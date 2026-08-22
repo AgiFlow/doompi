@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/AgiFlow/doompi/security/advisories/new
+    about: >-
+      Do not open a public issue for a security problem. Use private vulnerability
+      reporting so only the maintainers can read it. See SECURITY.md for scope.
+  - name: Read the docs first
+    url: https://github.com/AgiFlow/doompi/tree/main/docs
+    about: >-
+      Architecture, configuration, and the trust and data boundaries that explain
+      what DoomPi executes on your machine.

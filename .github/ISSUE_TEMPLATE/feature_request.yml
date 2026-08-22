@@ -1,0 +1,48 @@
+name: Feature request
+description: Propose a change to what DoomPi does.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What are you trying to do that DoomPi makes hard today? Describe the
+        situation, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+      description: >-
+        The simplest change that would solve it. DoomPi favours the minimum
+        thing that works over a general abstraction.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch
+      options:
+        - "Runtime foundations (packages/core)"
+        - "Default distribution features (packages/default)"
+        - "Optional modes (packages/minor)"
+        - "Selectable extensions (layers)"
+        - "Development tooling (packages/tooling)"
+        - "Docs"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: >-
+        Including any existing DoomPi feature, extension, or configuration you
+        tried first. Reuse before rebuilding.
+    validations:
+      required: false

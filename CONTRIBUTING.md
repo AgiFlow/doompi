@@ -3,6 +3,11 @@
 Thanks for helping improve DoomPi. The project is still alpha, so focused changes with clear tests
 are easier to review and safer to release.
 
+By participating in this project you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Found a security problem? Do not open a public issue. Follow [SECURITY.md](SECURITY.md) and use
+GitHub's private vulnerability reporting, which keeps the report visible only to the maintainers.
+
 ## Requirements
 
 - Node.js 22.22.1
@@ -84,6 +89,10 @@ Run the additional checks that match the change:
 
 On a pull request, CI runs formatting, the workspace audit, generated hook settings, builds, examples,
 lint, Vibe-Lint, type-checking, and unit tests on a GitHub-hosted runner.
+
+Pull requests from forks always run on a GitHub-hosted runner, never on the project's self-hosted
+machine. If this is your first contribution, a maintainer has to approve the workflow run before CI
+starts, so expect a delay before any results appear.
 
 The serial packed-install system tests run after merge, on push to `main`. They pack and install all
 40 packages for real and assert startup latency percentiles, which are not meaningful on a shared

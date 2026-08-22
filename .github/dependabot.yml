@@ -1,0 +1,41 @@
+# Dependabot keeps the workspace lockfile and the pinned action SHAs current.
+#
+# Updates are grouped so a routine week is a couple of pull requests rather than
+# forty. Each one still has to pass the full `quality` job before it can merge.
+version: 2
+
+updates:
+  # The pnpm workspace resolves every package from the root lockfile, so a
+  # single root entry covers all of `packages/`, `layers/`, and `plugins/`.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    groups:
+      production-minor-and-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-and-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Node itself is pinned by the workflows and .nvmrc, not by Dependabot.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+    commit-message:
+      prefix: "chore(root)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci(root)"
