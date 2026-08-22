@@ -1,0 +1,46 @@
+{
+  "name": "@agimon-ai/doompi-runner-rmux-darwin-arm64",
+  "version": "0.0.1-alpha.36",
+  "description": "Prebuilt RMUX runtime for DoomPi Runner on macOS arm64.",
+  "keywords": [
+    "ai",
+    "arm64",
+    "coding-agent",
+    "darwin",
+    "developer-tools",
+    "doom-runner",
+    "doompi",
+    "macos",
+    "native-runtime",
+    "pi-package",
+    "rmux"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT OR Apache-2.0",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/default/doompi-runner-rmux-darwin-arm64"
+  },
+  "files": [
+    "vendor",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

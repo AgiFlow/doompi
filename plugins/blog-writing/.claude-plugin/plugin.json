@@ -1,0 +1,10 @@
+{
+  "name": "blog-writing",
+  "version": "0.1.0",
+  "description": "Research, outline, draft, and review a source-backed blog post.",
+  "author": {
+    "name": "DoomPi Contributors"
+  },
+  "keywords": ["blog", "research", "writing", "editing"],
+  "skills": "./skills/"
+}

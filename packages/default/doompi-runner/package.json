@@ -1,0 +1,362 @@
+{
+  "name": "@agimon-ai/doompi-runner",
+  "version": "0.0.1-alpha.36",
+  "description": "Supervised shell execution, background process control, and run logs for Pi coding agents.",
+  "keywords": [
+    "ai",
+    "background-process",
+    "coding-agent",
+    "developer-tools",
+    "doom-runner",
+    "doompi",
+    "pi-coding-agent",
+    "pi-package",
+    "process-supervision",
+    "shell"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/default/doompi-runner"
+  },
+  "bin": {
+    "doom-runner": "./dist/bin/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "llms.txt",
+    "src/prompts",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./bin/cli": {
+      "types": "./dist/bin/cli.d.mts",
+      "import": "./dist/bin/cli.mjs",
+      "require": "./dist/bin/cli.cjs"
+    },
+    "./bin/logSink": {
+      "types": "./dist/bin/logSink.d.mts",
+      "import": "./dist/bin/logSink.mjs",
+      "require": "./dist/bin/logSink.cjs"
+    },
+    "./bin/runnerHost": {
+      "types": "./dist/bin/runnerHost.d.mts",
+      "import": "./dist/bin/runnerHost.mjs",
+      "require": "./dist/bin/runnerHost.cjs"
+    },
+    "./cli/cliApp": {
+      "types": "./dist/cli/cliApp.d.mts",
+      "import": "./dist/cli/cliApp.mjs",
+      "require": "./dist/cli/cliApp.cjs"
+    },
+    "./compaction": {
+      "types": "./dist/compaction.d.mts",
+      "import": "./dist/compaction.mjs",
+      "require": "./dist/compaction.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
+    },
+    "./container": {
+      "types": "./dist/container/index.d.mts",
+      "import": "./dist/container/index.mjs",
+      "require": "./dist/container/index.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./reconcile": {
+      "types": "./dist/reconcile.d.mts",
+      "import": "./dist/reconcile.mjs",
+      "require": "./dist/reconcile.cjs"
+    },
+    "./services/AnsiScrub": {
+      "types": "./dist/services/AnsiScrub/index.d.mts",
+      "import": "./dist/services/AnsiScrub/index.mjs",
+      "require": "./dist/services/AnsiScrub/index.cjs"
+    },
+    "./services/AnsiScrub/ansiScrub": {
+      "types": "./dist/services/AnsiScrub/ansiScrub.d.mts",
+      "import": "./dist/services/AnsiScrub/ansiScrub.mjs",
+      "require": "./dist/services/AnsiScrub/ansiScrub.cjs"
+    },
+    "./services/BashRunService": {
+      "types": "./dist/services/BashRunService/index.d.mts",
+      "import": "./dist/services/BashRunService/index.mjs",
+      "require": "./dist/services/BashRunService/index.cjs"
+    },
+    "./services/BashRunService/BashRunService": {
+      "types": "./dist/services/BashRunService/BashRunService.d.mts",
+      "import": "./dist/services/BashRunService/BashRunService.mjs",
+      "require": "./dist/services/BashRunService/BashRunService.cjs"
+    },
+    "./services/Clock": {
+      "types": "./dist/services/Clock/index.d.mts",
+      "import": "./dist/services/Clock/index.mjs",
+      "require": "./dist/services/Clock/index.cjs"
+    },
+    "./services/Clock/SystemClock": {
+      "types": "./dist/services/Clock/SystemClock.d.mts",
+      "import": "./dist/services/Clock/SystemClock.mjs",
+      "require": "./dist/services/Clock/SystemClock.cjs"
+    },
+    "./services/Launcher": {
+      "types": "./dist/services/Launcher/index.d.mts",
+      "import": "./dist/services/Launcher/index.mjs",
+      "require": "./dist/services/Launcher/index.cjs"
+    },
+    "./services/Launcher/Launcher": {
+      "types": "./dist/services/Launcher/Launcher.d.mts",
+      "import": "./dist/services/Launcher/Launcher.mjs",
+      "require": "./dist/services/Launcher/Launcher.cjs"
+    },
+    "./services/Lifeline": {
+      "types": "./dist/services/Lifeline/index.d.mts",
+      "import": "./dist/services/Lifeline/index.mjs",
+      "require": "./dist/services/Lifeline/index.cjs"
+    },
+    "./services/Lifeline/NodeLifeline": {
+      "types": "./dist/services/Lifeline/NodeLifeline.d.mts",
+      "import": "./dist/services/Lifeline/NodeLifeline.mjs",
+      "require": "./dist/services/Lifeline/NodeLifeline.cjs"
+    },
+    "./services/Lifeline/watchdog": {
+      "types": "./dist/services/Lifeline/client.d.mts",
+      "import": "./dist/services/Lifeline/client.mjs",
+      "require": "./dist/services/Lifeline/client.cjs"
+    },
+    "./services/LogFile": {
+      "types": "./dist/services/LogFile/index.d.mts",
+      "import": "./dist/services/LogFile/index.mjs",
+      "require": "./dist/services/LogFile/index.cjs"
+    },
+    "./services/LogFile/LogFile": {
+      "types": "./dist/services/LogFile/LogFile.d.mts",
+      "import": "./dist/services/LogFile/LogFile.mjs",
+      "require": "./dist/services/LogFile/LogFile.cjs"
+    },
+    "./services/LogReader": {
+      "types": "./dist/services/LogReader/index.d.mts",
+      "import": "./dist/services/LogReader/index.mjs",
+      "require": "./dist/services/LogReader/index.cjs"
+    },
+    "./services/LogReader/LogReader": {
+      "types": "./dist/services/LogReader/LogReader.d.mts",
+      "import": "./dist/services/LogReader/LogReader.mjs",
+      "require": "./dist/services/LogReader/LogReader.cjs"
+    },
+    "./services/ProcessControl": {
+      "types": "./dist/services/ProcessControl/index.d.mts",
+      "import": "./dist/services/ProcessControl/index.mjs",
+      "require": "./dist/services/ProcessControl/index.cjs"
+    },
+    "./services/ProcessControl/NodeProcessControl": {
+      "types": "./dist/services/ProcessControl/NodeProcessControl.d.mts",
+      "import": "./dist/services/ProcessControl/NodeProcessControl.mjs",
+      "require": "./dist/services/ProcessControl/NodeProcessControl.cjs"
+    },
+    "./services/PtyHost": {
+      "types": "./dist/services/PtyHost/index.d.mts",
+      "import": "./dist/services/PtyHost/index.mjs",
+      "require": "./dist/services/PtyHost/index.cjs"
+    },
+    "./services/PtyHost/PtyHost": {
+      "types": "./dist/services/PtyHost/PtyHost.d.mts",
+      "import": "./dist/services/PtyHost/PtyHost.mjs",
+      "require": "./dist/services/PtyHost/PtyHost.cjs"
+    },
+    "./services/PtySpawner": {
+      "types": "./dist/services/PtySpawner/index.d.mts",
+      "import": "./dist/services/PtySpawner/index.mjs",
+      "require": "./dist/services/PtySpawner/index.cjs"
+    },
+    "./services/PtySpawner/NodePtySpawner": {
+      "types": "./dist/services/PtySpawner/NodePtySpawner.d.mts",
+      "import": "./dist/services/PtySpawner/NodePtySpawner.mjs",
+      "require": "./dist/services/PtySpawner/NodePtySpawner.cjs"
+    },
+    "./services/RmuxBackend": {
+      "types": "./dist/services/RmuxBackend/index.d.mts",
+      "import": "./dist/services/RmuxBackend/index.mjs",
+      "require": "./dist/services/RmuxBackend/index.cjs"
+    },
+    "./services/RmuxBackend/RmuxBackend": {
+      "types": "./dist/services/RmuxBackend/RmuxBackend.d.mts",
+      "import": "./dist/services/RmuxBackend/RmuxBackend.mjs",
+      "require": "./dist/services/RmuxBackend/RmuxBackend.cjs"
+    },
+    "./services/RtkProcessor": {
+      "types": "./dist/services/RtkProcessor/index.d.mts",
+      "import": "./dist/services/RtkProcessor/index.mjs",
+      "require": "./dist/services/RtkProcessor/index.cjs"
+    },
+    "./services/RtkProcessor/RtkProcessor": {
+      "types": "./dist/services/RtkProcessor/RtkProcessor.d.mts",
+      "import": "./dist/services/RtkProcessor/RtkProcessor.mjs",
+      "require": "./dist/services/RtkProcessor/RtkProcessor.cjs"
+    },
+    "./services/RunnerNamer": {
+      "types": "./dist/services/RunnerNamer/index.d.mts",
+      "import": "./dist/services/RunnerNamer/index.mjs",
+      "require": "./dist/services/RunnerNamer/index.cjs"
+    },
+    "./services/RunnerNamer/RunnerNamer": {
+      "types": "./dist/services/RunnerNamer/RunnerNamer.d.mts",
+      "import": "./dist/services/RunnerNamer/RunnerNamer.mjs",
+      "require": "./dist/services/RunnerNamer/RunnerNamer.cjs"
+    },
+    "./services/RunnerPaths": {
+      "types": "./dist/services/RunnerPaths/index.d.mts",
+      "import": "./dist/services/RunnerPaths/index.mjs",
+      "require": "./dist/services/RunnerPaths/index.cjs"
+    },
+    "./services/RunnerPaths/RunnerPaths": {
+      "types": "./dist/services/RunnerPaths/RunnerPaths.d.mts",
+      "import": "./dist/services/RunnerPaths/RunnerPaths.mjs",
+      "require": "./dist/services/RunnerPaths/RunnerPaths.cjs"
+    },
+    "./services/RunnerRegistry": {
+      "types": "./dist/services/RunnerRegistry/index.d.mts",
+      "import": "./dist/services/RunnerRegistry/index.mjs",
+      "require": "./dist/services/RunnerRegistry/index.cjs"
+    },
+    "./services/RunnerRegistry/RunnerRegistry": {
+      "types": "./dist/services/RunnerRegistry/RunnerRegistry.d.mts",
+      "import": "./dist/services/RunnerRegistry/RunnerRegistry.mjs",
+      "require": "./dist/services/RunnerRegistry/RunnerRegistry.cjs"
+    },
+    "./services/Spawner": {
+      "types": "./dist/services/Spawner/index.d.mts",
+      "import": "./dist/services/Spawner/index.mjs",
+      "require": "./dist/services/Spawner/index.cjs"
+    },
+    "./services/Spawner/NodeSpawner": {
+      "types": "./dist/services/Spawner/NodeSpawner.d.mts",
+      "import": "./dist/services/Spawner/NodeSpawner.mjs",
+      "require": "./dist/services/Spawner/NodeSpawner.cjs"
+    },
+    "./session": {
+      "types": "./dist/session.d.mts",
+      "import": "./dist/session.mjs",
+      "require": "./dist/session.cjs"
+    },
+    "./tool/bashTool": {
+      "types": "./dist/tool/bashTool.d.mts",
+      "import": "./dist/tool/bashTool.mjs",
+      "require": "./dist/tool/bashTool.cjs"
+    },
+    "./tool/responseEnvelope": {
+      "types": "./dist/tool/responseEnvelope.d.mts",
+      "import": "./dist/tool/responseEnvelope.mjs",
+      "require": "./dist/tool/responseEnvelope.cjs"
+    },
+    "./tool/schema": {
+      "types": "./dist/tool/schema.d.mts",
+      "import": "./dist/tool/schema.mjs",
+      "require": "./dist/tool/schema.cjs"
+    },
+    "./tui/bashRender": {
+      "types": "./dist/tui/bashRender.d.mts",
+      "import": "./dist/tui/bashRender.mjs",
+      "require": "./dist/tui/bashRender.cjs"
+    },
+    "./tui/format": {
+      "types": "./dist/tui/format.d.mts",
+      "import": "./dist/tui/format.mjs",
+      "require": "./dist/tui/format.cjs"
+    },
+    "./tui/runnerSpace": {
+      "types": "./dist/tui/runnerSpace.d.mts",
+      "import": "./dist/tui/runnerSpace.mjs",
+      "require": "./dist/tui/runnerSpace.cjs"
+    },
+    "./types": {
+      "types": "./dist/types.d.mts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/foundation-process-registry": "0.29.16",
+    "@deepseek-ai/cordis": "4.0.1",
+    "@rmux/sdk": "0.6.5",
+    "@xterm/headless": "6.0.0",
+    "typebox": "1.3.16"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "@agimon-ai/doompi-runner-rmux-darwin-arm64": "workspace:*",
+    "@agimon-ai/doompi-runner-rmux-darwin-x64": "workspace:*",
+    "@agimon-ai/doompi-runner-rmux-linux-arm64": "workspace:*",
+    "@agimon-ai/doompi-runner-rmux-linux-x64": "workspace:*",
+    "@agimon-ai/doompi-runner-rtk-darwin-arm64": "workspace:*",
+    "@agimon-ai/doompi-runner-rtk-darwin-x64": "workspace:*",
+    "@agimon-ai/doompi-runner-rtk-linux-arm64": "workspace:*",
+    "@agimon-ai/doompi-runner-rtk-linux-x64": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

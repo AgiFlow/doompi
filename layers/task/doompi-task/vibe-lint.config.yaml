@@ -1,0 +1,33 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+
+overrides:
+  # These two commands render their own output rather than returning a value the
+  # Pi adapter renders, which is how doompi-mcp keeps commands free of the TUI.
+  # Inverting that is a behaviour change, so it is tracked separately and these
+  # lines come out with it.
+  - files:
+      - src/commands/index.ts
+      - src/commands/task/taskTool.ts
+    rules:
+      boundary-import-allowlist: off
+      doom-layer-boundary: off
+
+  # Reads time, randomness or process state ambiently instead of taking it as a
+  # dependency. Each needs a clock, id factory or env threaded through its
+  # caller; until then the rule stays on for every other module here.
+  - files:
+      - src/services/delegation/manager.ts # Date
+      - src/services/store/reconcile.ts # new Date()
+      - src/services/store/reducer.ts # new Date()
+    rules:
+      no-ambient-host-access: off

@@ -1,0 +1,19 @@
+{
+  "name": "@agimon-ai/doompi-extension-contracts",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/core/doompi-extension-contracts/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension",
+  "targets": {
+    "test": {
+      "dependsOn": [
+        "^build",
+        {
+          "projects": ["@agimon-ai/doompi-ui"],
+          "target": "build"
+        }
+      ]
+    }
+  }
+}

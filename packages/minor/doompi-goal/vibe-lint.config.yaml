@@ -1,0 +1,24 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+
+overrides:
+  # Reads time, randomness or process state ambiently instead of taking it as a
+  # dependency. Each needs a clock, id factory or env threaded through its
+  # caller; until then the rule stays on for every other module here.
+  - files:
+      - src/services/accounting.ts # Date
+      - src/services/queue.ts # Date
+      - src/services/safety.ts # Date
+      - src/services/stateCodec.ts # Date
+      - src/services/stateMachine.ts # Date
+    rules:
+      no-ambient-host-access: off

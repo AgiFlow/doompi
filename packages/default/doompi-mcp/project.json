@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-mcp",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/default/doompi-mcp/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

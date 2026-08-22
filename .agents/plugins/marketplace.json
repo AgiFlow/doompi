@@ -1,0 +1,44 @@
+{
+  "name": "doompi-examples",
+  "interface": {
+    "displayName": "DoomPi Examples"
+  },
+  "plugins": [
+    {
+      "name": "development",
+      "source": {
+        "source": "local",
+        "path": "./plugins/development"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Development"
+    },
+    {
+      "name": "testing",
+      "source": {
+        "source": "local",
+        "path": "./plugins/testing"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Development"
+    },
+    {
+      "name": "blog-writing",
+      "source": {
+        "source": "local",
+        "path": "./plugins/blog-writing"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+name: Development Feature
+description: Plan, implement, verify, and review a feature in the current checkout.
+tags:
+  - development
+  - example
+
+max-workflows: 2
+launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
+
+run-directory:
+  description: Feature plan, implementation handoff, verification, review, and final summary.
+  entries:
+    - path: plan.md
+      kind: file
+      description: Scope, acceptance criteria, implementation approach, and test plan.
+      produced-by: [plan]
+    - path: implementation.md
+      kind: file
+      description: Changed files, decisions, tests added, and remaining risks.
+      produced-by: [implement]
+    - path: verification.md
+      kind: file
+      description: Commands run, results, failures, and acceptance-criteria coverage.
+      produced-by: [verify]
+    - path: review.md
+      kind: file
+      description: Correctness, regression, maintainability, and test-coverage review.
+      produced-by: [review]
+    - path: summary.md
+      kind: file
+      description: Final outcome, evidence links, and unresolved work.
+      produced-by: [finalize]
+
+system-prompt: |
+  Runtime contract:
+  - WORKFLOW_CONTEXT contains the feature request.
+  - WORKFLOW_RUN_DIR is the only location for workflow artifacts.
+  - The current working directory is the existing repository checkout.
+
+  Safety contract:
+  - Read and follow the repository AGENTS.md and local instructions before acting.
+  - Never create or switch branches or worktrees. Never commit, push, publish, or open a pull request.
+  - Planning, verification, review, and finalization jobs must not edit repository files.
+  - Only the implement job may edit repository files, and only within the requested scope.
+  - Preserve unrelated and concurrent changes. Never revert work you did not create.
+  - Never use em dash characters in prose or artifacts.
+
+  Repair contract:
+  - Verification or review may request an in-scope repair by writing $WORKFLOW_RUN_DIR/fix.md.
+  - The file must have YAML frontmatter with `restart-from: implement`, followed by the failed criterion, expected and actual behavior, evidence, affected files, and required repair.
+  - Do not request repairs for unrelated failures or missing external prerequisites. Record those as blockers in the current report.
+  - The runner limits repair cycles through FIX_LOOP_MAX_CYCLES.
+
+env:
+  MAX_RETRIES: 2
+  FIX_LOOP_MAX_CYCLES: 2
+
+on:
+  user_prompt:
+
+jobs:
+  plan:
+    description: Turn the request into an evidence-backed implementation and test plan.
+    runs-on: macos-latest
+    system-prompt: |
+      Use the `doompi-development` and `doompi-testing` skills from the engineering domain.
+      Inspect the repository before deciding the approach. Do not edit repository files.
+
+      Write $WORKFLOW_RUN_DIR/plan.md with:
+      - the requested outcome and explicit non-goals
+      - repository evidence and affected areas
+      - acceptance criteria
+      - the smallest implementation approach
+      - focused tests and validation commands
+      - risks, assumptions, and any blocker
+    steps:
+      - name: Plan the feature
+        timeout-minutes: 30
+        artifacts:
+          - plan.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  implement:
+    description: Implement the approved plan in the current checkout.
+    runs-on: macos-latest
+    needs: plan
+    system-prompt: |
+      Act as the `doompi-developer` agent and apply the `doompi-development` skill.
+      Read $WORKFLOW_RUN_DIR/plan.md and inspect the current worktree before editing.
+
+      Implement only the requested feature. Follow repository-required checks before and after edits.
+      Add or update focused tests where the plan calls for them. Do not weaken tests or hide failures.
+
+      If WORKFLOW_ACTIVE_REPAIR_ID is set, read $WORKFLOW_ACTIVE_ISSUE_FILE and
+      $WORKFLOW_ACTIVE_REPAIR_FILE first and repair only that active issue.
+
+      Write $WORKFLOW_RUN_DIR/implementation.md with changed files, key decisions, tests added or updated,
+      commands already run, results, and remaining risks. Do not claim checks you did not run.
+    steps:
+      - name: Implement the feature
+        timeout-minutes: 120
+        artifacts:
+          - implementation.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  verify:
+    description: Run focused and repository-required checks without editing source files.
+    runs-on: macos-latest
+    needs: implement
+    system-prompt: |
+      Act as the `doompi-tester` agent and apply the `doompi-testing` skill.
+      Read $WORKFLOW_RUN_DIR/plan.md and $WORKFLOW_RUN_DIR/implementation.md, then inspect the resulting diff.
+      Do not edit repository files during verification.
+
+      Run the focused tests and applicable repository-required lint, typecheck, build, and test commands.
+      Map evidence to every acceptance criterion. Separate verified results from inferred conclusions.
+
+      Write $WORKFLOW_RUN_DIR/verification.md with commands, exit results, relevant output, acceptance coverage,
+      and any environmental or unrelated blockers. For a repairable in-scope failure, also write fix.md using
+      the workflow repair contract and set `restart-from: implement`.
+    steps:
+      - name: Verify the implementation
+        timeout-minutes: 75
+        artifacts:
+          - verification.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  review:
+    description: Review the implementation independently for correctness and regression risk.
+    runs-on: macos-latest
+    needs: implement
+    system-prompt: |
+      Act as the `doompi-reviewer` agent and apply the `doompi-review` skill.
+      Read $WORKFLOW_RUN_DIR/plan.md and $WORKFLOW_RUN_DIR/implementation.md, inspect the resulting diff,
+      and do not edit repository files.
+
+      Review correctness, acceptance-criteria coverage, edge cases, regression risk, maintainability,
+      security implications, and test quality. Findings must cite files and concrete evidence.
+
+      Write $WORKFLOW_RUN_DIR/review.md with a PASS, NEEDS_REPAIR, or BLOCKED verdict and prioritized findings.
+      For a repairable in-scope blocking finding, also write fix.md using the workflow repair contract and set
+      `restart-from: implement`. Report non-blocking or unrelated findings without expanding scope.
+    steps:
+      - name: Review the implementation
+        timeout-minutes: 45
+        artifacts:
+          - review.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  finalize:
+    description: Produce a concise evidence-backed handoff.
+    runs-on: macos-latest
+    needs: [verify, review]
+    system-prompt: |
+      Read $WORKFLOW_RUN_DIR/plan.md, $WORKFLOW_RUN_DIR/implementation.md,
+      $WORKFLOW_RUN_DIR/verification.md, and $WORKFLOW_RUN_DIR/review.md. Do not edit repository files.
+      Write $WORKFLOW_RUN_DIR/summary.md with the delivered outcome, changed areas, verification evidence,
+      review verdict, unresolved blockers, and recommended next action. Never report success when required
+      checks failed, were blocked, or were not run.
+    steps:
+      - name: Finalize the feature handoff
+        timeout-minutes: 20
+        artifacts:
+          - summary.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nFeature request:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"

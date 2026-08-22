@@ -1,0 +1,23 @@
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+export const {{ commandName | snakeCase | upper }}_COMMAND = '{{ commandName | kebabCase }}';
+export const {{ commandName | snakeCase | upper }}_DESCRIPTION = '{{ commandDescription }}';
+
+export interface {{ commandName | pascalCase }}CommandDependencies {
+  /** Injected so the command stays a translation layer over an already testable contract. */
+  readonly execute: () => Promise<string>;
+}
+
+/** {{ commandDescription }} */
+export function register{{ commandName | pascalCase }}Command(
+  pi: Pick<ExtensionAPI, 'registerCommand'>,
+  dependencies: {{ commandName | pascalCase }}CommandDependencies,
+): void {
+  pi.registerCommand({{ commandName | snakeCase | upper }}_COMMAND, {
+    description: {{ commandName | snakeCase | upper }}_DESCRIPTION,
+    handler: async (_args, ctx) => {
+      const message = await dependencies.execute();
+      if (ctx.hasUI) ctx.ui.notify(message, 'info');
+    },
+  });
+}

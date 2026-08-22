@@ -1,0 +1,10 @@
+{
+  "name": "development",
+  "version": "0.1.0",
+  "description": "Portable guidance for implementing and verifying scoped code changes.",
+  "author": {
+    "name": "DoomPi Contributors"
+  },
+  "keywords": ["development", "implementation", "verification"],
+  "skills": "./skills/"
+}

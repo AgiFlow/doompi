@@ -1,0 +1,32 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+
+overrides:
+  # Published as ./planMode, but this is the Pi orchestration boundary rather
+  # than host-neutral policy: it drives the cordis Context and emits telemetry.
+  # It moves to src/adapters when the composition root migration reaches this
+  # package, and these three lines come out with it.
+  - files:
+      - src/services/planMode.ts
+    rules:
+      service-boundary: off
+      no-ambient-host-access: off
+      boundary-import-allowlist: off
+      doom-layer-boundary: off
+
+  # Reads time, randomness or process state ambiently instead of taking it as a
+  # dependency. Each needs a clock, id factory or env threaded through its
+  # caller; until then the rule stays on for every other module here.
+  - files:
+      - src/services/fableFlow.ts # Date
+    rules:
+      no-ambient-host-access: off

@@ -1,0 +1,9 @@
+# Doom Pi Plan
+
+## Resources
+
+- [Package README](./README.md): Planning flavors, review flow, model configuration, storage, and safety boundaries.
+
+## How to use
+
+- [doompi-use-plan](./src/prompts/doompi-use-plan/SKILL.md): Draft reviewable normal, debug, or Fable-assisted plans, persist them, and exit safely.

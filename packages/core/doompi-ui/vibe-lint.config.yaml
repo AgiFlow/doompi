@@ -1,0 +1,21 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+  package-layer-order:
+    - error
+    - packageLayers:
+        "@agimon-ai/doompi-extension-contracts": contracts
+        "@agimon-ai/doompi-hashline": contracts
+        "@agimon-ai/doompi-telemetry": contracts
+        "@agimon-ai/doompi-config": platform
+        "@agimon-ai/doompi-ui": platform
+        "@agimon-ai/doompi-mcp": integration
+        "@agimon-ai/doompi": host

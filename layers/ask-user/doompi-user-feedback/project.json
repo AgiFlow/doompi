@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-user-feedback",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "layers/ask-user/doompi-user-feedback/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

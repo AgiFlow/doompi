@@ -1,0 +1,10 @@
+{
+  "name": "testing",
+  "version": "0.1.0",
+  "description": "Portable guidance for focused testing and evidence-based code review.",
+  "author": {
+    "name": "DoomPi Contributors"
+  },
+  "keywords": ["testing", "code-review", "quality"],
+  "skills": "./skills/"
+}

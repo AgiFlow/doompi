@@ -1,0 +1,9 @@
+# Doom Pi Runner
+
+## Resources
+
+- [Package README](./README.md): Supervised Bash behavior, CLI controls, storage, limits, and native artifacts.
+
+## How to use
+
+- [doompi-use-runner](./src/prompts/doompi-use-runner/SKILL.md): Supervise shell commands, inspect durable logs, provide interactive input, and stop background runs.

@@ -1,0 +1,10 @@
+import { describe, expect, it } from 'vitest';
+import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../../../src/services/extensionService.ts';
+
+describe('Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService', () => {
+  it('returns the command result without depending on a host API', async () => {
+    const service = new Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService();
+
+    await expect(service.execute()).resolves.toEqual({ message: '{{ commandDescription }}', level: 'info' });
+  });
+});

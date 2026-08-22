@@ -1,0 +1,10 @@
+/**
+ * {{ capabilityDescription }}
+ *
+ * Declared here, not beside its implementation: services may import types but
+ * never adapters, so a port living in src/adapters would be unreachable from
+ * the code that needs it.
+ */
+export interface {{ capabilityName | pascalCase }}Port {
+  read(): Promise<string | undefined>;
+}

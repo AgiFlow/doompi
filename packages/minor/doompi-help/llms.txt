@@ -1,0 +1,11 @@
+# Doom Pi Help
+
+Activation-gated, package-owned guidance for Doom Pi parent sessions.
+
+## Resources
+
+- [Package README](./README.md): Public entrypoints, activation model, security guarantees, and development commands.
+
+## How to use
+
+- [doompi-use-help](./src/prompts/doompi-use-help/SKILL.md): Activate package guidance, load exact-version skills, and diagnose unavailable or conflicting contributions.

@@ -1,0 +1,164 @@
+name: Release publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doompi-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: "${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'chore(release): publish') }}"
+    runs-on: [self-hosted, macOS, agirepo-deploy]
+    timeout-minutes: 120
+    environment:
+      name: npm-release
+    steps:
+      - name: Check out the merged release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Configure release git identity
+        run: |
+          git config user.name "doompi-release-bot"
+          git config user.email "doompi-release-bot@users.noreply.github.com"
+
+      - name: Validate the release commit
+        run: |
+          set -euo pipefail
+          pnpm fmt:check
+          pnpm nx run-many -t build --parallel=3
+          pnpm examples:check
+          pnpm nx run-many -t lint --parallel=3
+          pnpm lint:vibe --preflight-only
+          pnpm nx run-many -t typecheck --parallel=3
+          pnpm nx run-many -t test --parallel=3
+          pnpm nx run-many -t test-system --parallel=1
+
+      - name: Select the versions that are missing from the registry
+        run: |
+          set -euo pipefail
+          readonly MISSING_FILE="${RUNNER_TEMP}/doompi-release-missing.txt"
+
+          : > "${MISSING_FILE}"
+          while IFS=$'\t' read -r name version; do
+            if npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
+              echo "$name@$version is already on the registry."
+            else
+              echo "$name" >> "${MISSING_FILE}"
+              echo "$name@$version is missing from the registry and will be published."
+            fi
+          done < <(node scripts/list-packages.mjs)
+
+          PUBLISH_PROJECTS="$(tr '\n' ',' < "${MISSING_FILE}" | sed 's/,$//')"
+          if [[ -z "${PUBLISH_PROJECTS}" ]]; then
+            echo "Every release version is already on the registry, nothing to publish."
+          fi
+          echo "PUBLISH_PROJECTS=${PUBLISH_PROJECTS}" >> "${GITHUB_ENV}"
+
+      - name: Publish the missing versions under alpha
+        if: env.PUBLISH_PROJECTS != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$NODE_AUTH_TOKEN"
+          pnpm nx release publish --projects "${PUBLISH_PROJECTS}" --tag alpha
+
+      - name: Wait for every release version to be published under alpha
+        run: |
+          set -euo pipefail
+          readonly VERIFY_ATTEMPTS=30
+          readonly VERIFY_DELAY_SECONDS=10
+          readonly PENDING_FILE="${RUNNER_TEMP}/doompi-release-pending.tsv"
+          readonly ROUND_FILE="${RUNNER_TEMP}/doompi-release-pending-round.tsv"
+
+          node scripts/list-packages.mjs > "${PENDING_FILE}"
+
+          for ((attempt = 1; attempt <= VERIFY_ATTEMPTS; attempt += 1)); do
+            : > "${ROUND_FILE}"
+            while IFS=$'\t' read -r name version; do
+              alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
+              if [[ "$alpha" != "$version" ]]; then
+                printf '%s\t%s\n' "$name" "$version" >> "${ROUND_FILE}"
+                echo "Waiting for $name@$version on alpha, observed ${alpha:-unavailable} (attempt $attempt/$VERIFY_ATTEMPTS)"
+              fi
+            done < "${PENDING_FILE}"
+            mv "${ROUND_FILE}" "${PENDING_FILE}"
+
+            if [[ ! -s "${PENDING_FILE}" ]]; then
+              echo "Every package is published under the alpha tag."
+              exit 0
+            fi
+            if (( attempt < VERIFY_ATTEMPTS )); then
+              sleep "$VERIFY_DELAY_SECONDS"
+            fi
+          done
+
+          echo "::error::$(wc -l < "${PENDING_FILE}" | tr -d ' ') package(s) missing from the alpha tag after $VERIFY_ATTEMPTS attempts"
+          while IFS=$'\t' read -r name version; do
+            alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
+            if npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
+              echo "  $name@$version is on the registry but alpha points at ${alpha:-unavailable}; retag it with: npm dist-tag add $name@$version alpha"
+            else
+              echo "  $name@$version is absent from the registry and alpha points at ${alpha:-unavailable}; re-run this workflow to publish it again"
+            fi
+          done < "${PENDING_FILE}"
+          exit 1
+
+      - name: Tag the published versions
+        run: |
+          set -euo pipefail
+          readonly TAGS_FILE="${RUNNER_TEMP}/doompi-release-tags.txt"
+
+          : > "${TAGS_FILE}"
+          while IFS=$'\t' read -r name version; do
+            TAG="${name}@${version}"
+            if git rev-parse -q --verify "refs/tags/${TAG}" > /dev/null; then
+              continue
+            fi
+            git tag "${TAG}"
+            echo "${TAG}" >> "${TAGS_FILE}"
+          done < <(node scripts/list-packages.mjs)
+
+          if [[ ! -s "${TAGS_FILE}" ]]; then
+            echo "Every release version is already tagged."
+            exit 0
+          fi
+
+          PUSH_REFS=()
+          while IFS= read -r TAG; do
+            PUSH_REFS+=("refs/tags/${TAG}")
+          done < "${TAGS_FILE}"
+          git push --atomic origin "${PUSH_REFS[@]}"
+
+      - name: Promote the published versions to latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$NODE_AUTH_TOKEN"
+          while IFS=$'\t' read -r name version; do npm dist-tag add "$name@$version" latest; done < <(node scripts/list-packages.mjs)

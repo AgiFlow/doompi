@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "scaffold-mcp": {
+      "command": "npx",
+      "args": ["-y", "@agiflowai/scaffold-mcp@1.3.0", "mcp-serve", "--admin-enable"]
+    }
+  }
+}

@@ -1,0 +1,119 @@
+import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { describe, expect, it, vi } from 'vitest';
+import { COMMAND_NAME } from '../../../src/commands/{{ commandName | camelCase }}Command.ts';
+import { activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension } from '../../../src/adapters/pi/extension.ts';
+import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../../../src/types/extension.ts';
+
+interface CommandDefinition {
+  handler: (
+    args: string,
+    ctx: { hasUI: boolean; ui: { notify: (message: string, level: string) => void } },
+  ) => Promise<void>;
+}
+
+function createPiFixture(): {
+  commands: Map<string, CommandDefinition>;
+  listeners: Map<string, () => void | Promise<void>>;
+  pi: ExtensionAPI;
+} {
+  const commands = new Map<string, CommandDefinition>();
+  const listeners = new Map<string, () => void | Promise<void>>();
+  const eventHandlers = new Map<string, Set<(payload: unknown) => void>>();
+  const pi = {
+    events: {
+      emit(event: string, payload: unknown) {
+        for (const handler of eventHandlers.get(event) ?? []) handler(payload);
+      },
+      on(event: string, handler: (payload: unknown) => void) {
+        const handlers = eventHandlers.get(event) ?? new Set();
+        handlers.add(handler);
+        eventHandlers.set(event, handlers);
+        return () => handlers.delete(handler);
+      },
+    },
+    on: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
+    registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
+  } as unknown as ExtensionAPI;
+  return { commands, listeners, pi };
+}
+
+describe('{{ packageName | kebabCase }} Pi extension', () => {
+  it('injects its service into the standalone command', async () => {
+    const fixture = createPiFixture();
+    const service: {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService = {
+      execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
+    };
+    const notify = vi.fn();
+
+    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(fixture.pi, { service });
+    await fixture.commands.get(COMMAND_NAME)?.handler('', { hasUI: true, ui: { notify } });
+
+    expect(service.execute).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledWith('ready', 'info');
+  });
+
+  it('is headless-safe', async () => {
+    const fixture = createPiFixture();
+    const service: {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService = {
+      execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
+    };
+    const notify = vi.fn();
+
+    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(fixture.pi, { service });
+    await fixture.commands.get(COMMAND_NAME)?.handler('', { hasUI: false, ui: { notify } });
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('installs once per host and permits the next Pi runtime after shutdown', async () => {
+    const fixture = createPiFixture();
+
+    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(fixture.pi);
+    await fixture.listeners.get('session_shutdown')?.();
+    await fixture.listeners.get('session_shutdown')?.();
+    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(fixture.pi);
+
+    expect(fixture.pi.registerCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
+    const fixture = createPiFixture();
+    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(fixture.pi);
+    const connection = await connectDoomCordisHost(fixture.pi, '{{ packageName | kebabCase }}-help-test');
+    const firstService = createDoomHelpService('{{ packageName | kebabCase }}-help-first');
+    const firstFiber = connection.root.plugin((context) => context.provide(DOOM_HELP_SERVICE, firstService));
+    await firstFiber;
+
+    expect(firstService.listContributions()).toEqual([
+      {
+        source: '@agimon-ai/{{ packageName | kebabCase }}',
+        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        skills: [
+          {
+            name: 'doompi-use-{{ packageName | replace: "doompi-", "" | kebabCase }}',
+            description: 'Use @agimon-ai/{{ packageName | kebabCase }}: {{ packageDescription }}',
+          },
+        ],
+      },
+    ]);
+
+    await firstFiber.dispose();
+    expect(firstService.listContributions()).toEqual([]);
+
+    const replacementService = createDoomHelpService('{{ packageName | kebabCase }}-help-replacement');
+    const replacementFiber = connection.root.plugin((context) =>
+      context.provide(DOOM_HELP_SERVICE, replacementService),
+    );
+    await replacementFiber;
+    expect(replacementService.listContributions()).toHaveLength(1);
+
+    await fixture.listeners.get('session_shutdown')?.();
+    await fixture.listeners.get('session_shutdown')?.();
+    expect(replacementService.listContributions()).toEqual([]);
+
+    await replacementFiber.dispose();
+    await connection.dispose();
+  });
+});

@@ -1,0 +1,17 @@
+export {
+  createHarnessSession,
+  disposeHarnessState,
+  getHarnessState,
+  HARNESS_STATE_POINTER,
+  type HarnessStateFile,
+  type HarnessStateTransactionSnapshot,
+  harnessRoot,
+  type LoadedHarnessState,
+  loadHarnessState,
+  requireHarnessPaths,
+  requireHarnessRoot,
+  resetHarnessStore,
+  restoreHarnessStateSnapshot,
+  snapshotHarnessState,
+  updateHarnessState,
+} from '../adapters/harnessStore.ts';

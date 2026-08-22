@@ -1,0 +1,12 @@
+# Doom Pi Major Mode
+
+Named major-mode selection for Doom Pi sessions.
+
+## How to author
+
+- [Author DoomPi major modes](./src/prompts/doompi-author-major-mode/SKILL.md): Edit `modes.yaml` safely.
+- [`modes.yaml` authoring contract](./src/prompts/doompi-author-major-mode/references/modes-contract.md): Source precedence, schema, resolution, and verification details.
+
+## Package reference
+
+- [Package README](./README.md): The `/mode` command, the `major_mode` voice tool, and how a mode resolves to layers.

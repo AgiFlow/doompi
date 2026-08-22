@@ -1,0 +1,151 @@
+name: Development Fix
+description: Diagnose, fix, verify, and summarize a focused defect in the current checkout.
+tags:
+  - development
+  - testing
+  - example
+
+max-workflows: 2
+launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
+
+run-directory:
+  description: Defect diagnosis, implementation handoff, verification, and final summary.
+  entries:
+    - path: diagnosis.md
+      kind: file
+      description: Reproduction, root cause, evidence, scope, and regression plan.
+      produced-by: [diagnose]
+    - path: implementation.md
+      kind: file
+      description: Fix details, changed files, tests, and remaining risks.
+      produced-by: [fix]
+    - path: verification.md
+      kind: file
+      description: Regression commands, results, and defect-resolution evidence.
+      produced-by: [verify]
+    - path: summary.md
+      kind: file
+      description: Final fix outcome, evidence, and unresolved work.
+      produced-by: [summarize]
+
+system-prompt: |
+  Runtime contract:
+  - WORKFLOW_CONTEXT contains the defect report.
+  - WORKFLOW_RUN_DIR is the only location for workflow artifacts.
+  - The current working directory is the existing repository checkout.
+
+  Safety contract:
+  - Read and follow the repository AGENTS.md and local instructions before acting.
+  - Never create or switch branches or worktrees. Never commit, push, publish, or open a pull request.
+  - Diagnosis, verification, and summary jobs must not edit repository files.
+  - Only the fix job may edit repository files, and only within the diagnosed scope.
+  - Preserve unrelated and concurrent changes. Never revert work you did not create.
+  - Never use em dash characters in prose or artifacts.
+
+  Repair contract:
+  - Verification may request an in-scope repair by writing $WORKFLOW_RUN_DIR/fix.md.
+  - The file must have YAML frontmatter with `restart-from: fix`, followed by the failed criterion, expected
+    and actual behavior, reproduction, evidence, affected files, and required repair.
+  - Do not request repairs for unrelated failures or missing external prerequisites. Record those as blockers.
+  - The runner limits repair cycles through FIX_LOOP_MAX_CYCLES.
+
+env:
+  MAX_RETRIES: 2
+  FIX_LOOP_MAX_CYCLES: 2
+
+on:
+  user_prompt:
+
+jobs:
+  diagnose:
+    description: Reproduce the defect and establish an evidence-backed root cause.
+    runs-on: macos-latest
+    system-prompt: |
+      Use the `doompi-development` and `doompi-testing` skills from the engineering domain.
+      Inspect the repository and reproduce the reported behavior when safe. Do not edit repository files.
+      Distinguish the root cause from symptoms and distinguish verified evidence from inference.
+
+      Write $WORKFLOW_RUN_DIR/diagnosis.md with:
+      - expected and actual behavior
+      - the smallest reliable reproduction
+      - root cause with file or runtime evidence
+      - affected scope and explicit non-goals
+      - the minimal fix strategy
+      - a focused regression-test plan
+      - environmental or unrelated blockers
+    steps:
+      - name: Diagnose the defect
+        timeout-minutes: 45
+        artifacts:
+          - diagnosis.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  fix:
+    description: Apply the smallest fix supported by the diagnosis.
+    runs-on: macos-latest
+    needs: diagnose
+    system-prompt: |
+      Act as the `doompi-developer` agent and apply the `doompi-development` skill.
+      Read $WORKFLOW_RUN_DIR/diagnosis.md and inspect the current worktree before editing.
+
+      Apply the smallest fix that addresses the verified root cause. Add or update focused regression tests.
+      Follow repository-required checks before and after edits. Do not broaden the change into nearby cleanup.
+
+      If WORKFLOW_ACTIVE_REPAIR_ID is set, read $WORKFLOW_ACTIVE_ISSUE_FILE and
+      $WORKFLOW_ACTIVE_REPAIR_FILE first and repair only that active issue.
+
+      Write $WORKFLOW_RUN_DIR/implementation.md with changed files, why the fix addresses the root cause,
+      regression tests, commands already run, results, and remaining risks.
+    steps:
+      - name: Implement the fix
+        timeout-minutes: 90
+        artifacts:
+          - implementation.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  verify:
+    description: Prove the defect is fixed and focused regressions pass.
+    runs-on: macos-latest
+    needs: fix
+    system-prompt: |
+      Act as the `doompi-tester` agent and apply the `doompi-testing` skill.
+      Read $WORKFLOW_RUN_DIR/diagnosis.md and $WORKFLOW_RUN_DIR/implementation.md, inspect the resulting diff,
+      and do not edit repository files.
+
+      Re-run the original reproduction, focused regression tests, and applicable repository-required checks.
+      Separate verified results from inference and identify any test that could not run.
+
+      Write $WORKFLOW_RUN_DIR/verification.md with commands, exit results, reproduction outcome, regression
+      coverage, and blockers. For a repairable in-scope failure, also write fix.md using the workflow repair
+      contract and set `restart-from: fix`.
+    steps:
+      - name: Verify the fix
+        timeout-minutes: 60
+        artifacts:
+          - verification.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  summarize:
+    description: Produce a concise evidence-backed fix handoff.
+    runs-on: macos-latest
+    needs: verify
+    system-prompt: |
+      Read $WORKFLOW_RUN_DIR/diagnosis.md, $WORKFLOW_RUN_DIR/implementation.md,
+      and $WORKFLOW_RUN_DIR/verification.md. Do not edit repository files.
+      Write $WORKFLOW_RUN_DIR/summary.md with the root cause, fix, regression evidence, unresolved blockers,
+      and recommended next action. Never report success when the reproduction or required checks failed,
+      were blocked, or were not run.
+    steps:
+      - name: Summarize the fix
+        timeout-minutes: 20
+        artifacts:
+          - summary.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nDefect report:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains engineering --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"

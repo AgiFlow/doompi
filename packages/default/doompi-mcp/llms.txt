@@ -1,0 +1,9 @@
+# Doom Pi MCP
+
+## Resources
+
+- [Package README](./README.md): Server configuration, domain selection, commands, credentials, trust, and public API.
+
+## How to use
+
+- [doompi-use-mcp](./src/prompts/doompi-use-mcp/SKILL.md): Inspect domain-scoped servers, authenticate, reload configuration, and troubleshoot tool availability.

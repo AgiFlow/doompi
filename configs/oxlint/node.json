@@ -1,0 +1,34 @@
+{
+  "plugins": ["typescript"],
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-unused-vars": "error"
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.ts", "tests/**/*.tsx", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "rules": {
+        "typescript/unbound-method": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "build",
+    "coverage",
+    "out",
+    ".nx",
+    ".nx-cache",
+    "__generated__",
+    "generated",
+    "vendor",
+    "**/*.d.ts"
+  ]
+}

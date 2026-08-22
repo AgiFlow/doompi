@@ -1,0 +1,32 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+
+overrides:
+  # responseEnvelope carries the bash tool result shape and reads the log files
+  # that back it, so both the command and its renderer depend on it. Splitting
+  # the pure shape from the filesystem reads is tracked separately; until then
+  # these three modules cross the command/tui line in both directions.
+  - files:
+      - src/commands/bash/bashTool.ts
+      - src/tui/bashRender.ts
+      - src/tui/format.ts
+    rules:
+      boundary-import-allowlist: off
+      doom-layer-boundary: off
+
+  # Reads time, randomness or process state ambiently instead of taking it as a
+  # dependency. Each needs a clock, id factory or env threaded through its
+  # caller; until then the rule stays on for every other module here.
+  - files:
+      - src/services/runs/session.ts # process
+    rules:
+      no-ambient-host-access: off

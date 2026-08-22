@@ -1,0 +1,18 @@
+defaultDomains: [development, testing]
+
+plugins:
+  roots: [plugins]
+
+domains:
+  development:
+    description: Implementation guidance for feature work and fixes.
+    plugins: [development]
+  testing:
+    description: Testing and independent code review guidance.
+    plugins: [testing]
+  blog:
+    description: Research, drafting, and editorial review guidance for blog posts.
+    plugins: [blog-writing]
+
+aliases:
+  engineering: [development, testing]

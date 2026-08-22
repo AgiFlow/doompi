@@ -1,0 +1,111 @@
+{
+  "name": "@agimon-ai/doompi-log",
+  "version": "0.0.1-alpha.36",
+  "description": "Pi session metrics, findings, sink status, and a Log Metrics overlay for agent observability.",
+  "keywords": [
+    "agent-observability",
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "log-sink",
+    "logging",
+    "metrics",
+    "pi-extension",
+    "pi-package",
+    "telemetry"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/default/doompi-log"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./metrics": {
+      "types": "./dist/metrics.d.mts",
+      "import": "./dist/metrics.mjs",
+      "require": "./dist/metrics.cjs"
+    },
+    "./metricsSource": {
+      "types": "./dist/metricsSource.d.mts",
+      "import": "./dist/metricsSource.mjs",
+      "require": "./dist/metricsSource.cjs"
+    },
+    "./tui/metricsOverlay": {
+      "types": "./dist/tui/metricsOverlay.d.mts",
+      "import": "./dist/tui/metricsOverlay.mjs",
+      "require": "./dist/tui/metricsOverlay.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/log-sink-mcp": "0.29.16",
+    "@deepseek-ai/cordis": "4.0.1"
+  },
+  "devDependencies": {
+    "@agimon-ai/doompi-ui": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

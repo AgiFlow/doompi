@@ -1,0 +1,46 @@
+{
+  "name": "@agimon-ai/doompi-runner-rmux-linux-arm64",
+  "version": "0.0.1-alpha.36",
+  "description": "Prebuilt RMUX runtime for DoomPi Runner on Linux arm64.",
+  "keywords": [
+    "ai",
+    "arm64",
+    "coding-agent",
+    "developer-tools",
+    "doom-runner",
+    "doompi",
+    "linux",
+    "native-runtime",
+    "pi-package",
+    "process-supervision",
+    "rmux"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT OR Apache-2.0",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/default/doompi-runner-rmux-linux-arm64"
+  },
+  "files": [
+    "vendor",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

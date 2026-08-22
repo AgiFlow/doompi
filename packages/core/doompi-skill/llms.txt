@@ -1,0 +1,15 @@
+# Doom Pi Skill
+
+The session skill catalogue, deferred skill discovery, and the `SPC e s` browser.
+
+## How to author
+
+- [Author DoomPi skills](./src/prompts/doompi-author-skill/SKILL.md): Create, distribute, and register runtime skills or activation-gated Help prompts.
+
+## How to use
+
+- [Use DoomPi skills](./src/prompts/doompi-use-skill/SKILL.md): Browse the catalog, invoke deferred skills, and diagnose missing or shadowed skills.
+
+## Package reference
+
+- [Package README](./README.md): The `/skills` command, deferred discovery, and extension-contributed skill directories.

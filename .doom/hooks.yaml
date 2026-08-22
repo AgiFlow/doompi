@@ -1,0 +1,97 @@
+# Canonical hook registry.
+#
+# One entry per hook, with a binding per frontend. A missing frontend key means
+# "not emitted for that frontend", the non-parity is deliberate, not an
+# oversight, so each omission carries a comment.
+#
+# Pi reads this file directly at runtime
+# (packages/default/doompi-hook) and keeps only
+# bindings that declare a `pi` key. Claude Code reads .claude/settings.json
+# before any harness code runs, so that file is generated from here:
+#
+#   node scripts/emit-hooks.mjs --check   exit 1 if .claude/settings.json is stale
+#   node scripts/emit-hooks.mjs --write   regenerate it in place
+#
+# Commands are written bare. The emitter wraps every non-core group in a
+# DOOMPI_HOOK_GROUPS gate, so do not add one by hand. A group listed in a
+# layer's `hookGroups` in .doom/modes.yaml is active when that layer is.
+
+groups:
+  workflow:
+    core: true
+    description: Workflow status tracking across a session.
+    hooks:
+      - id: workflow-session-start
+        event: SessionStart
+        claude:
+          command: >-
+            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            [ -f "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" ] &&
+            node "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" claude-session-start-hook || true
+          timeout: 10
+        # Pi tracks workflow state through the workflow layer's extension.
+
+      - id: workflow-stop
+        event: Stop
+        claude:
+          command: >-
+            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            [ -f "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" ] &&
+            node "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" claude-stop-hook || true
+          timeout: 10
+
+      - id: workflow-notification
+        event: Notification
+        claude:
+          command: >-
+            [ -n "$WORKFLOW_STATUS_FILE" ] && REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            [ -f "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" ] &&
+            node "$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs" claude-notification-hook || true
+          timeout: 10
+
+  scaffold-mcp:
+    description: Suggest repository templates before creating files.
+    hooks:
+      - id: scaffold-mcp-pre-tool-use
+        event: PreToolUse
+        claude:
+          matcher: Write
+          command: >-
+            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            [ -f "$REPO/node_modules/@agiflowai/scaffold-mcp/dist/cli.cjs" ] &&
+            node "$REPO/node_modules/@agiflowai/scaffold-mcp/dist/cli.cjs" hook --type claude-code.preToolUse || true
+          timeout: 15
+        # The published hook adapter currently supports Claude Code, Codex, and Gemini.
+
+  vibe-lint:
+    description: Architectural review and design pattern enforcement.
+    hooks:
+      - id: vibe-lint-pre-tool-use
+        event: PreToolUse
+        claude:
+          matcher: Edit|Write|MultiEdit
+          # Surfaces the design patterns and deterministic preflight diagnostics
+          # for the file about to be edited.
+          command: >-
+            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            [ -f "$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs" ] &&
+            node "$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs" hook --type claude-code.preToolUse || true
+          timeout: 15
+        # Pi loads @agimon-ai/vibe-lint as an extension instead of a hook; see
+        # the vibe-lint layer in .doom/modes.yaml.
+
+      - id: vibe-lint-post-tool-batch
+        event: PostToolBatch
+        claude:
+          command: >-
+            REPO="${CLAUDE_PROJECT_DIR:-$PWD}" &&
+            [ -f "$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs" ] &&
+            node "$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs" hook --type claude-code.postToolBatch || true
+          timeout: 30
+        # Only Claude Code has a batch-level event.
+        #
+        # There is deliberately no Stop binding: the hook dispatcher registers
+        # claude-code.preToolUse, claude-code.postToolUse and
+        # claude-code.postToolBatch only (the published @agimon-ai/vibe-lint CLI).
+        # A Stop hook asking for claude-code.stop would fail silently behind
+        # `|| true`. Add the dispatcher case before adding the binding.

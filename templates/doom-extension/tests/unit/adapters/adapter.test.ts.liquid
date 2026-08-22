@@ -1,0 +1,10 @@
+import { describe, expect, it } from 'vitest';
+import { {{ adapterName | pascalCase }}{{ capabilityName | pascalCase }}Adapter } from '../../../src/adapters/{{ adapterName | camelCase }}/{{ capabilityName | camelCase }}.ts';
+
+describe('{{ adapterName | pascalCase }}{{ capabilityName | pascalCase }}Adapter', () => {
+  it('satisfies the {{ capabilityName | pascalCase }}Port contract', async () => {
+    const adapter = new {{ adapterName | pascalCase }}{{ capabilityName | pascalCase }}Adapter();
+
+    await expect(adapter.read()).resolves.toBeUndefined();
+  });
+});

@@ -1,0 +1,11 @@
+# @agimon-ai/doompi-cache
+
+Package-owned guidance for Provider prompt cache policy and deterministic routing for DoomPi
+
+## How to use
+
+- [Use Cache](./src/prompts/doompi-use-cache/SKILL.md): Package-specific usage guidance.
+
+## Resources
+
+- [Package README](./README.md): Installation, development commands, Pi entrypoint, and extension-specific usage.

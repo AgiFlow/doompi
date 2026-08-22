@@ -1,0 +1,201 @@
+{
+  "name": "@agimon-ai/doompi-task",
+  "version": "0.0.1-alpha.36",
+  "description": "Persistent, dependency-aware task graphs and subagent delegation for Pi coding sessions.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "delegation",
+    "developer-tools",
+    "doompi",
+    "pi-coding-agent",
+    "pi-package",
+    "subagents",
+    "task-graph",
+    "task-management"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "layers/task/doompi-task"
+  },
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./commands": {
+      "types": "./dist/commands.d.mts",
+      "import": "./dist/commands.mjs",
+      "require": "./dist/commands.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
+    },
+    "./delegation/manager": {
+      "types": "./dist/delegation/manager.d.mts",
+      "import": "./dist/delegation/manager.mjs",
+      "require": "./dist/delegation/manager.cjs"
+    },
+    "./extension": {
+      "types": "./dist/extension.d.mts",
+      "import": "./dist/extension.mjs",
+      "require": "./dist/extension.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./logSinkTelemetry": {
+      "types": "./dist/logSinkTelemetry.d.mts",
+      "import": "./dist/logSinkTelemetry.mjs",
+      "require": "./dist/logSinkTelemetry.cjs"
+    },
+    "./store/invariants": {
+      "types": "./dist/store/invariants.d.mts",
+      "import": "./dist/store/invariants.mjs",
+      "require": "./dist/store/invariants.cjs"
+    },
+    "./store/paths": {
+      "types": "./dist/store/paths.d.mts",
+      "import": "./dist/store/paths.mjs",
+      "require": "./dist/store/paths.cjs"
+    },
+    "./store/processLiveness": {
+      "types": "./dist/store/processLiveness.d.mts",
+      "import": "./dist/store/processLiveness.mjs",
+      "require": "./dist/store/processLiveness.cjs"
+    },
+    "./store/reconcile": {
+      "types": "./dist/store/reconcile.d.mts",
+      "import": "./dist/store/reconcile.mjs",
+      "require": "./dist/store/reconcile.cjs"
+    },
+    "./store/reducer": {
+      "types": "./dist/store/reducer.d.mts",
+      "import": "./dist/store/reducer.mjs",
+      "require": "./dist/store/reducer.cjs"
+    },
+    "./store/taskGraph": {
+      "types": "./dist/store/taskGraph.d.mts",
+      "import": "./dist/store/taskGraph.mjs",
+      "require": "./dist/store/taskGraph.cjs"
+    },
+    "./store/taskStore": {
+      "types": "./dist/store/taskStore.d.mts",
+      "import": "./dist/store/taskStore.mjs",
+      "require": "./dist/store/taskStore.cjs"
+    },
+    "./store/types": {
+      "types": "./dist/store/types.d.mts",
+      "import": "./dist/store/types.mjs",
+      "require": "./dist/store/types.cjs"
+    },
+    "./tool/promptGuidelines": {
+      "types": "./dist/tool/promptGuidelines.d.mts",
+      "import": "./dist/tool/promptGuidelines.mjs",
+      "require": "./dist/tool/promptGuidelines.cjs"
+    },
+    "./tool/responseEnvelope": {
+      "types": "./dist/tool/responseEnvelope.d.mts",
+      "import": "./dist/tool/responseEnvelope.mjs",
+      "require": "./dist/tool/responseEnvelope.cjs"
+    },
+    "./tool/schema": {
+      "types": "./dist/tool/schema.d.mts",
+      "import": "./dist/tool/schema.mjs",
+      "require": "./dist/tool/schema.cjs"
+    },
+    "./tool/taskTool": {
+      "types": "./dist/tool/taskTool.d.mts",
+      "import": "./dist/tool/taskTool.mjs",
+      "require": "./dist/tool/taskTool.cjs"
+    },
+    "./tui/format": {
+      "types": "./dist/tui/format.d.mts",
+      "import": "./dist/tui/format.mjs",
+      "require": "./dist/tui/format.cjs"
+    },
+    "./tui/selectors": {
+      "types": "./dist/tui/selectors.d.mts",
+      "import": "./dist/tui/selectors.mjs",
+      "require": "./dist/tui/selectors.cjs"
+    },
+    "./tui/taskOverlay": {
+      "types": "./dist/tui/taskOverlay.d.mts",
+      "import": "./dist/tui/taskOverlay.mjs",
+      "require": "./dist/tui/taskOverlay.cjs"
+    },
+    "./tui/taskSpace": {
+      "types": "./dist/tui/taskSpace.d.mts",
+      "import": "./dist/tui/taskSpace.mjs",
+      "require": "./dist/tui/taskSpace.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-ui": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1",
+    "typebox": "1.3.16"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

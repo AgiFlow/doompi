@@ -1,0 +1,12 @@
+# Doom Pi Domain
+
+Domain selection and resource staging for Doom Pi sessions.
+
+## How to author
+
+- [Author DoomPi domains](./src/prompts/doompi-author-domain/SKILL.md): Routing and safeguards for editing domain configuration.
+- [`domains.yaml` authoring contract](./src/prompts/doompi-author-domain/references/domains-contract.md): Schemas, source forms, layering, filtering, pinning, and verification.
+
+## Package reference
+
+- [Package README](./README.md): The `/domains` command, voice tools, and what a domain switch stages.

@@ -1,0 +1,10 @@
+import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../services/extensionService.ts';
+import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionDependencies } from '../types/extension.ts';
+
+export function create{{ packageName | replace: "doompi-", "" | pascalCase }}Container(
+  overrides: Partial<{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionDependencies> = {},
+): {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionDependencies {
+  return {
+    service: overrides.service ?? new Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService(),
+  };
+}

@@ -1,0 +1,13 @@
+import type { {{ capabilityName | pascalCase }}Port } from '../../types/{{ capabilityName | camelCase }}.ts';
+
+/**
+ * {{ capabilityDescription }}
+ *
+ * One technology per adapter. This is where {{ adapterName | kebabCase }} enters the
+ * package; the services that depend on the capability keep importing the port.
+ */
+export class {{ adapterName | pascalCase }}{{ capabilityName | pascalCase }}Adapter implements {{ capabilityName | pascalCase }}Port {
+  async read(): Promise<string | undefined> {
+    return undefined;
+  }
+}

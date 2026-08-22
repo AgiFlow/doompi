@@ -1,0 +1,73 @@
+{
+  "name": "@agimon-ai/doompi-telemetry",
+  "version": "0.0.1-alpha.36",
+  "description": "Host-neutral telemetry, OpenTelemetry controls, and Log Sink adapters for DoomPi sessions.",
+  "keywords": [
+    "agent-observability",
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "log-sink",
+    "metrics",
+    "opentelemetry",
+    "pi-package",
+    "telemetry",
+    "tracing"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-telemetry"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./telemetry": {
+      "types": "./dist/telemetry.d.mts",
+      "import": "./dist/telemetry.mjs",
+      "require": "./dist/telemetry.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/log-sink-mcp": "0.29.16"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

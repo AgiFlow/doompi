@@ -1,0 +1,12 @@
+# Doom Pi Config
+
+Package-owned guidance for DoomPi runtime settings, source precedence, and typed session context.
+
+## How to author
+
+- [Author DoomPi runtime configuration](./src/prompts/doompi-author-config/SKILL.md): Change `config.yaml` and consume session configuration safely.
+- [Configuration authoring contract](./src/prompts/doompi-author-config/references/config-contract.md): Runtime schema, source merge rules, typed context, transition state, and verification.
+
+## Package reference
+
+- [Package README](./README.md): Runtime configuration, immutable context, transitions, and public APIs.

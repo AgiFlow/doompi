@@ -1,0 +1,65 @@
+{
+  "name": "@agimon-ai/vibe-lint-plugin-doom-extension",
+  "version": "0.0.1-alpha.34",
+  "description": "Deterministic Vibe-Lint rules for DoomPi extension packages",
+  "keywords": [
+    "doompi",
+    "lint",
+    "typescript",
+    "vibe-lint"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/tooling/vibe-lint-plugin-doom-extension"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint": "0.0.1-alpha.26",
+    "@types/node": "26.1.1",
+    "@vitest/coverage-v8": "4.1.10",
+    "tsdown": "0.22.14",
+    "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "@agimon-ai/vibe-lint": "0.0.1-alpha.26"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

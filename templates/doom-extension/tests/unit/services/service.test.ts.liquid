@@ -1,0 +1,8 @@
+import { describe, expect, it } from 'vitest';
+import { {{ serviceName | camelCase }} } from '../../../src/services/{{ serviceName | camelCase }}.ts';
+
+describe('{{ serviceName | camelCase }}', () => {
+  it('derives its result from its arguments alone', () => {
+    expect({{ serviceName | camelCase }}({ value: 'example' }, 1_000)).toEqual({ value: 'example', observedAt: 1_000 });
+  });
+});

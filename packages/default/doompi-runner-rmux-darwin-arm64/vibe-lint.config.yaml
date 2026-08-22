@@ -1,0 +1,8 @@
+extends:
+  - "@agimonai/rig-vibe-lint-config/configs/cli-lib"
+
+patterns:
+  package-surface:
+    description: Platform-specific RMUX runtime package metadata.
+    includes:
+      - "package.json"

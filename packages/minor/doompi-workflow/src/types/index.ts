@@ -1,0 +1,11 @@
+export const PACKAGE_SOURCE = '@agimon-ai/doompi-workflow';
+export const COMMAND_DESCRIPTION = 'Doom Pi workflow execution and monitoring integration';
+export const LEADER_KEY = 'w';
+export const LEADER_LABEL = 'workflows';
+export const LEADER_ORDER = 50;
+export const LEADER_ENABLE_ACTION = 'workflow.enable';
+export const LEADER_DISABLE_ACTION = 'workflow.disable';
+export const LEADER_MANAGE_ACTION = 'workflow.manage';
+export const LEADER_RECOVER_ACTION = 'workflow.recover';
+export const LEADER_CATALOG_ACTION = 'workflow.catalog';
+export const LEADER_DETAIL = 'multi-step agent runs';

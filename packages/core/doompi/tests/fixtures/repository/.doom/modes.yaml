@@ -1,0 +1,44 @@
+# Registry-backed fixture for installed-package startup tests.
+default:
+  packages:
+    - "@agimon-ai/doompi-help"
+    - "@agimon-ai/doompi-hook"
+    - "@agimon-ai/doompi-goal"
+    - "@agimon-ai/doompi-voice"
+    - "@agimon-ai/doompi-runner"
+    - "@agimon-ai/doompi-read"
+    - "@agimon-ai/doompi-grep"
+    - "@agimon-ai/doompi-edit"
+    - "@agimon-ai/doompi-file-edit"
+    - "@agimon-ai/doompi-autocompact"
+    - "@agimon-ai/doompi-loop"
+    - "@agimon-ai/doompi-plan"
+    - "@agimon-ai/doompi-workflow"
+    - "@agimon-ai/doompi-log"
+    - "@agimon-ai/doompi-mcp"
+layers:
+  team:
+    packages:
+      - name: "@agimon-ai/doompi-team"
+        config:
+          models:
+            - model: openai-codex/gpt-5.6-luna
+              thinking: xhigh
+          excludeTools: [ask_user_question, intercom, subagent]
+  ask-user:
+    packages:
+      - "@agimon-ai/doompi-user-feedback"
+  task:
+    packages:
+      - "@agimon-ai/doompi-task"
+  vibe-lint:
+    packages:
+      - "@agimon-ai/vibe-lint"
+defaultMajorMode: copilot
+majorMode:
+  minimal:
+    description: Lean installed-package startup fixture.
+    layers: [team, task]
+  copilot:
+    description: Full installed-package startup fixture.
+    layers: [team, ask-user, task, vibe-lint]

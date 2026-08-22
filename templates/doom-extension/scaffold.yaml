@@ -1,0 +1,288 @@
+boilerplate:
+  - name: scaffold-doom-extension
+    targetFolder: packages/default
+    description: |-
+      Create a publishable Pi extension package for the DoomPi distribution using the repository's canonical KISS service-layer structure.
+      The generated package uses plain factory dependency injection, a thin standalone Pi entrypoint, deterministic lifecycle cleanup, strict TypeScript, dual ESM/CJS output, and portable Vibe-Lint boundaries.
+    variables_schema:
+      type: object
+      properties:
+        packageName:
+          type: string
+          description: Publishable package folder/name without the @agimon-ai scope (doompi-* in kebab-case)
+          pattern: "^doompi-[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          maxLength: 58
+          example: doompi-log
+        packageDescription:
+          type: string
+          description: Public npm package description; quotes, backslashes, and newlines are rejected so generated JSON stays valid
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Session metrics for DoomPi
+        packageKeyword:
+          type: string
+          description: Lowercase capability-specific npm search keyword
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: session-metrics
+        commandName:
+          type: string
+          description: Pi command name without the leading slash
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          example: doom-log
+        commandDescription:
+          type: string
+          description: Command help text and default service response
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          example: Show session metrics
+        author:
+          type: string
+          description: Package author and copyright holder
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,'()-]*$"
+          minLength: 1
+          maxLength: 120
+          default: Vuong Ngo
+          example: Vuong Ngo
+        copyrightYear:
+          type: string
+          description: Year recorded in the LICENSE copyright line
+          pattern: "^[0-9]{4}$"
+          default: "2026"
+          example: "2026"
+      required:
+        - packageName
+        - packageDescription
+        - packageKeyword
+        - commandName
+        - commandDescription
+      additionalProperties: false
+    includes:
+      - .oxlintrc.json
+      - LICENSE
+      - README.md
+      - llms.txt
+      - package.json
+      - project.json
+      - tsconfig.json
+      - tsdown.config.ts
+      - vitest.config.ts
+      - vibe-lint.config.yaml
+      - src/exports/index.ts
+      - src/types/extension.ts
+      - src/services/extensionService.ts
+      - src/container/index.ts
+      - src/commands/command.ts->src/commands/{{ commandName | camelCase }}Command.ts
+      - 'src/prompts/use/SKILL.md->src/prompts/doompi-use-{{ packageName | replace: "doompi-", "" | kebabCase }}/SKILL.md'
+      - src/exports/extensions/pi.ts
+      - src/adapters/pi/extension.ts
+      - tests/unit/services/extensionService.test.ts
+      - tests/integration/extensions/pi.test.ts
+      - tests/contract/packageShape.test.ts
+    instruction: |-
+      Generate the minimum canonical DoomPi extension. The executable source vocabulary is fixed: types, schemas, services, adapters, providers, container, commands, tui, and bin, with src/exports as the only public surface. Package-owned Help resources live under src/prompts. Omit unused folders; do not introduce alternate architecture roots.
+
+      File responsibilities:
+      - src/exports/: The only public surface. One pure re-export file per package.json exports subpath, mirroring the subpath tree. No src/index.ts.
+      - src/types/: Ports and domain contracts, owned by the core. A port is the interface the package needs, named in the package's own vocabulary; the adapter that satisfies it lives elsewhere and imports it from here. Never declare a port beside its implementation, or services can no longer depend on the capability at all.
+      - src/schemas/: Runtime TypeBox or Zod validation contracts.
+      - src/services/: Host-neutral business behavior, flat. The package already names its subject, so do not add a src/services/<subject> folder; group only where two or more domains need telling apart. A service is a function of its arguments: it may import types and schemas, never Pi, Node builtins, TUI, containers, or concrete adapters, and it must not read Date.now(), Math.random(), timers or process.* ambiently. Take a clock, an id factory or the environment as a parameter.
+      - src/providers/: Cordis Services published on the shared Context for other extensions to consume. Extend Service and call super(ctx, name).
+      - src/adapters/: Implementations of the ports declared in src/types, one per technology. This is where the filesystem, processes, the network, the clock and the Pi host API enter. src/adapters/pi connects to the shared Doom Cordis host, mounts one package-owned plugin fiber, and disposes that fiber before releasing its host lease on session_shutdown. Never construct a package-local Cordis Context.
+      - src/container/index.ts: Plain factory dependency construction and test overrides. Use @deepseek-ai/cordis, never inversify.
+      - src/commands/: Pi command translation; invoke injected service contracts and map results to UI.
+      - src/prompts/: Package-owned Help resources. Each direct child is a kebab-case skill directory containing SKILL.md. Prompts are published as source resources, linked from llms.txt, and registered through optional Cordis Help injection. Do not export them or copy them into dist.
+      - llms.txt: Concise H1-led package Help index whose relative links resolve to explicitly shipped resources and route to every package prompt.
+
+      Run pnpm fixcode in the generated package before the first lint. Rendered names change line widths, so a template signature that wraps in the source can render as a single line the formatter wants joined.
+
+      Pi packages use version 0.84.2 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
+features:
+  - name: scaffold-doom-prompt
+    description: Add one package-owned DoomPi Help prompt under src/prompts for either extension authoring or user guidance.
+    variables_schema:
+      type: object
+      properties:
+        promptName:
+          type: string
+          description: Help skill name beginning with doompi-author- or doompi-use-
+          pattern: "^doompi-(author|use)-[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          maxLength: 64
+          example: doompi-use-log
+        promptDescription:
+          type: string
+          description: Concise discovery description explaining what the prompt helps with and when it applies
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/@-]*$"
+          minLength: 1
+          maxLength: 480
+          example: Use DoomPi Log to inspect structured session diagnostics
+      required:
+        - promptName
+        - promptDescription
+      additionalProperties: false
+    includes:
+      - src/prompts/prompt/SKILL.md->src/prompts/{{ promptName | kebabCase }}/SKILL.md
+    instruction: |-
+      Generate one package-owned Help prompt at src/prompts/{{ promptName | kebabCase }}/SKILL.md. Keep its instructions specific to the owning package and put substantial conditional detail in references only when needed.
+
+      Complete the package integration after generation:
+      - Link the prompt from the matching How to author or How to use section in llms.txt.
+      - Register a descriptor with the exact same name and description through an optional cordis.inject([DOOM_HELP_SERVICE], ...) binding in the Pi adapter. Use the package name as source, import.meta.url as moduleUrl, and return the contribution disposer.
+      - Ensure package.json publishes the exact src/prompts directory. Do not add an export, build entry, or dist copy for Markdown prompts.
+      - Validate the new skill and run the package contract, integration, lint, typecheck, and build targets.
+    patterns:
+      - src/prompts/**/*.md
+  - name: scaffold-doom-service
+    description: Add one host-neutral service under src/services with its unit test.
+    variables_schema:
+      type: object
+      properties:
+        serviceName:
+          type: string
+          description: camelCase service module and function name
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: idlePolicy
+        serviceDescription:
+          type: string
+          description: What the service decides or derives, in one line
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Decide whether an idle session should stop
+      required:
+        - serviceName
+        - serviceDescription
+      additionalProperties: false
+    includes:
+      - src/services/service.ts->src/services/{{ serviceName | camelCase }}.ts
+      - tests/unit/services/service.test.ts->tests/unit/services/{{ serviceName | camelCase }}.test.ts
+    instruction: |-
+      Generate one host-neutral service at src/services/{{ serviceName | camelCase }}.ts. Keep src/services flat; the package already names its subject, so add a subfolder only when two or more domains need telling apart.
+
+      The service is a function of its arguments. It may import src/types and src/schemas, never Pi, node builtins, TUI, containers, or concrete adapters, and it must not read Date.now(), Math.random(), timers, or process.* ambiently. Take the clock, id factory, or environment as a parameter so the unit test stays deterministic.
+
+      Complete the package integration after generation:
+      - Replace the placeholder input, result, and body with the real contract; do not keep the generated shape.
+      - Re-export from src/exports/index.ts only if the service is part of the package's public surface.
+      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    patterns:
+      - src/services/**/*.ts
+  - name: scaffold-doom-command
+    description: Add one Pi command under src/commands with its integration test.
+    variables_schema:
+      type: object
+      properties:
+        commandName:
+          type: string
+          description: Pi command name without the leading slash
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          maxLength: 48
+          example: doom-log
+        commandDescription:
+          type: string
+          description: Command help text shown in the Pi command list
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Show session metrics
+      required:
+        - commandName
+        - commandDescription
+      additionalProperties: false
+    includes:
+      - src/commands/featureCommand.ts->src/commands/{{ commandName | camelCase }}Command.ts
+      - tests/integration/commands/featureCommand.test.ts->tests/integration/commands/{{ commandName | camelCase }}Command.test.ts
+    instruction: |-
+      Generate one Pi command at src/commands/{{ commandName | camelCase }}Command.ts. Commands are a translation layer only: invoke an injected contract and map its result to the UI. Business behavior belongs in src/services.
+
+      Complete the package integration after generation:
+      - Call register{{ commandName | pascalCase }}Command from the package's Pi adapter, inside the plugin fiber, passing dependencies built by src/container/index.ts. Do not construct the dependency inline.
+      - Guard every UI call with ctx.hasUI so the command stays headless-safe, and check ctx.mode when it needs the TUI.
+      - Document the command under the README Use section.
+      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    patterns:
+      - src/commands/**/*.ts
+  - name: scaffold-doom-provider
+    description: Add one Cordis provider under src/providers that publishes a service on the shared Context.
+    variables_schema:
+      type: object
+      properties:
+        providerName:
+          type: string
+          description: kebab-case capability name, used for the class name and the doom/ service key
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          maxLength: 48
+          example: session-metrics
+        providerDescription:
+          type: string
+          description: What the provider publishes for other extensions to consume
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Publish session metrics for other extensions to read
+      required:
+        - providerName
+        - providerDescription
+      additionalProperties: false
+    includes:
+      - src/providers/provider.ts->src/providers/{{ providerName | camelCase }}.ts
+    instruction: |-
+      Generate one Cordis provider at src/providers/{{ providerName | camelCase }}.ts. A provider is the package's contribution to the shared Doom Context: it extends Service, calls super(context, key), and is what other extensions inject rather than importing across packages.
+
+      Complete the package integration after generation:
+      - Construct the service inside the package's own plugin fiber in src/adapters/pi, never on a package-local Context, so host disposal unwinds it.
+      - Keep the declare module augmentation key identical to the exported service key string.
+      - Consumers read it through cordis.inject or the generated read{{ providerName | pascalCase }} helper and must tolerate undefined; a provider is optional until some extension mounts it.
+      - Export the service, its key, and its snapshot type from src/exports/index.ts if other packages consume them.
+      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    patterns:
+      - src/providers/**/*.ts
+  - name: scaffold-doom-adapter
+    description: Add one port under src/types and the adapter under src/adapters that implements it, with a unit test.
+    variables_schema:
+      type: object
+      properties:
+        capabilityName:
+          type: string
+          description: camelCase capability the port names, in the package's own vocabulary
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: clock
+        adapterName:
+          type: string
+          description: camelCase technology that satisfies the port, used as the src/adapters subfolder
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: node
+        capabilityDescription:
+          type: string
+          description: What the capability provides, in one line
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Read the current wall clock time
+      required:
+        - capabilityName
+        - adapterName
+        - capabilityDescription
+      additionalProperties: false
+    includes:
+      - src/types/port.ts->src/types/{{ capabilityName | camelCase }}.ts
+      - src/adapters/adapter/adapter.ts->src/adapters/{{ adapterName | camelCase }}/{{ capabilityName | camelCase }}.ts
+      - tests/unit/adapters/adapter.test.ts->tests/unit/adapters/{{ capabilityName | camelCase }}.test.ts
+    instruction: |-
+      Generate the {{ capabilityName | pascalCase }}Port in src/types and one {{ adapterName | camelCase }} implementation of it in src/adapters. The dependency points inward: the port is named in the package's vocabulary and the adapter imports it, never the reverse.
+
+      If src/types/{{ capabilityName | camelCase }}.ts already exists, keep the existing port, delete the generated one, and point the adapter import at it rather than declaring a second contract.
+
+      Complete the package integration after generation:
+      - Replace the placeholder read() signature with the real contract before writing the implementation.
+      - Wire the adapter through src/container/index.ts so services receive the port and tests can override it.
+      - Keep filesystem, process, network, clock, and Pi host access inside this folder; services must keep importing only the port.
+      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    patterns:
+      - src/adapters/**/*.ts
+      - src/types/**/*.ts

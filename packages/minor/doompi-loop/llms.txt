@@ -1,0 +1,9 @@
+# Doom Pi Loop
+
+## Resources
+
+- [Package README](./README.md): Commands, interval limits, lifecycle, cost, and cross-extension launchers.
+
+## How to use
+
+- [doompi-use-loop](./src/prompts/doompi-use-loop/SKILL.md): Start, inspect, and stop session-scoped recurring prompts safely.

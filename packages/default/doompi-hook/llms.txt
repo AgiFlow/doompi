@@ -1,0 +1,11 @@
+# Doom Pi Hook
+
+Claude-Code-compatible repository and plugin hooks for Doom Pi sessions.
+
+## How to author
+
+- [Author DoomPi hooks](./src/prompts/doompi-author-hook/SKILL.md): Create `.doom/hooks.yaml` groups and Claude-compatible hook commands.
+
+## Package reference
+
+- [Package README](./README.md): The hook registry, group selection, event mapping, decisions, and failure handling.

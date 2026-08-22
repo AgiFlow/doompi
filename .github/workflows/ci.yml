@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Pull requests run on GitHub-hosted runners, pushes to main on the self-hosted
+# macOS box.
+#
+# A pull request from a fork is untrusted code, and this workspace runs install
+# scripts (the root `prepare` builds the vibe-lint plugin) before any check has
+# had a chance to look at the diff. On a public repository that is arbitrary
+# execution on whatever machine picks the job up, so it must not be ours.
+#
+# The runner list is inlined rather than held in `env`: the env context is not
+# available to `runs-on`.
+
+jobs:
+  quality:
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-14"]' || '["self-hosted", "macOS", "agirepo-deploy"]') }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out materialized package snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up DoomPi workspace
+        uses: ./.github/actions/setup-monorepo
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Audit ownership and dependency boundaries
+        run: pnpm audit:workspace
+
+      - name: Check formatting
+        run: pnpm fmt:check
+
+      - name: Check generated hook settings
+        run: pnpm hooks:check
+
+      - name: Build packages
+        run: pnpm nx run-many -t build --parallel=3
+
+      - name: Validate plugin and workflow examples
+        run: pnpm examples:check
+
+      - name: Lint packages
+        run: pnpm nx run-many -t lint --parallel=3
+
+      - name: Run deterministic Vibe-Lint review
+        run: pnpm lint:vibe --preflight-only
+
+      - name: Type-check packages
+        run: pnpm nx run-many -t typecheck --parallel=3
+
+      - name: Test packages
+        run: pnpm nx run-many -t test --parallel=3
+
+  # Packed-install gate. Push-only, on the self-hosted runner, for two reasons:
+  # the job packs and installs all 40 packages for real, and it asserts startup
+  # latency percentiles with deltas in the 100-150ms range. Those thresholds are
+  # meaningless on a shared GitHub-hosted runner and would fail contributors for
+  # reasons they cannot act on.
+  installed-runtime:
+    needs: quality
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, macOS, agirepo-deploy]
+    timeout-minutes: 90
+    steps:
+      - name: Check out materialized package snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up DoomPi workspace
+        uses: ./.github/actions/setup-monorepo
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Audit ownership and dependency boundaries
+        run: pnpm audit:workspace
+
+      - name: Build package matrix
+        run: pnpm build
+
+      - name: Pack, install, and test the runtime
+        run: pnpm nx run-many -t test-system --parallel=1

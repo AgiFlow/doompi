@@ -1,0 +1,12 @@
+# Doom Pi Profile
+
+Package-owned guidance for DoomPi profile discovery, personas, environment defaults, and precedence.
+
+## How to author
+
+- [Author DoomPi profiles](./src/prompts/doompi-author-profile/SKILL.md): Configure personal and repository profiles.
+- [Profiles authoring contract](./src/prompts/doompi-author-profile/references/profiles-contract.md): File locations, discovery, precedence, path safety, environment defaults, and verification.
+
+## Package reference
+
+- [Package README](./README.md): Profile behavior, activation, and public package entries.

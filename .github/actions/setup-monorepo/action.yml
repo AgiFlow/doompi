@@ -1,0 +1,126 @@
+name: Setup DoomPi monorepo
+description: Install the pinned Node and pnpm toolchain and DoomPi workspace dependencies.
+
+runs:
+  using: composite
+  steps:
+    # External JavaScript actions are downloaded through codeload.github.com.
+    # Install the pinned toolchain directly so self-hosted runners keep working
+    # when that service throttles their shared public IP.
+    - name: Install Node and pnpm
+      shell: bash
+      env:
+        NODE_VERSION: 22.22.1
+        PNPM_VERSION: 11.1.3
+      run: |
+        set -euo pipefail
+
+        case "$(uname -s):$(uname -m)" in
+          Darwin:arm64) NODE_PLATFORM="darwin-arm64" ;;
+          Darwin:x86_64) NODE_PLATFORM="darwin-x64" ;;
+          Linux:aarch64 | Linux:arm64) NODE_PLATFORM="linux-arm64" ;;
+          Linux:x86_64) NODE_PLATFORM="linux-x64" ;;
+          *)
+            echo "Unsupported Node platform: $(uname -s) $(uname -m)"
+            exit 1
+            ;;
+        esac
+
+        NODE_DIST_URL="https://nodejs.org/dist/v${NODE_VERSION}"
+        SHASUMS_PATH="${RUNNER_TEMP}/node-v${NODE_VERSION}-SHASUMS256.txt"
+        curl --fail --silent --show-error --location --retry 5 \
+          "${NODE_DIST_URL}/SHASUMS256.txt" --output "${SHASUMS_PATH}"
+
+        NODE_ARCHIVE=""
+        NODE_CHECKSUM=""
+        while read -r CHECKSUM ARCHIVE; do
+          case "${ARCHIVE}" in
+            *-"${NODE_PLATFORM}.tar.gz")
+              NODE_ARCHIVE="${ARCHIVE}"
+              NODE_CHECKSUM="${CHECKSUM}"
+              break
+              ;;
+          esac
+        done < "${SHASUMS_PATH}"
+
+        if [ -z "${NODE_ARCHIVE}" ] || [ -z "${NODE_CHECKSUM}" ]; then
+          echo "Node ${NODE_VERSION} does not provide a ${NODE_PLATFORM} archive"
+          exit 1
+        fi
+
+        NODE_ARCHIVE_PATH="${RUNNER_TEMP}/${NODE_ARCHIVE}"
+        NODE_INSTALL_DIR="${RUNNER_TEMP}/setup-node-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+        curl --fail --silent --show-error --location --retry 5 \
+          "${NODE_DIST_URL}/${NODE_ARCHIVE}" --output "${NODE_ARCHIVE_PATH}"
+
+        if command -v sha256sum >/dev/null 2>&1; then
+          ACTUAL_CHECKSUM="$(sha256sum "${NODE_ARCHIVE_PATH}" | awk '{print $1}')"
+        else
+          ACTUAL_CHECKSUM="$(shasum -a 256 "${NODE_ARCHIVE_PATH}" | awk '{print $1}')"
+        fi
+        if [ "${ACTUAL_CHECKSUM}" != "${NODE_CHECKSUM}" ]; then
+          echo "Node archive checksum mismatch"
+          exit 1
+        fi
+
+        rm -rf "${NODE_INSTALL_DIR}"
+        mkdir -p "${NODE_INSTALL_DIR}"
+        tar -xzf "${NODE_ARCHIVE_PATH}" --strip-components=1 -C "${NODE_INSTALL_DIR}"
+        rm -f "${NODE_ARCHIVE_PATH}" "${SHASUMS_PATH}"
+
+        echo "${NODE_INSTALL_DIR}/bin" >> "${GITHUB_PATH}"
+        export PATH="${NODE_INSTALL_DIR}/bin:${PATH}"
+        if [ "$(node -p 'process.versions.node')" != "${NODE_VERSION}" ]; then
+          echo "Expected Node ${NODE_VERSION}, received $(node --version)"
+          exit 1
+        fi
+
+        PNPM_INSTALL_DIR="${RUNNER_TEMP}/setup-pnpm-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+        rm -rf "${PNPM_INSTALL_DIR}"
+        npm install --global --prefix "${PNPM_INSTALL_DIR}" --no-audit --no-fund "pnpm@${PNPM_VERSION}"
+
+        echo "${PNPM_INSTALL_DIR}/bin" >> "${GITHUB_PATH}"
+        export PATH="${PNPM_INSTALL_DIR}/bin:${PATH}"
+        if [ "$(pnpm --version)" != "${PNPM_VERSION}" ]; then
+          echo "Expected pnpm ${PNPM_VERSION}, received $(pnpm --version)"
+          exit 1
+        fi
+
+        node --version
+        pnpm --version
+
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        STORE_DIR="$GITHUB_WORKSPACE/node_modules/.pnpm-store"
+        {
+          echo "PNPM_STORE_DIR=$STORE_DIR"
+          echo "npm_config_store_dir=$STORE_DIR"
+          echo "NPM_CONFIG_STORE_DIR=$STORE_DIR"
+          echo "npm_config_enable_global_virtual_store=false"
+          echo "NPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false"
+          echo "NX_DAEMON=false"
+        } >> "$GITHUB_ENV"
+
+        rm -rf node_modules
+
+    - shell: bash
+      run: |
+        set -euo pipefail
+        pnpm install \
+          --frozen-lockfile \
+          --config.store-dir="$PNPM_STORE_DIR" \
+          --config.enableGlobalVirtualStore=false \
+          --config.enable-global-virtual-store=false
+        pnpm config get store-dir
+        pnpm config get enableGlobalVirtualStore || true
+        pnpm config get enable-global-virtual-store || true
+        pnpm store path
+
+    - name: Verify workspace toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        node -e "console.log(require.resolve('nx/package.json')); console.log(require.resolve('typescript'))"
+        ./node_modules/.bin/nx reset

@@ -1,0 +1,24 @@
+{
+  "name": "doompi-examples",
+  "owner": {
+    "name": "DoomPi Contributors"
+  },
+  "description": "Portable development, testing, and writing plugins composed by DoomPi.",
+  "plugins": [
+    {
+      "name": "development",
+      "source": "./plugins/development",
+      "description": "Implement and verify scoped code changes."
+    },
+    {
+      "name": "testing",
+      "source": "./plugins/testing",
+      "description": "Test behavior and review code changes with evidence."
+    },
+    {
+      "name": "blog-writing",
+      "source": "./plugins/blog-writing",
+      "description": "Create source-backed, review-ready blog posts."
+    }
+  ]
+}

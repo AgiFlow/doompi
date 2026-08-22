@@ -1,0 +1,358 @@
+{
+  "name": "@agimon-ai/doompi",
+  "version": "0.0.1-alpha.36",
+  "description": "Opinionated, composable Pi distribution for scoped agent tools, skills, MCP servers, and developer workflows.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "pi",
+    "pi-coding-agent",
+    "pi-package"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi"
+  },
+  "bin": {
+    "doom-runner": "./dist/bin/doomRunner.mjs",
+    "doompi": "./dist/bin/cli.mjs",
+    "dpi": "./dist/bin/dpi.mjs"
+  },
+  "files": [
+    "assets",
+    "dist",
+    "llms.txt",
+    "README.md",
+    "src/prompts"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./bin/cli": {
+      "types": "./dist/bin/cli.d.mts",
+      "import": "./dist/bin/cli.mjs",
+      "require": "./dist/bin/cli.cjs"
+    },
+    "./bin/doomRunner": {
+      "types": "./dist/bin/doomRunner.d.mts",
+      "import": "./dist/bin/doomRunner.mjs",
+      "require": "./dist/bin/doomRunner.cjs"
+    },
+    "./bin/dpi": {
+      "types": "./dist/bin/dpi.d.mts",
+      "import": "./dist/bin/dpi.mjs",
+      "require": "./dist/bin/dpi.cjs"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.mts",
+      "import": "./dist/cli/index.mjs",
+      "require": "./dist/cli/index.cjs"
+    },
+    "./cli/cliApp": {
+      "types": "./dist/cli/cliApp.d.mts",
+      "import": "./dist/cli/cliApp.mjs",
+      "require": "./dist/cli/cliApp.cjs"
+    },
+    "./cli/compatibilityOptions": {
+      "types": "./dist/cli/compatibilityOptions.d.mts",
+      "import": "./dist/cli/compatibilityOptions.mjs",
+      "require": "./dist/cli/compatibilityOptions.cjs"
+    },
+    "./cli/help": {
+      "types": "./dist/cli/help.d.mts",
+      "import": "./dist/cli/help.mjs",
+      "require": "./dist/cli/help.cjs"
+    },
+    "./cli/matrixOptions": {
+      "types": "./dist/cli/matrixOptions.d.mts",
+      "import": "./dist/cli/matrixOptions.mjs",
+      "require": "./dist/cli/matrixOptions.cjs"
+    },
+    "./cli/options": {
+      "types": "./dist/cli/options.d.mts",
+      "import": "./dist/cli/options.mjs",
+      "require": "./dist/cli/options.cjs"
+    },
+    "./commands": {
+      "types": "./dist/commands/index.d.mts",
+      "import": "./dist/commands/index.mjs",
+      "require": "./dist/commands/index.cjs"
+    },
+    "./commands/baseCommand": {
+      "types": "./dist/commands/baseCommand.d.mts",
+      "import": "./dist/commands/baseCommand.mjs",
+      "require": "./dist/commands/baseCommand.cjs"
+    },
+    "./commands/compatibilityCommand": {
+      "types": "./dist/commands/compatibilityCommand.d.mts",
+      "import": "./dist/commands/compatibilityCommand.mjs",
+      "require": "./dist/commands/compatibilityCommand.cjs"
+    },
+    "./commands/emitMcpCommand": {
+      "types": "./dist/commands/emitMcpCommand.d.mts",
+      "import": "./dist/commands/emitMcpCommand.mjs",
+      "require": "./dist/commands/emitMcpCommand.cjs"
+    },
+    "./commands/explainCommand": {
+      "types": "./dist/commands/explainCommand.d.mts",
+      "import": "./dist/commands/explainCommand.mjs",
+      "require": "./dist/commands/explainCommand.cjs"
+    },
+    "./commands/initCommand": {
+      "types": "./dist/commands/initCommand.d.mts",
+      "import": "./dist/commands/initCommand.mjs",
+      "require": "./dist/commands/initCommand.cjs"
+    },
+    "./commands/launchCommand": {
+      "types": "./dist/commands/launchCommand.d.mts",
+      "import": "./dist/commands/launchCommand.mjs",
+      "require": "./dist/commands/launchCommand.cjs"
+    },
+    "./commands/syncCommand": {
+      "types": "./dist/commands/syncCommand.d.mts",
+      "import": "./dist/commands/syncCommand.mjs",
+      "require": "./dist/commands/syncCommand.cjs"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.mts",
+      "import": "./dist/config/index.mjs",
+      "require": "./dist/config/index.cjs"
+    },
+    "./config/harnessState": {
+      "types": "./dist/config/harnessState.d.mts",
+      "import": "./dist/config/harnessState.mjs",
+      "require": "./dist/config/harnessState.cjs"
+    },
+    "./config/projectTrust": {
+      "types": "./dist/config/projectTrust.d.mts",
+      "import": "./dist/config/projectTrust.mjs",
+      "require": "./dist/config/projectTrust.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./entries/domains": {
+      "types": "./dist/entries/domains.d.mts",
+      "import": "./dist/entries/domains.mjs",
+      "require": "./dist/entries/domains.cjs"
+    },
+    "./entries/cordisFinalizer": {
+      "types": "./dist/entries/cordisFinalizer.d.mts",
+      "import": "./dist/entries/cordisFinalizer.mjs",
+      "require": "./dist/entries/cordisFinalizer.cjs"
+    },
+    "./entries/cordisHost": {
+      "types": "./dist/entries/cordisHost.d.mts",
+      "import": "./dist/entries/cordisHost.mjs",
+      "require": "./dist/entries/cordisHost.cjs"
+    },
+    "./entries/doom": {
+      "types": "./dist/entries/doom.d.mts",
+      "import": "./dist/entries/doom.mjs",
+      "require": "./dist/entries/doom.cjs"
+    },
+    "./entries/effort": {
+      "types": "./dist/entries/effort.d.mts",
+      "import": "./dist/entries/effort.mjs",
+      "require": "./dist/entries/effort.cjs"
+    },
+    "./entries/modeCatalog": {
+      "types": "./dist/entries/modeCatalog.d.mts",
+      "import": "./dist/entries/modeCatalog.mjs",
+      "require": "./dist/entries/modeCatalog.cjs"
+    },
+    "./entries/ollamaProvider": {
+      "types": "./dist/entries/ollamaProvider.d.mts",
+      "import": "./dist/entries/ollamaProvider.mjs",
+      "require": "./dist/entries/ollamaProvider.cjs"
+    },
+    "./entries/styleSystem": {
+      "types": "./dist/entries/styleSystem.d.mts",
+      "import": "./dist/entries/styleSystem.mjs",
+      "require": "./dist/entries/styleSystem.cjs"
+    },
+    "./logSinkTelemetry": {
+      "types": "./dist/logSinkTelemetry.d.mts",
+      "import": "./dist/logSinkTelemetry.mjs",
+      "require": "./dist/logSinkTelemetry.cjs"
+    },
+    "./services": {
+      "types": "./dist/services/index.d.mts",
+      "import": "./dist/services/index.mjs",
+      "require": "./dist/services/index.cjs"
+    },
+    "./services/compatibility": {
+      "types": "./dist/services/compatibility/index.d.mts",
+      "import": "./dist/services/compatibility/index.mjs",
+      "require": "./dist/services/compatibility/index.cjs"
+    },
+    "./services/compatibility/antigravity": {
+      "types": "./dist/services/compatibility/antigravity.d.mts",
+      "import": "./dist/services/compatibility/antigravity.mjs",
+      "require": "./dist/services/compatibility/antigravity.cjs"
+    },
+    "./services/compatibility/codex": {
+      "types": "./dist/services/compatibility/codex.d.mts",
+      "import": "./dist/services/compatibility/codex.mjs",
+      "require": "./dist/services/compatibility/codex.cjs"
+    },
+    "./services/compatibility/process": {
+      "types": "./dist/services/compatibility/process.d.mts",
+      "import": "./dist/services/compatibility/process.mjs",
+      "require": "./dist/services/compatibility/process.cjs"
+    },
+    "./services/compatibility/shared": {
+      "types": "./dist/services/compatibility/shared.d.mts",
+      "import": "./dist/services/compatibility/shared.mjs",
+      "require": "./dist/services/compatibility/shared.cjs"
+    },
+    "./services/compatibilityContext": {
+      "types": "./dist/services/compatibilityContext.d.mts",
+      "import": "./dist/services/compatibilityContext.mjs",
+      "require": "./dist/services/compatibilityContext.cjs"
+    },
+    "./services/composer": {
+      "types": "./dist/services/composer.d.mts",
+      "import": "./dist/services/composer.mjs",
+      "require": "./dist/services/composer.cjs"
+    },
+    "./services/harnessContext": {
+      "types": "./dist/services/harnessContext.d.mts",
+      "import": "./dist/services/harnessContext.mjs",
+      "require": "./dist/services/harnessContext.cjs"
+    },
+    "./services/matrixSwitcher": {
+      "types": "./dist/services/matrixSwitcher.d.mts",
+      "import": "./dist/services/matrixSwitcher.mjs",
+      "require": "./dist/services/matrixSwitcher.cjs"
+    },
+    "./services/modeCatalog": {
+      "types": "./dist/services/modeCatalog.d.mts",
+      "import": "./dist/services/modeCatalog.mjs",
+      "require": "./dist/services/modeCatalog.cjs"
+    },
+    "./services/mcpFilter": {
+      "types": "./dist/services/mcpFilter.d.mts",
+      "import": "./dist/services/mcpFilter.mjs",
+      "require": "./dist/services/mcpFilter.cjs"
+    },
+    "./services/piSettings": {
+      "types": "./dist/services/piSettings.d.mts",
+      "import": "./dist/services/piSettings.mjs",
+      "require": "./dist/services/piSettings.cjs"
+    },
+    "./services/resourceCollector": {
+      "types": "./dist/services/resourceCollector.d.mts",
+      "import": "./dist/services/resourceCollector.mjs",
+      "require": "./dist/services/resourceCollector.cjs"
+    },
+    "./services/syncState": {
+      "types": "./dist/services/syncState.d.mts",
+      "import": "./dist/services/syncState.mjs",
+      "require": "./dist/services/syncState.cjs"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.mts",
+      "import": "./dist/utils/index.mjs",
+      "require": "./dist/utils/index.cjs"
+    },
+    "./utils/json": {
+      "types": "./dist/utils/json.d.mts",
+      "import": "./dist/utils/json.mjs",
+      "require": "./dist/utils/json.cjs"
+    },
+    "./utils/moduleResolution": {
+      "types": "./dist/utils/moduleResolution.d.mts",
+      "import": "./dist/utils/moduleResolution.mjs",
+      "require": "./dist/utils/moduleResolution.cjs"
+    },
+    "./utils/repository": {
+      "types": "./dist/utils/repository.d.mts",
+      "import": "./dist/utils/repository.mjs",
+      "require": "./dist/utils/repository.cjs"
+    },
+    "./utils/toolNames": {
+      "types": "./dist/utils/toolNames.d.mts",
+      "import": "./dist/utils/toolNames.mjs",
+      "require": "./dist/utils/toolNames.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "test-system": "vitest run --config vitest.system.config.ts",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-autostop": "workspace:*",
+    "@agimon-ai/doompi-cache": "workspace:*",
+    "@agimon-ai/doompi-config": "workspace:*",
+    "@agimon-ai/doompi-domain": "workspace:*",
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-major-mode": "workspace:*",
+    "@agimon-ai/doompi-notification": "workspace:*",
+    "@agimon-ai/doompi-profile": "workspace:*",
+    "@agimon-ai/doompi-skill": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-ui": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1",
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "cross-spawn": "7.0.6",
+    "gpt-tokenizer": "4.0.0",
+    "minimatch": "10.2.6",
+    "protobufjs": "8.7.2",
+    "rolldown": "1.2.5",
+    "typebox": "1.3.16",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@agimon-ai/doompi-runner": "workspace:*",
+    "@earendil-works/pi-ai": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2",
+    "@types/cross-spawn": "6.0.6",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-tui": "0.84.2"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

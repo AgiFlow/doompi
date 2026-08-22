@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-edit",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/default/doompi-edit/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

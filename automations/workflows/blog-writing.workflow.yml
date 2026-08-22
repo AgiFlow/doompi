@@ -1,0 +1,214 @@
+name: Blog Writing
+description: Research, outline, draft, review, and finalize a review-ready blog post.
+tags:
+  - writing
+  - example
+
+max-workflows: 2
+launch-command: 'pnpm exec workflow-mcp launch-process --launcher "${WORKFLOW_LAUNCHER:-tmux}" --name "{name}" --cwd "$PWD" --command "{command}"'
+
+run-directory:
+  description: Research, drafts, review evidence, and review-ready blog artifacts.
+  entries:
+    - path: research.md
+      kind: file
+      description: Audience, angle, verified facts, competing perspectives, and research gaps.
+      produced-by: [research]
+    - path: sources.md
+      kind: file
+      description: Source ledger with URLs, supported claims, and verification status.
+      produced-by: [research, fact-check]
+    - path: outline.md
+      kind: file
+      description: Article promise, structure, evidence mapping, and intended call to action.
+      produced-by: [outline]
+    - path: draft.md
+      kind: file
+      description: Complete workflow-local article draft.
+      produced-by: [draft]
+    - path: copy-review.md
+      kind: file
+      description: Editorial findings covering clarity, structure, tone, and usefulness.
+      produced-by: [copy-review]
+    - path: fact-check.md
+      kind: file
+      description: Claim-by-claim fact-check findings and citation corrections.
+      produced-by: [fact-check]
+    - path: post.md
+      kind: file
+      description: Final review-ready article with generic draft frontmatter.
+      produced-by: [finalize]
+    - path: publication-checklist.md
+      kind: file
+      description: Publication readiness verdict, completed checks, and remaining work.
+      produced-by: [finalize]
+
+system-prompt: |
+  Runtime contract:
+  - WORKFLOW_CONTEXT contains the blog brief.
+  - Every output must remain under WORKFLOW_RUN_DIR.
+  - Repository files are read-only for every job in this workflow.
+
+  Safety and publishing contract:
+  - Read and follow the repository AGENTS.md and local instructions before acting.
+  - Never edit source content, site files, configuration, or any other repository file.
+  - Never create or switch branches or worktrees. Never commit, push, call a CMS, or publish externally.
+  - Do not generate, edit, download, or copy images.
+  - Never fabricate sources, quotations, dates, statistics, product behavior, or research findings.
+  - Mark information unverified when primary or authoritative evidence is unavailable.
+  - Never use em dash characters in prose or artifacts.
+
+  Repair contract:
+  - A review job may request an in-scope repair by writing $WORKFLOW_RUN_DIR/fix.md.
+  - The file must start with YAML frontmatter containing `restart-from: draft` for blocking copy
+    problems or `restart-from: research` for unsupported or incorrect factual claims.
+  - After the frontmatter, include the failed criterion, evidence, affected passages, and required correction.
+  - The runner limits repair cycles through FIX_LOOP_MAX_CYCLES.
+
+env:
+  MAX_RETRIES: 2
+  FIX_LOOP_MAX_CYCLES: 2
+
+on:
+  user_prompt:
+
+jobs:
+  research:
+    description: Establish the audience, angle, factual foundation, and source ledger.
+    runs-on: macos-latest
+    system-prompt: |
+      Act as the `blog-researcher` agent and apply the `blog-research` skill.
+      Research the brief using primary and authoritative sources when tools are available.
+      If browsing or a required source is unavailable, record that limitation and mark affected claims unverified.
+
+      Write $WORKFLOW_RUN_DIR/research.md with the audience, reader problem, proposed angle, verified facts,
+      counterpoints, useful examples, research gaps, and claims the article must avoid.
+
+      Write $WORKFLOW_RUN_DIR/sources.md as a source ledger. For each source include title, publisher or author,
+      URL, publication or update date when known, access date, claims supported, and VERIFIED or UNVERIFIED status.
+      Use direct URLs only. Do not invent a source to fill a gap.
+    steps:
+      - name: Research the blog brief
+        timeout-minutes: 60
+        artifacts:
+          - research.md
+          - sources.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  outline:
+    description: Build a focused article structure grounded in the research.
+    runs-on: macos-latest
+    needs: research
+    system-prompt: |
+      Apply the `blog-outline` skill. Read $WORKFLOW_RUN_DIR/research.md and
+      $WORKFLOW_RUN_DIR/sources.md before writing.
+      Do not add claims that the research does not support.
+
+      Write $WORKFLOW_RUN_DIR/outline.md with the article promise, intended reader, working title,
+      introduction approach, H2 and H3 structure, evidence mapped to sections, conclusion, and one useful
+      call to action. Prefer the smallest structure that fully delivers the promise.
+    steps:
+      - name: Outline the article
+        timeout-minutes: 30
+        artifacts:
+          - outline.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  draft:
+    description: Write a complete article draft from the approved research and outline.
+    runs-on: macos-latest
+    needs: outline
+    system-prompt: |
+      Act as the `blog-writer` agent and apply the `blog-draft` skill.
+      Read $WORKFLOW_RUN_DIR/research.md, $WORKFLOW_RUN_DIR/sources.md, and
+      $WORKFLOW_RUN_DIR/outline.md. If WORKFLOW_ACTIVE_REPAIR_ID is set, read
+      $WORKFLOW_ACTIVE_ISSUE_FILE and $WORKFLOW_ACTIVE_REPAIR_FILE first and correct only the active review
+      issue while preserving sound sections.
+
+      Write $WORKFLOW_RUN_DIR/draft.md as a complete article. Make the opening useful immediately, support
+      factual claims with Markdown links to sources.md entries, use concrete examples, and keep the conclusion
+      proportional to the article. Do not add unsupported claims or publication-specific frontmatter.
+    steps:
+      - name: Draft the article
+        timeout-minutes: 60
+        artifacts:
+          - draft.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  copy-review:
+    description: Review the draft for clarity, structure, tone, and reader value.
+    runs-on: macos-latest
+    needs: draft
+    system-prompt: |
+      Act as the `blog-editor` agent and apply the `blog-review` skill.
+      Read the brief, $WORKFLOW_RUN_DIR/outline.md, and $WORKFLOW_RUN_DIR/draft.md.
+      Do not edit draft.md or repository files.
+
+      Review the headline and opening, promise delivery, structure, clarity, repetition, tone, examples,
+      conclusion, call to action, and compliance with the no-em-dash rule.
+      Write $WORKFLOW_RUN_DIR/copy-review.md with a PASS or NEEDS_REPAIR verdict and precise passage-level edits.
+      If blocking writing changes are required, also write fix.md with `restart-from: draft`.
+    steps:
+      - name: Review the copy
+        timeout-minutes: 35
+        artifacts:
+          - copy-review.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  fact-check:
+    description: Validate material claims and citation coverage independently.
+    runs-on: macos-latest
+    needs: draft
+    system-prompt: |
+      Act as the `blog-editor` agent and apply the `blog-review` and `blog-research` skills.
+      Read $WORKFLOW_RUN_DIR/research.md, $WORKFLOW_RUN_DIR/sources.md, and
+      $WORKFLOW_RUN_DIR/draft.md. Verify every material factual claim against primary or authoritative sources
+      when tools are available. Do not edit draft.md or repository files.
+
+      Update $WORKFLOW_RUN_DIR/sources.md with final claim mappings and verification statuses.
+      Write $WORKFLOW_RUN_DIR/fact-check.md with a PASS, NEEDS_REPAIR, or BLOCKED verdict, listing each checked
+      claim, supporting source, citation suitability, and any unsupported, stale, or overstated passage.
+      If research or factual corrections are required, also write fix.md with `restart-from: research`.
+    steps:
+      - name: Fact-check the draft
+        timeout-minutes: 50
+        artifacts:
+          - fact-check.md
+          - sources.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"
+
+  finalize:
+    description: Apply approved review feedback and package review-ready artifacts.
+    runs-on: macos-latest
+    needs: [copy-review, fact-check]
+    system-prompt: |
+      Act as the `blog-editor` agent and apply the `blog-review` skill.
+      Read the brief and every workflow artifact. Do not edit repository files.
+
+      Write $WORKFLOW_RUN_DIR/post.md with generic YAML frontmatter containing title, description, date,
+      and `status: draft`, followed by the final article. Apply valid copy-review corrections and remove or
+      clearly qualify claims that fact-check.md does not verify. Preserve direct Markdown source links.
+
+      Write $WORKFLOW_RUN_DIR/publication-checklist.md with a READY_FOR_HUMAN_REVIEW or BLOCKED verdict and
+      checks for brief alignment, title and description, structure, copy quality, factual support, links,
+      source completeness, no em dash characters, no image requirements, and outstanding human decisions.
+      This job prepares artifacts for review only. It must not publish or copy post.md into a content directory.
+    steps:
+      - name: Finalize review-ready blog artifacts
+        timeout-minutes: 45
+        artifacts:
+          - post.md
+          - publication-checklist.md
+        interactiveRun: |
+          printf -v doompi_workflow_prompt '%s\n\nBlog brief:\n%s' "$JOB_SYSTEM_PROMPT" "$WORKFLOW_CONTEXT"
+          doompi --major-mode examples --domains blog --auto-stop --cwd "$PWD" "$doompi_workflow_prompt"

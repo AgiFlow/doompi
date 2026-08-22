@@ -1,0 +1,133 @@
+name: Release cut
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate and preview the version bumps without cutting a release branch or opening a pull request.
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: doompi-release-cut
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: [self-hosted, macOS, agirepo-deploy]
+    timeout-minutes: 120
+    steps:
+      - name: Check out the selected release revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Configure release git identity
+        run: |
+          git config user.name "doompi-release-bot"
+          git config user.email "doompi-release-bot@users.noreply.github.com"
+
+      - name: Sync the release base branch
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_TYPE}" = "branch"
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
+
+      - name: Select the projects to release
+        run: |
+          set -euo pipefail
+          readonly AFFECTED_FILE="${RUNNER_TEMP}/doompi-release-affected.json"
+
+          if BASE_TAG="$(git describe --tags --abbrev=0 HEAD 2> /dev/null)"; then
+            BASE_SHA="$(git rev-list -n 1 "${BASE_TAG}")"
+            echo "Detecting the projects affected since ${BASE_TAG} (${BASE_SHA})."
+            pnpm nx show projects --affected --base="${BASE_SHA}" --head=HEAD --json > "${AFFECTED_FILE}"
+            RELEASE_PROJECTS="$(node scripts/filter-release-projects.mjs "${AFFECTED_FILE}")"
+          else
+            echo "No release tag is reachable from HEAD, selecting every project in the alpha release group."
+            RELEASE_PROJECTS="$(node scripts/filter-release-projects.mjs --all)"
+          fi
+
+          if [[ -z "${RELEASE_PROJECTS}" ]]; then
+            echo "No release group project changed since the last release, there is nothing to cut."
+          else
+            echo "Releasing ${RELEASE_PROJECTS}"
+          fi
+          echo "RELEASE_PROJECTS=${RELEASE_PROJECTS}" >> "${GITHUB_ENV}"
+
+      - name: Validate the release candidate
+        if: env.RELEASE_PROJECTS != ''
+        run: |
+          set -euo pipefail
+          pnpm fmt:check
+          pnpm nx run-many -t build --parallel=3
+          pnpm examples:check
+          pnpm nx run-many -t lint --parallel=3
+          pnpm lint:vibe --preflight-only
+          pnpm nx run-many -t typecheck --parallel=3
+          pnpm nx run-many -t test --parallel=3
+          pnpm nx run-many -t test-system --parallel=1
+
+      - name: Preview the next alpha versions
+        if: env.RELEASE_PROJECTS != ''
+        run: pnpm nx release prerelease --preid alpha --projects "${RELEASE_PROJECTS}" --dry-run --skip-publish
+
+      - name: Cut the release branch
+        if: env.RELEASE_PROJECTS != '' && !inputs.dry_run
+        run: |
+          set -euo pipefail
+          RELEASE_BRANCH="release/alpha-${GITHUB_RUN_ID}"
+          git switch -c "${RELEASE_BRANCH}"
+          pnpm nx release prerelease --preid alpha --projects "${RELEASE_PROJECTS}" --skip-publish
+          test -n "$(git log --format=%H "origin/${GITHUB_REF_NAME}..HEAD")"
+          git push origin "${RELEASE_BRANCH}"
+          echo "RELEASE_BRANCH=${RELEASE_BRANCH}" >> "${GITHUB_ENV}"
+
+      - name: Open the release pull request
+        if: env.RELEASE_BRANCH != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BODY_FILE="${RUNNER_TEMP}/doompi-release-pr-body.md"
+          {
+            echo "Cut by the Release cut workflow from $(git rev-parse HEAD^)."
+            echo
+            echo "Merging this pull request publishes the versions below to npm under the alpha tag, tags them, and promotes them to latest."
+            echo
+            echo "| Package | Version |"
+            echo "| --- | --- |"
+            while IFS=$'\t' read -r name version; do
+              case ",${RELEASE_PROJECTS}," in
+                *",${name},"*) printf '| %s | %s |\n' "${name}" "${version}" ;;
+              esac
+            done < <(node scripts/list-packages.mjs)
+          } > "${BODY_FILE}"
+
+          gh pr create \
+            --base "${GITHUB_REF_NAME}" \
+            --head "${RELEASE_BRANCH}" \
+            --title "chore(release): publish" \
+            --body-file "${BODY_FILE}"

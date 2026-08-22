@@ -1,0 +1,97 @@
+[
+  {
+    "subpath": "./ask-user",
+    "values": {
+      "DOOM_ASK_USER_PROMPT_EVENT": "doom/ask-user/prompt",
+      "DOOM_ASK_USER_BLOCKED_EVENT": "doom/ask-user/blocked"
+    }
+  },
+  {
+    "subpath": "./cordis-host",
+    "values": {
+      "DOOM_CORDIS_HOST_ABI_VERSION": 1,
+      "DOOM_CORDIS_HOST_QUERY_CHANNEL": "doom:cordis:host:v1:query",
+      "DOOM_CORDIS_RUNTIME_SERVICE": "doom/runtime",
+      "DOOM_CORDIS_SESSION_SERVICE": "doom/session"
+    },
+    "functions": ["connectDoomCordisHost", "finalizeDoomCordisHost", "installDoomCordisHost"]
+  },
+  {
+    "subpath": "./help",
+    "values": { "DOOM_HELP_SERVICE": "doom/help" },
+    "functions": ["createDoomHelpService", "readDoomHelpService", "requireDoomHelpService"]
+  },
+  {
+    "subpath": "./loop-launchers",
+    "values": { "DOOM_LOOP_LAUNCHERS_SERVICE": "doom/loop-launchers" },
+    "functions": ["readDoomLoopLaunchers", "requireDoomLoopLaunchers"]
+  },
+  {
+    "subpath": "./narration",
+    "values": { "DOOM_NARRATION_SERVICE": "doom/narration" },
+    "functions": ["createNarrationRequest", "readDoomNarrationService", "requireDoomNarrationService"]
+  },
+  {
+    "subpath": "./skills",
+    "values": { "DOOM_SKILL_SOURCES_SERVICE": "doom/skill-sources" },
+    "functions": ["createDoomSkillSourcesService", "readDoomSkillSourcesService", "requireDoomSkillSourcesService"]
+  },
+  {
+    "subpath": "./tool-overrides",
+    "values": { "DOOM_TOOL_OVERRIDES_SERVICE": "doom/tool-overrides" },
+    "functions": ["createDoomToolOverridesService", "readDoomToolOverrides", "requireDoomToolOverrides"]
+  },
+  {
+    "subpath": "./ui-hub",
+    "values": { "DOOM_UI_HUB_SERVICE": "doom/ui-hub" },
+    "functions": ["readDoomUiHub", "requireDoomUiHub"]
+  },
+  {
+    "subpath": "./voice-tools",
+    "values": { "DOOM_VOICE_TOOLS_SERVICE": "doom/voice-tools" },
+    "functions": ["createDoomVoiceToolsService", "readDoomVoiceToolsService", "requireDoomVoiceToolsService"]
+  },
+  {
+    "subpath": "./voice-reload-handoff",
+    "values": {
+      "VOICE_RELOAD_HANDOFF_REGISTRY_KEY": "@agimon-ai/doompi-extension-contracts.voice-reload-handoff.v1",
+      "VOICE_RELOAD_HANDOFF_TTL_MS": 30000
+    },
+    "functions": ["createVoiceReloadHandoffStore"]
+  },
+  {
+    "subpath": "./background-work",
+    "values": {
+      "DOOM_BACKGROUND_WORK_SERVICE": "doom/background-work",
+      "DOOM_BACKGROUND_WORK_CHANGED_EVENT": "doom/background-work/changed"
+    },
+    "functions": ["readDoomBackgroundWorkService"]
+  },
+  {
+    "subpath": "./delegation",
+    "values": {
+      "DOOM_DELEGATION_SERVICE": "doom/delegation",
+      "DOOM_DELEGATION_REQUESTED_EVENT": "doom/delegation/requested",
+      "DOOM_DELEGATION_ACCEPTED_EVENT": "doom/delegation/accepted",
+      "DOOM_DELEGATION_STARTED_EVENT": "doom/delegation/started",
+      "DOOM_DELEGATION_UPDATED_EVENT": "doom/delegation/updated",
+      "DOOM_DELEGATION_FINISHED_EVENT": "doom/delegation/finished",
+      "DOOM_DELEGATION_CANCELLED_EVENT": "doom/delegation/cancelled"
+    },
+    "functions": ["readDoomDelegationService"]
+  },
+  {
+    "subpath": "./subagent-policy",
+    "values": { "DOOM_SUBAGENT_POLICY_SERVICE": "doom/subagent-policy" },
+    "functions": ["readDoomSubagentPolicyService"]
+  },
+  {
+    "subpath": "./fable-plan",
+    "values": { "DOOM_FABLE_PLAN_SERVICE": "doom/fable-plan" },
+    "functions": ["readDoomFablePlanService"]
+  },
+  {
+    "subpath": "./protocol",
+    "functions": ["createProtocolRuntime", "defineJob", "defineNotification", "defineRequestReply"]
+  }
+]

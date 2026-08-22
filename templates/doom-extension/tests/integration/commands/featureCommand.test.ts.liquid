@@ -1,0 +1,43 @@
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  {{ commandName | snakeCase | upper }}_COMMAND,
+  register{{ commandName | pascalCase }}Command,
+} from '../../../src/commands/{{ commandName | camelCase }}Command.ts';
+
+interface CommandDefinition {
+  handler: (
+    args: string,
+    ctx: { hasUI: boolean; ui: { notify: (message: string, level: string) => void } },
+  ) => Promise<void>;
+}
+
+function createPiFixture(): { commands: Map<string, CommandDefinition>; pi: ExtensionAPI } {
+  const commands = new Map<string, CommandDefinition>();
+  const pi = {
+    registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
+  } as unknown as ExtensionAPI;
+  return { commands, pi };
+}
+
+describe('{{ commandName | kebabCase }} command', () => {
+  it('notifies with the injected result', async () => {
+    const fixture = createPiFixture();
+    const notify = vi.fn();
+    register{{ commandName | pascalCase }}Command(fixture.pi, { execute: vi.fn().mockResolvedValue('ready') });
+
+    await fixture.commands.get({{ commandName | snakeCase | upper }}_COMMAND)?.handler('', { hasUI: true, ui: { notify } });
+
+    expect(notify).toHaveBeenCalledWith('ready', 'info');
+  });
+
+  it('is headless-safe', async () => {
+    const fixture = createPiFixture();
+    const notify = vi.fn();
+    register{{ commandName | pascalCase }}Command(fixture.pi, { execute: vi.fn().mockResolvedValue('ready') });
+
+    await fixture.commands.get({{ commandName | snakeCase | upper }}_COMMAND)?.handler('', { hasUI: false, ui: { notify } });
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+});

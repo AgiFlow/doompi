@@ -1,0 +1,47 @@
+## 0.0.1-alpha.8 (2026-08-22)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.7 (2026-08-22)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.6 (2026-08-22)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.5 (2026-08-22)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.4 (2026-08-22)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.3 (2026-08-22)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.2 (2026-08-21)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
+## 0.0.1-alpha.1 (2026-08-21)
+
+### 🚀 Features
+
+- add package help skills and improve team run feedback ([e4294de](https://github.com/AgiFlow/doompi/commit/e4294de))
+- split hashline tools into packages ([8f0be58](https://github.com/AgiFlow/doompi/commit/8f0be58))
+
+### ❤️ Thank You
+
+- vuongngo
+
+# Changelog
+
+## 0.0.1-alpha.0 (2026-08-21)
+
+### Features
+
+- Add the shared hashline file-header, line-anchor, tagged-line, and snapshot-edit protocol.
+- Add strict UTF-8, exact-byte file-tag, and shared path adapters for Node.js tools.

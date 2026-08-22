@@ -1,0 +1,168 @@
+{
+  "name": "@agimon-ai/doompi-config",
+  "version": "0.0.1-alpha.36",
+  "description": "Typed configuration loading, validation, and host adapters for composing DoomPi sessions.",
+  "keywords": [
+    "agent-configuration",
+    "ai",
+    "coding-agent",
+    "configuration",
+    "dependency-injection",
+    "developer-tools",
+    "doompi",
+    "pi-coding-agent",
+    "pi-package",
+    "typescript",
+    "yaml"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-config"
+  },
+  "files": [
+    "dist",
+    "llms.txt",
+    "README.md",
+    "src/prompts"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./agentPluginMcp": {
+      "types": "./dist/agentPluginMcp.d.mts",
+      "import": "./dist/agentPluginMcp.mjs",
+      "require": "./dist/agentPluginMcp.cjs"
+    },
+    "./atomicJson": {
+      "types": "./dist/atomicJson.d.mts",
+      "import": "./dist/atomicJson.mjs",
+      "require": "./dist/atomicJson.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
+    },
+    "./config/schema": {
+      "types": "./dist/config/schema.d.mts",
+      "import": "./dist/config/schema.mjs",
+      "require": "./dist/config/schema.cjs"
+    },
+    "./config/piConfig": {
+      "types": "./dist/config/piConfig.d.mts",
+      "import": "./dist/config/piConfig.mjs",
+      "require": "./dist/config/piConfig.cjs"
+    },
+    "./configWriter": {
+      "types": "./dist/configWriter.d.mts",
+      "import": "./dist/configWriter.mjs",
+      "require": "./dist/configWriter.cjs"
+    },
+    "./domains": {
+      "types": "./dist/domains.d.mts",
+      "import": "./dist/domains.mjs",
+      "require": "./dist/domains.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./harnessState": {
+      "types": "./dist/harnessState.d.mts",
+      "import": "./dist/harnessState.mjs",
+      "require": "./dist/harnessState.cjs"
+    },
+    "./harnessStore": {
+      "types": "./dist/harnessStore.d.mts",
+      "import": "./dist/harnessStore.mjs",
+      "require": "./dist/harnessStore.cjs"
+    },
+    "./init": {
+      "types": "./dist/init.d.mts",
+      "import": "./dist/init.mjs",
+      "require": "./dist/init.cjs"
+    },
+    "./layeredConfig": {
+      "types": "./dist/layeredConfig.d.mts",
+      "import": "./dist/layeredConfig.mjs",
+      "require": "./dist/layeredConfig.cjs"
+    },
+    "./majorModes": {
+      "types": "./dist/majorModes.d.mts",
+      "import": "./dist/majorModes.mjs",
+      "require": "./dist/majorModes.cjs"
+    },
+    "./piContext": {
+      "types": "./dist/piContext.d.mts",
+      "import": "./dist/piContext.mjs",
+      "require": "./dist/piContext.cjs"
+    },
+    "./profiles": {
+      "types": "./dist/profiles.d.mts",
+      "import": "./dist/profiles.mjs",
+      "require": "./dist/profiles.cjs"
+    },
+    "./selectionSwitch": {
+      "types": "./dist/selectionSwitch.d.mts",
+      "import": "./dist/selectionSwitch.mjs",
+      "require": "./dist/selectionSwitch.cjs"
+    },
+    "./types": {
+      "types": "./dist/types.d.mts",
+      "import": "./dist/types.mjs",
+      "require": "./dist/types.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

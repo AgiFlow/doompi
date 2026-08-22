@@ -1,0 +1,98 @@
+{
+  "name": "@agimon-ai/doompi-cache",
+  "version": "0.0.1-alpha.3",
+  "description": "Provider prompt cache policy and deterministic routing for DoomPi",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "pi-coding-agent",
+    "pi-extension",
+    "pi-package",
+    "prompt-cache",
+    "typescript"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-cache"
+  },
+  "files": [
+    "dist",
+    "src/prompts",
+    "llms.txt",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./env": {
+      "types": "./dist/env.d.mts",
+      "import": "./dist/env.mjs",
+      "require": "./dist/env.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-config": "workspace:*",
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1",
+    "pi-cache-optimizer": "2.8.3"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

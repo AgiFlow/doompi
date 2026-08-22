@@ -1,0 +1,24 @@
+node_modules/
+.pnpm-store/
+.nx/
+.nx-cache/
+coverage/
+**/dist/
+*.tgz
+release-artifacts/
+.env
+.env.*
+!.env.example
+.DS_Store
+.pi/
+*.log
+.codex-local/
+logs/
+tmp/
+.claude/settings.local.json
+
+# Runner native payloads. Fetched from upstream releases by
+# scripts/fetch-runner-binaries.mjs and verified against pinned checksums,
+# rather than stored here. See CONTRIBUTING.md.
+packages/default/doompi-runner-rmux-*/vendor/
+packages/default/doompi-runner-rtk-*/vendor/

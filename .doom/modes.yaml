@@ -1,0 +1,44 @@
+# This source repository mirrors DoomPi's standalone package set with local
+# workspace paths. Published consumers receive the package-name form from
+# `dpi init`; local paths keep this checkout self-contained after `pnpm build`.
+default:
+  packages:
+    - "./packages/minor/doompi-help"
+    - "./packages/default/doompi-hook"
+    - "./packages/minor/doompi-goal"
+    - "./packages/minor/doompi-voice"
+    - "./packages/default/doompi-runner"
+    - "./packages/default/doompi-read"
+    - "./packages/default/doompi-grep"
+    - "./packages/default/doompi-edit"
+    - "./packages/default/doompi-file-edit"
+    - "./packages/default/doompi-autocompact"
+    - "./packages/minor/doompi-loop"
+    - "./packages/minor/doompi-plan"
+    - "./packages/minor/doompi-workflow"
+    - "./packages/default/doompi-log"
+    - "./packages/default/doompi-mcp"
+
+layers:
+  team:
+    packages:
+      - name: "./layers/team/doompi-team"
+  ask-user:
+    packages:
+      - "./layers/ask-user/doompi-user-feedback"
+  task:
+    packages:
+      - "./layers/task/doompi-task"
+
+defaultMajorMode: copilot
+
+majorMode:
+  minimal:
+    description: Lean mode with Team delegation and persistent tasks.
+    layers: [team, task]
+  copilot:
+    description: General-purpose coding mode with delegation, persistent tasks, supervised commands, and structured user feedback.
+    layers: [team, ask-user, task]
+  examples:
+    description: Layer-free base mode for the repository's plugin and workflow examples.
+    layers: []

@@ -1,0 +1,14 @@
+---
+name: {{ promptName | kebabCase }}
+description: "{{ promptDescription }}"
+---
+
+# {{ promptName | kebabCase }}
+
+Use the owning package's README, source, and linked resources as the source of truth.
+
+## Guidance
+
+- Keep the response focused on the capability described in this prompt's frontmatter.
+- Record package-specific decisions and constraints that an agent could not safely infer.
+- Link a focused reference when detailed schemas or conditional procedures would otherwise make this entrypoint hard to scan.

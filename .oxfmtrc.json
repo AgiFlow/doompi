@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "overrides": [
+    {
+      "files": ["**/*.{yaml,yml}"],
+      "options": {
+        "singleQuote": false
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "build",
+    "coverage",
+    "out",
+    ".nx",
+    ".nx-cache",
+    "__generated__",
+    "generated",
+    "migration-records",
+    "vendor",
+    "**/*.d.ts",
+    "**/CHANGELOG.md"
+  ]
+}

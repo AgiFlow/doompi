@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-grep",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/default/doompi-grep/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

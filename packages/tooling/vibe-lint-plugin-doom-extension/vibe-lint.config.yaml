@@ -1,0 +1,71 @@
+root: true
+
+plugins:
+  - core
+
+extends:
+  - core/recommended
+
+rules:
+  boundary-import-allowlist: error
+
+patterns:
+  doom-lint-plugin-entry:
+    description: Public Vibe-Lint plugin entry and stable named rule exports.
+    includes:
+      - src/index.ts
+  doom-lint-plugin-configs:
+    description: Recommended and migration rule severity presets.
+    includes:
+      - src/configs/**/*.ts
+  doom-lint-plugin-rules:
+    description: Deterministic DoomPi package checks and their filesystem helpers.
+    includes:
+      - src/rules/**/*.ts
+  doom-lint-plugin-tests:
+    description: Unit and public plugin contract verification.
+    includes:
+      - tests/**/*.test.ts
+  doom-lint-plugin-metadata:
+    description: Publishable package, build, test, and lint configuration.
+    includes:
+      - .gitignore
+      - .oxlintrc.json
+      - README.md
+      - package.json
+      - project.json
+      - tsconfig.json
+      - tsdown.config.ts
+      - vitest.config.ts
+      - vibe-lint.config.yaml
+
+boundaries:
+  - name: configs
+    pattern: src/configs/**
+    allowedImports:
+      - src/configs/**
+  - name: rules
+    pattern: src/rules/**
+    allowedImports:
+      - src/rules/**
+  - name: source
+    pattern: src/*.ts
+    allowedImports:
+      - src/configs/**
+      - src/rules/**
+      - src/*.ts
+  - name: tests
+    pattern: tests/**
+    allowedImports:
+      - src/**
+      - tests/**
+  - name: metadata
+    pattern: "{.gitignore,.oxlintrc.json,README.md,package.json,project.json,tsconfig.json,tsdown.config.ts,vitest.config.ts,vibe-lint.config.yaml}"
+
+overrides:
+  - files:
+      - src/index.ts
+      - tsdown.config.ts
+      - vitest.config.ts
+    rules:
+      no-default-export: off

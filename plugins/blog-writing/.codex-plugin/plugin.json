@@ -1,0 +1,19 @@
+{
+  "name": "blog-writing",
+  "version": "0.1.0",
+  "description": "Research, outline, draft, and review a source-backed blog post.",
+  "author": {
+    "name": "DoomPi Contributors"
+  },
+  "keywords": ["blog", "research", "writing", "editing"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "DoomPi Blog Writing",
+    "shortDescription": "Create review-ready, source-backed blog posts.",
+    "longDescription": "Turn a brief into verified research, a focused outline, a sourced draft, and an editorial review without publishing externally.",
+    "developerName": "DoomPi Contributors",
+    "category": "Productivity",
+    "capabilities": ["Research", "Write", "Review"],
+    "defaultPrompt": ["Research and draft a blog post about this topic.", "Review this draft for accuracy and clarity."]
+  }
+}

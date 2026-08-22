@@ -1,0 +1,34 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+  doom-clean-architecture-boundary:
+    - error
+    - infrastructurePackages:
+        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-telemetry"
+        - "@agimon-ai/doompi-hashline"
+      foundationPackages:
+        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-hashline"
+      nonPiPackages:
+        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-telemetry"
+        - "@agimon-ai/doompi-hashline"
+  package-layer-order:
+    - error
+    - packageLayers:
+        "@agimon-ai/doompi-extension-contracts": contracts
+        "@agimon-ai/doompi-hashline": contracts
+        "@agimon-ai/doompi-telemetry": contracts
+        "@agimon-ai/doompi-config": platform
+        "@agimon-ai/doompi-ui": platform
+        "@agimon-ai/doompi-mcp": integration
+        "@agimon-ai/doompi": host

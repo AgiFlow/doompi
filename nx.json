@@ -1,0 +1,119 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "parallel": 3,
+  "tui": {
+    "enabled": false
+  },
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
+      "!{projectRoot}/tests/**/*",
+      "!{projectRoot}/vitest.config.ts",
+      "!{projectRoot}/vitest.system.config.ts"
+    ],
+    "sharedGlobals": ["{workspaceRoot}/nx.json", "{workspaceRoot}/package.json"]
+  },
+  "targetDefaults": {
+    "build": {
+      "inputs": ["production", "^production", "{projectRoot}/package.json"],
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "test": {
+      "inputs": ["default", "^production"],
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "test-system": {
+      "inputs": ["default", "production"],
+      "dependsOn": ["build", "^build"],
+      "cache": false
+    },
+    "typecheck": {
+      "inputs": ["default", "^production"],
+      "dependsOn": ["^build"],
+      "cache": true
+    },
+    "lint": {
+      "inputs": ["default"],
+      "dependsOn": ["^build"],
+      "cache": true
+    }
+  },
+  "cacheDirectory": "./.nx-cache",
+  "release": {
+    "groups": {
+      "alpha": {
+        "projects": [
+          "@agimon-ai/doompi",
+          "@agimon-ai/doompi-autocompact",
+          "@agimon-ai/doompi-autostop",
+          "@agimon-ai/doompi-cache",
+          "@agimon-ai/doompi-config",
+          "@agimon-ai/doompi-domain",
+          "@agimon-ai/doompi-edit",
+          "@agimon-ai/doompi-extension-contracts",
+          "@agimon-ai/doompi-file-edit",
+          "@agimon-ai/doompi-goal",
+          "@agimon-ai/doompi-grep",
+          "@agimon-ai/doompi-hashline",
+          "@agimon-ai/doompi-help",
+          "@agimon-ai/doompi-hook",
+          "@agimon-ai/doompi-log",
+          "@agimon-ai/doompi-loop",
+          "@agimon-ai/doompi-major-mode",
+          "@agimon-ai/doompi-mcp",
+          "@agimon-ai/doompi-notification",
+          "@agimon-ai/doompi-plan",
+          "@agimon-ai/doompi-profile",
+          "@agimon-ai/doompi-read",
+          "@agimon-ai/doompi-runner",
+          "@agimon-ai/doompi-runner-rmux-darwin-arm64",
+          "@agimon-ai/doompi-runner-rmux-darwin-x64",
+          "@agimon-ai/doompi-runner-rmux-linux-arm64",
+          "@agimon-ai/doompi-runner-rmux-linux-x64",
+          "@agimon-ai/doompi-runner-rtk-darwin-arm64",
+          "@agimon-ai/doompi-runner-rtk-darwin-x64",
+          "@agimon-ai/doompi-runner-rtk-linux-arm64",
+          "@agimon-ai/doompi-runner-rtk-linux-x64",
+          "@agimon-ai/doompi-skill",
+          "@agimon-ai/doompi-task",
+          "@agimon-ai/doompi-team",
+          "@agimon-ai/doompi-telemetry",
+          "@agimon-ai/doompi-ui",
+          "@agimon-ai/doompi-user-feedback",
+          "@agimon-ai/doompi-voice",
+          "@agimon-ai/doompi-workflow",
+          "@agimon-ai/vibe-lint-plugin-doom-extension"
+        ],
+        "version": {
+          "updateDependents": "never"
+        }
+      }
+    },
+    "projectsRelationship": "independent",
+    "git": {
+      "tag": false
+    },
+    "releaseTag": {
+      "pattern": "{projectName}@{version}"
+    },
+    "version": {
+      "currentVersionResolver": "disk",
+      "updateDependents": "auto"
+    },
+    "changelog": {
+      "automaticFromRef": true,
+      "projectChangelogs": {
+        "createRelease": false,
+        "renderOptions": {
+          "authors": true
+        }
+      }
+    }
+  },
+  "analytics": false
+}

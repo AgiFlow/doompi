@@ -1,0 +1,8 @@
+export { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../services/extensionService.ts';
+export { activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension } from '../adapters/pi/extension.ts';
+export { create{{ packageName | replace: "doompi-", "" | pascalCase }}Container } from '../container/index.ts';
+export type {
+  {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionDependencies,
+  {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult,
+  {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService,
+} from '../types/extension.ts';

@@ -1,0 +1,14 @@
+export type {{ packageName | replace: "doompi-", "" | pascalCase }}NotificationLevel = 'info';
+
+export interface {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult {
+  message: string;
+  level: {{ packageName | replace: "doompi-", "" | pascalCase }}NotificationLevel;
+}
+
+export interface {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService {
+  execute(): Promise<{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult>;
+}
+
+export interface {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionDependencies {
+  service: {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService;
+}

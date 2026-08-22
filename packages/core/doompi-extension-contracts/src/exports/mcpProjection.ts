@@ -1,0 +1,26 @@
+export type {
+  DisabledDoomMcpProjectionInput,
+  DoomMcpAgentPluginProjectionSource,
+  DoomMcpNativeProjectionSource,
+  DoomMcpProjection,
+  DoomMcpProjectionAllowlist,
+  DoomMcpProjectionService,
+  DoomMcpProjectionServiceInput,
+  DoomMcpProjectionSource,
+  DoomMcpProjectionSourceFormat,
+} from '../schemas/mcpProjection.ts';
+export {
+  AGENT_PLUGIN_MCP_SCHEMA_URL,
+  createDisabledDoomMcpProjection,
+  createDoomMcpProjectionService,
+  DOOM_MCP_PROJECTION_SERVICE,
+  DOOM_MCP_PROJECTION_VERSION,
+  DoomMcpAgentPluginProjectionSourceSchema,
+  DoomMcpNativeProjectionSourceSchema,
+  DoomMcpProjectionAllowlistSchema,
+  DoomMcpProjectionSchema,
+  DoomMcpProjectionSourceSchema,
+  isDoomMcpProjection,
+  readDoomMcpProjectionService,
+  requireDoomMcpProjectionService,
+} from '../schemas/mcpProjection.ts';

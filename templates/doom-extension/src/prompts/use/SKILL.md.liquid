@@ -1,0 +1,14 @@
+---
+name: doompi-use-{{ packageName | replace: "doompi-", "" | kebabCase }}
+description: "Use @agimon-ai/{{ packageName | kebabCase }}: {{ packageDescription }}"
+---
+
+# Use {{ packageName | replace: "doompi-", "" | pascalCase }}
+
+Read the package [README](../../../README.md) for its exact installation, command, configuration, and behavior.
+
+## Guidance
+
+- Use `/{{ commandName | kebabCase }}` as the package's primary Pi entrypoint.
+- Treat the package README and its linked resources as the source of truth for package-specific behavior.
+- Do not require DoomPi Help for runtime activation. Help only makes this package guidance discoverable while the minor mode is active.

@@ -1,0 +1,35 @@
+export type {
+  DomainTransitionTarget,
+  DoomTransitionCoordinator,
+  DoomTransitionPlan,
+  DoomTransitionRequest,
+  DoomTransitionResult,
+  MajorModeTransitionTarget,
+  MinorModeCatalogHost,
+  MinorModeTransitionTarget,
+  ProfileTransitionTarget,
+  StructuralTransitionExecution,
+  TransitionAxis,
+  TransitionDiagnosticCode,
+  TransitionDisposition,
+  TransitionExecutionStrategy,
+  TransitionGeneration,
+  TransitionOutcome,
+  TransitionSelectionSnapshot,
+  TransitionSource,
+  TransitionSynchronization,
+  TransitionTarget,
+} from '../schemas/transition.ts';
+export {
+  DOOM_TRANSITION_SERVICE,
+  MINOR_MODE_CATALOG_SERVICE,
+  readDoomTransitionCoordinator,
+  readMinorModeCatalogHost,
+  requireDoomTransitionCoordinator,
+} from '../schemas/transition.ts';
+export {
+  consumeMinorModeReloadHandoff,
+  discardMinorModeReloadHandoff,
+  type MinorModeReloadHandoffHandle,
+  prepareMinorModeReloadHandoff,
+} from '../schemas/transitionContext.ts';

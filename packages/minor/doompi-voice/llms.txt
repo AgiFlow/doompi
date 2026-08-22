@@ -1,0 +1,9 @@
+# Doom Pi Voice
+
+## Resources
+
+- [Package README](./README.md): Requirements, configuration, commands, data flow, recovery, and public API.
+
+## How to use
+
+- [doompi-use-voice](./src/prompts/doompi-use-voice/SKILL.md): Use manual transcription, autonomous capture, narration, configuration, and recovery on macOS.

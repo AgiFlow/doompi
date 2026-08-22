@@ -1,0 +1,16 @@
+# Doom Pi Workflow
+
+Package-owned guidance for authoring, launching, monitoring, and recovering Doom Pi workflows.
+
+## How to author
+
+- [Author DoomPi workflows](./src/prompts/doompi-author-workflow/SKILL.md): Define workflow graphs and host-executed steps safely.
+
+## How to use
+
+- [Use DoomPi workflows](./src/prompts/doompi-use-workflow/SKILL.md): Discover, launch, monitor, control, and recover asynchronous runs.
+- [Workflow recovery skill](./skills/workflow-recovery/SKILL.md): Evidence-first recovery of failed or interrupted workflow runs.
+
+## Package reference
+
+- [Package README](./README.md): Workflow mode, leader bindings, execution model, monitoring, and public entrypoints.

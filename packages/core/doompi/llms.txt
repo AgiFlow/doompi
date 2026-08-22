@@ -1,0 +1,12 @@
+# DoomPi
+
+Package-owned guidance for using and extending the DoomPi distribution.
+
+## How to author
+
+- [Author a DoomPi extension](./src/prompts/doompi-author-extension/SKILL.md): Create or update a DoomPi extension inside or outside this monorepo.
+- [Extension authoring contract](./src/prompts/doompi-author-extension/references/extension-contract.md): Package shape, Cordis lifecycle, Help contribution, and verification requirements.
+
+## Package reference
+
+- [Package README](./README.md): Installation, configuration, modes, domains, profiles, and runtime behavior.

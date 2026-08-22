@@ -1,0 +1,217 @@
+{
+  "name": "@agimon-ai/doompi-extension-contracts",
+  "version": "0.0.1-alpha.36",
+  "description": "Typed lifecycle, protocol, and Leader contracts for independently bundled DoomPi extensions.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "extension-api",
+    "leader-key",
+    "lifecycle",
+    "pi-extension",
+    "pi-package",
+    "protocol",
+    "typescript"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-extension-contracts"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./ask-user": {
+      "types": "./dist/askUser.d.mts",
+      "import": "./dist/askUser.mjs",
+      "require": "./dist/askUser.cjs"
+    },
+    "./background-work": {
+      "types": "./dist/backgroundWork.d.mts",
+      "import": "./dist/backgroundWork.mjs",
+      "require": "./dist/backgroundWork.cjs"
+    },
+    "./child-process": {
+      "types": "./dist/childProcess.d.mts",
+      "import": "./dist/childProcess.mjs",
+      "require": "./dist/childProcess.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
+    },
+    "./context-contributions": {
+      "types": "./dist/contextContributions.d.mts",
+      "import": "./dist/contextContributions.mjs",
+      "require": "./dist/contextContributions.cjs"
+    },
+    "./cordis-host": {
+      "types": "./dist/cordisHost.d.mts",
+      "import": "./dist/cordisHost.mjs",
+      "require": "./dist/cordisHost.cjs"
+    },
+    "./delegation": {
+      "types": "./dist/delegation.d.mts",
+      "import": "./dist/delegation.mjs",
+      "require": "./dist/delegation.cjs"
+    },
+    "./fable-plan": {
+      "types": "./dist/fablePlan.d.mts",
+      "import": "./dist/fablePlan.mjs",
+      "require": "./dist/fablePlan.cjs"
+    },
+    "./footer": {
+      "types": "./dist/footer.d.mts",
+      "import": "./dist/footer.mjs",
+      "require": "./dist/footer.cjs"
+    },
+    "./help": {
+      "types": "./dist/help.d.mts",
+      "import": "./dist/help.mjs",
+      "require": "./dist/help.cjs"
+    },
+    "./leader": {
+      "types": "./dist/leader.d.mts",
+      "import": "./dist/leader.mjs",
+      "require": "./dist/leader.cjs"
+    },
+    "./loop-launchers": {
+      "types": "./dist/loopLaunchers.d.mts",
+      "import": "./dist/loopLaunchers.mjs",
+      "require": "./dist/loopLaunchers.cjs"
+    },
+    "./mcp-projection": {
+      "types": "./dist/mcpProjection.d.mts",
+      "import": "./dist/mcpProjection.mjs",
+      "require": "./dist/mcpProjection.cjs"
+    },
+    "./mcp-session": {
+      "types": "./dist/mcpSession.d.mts",
+      "import": "./dist/mcpSession.mjs",
+      "require": "./dist/mcpSession.cjs"
+    },
+    "./mcp-status": {
+      "types": "./dist/mcpStatus.d.mts",
+      "import": "./dist/mcpStatus.mjs",
+      "require": "./dist/mcpStatus.cjs"
+    },
+    "./mcp-tool-resolver": {
+      "types": "./dist/mcpToolResolver.d.mts",
+      "import": "./dist/mcpToolResolver.mjs",
+      "require": "./dist/mcpToolResolver.cjs"
+    },
+    "./mode": {
+      "types": "./dist/mode.d.mts",
+      "import": "./dist/mode.mjs",
+      "require": "./dist/mode.cjs"
+    },
+    "./narration": {
+      "types": "./dist/narration.d.mts",
+      "import": "./dist/narration.mjs",
+      "require": "./dist/narration.cjs"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.mts",
+      "import": "./dist/protocol.mjs",
+      "require": "./dist/protocol.cjs"
+    },
+    "./readiness": {
+      "types": "./dist/readiness.d.mts",
+      "import": "./dist/readiness.mjs",
+      "require": "./dist/readiness.cjs"
+    },
+    "./skills": {
+      "types": "./dist/skills.d.mts",
+      "import": "./dist/skills.mjs",
+      "require": "./dist/skills.cjs"
+    },
+    "./subagent-policy": {
+      "types": "./dist/subagentPolicy.d.mts",
+      "import": "./dist/subagentPolicy.mjs",
+      "require": "./dist/subagentPolicy.cjs"
+    },
+    "./subagent-tool": {
+      "types": "./dist/subagentTool.d.mts",
+      "import": "./dist/subagentTool.mjs",
+      "require": "./dist/subagentTool.cjs"
+    },
+    "./transition": {
+      "types": "./dist/transition.d.mts",
+      "import": "./dist/transition.mjs",
+      "require": "./dist/transition.cjs"
+    },
+    "./tool-overrides": {
+      "types": "./dist/toolOverrides.d.mts",
+      "import": "./dist/toolOverrides.mjs",
+      "require": "./dist/toolOverrides.cjs"
+    },
+    "./ui-hub": {
+      "types": "./dist/uiHub.d.mts",
+      "import": "./dist/uiHub.mjs",
+      "require": "./dist/uiHub.cjs"
+    },
+    "./voice-tools": {
+      "types": "./dist/voiceTools.d.mts",
+      "import": "./dist/voiceTools.mjs",
+      "require": "./dist/voiceTools.cjs"
+    },
+    "./voice-reload-handoff": {
+      "types": "./dist/voiceReloadHandoff.d.mts",
+      "import": "./dist/voiceReloadHandoff.mjs",
+      "require": "./dist/voiceReloadHandoff.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "typebox": "1.3.16"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

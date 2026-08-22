@@ -1,0 +1,175 @@
+export { writePrivateAtomicJson } from '../adapters/atomicJson.ts';
+export {
+  globalDoomConfigDirectory,
+  globalDoomConfigPath,
+  loadDoomConfig,
+  loadDoomConfigAsync,
+  repositoryDoomConfigPath,
+  resolvePlanningPlansDirectory,
+} from '../adapters/config.ts';
+export {
+  type DoomConfigEdit,
+  setDoomConfigValue,
+  unsetDoomConfigValue,
+  type WriteDoomConfigOptions,
+  writeDoomConfigValues,
+} from '../adapters/configWriter.ts';
+export {
+  DOOM_DIR,
+  listDomainNames,
+  loadDomains,
+  resolvePluginDirectories,
+  resolvePluginEntries,
+  resolveSharedSkills,
+} from '../adapters/domains.ts';
+export {
+  FILE_ONLY_STATE_FIELDS,
+  HARNESS_STATE_KEYS,
+  type HarnessStateParseReporter,
+  projectHarnessEnvironment,
+  readHarnessState,
+} from '../adapters/harnessState.ts';
+export {
+  createHarnessSession,
+  disposeHarnessState,
+  getHarnessState,
+  HARNESS_STATE_POINTER,
+  type HarnessStateFile,
+  type HarnessStateTransactionSnapshot,
+  harnessRoot,
+  type LoadedHarnessState,
+  loadHarnessState,
+  requireHarnessPaths,
+  requireHarnessRoot,
+  resetHarnessStore,
+  restoreHarnessStateSnapshot,
+  snapshotHarnessState,
+  updateHarnessState,
+} from '../adapters/harnessStore.ts';
+export {
+  DOOM_CONFIG_TEMPLATES,
+  GLOBAL_DOOM_SEED_FILES,
+  type GlobalDoomInitResult,
+  initializeGlobalDoomConfig,
+  initializeRepositoryDoomConfig,
+  REPOSITORY_DOOM_CONFIG_TEMPLATES,
+  type RepositoryDoomInitOptions,
+  type RepositoryDoomInitResult,
+} from '../adapters/init.ts';
+export type {
+  LayerDefinition,
+  LayerPackage,
+  LayerPackageConfig,
+  LayerResolvers,
+  MajorModeDefinition,
+  MajorModesConfig,
+  ResolvedLayerDefinition,
+  ResolvedPackageConfiguration,
+} from '../adapters/majorModes.ts';
+export {
+  isLocalPackageSpecifier,
+  layerEntries,
+  layerHookGroups,
+  loadMajorModesConfig,
+  resolveLayers,
+  resolvePackageConfigurations,
+} from '../adapters/majorModes.ts';
+export {
+  acknowledgeDoomConfigTransition,
+  appendDoomConfigSelection,
+  appendDoomConfigTransition,
+  createDoomConfigContext,
+  createDoomConfigContextAsync,
+  DOOM_CONFIG_ENTRY_TYPE,
+  DOOM_CONFIG_TRANSITION_ENTRY_TYPE,
+  type DoomConfigSelection,
+  freezeDoomConfigContext,
+  provideDoomConfigContext,
+  readDoomConfigContextGeneration,
+  readDoomConfigPendingSelection,
+  readDoomConfigSelection,
+  replaceDoomConfigContext,
+  requireDoomConfigContext,
+  supersedeDoomConfigTransition,
+} from '../adapters/pi/piContext.ts';
+export { loadPiConfig, loadPiConfigAsync, piConfigPaths } from '../adapters/piConfig.ts';
+export {
+  findPluginManifestPath,
+  isRemotePluginSource,
+  MARKETPLACE_MANIFEST_RELATIVE_PATHS,
+  pluginDirectoryForSource,
+} from '../adapters/pluginCatalog.ts';
+export type { AgentProfile } from '../adapters/profiles.ts';
+export {
+  applyProfileEnvironment,
+  buildPersonaPrompt,
+  listProfileNames,
+  loadProfiles,
+  PERSONA_FILES,
+  replaceProfileEnvironment,
+  resolveProfile,
+} from '../adapters/profiles.ts';
+export type {
+  ConfigAdapterRegistrationOptions,
+  PiConfig,
+  PiConfigLoadOptions,
+  PiConfigPaths,
+} from '../schemas/config/schema.ts';
+export {
+  DOOM_PLANNING_THINKING_LEVELS,
+  DOOM_VOICE_ENGINES,
+  DOOM_VOICE_TTS_ENGINES,
+  mergeDoomConfigs,
+  parseDoomConfig,
+  parsePlanningModeConfig,
+  resolveVoiceConfig,
+} from '../services/configPolicy.ts';
+export { domainCompletionItems, domainCompletionPrefix, expandDomainNames } from '../services/domains.ts';
+export type {
+  DoomConfigPendingSelection,
+  DoomConfigTransitionPhase,
+  DoomConfigTransitionRecord,
+  DoomConfigTransitionStrategy,
+} from '../types/config.ts';
+export {
+  type DeepReadonly,
+  DOOM_CONFIG_SERVICE,
+  type DoomConfig,
+  type DoomConfigContext,
+  type DoomHarnessContext,
+  type DoomSelectionConfig,
+  type EditorConfig,
+  type HarnessState,
+  type IDoomConfigLoader,
+  type IDoomConfigService,
+  type PlanningAgentConfig,
+  type PlanningModeConfig,
+  type PlanningThinkingLevel,
+  type PluginHookSource,
+  type ProjectTrust,
+  type ResolvedVoiceAutoCaptureConfig,
+  type ResolvedVoiceConfig,
+  type VoiceAdapterConfig,
+  type VoiceAutoCaptureConfig,
+  type VoiceConfig,
+  type VoiceEngine,
+  type VoiceModelConfig,
+  type VoiceTtsConfig,
+  type VoiceTtsEngine,
+} from '../types/config.ts';
+export type {
+  DomainDefinition,
+  DomainManifest,
+  DomainMcpAllowlist,
+  DomainPlugin,
+  GitPluginSource,
+  LocalPluginSource,
+  NpmPluginSource,
+  PluginCatalog,
+  PluginCatalogEntry,
+  PluginEntry,
+  PluginManifestMetadata,
+  PluginSkillDiscovery,
+  PluginSource,
+  ResolvedDomain,
+} from '../types/domains.ts';

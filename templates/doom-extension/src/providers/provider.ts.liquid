@@ -1,0 +1,32 @@
+import { type Context, Service } from '@deepseek-ai/cordis';
+
+export const {{ providerName | snakeCase | upper }}_SERVICE = 'doom/{{ providerName | kebabCase }}';
+
+export interface {{ providerName | pascalCase }}Snapshot {
+  readonly ready: boolean;
+}
+
+/** {{ providerDescription }} */
+export class {{ providerName | pascalCase }}Service extends Service {
+  constructor(
+    context: Context,
+    private readonly source: () => {{ providerName | pascalCase }}Snapshot,
+  ) {
+    super(context, {{ providerName | snakeCase | upper }}_SERVICE);
+  }
+
+  snapshot(): {{ providerName | pascalCase }}Snapshot {
+    return this.source();
+  }
+}
+
+/** Returns undefined when no extension has published the service on this Context. */
+export function read{{ providerName | pascalCase }}(context: Context): {{ providerName | pascalCase }}Service | undefined {
+  return context.get({{ providerName | snakeCase | upper }}_SERVICE) as {{ providerName | pascalCase }}Service | undefined;
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    'doom/{{ providerName | kebabCase }}': {{ providerName | pascalCase }}Service;
+  }
+}

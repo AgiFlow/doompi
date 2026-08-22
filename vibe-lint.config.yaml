@@ -1,0 +1,33 @@
+# Architectural review for the standalone DoomPi package workspace.
+root: true
+
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+
+ignore:
+  - "**/*.md"
+  - "**/*.mdx"
+  - "**/*.txt"
+  - "**/*.gen.ts"
+  - "**/__generated__/**"
+  - "**/vendor/**"
+  - "migration-records/**"
+
+boundaries:
+  - name: packages
+    pattern: "packages/**"
+  - name: layers
+    pattern: "layers/**"
+  - name: repository-config
+    pattern: "{nx.json,package.json,pnpm-lock.yaml,pnpm-workspace.yaml,vibe-lint.config.yaml}"
+
+overrides:
+  - files:
+      - "*.config.*"
+      - "**/*.config.*"
+    rules:
+      no-default-export: off

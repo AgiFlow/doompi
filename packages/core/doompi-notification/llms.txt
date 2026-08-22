@@ -1,0 +1,7 @@
+# Doom Pi Notification
+
+Desktop notifications and an animated shell-tab title for Doom Pi sessions.
+
+## Resources
+
+- [Package README](./README.md): what is announced and when, the worker-thread shell-title animator, and the rules that keep a session quiet.

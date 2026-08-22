@@ -1,0 +1,70 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" claude-session-start-hook || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -z \"${DOOMPI_HOOK_GROUPS+x}\" ] || printf ',%s,' \"$DOOMPI_HOOK_GROUPS\" | grep -Fq ',scaffold-mcp,'; then REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agiflowai/scaffold-mcp/dist/cli.cjs\" ] && node \"$REPO/node_modules/@agiflowai/scaffold-mcp/dist/cli.cjs\" hook --type claude-code.preToolUse || true; fi",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -z \"${DOOMPI_HOOK_GROUPS+x}\" ] || printf ',%s,' \"$DOOMPI_HOOK_GROUPS\" | grep -Fq ',vibe-lint,'; then REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs\" hook --type claude-code.preToolUse || true; fi",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" claude-stop-hook || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$WORKFLOW_STATUS_FILE\" ] && REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/workflow-mcp/dist/cli.mjs\" claude-notification-hook || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -z \"${DOOMPI_HOOK_GROUPS+x}\" ] || printf ',%s,' \"$DOOMPI_HOOK_GROUPS\" | grep -Fq ',vibe-lint,'; then REPO=\"${CLAUDE_PROJECT_DIR:-$PWD}\" && [ -f \"$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs\" ] && node \"$REPO/node_modules/@agimon-ai/vibe-lint/dist/cli.mjs\" hook --type claude-code.postToolBatch || true; fi",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

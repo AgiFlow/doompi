@@ -1,0 +1,7 @@
+import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult, {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../types/extension.ts';
+
+export class Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService implements {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService {
+  async execute(): Promise<{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult> {
+    return { message: '{{ commandDescription }}', level: 'info' };
+  }
+}

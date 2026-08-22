@@ -1,0 +1,4 @@
+interface:
+  display_name: "Doom Pi Runtime Config"
+  short_description: "Configure runtime settings and session context"
+  default_prompt: "Use $doompi-author-config to update DoomPi runtime configuration safely."

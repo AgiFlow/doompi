@@ -1,0 +1,21 @@
+/** {{ serviceDescription }} */
+export interface {{ serviceName | pascalCase }}Input {
+  readonly value: string;
+}
+
+export interface {{ serviceName | pascalCase }}Result {
+  readonly value: string;
+  readonly observedAt: number;
+}
+
+/**
+ * {{ serviceDescription }}
+ *
+ * Host-neutral by construction: every input arrives as an argument, the clock
+ * included, so the same arguments always produce the same result. Reading
+ * Date.now, process.env or a timer here would make the behavior untestable and
+ * couple the service to whichever host happens to call it.
+ */
+export function {{ serviceName | camelCase }}(input: {{ serviceName | pascalCase }}Input, now: number): {{ serviceName | pascalCase }}Result {
+  return { value: input.value, observedAt: now };
+}

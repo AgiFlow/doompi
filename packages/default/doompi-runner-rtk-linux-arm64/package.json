@@ -1,0 +1,45 @@
+{
+  "name": "@agimon-ai/doompi-runner-rtk-linux-arm64",
+  "version": "0.0.1-alpha.36",
+  "description": "Prebuilt RTK v0.45.0 log processor for DoomPi Runner on Linux arm64.",
+  "keywords": [
+    "ai",
+    "arm64",
+    "coding-agent",
+    "developer-tools",
+    "doom-runner",
+    "doompi",
+    "linux",
+    "log-processing",
+    "native-runtime",
+    "pi-package",
+    "rtk"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/default/doompi-runner-rtk-linux-arm64"
+  },
+  "files": [
+    "vendor",
+    "LICENSE-APACHE"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

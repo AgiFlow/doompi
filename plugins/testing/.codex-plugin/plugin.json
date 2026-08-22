@@ -1,0 +1,19 @@
+{
+  "name": "testing",
+  "version": "0.1.0",
+  "description": "Portable guidance for focused testing and evidence-based code review.",
+  "author": {
+    "name": "DoomPi Contributors"
+  },
+  "keywords": ["testing", "code-review", "quality"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "DoomPi Testing",
+    "shortDescription": "Test behavior and review changes with evidence.",
+    "longDescription": "Design focused tests, run repository checks, and review code changes with actionable findings tied to evidence.",
+    "developerName": "DoomPi Contributors",
+    "category": "Development",
+    "capabilities": ["Test", "Review"],
+    "defaultPrompt": ["Test this change and report the evidence.", "Review this diff for concrete regressions."]
+  }
+}

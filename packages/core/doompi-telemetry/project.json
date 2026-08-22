@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-telemetry",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/core/doompi-telemetry/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

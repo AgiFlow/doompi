@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/vibe-lint-plugin-doom-extension",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/tooling/vibe-lint-plugin-doom-extension/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "typescript-lib"
+}

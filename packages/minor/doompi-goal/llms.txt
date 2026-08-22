@@ -1,0 +1,9 @@
+# Doom Pi Goal
+
+## Resources
+
+- [Package README](./README.md): Commands, token budgets, queue behavior, state, history, and public API.
+
+## How to use
+
+- [doompi-use-goal](./src/prompts/doompi-use-goal/SKILL.md): Start, budget, pause, resume, complete, block, and inspect persistent repository goals.

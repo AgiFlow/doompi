@@ -1,0 +1,7 @@
+# Doom Pi Autostop
+
+Shuts a Doom Pi session down once the agent settles and stays idle.
+
+## Resources
+
+- [Package README](./README.md): the idle policy, the cooldown, and when the session is left alone.
