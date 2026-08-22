@@ -1,0 +1,22 @@
+# Every pull request requests a review from the maintainer.
+#
+# The ruleset on `main` does not require an approval, so this auto-requests
+# rather than blocks. Paths that can execute code on the self-hosted runner or
+# publish to npm are listed explicitly so they stay visible in the review queue.
+
+* @vuongngo
+
+# CI, release automation, and anything that touches the self-hosted runner.
+/.github/                        @vuongngo
+/.github/workflows/              @vuongngo
+/scripts/                        @vuongngo
+
+# Supply-chain surface: lockfile, workspace layout, and native payload fetching.
+/pnpm-lock.yaml                  @vuongngo
+/pnpm-workspace.yaml             @vuongngo
+/scripts/fetch-runner-binaries.mjs @vuongngo
+
+# Security and contribution policy.
+/SECURITY.md                     @vuongngo
+/CODE_OF_CONDUCT.md              @vuongngo
+/CONTRIBUTING.md                 @vuongngo
