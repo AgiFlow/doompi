@@ -1,0 +1,7 @@
+# @agimon-ai/doompi-server
+
+Package-owned guidance for the headless DoomPi session server.
+
+## Resources
+
+- [Package README](./README.md): Running the server, socket transport, authentication, and client attachment.
