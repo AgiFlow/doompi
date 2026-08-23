@@ -342,17 +342,18 @@
       "./mcp-tool-resolver": "tir",
       "./mode": "tir",
       "./narration": "tir",
+      "./package.json": "esm",
       "./protocol": "tir",
       "./readiness": "tir",
+      "./sandbox-harness": "tir",
       "./skills": "tir",
       "./subagent-policy": "tir",
       "./subagent-tool": "tir",
-      "./transition": "tir",
       "./tool-overrides": "tir",
+      "./transition": "tir",
       "./ui-hub": "tir",
-      "./voice-tools": "tir",
       "./voice-reload-handoff": "tir",
-      "./package.json": "esm"
+      "./voice-tools": "tir"
     },
     "exportTargets": {
       ".": {
@@ -450,6 +451,7 @@
         "import": "./dist/narration.mjs",
         "require": "./dist/narration.cjs"
       },
+      "./package.json": "./package.json",
       "./protocol": {
         "types": "./dist/protocol.d.mts",
         "import": "./dist/protocol.mjs",
@@ -459,6 +461,11 @@
         "types": "./dist/readiness.d.mts",
         "import": "./dist/readiness.mjs",
         "require": "./dist/readiness.cjs"
+      },
+      "./sandbox-harness": {
+        "import": "./dist/sandboxHarness.mjs",
+        "require": "./dist/sandboxHarness.cjs",
+        "types": "./dist/sandboxHarness.d.mts"
       },
       "./skills": {
         "types": "./dist/skills.d.mts",
@@ -475,32 +482,31 @@
         "import": "./dist/subagentTool.mjs",
         "require": "./dist/subagentTool.cjs"
       },
-      "./transition": {
-        "types": "./dist/transition.d.mts",
-        "import": "./dist/transition.mjs",
-        "require": "./dist/transition.cjs"
-      },
       "./tool-overrides": {
         "types": "./dist/toolOverrides.d.mts",
         "import": "./dist/toolOverrides.mjs",
         "require": "./dist/toolOverrides.cjs"
+      },
+      "./transition": {
+        "types": "./dist/transition.d.mts",
+        "import": "./dist/transition.mjs",
+        "require": "./dist/transition.cjs"
       },
       "./ui-hub": {
         "types": "./dist/uiHub.d.mts",
         "import": "./dist/uiHub.mjs",
         "require": "./dist/uiHub.cjs"
       },
-      "./voice-tools": {
-        "types": "./dist/voiceTools.d.mts",
-        "import": "./dist/voiceTools.mjs",
-        "require": "./dist/voiceTools.cjs"
-      },
       "./voice-reload-handoff": {
         "types": "./dist/voiceReloadHandoff.d.mts",
         "import": "./dist/voiceReloadHandoff.mjs",
         "require": "./dist/voiceReloadHandoff.cjs"
       },
-      "./package.json": "./package.json"
+      "./voice-tools": {
+        "types": "./dist/voiceTools.d.mts",
+        "import": "./dist/voiceTools.mjs",
+        "require": "./dist/voiceTools.cjs"
+      }
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
