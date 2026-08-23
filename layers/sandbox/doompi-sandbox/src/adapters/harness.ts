@@ -4,10 +4,12 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import type { SandboxLaunchRequest } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import { findDevcontainerConfig, runDevcontainerSession } from './devcontainer.ts';
+import { DEVCONTAINER_DISABLED_ENV } from '../services/devcontainer.ts';
 import { availableLoginPorts } from './loginPorts.ts';
 import { startBroker, type RunningBroker } from './brokerHost.ts';
 import { BRIDGE_FILE_NAME, sandboxBridgeSource } from '../services/sandboxBridge.ts';
-import { buildSandboxPlan } from '../services/sandboxPlan.ts';
+import { buildSandboxPlan, containerEnvironment } from '../services/sandboxPlan.ts';
 import { OAUTH_CALLBACK_PORTS } from '../services/oauthCallback.ts';
 import { assertRunFlags, parseRunFlags } from '../services/runFlags.ts';
 import { sandboxDockerfile } from '../services/sandboxImage.ts';
@@ -47,6 +49,11 @@ export interface SandboxLauncherDependencies {
 
 function distributionVersion(): string {
   return (require(SELF_MANIFEST) as { version: string }).version;
+}
+
+/** Fixed per-repository directory a reused dev container can keep mounted. */
+function brokerDirectory(repoRoot: string): string {
+  return path.join(os.tmpdir(), `${repoKey(repoRoot)}-broker`);
 }
 
 function repoKey(repoRoot: string): string {
@@ -127,8 +134,22 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
       request.onProgress?.(`using ${engine}${runFlags.length > 0 ? ` with ${runFlags.join(' ')}` : ''}`);
 
       const version = dependencies.version ?? distributionVersion();
-      const imageTag = await ensureImage(runner, engine, version, request.onProgress);
-      warnAboutLocalPackages(request.repoRoot, request.onProgress);
+      // A workspace that describes its own container is describing the
+      // toolchain its agent needs, so that container wins over the built-in
+      // image. Nothing here is built or pulled until that choice is made.
+      const devcontainer =
+        request.environment[DEVCONTAINER_DISABLED_ENV] === DISABLED_VALUE
+          ? undefined
+          : findDevcontainerConfig(request.repoRoot);
+      const imageTag = devcontainer ? undefined : await ensureImage(runner, engine, version, request.onProgress);
+      if (devcontainer) {
+        request.onProgress?.(`using the workspace dev container from ${path.relative(request.repoRoot, devcontainer)}`);
+        request.onProgress?.(
+          'its configuration owns the mounts and run arguments, so this is not an isolation boundary',
+        );
+      } else {
+        warnAboutLocalPackages(request.repoRoot, request.onProgress);
+      }
 
       const broker =
         request.environment[BROKER_DISABLED_ENV] === DISABLED_VALUE
@@ -136,21 +157,40 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
           : await beginBroker({
               environment: request.environment,
               onDenied: (reason) => request.onProgress?.(`broker refused a call: ${reason}`),
+              // A reused dev container keeps the mounts it was created with,
+              // so the socket has to be at the same path on every launch.
+              ...(devcontainer ? { socketDirectory: brokerDirectory(request.repoRoot) } : {}),
             });
       if (broker) {
         request.onProgress?.(`brokering ${broker.providers.join(', ')}; provider keys stay on the host`);
       }
 
-      const loginPorts = await resolveLoginPorts();
-      if (loginPorts.length < OAUTH_CALLBACK_PORTS.length) {
+      const loginPorts = devcontainer ? [] : await resolveLoginPorts();
+      if (!devcontainer && loginPorts.length < OAUTH_CALLBACK_PORTS.length) {
         request.onProgress?.(
           'some OAuth callback ports are already taken; /login inside this sandbox may not complete',
         );
       }
 
       try {
+        const hasTty = process.stdin.isTTY === true && process.stdout.isTTY === true;
+        if (devcontainer) {
+          return await runDevcontainerSession({
+            repoRoot: request.repoRoot,
+            cwd: request.cwd,
+            forwardArgs: request.forwardArgs,
+            environment: containerEnvironment(request.environment, broker),
+            engine,
+            runner,
+            version,
+            hasTty,
+            ...(broker?.endpoint.transport === 'unix' ? { socketDirectory: broker.endpoint.socketDirectory } : {}),
+            ...(request.onProgress ? { onProgress: request.onProgress } : {}),
+          });
+        }
+
         const host: SandboxHostFacts = {
-          hasTty: process.stdin.isTTY === true && process.stdout.isTTY === true,
+          hasTty,
           platform: process.platform,
           userId: process.getuid?.(),
           groupId: process.getgid?.(),
@@ -165,7 +205,7 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
           environment: request.environment,
           engine,
           host,
-          imageTag,
+          imageTag: imageTag as string,
           runFlags,
           loginPorts,
           broker,

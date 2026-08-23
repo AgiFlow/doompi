@@ -41,6 +41,14 @@ the trusted base. `docker`, `podman`, `nerdctl`, and `finch` are supported, and
 `DOOMPI_SANDBOX_RUN_FLAGS` passes options such as `--runtime=runsc` through to select a stronger
 isolation runtime. DoomPi does not verify which runtime actually ran.
 
+### Workspace dev containers
+
+When a repository carries a dev container configuration, `--sandbox` runs the session in that
+container rather than the built-in image, and the configuration is honoured in full. It is
+author-controlled, so it can mount anything, including the docker socket, and this mode is
+therefore a convenience rather than a boundary. The environment allowlist and the credential broker
+still apply. `DOOMPI_SANDBOX_DEVCONTAINER=0` restores the built-in image.
+
 ### Provider credentials
 
 A sandboxed session holds no provider API key. The host starts a broker, grants the container one

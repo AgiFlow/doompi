@@ -32,6 +32,15 @@ export interface StartBrokerOptions {
   onDenied?: (reason: string) => void;
   /** Seam for tests; defaults to this host's platform. */
   platform?: string;
+  /**
+   * Fixed directory to hold the socket instead of a fresh temporary one.
+   *
+   * A reused container keeps the mounts it was created with, so a dev
+   * container has to find the socket at the same path on every launch.
+   */
+  socketDirectory?: string;
+  /** Forces the loopback transport even where a socket would work. */
+  forceLoopback?: boolean;
 }
 
 /**
@@ -50,8 +59,10 @@ export async function startBroker(options: StartBrokerOptions): Promise<RunningB
   const server = createBrokerServer({ credentials, token, onDenied: options.onDenied });
   const platform = options.platform ?? process.platform;
 
-  const { endpoint, dispose } =
-    platform === LINUX_PLATFORM ? await listenOnSocket(server) : await listenOnLoopback(server);
+  const useSocket = platform === LINUX_PLATFORM && options.forceLoopback !== true;
+  const { endpoint, dispose } = useSocket
+    ? await listenOnSocket(server, options.socketDirectory)
+    : await listenOnLoopback(server);
 
   return {
     endpoint,
@@ -66,17 +77,28 @@ export async function startBroker(options: StartBrokerOptions): Promise<RunningB
  * Native Linux shares a kernel with the container, so a bind-mounted socket
  * needs no port and is reachable as an ordinary file.
  */
-async function listenOnSocket(server: http.Server): Promise<{ endpoint: BrokerEndpoint; dispose: () => void }> {
-  const socketDirectory = fs.mkdtempSync(path.join(os.tmpdir(), SOCKET_DIRECTORY_PREFIX));
+async function listenOnSocket(
+  server: http.Server,
+  fixedDirectory?: string,
+): Promise<{ endpoint: BrokerEndpoint; dispose: () => void }> {
+  const socketDirectory = fixedDirectory ?? fs.mkdtempSync(path.join(os.tmpdir(), SOCKET_DIRECTORY_PREFIX));
+  fs.mkdirSync(socketDirectory, { recursive: true });
   fs.chmodSync(socketDirectory, OWNER_ONLY_DIRECTORY);
   const socketPath = path.join(socketDirectory, SOCKET_FILE_NAME);
+  // A previous session that died without closing leaves the node behind, and
+  // bind fails on an existing path.
+  fs.rmSync(socketPath, { force: true });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(socketPath, () => resolve());
   });
   return {
     endpoint: { transport: 'unix', socketDirectory },
-    dispose: () => fs.rmSync(socketDirectory, { recursive: true, force: true }),
+    // A fixed directory outlives the session that borrowed it.
+    dispose: () =>
+      fixedDirectory
+        ? fs.rmSync(socketPath, { force: true })
+        : fs.rmSync(socketDirectory, { recursive: true, force: true }),
   };
 }
 

@@ -6,6 +6,12 @@ This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/d
 It is the serving core the web, desktop, and mobile clients attach to. It registers no Pi
 extension and adds nothing to an interactive session.
 
+## Enabling it
+
+This package is still in development, so `doompi init` does not reference it and there is nothing
+to add to `.doom/modes.yaml`: it registers no Pi extension and is not part of a mode. It is a
+standalone executable you run yourself, as shown under Run below.
+
 ## Requirements
 
 - Node.js 22.19.0 or newer

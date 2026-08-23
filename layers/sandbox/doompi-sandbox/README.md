@@ -18,6 +18,26 @@ pi install npm:@agimon-ai/doompi-sandbox
 
 The package declares its Pi extension entry, so Pi loads it after installation. DoomPi users can include the package through their normal profile and domain composition instead.
 
+## Enabling it
+
+This layer is still in development, so `doompi init` does not add it to any mode. Opt in by hand:
+name it as a layer in `.doom/modes.yaml`, then list that layer on the mode you want it in.
+
+```yaml
+layers:
+  sandbox:
+    packages:
+      - '@agimon-ai/doompi-sandbox'
+
+majorMode:
+  copilot:
+    description: General-purpose coding mode.
+    layers: [team, ask-user, task, sandbox]
+```
+
+`--sandbox` resolves the provider from the selected mode, so a mode without this layer reports that
+no sandbox harness is available and refuses to launch rather than running unsandboxed.
+
 ## Sandboxed launches
 
 With this layer in the selected major mode, `doompi --sandbox` moves the whole session into a
@@ -58,6 +78,31 @@ would silently launch a different container.
 A stronger runtime that boots a VM rather than sharing the host kernel, such as Kata or
 Firecracker, is untested here. Their filesystem passthrough is unlikely to carry the broker's
 bind-mounted unix socket, so expect to turn brokering off or move it to a port first.
+
+## Workspace dev containers
+
+A repository with a `.devcontainer/devcontainer.json` (or a root `.devcontainer.json`) uses that
+container instead of the built-in image, because a workspace that describes its own container is
+describing the toolchain its agent needs. The Dev Containers CLI brings it up, so the file decides
+the image, features, mounts, run arguments and lifecycle hooks in full.
+
+**This mode is not an isolation boundary.** The configuration is author-controlled, and a
+devcontainer that mounts your home directory or the docker socket removes the containment this
+layer otherwise provides. The launch says so on every run. Set `DOOMPI_SANDBOX_DEVCONTAINER=0` to
+ignore the file and use the built-in image, which is a boundary.
+
+What still applies: the environment allowlist and the credential broker. The container receives the
+session token rather than any real key, and reaches the broker over the host gateway.
+
+Notes on this mode:
+
+- DoomPi is installed into the container on first use with `npm install -g`, since a project's
+  container has no reason to carry it. The CLI reuses the container, so that cost is paid once for
+  its lifetime. A container without `npm` is reported rather than silently degraded.
+- The session attaches through the engine rather than `devcontainer exec`, which allocates no
+  terminal and would break the full-screen TUI.
+- OAuth callback ports cannot be published into a container this layer did not create, so `/login`
+  needs the ports declared as `appPort` in the devcontainer configuration.
 
 ## Signing in from inside the sandbox
 

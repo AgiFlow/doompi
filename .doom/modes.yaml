@@ -29,9 +29,6 @@ layers:
   task:
     packages:
       - "./layers/task/doompi-task"
-  sandbox:
-    packages:
-      - "./layers/sandbox/doompi-sandbox"
 
 defaultMajorMode: copilot
 
@@ -41,7 +38,7 @@ majorMode:
     layers: [team, task]
   copilot:
     description: General-purpose coding mode with delegation, persistent tasks, supervised commands, and structured user feedback.
-    layers: [team, ask-user, task, sandbox]
+    layers: [team, ask-user, task]
   examples:
     description: Layer-free base mode for the repository's plugin and workflow examples.
     layers: []

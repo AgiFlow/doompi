@@ -20,6 +20,7 @@ const REPOSITORY_LABEL = 'doompi.sandbox.repo';
 const LAUNCHER_BINARY = 'doompi';
 const NODE_BINARY = 'node';
 const LINUX_PLATFORM = 'linux';
+const ENABLED = '1';
 const BROKER_MOUNT_DIRECTORY = '/run/doompi';
 
 /** Host broker facts the plan projects into mounts and environment. */
@@ -66,9 +67,13 @@ function brokeredEnvironment(filtered: Record<string, string>, broker: SandboxPl
     if (!isCredentialEnvName(name)) environment[name] = value;
   }
   for (const name of broker.withheldEnv) environment[name] = broker.token;
-  if (broker.endpoint.transport === 'unix') environment[BROKER_SOCKET_ENV] = BROKER_SOCKET_CONTAINER_PATH;
-  else environment[BROKER_ADDRESS_ENV] = `${BROKER_HOST_GATEWAY}:${broker.endpoint.port}`;
-  environment[BROKER_PORT_ENV] = String(BROKER_CONTAINER_PORT);
+  if (broker.endpoint.transport === 'unix') {
+    environment[BROKER_SOCKET_ENV] = BROKER_SOCKET_CONTAINER_PATH;
+    // Only the bridge reads this, and only a socket needs the bridge.
+    environment[BROKER_PORT_ENV] = String(BROKER_CONTAINER_PORT);
+  } else {
+    environment[BROKER_ADDRESS_ENV] = `${BROKER_HOST_GATEWAY}:${broker.endpoint.port}`;
+  }
   environment[BROKER_PROVIDERS_ENV] = broker.providers.join(',');
   return environment;
 }
@@ -96,13 +101,30 @@ function brokerAccessArgs(broker: SandboxPlanBroker | undefined): string[] {
  * `.pi` store, which keeps Linux installs from corrupting the host's own
  * platform-specific packages on the shared workspace mount.
  */
+/**
+ * The environment a sandboxed session runs with, whichever container hosts it.
+ *
+ * Shared with the dev container path, which builds no run arguments of its own
+ * but must apply the same allowlist and the same credential substitution.
+ */
+export function containerEnvironment(
+  environment: Readonly<Record<string, string | undefined>>,
+  broker?: SandboxPlanBroker,
+  loginPorts: readonly number[] = [],
+): Record<string, string> {
+  const filtered = filterSandboxEnvironment(environment);
+  const resolved = broker ? brokeredEnvironment(filtered, broker) : filtered;
+  resolved[DOOMPI_SANDBOX_ENV] = ENABLED;
+  if (loginPorts.length > 0) resolved[OAUTH_CALLBACK_HOST_ENV] = OAUTH_CONTAINER_BIND;
+  return resolved;
+}
+
 export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
   const { repoRoot, cwd, engine, host, broker, imageTag } = input;
-  const filtered = filterSandboxEnvironment(input.environment);
-  const containerEnvironment = broker ? brokeredEnvironment(filtered, broker) : filtered;
   const loginPorts = input.loginPorts ?? [];
-  if (loginPorts.length > 0) containerEnvironment[OAUTH_CALLBACK_HOST_ENV] = OAUTH_CONTAINER_BIND;
-  const environmentPairs = Object.entries(containerEnvironment).sort(([left], [right]) => left.localeCompare(right));
+  const environmentPairs = Object.entries(containerEnvironment(input.environment, broker, loginPorts)).sort(
+    ([left], [right]) => left.localeCompare(right),
+  );
 
   const runArgs = [
     'run',
@@ -123,8 +145,6 @@ export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
     cwd,
     '-e',
     `HOME=${CONTAINER_HOME}`,
-    '-e',
-    `${DOOMPI_SANDBOX_ENV}=1`,
     ...environmentPairs.flatMap(([name, value]) => ['-e', `${name}=${value}`]),
     ...(host.platform === LINUX_PLATFORM && host.userId !== undefined
       ? [
@@ -137,9 +157,9 @@ export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
     // above it, and cannot be mistaken for the image or its command.
     ...(input.runFlags ?? []),
     imageTag,
-    // The bridge owns the loopback listener the provider SDKs dial, so it has
-    // to outlive nothing but the launcher it wraps.
-    ...(broker ? [NODE_BINARY, BRIDGE_CONTAINER_PATH] : []),
+    // Only a mounted socket needs the bridge: a broker on a host port is
+    // addressed directly, so the launcher runs unwrapped.
+    ...(broker?.endpoint.transport === 'unix' ? [NODE_BINARY, BRIDGE_CONTAINER_PATH] : []),
     LAUNCHER_BINARY,
     ...input.forwardArgs,
   ];

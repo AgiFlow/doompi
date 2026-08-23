@@ -352,6 +352,73 @@ describe('createSandboxLauncher', () => {
     });
   });
 
+  describe('workspace dev container', () => {
+    function repoWithDevcontainer(): string {
+      const repoRoot = createRepo();
+      fs.mkdirSync(path.join(repoRoot, '.devcontainer'), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, '.devcontainer', 'devcontainer.json'), '{"image":"node:22"}');
+      return repoRoot;
+    }
+
+    function devcontainerRunner() {
+      const runs: Array<{ command: string; args: string[] }> = [];
+      return {
+        runs,
+        run: vi.fn(async (command: string, args: string[]) => {
+          runs.push({ command, args });
+          return 0;
+        }),
+        capture: vi.fn(async () => ({ exitCode: 0, stdout: '{"outcome":"success","containerId":"dev-abc"}' })),
+      };
+    }
+
+    it('prefers it over the built-in image and never builds one', async () => {
+      const runner = devcontainerRunner();
+      const progress: string[] = [];
+
+      await createSandboxLauncher({
+        runner,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
+        repoRoot: repoWithDevcontainer(),
+        cwd: '/tmp',
+        forwardArgs: ['--major-mode', 'copilot'],
+        environment: {},
+        onProgress: (message) => progress.push(message),
+      });
+
+      expect(runner.runs.some((entry) => entry.args[0] === 'build')).toBe(false);
+      expect(runner.runs.at(-1)?.args).toContain('dev-abc');
+      expect(progress.some((message) => message.includes('workspace dev container'))).toBe(true);
+      expect(progress.some((message) => message.includes('not an isolation boundary'))).toBe(true);
+    });
+
+    it('falls back to the built-in image when turned off', async () => {
+      const runner = fakeRunner({
+        captures: {
+          'docker --version': { exitCode: 0, stdout: 'docker 27' },
+          [`docker image inspect ${TAG}`]: { exitCode: 0, stdout: '[]' },
+        },
+      });
+
+      await createSandboxLauncher({
+        runner,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
+        repoRoot: repoWithDevcontainer(),
+        cwd: '/tmp',
+        forwardArgs: [],
+        environment: { DOOMPI_SANDBOX_DEVCONTAINER: '0' },
+      });
+
+      expect(runner.runs[0]?.args).toContain(TAG);
+    });
+  });
+
   it('warns when the composition declares local workspace packages', async () => {
     const runner = fakeRunner({
       captures: {

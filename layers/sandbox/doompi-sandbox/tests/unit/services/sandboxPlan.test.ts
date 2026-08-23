@@ -105,6 +105,9 @@ describe('buildSandboxPlan', () => {
       expect(plan.runArgs).toContain('--add-host');
       expect(plan.runArgs).toContain('host.docker.internal:host-gateway');
       expect(plan.runArgs).toContain('DOOMPI_BROKER_ADDRESS=host.docker.internal:54321');
+      // No socket means no bridge: the launcher runs unwrapped.
+      expect(plan.runArgs.join(' ')).not.toContain('sandbox-bridge.mjs');
+      expect(plan.runArgs.slice(-4)).toEqual(['doompi', '--major-mode', 'copilot', 'run']);
       expect(plan.runArgs.join(' ')).not.toContain('/run/doompi');
       expect(plan.runArgs.join(' ')).not.toContain('DOOMPI_BROKER_SOCKET');
     });
