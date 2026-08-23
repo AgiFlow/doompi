@@ -74,6 +74,22 @@ describe('buildSandboxPlan', () => {
     expect(buildSandboxPlan(input()).runArgs).not.toContain('--runtime=runsc');
   });
 
+  it('publishes free callback ports and binds them inside the container', () => {
+    const plan = buildSandboxPlan(input({ loginPorts: [1455, 53692] }));
+
+    expect(plan.runArgs).toContain('127.0.0.1:1455:1455');
+    expect(plan.runArgs).toContain('127.0.0.1:53692:53692');
+    // A published port reaches the container's external interface, never its loopback.
+    expect(plan.runArgs).toContain('PI_OAUTH_CALLBACK_HOST=0.0.0.0');
+  });
+
+  it('leaves the callback host alone when no port could be published', () => {
+    const plan = buildSandboxPlan(input({ loginPorts: [] }));
+
+    expect(plan.runArgs).not.toContain('-p');
+    expect(plan.runArgs.join(' ')).not.toContain('PI_OAUTH_CALLBACK_HOST');
+  });
+
   describe('with a host broker', () => {
     const broker = {
       endpoint: { transport: 'unix' as const, socketDirectory: '/tmp/doompi-broker-xyz' },

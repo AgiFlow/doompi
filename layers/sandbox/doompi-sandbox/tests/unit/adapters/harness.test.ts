@@ -7,6 +7,7 @@ import { sandboxImageTag } from '../../../src/adapters/sandboxImageTag.ts';
 import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness.ts';
 
 const TAG = sandboxImageTag('9.9.9');
+const noLoginPorts = async (): Promise<number[]> => [];
 
 const tempDirectories: string[] = [];
 
@@ -69,7 +70,12 @@ describe('createSandboxLauncher', () => {
     const repoRoot = createRepo();
     const progress: string[] = [];
 
-    const exitCode = await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+    const exitCode = await createSandboxLauncher({
+      runner,
+      version: '9.9.9',
+      hostFacts: hostFacts(),
+      loginPorts: noLoginPorts,
+    }).launchSandbox({
       repoRoot,
       cwd: repoRoot,
       forwardArgs: ['--major-mode', 'copilot'],
@@ -93,7 +99,12 @@ describe('createSandboxLauncher', () => {
     });
     const repoRoot = createRepo();
 
-    await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+    await createSandboxLauncher({
+      runner,
+      version: '9.9.9',
+      hostFacts: hostFacts(),
+      loginPorts: noLoginPorts,
+    }).launchSandbox({
       repoRoot,
       cwd: repoRoot,
       forwardArgs: [],
@@ -116,7 +127,12 @@ describe('createSandboxLauncher', () => {
     });
 
     await expect(
-      createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+      createSandboxLauncher({
+        runner,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -135,7 +151,12 @@ describe('createSandboxLauncher', () => {
         },
       });
 
-      await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+      await createSandboxLauncher({
+        runner,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -155,7 +176,12 @@ describe('createSandboxLauncher', () => {
     });
     const progress: string[] = [];
 
-    await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+    await createSandboxLauncher({
+      runner,
+      version: '9.9.9',
+      hostFacts: hostFacts(),
+      loginPorts: noLoginPorts,
+    }).launchSandbox({
       repoRoot: createRepo(),
       cwd: '/tmp',
       forwardArgs: [],
@@ -171,7 +197,12 @@ describe('createSandboxLauncher', () => {
     const runner = fakeRunner({ captures: { 'docker --version': { exitCode: 0, stdout: 'docker 27' } } });
 
     await expect(
-      createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+      createSandboxLauncher({
+        runner,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -185,7 +216,7 @@ describe('createSandboxLauncher', () => {
     const runner = fakeRunner();
 
     await expect(
-      createSandboxLauncher({ runner, version: '9.9.9' }).launchSandbox({
+      createSandboxLauncher({ runner, version: '9.9.9', loginPorts: noLoginPorts }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -198,7 +229,7 @@ describe('createSandboxLauncher', () => {
     const runner = fakeRunner();
 
     await expect(
-      createSandboxLauncher({ runner, version: '9.9.9' }).launchSandbox({
+      createSandboxLauncher({ runner, version: '9.9.9', loginPorts: noLoginPorts }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -213,7 +244,7 @@ describe('createSandboxLauncher', () => {
     });
     const repoRoot = createRepo();
 
-    await createSandboxLauncher({ runner, hostFacts: hostFacts() }).launchSandbox({
+    await createSandboxLauncher({ runner, hostFacts: hostFacts(), loginPorts: noLoginPorts }).launchSandbox({
       repoRoot,
       cwd: repoRoot,
       forwardArgs: [],
@@ -247,7 +278,13 @@ describe('createSandboxLauncher', () => {
       });
       const progress: string[] = [];
 
-      await createSandboxLauncher({ runner, startBroker, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+      await createSandboxLauncher({
+        runner,
+        startBroker,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -277,7 +314,13 @@ describe('createSandboxLauncher', () => {
       });
 
       await expect(
-        createSandboxLauncher({ runner, startBroker, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+        createSandboxLauncher({
+          runner,
+          startBroker,
+          version: '9.9.9',
+          hostFacts: hostFacts(),
+          loginPorts: noLoginPorts,
+        }).launchSandbox({
           repoRoot: createRepo(),
           cwd: '/tmp',
           forwardArgs: [],
@@ -291,7 +334,13 @@ describe('createSandboxLauncher', () => {
       const runner = brokeringRunner();
       const startBroker = vi.fn();
 
-      await createSandboxLauncher({ runner, startBroker, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+      await createSandboxLauncher({
+        runner,
+        startBroker,
+        version: '9.9.9',
+        hostFacts: hostFacts(),
+        loginPorts: noLoginPorts,
+      }).launchSandbox({
         repoRoot: createRepo(),
         cwd: '/tmp',
         forwardArgs: [],
@@ -313,7 +362,12 @@ describe('createSandboxLauncher', () => {
     const repoRoot = createRepo('default:\n  packages:\n    - "./packages/local-thing"\n');
     const progress: string[] = [];
 
-    await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+    await createSandboxLauncher({
+      runner,
+      version: '9.9.9',
+      hostFacts: hostFacts(),
+      loginPorts: noLoginPorts,
+    }).launchSandbox({
       repoRoot,
       cwd: repoRoot,
       forwardArgs: [],

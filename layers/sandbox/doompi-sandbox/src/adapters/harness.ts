@@ -4,9 +4,11 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import type { SandboxLaunchRequest } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import { availableLoginPorts } from './loginPorts.ts';
 import { startBroker, type RunningBroker } from './brokerHost.ts';
 import { BRIDGE_FILE_NAME, sandboxBridgeSource } from '../services/sandboxBridge.ts';
 import { buildSandboxPlan } from '../services/sandboxPlan.ts';
+import { OAUTH_CALLBACK_PORTS } from '../services/oauthCallback.ts';
 import { assertRunFlags, parseRunFlags } from '../services/runFlags.ts';
 import { sandboxDockerfile } from '../services/sandboxImage.ts';
 import { sandboxImageTag } from './sandboxImageTag.ts';
@@ -31,6 +33,8 @@ const SELF_MANIFEST = '@agimon-ai/doompi-sandbox/package.json';
 
 export interface SandboxLauncherDependencies {
   runner?: EngineProcessRunner;
+  /** Seam for tests; defaults to probing the real OAuth callback ports. */
+  loginPorts?: () => Promise<number[]>;
   /** Seam for tests; defaults to the real host broker. */
   startBroker?: (options: {
     environment: Readonly<Record<string, string | undefined>>;
@@ -114,6 +118,7 @@ function warnAboutLocalPackages(repoRoot: string, onProgress: ((message: string)
 export function createSandboxLauncher(dependencies: SandboxLauncherDependencies = {}) {
   const runner = dependencies.runner ?? new SpawnEngineProcessRunner();
   const beginBroker = dependencies.startBroker ?? startBroker;
+  const resolveLoginPorts = dependencies.loginPorts ?? availableLoginPorts;
   return {
     async launchSandbox(request: SandboxLaunchRequest): Promise<number> {
       const engine = await detectEngine(runner, request.environment);
@@ -136,6 +141,13 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
         request.onProgress?.(`brokering ${broker.providers.join(', ')}; provider keys stay on the host`);
       }
 
+      const loginPorts = await resolveLoginPorts();
+      if (loginPorts.length < OAUTH_CALLBACK_PORTS.length) {
+        request.onProgress?.(
+          'some OAuth callback ports are already taken; /login inside this sandbox may not complete',
+        );
+      }
+
       try {
         const host: SandboxHostFacts = {
           hasTty: process.stdin.isTTY === true && process.stdout.isTTY === true,
@@ -155,6 +167,7 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
           host,
           imageTag,
           runFlags,
+          loginPorts,
           broker,
         });
         request.onProgress?.(`starting contained session in ${imageTag}`);

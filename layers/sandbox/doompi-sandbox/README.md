@@ -59,6 +59,25 @@ A stronger runtime that boots a VM rather than sharing the host kernel, such as 
 Firecracker, is untested here. Their filesystem passthrough is unlikely to carry the broker's
 bind-mounted unix socket, so expect to turn brokering off or move it to a port first.
 
+## Signing in from inside the sandbox
+
+Subscription logins are not brokered, so `/login` runs inside the container. Two things make its
+browser callback reachable:
+
+- The launch publishes Pi's fixed callback ports back onto host loopback: 1455 (OpenAI Codex),
+  1456 (Radius) and 53692 (Anthropic).
+- `PI_OAUTH_CALLBACK_HOST=0.0.0.0` makes the in-container server bind every interface. A published
+  port reaches the container's external interface, never its loopback, so Pi's default bind would
+  refuse the connection. The redirect the provider sees is unchanged, still `localhost:<port>`.
+
+Credentials land in the per-repository home volume, so a login survives later runs against the
+same repository.
+
+Ports already held by another process are skipped rather than failing the launch, and the run says
+so. A second concurrent sandbox therefore starts normally but cannot complete a login. Providers
+that bind an ephemeral callback port instead of a fixed one, OpenRouter among them, cannot be
+published ahead of the flow and are not covered.
+
 ## Provider credential broker
 
 The container never receives a provider API key. For each brokered provider the host holds a key
@@ -94,8 +113,8 @@ Reports whether the current session runs inside the sandbox container or directl
 
 ## Current limits
 
-- The broker carries a curated provider list. OAuth subscription logins held in `~/.pi` are not
-  brokered and need a login inside the sandbox, since the host home directory is not mounted.
+- The broker carries a curated provider list. OAuth subscription logins are not brokered, so they
+  are performed inside the sandbox (see below) and stored in that container's home volume.
 - A host `*_BASE_URL` override is dropped rather than used as the broker's upstream.
 - Compositions that declare local workspace packages cannot load their platform-specific
   dependencies inside the Linux container; use registry-installed layers for sandboxed work.

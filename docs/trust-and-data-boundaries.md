@@ -32,6 +32,9 @@ What a sandboxed session can reach:
 - An allowlisted environment: terminal and locale variables, proxy settings, and `DOOMPI_PRESET`.
   Everything else a shell accumulates stays on the host.
 - The network, under the engine's default configuration. Network policy is not restricted yet.
+- Three host loopback ports, published so a browser can complete an OAuth login started inside the
+  container: 1455, 1456 and 53692. They are bound to `127.0.0.1`, so they are not exposed beyond
+  the host, and a port another process already holds is skipped rather than taken.
 
 The boundary is whatever the container engine provides, so the engine and its runtime are part of
 the trusted base. `docker`, `podman`, `nerdctl`, and `finch` are supported, and

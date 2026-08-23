@@ -1,6 +1,7 @@
 import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import type { BrokerEndpoint, SandboxEngine, SandboxHostFacts } from '../types/sandboxHarness.ts';
 import { filterSandboxEnvironment, isCredentialEnvName } from './sandboxEnvironment.ts';
+import { OAUTH_CALLBACK_HOST_ENV, OAUTH_CONTAINER_BIND, oauthPublishArgs } from './oauthCallback.ts';
 import {
   BRIDGE_CONTAINER_PATH,
   BROKER_ADDRESS_ENV,
@@ -41,6 +42,8 @@ export interface SandboxPlanInput {
   imageTag: string;
   /** Engine options the operator configured, such as an alternate runtime. */
   runFlags?: readonly string[];
+  /** OAuth callback ports free on the host, published so a browser can reach them. */
+  loginPorts?: readonly number[];
   broker?: SandboxPlanBroker;
 }
 
@@ -97,6 +100,8 @@ export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
   const { repoRoot, cwd, engine, host, broker, imageTag } = input;
   const filtered = filterSandboxEnvironment(input.environment);
   const containerEnvironment = broker ? brokeredEnvironment(filtered, broker) : filtered;
+  const loginPorts = input.loginPorts ?? [];
+  if (loginPorts.length > 0) containerEnvironment[OAUTH_CALLBACK_HOST_ENV] = OAUTH_CONTAINER_BIND;
   const environmentPairs = Object.entries(containerEnvironment).sort(([left], [right]) => left.localeCompare(right));
 
   const runArgs = [
@@ -113,6 +118,7 @@ export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
     '-v',
     `${host.repoKey}-pi:${repoRoot}/.pi`,
     ...brokerAccessArgs(broker),
+    ...oauthPublishArgs(loginPorts),
     '-w',
     cwd,
     '-e',
