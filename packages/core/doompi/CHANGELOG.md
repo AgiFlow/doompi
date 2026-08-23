@@ -1,3 +1,36 @@
+## 0.0.1-alpha.37 (2026-08-23)
+
+### 🚀 Features
+
+- **doompi:** accept --sandbox on the dpi entry point ([c8c4984](https://github.com/AgiFlow/doompi/commit/c8c4984))
+- **root:** run sandboxed sessions in a container with --sandbox ([efdf5b7](https://github.com/AgiFlow/doompi/commit/efdf5b7))
+- **root:** price mcp tool schemas in --explain and surface domain allowlists ([db208c3](https://github.com/AgiFlow/doompi/commit/db208c3))
+
+### 🩹 Fixes
+
+- **doompi:** measure startup on request instead of on every run ([cc81559](https://github.com/AgiFlow/doompi/commit/cc81559))
+- **doompi:** widen only the parity gate, not every startup budget ([201dc88](https://github.com/AgiFlow/doompi/commit/201dc88))
+- **doompi:** record the new contracts export and widen the startup jitter ([8120d2a](https://github.com/AgiFlow/doompi/commit/8120d2a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.37
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.36 (2026-08-22)
 
 ### 🧱 Updated Dependencies

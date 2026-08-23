@@ -1,3 +1,18 @@
+## 0.0.1-alpha.37 (2026-08-23)
+
+### 🚀 Features
+
+- **root:** price mcp tool schemas in --explain and surface domain allowlists ([db208c3](https://github.com/AgiFlow/doompi/commit/db208c3))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.37
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.36 (2026-08-22)
 
 ### 🧱 Updated Dependencies
