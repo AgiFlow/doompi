@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TmuxBackend } from '../../src/adapters/TmuxBackend/TmuxBackend.ts';
+import type { RunHandle } from '../../src/types/launcher';
+import type { PtyRun } from '../../src/types/ptyHost';
 import type { IRunnerPaths } from '../../src/services/RunnerPaths/types';
 import type { ITmuxClient } from '../../src/types/tmuxClient';
 
@@ -285,5 +287,334 @@ describe('TmuxBackend without a usable tmux', () => {
         interactive: false,
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Drives the paths a machine without tmux never reaches.
+ *
+ * The suite above needs a real tmux server, so CI skips it and leaves the
+ * failure handling untested. A scripted client covers the same code with no
+ * binary present.
+ */
+describe('TmuxBackend failure handling with a scripted tmux', () => {
+  interface Script {
+    run?: (args: string[]) => Promise<{ returnCode: number; stdout: string; stderr: string }>;
+    format?: (target: string, spec: string) => Promise<string | undefined>;
+    sessionMissing?: (target: string) => Promise<boolean>;
+  }
+
+  function scripted(script: Script): ITmuxClient {
+    return {
+      run: script.run ?? (() => Promise.resolve({ returnCode: 0, stdout: '', stderr: '' })),
+      format: script.format ?? (() => Promise.resolve(undefined)),
+      sessionMissing: script.sessionMissing ?? (() => Promise.resolve(false)),
+    };
+  }
+
+  function backendWith(script: Script): TmuxBackend {
+    return new TmuxBackend(pathsFor('/scripted-repo'), () => scripted(script));
+  }
+
+  describe('a launch that tmux accepts', () => {
+    /** Answers the pane queries a launch makes, then reports a clean exit. */
+    function launching(exitStatus = '0'): Script {
+      return {
+        format: (_target, spec) =>
+          Promise.resolve(spec === '#{pane_pid}' ? String(process.pid) : `1:${exitStatus}:doom-tmux-run-ok`),
+      };
+    }
+
+    it('hands back a handle describing the pane it created', async () => {
+      const backend = backendWith(launching());
+
+      const handle = await backend.launch({
+        id: 'run-ok',
+        name: 'ok',
+        command: 'echo hi',
+        cwd: root,
+        sessionId: 'session-1',
+        interactive: false,
+      });
+
+      expect(handle?.backend).toBe('tmux');
+      expect(handle?.backendTarget).toBe('doom-tmux-run-ok');
+      expect(handle?.pid).toBe(process.pid);
+      await expect(handle?.completion()).resolves.toMatchObject({ code: 0 });
+    });
+
+    it('reports the pane exit code it was given', async () => {
+      const backend = backendWith(launching('3'));
+
+      const handle = await backend.launch({
+        id: 'run-ok',
+        name: 'ok',
+        command: 'exit 3',
+        cwd: root,
+        sessionId: 'session-1',
+        interactive: false,
+      });
+
+      await expect(handle?.completion()).resolves.toMatchObject({ code: 3 });
+    });
+
+    it('stops buffering output once the caller detaches', async () => {
+      const backend = backendWith(launching());
+
+      const handle = await backend.launch({
+        id: 'run-ok',
+        name: 'ok',
+        command: 'echo hi',
+        cwd: root,
+        sessionId: 'session-1',
+        interactive: false,
+      });
+      handle?.detach();
+
+      expect(handle?.output()).toBe('');
+    });
+
+    it('registers an interactive run under its name', async () => {
+      const backend = backendWith(launching());
+
+      await backend.launch({
+        id: 'run-ok',
+        name: 'ok',
+        command: 'echo hi',
+        cwd: root,
+        sessionId: 'session-1',
+        interactive: true,
+      });
+
+      expect(backend.get('ok')).toBeDefined();
+    });
+
+    it('gives up when tmux refuses to create the session', async () => {
+      const backend = backendWith({
+        run: (args) =>
+          Promise.resolve(
+            args[0] === 'new-session'
+              ? { returnCode: 1, stdout: '', stderr: 'duplicate session' }
+              : { returnCode: 0, stdout: '', stderr: '' },
+          ),
+      });
+
+      await expect(
+        backend.launch({
+          id: 'run-dupe',
+          name: 'dupe',
+          command: 'echo hi',
+          cwd: root,
+          sessionId: 'session-1',
+          interactive: false,
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('gives up when the pane never reports a pid', async () => {
+      const backend = backendWith({ format: () => Promise.resolve(undefined) });
+
+      await expect(
+        backend.launch({
+          id: 'run-nopid',
+          name: 'nopid',
+          command: 'echo hi',
+          cwd: root,
+          sessionId: 'session-1',
+          interactive: false,
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('an interactive run', () => {
+    async function interactiveFor(screenText: string): Promise<PtyRun | undefined> {
+      let frame = 0;
+      const backend = new TmuxBackend(pathsFor('/scripted-repo'), () => ({
+        // A pane that never changes never notifies, so each capture differs.
+        run: (args) =>
+          Promise.resolve(
+            args[0] === 'capture-pane'
+              ? { returnCode: 0, stdout: `${screenText} ${frame++}`, stderr: '' }
+              : { returnCode: 0, stdout: '', stderr: '' },
+          ),
+        // Never dead, so the pane stays live for the duration of the test.
+        format: (_target, spec) => Promise.resolve(spec === '#{pane_pid}' ? String(process.pid) : '0::doom-tmux-run-i'),
+        sessionMissing: () => Promise.resolve(false),
+      }));
+      await backend.launch({
+        id: 'run-i',
+        name: 'interactive',
+        command: 'bash',
+        cwd: root,
+        sessionId: 'session-1',
+        interactive: true,
+      });
+      return backend.get('interactive');
+    }
+
+    it('publishes the captured screen to its subscribers', async () => {
+      const run = await interactiveFor('hello from the pane');
+      const seen: string[] = [];
+      run?.onData((data) => seen.push(data));
+
+      await waitUntil(() => seen.length > 0, 'screen data');
+
+      expect(seen[0]).toMatch(/^hello from the pane \d+$/);
+      expect(run?.screen()).toBe(seen.at(-1));
+    });
+
+    it('stops delivering to a subscriber that unsubscribed', async () => {
+      const run = await interactiveFor('first');
+      const seen: string[] = [];
+      const unsubscribe = run?.onData((data) => seen.push(data));
+
+      await waitUntil(() => seen.length > 0, 'first frame');
+      unsubscribe?.();
+      const countAfterUnsubscribe = seen.length;
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      expect(seen.length).toBe(countAfterUnsubscribe);
+    });
+
+    it('accepts writes and resizes without throwing', async () => {
+      const run = await interactiveFor('ready');
+
+      expect(() => run?.write('ls\n')).not.toThrow();
+      expect(() => run?.resize(120, 40)).not.toThrow();
+    });
+  });
+
+  describe('stop', () => {
+    it('refuses a target this backend does not own', async () => {
+      const backend = backendWith({});
+
+      await expect(backend.stop('someone-elses-session', 4321)).resolves.toBe(false);
+    });
+
+    it('refuses an implausible pid rather than signalling it', async () => {
+      const backend = backendWith({});
+
+      await expect(backend.stop('doom-tmux-run-a', 0)).resolves.toBe(false);
+      await expect(backend.stop('doom-tmux-run-a', -1)).resolves.toBe(false);
+      await expect(backend.stop('doom-tmux-run-a', 1.5)).resolves.toBe(false);
+    });
+
+    it('leaves a pane alone when its pid is not the one the caller expected', async () => {
+      // The run died and the pid was reused, so stopping it would kill a stranger.
+      const backend = backendWith({ format: () => Promise.resolve('999999') });
+
+      await expect(backend.stop('doom-tmux-run-a', 4321)).resolves.toBe(false);
+    });
+
+    it('reports a pane whose pid tmux will not give up', async () => {
+      const backend = backendWith({ format: () => Promise.resolve('not-a-pid') });
+
+      await expect(backend.stop('doom-tmux-run-a', 4321)).resolves.toBe(false);
+    });
+
+    it('reports a tmux that fails outright', async () => {
+      const backend = backendWith({ format: () => Promise.reject(new Error('server gone')) });
+
+      await expect(backend.stop('doom-tmux-run-a', 4321)).resolves.toBe(false);
+    });
+  });
+
+  describe('a pane whose process is already gone', () => {
+    // A pid no longer in the table means the work finished; closing the
+    // session is still the right outcome.
+    it('closes the session anyway', async () => {
+      const absentPid = 999_999;
+      const backend = backendWith({ format: () => Promise.resolve(String(absentPid)) });
+
+      await expect(backend.stop('doom-tmux-run-a', absentPid)).resolves.toBe(true);
+    });
+  });
+
+  describe('buffered output', () => {
+    async function launchFor(id: string): Promise<RunHandle | undefined> {
+      const backend = backendWith({
+        format: (_target, spec) =>
+          Promise.resolve(spec === '#{pane_pid}' ? String(process.pid) : `1:0:doom-tmux-${id}`),
+      });
+      return backend.launch({
+        id,
+        name: id,
+        command: 'echo hi',
+        cwd: root,
+        sessionId: 'session-1',
+        interactive: false,
+      });
+    }
+
+    it('answers nothing when the log has gone', async () => {
+      const handle = await launchFor('run-nolog');
+      fs.rmSync(path.join(root, 'logs', 'run-nolog.log'), { force: true });
+
+      expect(handle?.output()).toBe('');
+    });
+
+    it('keeps the end of a log rather than the whole of it', async () => {
+      const handle = await launchFor('run-biglog');
+      const tailMarker = 'THE-VERY-END';
+      fs.writeFileSync(path.join(root, 'logs', 'run-biglog.log'), `${'x'.repeat(2_000_000)}${tailMarker}`);
+
+      const output = handle?.output() ?? '';
+
+      expect(output.endsWith(tailMarker)).toBe(true);
+      expect(output.length).toBeLessThan(2_000_000);
+    });
+  });
+
+  describe('input', () => {
+    it('reports a rejected send', async () => {
+      const backend = backendWith({
+        run: (args) =>
+          args[0] === 'send-keys'
+            ? Promise.reject(new Error('no server'))
+            : Promise.resolve({ returnCode: 0, stdout: '', stderr: '' }),
+      });
+
+      await expect(backend.input('doom-tmux-run-a', 'hello')).resolves.toBe(false);
+    });
+
+    it('reports a non-zero send', async () => {
+      const backend = backendWith({
+        run: (args) =>
+          Promise.resolve(
+            args[0] === 'send-keys'
+              ? { returnCode: 1, stdout: '', stderr: 'no such pane' }
+              : { returnCode: 0, stdout: '', stderr: '' },
+          ),
+      });
+
+      await expect(backend.input('doom-tmux-run-a', 'hello')).resolves.toBe(false);
+    });
+
+    it('confirms a send tmux accepted', async () => {
+      const backend = backendWith({});
+
+      await expect(backend.input('doom-tmux-run-a', 'hello')).resolves.toBe(true);
+    });
+  });
+
+  describe('watch', () => {
+    it('answers nothing for a session tmux does not have', async () => {
+      const backend = backendWith({ sessionMissing: () => Promise.resolve(true) });
+
+      await expect(backend.watch('run-a', 'doom-tmux-run-a')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('readOutcome', () => {
+    it('answers nothing when the run left no exit record', async () => {
+      expect(backendWith({}).readOutcome('run-never-ran', 'session-1')).toBeUndefined();
+    });
+  });
+
+  describe('get', () => {
+    it('answers nothing for a name it never launched', () => {
+      expect(backendWith({}).get('absent')).toBeUndefined();
+    });
   });
 });
