@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   bootstrapCommand,
+  containerWorkspacePath,
+  mapForwardArgs,
   devcontainerExecArgs,
   devcontainerUpArgs,
   parseDevcontainerUp,
@@ -96,5 +98,42 @@ describe('devcontainerExecArgs', () => {
 
     expect(args.slice(0, 2)).toEqual(['exec', '-i']);
     expect(args).not.toContain('-t');
+  });
+});
+
+describe('containerWorkspacePath', () => {
+  it('maps the repository root onto the container workspace', () => {
+    expect(containerWorkspacePath('/Users/me/repo', '/Users/me/repo', '/workspaces/repo')).toBe('/workspaces/repo');
+  });
+
+  it('keeps a subdirectory of the repository', () => {
+    expect(containerWorkspacePath('/Users/me/repo', '/Users/me/repo/packages/app', '/workspaces/repo')).toBe(
+      '/workspaces/repo/packages/app',
+    );
+  });
+
+  it('falls back to the workspace for a path outside the repository', () => {
+    expect(containerWorkspacePath('/Users/me/repo', '/somewhere/else', '/workspaces/repo')).toBe('/workspaces/repo');
+  });
+});
+
+describe('mapForwardArgs', () => {
+  it('rewrites forwarded host paths, since the workspace is mounted elsewhere', () => {
+    const args = ['--major-mode', 'copilot', '--cwd', '/Users/me/repo', '--plugin-dir', '/Users/me/repo/plugins'];
+
+    expect(mapForwardArgs(args, '/Users/me/repo', '/workspaces/repo')).toEqual([
+      '--major-mode',
+      'copilot',
+      '--cwd',
+      '/workspaces/repo',
+      '--plugin-dir',
+      '/workspaces/repo/plugins',
+    ]);
+  });
+
+  it('leaves everything that is not a repository path alone', () => {
+    const args = ['--major-mode', 'copilot', '--preset', 'default', '/Users/other/thing'];
+
+    expect(mapForwardArgs(args, '/Users/me/repo', '/workspaces/repo')).toEqual(args);
   });
 });

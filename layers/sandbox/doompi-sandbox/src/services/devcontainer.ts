@@ -99,6 +99,23 @@ export function bootstrapCommand(version: string): string[] {
   ];
 }
 
+/**
+ * Rewrites forwarded host paths into the dev container's workspace.
+ *
+ * The launcher replays its resolved options, and several carry absolute host
+ * paths: --cwd always, plugin and additional directories when set. Those
+ * resolve in the built-in image, which mounts the repository at the path it
+ * has on the host, but a dev container mounts it wherever its configuration
+ * says, and the session would fail looking for a repository that is not there.
+ */
+export function mapForwardArgs(args: readonly string[], repoRoot: string, remoteWorkspaceFolder: string): string[] {
+  return args.map((argument) =>
+    argument === repoRoot || argument.startsWith(`${repoRoot}/`)
+      ? containerWorkspacePath(repoRoot, argument, remoteWorkspaceFolder)
+      : argument,
+  );
+}
+
 export interface DevcontainerExecOptions {
   containerId: string;
   cwd: string;

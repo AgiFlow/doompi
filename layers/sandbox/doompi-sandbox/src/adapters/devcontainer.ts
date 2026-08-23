@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   bootstrapCommand,
   containerWorkspacePath,
+  mapForwardArgs,
   DEVCONTAINER_CLI_PACKAGE,
   DEVCONTAINER_CONFIG_PATHS,
   devcontainerExecArgs,
@@ -99,7 +100,12 @@ export async function runDevcontainerSession(options: DevcontainerSessionOptions
         : options.cwd,
       environment: options.environment,
       hasTty: options.hasTty,
-      command: [LAUNCHER_BINARY, ...options.forwardArgs],
+      command: [
+        LAUNCHER_BINARY,
+        ...(remoteWorkspaceFolder
+          ? mapForwardArgs(options.forwardArgs, options.repoRoot, remoteWorkspaceFolder)
+          : options.forwardArgs),
+      ],
     }),
   );
 }
