@@ -36,8 +36,21 @@ extensions, MCP servers, and skills all execute inside the container. `DOOMPI_SA
 every sandboxed process; nesting is refused.
 
 Only an allowlisted environment enters the container: terminal and locale variables, proxy
-settings, `DOOMPI_PRESET`, and credentials matching `*_API_KEY`, `*_AUTH_TOKEN`, or
-`*_BASE_URL`. Everything else a shell accumulates stays on the host.
+settings, and `DOOMPI_PRESET`. Everything else a shell accumulates stays on the host.
+
+## Provider credential broker
+
+The container never receives a provider API key. For each brokered provider the host holds a key
+for, the launch:
+
+1. Starts a broker on an owner-only unix socket and mounts just that socket into the container.
+2. Replaces the credential variable with a random per-session token.
+3. Redirects the provider's base URL at a loopback bridge inside the container, which forwards
+   raw bytes to the mounted socket.
+
+The broker validates the token, swaps in the real key, and streams the provider response back.
+Credentials for providers it cannot carry are withheld from the container rather than passed
+through. Turn the whole mechanism off with `DOOMPI_SANDBOX_BROKER=0`.
 
 ## In-session command
 
@@ -49,8 +62,9 @@ Reports whether the current session runs inside the sandbox container or directl
 
 ## Current limits
 
-- Provider credentials still enter the container as environment variables; a host-side
-  credential broker is the next planned boundary.
+- The broker carries a curated provider list. OAuth subscription logins held in `~/.pi` are not
+  brokered and need a login inside the sandbox, since the host home directory is not mounted.
+- A host `*_BASE_URL` override is dropped rather than used as the broker's upstream.
 - Compositions that declare local workspace packages cannot load their platform-specific
   dependencies inside the Linux container; use registry-installed layers for sandboxed work.
 - `--sandbox` belongs to the `doompi` launcher; the synced `dpi` fast path does not accept it yet.

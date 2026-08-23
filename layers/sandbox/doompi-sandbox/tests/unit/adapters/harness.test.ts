@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSandboxLauncher } from '../../../src/adapters/harness.ts';
+import { sandboxImageTag } from '../../../src/adapters/sandboxImageTag.ts';
 import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness.ts';
+
+const TAG = sandboxImageTag('9.9.9');
 
 const tempDirectories: string[] = [];
 
@@ -60,7 +63,7 @@ describe('createSandboxLauncher', () => {
     const runner = fakeRunner({
       captures: {
         'podman --version': { exitCode: 0, stdout: 'podman 5' },
-        'podman image inspect doompi-sandbox:v9.9.9': { exitCode: 0, stdout: '[]' },
+        [`podman image inspect ${TAG}`]: { exitCode: 0, stdout: '[]' },
       },
     });
     const repoRoot = createRepo();
@@ -78,14 +81,14 @@ describe('createSandboxLauncher', () => {
     expect(progress).toContain('using podman');
     expect(runner.runs).toHaveLength(1);
     expect(runner.runs[0]?.args[0]).toBe('run');
-    expect(runner.runs[0]?.args).toContain('doompi-sandbox:v9.9.9');
+    expect(runner.runs[0]?.args).toContain(TAG);
   });
 
   it('builds the image once when it is missing', async () => {
     const runner = fakeRunner({
       captures: {
         'docker --version': { exitCode: 0, stdout: 'docker 27' },
-        'docker image inspect doompi-sandbox:v9.9.9': { exitCode: 1, stdout: '' },
+        [`docker image inspect ${TAG}`]: { exitCode: 1, stdout: '' },
       },
     });
     const repoRoot = createRepo();
@@ -98,7 +101,7 @@ describe('createSandboxLauncher', () => {
     });
 
     expect(runner.runs).toHaveLength(2);
-    expect(runner.runs[0]?.args.slice(0, 3)).toEqual(['build', '-t', 'doompi-sandbox:v9.9.9']);
+    expect(runner.runs[0]?.args.slice(0, 3)).toEqual(['build', '-t', TAG]);
     expect(runner.runs[0]?.args).toContain('DOOMPI_VERSION=9.9.9');
     expect(runner.runs[1]?.args[0]).toBe('run');
   });
@@ -107,7 +110,7 @@ describe('createSandboxLauncher', () => {
     const runner = fakeRunner({
       captures: {
         'docker --version': { exitCode: 0, stdout: 'docker 27' },
-        'docker image inspect doompi-sandbox:v9.9.9': { exitCode: 1, stdout: '' },
+        [`docker image inspect ${TAG}`]: { exitCode: 1, stdout: '' },
       },
       runExitCodes: [1],
     });
@@ -167,11 +170,89 @@ describe('createSandboxLauncher', () => {
     expect(buildArgs[2]).toMatch(/^doompi-sandbox:v\d/);
   });
 
+  describe('provider broker', () => {
+    function brokeringRunner() {
+      return fakeRunner({
+        captures: {
+          'docker --version': { exitCode: 0, stdout: 'docker 27' },
+          [`docker image inspect ${TAG}`]: { exitCode: 0, stdout: '[]' },
+        },
+      });
+    }
+
+    it('starts a broker, wires it into the run, and stops it afterwards', async () => {
+      const runner = brokeringRunner();
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const startBroker = vi.fn().mockResolvedValue({
+        socketDirectory: '/tmp/broker-abc',
+        token: 'session-token',
+        providers: ['anthropic'],
+        withheldEnv: ['ANTHROPIC_API_KEY'],
+        stop,
+      });
+      const progress: string[] = [];
+
+      await createSandboxLauncher({ runner, startBroker, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+        repoRoot: createRepo(),
+        cwd: '/tmp',
+        forwardArgs: [],
+        environment: { ANTHROPIC_API_KEY: 'real-anthropic' },
+        onProgress: (message) => progress.push(message),
+      });
+
+      expect(startBroker).toHaveBeenCalledOnce();
+      expect(stop).toHaveBeenCalledOnce();
+      const runArgs = runner.runs[0]?.args ?? [];
+      expect(runArgs).toContain('/tmp/broker-abc:/run/doompi');
+      expect(runArgs).toContain('ANTHROPIC_API_KEY=session-token');
+      expect(runArgs.join(' ')).not.toContain('real-anthropic');
+      expect(progress.some((message) => message.includes('provider keys stay on the host'))).toBe(true);
+    });
+
+    it('stops the broker even when the session fails', async () => {
+      const runner = brokeringRunner();
+      runner.run = vi.fn().mockRejectedValue(new Error('engine died'));
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const startBroker = vi.fn().mockResolvedValue({
+        socketDirectory: '/tmp/broker-abc',
+        token: 'session-token',
+        providers: ['anthropic'],
+        withheldEnv: ['ANTHROPIC_API_KEY'],
+        stop,
+      });
+
+      await expect(
+        createSandboxLauncher({ runner, startBroker, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+          repoRoot: createRepo(),
+          cwd: '/tmp',
+          forwardArgs: [],
+          environment: {},
+        }),
+      ).rejects.toThrowError(/engine died/);
+      expect(stop).toHaveBeenCalledOnce();
+    });
+
+    it('leaves credentials alone when brokering is turned off', async () => {
+      const runner = brokeringRunner();
+      const startBroker = vi.fn();
+
+      await createSandboxLauncher({ runner, startBroker, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+        repoRoot: createRepo(),
+        cwd: '/tmp',
+        forwardArgs: [],
+        environment: { DOOMPI_SANDBOX_BROKER: '0', ANTHROPIC_API_KEY: 'real-anthropic' },
+      });
+
+      expect(startBroker).not.toHaveBeenCalled();
+      expect(runner.runs[0]?.args).toContain('ANTHROPIC_API_KEY=real-anthropic');
+    });
+  });
+
   it('warns when the composition declares local workspace packages', async () => {
     const runner = fakeRunner({
       captures: {
         'docker --version': { exitCode: 0, stdout: 'docker 27' },
-        'docker image inspect doompi-sandbox:v9.9.9': { exitCode: 0, stdout: '[]' },
+        [`docker image inspect ${TAG}`]: { exitCode: 0, stdout: '[]' },
       },
     });
     const repoRoot = createRepo('default:\n  packages:\n    - "./packages/local-thing"\n');

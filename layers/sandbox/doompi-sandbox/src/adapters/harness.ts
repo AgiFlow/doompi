@@ -4,12 +4,17 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import type { SandboxLaunchRequest } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import { startBroker, type RunningBroker } from './brokerHost.ts';
+import { BRIDGE_FILE_NAME, sandboxBridgeSource } from '../services/sandboxBridge.ts';
 import { buildSandboxPlan } from '../services/sandboxPlan.ts';
-import { sandboxDockerfile, sandboxImageTag } from '../services/sandboxImage.ts';
+import { sandboxDockerfile } from '../services/sandboxImage.ts';
+import { sandboxImageTag } from './sandboxImageTag.ts';
 import type { EngineProcessRunner, SandboxEngine, SandboxHostFacts } from '../types/sandboxHarness.ts';
 import { SpawnEngineProcessRunner } from './engineProcess.ts';
 
 const ENGINE_ENV = 'DOOMPI_SANDBOX_ENGINE';
+const BROKER_DISABLED_ENV = 'DOOMPI_SANDBOX_BROKER';
+const DISABLED_VALUE = '0';
 const ENGINES: SandboxEngine[] = ['docker', 'podman'];
 const DOCKERFILE_NAME = 'Dockerfile';
 const MODES_FILE = path.join('.doom', 'modes.yaml');
@@ -23,6 +28,11 @@ const SELF_MANIFEST = '@agimon-ai/doompi-sandbox/package.json';
 
 export interface SandboxLauncherDependencies {
   runner?: EngineProcessRunner;
+  /** Seam for tests; defaults to the real host broker. */
+  startBroker?: (options: {
+    environment: Readonly<Record<string, string | undefined>>;
+    onDenied?: (reason: string) => void;
+  }) => Promise<RunningBroker | undefined>;
   /** Distribution version override; defaults to this package's own version. */
   version?: string;
   hostFacts?: Partial<SandboxHostFacts>;
@@ -66,6 +76,7 @@ async function ensureImage(
   const context = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-sandbox-build-'));
   try {
     fs.writeFileSync(path.join(context, DOCKERFILE_NAME), sandboxDockerfile());
+    fs.writeFileSync(path.join(context, BRIDGE_FILE_NAME), sandboxBridgeSource());
     const exitCode = await runner.run(engine, [
       'build',
       '-t',
@@ -99,6 +110,7 @@ function warnAboutLocalPackages(repoRoot: string, onProgress: ((message: string)
 /** Builds the launcher with injectable seams for tests. */
 export function createSandboxLauncher(dependencies: SandboxLauncherDependencies = {}) {
   const runner = dependencies.runner ?? new SpawnEngineProcessRunner();
+  const beginBroker = dependencies.startBroker ?? startBroker;
   return {
     async launchSandbox(request: SandboxLaunchRequest): Promise<number> {
       const engine = await detectEngine(runner, request.environment);
@@ -108,25 +120,42 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
       const imageTag = await ensureImage(runner, engine, version, request.onProgress);
       warnAboutLocalPackages(request.repoRoot, request.onProgress);
 
-      const host: SandboxHostFacts = {
-        hasTty: process.stdin.isTTY === true && process.stdout.isTTY === true,
-        platform: process.platform,
-        userId: process.getuid?.(),
-        groupId: process.getgid?.(),
-        repoKey: repoKey(request.repoRoot),
-        version,
-        ...dependencies.hostFacts,
-      };
-      const plan = buildSandboxPlan({
-        repoRoot: request.repoRoot,
-        cwd: request.cwd,
-        forwardArgs: request.forwardArgs,
-        environment: request.environment,
-        engine,
-        host,
-      });
-      request.onProgress?.(`starting contained session in ${imageTag}`);
-      return runner.run(engine, plan.runArgs);
+      const broker =
+        request.environment[BROKER_DISABLED_ENV] === DISABLED_VALUE
+          ? undefined
+          : await beginBroker({
+              environment: request.environment,
+              onDenied: (reason) => request.onProgress?.(`broker refused a call: ${reason}`),
+            });
+      if (broker) {
+        request.onProgress?.(`brokering ${broker.providers.join(', ')}; provider keys stay on the host`);
+      }
+
+      try {
+        const host: SandboxHostFacts = {
+          hasTty: process.stdin.isTTY === true && process.stdout.isTTY === true,
+          platform: process.platform,
+          userId: process.getuid?.(),
+          groupId: process.getgid?.(),
+          repoKey: repoKey(request.repoRoot),
+          version,
+          ...dependencies.hostFacts,
+        };
+        const plan = buildSandboxPlan({
+          repoRoot: request.repoRoot,
+          cwd: request.cwd,
+          forwardArgs: request.forwardArgs,
+          environment: request.environment,
+          engine,
+          host,
+          imageTag,
+          broker,
+        });
+        request.onProgress?.(`starting contained session in ${imageTag}`);
+        return await runner.run(engine, plan.runArgs);
+      } finally {
+        await broker?.stop();
+      }
     },
   };
 }

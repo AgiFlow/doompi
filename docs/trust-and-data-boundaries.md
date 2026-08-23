@@ -29,16 +29,32 @@ What a sandboxed session can reach:
   invisible, including `~/.ssh`, keychains, host Pi sessions, and other repositories.
 - An isolated home directory and an isolated `.pi` package store, both named volumes keyed to the
   repository path, so Linux installs never touch the host's platform-specific packages.
-- An allowlisted environment: terminal and locale variables, proxy settings, `DOOMPI_PRESET`, and
-  provider credentials matching `*_API_KEY`, `*_AUTH_TOKEN`, or `*_BASE_URL`. Everything else a
-  shell accumulates stays on the host.
+- An allowlisted environment: terminal and locale variables, proxy settings, and `DOOMPI_PRESET`.
+  Everything else a shell accumulates stays on the host.
 - The network, under the engine's default configuration. Network policy is not restricted yet.
+
+### Provider credentials
+
+A sandboxed session holds no provider API key. The host starts a broker on a unix socket, mounts
+only that socket into the container, and gives the container a random per-session token in place of
+every credential. Pi inside the container is redirected at the socket, presents the token, and the
+broker swaps it for the real key before forwarding upstream. A call that cannot prove possession of
+the token is refused, and a provider the session was not granted is unroutable.
+
+Credentials for providers the broker does not carry are withheld from the container entirely
+rather than passed through, so the promise holds for every provider rather than the brokered ones
+only. Set `DOOMPI_SANDBOX_BROKER=0` to turn brokering off and hand credentials to the container
+directly, which is the pre-broker behavior.
 
 Known limits of this boundary today:
 
-- Provider credentials still enter the container as environment variables, so a compromised
-  session can read them. A host-side credential broker that keeps keys out of the container is
-  the next planned step.
+- The broker terminates a curated provider list. A session that authenticates any other way, in
+  particular OAuth subscription logins held in `~/.pi`, has to log in inside the sandbox because
+  the host home directory is not mounted.
+- A `*_BASE_URL` override on the host is dropped rather than honored as the broker's upstream, so
+  a session pointed at a corporate gateway needs brokering turned off.
+- The token authorizes any brokered provider for the life of the session; the broker does not cap
+  spend or rate.
 - The container engine daemon is part of the trusted base; a user or process that can talk to
   Docker can escape any container it runs.
 - Compositions that declare local workspace packages cannot load their platform-specific

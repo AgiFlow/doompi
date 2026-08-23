@@ -1,9 +1,17 @@
+import { BRIDGE_CONTAINER_PATH, BRIDGE_FILE_NAME } from './sandboxBridge.ts';
+
 const IMAGE_REPOSITORY = 'doompi-sandbox';
 const TAG_SAFE = /[^A-Za-z0-9_.-]/g;
 
-/** Image tag pinned to one distribution version, so upgrades rebuild. */
-export function sandboxImageTag(version: string): string {
-  return `${IMAGE_REPOSITORY}:v${version.replaceAll(TAG_SAFE, '-')}`;
+/**
+ * Names one image build: a distribution version plus its image definition.
+ *
+ * The digest matters as much as the version. Editing the Dockerfile or the
+ * bridge without it would silently reuse a cached image that predates the
+ * change.
+ */
+export function formatImageTag(version: string, digest: string): string {
+  return `${IMAGE_REPOSITORY}:v${version.replaceAll(TAG_SAFE, '-')}-${digest}`;
 }
 
 /**
@@ -22,6 +30,7 @@ export function sandboxDockerfile(): string {
     '  && rm -rf /var/lib/apt/lists/*',
     'ARG DOOMPI_VERSION',
     'RUN npm install -g @agimon-ai/doompi@${DOOMPI_VERSION}',
+    `COPY ${BRIDGE_FILE_NAME} ${BRIDGE_CONTAINER_PATH}`,
     '# World-writable so the launch can map any host user id onto it.',
     'RUN mkdir -m 0777 /doompi-home',
     'ENV DOOMPI_SANDBOX=1 HOME=/doompi-home',

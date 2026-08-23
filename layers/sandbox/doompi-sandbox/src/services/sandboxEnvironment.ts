@@ -15,6 +15,11 @@ const EXACT_NAMES = new Set([
 const NAME_PREFIXES = ['LC_'];
 const NAME_SUFFIXES = ['_API_KEY', '_AUTH_TOKEN', '_BASE_URL'];
 
+/** True for variables shaped like a provider credential or endpoint override. */
+export function isCredentialEnvName(name: string): boolean {
+  return NAME_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
+
 function allowed(name: string): boolean {
   return (
     EXACT_NAMES.has(name) ||

@@ -4,6 +4,7 @@ import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-ext
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { registerSandboxCommand } from '../../commands/doomSandboxCommand.ts';
+import { brokeredProviderOverrides } from '../../services/brokerProviders.ts';
 import { createSandboxContainer } from '../../container';
 import type { SandboxExtensionDependencies } from '../../types/extension';
 
@@ -39,6 +40,22 @@ export function installSandboxRuntime(
   });
 
   registerSandboxCommand(pi, dependencies.service);
+  registerBrokeredProviders(pi, process.env);
+}
+
+/**
+ * Redirects brokered providers at the loopback bridge inside the sandbox.
+ *
+ * Silent by design when the launch set no broker variables: an unbrokered or
+ * host session must keep Pi's own provider endpoints.
+ */
+export function registerBrokeredProviders(
+  pi: Pick<ExtensionAPI, 'registerProvider'>,
+  environment: Readonly<Record<string, string | undefined>>,
+): void {
+  for (const override of brokeredProviderOverrides(environment)) {
+    pi.registerProvider(override.provider, { baseUrl: override.baseUrl });
+  }
 }
 
 interface SandboxPluginConfig {
