@@ -32,6 +32,8 @@ export interface HarnessOptions {
   mute: boolean;
   automation: boolean;
   autoStop: boolean;
+  /** Run the agent inside the sandbox container provided by the composition. */
+  sandbox: boolean;
   allowProtectedWrites: boolean;
   hooks: boolean;
   mcp: boolean;

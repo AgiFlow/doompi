@@ -16,6 +16,35 @@ configured. Results are cached under `~/.pi/.doom/mcp-schema-cache` and keyed on
 command, arguments, and environment, so a server is only started again when that descriptor
 changes. Use `--no-mcp` to inspect a selection without starting anything.
 
+## Sandboxed launches
+
+`doompi --sandbox` moves a session's blast radius off the host. A layer that exports
+`./sandbox-harness` (the bundled one is `@agimon-ai/doompi-sandbox`) runs the entire agent,
+extensions, MCP servers, skills, and tools inside a disposable Docker or Podman container while
+the terminal stays attached.
+
+What a sandboxed session can reach:
+
+- The repository, bind-mounted read-write at its host path. The rest of the host filesystem is
+  invisible, including `~/.ssh`, keychains, host Pi sessions, and other repositories.
+- An isolated home directory and an isolated `.pi` package store, both named volumes keyed to the
+  repository path, so Linux installs never touch the host's platform-specific packages.
+- An allowlisted environment: terminal and locale variables, proxy settings, `DOOMPI_PRESET`, and
+  provider credentials matching `*_API_KEY`, `*_AUTH_TOKEN`, or `*_BASE_URL`. Everything else a
+  shell accumulates stays on the host.
+- The network, under the engine's default configuration. Network policy is not restricted yet.
+
+Known limits of this boundary today:
+
+- Provider credentials still enter the container as environment variables, so a compromised
+  session can read them. A host-side credential broker that keeps keys out of the container is
+  the next planned step.
+- The container engine daemon is part of the trusted base; a user or process that can talk to
+  Docker can escape any container it runs.
+- Compositions that declare local workspace packages cannot load their platform-specific
+  dependencies inside the Linux container; sandboxed sessions expect registry-installed layers.
+- `--sandbox` belongs to the `doompi` launcher. The synced `dpi` fast path does not accept it yet.
+
 ## Approval prompts in compatibility mode
 
 `doompi compat <codex|claude|antigravity>` resolves the DoomPi matrix and then launches a third-party
