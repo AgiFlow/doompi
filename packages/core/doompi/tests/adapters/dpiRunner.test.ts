@@ -23,6 +23,7 @@ function dependencies(): DpiRunnerDependencies {
     init: vi.fn(() => 0),
     launchPi: vi.fn(async () => 0),
     sync: vi.fn(async () => 0),
+    launchSandbox: vi.fn(async () => 0),
   };
 }
 
@@ -70,6 +71,37 @@ describe('runDpi', () => {
     expect(runtime.launchPi).toHaveBeenCalledWith(args);
     expect(runtime.init).not.toHaveBeenCalled();
     expect(runtime.sync).not.toHaveBeenCalled();
+  });
+
+  it('claims a sandboxed run rather than letting Pi reject the option', async () => {
+    const runtime = dependencies();
+    vi.mocked(runtime.launchSandbox).mockResolvedValue(4);
+    const args = ['--sandbox', '--model', 'claude-test', 'hello'];
+
+    await expect(runDpi(args, runtime)).resolves.toBe(4);
+
+    expect(runtime.launchSandbox).toHaveBeenCalledWith(args);
+    expect(runtime.launchPi).not.toHaveBeenCalled();
+  });
+
+  it('claims the option wherever it appears in the arguments', async () => {
+    const runtime = dependencies();
+
+    await expect(runDpi(['--model', 'claude-test', '--sandbox'], runtime)).resolves.toBe(0);
+
+    expect(runtime.launchSandbox).toHaveBeenCalledOnce();
+    expect(runtime.launchPi).not.toHaveBeenCalled();
+  });
+
+  it('leaves setup commands with their owners', async () => {
+    const runtime = dependencies();
+
+    await runDpi(['sync', '--sandbox'], runtime);
+    await runDpi(['init', '--sandbox'], runtime);
+
+    expect(runtime.launchSandbox).not.toHaveBeenCalled();
+    expect(runtime.sync).toHaveBeenCalledOnce();
+    expect(runtime.init).toHaveBeenCalledOnce();
   });
 
   it('owns sync instead of forwarding it to Pi', async () => {

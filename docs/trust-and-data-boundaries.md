@@ -71,7 +71,6 @@ Known limits of this boundary today:
   Docker can escape any container it runs.
 - Compositions that declare local workspace packages cannot load their platform-specific
   dependencies inside the Linux container; sandboxed sessions expect registry-installed layers.
-- `--sandbox` belongs to the `doompi` launcher. The synced `dpi` fast path does not accept it yet.
 
 ## Approval prompts in compatibility mode
 

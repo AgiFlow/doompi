@@ -99,7 +99,9 @@ Reports whether the current session runs inside the sandbox container or directl
 - A host `*_BASE_URL` override is dropped rather than used as the broker's upstream.
 - Compositions that declare local workspace packages cannot load their platform-specific
   dependencies inside the Linux container; use registry-installed layers for sandboxed work.
-- `--sandbox` belongs to the `doompi` launcher; the synced `dpi` fast path does not accept it yet.
+- `dpi --sandbox` runs the harness rather than the synchronized fast path. That path loads Pi
+  in-process against synchronized settings, and a fresh container has none to load, so the
+  session is composed from the repository the way a first run is.
 - Container network access follows the engine's defaults and is not restricted yet.
 
 ## Public API
