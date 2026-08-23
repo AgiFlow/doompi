@@ -41,12 +41,17 @@ export function encodeFrame(frame: SessionFrame): string {
 export interface DetachedBacklog {
   record(frame: SessionFrame): void;
   drain(): { frames: SessionFrame[]; dropped: number };
+  /** How many frames are waiting for the next client. */
+  readonly held: number;
 }
 
 export function createDetachedBacklog(limit: number): DetachedBacklog {
   let frames: SessionFrame[] = [];
   let dropped = 0;
   return {
+    get held() {
+      return frames.length;
+    },
     record(frame) {
       frames.push(frame);
       if (frames.length > limit) {

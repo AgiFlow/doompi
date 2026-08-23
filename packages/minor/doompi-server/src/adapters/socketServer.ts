@@ -20,6 +20,8 @@ export interface SessionSocketOptions {
 
 export interface SessionSocket {
   readonly attached: boolean;
+  /** Frames buffered for the next client, zero while one is attached. */
+  readonly backlogged: number;
   close(): Promise<void>;
 }
 
@@ -110,6 +112,9 @@ export function serveSessionSocket(options: SessionSocketOptions): SessionSocket
   return {
     get attached(): boolean {
       return client !== undefined;
+    },
+    get backlogged(): number {
+      return backlog.held;
     },
     close: () =>
       new Promise<void>((resolve) => {
