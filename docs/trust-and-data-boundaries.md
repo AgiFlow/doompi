@@ -33,6 +33,11 @@ What a sandboxed session can reach:
   Everything else a shell accumulates stays on the host.
 - The network, under the engine's default configuration. Network policy is not restricted yet.
 
+The boundary is whatever the container engine provides, so the engine and its runtime are part of
+the trusted base. `docker`, `podman`, `nerdctl`, and `finch` are supported, and
+`DOOMPI_SANDBOX_RUN_FLAGS` passes options such as `--runtime=runsc` through to select a stronger
+isolation runtime. DoomPi does not verify which runtime actually ran.
+
 ### Provider credentials
 
 A sandboxed session holds no provider API key. The host starts a broker on a unix socket, mounts

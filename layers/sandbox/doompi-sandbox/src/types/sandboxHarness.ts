@@ -1,4 +1,4 @@
-export type SandboxEngine = 'docker' | 'podman';
+export type SandboxEngine = 'docker' | 'podman' | 'nerdctl' | 'finch';
 
 export interface EngineRunOptions {
   /** Pipes this to stdin instead of attaching the session's stdio. */

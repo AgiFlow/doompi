@@ -7,6 +7,7 @@ import type { SandboxLaunchRequest } from '@agimon-ai/doompi-extension-contracts
 import { startBroker, type RunningBroker } from './brokerHost.ts';
 import { BRIDGE_FILE_NAME, sandboxBridgeSource } from '../services/sandboxBridge.ts';
 import { buildSandboxPlan } from '../services/sandboxPlan.ts';
+import { assertRunFlags, parseRunFlags } from '../services/runFlags.ts';
 import { sandboxDockerfile } from '../services/sandboxImage.ts';
 import { sandboxImageTag } from './sandboxImageTag.ts';
 import type { EngineProcessRunner, SandboxEngine, SandboxHostFacts } from '../types/sandboxHarness.ts';
@@ -14,8 +15,10 @@ import { SpawnEngineProcessRunner } from './engineProcess.ts';
 
 const ENGINE_ENV = 'DOOMPI_SANDBOX_ENGINE';
 const BROKER_DISABLED_ENV = 'DOOMPI_SANDBOX_BROKER';
+const RUN_FLAGS_ENV = 'DOOMPI_SANDBOX_RUN_FLAGS';
 const DISABLED_VALUE = '0';
-const ENGINES: SandboxEngine[] = ['docker', 'podman'];
+// Every entry takes docker's run syntax, which is what the plan emits.
+const ENGINES: SandboxEngine[] = ['docker', 'podman', 'nerdctl', 'finch'];
 const DOCKERFILE_NAME = 'Dockerfile';
 const MODES_FILE = path.join('.doom', 'modes.yaml');
 const LOCAL_PACKAGE_PATTERN = /^\s*(?:-|name:)\s*["']?\.{1,2}\//m;
@@ -59,7 +62,7 @@ async function detectEngine(
     const probe = await runner.capture(engine, ['--version']);
     if (probe?.exitCode === 0) return engine;
   }
-  throw new Error(`No container engine found. Install Docker or Podman, or set ${ENGINE_ENV}.`);
+  throw new Error(`No container engine found. Install one of ${ENGINES.join(', ')}, or set ${ENGINE_ENV}.`);
 }
 
 async function ensureImage(
@@ -114,7 +117,9 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
   return {
     async launchSandbox(request: SandboxLaunchRequest): Promise<number> {
       const engine = await detectEngine(runner, request.environment);
-      request.onProgress?.(`using ${engine}`);
+      const runFlags = parseRunFlags(request.environment[RUN_FLAGS_ENV]);
+      assertRunFlags(runFlags, RUN_FLAGS_ENV);
+      request.onProgress?.(`using ${engine}${runFlags.length > 0 ? ` with ${runFlags.join(' ')}` : ''}`);
 
       const version = dependencies.version ?? distributionVersion();
       const imageTag = await ensureImage(runner, engine, version, request.onProgress);
@@ -149,6 +154,7 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
           engine,
           host,
           imageTag,
+          runFlags,
           broker,
         });
         request.onProgress?.(`starting contained session in ${imageTag}`);

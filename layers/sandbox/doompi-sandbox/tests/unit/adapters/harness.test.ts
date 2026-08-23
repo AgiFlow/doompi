@@ -126,6 +126,61 @@ describe('createSandboxLauncher', () => {
     expect(runner.runs).toHaveLength(1);
   });
 
+  it('falls back through the docker-compatible engines', async () => {
+    for (const engine of ['nerdctl', 'finch'] as const) {
+      const runner = fakeRunner({
+        captures: {
+          [`${engine} --version`]: { exitCode: 0, stdout: `${engine} 1.0` },
+          [`${engine} image inspect ${TAG}`]: { exitCode: 0, stdout: '[]' },
+        },
+      });
+
+      await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+        repoRoot: createRepo(),
+        cwd: '/tmp',
+        forwardArgs: [],
+        environment: {},
+      });
+
+      expect(runner.runs[0]?.command).toBe(engine);
+    }
+  });
+
+  it('passes configured engine options through to the run', async () => {
+    const runner = fakeRunner({
+      captures: {
+        'docker --version': { exitCode: 0, stdout: 'docker 27' },
+        [`docker image inspect ${TAG}`]: { exitCode: 0, stdout: '[]' },
+      },
+    });
+    const progress: string[] = [];
+
+    await createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+      repoRoot: createRepo(),
+      cwd: '/tmp',
+      forwardArgs: [],
+      environment: { DOOMPI_SANDBOX_RUN_FLAGS: '--runtime=runsc' },
+      onProgress: (message) => progress.push(message),
+    });
+
+    expect(runner.runs[0]?.args).toContain('--runtime=runsc');
+    expect(progress).toContain('using docker with --runtime=runsc');
+  });
+
+  it('refuses configured options that would replace the image', async () => {
+    const runner = fakeRunner({ captures: { 'docker --version': { exitCode: 0, stdout: 'docker 27' } } });
+
+    await expect(
+      createSandboxLauncher({ runner, version: '9.9.9', hostFacts: hostFacts() }).launchSandbox({
+        repoRoot: createRepo(),
+        cwd: '/tmp',
+        forwardArgs: [],
+        environment: { DOOMPI_SANDBOX_RUN_FLAGS: 'alpine' },
+      }),
+    ).rejects.toThrowError(/would replace|is neither/);
+    expect(runner.runs).toEqual([]);
+  });
+
   it('honors the engine override and rejects unknown engines', async () => {
     const runner = fakeRunner();
 
@@ -149,7 +204,7 @@ describe('createSandboxLauncher', () => {
         forwardArgs: [],
         environment: {},
       }),
-    ).rejects.toThrowError(/Install Docker or Podman/);
+    ).rejects.toThrowError(/Install one of docker, podman, nerdctl, finch/);
   });
 
   it('tags the image with its own distribution version by default', async () => {

@@ -8,7 +8,7 @@ This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/d
 
 - Node.js 22.19.0 or newer
 - `@earendil-works/pi-coding-agent` 0.84.2
-- Docker or Podman on the host for sandboxed launches
+- One of `docker`, `podman`, `nerdctl`, or `finch` on the host for sandboxed launches
 
 ## Install
 
@@ -24,9 +24,10 @@ With this layer in the selected major mode, `doompi --sandbox` moves the whole s
 disposable Linux container instead of running Pi on the host:
 
 1. The harness resolves this package's `./sandbox-harness` export and delegates the launch.
-2. The layer detects Docker or Podman (override with `DOOMPI_SANDBOX_ENGINE`), and builds the
-   `doompi-sandbox:v<version>` image on first use. The image installs the DoomPi distribution
-   from the registry, so the container never runs the host's platform-specific packages.
+2. The layer detects the first available engine in the order `docker`, `podman`, `nerdctl`,
+   `finch` (override with `DOOMPI_SANDBOX_ENGINE`), and builds the `doompi-sandbox:v<version>`
+   image on first use. The image installs the DoomPi distribution from the registry, so the
+   container never runs the host's platform-specific packages.
 3. It starts `docker run --rm` with the repository bind-mounted at its host path, an isolated
    home volume, and a volume shadowing the repository's `.pi` package store. Inside, the
    `doompi` launcher replays the same major mode, domains, profile, and Pi arguments.
@@ -37,6 +38,26 @@ every sandboxed process; nesting is refused.
 
 Only an allowlisted environment enters the container: terminal and locale variables, proxy
 settings, and `DOOMPI_PRESET`. Everything else a shell accumulates stays on the host.
+
+## Engine and runtime selection
+
+Every supported engine takes docker's `run` syntax. On macOS any docker-compatible VM manager
+(Docker Desktop, OrbStack, colima, podman machine) works without configuration.
+
+`DOOMPI_SANDBOX_RUN_FLAGS` passes extra options straight to the engine, which is how you select a
+different isolation runtime without the layer having to know about it:
+
+```bash
+DOOMPI_SANDBOX_RUN_FLAGS=--runtime=runsc doompi --sandbox
+```
+
+Options must be self-contained (`--flag` or `--flag=value`). A separated value such as
+`--runtime runsc` is refused, because a bare word cannot be told apart from an image name and
+would silently launch a different container.
+
+A stronger runtime that boots a VM rather than sharing the host kernel, such as Kata or
+Firecracker, is untested here. Their filesystem passthrough is unlikely to carry the broker's
+bind-mounted unix socket, so expect to turn brokering off or move it to a port first.
 
 ## Provider credential broker
 

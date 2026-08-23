@@ -62,6 +62,18 @@ describe('buildSandboxPlan', () => {
     expect(podman.runArgs).toContain('--userns=keep-id');
   });
 
+  it('places configured engine options immediately before the image', () => {
+    const plan = buildSandboxPlan(input({ runFlags: ['--runtime=runsc', '--read-only'] }));
+    const imageIndex = plan.runArgs.indexOf(sandboxImageTag('1.2.3'));
+
+    expect(plan.runArgs[imageIndex - 2]).toBe('--runtime=runsc');
+    expect(plan.runArgs[imageIndex - 1]).toBe('--read-only');
+  });
+
+  it('emits no extra options when none are configured', () => {
+    expect(buildSandboxPlan(input()).runArgs).not.toContain('--runtime=runsc');
+  });
+
   describe('with a host broker', () => {
     const broker = {
       socketDirectory: '/tmp/doompi-broker-xyz',

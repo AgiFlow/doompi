@@ -37,6 +37,8 @@ export interface SandboxPlanInput {
   host: SandboxHostFacts;
   /** Image the launch resolved, which also pins the image definition. */
   imageTag: string;
+  /** Engine options the operator configured, such as an alternate runtime. */
+  runFlags?: readonly string[];
   broker?: SandboxPlanBroker;
 }
 
@@ -107,6 +109,9 @@ export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
           ...(engine === 'podman' ? ['--userns=keep-id'] : []),
         ]
       : []),
+    // Last before the image so a configured option wins over the defaults
+    // above it, and cannot be mistaken for the image or its command.
+    ...(input.runFlags ?? []),
     imageTag,
     // The bridge owns the loopback listener the provider SDKs dial, so it has
     // to outlive nothing but the launcher it wraps.
