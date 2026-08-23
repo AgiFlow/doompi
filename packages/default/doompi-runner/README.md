@@ -19,6 +19,11 @@ inline; long commands can be promoted to a background runner instead of blocking
 Linux native loading also depends on a compatible system loader and libc. The bundled binaries are
 glibc-linked, so a musl host such as Alpine cannot run them.
 
+RTK is optional. Where its binary is absent or cannot start, runner results carry the raw log with
+an "RTK is unavailable" note instead of processed output. That verdict is reached once per process
+rather than retried per command, so an unusable binary costs one failed start rather than one on
+every run.
+
 Panes come from the first backend that answers: bundled RMUX, then `rmux` on PATH, then `tmux` on
 PATH. Only when none is available does a non-interactive command fall back to a supervised
 subprocess, and interactive commands need one of them. A tmux-backed run is supervised by the same
