@@ -78,6 +78,26 @@ so. A second concurrent sandbox therefore starts normally but cannot complete a 
 that bind an ephemeral callback port instead of a fixed one, OpenRouter among them, cannot be
 published ahead of the flow and are not covered.
 
+## Terminal behaviour
+
+The session is Pi's own TUI running inside the container, attached straight to your terminal: the
+launch passes `-i`, adds `-t` when the host session has one, and inherits stdio. Nothing proxies or
+re-renders frames, so rendering, keybindings, mouse and every extension's custom panel behave
+exactly as they do unsandboxed.
+
+Host integrations are the exception, because the process is not on your host:
+
+| Feature               | In a sandboxed session                                                       |
+| --------------------- | ---------------------------------------------------------------------------- |
+| External editor       | Works. `nano` is installed and Pi falls back to it, editing the mounted file |
+| Opening a browser     | Not available; Pi prints the URL, which is how OAuth login proceeds          |
+| Clipboard integration | Not available; your terminal's own copy and paste still work                 |
+| Desktop notifications | Not available                                                                |
+
+A host `EDITOR` or `VISUAL` is deliberately not forwarded. Those commonly name a desktop
+application, which would resolve to a binary the container does not have and would fail instead of
+falling back to the editor that is there.
+
 ## Provider credential broker
 
 The container never receives a provider API key. For each brokered provider the host holds a key

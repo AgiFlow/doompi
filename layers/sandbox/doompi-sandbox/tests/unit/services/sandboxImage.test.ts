@@ -30,5 +30,7 @@ describe('sandboxDockerfile', () => {
     expect(dockerfile).toContain('npm install -g @agimon-ai/doompi@${DOOMPI_VERSION}');
     expect(dockerfile).toContain('ENV DOOMPI_SANDBOX=1 HOME=/doompi-home');
     expect(dockerfile).toContain('COPY sandbox-bridge.mjs /opt/doompi/sandbox-bridge.mjs');
+    // Pi falls back to nano for the external editor, and no host editor is forwarded.
+    expect(dockerfile).toContain('nano');
   });
 });
