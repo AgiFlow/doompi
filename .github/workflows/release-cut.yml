@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   cut:
-    runs-on: [self-hosted, macOS, agirepo-deploy]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Check out the selected release revision

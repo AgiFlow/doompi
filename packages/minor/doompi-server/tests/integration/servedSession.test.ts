@@ -107,7 +107,10 @@ describe('a served agent session', () => {
     await waitFor(() => !served.attached, 'the detach');
 
     agent.send({ type: 'prompt', message: 'while away' });
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // The agent answers a prompt with two frames. Waiting for both to reach the
+    // backlog is what makes the replay count below deterministic; a fixed delay
+    // races the agent on a slow machine.
+    await waitFor(() => served.backlogged === 2, 'the missed frames');
 
     const second = await attach(socketPath);
     await waitFor(() => second.frames.length >= 3, 'the replayed events');
@@ -117,6 +120,20 @@ describe('a served agent session', () => {
       type: 'replay',
       frame: { type: 'message_end', echo: 'while away' },
     });
+  });
+
+  it('buffers nothing while a client is attached', async () => {
+    const { agent, directory } = startFakeAgent();
+    const socketPath = path.join(directory, 'session.sock');
+    const served: SessionSocket = serveSessionSocket({ socketPath, token: TOKEN, agent });
+    cleanups.push(() => served.close());
+
+    const client = await attach(socketPath);
+    await waitFor(() => client.frames.length > 0, 'the handshake');
+    agent.send({ type: 'prompt', message: 'live' });
+    await waitFor(() => client.frames.length >= 3, 'the delivered events');
+
+    expect(served.backlogged).toBe(0);
   });
 
   it('reports the agent exit code to whoever started the server', async () => {
