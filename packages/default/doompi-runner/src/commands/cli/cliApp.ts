@@ -9,7 +9,7 @@ import { formatRunnerLine } from '../bash/responseEnvelope.ts';
 const DEFAULT_LOG_LINES = 200;
 const FOLLOW_INTERVAL_MS = 250;
 const COMPLETED_STATE = 'completed';
-const RMUX_BACKEND = 'rmux';
+const MULTIPLEXER_BACKENDS = new Set(['rmux', 'tmux']);
 const STOPPED_REASON = 'stopped';
 const TERMINATION_SIGNAL = 'SIGTERM';
 
@@ -160,7 +160,7 @@ async function input(args: readonly string[], dependencies: CliDependencies): Pr
   const supplied = option(args, '--text');
   const text = supplied ?? (await dependencies.readStdin());
   const payload = args.includes('--enter') && !text.endsWith('\n') ? `${text}\n` : text;
-  if (record.backend !== RMUX_BACKEND || !record.backendTarget) {
+  if (!MULTIPLEXER_BACKENDS.has(record.backend) || !record.backendTarget) {
     dependencies.stderr(`Runner ${record.id} uses the ${record.backend} backend, which does not expose CLI input`);
     return 1;
   }
@@ -259,7 +259,7 @@ async function follow(record: RunnerRecord, initialSize: number, dependencies: C
 }
 
 async function stopRecord(record: RunnerRecord, dependencies: CliDependencies): Promise<boolean> {
-  if (record.backend === RMUX_BACKEND && record.backendTarget) {
+  if (MULTIPLEXER_BACKENDS.has(record.backend) && record.backendTarget) {
     return dependencies.rmuxBackend.stop(record.backendTarget, record.pid);
   }
   return dependencies.launcher.stop(record.pid);

@@ -106,6 +106,10 @@ command that can expose panes over a public tunnel with pairing codes; **DoomPi 
 and no DoomPi code path passes `web-share`, `--web-port`, or `--frontend-url`. DoomPi Runner uses
 RMUX for session and pane supervision and RTK for log processing, nothing else.
 
+Where no compatible RMUX binary exists, the runner supervises panes with `tmux` from PATH instead.
+That is the host's own tmux rather than a bundled binary, so it runs with the same privileges as
+any other command the runner starts.
+
 RTK has its own upstream telemetry, documented at
 [rtk-ai/rtk TELEMETRY.md](https://github.com/rtk-ai/rtk/blob/master/docs/TELEMETRY.md). It is
 governed by that project, not by DoomPi's telemetry controls below.

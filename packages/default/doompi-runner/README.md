@@ -16,8 +16,14 @@ inline; long commands can be promoted to a background runner instead of blocking
 - `/bin/bash`
 - macOS or Linux on arm64 or x64 for bundled RMUX and RTK support
 
-Linux native loading also depends on a compatible system loader and libc. Non-interactive commands
-fall back to a supervised subprocess when RMUX is unavailable. Interactive commands require RMUX.
+Linux native loading also depends on a compatible system loader and libc. The bundled binaries are
+glibc-linked, so a musl host such as Alpine cannot run them.
+
+Panes come from the first backend that answers: bundled RMUX, then `rmux` on PATH, then `tmux` on
+PATH. Only when none is available does a non-interactive command fall back to a supervised
+subprocess, and interactive commands need one of them. A tmux-backed run is supervised by the same
+host process as an RMUX one, so exit metadata and logs behave the same; its session names carry a
+`doom-tmux-` prefix rather than `doom-runner-`.
 
 ## Install
 
@@ -70,7 +76,7 @@ doom-runner stop <runner-id>
 doom-runner stop-all
 ```
 
-The `input` command requires a running interactive process backed by RMUX.
+The `input` command requires a running interactive process backed by RMUX or tmux.
 
 Stop runs that are no longer required.
 
