@@ -12,8 +12,16 @@
     "typescript"
   ],
   "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
   "license": "MIT",
   "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "layers/sandbox/doompi-sandbox"
+  },
   "files": [
     "dist",
     "src/prompts",

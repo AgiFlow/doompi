@@ -79,6 +79,8 @@
           "@agimon-ai/doompi-runner-rtk-darwin-x64",
           "@agimon-ai/doompi-runner-rtk-linux-arm64",
           "@agimon-ai/doompi-runner-rtk-linux-x64",
+          "@agimon-ai/doompi-sandbox",
+          "@agimon-ai/doompi-server",
           "@agimon-ai/doompi-skill",
           "@agimon-ai/doompi-task",
           "@agimon-ai/doompi-team",
