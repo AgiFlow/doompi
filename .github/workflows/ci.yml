@@ -12,20 +12,17 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Pull requests run on GitHub-hosted runners, pushes to main on the self-hosted
-# macOS box.
+# Every job runs on a GitHub-hosted runner.
 #
 # A pull request from a fork is untrusted code, and this workspace runs install
 # scripts (the root `prepare` builds the vibe-lint plugin) before any check has
 # had a chance to look at the diff. On a public repository that is arbitrary
-# execution on whatever machine picks the job up, so it must not be ours.
-#
-# The runner list is inlined rather than held in `env`: the env context is not
-# available to `runs-on`.
+# execution on whatever machine picks the job up, so it must not be ours. A
+# disposable hosted runner satisfies that for every trigger, not just forks.
 
 jobs:
   quality:
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["macos-14"]' || '["self-hosted", "macOS", "agirepo-deploy"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Check out materialized package snapshot
@@ -66,15 +63,17 @@ jobs:
       - name: Test packages
         run: pnpm nx run-many -t test --parallel=3
 
-  # Packed-install gate. Push-only, on the self-hosted runner, for two reasons:
-  # the job packs and installs all 40 packages for real, and it asserts startup
-  # latency percentiles with deltas in the 100-150ms range. Those thresholds are
-  # meaningless on a shared GitHub-hosted runner and would fail contributors for
-  # reasons they cannot act on.
+  # Packed-install gate. Push-only, because it packs and installs every package
+  # for real and then asserts startup latency.
+  #
+  # Two of those assertions compare modes measured on the same machine, with
+  # deltas of 150ms and 250ms. Being deltas rather than absolute times, a
+  # uniformly slower runner cancels out, but a noisy shared one may not. Watch
+  # this job for flakiness before trusting a failure here.
   installed-runtime:
     needs: quality
     if: github.event_name == 'push'
-    runs-on: [self-hosted, macOS, agirepo-deploy]
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - name: Check out materialized package snapshot
