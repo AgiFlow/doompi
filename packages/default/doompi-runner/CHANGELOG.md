@@ -1,3 +1,32 @@
+## 0.0.1-alpha.37 (2026-08-23)
+
+### 🚀 Features
+
+- **doompi-runner:** supervise panes with tmux when RMUX is unavailable ([8793e34](https://github.com/AgiFlow/doompi/commit/8793e34))
+
+### 🩹 Fixes
+
+- **doompi-runner:** skip the prebuilt binaries on musl hosts ([9392f8f](https://github.com/AgiFlow/doompi/commit/9392f8f))
+- **doompi-runner:** treat an unrunnable RTK binary as absent ([cdc05e5](https://github.com/AgiFlow/doompi/commit/cdc05e5))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.37
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.36 (2026-08-22)
 
 ### 🧱 Updated Dependencies

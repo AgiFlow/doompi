@@ -1,3 +1,13 @@
+## 0.0.1-alpha.37 (2026-08-23)
+
+### 🩹 Fixes
+
+- **doompi-runner:** skip the prebuilt binaries on musl hosts ([9392f8f](https://github.com/AgiFlow/doompi/commit/9392f8f))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.36 (2026-08-22)
 
 This was a version bump only for @agimon-ai/doompi-runner-rtk-linux-arm64 to align it with other projects, there were no code changes.

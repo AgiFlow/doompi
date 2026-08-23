@@ -1,3 +1,13 @@
+## 0.0.1-alpha.37 (2026-08-23)
+
+### 🚀 Features
+
+- **root:** run sandboxed sessions in a container with --sandbox ([efdf5b7](https://github.com/AgiFlow/doompi/commit/efdf5b7))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.36 (2026-08-22)
 
 This was a version bump only for @agimon-ai/doompi-extension-contracts to align it with other projects, there were no code changes.
