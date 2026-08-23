@@ -152,6 +152,15 @@ domains:
   #       mcp: true
   #   # Set false only when this domain should omit shared .claude/skills.
   #   sharedSkills: false
+  #   # Domain mcp is an allowlist over servers configured elsewhere, not a
+  #   # request to start new ones. Listing servers here drops the tool schemas
+  #   # of the ones left out, usually the largest context saving a domain can
+  #   # make. Run doompi --explain to see the token cost before and after.
+  #   # Filtering applies only when every selected domain declares mcp, so a
+  #   # selection mixing this with a domain that omits it stays unfiltered.
+  #   mcp:
+  #     servers: [code-intel]
+  #     proxy: [repository-search]
 # Select it with doompi --domains development, or add it to defaultDomains.
 #
 # Aliases let one selection enable multiple domains. Replace the empty mapping
