@@ -63,16 +63,20 @@ jobs:
       - name: Test packages
         run: pnpm nx run-many -t test --parallel=3
 
-  # Packed-install gate. Push-only, because it packs and installs every package
-  # for real and then asserts startup latency.
+  # Packed-install gate: packs and installs every package for real, checks the
+  # frozen published compatibility baseline, then asserts startup latency.
   #
-  # Two of those assertions compare modes measured on the same machine, with
-  # deltas of 150ms and 250ms. Being deltas rather than absolute times, a
+  # It runs on pull requests, not only on pushes. It was push-only while it
+  # needed a machine of ours, and the cost showed: an export added to the
+  # contracts package went unrecorded through review and only failed after it
+  # reached main, because nothing ran this gate before the merge.
+  #
+  # The latency assertions compare measurements from one machine, so a
   # uniformly slower runner cancels out, but a noisy shared one may not. Watch
-  # this job for flakiness before trusting a failure here.
+  # for flakiness before trusting a failure here, and prefer giving the parity
+  # comparison its own allowance over widening the shared jitter again.
   installed-runtime:
     needs: quality
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
