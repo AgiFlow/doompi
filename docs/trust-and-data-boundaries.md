@@ -16,6 +16,73 @@ configured. Results are cached under `~/.pi/.doom/mcp-schema-cache` and keyed on
 command, arguments, and environment, so a server is only started again when that descriptor
 changes. Use `--no-mcp` to inspect a selection without starting anything.
 
+## Sandboxed launches
+
+`doompi --sandbox` moves a session's blast radius off the host. A layer that exports
+`./sandbox-harness` (the bundled one is `@agimon-ai/doompi-sandbox`) runs the entire agent,
+extensions, MCP servers, skills, and tools inside a disposable Docker or Podman container while
+the terminal stays attached.
+
+What a sandboxed session can reach:
+
+- The repository, bind-mounted read-write at its host path. The rest of the host filesystem is
+  invisible, including `~/.ssh`, keychains, host Pi sessions, and other repositories.
+- An isolated home directory and an isolated `.pi` package store, both named volumes keyed to the
+  repository path, so Linux installs never touch the host's platform-specific packages.
+- An allowlisted environment: terminal and locale variables, proxy settings, and `DOOMPI_PRESET`.
+  Everything else a shell accumulates stays on the host.
+- The network, under the engine's default configuration. Network policy is not restricted yet.
+- Three host loopback ports, published so a browser can complete an OAuth login started inside the
+  container: 1455, 1456 and 53692. They are bound to `127.0.0.1`, so they are not exposed beyond
+  the host, and a port another process already holds is skipped rather than taken.
+
+The boundary is whatever the container engine provides, so the engine and its runtime are part of
+the trusted base. `docker`, `podman`, `nerdctl`, and `finch` are supported, and
+`DOOMPI_SANDBOX_RUN_FLAGS` passes options such as `--runtime=runsc` through to select a stronger
+isolation runtime. DoomPi does not verify which runtime actually ran.
+
+### Workspace dev containers
+
+When a repository carries a dev container configuration, `--sandbox` runs the session in that
+container rather than the built-in image, and the configuration is honoured in full. It is
+author-controlled, so it can mount anything, including the docker socket, and this mode is
+therefore a convenience rather than a boundary. The environment allowlist and the credential broker
+still apply. `DOOMPI_SANDBOX_DEVCONTAINER=0` restores the built-in image.
+
+### Provider credentials
+
+A sandboxed session holds no provider API key. The host starts a broker, grants the container one
+route to it, and gives the container a random per-session token in place of every credential. Pi
+inside the container is redirected at that route, presents the token, and the broker swaps it for
+the real key before forwarding upstream. A call that cannot prove possession of the token is
+refused, and a provider the session was not granted is unroutable.
+
+On Linux the broker listens on an owner-only unix socket, bind-mounted into the container. On a
+virtual machine backed engine, which is every macOS and Windows install, a container cannot connect
+to a mounted host socket at all: the connect fails with ENOTSUP even when the file is shared
+through. There the broker binds an ephemeral port on `127.0.0.1` and the container reaches it
+through the engine's host gateway. That port is not exposed beyond the host, but it is reachable by
+other local processes, and the session token is the only thing that makes it useful.
+
+Credentials for providers the broker does not carry are withheld from the container entirely
+rather than passed through, so the promise holds for every provider rather than the brokered ones
+only. Set `DOOMPI_SANDBOX_BROKER=0` to turn brokering off and hand credentials to the container
+directly, which is the pre-broker behavior.
+
+Known limits of this boundary today:
+
+- The broker terminates a curated provider list. A session that authenticates any other way, in
+  particular OAuth subscription logins held in `~/.pi`, has to log in inside the sandbox because
+  the host home directory is not mounted.
+- A `*_BASE_URL` override on the host is dropped rather than honored as the broker's upstream, so
+  a session pointed at a corporate gateway needs brokering turned off.
+- The token authorizes any brokered provider for the life of the session; the broker does not cap
+  spend or rate.
+- The container engine daemon is part of the trusted base; a user or process that can talk to
+  Docker can escape any container it runs.
+- Compositions that declare local workspace packages cannot load their platform-specific
+  dependencies inside the Linux container; sandboxed sessions expect registry-installed layers.
+
 ## Approval prompts in compatibility mode
 
 `doompi compat <codex|claude|antigravity>` resolves the DoomPi matrix and then launches a third-party
@@ -55,6 +122,10 @@ Both are general-purpose tools that carry features DoomPi does not use. RMUX inc
 command that can expose panes over a public tunnel with pairing codes; **DoomPi never invokes it**,
 and no DoomPi code path passes `web-share`, `--web-port`, or `--frontend-url`. DoomPi Runner uses
 RMUX for session and pane supervision and RTK for log processing, nothing else.
+
+Where no compatible RMUX binary exists, the runner supervises panes with `tmux` from PATH instead.
+That is the host's own tmux rather than a bundled binary, so it runs with the same privileges as
+any other command the runner starts.
 
 RTK has its own upstream telemetry, documented at
 [rtk-ai/rtk TELEMETRY.md](https://github.com/rtk-ai/rtk/blob/master/docs/TELEMETRY.md). It is

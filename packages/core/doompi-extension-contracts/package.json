@@ -139,6 +139,11 @@
       "import": "./dist/readiness.mjs",
       "require": "./dist/readiness.cjs"
     },
+    "./sandbox-harness": {
+      "types": "./dist/sandboxHarness.d.mts",
+      "import": "./dist/sandboxHarness.mjs",
+      "require": "./dist/sandboxHarness.cjs"
+    },
     "./skills": {
       "types": "./dist/skills.d.mts",
       "import": "./dist/skills.mjs",

@@ -144,6 +144,37 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
 
+  layers/sandbox/doompi-sandbox:
+    dependencies:
+      '@agimon-ai/doompi-extension-contracts':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-extension-contracts
+      '@deepseek-ai/cordis':
+        specifier: 4.0.1
+        version: 4.0.1
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.84.2
+        version: 0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+
   layers/task/doompi-task:
     dependencies:
       '@agimon-ai/doompi-extension-contracts':
@@ -1297,6 +1328,37 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/minor/doompi-server:
+    dependencies:
+      '@agimon-ai/doompi-extension-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-extension-contracts
+      '@deepseek-ai/cordis':
+        specifier: 4.0.1
+        version: 4.0.1
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.84.2
+        version: 0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
       typescript:
         specifier: 7.0.2
         version: 7.0.2

@@ -58,6 +58,7 @@ const CWD_OPTION = '--cwd';
 const CD_OPTION = '--cd';
 const AUTOMATION_OPTION = '--automation';
 const AUTO_STOP_OPTION = '--auto-stop';
+const SANDBOX_OPTION = '--sandbox';
 const ALLOW_PROTECTED_WRITES_OPTION = '--allow-protected-writes';
 const HOOKS_OPTION = '--hooks';
 const MCP_OPTION = '--mcp';
@@ -159,6 +160,7 @@ function parseInformationalArgs(args: string[], currentDirectory: string): Parse
       mute: false,
       automation: false,
       autoStop: false,
+      sandbox: false,
       allowProtectedWrites: false,
       hooks: true,
       mcp: true,
@@ -198,6 +200,7 @@ export function parseHarnessArgs(
   let mute = false;
   let automation = false;
   let autoStop = false;
+  let sandbox = false;
   let allowProtectedWrites = false;
   let hooks = true;
   let mcp = true;
@@ -310,6 +313,7 @@ export function parseHarnessArgs(
     else if (arg === AUTOMATION_OPTION) automation = true;
     else if (arg === MUTE_OPTION) mute = true;
     else if (arg === AUTO_STOP_OPTION) autoStop = true;
+    else if (arg === SANDBOX_OPTION) sandbox = true;
     else if (arg === ALLOW_PROTECTED_WRITES_OPTION) allowProtectedWrites = true;
     else if (arg === HOOKS_OPTION) hooks = true;
     else if (arg === MCP_OPTION) mcp = true;
@@ -364,6 +368,7 @@ export function parseHarnessArgs(
       mute,
       automation,
       autoStop,
+      sandbox,
       allowProtectedWrites,
       hooks,
       mcp,

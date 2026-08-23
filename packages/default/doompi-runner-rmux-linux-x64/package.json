@@ -37,6 +37,9 @@
   "cpu": [
     "x64"
   ],
+  "libc": [
+    "glibc"
+  ],
   "exports": {
     "./package.json": "./package.json"
   },

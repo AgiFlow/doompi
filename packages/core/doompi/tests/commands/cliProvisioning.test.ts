@@ -28,6 +28,7 @@ function options(): HarnessOptions {
     mute: false,
     automation: false,
     autoStop: false,
+    sandbox: false,
     allowProtectedWrites: false,
     hooks: true,
     mcp: true,

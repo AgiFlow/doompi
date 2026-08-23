@@ -308,6 +308,18 @@ export function consumerPackageEntry(specifier: string, consumerRoot: string): s
   return subpath === '.' ? extensionIndexEntry(packageRoot) : fs.existsSync(directTarget) ? directTarget : undefined;
 }
 
+/** Resolves one exports subpath from a path-style package directory. */
+export function localPackageExport(specifier: string, baseDirectory: string, subpath: string): string | undefined {
+  const packageRoot = path.resolve(baseDirectory, specifier);
+  const manifest = readPackageManifest(packageRoot);
+  const exports = manifest?.exports;
+  if (exports === undefined || exports === null) return undefined;
+  const target = selectImportTarget(isRecord(exports) ? exports[subpath] : undefined);
+  if (!target) return undefined;
+  const resolved = path.join(packageRoot, target);
+  return fs.existsSync(resolved) ? resolved : undefined;
+}
+
 /** Manifest fields consulted when a local package declares no `exports`. */
 const MAIN_FIELDS = ['module', 'main'] as const;
 

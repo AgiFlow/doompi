@@ -3,6 +3,7 @@ import { CliApp } from '../../src/exports/cli/cliApp';
 import { EmitMcpCommand } from '../../src/commands/emitMcpCommand';
 import { ExplainCommand, explainMatrix } from '../../src/commands/explainCommand';
 import { LaunchCommand } from '../../src/commands/launchCommand';
+import { SandboxLaunchCommand } from '../../src/commands/sandboxLaunchCommand';
 import type { HarnessOptions } from '../../src/types/interfaces/harness';
 
 function options(overrides: Partial<HarnessOptions> = {}): HarnessOptions {
@@ -19,6 +20,7 @@ function options(overrides: Partial<HarnessOptions> = {}): HarnessOptions {
     mute: false,
     automation: false,
     autoStop: false,
+    sandbox: false,
     allowProtectedWrites: false,
     hooks: true,
     mcp: true,
@@ -41,6 +43,14 @@ describe('CliApp command dispatch', () => {
 
   it('emits mcp when --emit-mcp is set', async () => {
     await expect(app.selectCommand(options({ emitMcp: '/tmp/out' }))).resolves.toBeInstanceOf(EmitMcpCommand);
+  });
+
+  it('delegates to the sandbox command when --sandbox is set', async () => {
+    await expect(app.selectCommand(options({ sandbox: true }))).resolves.toBeInstanceOf(SandboxLaunchCommand);
+  });
+
+  it('lets diagnostics win over --sandbox', async () => {
+    await expect(app.selectCommand(options({ sandbox: true, explain: true }))).resolves.toBeInstanceOf(ExplainCommand);
   });
 
   // LaunchCommand matches everything, so registration order is what keeps the

@@ -30,6 +30,13 @@ function executable(source: string): string {
   return target;
 }
 
+/** Exists and is executable, but cannot exec: the glibc-on-musl shape. */
+function unrunnable(): string {
+  const target = path.join(directory, `rtk-unrunnable-${Math.random().toString(36).slice(2)}`);
+  fs.writeFileSync(target, '#!/nonexistent/loader\n', { mode: 0o755 });
+  return target;
+}
+
 function log(contents: string): string {
   const target = path.join(directory, 'command.log');
   fs.writeFileSync(target, contents);
@@ -132,6 +139,44 @@ process.stdout.write(process.argv.slice(2).join(' ') + '\\nfiltered:' + Buffer.c
       warning: expect.stringContaining('unavailable'),
     });
     await expect(failed.process({ command: 'cargo test', logPath })).resolves.toMatchObject({
+      kind: 'fallback',
+      warning: expect.stringContaining('failed'),
+    });
+  });
+
+  it('reports a binary that cannot start as unavailable rather than failed', async () => {
+    // A glibc build on a musl host resolves and then refuses to exec, which is
+    // absence rather than a processing fault.
+    const processor = new RtkProcessor(() => unrunnable());
+
+    await expect(processor.process({ command: 'cargo test', logPath: log('raw\n') })).resolves.toMatchObject({
+      kind: 'fallback',
+      warning: expect.stringContaining('unavailable'),
+    });
+  });
+
+  it('stops attempting a binary that already proved unrunnable', async () => {
+    const binary = unrunnable();
+    const resolveBinary = vi.fn(() => binary);
+    const processor = new RtkProcessor(resolveBinary);
+    const logPath = log('raw\n');
+
+    await processor.process({ command: 'cargo test', logPath });
+    await expect(processor.process({ command: 'cargo test', logPath })).resolves.toMatchObject({
+      kind: 'fallback',
+      warning: expect.stringContaining('unavailable'),
+    });
+
+    // The second call short-circuits before resolution, so no second spawn.
+    expect(resolveBinary).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps reporting a processing fault when the binary does run', async () => {
+    const processor = new RtkProcessor(() => executable('process.stdin.resume(); process.exitCode = 2;'));
+    const logPath = log('raw\n');
+
+    await processor.process({ command: 'cargo test', logPath });
+    await expect(processor.process({ command: 'cargo test', logPath })).resolves.toMatchObject({
       kind: 'fallback',
       warning: expect.stringContaining('failed'),
     });

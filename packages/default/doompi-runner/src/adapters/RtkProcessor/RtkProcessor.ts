@@ -75,6 +75,16 @@ const PACKAGE_BY_PLATFORM: Readonly<Record<string, string>> = {
 type BinaryResolver = () => string | undefined;
 
 export class RtkProcessor implements IRtkProcessor {
+  /**
+   * Latched once a binary proves unrunnable on this host.
+   *
+   * A glibc build installed on a musl host satisfies os and cpu, so it
+   * resolves and then fails to exec. Without this the same doomed spawn is
+   * paid on every command, and each one is reported as a processing failure
+   * rather than the absence it actually is.
+   */
+  private unrunnable = false;
+
   constructor(
     private readonly resolveBinary: BinaryResolver = bundledBinary,
     private readonly timeoutMs = DEFAULT_RTK_TIMEOUT_MS,
@@ -91,6 +101,8 @@ export class RtkProcessor implements IRtkProcessor {
       return { kind: 'fallback', warning: RTK_FAILED_WARNING };
     }
     if (inputBytes > RTK_STDIN_MAX_BYTES) return { kind: 'fallback', warning: RTK_OVERSIZED_WARNING };
+
+    if (this.unrunnable) return { kind: 'fallback', warning: RTK_UNAVAILABLE_WARNING };
 
     let binary: string | undefined;
     try {
@@ -110,7 +122,8 @@ export class RtkProcessor implements IRtkProcessor {
       try {
         child = spawn(binary, ['pipe', '-f', filter], { stdio: 'pipe' });
       } catch {
-        resolve({ kind: 'fallback', warning: RTK_FAILED_WARNING });
+        this.unrunnable = true;
+        resolve({ kind: 'fallback', warning: RTK_UNAVAILABLE_WARNING });
         return;
       }
 
@@ -161,7 +174,16 @@ export class RtkProcessor implements IRtkProcessor {
         output = appendTail(output, chunk, outputLimit);
       });
       child.stderr.resume();
-      child.once('error', () => stop(RTK_FAILED_WARNING));
+      child.once('error', (error: NodeJS.ErrnoException) => {
+        // Reaching the process is a precondition, not part of processing, so a
+        // failure to start reports absence and is not attempted again.
+        if (error.code === 'ENOENT' || error.code === 'EACCES' || error.code === 'ENOEXEC') {
+          this.unrunnable = true;
+          stop(RTK_UNAVAILABLE_WARNING);
+          return;
+        }
+        stop(RTK_FAILED_WARNING);
+      });
       child.stdin.once('error', () => stop(RTK_FAILED_WARNING));
       input.once('error', () => stop(RTK_FAILED_WARNING));
       child.once('close', (code) => {

@@ -1,0 +1,24 @@
+# The layer graph, design patterns, and Pi-entry overrides come from the
+# doom-extension plugin preset. Declare only what is specific to this package.
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  # A session server publishes an executable and a socket, not a Pi extension,
+  # so it declares itself alongside the other non-Pi packages.
+  doom-clean-architecture-boundary:
+    - error
+    - nonPiPackages:
+        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-telemetry"
+        - "@agimon-ai/doompi-server"
+  boundary-import-allowlist: error
+  file-naming-convention: error
+  public-export-boundary: error
+  no-internal-public-import: error
+  doom-layer-boundary: error

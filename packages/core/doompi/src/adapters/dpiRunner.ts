@@ -4,6 +4,7 @@ import { installDpiSettingsOverlay, loadPiSettingsRuntime, type PiSettingsRuntim
 
 const INIT_COMMAND = 'init';
 const SYNC_COMMAND = 'sync';
+const SANDBOX_OPTION = '--sandbox';
 const FORCE_FLAG = '--force';
 const PI_SUBAGENT_BINARY_ENV = 'PI_SUBAGENT_PI_BINARY';
 const DPI_ENTRY_PATTERN = /^dpi(?:\.[cm]?js|\.ts)?$/u;
@@ -14,6 +15,7 @@ export interface DpiRunnerDependencies {
   init(args: string[]): number | Promise<number>;
   launchPi(args: string[]): Promise<number>;
   sync(args: string[]): Promise<number>;
+  launchSandbox(args: string[]): Promise<number>;
 }
 
 async function loadPiModule(settingsRuntime: PiSettingsRuntime): Promise<PiModule> {
@@ -87,10 +89,24 @@ export async function runDpiSync(args: string[]): Promise<number> {
   return new SyncPipeline({ settingsMode: 'embedded' }).execute(args);
 }
 
+/**
+ * Hands a sandboxed run to the harness instead of this fast path.
+ *
+ * The fast path exists to load Pi in-process against already synchronized
+ * settings. A sandboxed run is a container launch, and a fresh container has
+ * no synchronized state to load, so the harness composes it from the
+ * repository the way a first run does.
+ */
+export async function runDpiSandbox(args: string[]): Promise<number> {
+  const { runCli } = await import('../commands/cli/cliApp.ts');
+  return runCli(args);
+}
+
 const DEFAULT_DEPENDENCIES: DpiRunnerDependencies = {
   init: runDpiInit,
   launchPi: launchDpiPi,
   sync: runDpiSync,
+  launchSandbox: runDpiSandbox,
 };
 
 /** Dispatches DPI-owned setup commands and forwards every other argument to Pi. */
@@ -100,5 +116,8 @@ export async function runDpi(
 ): Promise<number> {
   if (args[0] === INIT_COMMAND) return dependencies.init(args);
   if (args[0] === SYNC_COMMAND) return dependencies.sync(args);
+  // Pi owns every other flag, so the sandbox option has to be claimed here or
+  // it reaches Pi as an unknown one.
+  if (args.includes(SANDBOX_OPTION)) return dependencies.launchSandbox(args);
   return dependencies.launchPi(args);
 }

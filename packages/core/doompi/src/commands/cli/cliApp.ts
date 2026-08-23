@@ -44,6 +44,10 @@ export class CliApp {
       const { ExplainCommand } = await import('../explainCommand.ts');
       return new ExplainCommand();
     }
+    if (options.sandbox) {
+      const { SandboxLaunchCommand } = await import('../sandboxLaunchCommand.ts');
+      return new SandboxLaunchCommand();
+    }
     const { LaunchCommand } = await import('../launchCommand.ts');
     return new LaunchCommand();
   }

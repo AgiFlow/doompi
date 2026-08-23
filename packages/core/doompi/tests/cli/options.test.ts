@@ -143,6 +143,13 @@ describe('parseHarnessArgs', () => {
     expect(result.options.piArgs).toEqual(['run']);
   });
 
+  it('enables the sandbox without forwarding the harness flag to Pi', () => {
+    const result = parseHarnessArgs(['--sandbox', 'run'], {}, '/repo');
+
+    expect(result.options.sandbox).toBe(true);
+    expect(result.options.piArgs).toEqual(['run']);
+  });
+
   it('consumes and deduplicates additional directories without forwarding them to Pi', () => {
     const result = parseHarnessArgs(
       ['--add-dir', './workflow-run', '--add-dir', '/shared', '--add-dir', './workflow-run', 'run'],

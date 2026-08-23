@@ -60,6 +60,7 @@ Harness options:
   --output-format vibe-lint Read a vibe-lint request from stdin and emit one JSON response
   --mute                    Disable the notification extension for this run
   --auto-stop               Exit interactive Pi when the agent settles
+  --sandbox                 Run the agent in the sandbox container a layer provides
   --allow-protected-writes  Allow writes to protected repository paths
   --hooks, --no-hooks       Enable or disable repository and plugin hooks
   --mcp, --no-mcp           Enable or disable MCP configuration

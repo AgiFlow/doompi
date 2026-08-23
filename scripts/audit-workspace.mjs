@@ -76,9 +76,9 @@ const packageByName = new Map(packageRecords.map((record) => [record.manifest.na
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
 const workspacePackageNames = new Set([...ownedNames, toolingPackageName]);
 
-if (packageDirectories.length !== 39 || ownedNames.size !== 39) {
+if (packageDirectories.length !== 41 || ownedNames.size !== 41) {
   fail(
-    `Expected exactly 39 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 41 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {
@@ -181,8 +181,8 @@ for (const ownerRecord of packageRecords) {
 const nx = readJson(path.join(root, 'nx.json'));
 const releaseProjects = nx.release?.groups?.alpha?.projects ?? [];
 const releasedNames = new Set([...ownedNames, toolingPackageName]);
-if (releaseProjects.length !== 40 || new Set(releaseProjects).size !== 40) {
-  fail(`Expected the alpha release group to contain 40 unique projects, found ${releaseProjects.length}`);
+if (releaseProjects.length !== 42 || new Set(releaseProjects).size !== 42) {
+  fail(`Expected the alpha release group to contain 42 unique projects, found ${releaseProjects.length}`);
 }
 for (const name of releasedNames) if (!releaseProjects.includes(name)) fail(`Release group is missing ${name}`);
 for (const name of releaseProjects)
@@ -266,5 +266,5 @@ if (rmuxPayloadCount !== 12) fail(`Expected 12 RMUX vendor files, found ${rmuxPa
 if (rtkPayloadCount !== 4) fail(`Expected 4 RTK vendor files, found ${rtkPayloadCount}`);
 
 console.log(
-  'Workspace audit passed: 39 runtime packages, 1 tooling package, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
+  'Workspace audit passed: 41 runtime packages, 1 tooling package, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
 );

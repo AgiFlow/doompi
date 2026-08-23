@@ -1,0 +1,11 @@
+# @agimon-ai/doompi-sandbox
+
+Package-owned guidance for Container sandbox for DoomPi launches: the agent, extensions, and tools run inside Docker or Podman while the terminal stays on the host
+
+## How to use
+
+- [Use Sandbox](./src/prompts/doompi-use-sandbox/SKILL.md): Run the package command and follow its package-specific usage guidance.
+
+## Resources
+
+- [Package README](./README.md): Installation, development commands, Pi entrypoint, and extension-specific usage.

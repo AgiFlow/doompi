@@ -6,7 +6,7 @@ import type { IRunnerPaths } from '../RunnerPaths/types';
 import type { IRunnerRegistry, RunnerRecord } from '../../types/runnerRegistry';
 
 const COMPLETED_STATE = 'completed';
-const RMUX_BACKEND = 'rmux';
+const MULTIPLEXER_BACKENDS = new Set(['rmux', 'tmux']);
 
 interface ReconcileDependencies {
   registry: IRunnerRegistry;
@@ -28,7 +28,7 @@ export async function stopRunnerProcess(
   launcher: ILauncher,
   rmuxBackend: IRmuxBackend,
 ): Promise<boolean> {
-  if (record.backend === RMUX_BACKEND && record.backendTarget) {
+  if (MULTIPLEXER_BACKENDS.has(record.backend) && record.backendTarget) {
     const stopped = await rmuxBackend.stop(record.backendTarget, record.pid);
     if (stopped) return true;
   }
@@ -48,8 +48,9 @@ export async function reconcileActiveRunners(dependencies: ReconcileDependencies
         continue;
       }
 
-      const rmuxOutcome =
-        record.backend === RMUX_BACKEND ? dependencies.rmuxBackend.readOutcome(record.id, record.sessionId) : undefined;
+      const rmuxOutcome = MULTIPLEXER_BACKENDS.has(record.backend)
+        ? dependencies.rmuxBackend.readOutcome(record.id, record.sessionId)
+        : undefined;
       if (rmuxOutcome) {
         await dependencies.registry.complete(
           record.id,

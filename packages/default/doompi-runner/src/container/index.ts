@@ -8,6 +8,8 @@ import { NodeProcessControl } from '../adapters/ProcessControl/NodeProcessContro
 import { PtyHost } from '../adapters/PtyHost/PtyHost';
 import { NodePtySpawner } from '../adapters/PtySpawner/NodePtySpawner';
 import { RmuxBackend } from '../adapters/RmuxBackend/RmuxBackend';
+import { PtyBackendChain } from '../adapters/PtyBackendChain/PtyBackendChain';
+import { TmuxBackend } from '../adapters/TmuxBackend/TmuxBackend';
 import { RtkProcessor } from '../adapters/RtkProcessor/RtkProcessor';
 import { RunnerNamer } from '../services/RunnerNamer/RunnerNamer';
 import { RunnerPaths } from '../adapters/RunnerPaths';
@@ -56,7 +58,9 @@ export function createRunnerContainer(overrides: Partial<RunnerDependencies> = {
   const launcher = memoize(
     () => overrides.launcher ?? new Launcher(spawner(), processControl(), logFile(), clock(), paths()),
   );
-  const rmuxBackend = memoize(() => overrides.rmuxBackend ?? new RmuxBackend(paths()));
+  const rmuxBackend = memoize(
+    () => overrides.rmuxBackend ?? new PtyBackendChain(new RmuxBackend(paths()), new TmuxBackend(paths())),
+  );
   const rtkProcessor = memoize(() => overrides.rtkProcessor ?? new RtkProcessor());
   const ptyHost = memoize(() => overrides.ptyHost ?? new PtyHost(ptySpawner(), logFile(), processControl(), clock()));
   const bashRunService = memoize(

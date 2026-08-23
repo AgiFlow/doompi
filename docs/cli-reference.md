@@ -13,6 +13,7 @@
 | `--explain`                                  | Prints the resolved matrix and estimated prompt cost without launching Pi        |
 | `--emit-mcp <dir>`, `--no-mcp`               | Writes the resolved MCP config or disables MCP for one run                       |
 | `--cwd <path>`, `--auto-stop`                | Chooses the working directory or exits after an interactive agent settles        |
+| `--sandbox`                                  | Runs the whole session in a container, terminal attached; accepted by `dpi` too  |
 | `--` and remaining arguments                 | Forwards provider or Pi arguments unchanged where the selected command allows it |
 
 `doompi compat` leaves the third-party frontend's own approval behavior alone unless you pass
