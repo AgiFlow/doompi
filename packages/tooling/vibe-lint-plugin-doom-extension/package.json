@@ -47,7 +47,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint": "0.0.1-alpha.26",
