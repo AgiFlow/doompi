@@ -40,11 +40,18 @@ isolation runtime. DoomPi does not verify which runtime actually ran.
 
 ### Provider credentials
 
-A sandboxed session holds no provider API key. The host starts a broker on a unix socket, mounts
-only that socket into the container, and gives the container a random per-session token in place of
-every credential. Pi inside the container is redirected at the socket, presents the token, and the
-broker swaps it for the real key before forwarding upstream. A call that cannot prove possession of
-the token is refused, and a provider the session was not granted is unroutable.
+A sandboxed session holds no provider API key. The host starts a broker, grants the container one
+route to it, and gives the container a random per-session token in place of every credential. Pi
+inside the container is redirected at that route, presents the token, and the broker swaps it for
+the real key before forwarding upstream. A call that cannot prove possession of the token is
+refused, and a provider the session was not granted is unroutable.
+
+On Linux the broker listens on an owner-only unix socket, bind-mounted into the container. On a
+virtual machine backed engine, which is every macOS and Windows install, a container cannot connect
+to a mounted host socket at all: the connect fails with ENOTSUP even when the file is shared
+through. There the broker binds an ephemeral port on `127.0.0.1` and the container reaches it
+through the engine's host gateway. That port is not exposed beyond the host, but it is reachable by
+other local processes, and the session token is the only thing that makes it useful.
 
 Credentials for providers the broker does not carry are withheld from the container entirely
 rather than passed through, so the promise holds for every provider rather than the brokered ones

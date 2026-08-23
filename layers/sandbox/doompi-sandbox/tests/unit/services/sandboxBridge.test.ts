@@ -4,7 +4,12 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BROKER_PORT_ENV, BROKER_SOCKET_ENV, sandboxBridgeSource } from '../../../src/services/sandboxBridge.ts';
+import {
+  BROKER_ADDRESS_ENV,
+  BROKER_PORT_ENV,
+  BROKER_SOCKET_ENV,
+  sandboxBridgeSource,
+} from '../../../src/services/sandboxBridge.ts';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 
@@ -75,7 +80,38 @@ describe('sandboxBridgeSource', () => {
     expect(result.code).toBe(7);
   });
 
-  it('runs the child unchanged when no broker socket is configured', async () => {
+  it('forwards to a host and port when the broker listens on tcp', async () => {
+    const bridgePath = writeBridge();
+    const upstream = http.createServer((request, response) => {
+      response.writeHead(200, { 'content-type': 'text/plain' });
+      response.end(`served ${request.url}`);
+    });
+    cleanups.push(
+      () =>
+        new Promise<void>((resolve) => {
+          upstream.close(() => resolve());
+        }),
+    );
+    await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', () => resolve()));
+    const address = upstream.address();
+    if (address === null || typeof address === 'string') throw new Error('Expected a tcp upstream');
+    const port = 18319;
+    const fetcher = `fetch('http://127.0.0.1:${port}/anthropic/v1/messages').then(async (r) => {
+      process.stdout.write(await r.text());
+      process.exit(5);
+    })`;
+
+    const result = await runBridge(
+      bridgePath,
+      { [BROKER_ADDRESS_ENV]: `127.0.0.1:${address.port}`, [BROKER_PORT_ENV]: String(port) },
+      [process.execPath, '-e', fetcher],
+    );
+
+    expect(result.stdout).toBe('served /anthropic/v1/messages');
+    expect(result.code).toBe(5);
+  });
+
+  it('runs the child unchanged when no broker is configured', async () => {
     const bridgePath = writeBridge();
 
     const result = await runBridge(bridgePath, {}, [

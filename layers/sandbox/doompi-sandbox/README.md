@@ -64,10 +64,21 @@ bind-mounted unix socket, so expect to turn brokering off or move it to a port f
 The container never receives a provider API key. For each brokered provider the host holds a key
 for, the launch:
 
-1. Starts a broker on an owner-only unix socket and mounts just that socket into the container.
+1. Starts a broker on the host and grants the container exactly one route to it.
 2. Replaces the credential variable with a random per-session token.
 3. Redirects the provider's base URL at a loopback bridge inside the container, which forwards
-   raw bytes to the mounted socket.
+   raw bytes to the broker.
+
+How the container reaches the broker depends on the engine:
+
+| Host                          | Transport                                   | Why                                                                                |
+| ----------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Linux                         | Unix socket, bind-mounted, owner-only       | Container and host share a kernel, so no port is needed                            |
+| macOS, Windows, any VM engine | Loopback TCP through `host.docker.internal` | A container in a virtual machine cannot connect to a mounted host socket (ENOTSUP) |
+
+On the TCP path the broker binds `127.0.0.1` on an ephemeral port, so it is never exposed beyond
+the host, and the launch passes `--add-host` so the gateway name resolves on every engine. Another
+local process could reach that port, and the session token is what stops it being useful.
 
 The broker validates the token, swaps in the real key, and streams the provider response back.
 Credentials for providers it cannot carry are withheld from the container rather than passed

@@ -76,11 +76,22 @@ describe('buildSandboxPlan', () => {
 
   describe('with a host broker', () => {
     const broker = {
-      socketDirectory: '/tmp/doompi-broker-xyz',
+      endpoint: { transport: 'unix' as const, socketDirectory: '/tmp/doompi-broker-xyz' },
       token: 'session-token',
       providers: ['anthropic', 'groq'],
       withheldEnv: ['ANTHROPIC_API_KEY', 'GROQ_API_KEY'],
     };
+    const tcpBroker = { ...broker, endpoint: { transport: 'tcp' as const, port: 54321 } };
+
+    it('reaches a loopback broker through the engine host gateway', () => {
+      const plan = buildSandboxPlan(input({ broker: tcpBroker }));
+
+      expect(plan.runArgs).toContain('--add-host');
+      expect(plan.runArgs).toContain('host.docker.internal:host-gateway');
+      expect(plan.runArgs).toContain('DOOMPI_BROKER_ADDRESS=host.docker.internal:54321');
+      expect(plan.runArgs.join(' ')).not.toContain('/run/doompi');
+      expect(plan.runArgs.join(' ')).not.toContain('DOOMPI_BROKER_SOCKET');
+    });
 
     it('mounts the broker socket and wraps the launcher in the bridge', () => {
       const plan = buildSandboxPlan(input({ broker }));
@@ -95,6 +106,7 @@ describe('buildSandboxPlan', () => {
         'run',
       ]);
       expect(plan.runArgs).toContain('DOOMPI_BROKER_SOCKET=/run/doompi/broker.sock');
+      expect(plan.runArgs).not.toContain('--add-host');
       expect(plan.runArgs).toContain('DOOMPI_BROKER_PORT=8317');
       expect(plan.runArgs).toContain('DOOMPI_BROKER_PROVIDERS=anthropic,groq');
     });

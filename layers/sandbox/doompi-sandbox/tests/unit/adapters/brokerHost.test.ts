@@ -11,52 +11,86 @@ afterEach(async () => {
   for (const broker of running.splice(0)) await broker.stop();
 });
 
-async function start(environment: Record<string, string>): Promise<RunningBroker | undefined> {
-  const broker = await startBroker({ environment });
+async function start(environment: Record<string, string>, platform: string): Promise<RunningBroker | undefined> {
+  const broker = await startBroker({ environment, platform });
   if (broker) running.push(broker);
   return broker;
 }
 
-describe('startBroker', () => {
-  it('listens on an owner-only socket and reports what it brokers', async () => {
-    const broker = await start({ ANTHROPIC_API_KEY: 'real-anthropic', OPENAI_API_KEY: 'real-openai' });
-    if (!broker) throw new Error('Expected a broker');
+function statusOf(options: http.RequestOptions): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const request = http.request({ ...options, path: '/unknown-provider', method: 'GET' }, (response) => {
+      response.resume();
+      resolve(response.statusCode ?? 0);
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
 
-    expect(broker.providers).toEqual(['anthropic', 'openai']);
-    expect(broker.withheldEnv).toEqual(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY']);
-    expect(fs.existsSync(path.join(broker.socketDirectory, 'broker.sock'))).toBe(true);
-    expect(fs.statSync(broker.socketDirectory).mode & 0o777).toBe(0o700);
+describe('startBroker', () => {
+  it('reports what it brokers and withholds', async () => {
+    const broker = await start({ ANTHROPIC_API_KEY: 'real-anthropic', OPENAI_API_KEY: 'real-openai' }, 'darwin');
+
+    expect(broker?.providers).toEqual(['anthropic', 'openai']);
+    expect(broker?.withheldEnv).toEqual(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY']);
+    expect(broker?.token.length).toBeGreaterThanOrEqual(32);
   });
 
-  it('mints a long random token per session', async () => {
-    const first = await start({ ANTHROPIC_API_KEY: 'k' });
-    const second = await start({ ANTHROPIC_API_KEY: 'k' });
+  it('mints a distinct token per session', async () => {
+    const first = await start({ ANTHROPIC_API_KEY: 'k' }, 'darwin');
+    const second = await start({ ANTHROPIC_API_KEY: 'k' }, 'darwin');
 
     expect(first?.token).not.toBe(second?.token);
-    expect(first?.token.length).toBeGreaterThanOrEqual(32);
   });
 
   it('does not start when the host holds no brokerable credential', async () => {
-    expect(await start({ PATH: '/usr/bin' })).toBeUndefined();
+    expect(await start({ PATH: '/usr/bin' }, 'linux')).toBeUndefined();
   });
 
-  it('answers requests while running and removes the socket on stop', async () => {
-    const broker = await start({ ANTHROPIC_API_KEY: 'real-anthropic' });
-    if (!broker) throw new Error('Expected a broker');
-    const socketPath = path.join(broker.socketDirectory, 'broker.sock');
+  describe('on linux', () => {
+    it('listens on an owner-only socket a container can bind-mount', async () => {
+      const broker = await start({ ANTHROPIC_API_KEY: 'real-anthropic' }, 'linux');
+      if (broker?.endpoint.transport !== 'unix') throw new Error('Expected a unix endpoint');
 
-    const status = await new Promise<number>((resolve, reject) => {
-      const request = http.request({ socketPath, path: '/unknown-provider', method: 'GET' }, (response) => {
-        response.resume();
-        resolve(response.statusCode ?? 0);
-      });
-      request.on('error', reject);
-      request.end();
+      const socketPath = path.join(broker.endpoint.socketDirectory, 'broker.sock');
+      expect(fs.existsSync(socketPath)).toBe(true);
+      expect(fs.statSync(broker.endpoint.socketDirectory).mode & 0o777).toBe(0o700);
+      await expect(statusOf({ socketPath })).resolves.toBe(404);
     });
-    expect(status).toBe(404);
 
-    await broker.stop();
-    running.length = 0;
-    expect(fs.existsSync(broker.socketDirectory)).toBe(false);
+    it('removes the socket directory on stop', async () => {
+      const broker = await start({ ANTHROPIC_API_KEY: 'k' }, 'linux');
+      if (broker?.endpoint.transport !== 'unix') throw new Error('Expected a unix endpoint');
+      const { socketDirectory } = broker.endpoint;
+
+      await broker.stop();
+      running.length = 0;
+
+      expect(fs.existsSync(socketDirectory)).toBe(false);
+    });
+  });
+
+  describe('on a virtual machine backed engine', () => {
+    // A container there cannot connect to a mounted host socket at all, so the
+    // broker takes a loopback port the engine's host gateway can reach.
+    it('listens on loopback rather than a socket', async () => {
+      const broker = await start({ ANTHROPIC_API_KEY: 'real-anthropic' }, 'darwin');
+      if (broker?.endpoint.transport !== 'tcp') throw new Error('Expected a tcp endpoint');
+
+      expect(broker.endpoint.port).toBeGreaterThan(0);
+      await expect(statusOf({ host: '127.0.0.1', port: broker.endpoint.port })).resolves.toBe(404);
+    });
+
+    it('stops answering once the session ends', async () => {
+      const broker = await start({ ANTHROPIC_API_KEY: 'k' }, 'win32');
+      if (broker?.endpoint.transport !== 'tcp') throw new Error('Expected a tcp endpoint');
+      const { port } = broker.endpoint;
+
+      await broker.stop();
+      running.length = 0;
+
+      await expect(statusOf({ host: '127.0.0.1', port })).rejects.toThrowError();
+    });
   });
 });

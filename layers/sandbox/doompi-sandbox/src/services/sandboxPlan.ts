@@ -1,9 +1,11 @@
 import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
-import type { SandboxEngine, SandboxHostFacts } from '../types/sandboxHarness.ts';
+import type { BrokerEndpoint, SandboxEngine, SandboxHostFacts } from '../types/sandboxHarness.ts';
 import { filterSandboxEnvironment, isCredentialEnvName } from './sandboxEnvironment.ts';
 import {
   BRIDGE_CONTAINER_PATH,
+  BROKER_ADDRESS_ENV,
   BROKER_CONTAINER_PORT,
+  BROKER_HOST_GATEWAY,
   BROKER_PORT_ENV,
   BROKER_PROVIDERS_ENV,
   BROKER_SOCKET_CONTAINER_PATH,
@@ -21,7 +23,7 @@ const BROKER_MOUNT_DIRECTORY = '/run/doompi';
 
 /** Host broker facts the plan projects into mounts and environment. */
 export interface SandboxPlanBroker {
-  socketDirectory: string;
+  endpoint: BrokerEndpoint;
   token: string;
   providers: readonly string[];
   /** Credential variables whose value the container receives as the token. */
@@ -61,10 +63,26 @@ function brokeredEnvironment(filtered: Record<string, string>, broker: SandboxPl
     if (!isCredentialEnvName(name)) environment[name] = value;
   }
   for (const name of broker.withheldEnv) environment[name] = broker.token;
-  environment[BROKER_SOCKET_ENV] = BROKER_SOCKET_CONTAINER_PATH;
+  if (broker.endpoint.transport === 'unix') environment[BROKER_SOCKET_ENV] = BROKER_SOCKET_CONTAINER_PATH;
+  else environment[BROKER_ADDRESS_ENV] = `${BROKER_HOST_GATEWAY}:${broker.endpoint.port}`;
   environment[BROKER_PORT_ENV] = String(BROKER_CONTAINER_PORT);
   environment[BROKER_PROVIDERS_ENV] = broker.providers.join(',');
   return environment;
+}
+
+/**
+ * Grants the container the one route it needs to reach the broker.
+ *
+ * A mounted socket needs no network at all. TCP needs the engine's host
+ * gateway named explicitly, because it is not resolvable by default on every
+ * engine.
+ */
+function brokerAccessArgs(broker: SandboxPlanBroker | undefined): string[] {
+  if (!broker) return [];
+  if (broker.endpoint.transport === 'unix') {
+    return ['-v', `${broker.endpoint.socketDirectory}:${BROKER_MOUNT_DIRECTORY}`];
+  }
+  return ['--add-host', `${BROKER_HOST_GATEWAY}:host-gateway`];
 }
 
 /**
@@ -94,7 +112,7 @@ export function buildSandboxPlan(input: SandboxPlanInput): SandboxPlan {
     `${host.repoKey}-home:${CONTAINER_HOME}`,
     '-v',
     `${host.repoKey}-pi:${repoRoot}/.pi`,
-    ...(broker ? ['-v', `${broker.socketDirectory}:${BROKER_MOUNT_DIRECTORY}`] : []),
+    ...brokerAccessArgs(broker),
     '-w',
     cwd,
     '-e',

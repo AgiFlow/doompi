@@ -29,3 +29,6 @@ export interface SandboxHostFacts {
   /** Distribution version, which tags the sandbox image. */
   version: string;
 }
+
+/** How a sandboxed container reaches the host broker. */
+export type BrokerEndpoint = { transport: 'unix'; socketDirectory: string } | { transport: 'tcp'; port: number };

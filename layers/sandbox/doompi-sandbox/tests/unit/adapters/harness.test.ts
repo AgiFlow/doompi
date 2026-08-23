@@ -239,7 +239,7 @@ describe('createSandboxLauncher', () => {
       const runner = brokeringRunner();
       const stop = vi.fn().mockResolvedValue(undefined);
       const startBroker = vi.fn().mockResolvedValue({
-        socketDirectory: '/tmp/broker-abc',
+        endpoint: { transport: 'unix', socketDirectory: '/tmp/broker-abc' },
         token: 'session-token',
         providers: ['anthropic'],
         withheldEnv: ['ANTHROPIC_API_KEY'],
@@ -269,7 +269,7 @@ describe('createSandboxLauncher', () => {
       runner.run = vi.fn().mockRejectedValue(new Error('engine died'));
       const stop = vi.fn().mockResolvedValue(undefined);
       const startBroker = vi.fn().mockResolvedValue({
-        socketDirectory: '/tmp/broker-abc',
+        endpoint: { transport: 'unix', socketDirectory: '/tmp/broker-abc' },
         token: 'session-token',
         providers: ['anthropic'],
         withheldEnv: ['ANTHROPIC_API_KEY'],
