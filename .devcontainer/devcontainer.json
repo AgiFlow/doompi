@@ -1,0 +1,10 @@
+{
+  "name": "doompi",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "containerEnv": {
+    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"
+  },
+  "remoteUser": "node"
+}
