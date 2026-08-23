@@ -9,6 +9,13 @@ shell commands you configure. Treat them as trusted executable code. Runner comm
 process environment and operating-system privileges; their logs may contain command output and
 secrets. MCP credentials may live in the system keyring or private configuration files.
 
+`doompi --explain` is included in this. To report what MCP tool schemas cost in context it starts
+each configured stdio server, asks it for its tool list, and stops it again. The servers run with
+the same privileges a session gives them, so a command you would not want executed should not be
+configured. Results are cached under `~/.pi/.doom/mcp-schema-cache` and keyed on the server
+command, arguments, and environment, so a server is only started again when that descriptor
+changes. Use `--no-mcp` to inspect a selection without starting anything.
+
 ## Approval prompts in compatibility mode
 
 `doompi compat <codex|claude|antigravity>` resolves the DoomPi matrix and then launches a third-party

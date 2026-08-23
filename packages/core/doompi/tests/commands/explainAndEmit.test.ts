@@ -94,19 +94,48 @@ describe('explainMatrix', () => {
     expect(output).toContain('agents: 3');
   });
 
-  it('prices the selection and names what the figure leaves out', () => {
+  it('prices the selection including mcp tool schemas', () => {
     const output = explainMatrix(
-      baseExplanation({ cost: { skillPromptTokens: 3_772, skillBodyTokens: 54_145, personaTokens: 228 } }),
+      baseExplanation({
+        cost: {
+          skillPromptTokens: 3_772,
+          skillBodyTokens: 54_145,
+          personaTokens: 228,
+          mcpToolTokens: 5_385,
+          mcpServers: [{ name: 'scaffold-mcp', tokens: 5_385, toolCount: 8, cached: true }],
+        },
+      }),
     );
 
     expect(output).toContain('context cost (tokens)');
     expect(output).toContain('skills prompt');
     expect(output).toContain('3,772');
-    // Startup is the always-on pair, not the bodies, which are read on demand.
+    expect(output).toContain('8 tools from 1 server');
+    expect(output).toContain('scaffold-mcp');
+    expect(output).toContain('cached');
+    // Startup is the always-on trio, not the bodies, which are read on demand.
     expect(output).toContain('startup total');
-    expect(output).toContain('4,000');
+    expect(output).toContain('9,385');
     expect(output).toContain('54,145');
-    expect(output).toContain('Excludes MCP tool schemas');
+    expect(output).toContain('Excludes skills contributed by extensions');
+  });
+
+  it('names servers it could not price instead of dropping them silently', () => {
+    const output = explainMatrix(
+      baseExplanation({
+        cost: {
+          skillPromptTokens: 100,
+          skillBodyTokens: 0,
+          personaTokens: 0,
+          mcpToolTokens: 0,
+          mcpServers: [
+            { name: 'remote-api', tokens: 0, toolCount: 0, cached: false, unavailable: 'not a stdio server' },
+          ],
+        },
+      }),
+    );
+
+    expect(output).toContain('Not priced: remote-api (not a stdio server)');
   });
 
   it('omits the cost section when nothing priced the selection', () => {

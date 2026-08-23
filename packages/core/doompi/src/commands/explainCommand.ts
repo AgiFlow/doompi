@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildPersonaPrompt } from '@agimon-ai/doompi-config';
+import { buildPersonaPrompt, globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
 import type { HarnessContext } from '../adapters/harnessContext';
+import { type McpServerCost, priceMcpToolSchemas } from '../adapters/mcpSchemaCost.ts';
 import { buildSkillCatalog, counter } from '@agimon-ai/doompi-skill/catalog';
 import type { HarnessOptions } from '../types/interfaces/harness';
 import { BaseCommand } from './baseCommand.ts';
@@ -9,10 +10,9 @@ import { BaseCommand } from './baseCommand.ts';
 /**
  * What the selection costs before the first prompt, in tokens.
  *
- * MCP tool schemas are deliberately absent: they come from the servers at
- * connect time, and pricing them here would mean spawning every configured
- * server and running a handshake on a command that is meant to be instant.
- * `startupTokens` is therefore a floor, not a total, and the rendering says so.
+ * Every figure is an estimate of what the provider will be sent, not a billed
+ * total: skills are counted from files on disk and MCP tools from the schemas
+ * their servers advertise, both with the same tokenizer.
  */
 export interface MatrixCost {
   /** The always-on skill block Pi puts in the system prompt. */
@@ -21,6 +21,9 @@ export interface MatrixCost {
   skillBodyTokens: number;
   /** The persona prompt, when a profile selected one. */
   personaTokens: number;
+  /** Always-on tool schemas, per configured MCP server. */
+  mcpServers: McpServerCost[];
+  mcpToolTokens: number;
 }
 
 export interface MatrixExplanation {
@@ -111,21 +114,37 @@ function tokenLine(label: string, tokens: number, note = ''): string {
 /**
  * The bill, rendered last so the sections above keep their order.
  *
- * Every figure is derived from files on disk, so two runs of the same selection
- * print the same numbers and a reader can reproduce them without trusting this
- * output.
+ * Skill and persona figures are derived from files on disk and MCP figures
+ * from a cached handshake, so two runs of the same selection print the same
+ * numbers and a reader can reproduce them without trusting this output.
  */
 function renderCost(cost: MatrixCost): string {
-  const startup = cost.skillPromptTokens + cost.personaTokens;
+  const startup = cost.skillPromptTokens + cost.personaTokens + cost.mcpToolTokens;
+  const unpriced = cost.mcpServers.filter((server) => server.unavailable);
   return [
     '\ncontext cost (tokens)\n',
     tokenLine('skills prompt', cost.skillPromptTokens, 'always on'),
     tokenLine('persona', cost.personaTokens, 'always on'),
+    tokenLine('mcp tools', cost.mcpToolTokens, mcpNote(cost.mcpServers)),
     tokenLine('startup total', startup),
     tokenLine('skill bodies', cost.skillBodyTokens, 'read on demand'),
-    '\n  Excludes MCP tool schemas, which the servers only report once connected,\n',
-    '  and skills contributed by extensions, which register after startup.\n',
+    ...cost.mcpServers.filter((server) => !server.unavailable).map(serverLine),
+    unpriced.length > 0
+      ? `\n  Not priced: ${unpriced.map((server) => `${server.name} (${server.unavailable})`).join(', ')}\n`
+      : '',
+    '\n  Excludes skills contributed by extensions, which register after startup.\n',
   ].join('');
+}
+
+function mcpNote(servers: McpServerCost[]): string {
+  const priced = servers.filter((server) => !server.unavailable);
+  if (priced.length === 0) return 'always on';
+  const tools = priced.reduce((total, server) => total + server.toolCount, 0);
+  return `always on, ${tools} tools from ${priced.length} server${priced.length === 1 ? '' : 's'}`;
+}
+
+function serverLine(server: McpServerCost): string {
+  return tokenLine(`  ${server.name}`, server.tokens, server.cached ? 'cached' : 'measured now');
 }
 
 /** Prints the fully resolved matrix instead of launching Pi. */
@@ -137,7 +156,7 @@ export class ExplainCommand extends BaseCommand {
   }
 
   /**
-   * Prices the selection from files on disk.
+   * Prices the selection from files on disk and configured MCP servers.
    *
    * `extensionSources` is empty because extensions publish their skill
    * directories over the session event bus, which has not started here. The
@@ -157,10 +176,21 @@ export class ExplainCommand extends BaseCommand {
       const persona = context.personaDirectory
         ? buildPersonaPrompt(context.personaRoot ?? options.repoRoot, context.personaDirectory)
         : undefined;
+      const mcp = resources.mcpConfigPath
+        ? await priceMcpToolSchemas({
+            configPath: resources.mcpConfigPath,
+            homeDoomDirectory: globalDoomConfigDirectory(),
+            cwd: options.repoRoot,
+            environment: context.environment,
+            countTokens,
+          })
+        : { servers: [], totalTokens: 0 };
       return {
         skillPromptTokens: catalog.promptTokens,
         skillBodyTokens: catalog.bodyTokens,
         personaTokens: persona ? countTokens(persona) : 0,
+        mcpServers: mcp.servers,
+        mcpToolTokens: mcp.totalTokens,
       };
     } catch (error) {
       // Pricing reads the skill files, so an unreadable one must not take the

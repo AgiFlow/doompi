@@ -118,6 +118,30 @@ describe('initializeGlobalDoomConfig', () => {
     });
   });
 
+  it('offers the domain mcp allowlist as an example that parses when uncommented', () => {
+    const template = DOOM_CONFIG_TEMPLATES['domains.yaml'];
+    const lines = template.split('\n');
+    const start = lines.findIndex((line) => line.startsWith('  # development:'));
+    const end = lines.findIndex((line) => line.includes('proxy: [repository-search]'));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    // Only the development block is uncommented: the surrounding prose comments
+    // are not YAML and would not parse.
+    const uncommented = ['domains:', ...lines.slice(start, end + 1).map((line) => line.replace('# ', ''))].join('\n');
+
+    expect(parseYaml(uncommented)).toMatchObject({
+      domains: {
+        development: {
+          sharedSkills: false,
+          plugins: ['development', { name: 'remote-review', mcp: true }],
+          mcp: { servers: ['code-intel'], proxy: ['repository-search'] },
+        },
+      },
+    });
+  });
+
   it('documents how to discover, override, and select profiles', () => {
     const template = DOOM_CONFIG_TEMPLATES['profiles.yaml'];
 
