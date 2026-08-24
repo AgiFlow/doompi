@@ -56,6 +56,30 @@ export function pickerTitle(listing: DomainListing): string {
   return `Domains (active: ${listing.effective.join(', ') || NONE})`;
 }
 
+const MARK_ON = '[x]';
+const MARK_OFF = '[ ]';
+const OPTION_PREFIX = /^\[[ x]\] /;
+
+/**
+ * Rows for a single-pick select where domains compose: each row shows the
+ * membership it would flip, so a client without a multi-select still reaches
+ * every set one toggle at a time.
+ */
+export function domainToggleOptions(listing: DomainListing): string[] {
+  const active = new Set(listing.effective);
+  return listing.available.map((name) => `${active.has(name) ? MARK_ON : MARK_OFF} ${name}`);
+}
+
+/** The domain a toggle row names. */
+export function toggleOptionDomain(option: string): string {
+  return option.replace(OPTION_PREFIX, '').trim();
+}
+
+/** The effective set with one domain flipped, order preserved for the rest. */
+export function toggledDomains(effective: readonly string[], name: string): string[] {
+  return effective.includes(name) ? effective.filter((domain) => domain !== name) : [...effective, name];
+}
+
 /**
  * Deduplicates a requested selection and rejects anything unsafe.
  *

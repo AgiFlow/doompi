@@ -6,17 +6,30 @@ import {
   domainItems,
   domainStatus,
   domainSummary,
+  domainToggleOptions,
   errorMessage,
   normalizeDomainNames,
   pickerTitle,
   splitDomains,
   switchedSummary,
+  toggledDomains,
+  toggleOptionDomain,
   transitionError,
   unchangedSummary,
   voiceSwitchToken,
 } from '../../src/services/domainText.ts';
 
 const listing = { active: ['default'], effective: ['default'], available: ['default', 'development'] };
+
+describe('toggle rows', () => {
+  it('marks membership, reads the domain back, and flips one at a time', () => {
+    expect(domainToggleOptions(listing)).toEqual(['[x] default', '[ ] development']);
+    expect(toggleOptionDomain('[ ] development')).toBe('development');
+    expect(toggleOptionDomain('[x] default')).toBe('default');
+    expect(toggledDomains(['default'], 'development')).toEqual(['default', 'development']);
+    expect(toggledDomains(['default', 'development'], 'default')).toEqual(['development']);
+  });
+});
 
 describe('splitDomains', () => {
   it('trims and drops the blanks a trailing comma leaves behind', () => {
