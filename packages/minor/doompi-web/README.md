@@ -114,4 +114,6 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 ## License
 
-MIT
+Source available under the DoomPi Web License (see LICENSE). Use is free for any purpose, including
+production and commercial use, and you may modify it and publish patches. Redistributing the
+software, or offering it to third parties as a hosted or managed service, is not permitted.
