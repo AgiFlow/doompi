@@ -223,8 +223,35 @@ function findManagedPackage(name: string, consumerRoot: string): string | undefi
   return fs.existsSync(path.join(candidate, PACKAGE_MANIFEST)) ? candidate : undefined;
 }
 
+/**
+ * Whether the repository itself asked Pi to provision this package, rather
+ * than inheriting it transitively. The store's manifest is that list; a store
+ * without one has nothing to check against and every package in it counts.
+ */
+function managedPackageDeclared(name: string, consumerRoot: string): boolean {
+  const manifestPath = path.join(path.resolve(consumerRoot), PI_MANAGED_NPM_DIRECTORY, '..', PACKAGE_MANIFEST);
+  if (!fs.existsSync(manifestPath)) return true;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { dependencies?: Record<string, unknown> };
+    return name in (manifest.dependencies ?? {});
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The repository's own dependency tree answers first, then the packages the
+ * repository asked Pi to provision. A package that merely arrived under
+ * .pi/npm as a dependency of one of those (doompi-config beneath a layer
+ * package, say) is not the repository's answer: declining lets the caller's
+ * fallback resolve it from DoomPi's own tree, so one session never loads two
+ * copies of a core package with their state split between them.
+ */
 function findConsumerPackage(name: string, consumerRoot: string): string | undefined {
-  return findInstalledPackage(name, consumerRoot) ?? findManagedPackage(name, consumerRoot);
+  const installed = findInstalledPackage(name, consumerRoot);
+  if (installed) return installed;
+  const managed = findManagedPackage(name, consumerRoot);
+  return managed && managedPackageDeclared(name, consumerRoot) ? managed : undefined;
 }
 
 /** Resolves every extension declared by a bare package's standard Pi manifest. */

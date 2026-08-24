@@ -49,6 +49,32 @@ describe('consumerPackageEntry', () => {
     return writePackage(path.join(consumerRoot, '.pi', 'npm', 'node_modules', ...name.split('/')), manifest, files);
   }
 
+  it('declines a transitive .pi/npm copy the repository never asked for', () => {
+    // A copy that merely arrived under .pi/npm beneath a layer package is not
+    // the repository's answer; declining lets DoomPi's own tree resolve it.
+    installManaged('@agimon-ai/doompi-config', { exports: { './harnessStore': './dist/x.mjs' } }, ['dist/x.mjs']);
+    fs.writeFileSync(
+      path.join(consumerRoot, '.pi', 'npm', 'package.json'),
+      JSON.stringify({ dependencies: { '@agimon-ai/doompi-team': '*' } }),
+    );
+
+    expect(consumerPackageEntry('@agimon-ai/doompi-config/harnessStore', consumerRoot)).toBeUndefined();
+  });
+
+  it('honors a .pi/npm package the repository itself asked Pi to provision', () => {
+    const managed = installManaged('@agimon-ai/doompi-config', { exports: { './harnessStore': './dist/x.mjs' } }, [
+      'dist/x.mjs',
+    ]);
+    fs.writeFileSync(
+      path.join(consumerRoot, '.pi', 'npm', 'package.json'),
+      JSON.stringify({ dependencies: { '@agimon-ai/doompi-config': '*' } }),
+    );
+
+    expect(consumerPackageEntry('@agimon-ai/doompi-config/harnessStore', consumerRoot)).toBe(
+      path.join(managed, 'dist/x.mjs'),
+    );
+  });
+
   it('resolves a subpath declared as a plain string', () => {
     const root = install('@scope/plain', { exports: { './extensions/pi': './dist/pi.mjs' } }, ['dist/pi.mjs']);
 
