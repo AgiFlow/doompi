@@ -1,4 +1,4 @@
-import { pluginMinorModes } from './pluginRegistry.ts';
+import { pluginActivityGroups, pluginMinorModes } from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
 
 export type MinorModeAvailability = 'unavailable' | 'off' | 'on';
@@ -69,19 +69,37 @@ export interface ActivityGroup {
   active: boolean;
 }
 
-const ACTIVITY: readonly { name: string; keys: string; statusKey: string }[] = [
+interface ActivityGroupSource {
+  name: string;
+  keys: string;
+  statusKey?: string;
+  widgetKeys?: string[];
+}
+
+/**
+ * The fallback activity table for the packaged bundle; a synced bundle
+ * carries each group as its owning package's plugin declaration, and the
+ * registry list wins whenever any plugin declares one.
+ */
+const FALLBACK_ACTIVITY: readonly ActivityGroupSource[] = [
   { name: 'agents', keys: 'a r', statusKey: 'doom-team-agents' },
   { name: 'runners', keys: 'r l', statusKey: 'doom-runner-runners' },
+  { name: 'workflows', keys: 'w r', widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'] },
 ];
 
 export function activityGroups(statuses: Record<string, string>, widgets: readonly string[]): ActivityGroup[] {
-  const groups = ACTIVITY.filter((entry) => statuses[entry.statusKey] !== undefined).map((entry) => {
-    const summary = stripAnsi(statuses[entry.statusKey] ?? '').trim();
-    return { name: entry.name, keys: entry.keys, summary, active: summary.length > 0 };
-  });
-
-  if (widgets.includes('workflow-mcp-progress') || widgets.includes('workflow-mcp-follow')) {
-    groups.push({ name: 'workflows', keys: 'w r', summary: '', active: false });
+  const declared = pluginActivityGroups();
+  const sources: readonly ActivityGroupSource[] = declared.length > 0 ? declared : FALLBACK_ACTIVITY;
+  const groups: ActivityGroup[] = [];
+  for (const source of sources) {
+    if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
+      const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
+      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0 });
+      continue;
+    }
+    if (source.widgetKeys !== undefined && source.widgetKeys.some((key) => widgets.includes(key))) {
+      groups.push({ name: source.name, keys: source.keys, summary: '', active: false });
+    }
   }
   return groups;
 }

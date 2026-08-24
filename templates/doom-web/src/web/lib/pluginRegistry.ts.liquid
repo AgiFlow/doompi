@@ -1,4 +1,5 @@
 import type {
+  ActivityGroupContribution,
   MinorModeContribution,
   PaletteCommandContribution,
   SessionChannelContribution,
@@ -17,6 +18,7 @@ interface RegistryState {
   surfaces: Record<SurfaceSlot, SurfaceContribution[]>;
   commands: PaletteCommandContribution[];
   minorModes: MinorModeContribution[];
+  activityGroups: ActivityGroupContribution[];
 }
 
 function emptyState(): RegistryState {
@@ -27,6 +29,7 @@ function emptyState(): RegistryState {
     surfaces: { overlay: [], rail: [], selectionBar: [], activity: [] },
     commands: [],
     minorModes: [],
+    activityGroups: [],
   };
 }
 
@@ -64,10 +67,12 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     for (const surface of plugin.activitySections ?? []) state.surfaces.activity.push(surface);
     state.commands.push(...(plugin.paletteCommands ?? []));
     state.minorModes.push(...(plugin.minorModes ?? []));
+    state.activityGroups.push(...(plugin.activityGroups ?? []));
   }
-  state.minorModes.sort(
-    (left, right) => (left.order ?? 1000) - (right.order ?? 1000) || left.name.localeCompare(right.name),
-  );
+  const byDisplayOrder = (left: { order?: number; name: string }, right: { order?: number; name: string }): number =>
+    (left.order ?? 1000) - (right.order ?? 1000) || left.name.localeCompare(right.name);
+  state.minorModes.sort(byDisplayOrder);
+  state.activityGroups.sort(byDisplayOrder);
   installed = true;
 }
 
@@ -92,6 +97,11 @@ export function paletteCommands(): readonly PaletteCommandContribution[] {
 /** Minor-mode declarations from every installed plugin, in display order. */
 export function pluginMinorModes(): readonly MinorModeContribution[] {
   return state.minorModes;
+}
+
+/** Activity-dock group declarations from every installed plugin, in display order. */
+export function pluginActivityGroups(): readonly ActivityGroupContribution[] {
+  return state.activityGroups;
 }
 
 /**

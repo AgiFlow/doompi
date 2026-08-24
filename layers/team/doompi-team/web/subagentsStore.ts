@@ -1,6 +1,6 @@
 import { defineSessionChannel } from '@agimon-ai/doompi-web-contracts';
 import { Store } from '@tanstack/store';
-import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../../types/hub.ts';
+import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../src/types/webSubagents.ts';
 
 export interface SubagentsState {
   /** The fleet the hub last reported, per session id; presented order preserved. */

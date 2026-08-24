@@ -64,8 +64,6 @@ boilerplate:
       - src/adapters/serverSpawner.ts
       - src/adapters/sessionHub.ts
       - src/adapters/sessionSocketClient.ts
-      - src/adapters/subagentWatcher.ts
-      - src/adapters/subagentsChannel.ts
       - src/adapters/webBundler.ts
       - src/adapters/webHubPluginLoader.ts
       - src/adapters/webPluginGenerate.ts
@@ -81,7 +79,6 @@ boilerplate:
       - src/services/sessionFraming.ts
       - src/services/sessionPresence.ts
       - src/services/staticAssets.ts
-      - src/services/subagentRuns.ts
       - src/services/webPluginManifest.ts
       - src/types/bridge.ts
       - src/types/hub.ts
@@ -103,9 +100,6 @@ boilerplate:
       - src/web/features/sessions/NewSessionDialog.tsx
       - src/web/features/sessions/SessionRail.tsx
       - src/web/features/status/TopBar.tsx
-      - src/web/features/subagents/SubagentsPanel.tsx
-      - src/web/features/subagents/index.ts
-      - src/web/features/subagents/subagentsStore.ts
       - src/web/index.html
       - src/web/lib/commands.ts
       - src/web/lib/composition.ts
@@ -150,6 +144,7 @@ boilerplate:
       - tests/unit/clientStores.test.ts
       - tests/unit/composition.test.ts
       - tests/unit/hubApi.test.ts
+      - tests/unit/webPluginManifest.test.ts
       - tests/unit/pluginRegistry.test.ts
       - tests/unit/hubServices.test.ts
       - tests/unit/serverServices.test.ts
@@ -175,7 +170,7 @@ boilerplate:
 
       Render only what the session reports. Pi's RPC protocol is the single source of truth, so add a frame to the reducer in src/web/lib/sessionModel.ts before rendering it, and leave a surface out rather than inventing a value the agent never sent. The rail renders from hub summaries alone; if a fact is not in SessionSummary, derive it in src/services/sessionPresence.ts before showing it.
 
-      Tabs beyond the conversation are web plugins, and no plugin package is ever a dependency of this one. A plugin declares a doompiWeb block in its package.json (client entry, optional hub entry with its built dist, channels); the package's own build only regenerates the committed builtin registry from its own manifest (src/adapters/webPluginGenerate.ts at config-load of vite.config.ts and tsdown.config.ts, checked in CI and by tests/contract/webPluginRegistry.test.ts). The full plugin set is assembled later, on the user's machine: doompi sync scans the installed composition's package roots, generates the entry modules, and runs the ./bundler subpath (src/adapters/webBundler.ts) to rebuild the SPA into ~/.doompi/web/current, which serveWeb prefers over the packaged bundle; the bundle carries webPlugins.server.json naming each plugin's built hub entry, which the hub imports lazily so an absent package is a notice and an empty tab, never a crash. The subagents tab is the in-package reference plugin: its feature dir exports webPlugin from index.ts and its hub channel wraps the doom-team runs watcher (a disk mirror of doom-team's per-run status files, pinned by unit tests).
+      Tabs beyond the conversation are web plugins, and no plugin package is ever a dependency of this one. A plugin declares a doompiWeb block in its package.json (client entry, optional hub entry with its built dist, channels); the package's own build only regenerates the committed builtin registry from its own manifest (src/adapters/webPluginGenerate.ts at config-load of vite.config.ts and tsdown.config.ts, checked in CI and by tests/contract/webPluginRegistry.test.ts). The full plugin set is assembled later, on the user's machine: doompi sync scans the installed composition's package roots, generates the entry modules, and runs the ./bundler subpath (src/adapters/webBundler.ts) to rebuild the SPA into ~/.doompi/web/current, which serveWeb prefers over the packaged bundle; the bundle carries webPlugins.server.json naming each plugin's built hub entry, which the hub imports lazily so an absent package is a notice and an empty tab, never a crash. No plugin ships in this package: the reference plugins are @agimon-ai/doompi-team (subagents tab, channel, and activity group) and @agimon-ai/doompi-workflow (workflows tab, channel, minor mode, and activity group); the minor-mode packages show the metadata-only shape.
 
 feature:
   - name: scaffold-doom-web-feature
@@ -217,47 +212,4 @@ feature:
       Anything the slice renders must come from a frame the session actually sends. If Pi's RPC protocol has no source for it, say so instead of rendering a placeholder value.
     patterns:
       - src/web/features/**/*.tsx
-      - tests/e2e/**/*.spec.ts
-
-  - name: scaffold-doom-web-plugin
-    description: |-
-      Add a web plugin to a DoomPi web package: a self-contained feature directory exporting webPlugin (tab, panel, store, session data channel), a hub channel adapter feeding it, and the doompiWeb manifest wiring that the build-time scanner turns into registry entries.
-
-      Use it when a new tab needs its own session data channel. For a surface with no data source of its own, use scaffold-doom-web-feature instead.
-    variables_schema:
-      type: object
-      properties:
-        pluginName:
-          type: string
-          description: Plugin id, feature folder, and wire channel prefix in kebab-case
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
-          minLength: 2
-          maxLength: 40
-          example: workflows
-        componentName:
-          type: string
-          description: Panel component name in PascalCase
-          pattern: "^[A-Z][A-Za-z0-9]*$"
-          minLength: 2
-          maxLength: 60
-          example: WorkflowsPanel
-      required:
-        - pluginName
-        - componentName
-      additionalProperties: false
-    includes:
-      - src/web/features/subagents/index.ts->src/web/features/{{ pluginName }}/index.ts
-      - src/web/features/subagents/subagentsStore.ts->src/web/features/{{ pluginName }}/{{ pluginName }}Store.ts
-      - src/web/features/subagents/SubagentsPanel.tsx->src/web/features/{{ pluginName }}/{{ componentName }}.tsx
-      - src/adapters/subagentsChannel.ts->src/adapters/{{ pluginName }}Channel.ts
-      - tests/e2e/subagents.spec.ts->tests/e2e/{{ pluginName }}.spec.ts
-    instruction: |-
-      The copied files are the subagents reference plugin; replace their bodies with your domain while keeping the shape: the feature index exports a named webPlugin built with defineWebPlugin, the store owns a session channel built with defineSessionChannel whose parse gate validates every payload, the panel takes {sessionId} props and reads only its own store, and the hub channel implements WebHubChannel over your data source.
-
-      Then declare the plugin: add a doompiWeb block entry to package.json (unique pluginId and registrationOrder, the channel frame types, the client entry, and the hub entry) and run pnpm build; the scanner regenerates the committed registry modules, which the contract test pins. Channel frame types are global across every plugin the scanner sees, so name them with your plugin prefix.
-
-      An external package ships the same two entries behind published subpaths and points its manifest at them with specifier fields; the host imports the hub side lazily and treats absence as a notice, so never let the client tab assume its hub channel is loaded.
-    patterns:
-      - src/web/features/**/*
-      - src/adapters/*Channel.ts
       - tests/e2e/**/*.spec.ts

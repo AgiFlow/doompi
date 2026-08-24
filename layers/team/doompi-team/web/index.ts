@@ -13,4 +13,5 @@ export const webPlugin = defineWebPlugin({
   id: 'subagents',
   tabs: [{ id: 'subagents', label: 'subagents', panel: SubagentsPanel, useBadge: useSubagentsBadge }],
   channels: [subagentRunsChannel],
+  activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', order: 10 }],
 });

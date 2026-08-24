@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import type { SubagentRun, SubagentRunState } from '../types/hub.ts';
+import type { SubagentRun, SubagentRunState } from '../types/webSubagents.ts';
 
 /**
  * MIRRORS @agimon-ai/doompi-team's on-disk run layout
@@ -9,10 +8,6 @@ import type { SubagentRun, SubagentRunState } from '../types/hub.ts';
  * hub only ever reads them. The derivation is duplicated rather than imported
  * because doompi-web must not depend on the team package at runtime.
  */
-const TEMP_ROOT_PREFIX = 'doom-team';
-const SESSIONS_DIR_NAME = 'sessions';
-const RUNS_DIR_NAME = 'runs';
-const SCOPE_KEY_HASH_LENGTH = 16;
 export const RUN_STATUS_FILE_NAME = 'status.json';
 
 const TAIL_LIMIT = 12;
@@ -31,22 +26,6 @@ const STATE_MAP: Readonly<Record<string, SubagentRunState>> = {
 };
 
 const TERMINAL_STATES: ReadonlySet<SubagentRunState> = new Set(['done', 'failed', 'stopped']);
-
-export interface TeamRunsDirInput {
-  /** The Pi session id, which doom-team scopes its runs by. */
-  sessionId: string;
-  /** os.tmpdir(), supplied by the caller. */
-  tmpdir: string;
-  /** process.getuid(), absent on platforms without one. */
-  uid: number | undefined;
-}
-
-/** Where doom-team keeps this session's runs, or undefined when the user cannot be scoped. */
-export function teamRunsDirFor(input: TeamRunsDirInput): string | undefined {
-  if (input.uid === undefined) return undefined;
-  const scopeKey = createHash('sha256').update(input.sessionId.trim()).digest('hex').slice(0, SCOPE_KEY_HASH_LENGTH);
-  return `${input.tmpdir}/${TEMP_ROOT_PREFIX}-uid-${input.uid}/${SESSIONS_DIR_NAME}/${scopeKey}/${RUNS_DIR_NAME}`;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

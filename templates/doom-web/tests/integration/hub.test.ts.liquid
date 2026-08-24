@@ -6,10 +6,8 @@ import { watchRegistry } from '../../src/adapters/registryWatcher.ts';
 import type { HubChannelHost, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { createSessionHub, type HubEvent, type SessionHub } from '../../src/adapters/sessionHub.ts';
 import type { SpawnOutcome } from '../../src/adapters/serverSpawner.ts';
-import { createSubagentsChannel } from '../../src/adapters/subagentsChannel.ts';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession, writeStaleRecord } from '../support/fakeSession.ts';
-import { removeRunsScope, writeRunStatus } from '../support/subagentRuns.ts';
 
 let cleanups: Array<() => Promise<void> | void> = [];
 
@@ -40,9 +38,9 @@ function startHub(
   const hub = createSessionHub({
     source: watchRegistry(registryDir),
     spawner: spawn === undefined ? undefined : { spawn },
-    // The real subagents channel (its watcher reads a per-session temp
-    // scope) plus whatever fakes the test injects.
-    channels: [createSubagentsChannel(), ...extraChannels],
+    // Channels are entirely injected: the packaged host ships no builtin
+    // ones since every data source is a plugin now.
+    channels: extraChannels,
   });
   cleanups.push(() => hub.close());
   hub.onEvent((event) => events.push(event));
@@ -81,31 +79,6 @@ const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 8000)
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 };
-
-/** The runs array a channel's subscribe-time snapshot carries for one session. */
-function snapshotRuns(
-  harness: HubHarness,
-  sessionId: string,
-  frameType: string,
-): Record<string, unknown>[] | undefined {
-  const frame = harness.hub.channelFrames(sessionId).find((candidate) => candidate.type === frameType);
-  if (!frame) return undefined;
-  return (frame.payload as { runs: Record<string, unknown>[] }).runs;
-}
-
-/** Whether any published channel event for the frame type satisfies the predicate. */
-function sawChannelRun(
-  events: HubEvent[],
-  frameType: string,
-  predicate: (run: Record<string, unknown>) => boolean,
-): boolean {
-  return events.some(
-    (event) =>
-      event.kind === 'channel' &&
-      event.frameType === frameType &&
-      (event.payload as { runs: Record<string, unknown>[] }).runs.some(predicate),
-  );
-}
 
 describe('the session hub over a registry', () => {
   it('discovers registered sessions and attaches to each', async () => {
@@ -210,55 +183,6 @@ describe('the session hub over a registry', () => {
     await waitFor(() => harness.latest('one')?.attach === 'attached', 'the takeover', 15_000);
   });
 
-  it('streams the session subagent fleet from disk', { timeout: 15_000 }, async () => {
-    const registryDir = freshRegistryDir();
-    const sessionId = `subruns-${process.pid}-${Date.now()}`;
-    cleanups.push(() => removeRunsScope(sessionId));
-    const session = await startRegisteredSession(registryDir, { id: sessionId });
-    const harness = startHub(registryDir);
-    await session.waitForAttach();
-
-    const startedAt = Date.now();
-    writeRunStatus(sessionId, {
-      version: 1,
-      runId: 'run-1',
-      agent: 'reviewer',
-      state: 'running',
-      startedAt,
-      lastUpdate: startedAt,
-      task: 'Review the diff.',
-      cwd: '/workspace',
-      currentTool: 'working: reading',
-    });
-    await waitFor(
-      () => sawChannelRun(harness.events, 'subagent_runs', (run) => run.runId === 'run-1' && run.state === 'running'),
-      'the running run reaching the hub',
-    );
-    expect(snapshotRuns(harness, sessionId, 'subagent_runs')?.[0]).toMatchObject({
-      agent: 'reviewer',
-      state: 'running',
-    });
-
-    writeRunStatus(sessionId, {
-      version: 1,
-      runId: 'run-1',
-      agent: 'reviewer',
-      state: 'completed',
-      startedAt,
-      lastUpdate: Date.now(),
-      endedAt: Date.now(),
-      task: 'Review the diff.',
-      cwd: '/workspace',
-      summary: 'All good.',
-    });
-    await waitFor(
-      () => snapshotRuns(harness, sessionId, 'subagent_runs')?.[0]?.state === 'done',
-      'the completed state',
-    );
-    expect(snapshotRuns(harness, sessionId, 'subagent_runs')?.[0]?.summary).toBe('All good.');
-    expect(harness.hub.channelFrames('unknown')).toEqual([]);
-  });
-
   it('runs channel lifecycle hooks and fans published payloads out as channel events', async () => {
     const registryDir = freshRegistryDir();
     const lifecycle: string[] = [];
@@ -286,7 +210,7 @@ describe('the session hub over a registry', () => {
         (event) => event.kind === 'channel' && event.frameType === 'fake_data' && event.sessionId === 'chan',
       ),
     ).toBe(true);
-    expect(harness.hub.channelTypes()).toEqual(['subagent_runs', 'fake_data']);
+    expect(harness.hub.channelTypes()).toEqual(['fake_data']);
     const frame = harness.hub.channelFrames('chan').find((candidate) => candidate.type === 'fake_data');
     expect(frame?.payload).toEqual({ marker: 'snapshot:chan' });
 

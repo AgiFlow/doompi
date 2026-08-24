@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { bundleCockpitWeb } from '../../src/adapters/webBundler.ts';
 
 const workflowRoot = fileURLToPath(new URL('../../../doompi-workflow', import.meta.url));
+const teamRoot = fileURLToPath(new URL('../../../../../layers/team/doompi-team', import.meta.url));
 
 /** Env var the cockpit fixture reads to serve the synced-style bundle. */
 export const SYNCED_DIST_ENV = 'DOOMPI_E2E_SYNCED_DIST';
@@ -17,7 +18,7 @@ export const SYNCED_DIST_ENV = 'DOOMPI_E2E_SYNCED_DIST';
  */
 export default async function globalSetup(): Promise<() => void> {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-sync-'));
-  const result = await bundleCockpitWeb({ pluginRoots: [workflowRoot], outDir });
+  const result = await bundleCockpitWeb({ pluginRoots: [teamRoot, workflowRoot], outDir });
   process.env[SYNCED_DIST_ENV] = result.assetsDir;
   return () => {
     fs.rmSync(outDir, { recursive: true, force: true });

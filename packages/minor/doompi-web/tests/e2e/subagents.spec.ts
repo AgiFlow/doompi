@@ -5,6 +5,9 @@ import { removeRunsScope, writeRunStatus } from '../support/subagentRuns.ts';
 // per session id, so every test starts and ends with it clean. That same
 // global scope is why this file cannot run its tests in parallel workers:
 // they would write into and wipe each other's fleet.
+// The subagents tab is doompi-team's plugin now, so this suite serves the
+// synced-style bundle the Playwright global setup built.
+test.use({ assets: 'synced' });
 test.describe.configure({ mode: 'serial' });
 test.beforeEach(() => removeRunsScope('s1'));
 test.afterEach(() => removeRunsScope('s1'));

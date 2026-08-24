@@ -15,17 +15,15 @@ describe('the committed builtin web plugin registry', () => {
     }
   });
 
-  it('contains only the host package plugins, never a hardcoded external', () => {
-    // External plugins reach the cockpit through the doompi sync bundle, not
-    // through this package's own build: the committed registry must not name
-    // any other package.
+  it('is empty: every tab and channel is a plugin, never a hardcoded builtin', () => {
+    // The host package declares no plugins of its own any more; the whole
+    // set reaches the cockpit through the doompi sync bundle, so the
+    // committed registry must stay empty and name no other package.
     const rendered = renderBuiltinWebPluginModules();
     const client = rendered.get(path.join('src', 'web', 'app', 'webPlugins.generated.ts'));
-    expect(client).toContain("from '../features/subagents/index.ts'");
-    expect(client).not.toContain('@agimon-ai/doompi-workflow');
+    expect(client).toContain('export const webPlugins: readonly WebPluginDefinition[] = [];');
     expect(client).not.toContain('file://');
     const hub = rendered.get(path.join('src', 'adapters', 'webHubPlugins.generated.ts'));
-    expect(hub).toContain('...subagentsChannels');
-    expect(hub).not.toContain('doompi-workflow');
+    expect(hub).toContain('export const BUILTIN_HUB_CHANNELS: readonly WebHubChannel[] = [];');
   });
 });

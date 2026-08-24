@@ -1,11 +1,32 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseSubagentRun, presentRuns, RUN_STATUS_FILE_NAME, teamRunsDirFor } from '../services/subagentRuns.ts';
-import type { SubagentRun } from '../types/hub.ts';
+import { createHash } from 'node:crypto';
+import { parseSubagentRun, presentRuns, RUN_STATUS_FILE_NAME } from '../services/webSubagentRuns.ts';
+import type { SubagentRun } from '../types/webSubagents.ts';
 
 const POLL_MS = 1000;
 const DEBOUNCE_MS = 60;
+const TEMP_ROOT_PREFIX = 'doom-team';
+const SESSIONS_DIR_NAME = 'sessions';
+const RUNS_DIR_NAME = 'runs';
+const SCOPE_KEY_HASH_LENGTH = 16;
+
+export interface TeamRunsDirInput {
+  /** The Pi session id, which doom-team scopes its runs by. */
+  sessionId: string;
+  /** os.tmpdir(), supplied by the caller. */
+  tmpdir: string;
+  /** process.getuid(), absent on platforms without one. */
+  uid: number | undefined;
+}
+
+/** Where this package keeps a session's runs, or undefined when the user cannot be scoped. */
+export function teamRunsDirFor(input: TeamRunsDirInput): string | undefined {
+  if (input.uid === undefined) return undefined;
+  const scopeKey = createHash('sha256').update(input.sessionId.trim()).digest('hex').slice(0, SCOPE_KEY_HASH_LENGTH);
+  return `${input.tmpdir}/${TEMP_ROOT_PREFIX}-uid-${String(input.uid)}/${SESSIONS_DIR_NAME}/${scopeKey}/${RUNS_DIR_NAME}`;
+}
 
 export interface SubagentRunsSource {
   close(): void;

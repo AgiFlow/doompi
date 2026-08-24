@@ -1,6 +1,6 @@
 import type { HubChannelSource, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
-import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../types/hub.ts';
-import { type SubagentRunsSource, watchSubagentRuns } from './subagentWatcher.ts';
+import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../types/webSubagents.ts';
+import { type SubagentRunsSource, watchSubagentRuns } from './webSubagentWatcher.ts';
 
 /**
  * The built-in subagents data channel: one doom-team runs watcher per managed

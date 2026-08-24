@@ -1,8 +1,8 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
-import type { SubagentRun, SubagentRunState } from '../../../types/hub.ts';
-import { abbreviateCwd, formatRunDuration } from '../../lib/sessionSummary.ts';
+import type { SubagentRun, SubagentRunState } from '../src/types/webSubagents.ts';
+import { abbreviateCwd, formatRunDuration } from './format.ts';
 import { subagentsStore } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;

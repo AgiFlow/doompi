@@ -64,6 +64,23 @@ export interface MinorModeContribution {
 }
 
 /**
+ * An activity-dock group, declared as data: the host renders the group when
+ * the session publishes its signal (the footer status key, or any of the
+ * widget keys), with the status content as the live summary.
+ */
+export interface ActivityGroupContribution {
+  name: string;
+  /** Leader Space key path, as the TUI documents it. */
+  keys: string;
+  /** Footer status key whose presence shows the group and content fills its summary. */
+  statusKey?: string;
+  /** Widget keys any of which shows the group without a summary. */
+  widgetKeys?: string[];
+  /** Sort position in the dock; lower first, name breaks ties. */
+  order?: number;
+}
+
+/**
  * One session-scoped data channel: the hub pushes ChannelFrame payloads whose
  * frame type equals `channel`; parse is the validation gate at the boundary
  * (null rejects); drop clears the plugin's per-session state.
@@ -86,6 +103,7 @@ export interface WebPluginDefinition {
   tabs?: TabContribution[];
   channels?: SessionChannelContribution[];
   minorModes?: MinorModeContribution[];
+  activityGroups?: ActivityGroupContribution[];
   overlays?: SurfaceContribution[];
   paletteCommands?: PaletteCommandContribution[];
   railSections?: SurfaceContribution[];
