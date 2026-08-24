@@ -30,7 +30,9 @@
     "llms.txt",
     "README.md",
     "src/prompts",
-    "skills/workflow-recovery/SKILL.md"
+    "skills/workflow-recovery/SKILL.md",
+    "web",
+    "src/types/webWorkflows.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -47,6 +49,12 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./web": "./web/index.ts",
+    "./web-hub": {
+      "types": "./dist/webHub.d.mts",
+      "import": "./dist/webHub.mjs",
+      "require": "./dist/webHub.cjs"
+    },
     "./package.json": "./package.json",
     "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md"
   },
@@ -56,7 +64,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -64,6 +72,7 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/workflow-mcp": "0.23.16",
     "@deepseek-ai/cordis": "4.0.1",
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -72,8 +81,12 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@earendil-works/pi-tui": "0.84.2",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
@@ -92,6 +105,21 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "workflows",
+    "registrationOrder": 20,
+    "channels": [
+      "workflow_runs"
+    ],
+    "client": {
+      "entry": "./web/index.ts",
+      "specifier": "@agimon-ai/doompi-workflow/web"
+    },
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "specifier": "@agimon-ai/doompi-workflow/web-hub"
+    }
   },
   "pi": {
     "extensions": [
