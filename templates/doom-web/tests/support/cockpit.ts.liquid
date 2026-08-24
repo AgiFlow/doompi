@@ -94,6 +94,8 @@ export interface CockpitFixture {
   /** The first session, which the cockpit auto-focuses; single-session specs read this. */
   session: FakeSession;
   registryDir: string;
+  /** The isolated workflow-mcp registry home the spawned hub watches. */
+  workflowHome: string;
   url: string;
 }
 
@@ -126,10 +128,13 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     }
 
     const port = await freePort();
+    // An isolated workflow home: the hub must never watch the developer's
+    // real registry from a test, and workflow specs write runs into this one.
+    const workflowHome = path.join(root, 'workflow-mcp');
     const child: ChildProcess = spawn(
       process.execPath,
       [binary, '--registry-dir', registryDir, '--spawn-command', stub, '--port', String(port)],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
+      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WORKFLOW_MCP_HOME: workflowHome } },
     );
 
     const logs: string[] = [];
@@ -145,7 +150,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       throw new Error(`${(error as Error).message}\n${logs.join('')}`);
     }
 
-    await use({ sessions, session: sessions[0], registryDir, url });
+    await use({ sessions, session: sessions[0], registryDir, workflowHome, url });
 
     child.kill('SIGTERM');
     for (const session of sessions) await session.close();

@@ -17,6 +17,7 @@ import {
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
   SUBAGENT_RUNS_TYPE,
+  WORKFLOW_RUNS_TYPE,
   SUBSCRIBE_TYPE,
   UNSUBSCRIBE_TYPE,
 } from '../types/hub.ts';
@@ -168,6 +169,10 @@ export function serveWeb(options: WebServerOptions): Promise<WebServer> {
               if (subscriptions.has(event.sessionId)) {
                 post({ type: SUBAGENT_RUNS_TYPE, sessionId: event.sessionId, runs: event.runs });
               }
+            } else if (event.kind === 'workflows') {
+              if (subscriptions.has(event.sessionId)) {
+                post({ type: WORKFLOW_RUNS_TYPE, sessionId: event.sessionId, runs: event.runs });
+              }
             } else if (subscriptions.has(event.sessionId)) {
               post(sessionFrameEnvelope(event.sessionId, event.frame));
             }
@@ -192,6 +197,8 @@ export function serveWeb(options: WebServerOptions): Promise<WebServer> {
               ws.send(JSON.stringify(backlog));
               const runs = hub.runsFor(sessionId);
               if (runs) ws.send(JSON.stringify(runs));
+              const workflows = hub.workflowsFor(sessionId);
+              if (workflows) ws.send(JSON.stringify(workflows));
             } catch {
               // The browser went away mid-write; onClose tears the socket down.
             }

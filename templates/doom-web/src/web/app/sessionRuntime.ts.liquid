@@ -7,6 +7,7 @@ import {
   SUBAGENT_RUNS_TYPE,
   subscribeFrame,
   unsubscribeFrame,
+  WORKFLOW_RUNS_TYPE,
 } from '../../types/hub.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
@@ -20,6 +21,7 @@ import {
   sessionsStore,
 } from '../stores/sessionsStore.ts';
 import { applySubagentRuns, dropSubagentRuns } from '../stores/subagentsStore.ts';
+import { applyWorkflowRuns, dropWorkflowRuns } from '../stores/workflowsStore.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -66,11 +68,15 @@ export function startSessionRuntime(): () => void {
           applySessionRemoved(frame);
           dropSessionStore(frame.sessionId);
           dropSubagentRuns(frame.sessionId);
+          dropWorkflowRuns(frame.sessionId);
           if (subscribed === frame.sessionId) subscribed = null;
           return;
         }
         case SUBAGENT_RUNS_TYPE:
           applySubagentRuns(frame);
+          return;
+        case WORKFLOW_RUNS_TYPE:
+          applyWorkflowRuns(frame);
           return;
         case SESSION_BACKLOG_TYPE: {
           if (typeof frame.sessionId !== 'string' || !Array.isArray(frame.frames)) return;

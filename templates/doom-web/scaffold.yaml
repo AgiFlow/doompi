@@ -4,7 +4,7 @@ boilerplate:
     description: |-
       Create a publishable DoomPi web package: a Hono executable hosting a multi-session cockpit hub that discovers running doompi-server sessions through the registry directory, multiplexes their authenticated sockets behind one page WebSocket, and serves a React cockpit built by Vite.
 
-      The generated package boots against real sessions on the first run. It ships the session hub (registry watcher, one socket attachment per session, a bounded replay ring, presence derivation, a spawner for sessions created from the page), the frame reducer, a feature-sliced client (sessions rail, session timeline and composer, status rail, extension-UI dialogs, command palette), and the test pyramid that covers them: vitest unit and integration suites plus Playwright end-to-end specs driving the built executable against scripted session sockets.
+      The generated package boots against real sessions on the first run. It ships the session hub (registry watcher, one socket attachment per session, a bounded replay ring, presence derivation, a spawner for sessions created from the page), the frame reducer, a feature-sliced client (sessions rail, session timeline and composer, subagents fleet grid, workflows tab, status rail, extension-UI dialogs, command palette), and the test pyramid that covers them: vitest unit and integration suites plus Playwright end-to-end specs driving the built executable against scripted session sockets.
 
       Use it for any browser surface that attaches to supervised Pi sessions. It registers no Pi extension and is not part of a mode; it is a standalone executable, or the process doompi-server --web starts.
     variables_schema:
@@ -65,6 +65,7 @@ boilerplate:
       - src/adapters/sessionHub.ts
       - src/adapters/sessionSocketClient.ts
       - src/adapters/subagentWatcher.ts
+      - src/adapters/workflowWatcher.ts
       - src/bin/serve.ts
       - src/exports/index.ts
       - src/services/frameRing.ts
@@ -75,6 +76,7 @@ boilerplate:
       - src/services/sessionPresence.ts
       - src/services/staticAssets.ts
       - src/services/subagentRuns.ts
+      - src/services/workflowRuns.ts
       - src/types/bridge.ts
       - src/types/hub.ts
       - src/types/registry.ts
@@ -94,6 +96,7 @@ boilerplate:
       - src/web/features/sessions/SessionRail.tsx
       - src/web/features/status/TopBar.tsx
       - src/web/features/subagents/SubagentsPanel.tsx
+      - src/web/features/workflows/WorkflowsPanel.tsx
       - src/web/index.html
       - src/web/lib/commands.ts
       - src/web/lib/composition.ts
@@ -111,6 +114,7 @@ boilerplate:
       - src/web/stores/sessionStore.ts
       - src/web/stores/sessionsStore.ts
       - src/web/stores/subagentsStore.ts
+      - src/web/stores/workflowsStore.ts
       - src/web/styles/app.css
       - src/web/vite-env.d.ts
       - tests/contract/packageShape.test.ts
@@ -124,12 +128,15 @@ boilerplate:
       - tests/e2e/states.spec.ts
       - tests/e2e/status.spec.ts
       - tests/e2e/subagents.spec.ts
+      - tests/e2e/workflows.spec.ts
       - tests/integration/bridge.test.ts
       - tests/integration/hub.test.ts
       - tests/integration/spawner.test.ts
       - tests/support/cockpit.ts
       - tests/support/fakeSession.ts
       - tests/support/subagentRuns.ts
+      - tests/support/vitestEnv.ts
+      - tests/support/workflowRuns.ts
       - tests/unit/clientStores.test.ts
       - tests/unit/composition.test.ts
       - tests/unit/hubApi.test.ts
@@ -156,6 +163,8 @@ boilerplate:
       The cockpit is multi-session. The hub in src/adapters/sessionHub.ts holds one socket attachment per registered session and every page-facing frame is enveloped by session id (src/types/hub.ts is that contract). On the client, session-scoped state lives in per-session stores keyed by session id (src/web/stores/sessionStore.ts is a registry, src/web/stores/sessionsStore.ts holds the rail), the active session is the route param, and store actions default to the focused session.
 
       Render only what the session reports. Pi's RPC protocol is the single source of truth, so add a frame to the reducer in src/web/lib/sessionModel.ts before rendering it, and leave a surface out rather than inventing a value the agent never sent. The rail renders from hub summaries alone; if a fact is not in SessionSummary, derive it in src/services/sessionPresence.ts before showing it.
+
+      The subagents and workflows tabs render from disk mirrors: doom-team's per-run status files and workflow-mcp's registry (run.json plus the progress.ndjson job log). The hub only ever reads those files. The mirrored path derivations and parsers live in src/services/subagentRuns.ts and src/services/workflowRuns.ts and are pinned by unit tests against the writing packages; keep them in step when either writer changes its layout.
 
 feature:
   - name: scaffold-doom-web-feature

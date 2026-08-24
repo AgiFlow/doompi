@@ -6,15 +6,19 @@ import {
   reducePresence,
   type SessionPresence,
 } from '../services/sessionPresence.ts';
+import { presentWorkflowRuns, runBelongsToSession, type ParsedWorkflowRun } from '../services/workflowRuns.ts';
 import type { SessionAttachment } from '../types/bridge.ts';
 import {
   SESSION_BACKLOG_TYPE,
   SUBAGENT_RUNS_TYPE,
+  WORKFLOW_RUNS_TYPE,
   type SessionBacklogFrame,
   type SessionGitStatus,
   type SessionSummary,
   type SubagentRun,
   type SubagentRunsFrame,
+  type WorkflowRunView,
+  type WorkflowRunsFrame,
 } from '../types/hub.ts';
 import type { SessionRecord } from '../types/registry.ts';
 import type { BridgeState, SessionFrame } from '../types/session.ts';
@@ -22,6 +26,7 @@ import type { RecordSource } from './registryWatcher.ts';
 import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSpawner.ts';
 import { attachToSession } from './sessionSocketClient.ts';
 import { type SubagentRunsSource, watchSubagentRuns } from './subagentWatcher.ts';
+import { watchWorkflowRuns } from './workflowWatcher.ts';
 
 const GIT_REFRESH_MS = 10_000;
 
@@ -29,7 +34,8 @@ export type HubEvent =
   | { kind: 'upsert'; session: SessionSummary }
   | { kind: 'removed'; sessionId: string }
   | { kind: 'frame'; sessionId: string; frame: SessionFrame }
-  | { kind: 'runs'; sessionId: string; runs: SubagentRun[] };
+  | { kind: 'runs'; sessionId: string; runs: SubagentRun[] }
+  | { kind: 'workflows'; sessionId: string; runs: WorkflowRunView[] };
 
 export interface SessionHubOptions {
   source: RecordSource;
@@ -41,6 +47,8 @@ export interface SessionHubOptions {
   readToken?: (record: SessionRecord) => string;
   /** Injectable for tests; defaults to watching doom-team's run directory. */
   watchRuns?: typeof watchSubagentRuns;
+  /** Injectable for tests; defaults to watching workflow-mcp's registry. */
+  watchWorkflows?: typeof watchWorkflowRuns;
   ringLimit?: number;
   gitRefreshMs?: number;
   onNotice?: (message: string) => void;
@@ -54,6 +62,8 @@ export interface SessionHub {
   backlog(sessionId: string): SessionBacklogFrame | undefined;
   /** The session's current subagent fleet, or undefined for an unknown id. */
   runsFor(sessionId: string): SubagentRunsFrame | undefined;
+  /** The session's workflow runs, or undefined for an unknown id. */
+  workflowsFor(sessionId: string): WorkflowRunsFrame | undefined;
   command(sessionId: string, frame: SessionFrame): void;
   create(input: SpawnSessionInput): Promise<SpawnOutcome>;
   close(): void;
@@ -69,6 +79,8 @@ interface ManagedSession {
   git?: SessionGitStatus;
   runs: SubagentRun[];
   runsSource?: SubagentRunsSource;
+  workflows: WorkflowRunView[];
+  lastWorkflowsJson?: string;
   lastSummaryJson?: string;
 }
 
@@ -95,9 +107,27 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const readGit = options.readGit;
   const readToken = options.readToken ?? readTokenFile;
   let closed = false;
+  let workflowRuns: ParsedWorkflowRun[] = [];
 
   const emit = (event: HubEvent): void => {
     for (const listener of listeners) listener(event);
+  };
+
+  const sessionWorkflows = (managed: ManagedSession): WorkflowRunView[] =>
+    presentWorkflowRuns(
+      workflowRuns
+        .filter((run) => runBelongsToSession(run, { sessionId: managed.record.id, cwd: managed.record.cwd }))
+        .map((run) => run.view),
+      Date.now(),
+    );
+
+  const refreshWorkflows = (managed: ManagedSession, announce: boolean): void => {
+    const runs = sessionWorkflows(managed);
+    const json = JSON.stringify(runs);
+    if (json === managed.lastWorkflowsJson) return;
+    managed.lastWorkflowsJson = json;
+    managed.workflows = runs;
+    if (announce) emit({ kind: 'workflows', sessionId: managed.record.id, runs });
   };
 
   const toSummary = (managed: ManagedSession): SessionSummary => ({
@@ -182,12 +212,15 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       presence: initialPresence(new Date().toISOString()),
       attach: 'connecting',
       runs: [],
+      workflows: [],
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
     startAttachment(managed);
     pushSummary(managed);
     refreshGit(managed);
+    // Quietly: no page can be subscribed before the upsert lands.
+    refreshWorkflows(managed, false);
     managed.runsSource = (options.watchRuns ?? watchSubagentRuns)(record.id, (runs) => {
       if (closed || sessions.get(record.id) !== managed) return;
       managed.runs = runs;
@@ -226,6 +259,11 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   };
 
   options.source.subscribe(reconcile);
+  const workflowSource = (options.watchWorkflows ?? watchWorkflowRuns)((runs) => {
+    if (closed) return;
+    workflowRuns = runs;
+    for (const managed of sessions.values()) refreshWorkflows(managed, true);
+  });
   const gitTimer = readGit
     ? setInterval(() => {
         for (const managed of sessions.values()) refreshGit(managed);
@@ -257,6 +295,13 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       if (!managed) return undefined;
       return { type: SUBAGENT_RUNS_TYPE, sessionId, runs: managed.runs };
     },
+    workflowsFor(sessionId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return undefined;
+      // Recomputed rather than cached so retention keeps moving between
+      // registry changes; the cache only gates live announcements.
+      return { type: WORKFLOW_RUNS_TYPE, sessionId, runs: sessionWorkflows(managed) };
+    },
     command(sessionId, frame) {
       const managed = sessions.get(sessionId);
       if (!managed) return;
@@ -280,6 +325,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     close() {
       closed = true;
       options.source.close();
+      workflowSource.close();
       if (gitTimer) clearInterval(gitTimer);
       for (const managed of sessions.values()) {
         managed.attachment?.close();

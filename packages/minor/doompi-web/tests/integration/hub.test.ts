@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { watchRegistry } from '../../src/adapters/registryWatcher.ts';
 import { createSessionHub, type HubEvent, type SessionHub } from '../../src/adapters/sessionHub.ts';
 import type { SpawnOutcome } from '../../src/adapters/serverSpawner.ts';
+import { watchWorkflowRuns } from '../../src/adapters/workflowWatcher.ts';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession, writeStaleRecord } from '../support/fakeSession.ts';
 import { removeRunsScope, writeRunStatus } from '../support/subagentRuns.ts';
+import { moveWorkflowRun, writeWorkflowRun } from '../support/workflowRuns.ts';
 
 let cleanups: Array<() => Promise<void> | void> = [];
 
@@ -32,11 +34,18 @@ interface HubHarness {
 function startHub(
   registryDir: string,
   spawn?: (input: { cwd: string; name?: string }) => Promise<SpawnOutcome>,
+  workflowHome?: string,
 ): HubHarness {
   const events: HubEvent[] = [];
   const hub = createSessionHub({
     source: watchRegistry(registryDir),
     spawner: spawn === undefined ? undefined : { spawn },
+    // The default watcher would read the env-pinned throwaway home; tests
+    // that exercise workflows point the real watcher at their own registry.
+    watchWorkflows:
+      workflowHome === undefined
+        ? () => ({ close: () => undefined })
+        : (onRuns) => watchWorkflowRuns(onRuns, { homeDir: workflowHome }),
   });
   cleanups.push(() => hub.close());
   hub.onEvent((event) => events.push(event));
@@ -224,6 +233,63 @@ describe('the session hub over a registry', () => {
     await waitFor(() => harness.hub.runsFor(sessionId)?.runs[0]?.state === 'done', 'the completed state');
     expect(harness.hub.runsFor(sessionId)?.runs[0]?.summary).toBe('All good.');
     expect(harness.hub.runsFor('unknown')).toBeUndefined();
+  });
+
+  it('streams session workflow runs from the registry and follows a failure', { timeout: 15_000 }, async () => {
+    const registryDir = freshRegistryDir();
+    const workflowHome = path.join(path.dirname(registryDir), 'workflow-mcp');
+    const session = await startRegisteredSession(registryDir, { id: 'wf-owner' });
+    const harness = startHub(registryDir, undefined, workflowHome);
+    await session.waitForAttach();
+
+    // A run owned by another session, in a repository this session is not in:
+    // it must never reach this session's tab.
+    writeWorkflowRun(workflowHome, {
+      workspace: 'default',
+      stage: 'running',
+      runKey: 'foreign',
+      record: { env: { PI_SESSION_ID: 'someone-else' }, workflowPath: '/elsewhere/wf.workflow.yml' },
+    });
+    writeWorkflowRun(workflowHome, {
+      workspace: 'default',
+      stage: 'running',
+      runKey: 'verify-a',
+      record: { env: { PI_SESSION_ID: 'wf-owner' }, workflowName: 'Verify' },
+      progress: [
+        { type: 'job', status: 'running', job: 'build', index: 0, total: 1, at: new Date().toISOString() },
+        { type: 'step', status: 'running', job: 'build', step: 'compile', at: new Date().toISOString() },
+      ],
+    });
+    await waitFor(
+      () =>
+        harness.events.some(
+          (event) =>
+            event.kind === 'workflows' &&
+            event.runs.some((run) => run.runKey === 'verify-a' && run.stage === 'running'),
+        ),
+      'the running workflow reaching the hub',
+    );
+    const frame = harness.hub.workflowsFor('wf-owner');
+    expect(frame?.runs.map((run) => run.runKey)).toEqual(['verify-a']);
+    expect(frame?.runs[0]?.position).toEqual({ job: 'build', step: 'compile', index: 0, total: 1 });
+    expect(frame?.runs[0]?.jobs[0]?.steps[0]).toMatchObject({ name: 'compile', status: 'running' });
+
+    moveWorkflowRun(workflowHome, { workspace: 'default', runKey: 'verify-a' }, 'running', 'error', {
+      outcome: 'failed',
+      errorMessage: 'compile blew up',
+      failedJob: 'build',
+      finishedAt: new Date().toISOString(),
+    });
+    await waitFor(
+      () => harness.hub.workflowsFor('wf-owner')?.runs[0]?.stage === 'error',
+      'the failure reaching the hub',
+    );
+    expect(harness.hub.workflowsFor('wf-owner')?.runs[0]).toMatchObject({
+      errorMessage: 'compile blew up',
+      failedJob: 'build',
+      outcome: 'failed',
+    });
+    expect(harness.hub.workflowsFor('unknown')).toBeUndefined();
   });
 
   it('creates sessions through the injected spawner', async () => {

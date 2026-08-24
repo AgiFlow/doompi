@@ -27,4 +27,19 @@ const sessionSubagentsRoute = createRoute({
   component: SubagentsView,
 });
 
-export const routeTree = rootRoute.addChildren([indexRoute, sessionRoute, sessionSubagentsRoute]);
+function WorkflowsView() {
+  return <CockpitPage view="workflows" />;
+}
+
+const sessionWorkflowsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/session/$sessionId/workflows',
+  component: WorkflowsView,
+});
+
+export const routeTree = rootRoute.addChildren([
+  indexRoute,
+  sessionRoute,
+  sessionSubagentsRoute,
+  sessionWorkflowsRoute,
+]);

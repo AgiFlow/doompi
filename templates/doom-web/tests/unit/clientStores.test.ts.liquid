@@ -200,6 +200,26 @@ describe('subagentsStore', () => {
   });
 });
 
+describe('workflowsStore', () => {
+  it('keeps each session workflow set separately and drops one with its session', async () => {
+    const { applyWorkflowRuns, dropWorkflowRuns, resetWorkflows, workflowsStore } =
+      await import('../../src/web/stores/workflowsStore.ts');
+    resetWorkflows();
+    const run = { runKey: 'wf-1', workspace: 'w', displayName: 'wf-1', stage: 'running', jobs: [] };
+    applyWorkflowRuns({ type: 'workflow_runs', sessionId: 's1', runs: [run] });
+    applyWorkflowRuns({ type: 'workflow_runs', sessionId: 's2', runs: [] });
+    expect(workflowsStore.state.bySession.s1).toHaveLength(1);
+    expect(workflowsStore.state.bySession.s2).toEqual([]);
+
+    dropWorkflowRuns('s1');
+    expect(workflowsStore.state.bySession.s1).toBeUndefined();
+    // Malformed frames change nothing.
+    applyWorkflowRuns({ type: 'workflow_runs', runs: [run] });
+    expect(Object.keys(workflowsStore.state.bySession)).toEqual(['s2']);
+    resetWorkflows();
+  });
+});
+
 describe('menuStore', () => {
   it('anchors a fresh selection command and expires a stale one', async () => {
     const { setPendingMenu, clearPendingMenu, pendingMenuFor } = await import('../../src/web/stores/menuStore.ts');

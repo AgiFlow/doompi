@@ -11,9 +11,10 @@ import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { SubagentsPanel } from '../features/subagents/SubagentsPanel.tsx';
 import { Timeline } from '../features/session/Timeline.tsx';
 import { TopBar } from '../features/status/TopBar.tsx';
+import { WorkflowsPanel } from '../features/workflows/WorkflowsPanel.tsx';
 import { sessionsStore, setActiveSession } from '../stores/sessionsStore.ts';
 
-export function CockpitPage({ view = 'conversation' }: { view?: 'conversation' | 'subagents' }) {
+export function CockpitPage({ view = 'conversation' }: { view?: 'conversation' | 'subagents' | 'workflows' }) {
   const [dockOpen, setDockOpen] = useState(true);
   const { sessionId } = useParams({ strict: false });
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ export function CockpitPage({ view = 'conversation' }: { view?: 'conversation' |
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar view={view} />
-        {view === 'subagents' ? <SubagentsPanel /> : <Timeline />}
+        {view === 'subagents' ? <SubagentsPanel /> : view === 'workflows' ? <WorkflowsPanel /> : <Timeline />}
         <Composer />
         <SelectionBar />
       </main>

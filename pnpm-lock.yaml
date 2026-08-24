@@ -1427,6 +1427,9 @@ importers:
       '@agimon-ai/vibe-lint-plugin-doom-web':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-web
+      '@agimon-ai/workflow-mcp':
+        specifier: 0.23.16
+        version: 0.23.16(@earendil-works/pi-coding-agent@0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@playwright/test':
         specifier: 1.62.1
         version: 1.62.1

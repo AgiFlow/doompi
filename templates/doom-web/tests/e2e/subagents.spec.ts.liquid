@@ -2,7 +2,10 @@ import { expect, test } from '../support/cockpit.ts';
 import { removeRunsScope, writeRunStatus } from '../support/subagentRuns.ts';
 
 // The fixture's first session is always 's1'; its doom-team scope is global
-// per session id, so every test starts and ends with it clean.
+// per session id, so every test starts and ends with it clean. That same
+// global scope is why this file cannot run its tests in parallel workers:
+// they would write into and wipe each other's fleet.
+test.describe.configure({ mode: 'serial' });
 test.beforeEach(() => removeRunsScope('s1'));
 test.afterEach(() => removeRunsScope('s1'));
 
