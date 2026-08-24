@@ -36,6 +36,35 @@ The server starts `doompi --mode rpc` with the arguments after `--`, then publis
 on the socket. The socket is created owner-only, under a umask so the mode is atomic rather than
 applied after the fact.
 
+The session gets an identity at spawn: the server mints a session id (or takes `--session-id`) and
+passes it to Pi together with the `--name` you gave it, so the cockpit knows the session before its
+first frame.
+
+## The session registry
+
+Every server announces itself by writing one JSON record to
+`~/.doompi/run/sessions/<session id>.json` (override the directory with `--registry-dir` or
+`DOOMPI_RUNTIME_DIR`). The record names the socket, the working directory, the token file, and the
+server pid; writing it is the whole act of registration, and the server withdraws it on exit. The
+web cockpit watches this directory to find every running session, and deletes records whose pid is
+gone, so a crashed server does not haunt the rail.
+
+## Serving the web cockpit
+
+Add `--web` to make sure a browser cockpit is reachable:
+
+```bash
+doompi-server --listen /run/doompi/session.sock --auth-token-file /run/doompi/token --name doompi-web --web 7433 -- --major-mode copilot
+```
+
+The port is optional and defaults to 7433. The cockpit is a multi-session hub: if one already
+answers on the port, this server just logs its URL and appears there through the registry; only
+otherwise does it start the hub in-process. An embedded hub dies with its server, so for several
+sessions the durable topology is a standalone `doompi-web`. The cockpit binds loopback and reads
+tokens from token files, so the browser never holds a session credential. `--web` requires
+[@agimon-ai/doompi-web](https://www.npmjs.com/package/@agimon-ai/doompi-web), which is an optional
+peer: without it the flag reports what to install rather than failing obscurely.
+
 ## Protocol
 
 Newline-delimited JSON in both directions, carrying Pi's own RPC frames untouched. The server adds
@@ -53,7 +82,8 @@ Everything else passes through: client frames go to the agent, agent frames go t
 ## Attach and reattach
 
 One client holds a session at a time; a second attach is refused rather than allowed to fight over
-the same agent. Losing the client does not end the run. Frames buffer while nobody is attached and
+the same agent. When the web cockpit runs, the hub is that one client and browser tabs multiplex
+behind it. Losing the client does not end the run. Frames buffer while nobody is attached and
 replay on the next attach, so a dropped connection or a reloaded page recovers instead of losing
 the session. The buffer is bounded and reports how many frames it had to drop.
 
@@ -62,7 +92,8 @@ the session. The buffer is bounded and reports how many frames it had to drop.
 - The executable itself is not covered end to end; the supervisor, socket, handshake, and replay
   paths are.
 - Transport is a unix socket only. Remote access means tunnelling it, for example over SSH.
-- One agent per server process. Serving several sessions means several servers.
+- One agent per server process. Serving several sessions means several servers, which the registry
+  and the cockpit hub present as one working set.
 
 ## Public API
 

@@ -59,6 +59,7 @@
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-web": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@types/node": "26.2.0",
@@ -68,9 +69,13 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
+    "@agimon-ai/doompi-web": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.84.2"
   },
   "peerDependenciesMeta": {
+    "@agimon-ai/doompi-web": {
+      "optional": true
+    },
     "@earendil-works/pi-coding-agent": {
       "optional": true
     }

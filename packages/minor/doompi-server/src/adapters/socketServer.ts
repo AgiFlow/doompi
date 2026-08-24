@@ -25,6 +25,34 @@ export interface SessionSocket {
   close(): Promise<void>;
 }
 
+const STALE_PROBE_TIMEOUT_MS = 1000;
+
+/**
+ * Unlinks a socket file left behind by a crashed server.
+ *
+ * A live server answers the probe and keeps its file (the caller's listen then
+ * fails loudly instead of silently stealing the path); a dead one refuses the
+ * connection, which is the signal that unlinking is safe.
+ */
+export function removeStaleSocket(socketPath: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(socketPath)) {
+      resolve();
+      return;
+    }
+    const probe = net.connect(socketPath);
+    probe.setTimeout(STALE_PROBE_TIMEOUT_MS);
+    const finish = (stale: boolean): void => {
+      probe.destroy();
+      if (stale) fs.rmSync(socketPath, { force: true });
+      resolve();
+    };
+    probe.once('connect', () => finish(false));
+    probe.once('timeout', () => finish(false));
+    probe.once('error', () => finish(true));
+  });
+}
+
 function sameToken(candidate: string, expected: string): boolean {
   const left = Buffer.from(candidate);
   const right = Buffer.from(expected);

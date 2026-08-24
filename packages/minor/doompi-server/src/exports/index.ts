@@ -13,4 +13,6 @@ export { createDetachedBacklog, createFrameDecoder, encodeFrame } from '../servi
 export type { DetachedBacklog } from '../services/sessionFraming.ts';
 export { parseServeOptions, SERVE_USAGE } from '../services/serveOptions.ts';
 export type { ServeOptions } from '../services/serveOptions.ts';
+export { SESSION_RECORD_VERSION } from '../types/registry.ts';
+export type { SessionRecord } from '../types/registry.ts';
 export type { AgentProcess, AgentProcessFactory, AgentProcessOptions, SessionFrame } from '../types/session.ts';

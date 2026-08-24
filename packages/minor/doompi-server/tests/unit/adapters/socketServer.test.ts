@@ -3,7 +3,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { serveSessionSocket, type SessionSocket } from '../../../src/adapters/socketServer.ts';
+import { removeStaleSocket, serveSessionSocket, type SessionSocket } from '../../../src/adapters/socketServer.ts';
 import { createFrameDecoder, encodeFrame } from '../../../src/services/sessionFraming.ts';
 import type { AgentProcess, SessionFrame } from '../../../src/types/session.ts';
 
@@ -148,6 +148,33 @@ describe('serveSessionSocket', () => {
 
     expect(second.frames[0]).toEqual({ type: 'attached', replayed: 1, dropped: 0 });
     expect(second.frames[1]).toEqual({ type: 'replay', frame: { type: 'message_update', text: 'while away' } });
+  });
+
+  it('lets a restarted server reclaim the path a crash left behind', async () => {
+    const socketPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-server-')), 'session.sock');
+    // A crashed server leaves a path nothing answers on; a plain file behaves
+    // the same way for the probe.
+    fs.writeFileSync(socketPath, '');
+
+    await removeStaleSocket(socketPath);
+    expect(fs.existsSync(socketPath)).toBe(false);
+
+    const agent = fakeAgent();
+    sockets.push(serveSessionSocket({ socketPath, token: TOKEN, agent }));
+    await waitFor(() => fs.existsSync(socketPath), 'the reclaimed socket');
+  });
+
+  it('leaves a live socket alone', async () => {
+    const socketPath = startSocket(fakeAgent());
+    await waitFor(() => fs.existsSync(socketPath), 'the socket file');
+
+    await removeStaleSocket(socketPath);
+    expect(fs.existsSync(socketPath)).toBe(true);
+
+    const client = await connect(socketPath);
+    client.socket.write(encodeFrame({ type: 'attach', token: TOKEN }));
+    await waitFor(() => client.frames.length > 0, 'the handshake reply');
+    expect(client.frames[0]?.type).toBe('attached');
   });
 
   it('reports frames dropped past the backlog limit', async () => {
