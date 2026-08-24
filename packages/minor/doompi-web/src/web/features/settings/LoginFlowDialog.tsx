@@ -1,11 +1,20 @@
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Spinner,
+} from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
 import type { AuthMethodType, LoginEvent, LoginFlowSnapshot, LoginPromptView } from '../../../types/auth.ts';
 
 export const METHOD_LABEL: Readonly<Record<AuthMethodType, string>> = { api_key: 'api key', oauth: 'oauth' };
 
 const linkClass = 'break-all text-doom-blue underline decoration-doom-blue/40 hover:decoration-doom-blue';
-const buttonClass = 'rounded border border-doom-border px-3 py-1 text-[11px] text-doom-dim hover:text-doom-hi';
-const primaryClass = 'rounded bg-doom-blue px-3 py-1 text-[11px] font-bold text-doom-rail disabled:opacity-40';
 
 function FlowEvent({ event }: { event: LoginEvent }) {
   if (event.type === 'auth_url') {
@@ -74,7 +83,7 @@ function PromptField({
               type="button"
               data-testid={`login-prompt-option-${option.id}`}
               onClick={() => onSelect(option.id)}
-              className="flex flex-col items-start gap-0.5 rounded border border-doom-border px-2.5 py-1.5 text-left hover:border-doom-blue/50"
+              className="flex flex-col items-start gap-0.5 rounded border border-doom-border px-2.5 py-1.5 text-left transition-colors outline-none hover:border-doom-blue/50 focus-visible:border-doom-blue/50"
             >
               <span className="text-[11px] text-doom-hi">{option.label}</span>
               {option.description ? <span className="text-[10px] text-doom-faint">{option.description}</span> : null}
@@ -88,29 +97,22 @@ function PromptField({
     <label data-testid="login-prompt" data-prompt-type={prompt.type} className="flex flex-col gap-1">
       <span className="text-[11px] text-doom-text">{prompt.message}</span>
       <div className="flex items-center gap-2">
-        <input
+        <Input
           data-testid="login-prompt-input"
           type={prompt.type === 'secret' ? 'password' : 'text'}
           value={value}
           autoFocus
-          spellCheck={false}
           autoComplete="off"
           placeholder={prompt.placeholder}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') onSubmit();
           }}
-          className="min-w-0 flex-1 rounded border border-doom-border bg-doom-deep px-2.5 py-1.5 text-[12px] text-doom-hi outline-none placeholder:text-doom-faint focus:border-doom-blue/60"
+          className="flex-1"
         />
-        <button
-          type="button"
-          data-testid="login-prompt-submit"
-          disabled={value.trim() === ''}
-          onClick={onSubmit}
-          className={primaryClass}
-        >
+        <Button variant="primary" data-testid="login-prompt-submit" disabled={value.trim() === ''} onClick={onSubmit}>
           continue
-        </button>
+        </Button>
       </div>
     </label>
   );
@@ -141,16 +143,6 @@ export function LoginFlowDialog({
     setValue('');
   }, [promptId]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      if (running) onCancel();
-      else onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [running, onCancel, onClose]);
-
   const submit = (): void => {
     if (!prompt || value.trim() === '') return;
     onAnswer(prompt.id, value);
@@ -163,19 +155,22 @@ export function LoginFlowDialog({
   else if (flow.status === 'cancelled') outcome = { text: 'sign-in cancelled.', className: 'text-doom-dim' };
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-doom-deep/70">
-      <div
-        role="dialog"
-        aria-modal
-        data-testid="login-flow"
-        data-status={flow.status}
-        className="w-[480px] overflow-hidden rounded-lg border border-doom-border bg-doom-panel shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-doom-border px-4 py-3">
-          <span className="text-[12px] font-bold tracking-wide text-doom-hi">sign in to {flow.providerName}</span>
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (next) return;
+        // Escape or an outside click abandons a live sign-in, and simply
+        // dismisses a finished one.
+        if (running) onCancel();
+        else onClose();
+      }}
+    >
+      <DialogContent width="md" data-testid="login-flow" data-status={flow.status} aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>sign in to {flow.providerName}</DialogTitle>
           <span className="text-[10px] text-doom-faint">{METHOD_LABEL[flow.type]}</span>
-        </div>
-        <div className="flex flex-col gap-3 px-4 py-4">
+        </DialogHeader>
+        <DialogBody>
           {flow.events.length > 0 ? (
             <ol data-testid="login-flow-events" className="flex flex-col gap-2">
               {flow.events.map((event, index) => (
@@ -195,7 +190,8 @@ export function LoginFlowDialog({
             />
           ) : null}
           {running && !prompt ? (
-            <p data-testid="login-flow-waiting" className="text-[11px] text-doom-dim">
+            <p data-testid="login-flow-waiting" className="flex items-center gap-2 text-[11px] text-doom-dim">
+              <Spinner />
               {flow.events.length === 0 ? 'starting…' : `waiting for ${flow.providerName}…`}
             </p>
           ) : null}
@@ -204,19 +200,19 @@ export function LoginFlowDialog({
               {outcome.text}
             </p>
           ) : null}
-          <div className="flex items-center justify-end gap-2">
+          <DialogFooter>
             {running ? (
-              <button type="button" data-testid="login-flow-cancel" onClick={onCancel} className={buttonClass}>
+              <Button variant="outline" data-testid="login-flow-cancel" onClick={onCancel}>
                 cancel
-              </button>
+              </Button>
             ) : (
-              <button type="button" data-testid="login-flow-close" autoFocus onClick={onClose} className={buttonClass}>
+              <Button variant="outline" data-testid="login-flow-close" autoFocus onClick={onClose}>
                 close
-              </button>
+              </Button>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+          </DialogFooter>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -3,9 +3,19 @@
  * package.json, validated and ordered without touching the filesystem. The
  * scan adapter feeds this from real manifests; the sync bundler feeds it from
  * the installed composition's package roots.
+ *
+ * Plugins are independent: a manifest names no other plugin, and the order
+ * plugins install in is only a tiebreak (registrationOrder, then pluginId),
+ * because every relation between two plugins resolves by name once all of
+ * them are installed. A collision between two packages is a notice for the
+ * sync log and the first package keeps the name; only a malformed block is an
+ * error, which the scanner turns into a notice for that package alone.
  */
 
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+
+/** The order a plugin installs at when its manifest names none. */
+export const DEFAULT_REGISTRATION_ORDER = 1000;
 
 export interface WebPluginEntryDeclaration {
   /** Package-relative ./path to the source entry. */
@@ -17,7 +27,6 @@ export interface WebPluginEntryDeclaration {
 export interface DeclaredWebPlugin {
   pluginId: string;
   registrationOrder: number;
-  dependencies: string[];
   channels: string[];
   packageDir: string;
   packageName: string;
@@ -71,15 +80,12 @@ export function declaredPluginsOf(
   const plugins: DeclaredWebPlugin[] = [];
   for (const block of pluginBlocksOf(manifest)) {
     if (!isRecord(block)) throw new WebPluginManifestError(packageDir, 'each block must be an object.');
-    const { pluginId, registrationOrder, dependencies = [], channels = [], client, hub } = block;
+    const { pluginId, registrationOrder = DEFAULT_REGISTRATION_ORDER, channels = [], client, hub } = block;
     if (typeof pluginId !== 'string' || !PLUGIN_ID_PATTERN.test(pluginId)) {
       throw new WebPluginManifestError(packageDir, `pluginId '${String(pluginId)}' must be kebab-case.`);
     }
     if (!Number.isInteger(registrationOrder) || (registrationOrder as number) < 0) {
       throw new WebPluginManifestError(packageDir, `'${pluginId}' needs a non-negative integer registrationOrder.`);
-    }
-    if (!Array.isArray(dependencies) || dependencies.some((dep) => typeof dep !== 'string')) {
-      throw new WebPluginManifestError(packageDir, `'${pluginId}' dependencies must be pluginId strings.`);
     }
     if (!Array.isArray(channels) || channels.some((channel) => typeof channel !== 'string' || channel === '')) {
       throw new WebPluginManifestError(packageDir, `'${pluginId}' channels must be non-empty strings.`);
@@ -87,7 +93,6 @@ export function declaredPluginsOf(
     plugins.push({
       pluginId,
       registrationOrder: registrationOrder as number,
-      dependencies: dependencies as string[],
       channels: channels as string[],
       packageDir,
       packageName: typeof manifest.name === 'string' ? manifest.name : packageDir,
@@ -99,66 +104,46 @@ export function declaredPluginsOf(
   return plugins;
 }
 
+const byInstallOrder = (left: DeclaredWebPlugin, right: DeclaredWebPlugin): number =>
+  left.registrationOrder - right.registrationOrder ||
+  left.pluginId.localeCompare(right.pluginId) ||
+  left.packageDir.localeCompare(right.packageDir);
+
 /**
- * Cross-package validation and deterministic order: unique ids, orders, and
- * channels (wire frame types are a global namespace), then a topological sort
- * by dependencies with registrationOrder and pluginId as tiebreaks.
+ * The deterministic install order, (registrationOrder, pluginId), with the
+ * cross-package collisions resolved the way the client registry resolves
+ * them: the first plugin keeps a shared pluginId and the later package is
+ * dropped with a notice; a channel two kept plugins both declare is noticed
+ * here and settled first-wins by the client and the hub loader.
  */
-export function orderDeclaredPlugins(plugins: readonly DeclaredWebPlugin[]): DeclaredWebPlugin[] {
+export function orderDeclaredPlugins(
+  plugins: readonly DeclaredWebPlugin[],
+  onNotice: (message: string) => void = () => undefined,
+): DeclaredWebPlugin[] {
+  const sorted = [...plugins].sort(byInstallOrder);
   const byId = new Map<string, DeclaredWebPlugin>();
-  const orders = new Map<number, string>();
-  const seenChannels = new Map<string, string>();
-  for (const plugin of plugins) {
-    if (byId.has(plugin.pluginId)) {
-      throw new WebPluginManifestError(plugin.packageDir, `duplicate pluginId '${plugin.pluginId}'.`);
+  const channelOwners = new Map<string, string>();
+  const kept: DeclaredWebPlugin[] = [];
+  for (const plugin of sorted) {
+    const holder = byId.get(plugin.pluginId);
+    if (holder !== undefined) {
+      onNotice(
+        `web plugin '${plugin.pluginId}' from ${plugin.packageDir} is skipped: ${holder.packageDir} already declares it.`,
+      );
+      continue;
     }
     byId.set(plugin.pluginId, plugin);
-    const holder = orders.get(plugin.registrationOrder);
-    if (holder !== undefined) {
-      throw new WebPluginManifestError(
-        plugin.packageDir,
-        `registrationOrder ${String(plugin.registrationOrder)} is already used by '${holder}'.`,
-      );
-    }
-    orders.set(plugin.registrationOrder, plugin.pluginId);
+    kept.push(plugin);
     for (const channel of plugin.channels) {
-      const owner = seenChannels.get(channel);
+      const owner = channelOwners.get(channel);
       if (owner !== undefined) {
-        throw new WebPluginManifestError(
-          plugin.packageDir,
-          `channel '${channel}' is already claimed by '${owner}'; wire frame types are global.`,
+        onNotice(
+          `web plugin '${plugin.pluginId}' channel '${channel}' is already claimed by '${owner}'; the first keeps it.`,
         );
+        continue;
       }
-      seenChannels.set(channel, plugin.pluginId);
+      channelOwners.set(channel, plugin.pluginId);
     }
   }
-  for (const plugin of plugins) {
-    for (const dep of plugin.dependencies) {
-      if (!byId.has(dep)) {
-        throw new WebPluginManifestError(plugin.packageDir, `'${plugin.pluginId}' depends on unknown plugin '${dep}'.`);
-      }
-    }
-  }
-
-  const sorted: DeclaredWebPlugin[] = [];
-  const state = new Map<string, 'visiting' | 'done'>();
-  const byPriority = (left: DeclaredWebPlugin, right: DeclaredWebPlugin): number =>
-    left.registrationOrder - right.registrationOrder || left.pluginId.localeCompare(right.pluginId);
-  const visit = (plugin: DeclaredWebPlugin, trail: string[]): void => {
-    const mark = state.get(plugin.pluginId);
-    if (mark === 'done') return;
-    if (mark === 'visiting') {
-      throw new Error(`doompiWeb dependency cycle: ${[...trail, plugin.pluginId].join(' -> ')}`);
-    }
-    state.set(plugin.pluginId, 'visiting');
-    const deps = plugin.dependencies
-      .map((dep) => byId.get(dep))
-      .filter((dep): dep is DeclaredWebPlugin => dep !== undefined)
-      .sort(byPriority);
-    for (const dep of deps) visit(dep, [...trail, plugin.pluginId]);
-    state.set(plugin.pluginId, 'done');
-    sorted.push(plugin);
-  };
-  for (const plugin of [...plugins].sort(byPriority)) visit(plugin, []);
-  return sorted;
+  return kept;
 }

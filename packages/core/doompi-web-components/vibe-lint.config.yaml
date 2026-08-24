@@ -1,0 +1,54 @@
+# A web component library: presentational primitives and theme tokens shared
+# by the cockpit host and every plugin's web/ client. The doom-web plugin's
+# components rules own the layout (types, lib, theme, icons, components,
+# exports), keep components free of application state, and forbid raw colour
+# literals so every surface follows the active theme.
+plugins:
+  - core
+  - doom-web
+
+extends:
+  - core/recommended
+  - doom-web/recommended
+
+ignore:
+  - "dist/**"
+  - "coverage/**"
+
+boundaries:
+  - name: types
+    pattern: src/types/**
+    allowedImports:
+      - src/types/**
+  - name: lib
+    pattern: src/lib/**
+    allowedImports:
+      - src/lib/**
+      - src/types/**
+  - name: theme
+    pattern: src/theme/**
+    allowedImports:
+      - src/theme/**
+      - src/types/**
+      - themes/**
+  - name: icons
+    pattern: src/icons/**
+    allowedImports:
+      - src/icons/**
+  - name: components
+    pattern: src/components/**
+    allowedImports:
+      - src/components/**
+      - src/icons/**
+      - src/lib/**
+      - src/types/**
+  - name: exports
+    pattern: src/exports/**
+    allowedImports:
+      - src/**
+  - name: tests
+    pattern: tests/**
+    allowedImports:
+      - src/**
+      - tests/**
+      - themes/**

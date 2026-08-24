@@ -1,5 +1,7 @@
+import { Button, Kbd, StopIcon, Textarea } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
+import { registerPromptInput } from '../../lib/promptFocus.ts';
 import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
 import { activeSessionId, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { openPalette } from '../../stores/paletteStore.ts';
@@ -52,6 +54,9 @@ export function Composer() {
 
   const attached = meta?.attach === 'attached';
   const queued = meta?.summary.pendingMessageCount ?? 0;
+
+  // Overlays hand the keyboard back here when they close.
+  useEffect(() => registerPromptInput(inputRef.current), []);
 
   // Auto-grow: measure after every draft change so pasted stack traces are
   // actually visible instead of scrolling inside one line.
@@ -171,12 +176,14 @@ export function Composer() {
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-5 pt-3 pb-2.5">
       <div
         ref={containerRef}
-        className="relative rounded-lg border border-doom-border bg-doom-deep transition-colors focus-within:border-doom-blue/60"
+        className={`relative rounded-lg border bg-doom-deep transition-colors focus-within:border-doom-blue/60 ${
+          streaming ? 'border-doom-edge-yellow' : 'border-doom-border'
+        }`}
       >
         {completion ? (
           <div
             data-testid="composer-completion"
-            className="absolute bottom-full left-3 z-30 mb-2 w-[420px] max-w-[85%] overflow-hidden rounded-md border border-doom-border bg-doom-panel shadow-xl"
+            className="absolute bottom-full left-3 z-30 mb-2 w-[420px] max-w-[85%] animate-doom-rise overflow-hidden rounded-md border border-doom-border bg-doom-panel shadow-xl"
           >
             {completion.items.map((item, index) => (
               <button
@@ -196,14 +203,15 @@ export function Composer() {
                 {item.detail ? <span className="truncate text-[10px] text-doom-dim">{item.detail}</span> : null}
               </button>
             ))}
-            <p className="border-t border-doom-border-soft px-3 py-1 text-[9px] text-doom-faint">
-              tab or enter completes · esc closes
+            <p className="flex items-center gap-1.5 border-t border-doom-border-soft px-3 py-1 text-[9px] text-doom-faint">
+              <Kbd>tab</Kbd> or <Kbd>enter</Kbd> completes · <Kbd>esc</Kbd> closes
             </p>
           </div>
         ) : null}
         <div className="flex items-start gap-2.5 px-3.5 pt-3">
           <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
-          <textarea
+          <Textarea
+            bare
             ref={inputRef}
             data-testid="composer-input"
             value={draft}
@@ -252,7 +260,7 @@ export function Composer() {
             }}
             rows={1}
             placeholder={placeholder}
-            className="min-h-[20px] min-w-0 flex-1 resize-none bg-transparent text-[13px] leading-relaxed text-doom-hi outline-none placeholder:text-doom-faint disabled:opacity-50"
+            className="min-h-[20px] flex-1 text-[13px] leading-relaxed"
           />
         </div>
         <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
@@ -271,35 +279,31 @@ export function Composer() {
           ) : null}
           <span className="min-w-0 flex-1" />
           {streaming ? (
-            <button
-              type="button"
-              data-testid="composer-abort"
-              onClick={() => abortRun()}
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-[#6B3A3A] bg-[#332428] px-3 text-[11px] font-bold text-doom-red hover:bg-[#3d2b30]"
-            >
-              <span className="inline-block h-[7px] w-[7px] bg-doom-red" />
+            <Button variant="danger-outline" size="md" data-testid="composer-abort" onClick={() => abortRun()}>
+              <StopIcon className="h-2 w-2 fill-current" />
               abort
-            </button>
+            </Button>
           ) : null}
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="md"
             data-testid="composer-queue"
             onClick={queue}
             disabled={!attached || !draft.trim()}
             title="deliver after the current run settles"
-            className="h-7 shrink-0 rounded-md border border-doom-border px-3 text-[11px] text-doom-dim hover:border-doom-blue/40 hover:text-doom-hi disabled:opacity-40"
           >
             queue
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
             data-testid="composer-send"
             onClick={submit}
             disabled={!attached || !draft.trim()}
-            className="h-7 shrink-0 rounded-md bg-doom-blue px-3.5 text-[11px] font-bold text-doom-rail hover:brightness-110 disabled:opacity-40"
+            className="px-3.5"
           >
             {streaming ? 'steer' : 'send'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

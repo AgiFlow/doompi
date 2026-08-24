@@ -35,7 +35,7 @@ describe('web runner runs', () => {
     expect(parseRunnerRecord('not json')).toBeUndefined();
   });
 
-  it('projects the view without node-only fields and keeps the exit', () => {
+  it('projects the view without host-only fields, keeping the log path and the exit', () => {
     const view = toRunnerRunView(
       record({
         state: 'completed',
@@ -59,6 +59,7 @@ describe('web runner runs', () => {
       state: 'completed',
       promoted: true,
       startedAt: '2026-08-24T11:00:00.000Z',
+      logPath: '/tmp/api.log',
       exit: {
         reason: 'stopped',
         code: null,
@@ -67,7 +68,10 @@ describe('web runner runs', () => {
         finishedAt: '2026-08-24T11:30:00.000Z',
       },
     });
-    expect('logPath' in view).toBe(false);
+    // The log path is carried: the cockpit only ever receives a bounded tail,
+    // so naming the whole log is the only way a reader can reach it.
+    expect(view.logPath).toBe('/tmp/api.log');
+    expect('hostPid' in view).toBe(false);
     expect(toRunnerRunView(record({})).exit).toBeUndefined();
   });
 

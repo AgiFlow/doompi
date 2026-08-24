@@ -1,6 +1,6 @@
 import type { LeaderBindingContribution } from '@agimon-ai/doompi-web-contracts';
 import { describe, expect, it } from 'vitest';
-import { leaderGroup } from '../../src/web/lib/leaderTree.ts';
+import { leaderConflicts, leaderGroup } from '../../src/web/lib/leaderTree.ts';
 
 const WORKFLOWS = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };
 const noop = (): void => undefined;
@@ -128,5 +128,41 @@ describe('leaderGroup', () => {
         [],
       )?.options[0],
     ).toMatchObject({ binding: { id: 'leaf' }, children: [] });
+  });
+});
+
+describe('leaderConflicts', () => {
+  const enter: LeaderBindingContribution = {
+    id: 'first',
+    path: [
+      { key: 'g', label: 'goal' },
+      { key: 'e', label: 'enter' },
+    ],
+    command: 'one',
+  };
+  const toggle: LeaderBindingContribution = {
+    id: 'second',
+    path: [
+      { key: 'g', label: 'goals' },
+      { key: 'e', label: 'toggle' },
+    ],
+    command: 'two',
+  };
+  const leaf: LeaderBindingContribution = { id: 'leaf', path: [{ key: 'g', label: 'goal' }], command: 'goal' };
+
+  it('is empty for bindings that only share a group worded the same way', () => {
+    expect(leaderConflicts(BINDINGS)).toEqual([]);
+  });
+
+  it('names the winner and loser of a leaf takeover and of a reworded group', () => {
+    expect(leaderConflicts([enter, toggle])).toEqual([
+      { kind: 'group-label', path: 'g', winner: enter, loser: toggle },
+      { kind: 'leaf-override', path: 'g e', winner: toggle, loser: enter },
+    ]);
+  });
+
+  it('reports a group crossing a leaf and a leaf covering a group as takeovers', () => {
+    expect(leaderConflicts([leaf, enter])).toEqual([{ kind: 'leaf-override', path: 'g', winner: enter, loser: leaf }]);
+    expect(leaderConflicts([enter, leaf])).toEqual([{ kind: 'leaf-override', path: 'g', winner: leaf, loser: enter }]);
   });
 });

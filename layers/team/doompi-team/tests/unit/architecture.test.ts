@@ -22,12 +22,12 @@ function readConfig(): VibeLintConfig {
 describe('import boundaries', () => {
   const config = readConfig();
 
-  it('uses the repository-owned canonical boundary preset, plus only the web plugin root', () => {
+  it('uses the repository-owned canonical boundary preset and declares no boundaries of its own', () => {
     expect(config.extends).toContain('doom-extension/recommended');
-    // web/ hosts the cockpit plugin, a root the doom-extension vocabulary
-    // does not know; it and the tests override that reaches it are the only
-    // package-local boundaries allowed here.
-    expect(config.boundaries?.map((boundary) => boundary.name)).toEqual(['web-plugin', 'tests']);
+    // web/ hosts the cockpit plugin, a root outside the src vocabulary; the
+    // doom-extension preset carries its boundary (web-plugin) and the tests
+    // boundary that reaches it, so a package-local block would only drift.
+    expect(config.boundaries).toBeUndefined();
   });
 
   it('enforces deterministic boundary findings as errors', () => {

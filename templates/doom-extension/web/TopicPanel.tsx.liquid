@@ -1,0 +1,41 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import { useStore } from '@tanstack/react-store';
+import { {{ topic | camelCase }} } from './{{ topic | camelCase }}Store.ts';
+
+/**
+ * The {{ pluginId }} tab: the session's items as the hub reports them. Reads
+ * come from the store; acting on the session goes through the sender the
+ * host passes in, as the slash verb the package registers.
+ */
+export function {{ topic | pascalCase }}Panel({ sessionId, sendSessionFrame }: WebPluginSlotProps) {
+  const { items } = useStore({{ topic | camelCase }}.store, (state) => {{ topic | camelCase }}.select(state, sessionId));
+
+  if (items.length === 0) {
+    return (
+      <p data-testid="{{ pluginId }}-empty" className="px-6 py-4 text-[11px] text-doom-faint">
+        nothing reported yet
+      </p>
+    );
+  }
+
+  return (
+    <div data-testid="{{ pluginId }}-panel" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-6 py-4">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          data-testid={`{{ pluginId }}-item-${item.id}`}
+          data-item-state={item.state}
+          className="flex items-center gap-2 rounded-[5px] px-2 py-1 text-left text-[11px] text-doom-text hover:bg-doom-panel"
+          onClick={() => {
+            if (sessionId === null) return;
+            sendSessionFrame(sessionId, { type: 'prompt', message: `/{{ pluginId }} ${item.id}` });
+          }}
+        >
+          <span className="min-w-0 flex-1 truncate font-bold">{item.name}</span>
+          <span className="shrink-0 text-[9px] text-doom-faint">{item.state}</span>
+        </button>
+      ))}
+    </div>
+  );
+}

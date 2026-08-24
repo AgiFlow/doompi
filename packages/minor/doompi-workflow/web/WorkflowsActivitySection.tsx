@@ -1,18 +1,19 @@
+import { Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import { type WorkflowActivityTone, workflowActivityRows } from './workflowActivity.ts';
-import { focusRun, workflowsStore } from './workflowsStore.ts';
+import { focusRun, workflows } from './workflowsStore.ts';
 
 const TICK_MS = 10_000;
 const WORKFLOWS_TAB = 'workflows';
 
-const TONE_DOT: Readonly<Record<WorkflowActivityTone, string>> = {
-  running: 'bg-doom-yellow',
-  paused: 'bg-doom-yellow',
-  failed: 'bg-doom-red',
-  done: 'bg-doom-green',
-  skipped: 'bg-doom-faint/40',
+const TONE_DOT: Readonly<Record<WorkflowActivityTone, DotTone>> = {
+  running: 'yellow',
+  paused: 'yellow',
+  failed: 'red',
+  done: 'green',
+  skipped: 'muted',
 };
 
 const TONE_DETAIL: Readonly<Record<WorkflowActivityTone, string>> = {
@@ -29,7 +30,7 @@ const TONE_DETAIL: Readonly<Record<WorkflowActivityTone, string>> = {
  * signal the runtime publishes, which only says the mode is installed.
  */
 export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotProps) {
-  const runs = useStore(workflowsStore, (state) => (sessionId === null ? [] : (state.bySession[sessionId] ?? [])));
+  const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
           className="flex min-w-0 flex-col gap-0.5 rounded-[5px] px-1 py-1 text-left hover:bg-doom-panel"
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[row.tone]}`} />
+            <Dot tone={TONE_DOT[row.tone]} pulse={row.tone === 'running'} />
             <span
               className={`min-w-0 flex-1 truncate text-[10px] font-bold ${
                 row.tone === 'running' || row.tone === 'paused' ? 'text-doom-hi' : 'text-doom-dim'

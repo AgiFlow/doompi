@@ -155,3 +155,46 @@ test('previews the files a prompt mentions and renders the reply as markdown', a
   await expect(reply.locator('code')).toHaveText('code');
   await expect(reply.locator('li')).toHaveText('item');
 });
+
+test('follows the newest reply, and stops following once the reader scrolls back', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const timeline = page.getByTestId('timeline');
+  const atBottom = () =>
+    timeline.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight < 48);
+
+  cockpit.session.emit({ type: 'agent_start' });
+  for (let line = 0; line < 60; line += 1) {
+    cockpit.session.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: `line ${String(line)}\n` },
+    });
+  }
+  await expect(timeline).toContainText('line 59');
+  // A run the reader is watching keeps the newest line in view.
+  await expect.poll(atBottom).toBe(true);
+  await expect(page.getByTestId('timeline-jump')).toBeHidden();
+
+  // Reading back through the transcript unpins it: more output must not yank
+  // the reader to the bottom mid-sentence.
+  await timeline.evaluate((element) => element.scrollTo({ top: 0 }));
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'arrived while reading\n' },
+  });
+  await expect(page.getByTestId('timeline-jump')).toBeVisible();
+  expect(await atBottom()).toBe(false);
+
+  // The way back is one click, and it starts following again.
+  await page.getByTestId('timeline-jump').click();
+  await expect.poll(atBottom).toBe(true);
+  await expect(page.getByTestId('timeline-jump')).toBeHidden();
+
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'and after that\n' },
+  });
+  await expect(timeline).toContainText('and after that');
+  await expect.poll(atBottom).toBe(true);
+});

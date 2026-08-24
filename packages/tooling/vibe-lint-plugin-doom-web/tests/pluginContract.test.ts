@@ -1,17 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import doomWebPlugin, {
+  doomComponentsLayerBoundary,
   doomWebLayerBoundary,
   doomWebPlugin as namedPlugin,
   noCrossFeatureImport,
+  noRawThemeColor,
   patterns,
   recommended,
   rules,
   webFileNaming,
 } from '../src/index.js';
 
-const EXPECTED_RULE_IDS = ['doom-web-layer-boundary', 'no-cross-feature-import', 'web-file-naming'] as const;
+const EXPECTED_RULE_IDS = [
+  'doom-components-layer-boundary',
+  'doom-web-layer-boundary',
+  'no-cross-feature-import',
+  'no-raw-theme-color',
+  'web-file-naming',
+] as const;
 
 const EXPECTED_PATTERN_IDS = [
+  'doom-components-components',
+  'doom-components-icons',
+  'doom-components-lib',
+  'doom-components-styles',
+  'doom-components-theme',
+  'doom-components-types',
   'doom-web-adapters',
   'doom-web-bin',
   'doom-web-client-app',
@@ -39,7 +53,13 @@ describe('Doom web plugin contract', () => {
 
   it('publishes the complete deterministic rule set', () => {
     expect(Object.keys(rules).sort()).toEqual([...EXPECTED_RULE_IDS]);
-    expect(Object.values(rules)).toEqual([doomWebLayerBoundary, noCrossFeatureImport, webFileNaming]);
+    expect(Object.values(rules)).toEqual([
+      doomComponentsLayerBoundary,
+      doomWebLayerBoundary,
+      noCrossFeatureImport,
+      noRawThemeColor,
+      webFileNaming,
+    ]);
     expect(
       Object.values(rules).every(
         ({ check, preflight, rationale, rule }) =>
@@ -56,6 +76,8 @@ describe('Doom web plugin contract', () => {
     expect(Object.keys(patterns).sort()).toEqual([...EXPECTED_PATTERN_IDS]);
     expect(patterns['doom-web-client-features']?.includes).toEqual(['src/web/features/**']);
     expect(patterns['doom-web-metadata']?.includes).toContain('playwright.config.ts');
+    expect(patterns['doom-components-components']?.includes).toEqual(['src/components/**']);
+    expect(patterns['doom-components-theme']?.includes).toEqual(['src/theme/**', 'themes/**']);
     expect(Object.values(patterns).every(({ description }) => description.length > 0)).toBe(true);
   });
 });

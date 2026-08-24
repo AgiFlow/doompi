@@ -16,8 +16,8 @@ export function SettingsMenu({ active }: { active: string | undefined }) {
             params={{ section: section.id }}
             data-testid={`settings-section-${section.id}`}
             data-active={current}
-            className={`flex flex-col gap-0.5 rounded-md px-[11px] py-2 ${
-              current ? 'bg-[#21313F]' : 'hover:bg-doom-panel'
+            className={`flex flex-col gap-0.5 rounded-md px-[11px] py-2 transition-colors ${
+              current ? 'bg-doom-tint-blue' : 'hover:bg-doom-panel'
             }`}
           >
             <span className={`text-[12px] font-bold ${current ? 'text-doom-blue' : 'text-doom-hi'}`}>

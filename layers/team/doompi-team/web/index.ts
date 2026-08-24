@@ -2,12 +2,13 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { AgentsActivitySection } from './AgentsActivitySection.tsx';
 import { SubagentsPanel } from './SubagentsPanel.tsx';
-import { bindSubagentsRuntime, subagentRunsChannel, subagentsStore, visibleRuns } from './subagentsStore.ts';
+import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
+import { subagentRunsChannel, subagents, visibleRuns } from './subagentsStore.ts';
 import { teamToolRenderers } from './toolRenderers.ts';
 
 /** The tab badge: every run the session's fleet currently shows. */
 export function useSubagentsBadge(sessionId: string | null): number {
-  return useStore(subagentsStore, (state) => visibleRuns(state, sessionId).length);
+  return useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)).length);
 }
 
 const AGENTS_GROUP = { key: 'a', label: 'agents', detail: 'subagent resources and runs' };
@@ -30,5 +31,6 @@ export const webPlugin = defineWebPlugin({
   // footer's one-line summary.
   activitySections: [{ id: 'agents', component: AgentsActivitySection }],
   toolRenderers: teamToolRenderers,
-  start: bindSubagentsRuntime,
+  // The run drawer's action row is open to independent plugins.
+  slots: [RUN_ACTIONS_SLOT],
 });

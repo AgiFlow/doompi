@@ -1,0 +1,65 @@
+import type { HubChannelSource, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import { {{ topic | camelCase }}ChannelType, type {{ topic | pascalCase }}ItemView } from '../types/web{{ topic | pascalCase }}.ts';
+
+/** A live source of one session's items; close stops it. */
+export interface {{ topic | pascalCase }}Source {
+  close(): void;
+}
+
+/**
+ * Watches one session's items and reports every change. The hub runs in its
+ * own process, so read what the session's extension writes (a state file,
+ * a registry directory) rather than the extension itself. Replace this stub.
+ */
+export function watch{{ topic | pascalCase }}(
+  _sessionId: string,
+  onChange: (items: {{ topic | pascalCase }}ItemView[]) => void,
+): {{ topic | pascalCase }}Source {
+  onChange([]);
+  return { close: () => undefined };
+}
+
+/**
+ * The {{ pluginId }} data channel: one watcher per managed session, published
+ * as { items } payloads under the '{{ channelName }}' frame type.
+ */
+export function create{{ topic | pascalCase }}Channel(
+  watch: typeof watch{{ topic | pascalCase }} = watch{{ topic | pascalCase }},
+): WebHubChannel {
+  return {
+    frameType: {{ topic | camelCase }}ChannelType,
+    start(host) {
+      const latest = new Map<string, {{ topic | pascalCase }}ItemView[]>();
+      const sources = new Map<string, {{ topic | pascalCase }}Source>();
+      const channelSource: HubChannelSource = {
+        payloadFor(scope) {
+          const items = latest.get(scope.sessionId);
+          return items === undefined ? undefined : { items };
+        },
+        sessionAdded(scope) {
+          sources.set(
+            scope.sessionId,
+            watch(scope.sessionId, (items) => {
+              latest.set(scope.sessionId, items);
+              host.publish(scope.sessionId, { items });
+            }),
+          );
+        },
+        sessionRemoved(sessionId) {
+          sources.get(sessionId)?.close();
+          sources.delete(sessionId);
+          latest.delete(sessionId);
+        },
+        close() {
+          for (const source of sources.values()) source.close();
+          sources.clear();
+          latest.clear();
+        },
+      };
+      return channelSource;
+    },
+  };
+}
+
+/** The named export the hub imports from the built entry the doompiWeb block names. */
+export const webHubChannels: readonly WebHubChannel[] = [create{{ topic | pascalCase }}Channel()];

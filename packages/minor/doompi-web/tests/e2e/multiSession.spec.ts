@@ -72,7 +72,7 @@ test('updates a card live while its session is not focused', async ({ page, cock
 
   cockpit.sessions[1].emit({ type: 'agent_start' });
 
-  const status = page.getByTestId('session-card-s2').getByTestId('session-card-status');
+  const status = page.getByTestId('session-card-s2').getByTestId('session-status');
   await expect(status).toContainText('running ·');
   await expect(page.getByTestId('sessions-running-rail')).toHaveText('1 running');
   await expect(page.getByTestId('sessions-running')).toHaveText('1 running');
@@ -80,7 +80,7 @@ test('updates a card live while its session is not focused', async ({ page, cock
   await expect(page.getByTestId('timeline-empty')).toBeVisible();
 
   cockpit.sessions[1].emit({ type: 'agent_settled' });
-  await expect(status).toContainText('finished its work');
+  await expect(status).toContainText('done · waiting for you');
 });
 
 test('switches focus by card click and by ordinal digit', async ({ page, cockpit }) => {
@@ -111,7 +111,7 @@ test('keeps a refusal scoped to the session it hits', async ({ page, cockpit }) 
   const release = await cockpit.sessions[1].holdFromAnotherClient();
 
   // The rail reports it; the overlay stays away while another session is focused.
-  const status = page.getByTestId('session-card-s2').getByTestId('session-card-status');
+  const status = page.getByTestId('session-card-s2').getByTestId('session-status');
   await expect(status).toHaveText('another cockpit holds this session');
   await expect(page.getByTestId('refused-card')).toBeHidden();
 

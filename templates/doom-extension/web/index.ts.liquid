@@ -1,0 +1,30 @@
+import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { useStore } from '@tanstack/react-store';
+import { {{ topic | pascalCase }}Panel } from './{{ topic | pascalCase }}Panel.tsx';
+import { {{ topic | camelCase }}, {{ topic | camelCase }}Channel } from './{{ topic | camelCase }}Store.ts';
+
+/** The tab badge: how many items the session currently reports; 0 hides it. */
+export function use{{ topic | pascalCase }}Badge(sessionId: string | null): number {
+  return useStore({{ topic | camelCase }}.store, (state) => {{ topic | camelCase }}.select(state, sessionId).items.length);
+}
+
+/**
+ * This package's cockpit presence: the named export the generated plugin
+ * registry imports. Plugins are independent, so nothing here depends on
+ * install order; every relation to another plugin resolves by name.
+ */
+export const webPlugin = defineWebPlugin({
+  id: '{{ pluginId }}',
+  tabs: [
+    {
+      id: '{{ pluginId }}',
+      label: '{{ pluginId }}',
+      panel: {{ topic | pascalCase }}Panel,
+      useBadge: use{{ topic | pascalCase }}Badge,
+    },
+  ],
+  channels: [{{ topic | camelCase }}Channel],
+  // Open a slot for independent plugins, or fill one they or the host declare:
+  //   slots: [defineSlot({ slot: '{{ pluginId }}.actions' })],
+  //   fills: [{ slot: 'activity', id: '{{ pluginId }}', component: {{ topic | pascalCase }}Section }],
+});

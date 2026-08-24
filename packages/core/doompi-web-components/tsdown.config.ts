@@ -1,0 +1,30 @@
+import { defineConfig } from 'tsdown';
+
+/**
+ * One entry per public subpath, unbundled so a consumer's bundler tree-shakes
+ * component by component. The browser platform keeps node builtins out of a
+ * package that only ever renders in a page; the extensions are pinned because
+ * that platform would otherwise name the ESM output .js, and every DoomPi
+ * package publishes .mjs / .cjs.
+ */
+export const tsdownConfig = defineConfig({
+  entry: { '*': 'src/exports/**/*.ts' },
+  clean: true,
+  dts: { incremental: true, parallel: false, eager: true },
+  exports: false,
+  format: ['esm', 'cjs'],
+  minify: {
+    compress: true,
+    mangle: { toplevel: true },
+    codegen: { removeWhitespace: true },
+  },
+  platform: 'browser',
+  outExtensions: ({ format }) => ({
+    js: format === 'es' ? '.mjs' : '.cjs',
+    dts: format === 'es' ? '.d.mts' : '.d.cts',
+  }),
+  sourcemap: true,
+  unbundle: true,
+});
+
+export { tsdownConfig as default };

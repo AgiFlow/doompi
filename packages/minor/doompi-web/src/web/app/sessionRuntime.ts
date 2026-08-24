@@ -10,6 +10,7 @@ import {
 import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
+import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applySessionFrame, dropSessionStore, refreshSessionFacts, resetSessionStore } from '../stores/sessionStore.ts';
 import {
   applySessionBacklog,
@@ -82,7 +83,15 @@ export function startSessionRuntime(): () => void {
         case SESSION_FRAME_TYPE: {
           if (typeof frame.sessionId !== 'string' || !isRecord(frame.frame)) return;
           applySessionFrame(frame.sessionId, frame.frame);
-          if (frame.frame.type === 'agent_settled') refreshSessionFacts(frame.sessionId);
+          // A select the bar asked for becomes the bar's popover; the claim is
+          // settled here, at frame time, so no surface renders it twice.
+          if (frame.frame.type === 'extension_ui_request' && frame.frame.method === 'select') {
+            claimDialogMenu(typeof frame.frame.id === 'string' ? frame.frame.id : '');
+          }
+          if (frame.frame.type === 'agent_settled') {
+            clearPendingMenu();
+            refreshSessionFacts(frame.sessionId);
+          }
           return;
         }
         default:

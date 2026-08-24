@@ -99,6 +99,8 @@ boilerplate:
       Run pnpm fixcode in the generated package before the first lint. Rendered names change line widths, so a template signature that wraps in the source can render as a single line the formatter wants joined.
 
       Pi packages use version 0.84.2 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
+
+      A cockpit (web) presence is not generated here; add it with the scaffold-doom-web-plugin feature. It lives in web/, outside the src vocabulary, and is governed by the web-plugin-* rules.
 features:
   - name: scaffold-doom-prompt
     description: Add one package-owned DoomPi Help prompt under src/prompts for either extension authoring or user guidance.
@@ -286,3 +288,58 @@ features:
     patterns:
       - src/adapters/**/*.ts
       - src/types/**/*.ts
+  - name: scaffold-doom-web-plugin
+    description: Add this package's cockpit (web) plugin under web/ with its per-session store, hub data channel, shared view types, and store test.
+    variables_schema:
+      type: object
+      properties:
+        pluginId:
+          type: string
+          description: The kebab-case web plugin id, also the tab id and URL segment; unique across every installed plugin
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          maxLength: 48
+          example: runners
+        topic:
+          type: string
+          description: camelCase stem for the store, panel, view types, and channel module names
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: runners
+        channelName:
+          type: string
+          description: The snake_case wire frame type the hub publishes and the plugin claims; unique across every installed plugin
+          pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          maxLength: 48
+          example: runner_runs
+      required:
+        - pluginId
+        - topic
+        - channelName
+      additionalProperties: false
+    includes:
+      - web/index.ts
+      - web/topicStore.ts->web/{{ topic | camelCase }}Store.ts
+      - web/TopicPanel.tsx->web/{{ topic | pascalCase }}Panel.tsx
+      - web/tsconfig.json
+      - src/types/webTopic.ts->src/types/web{{ topic | pascalCase }}.ts
+      - src/adapters/webTopicChannel.ts->src/adapters/web{{ topic | pascalCase }}Channel.ts
+      - src/exports/webHub.ts
+      - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
+    instruction: |-
+      Generate the package's cockpit plugin: web/index.ts exporting webPlugin through defineWebPlugin, web/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its channel, web/{{ topic | pascalCase }}Panel.tsx as the tab, src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types both halves share, src/adapters/web{{ topic | pascalCase }}Channel.ts as the hub's data source, and src/exports/webHub.ts as the built hub entry.
+
+      The rules: the store record is the whole per-session state (the hub's last payload plus this page's ephemeral state), components read it with useStore over the store's select and act through props.sendSessionFrame, tool cards receive the session statuses as props, and no web/ module keeps a top-level let. web/ may import only react, @tanstack/store, @tanstack/react-store, @agimon-ai/doompi-web-contracts, @agimon-ai/doompi-web-components, its own web/** and src/types/**; plugins never import each other. Plugins are independent: open a slot with slots: [defineSlot({ slot: '{{ pluginId }}.<name>' })] and render it with props.renderSlot; fill another plugin's or the host's slot with fills; every relation resolves by name after install, so never depend on order, and a collision is an install diagnostic, not a failure.
+
+      Complete the package integration after generation:
+      - Add the doompiWeb block to package.json: pluginId "{{ pluginId }}", channels ["{{ channelName }}"], client "./web/index.ts", hub { entry "./src/exports/webHub.ts", dist "./dist/webHub.mjs" }, and registrationOrder only if this plugin must install before or after another for a tool matcher or start hook (it is an optional tiebreak, default 1000).
+      - Add "web" and "src/types/web{{ topic | pascalCase }}.ts" to the files allowlist, and a "./web-hub" export pointing at dist/webHub.d.mts, dist/webHub.mjs, dist/webHub.cjs (tsdown builds it from src/exports).
+      - Add @agimon-ai/doompi-web-contracts (workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, and @types/react 19.2.7 to devDependencies; add @agimon-ai/doompi-web-components (workspace:*) to dependencies only if the panel uses it.
+      - Change the typecheck script to "tsc --noEmit && tsc --noEmit -p web/tsconfig.json".
+      - Replace the placeholder item view and the hub watcher stub with the package's real records and source; the channel name constant in src/types must equal the doompiWeb channels entry.
+      - Run pnpm install, pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on web/, src/types, src/adapters/web*, and package.json.
+      - To iterate with hot reload, run the cockpit's dev loop: the hub on 7433, then pnpm dev in packages/minor/doompi-web with DOOMPI_WEB_PLUGIN_ROOTS naming this package (or after a doompi sync), and open port 7434.
+    patterns:
+      - web/**
+      - src/types/web*.ts
+      - src/adapters/web*Channel.ts
+      - src/exports/webHub.ts

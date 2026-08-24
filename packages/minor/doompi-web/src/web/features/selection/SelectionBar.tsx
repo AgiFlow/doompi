@@ -1,11 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
-import { useStore } from '@tanstack/react-store';
-import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition.ts';
-import type { AgentInfo, ModelChoice } from '../../lib/sessionModel.ts';
-import { parseSelection } from '../../lib/statusLine.ts';
-import { setPendingMenu } from '../../stores/menuStore.ts';
 import {
+  Button,
+  ChevronDownIcon,
+  Input,
+  Kbd,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverFooter,
+  PopoverHeader,
+  PopoverTrigger,
+  SectionLabel,
+  Spinner,
+} from '@agimon-ai/doompi-web-components';
+import { useStore } from '@tanstack/react-store';
+import { useEffect, useState } from 'react';
+import { PluginSurface } from '../../components/PluginSurface.tsx';
+import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
+import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition.ts';
+import type { AgentInfo, DialogRequest, ModelChoice } from '../../lib/sessionModel.ts';
+import { focusPrompt } from '../../lib/promptFocus.ts';
+import { parseSelection } from '../../lib/statusLine.ts';
+import { menuStore, setPendingMenu } from '../../stores/menuStore.ts';
+import {
+  answerDialogValue,
+  cancelDialog,
   loadModelChoices,
   runCommand,
   selectModel,
@@ -14,26 +32,149 @@ import {
 } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 
-function Caret({ className }: { className: string }) {
-  return (
-    <svg viewBox="0 0 10 10" className={`h-[10px] w-[10px] shrink-0 ${className}`} aria-hidden>
-      <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-// The mockup's colour per axis; a plugin axis the host has no entry for reads
-// in the neutral tone.
+// The known axes keep their mockup styling; a plugin-declared axis the host
+// has no entry for reads in the neutral tone.
 const AXIS_TONE: Readonly<Record<string, string>> = {
   profile: 'text-doom-green',
   domains: 'text-doom-violet',
 };
+
+const MENU_TITLE: Readonly<Record<string, string>> = {
+  mode: 'MAJOR MODE',
+  profile: 'PROFILE',
+  domains: 'DOMAINS',
+  minor: 'MINOR MODES',
+};
+
+const MENU_ACCENT: Readonly<Record<string, { border: string; title: string }>> = {
+  mode: { border: 'border-doom-edge-blue', title: 'text-doom-blue' },
+  profile: { border: 'border-doom-edge-green', title: 'text-doom-green' },
+  domains: { border: 'border-doom-edge-violet', title: 'text-doom-violet' },
+  minor: { border: 'border-doom-edge-magenta', title: 'text-doom-magenta' },
+};
+
+const DEFAULT_ACCENT = { border: 'border-doom-border', title: 'text-doom-hi' };
 
 const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
   on: 'text-doom-hi',
   off: 'text-doom-dim',
   unavailable: 'text-doom-faint/60',
 };
+
+/**
+ * A select the user asked for from this bar, rendered as the button's own
+ * popover rather than a centered modal: the question came from here, so the
+ * answer belongs here. It is the same dialog and the same replies; only the
+ * frame differs.
+ */
+function AxisMenu({ menu, dialog }: { menu: string; dialog: DialogRequest }) {
+  const accent = MENU_ACCENT[menu] ?? DEFAULT_ACCENT;
+  return (
+    <PopoverContent
+      side="top"
+      align="start"
+      data-testid="dialog"
+      data-dialog-method={dialog.method}
+      data-dialog-menu={menu}
+      onCloseAutoFocus={(event) => {
+        event.preventDefault();
+        focusPrompt();
+      }}
+      onKeyDown={(event) => {
+        const index = Number.parseInt(event.key, 10) - 1;
+        const option = Number.isInteger(index) ? dialog.options[index] : undefined;
+        if (option === undefined) return;
+        event.preventDefault();
+        event.stopPropagation();
+        answerDialogValue(dialog.id, option);
+      }}
+      className={`w-[420px] ${accent.border}`}
+    >
+      <PopoverHeader>
+        <span data-testid="dialog-title" className={`text-[10px] font-bold tracking-wide ${accent.title}`}>
+          {MENU_TITLE[menu] ?? menu.toUpperCase()}
+        </span>
+        <span className="truncate text-[9px] text-doom-faint">{dialog.title}</span>
+      </PopoverHeader>
+      <div className="flex max-h-[320px] flex-col gap-0.5 overflow-y-auto p-1.5">
+        {dialog.options.map((option, index) => (
+          <button
+            key={option}
+            type="button"
+            data-testid={`dialog-option-${index}`}
+            title={option}
+            onClick={() => answerDialogValue(dialog.id, option)}
+            className="flex items-center gap-2.5 rounded-[5px] px-2 py-[7px] text-left outline-none hover:bg-doom-tint-blue focus-visible:bg-doom-tint-blue"
+          >
+            <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border border-doom-border text-[8px] font-bold text-doom-faint">
+              {index + 1}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[12px] text-doom-text">{option}</span>
+          </button>
+        ))}
+      </div>
+      <PopoverFooter>
+        <span data-testid="dialog-hints" className="flex items-center gap-1.5">
+          <Kbd>1-9</Kbd> select · <Kbd>esc</Kbd> closes
+        </span>
+        <Button variant="ghost" size="xs" data-testid="dialog-cancel" onClick={() => cancelDialog(dialog.id)}>
+          cancel
+        </Button>
+      </PopoverFooter>
+    </PopoverContent>
+  );
+}
+
+/**
+ * One selection axis: a button that asks the agent, and the menu the agent
+ * answers with. While the question is in flight the button says so, because
+ * the round trip runs through the session and can take a moment.
+ */
+function AxisButton({
+  name,
+  command,
+  pending,
+  claimedDialog,
+  children,
+  className,
+}: {
+  name: string;
+  command: string;
+  pending: boolean;
+  claimedDialog: DialogRequest | null;
+  children: React.ReactNode;
+  className: string;
+}) {
+  const open = claimedDialog !== null;
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && claimedDialog) cancelDialog(claimedDialog.id);
+      }}
+    >
+      <PopoverAnchor asChild>
+        <button
+          type="button"
+          data-testid={`axis-${name}`}
+          data-pending={pending}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title={pending ? `asking the session for ${name}…` : `change ${name}`}
+          onClick={() => {
+            setPendingMenu(name);
+            runCommand(command);
+          }}
+          className={className}
+        >
+          {children}
+          {pending ? <Spinner className="h-[10px] w-[10px]" /> : <ChevronDownIcon className="h-[10px] w-[10px]" />}
+        </button>
+      </PopoverAnchor>
+      {claimedDialog ? <AxisMenu menu={name} dialog={claimedDialog} /> : null}
+    </Popover>
+  );
+}
 
 /**
  * The minor-modes popup: state is derived from the statuses the session
@@ -43,52 +184,40 @@ const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
  * dialog, and modes compose, so any number can be on at once.
  */
 function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () => void }) {
-  const surface = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    surface.current?.focus();
-  }, []);
-
   const on = modes.filter((mode) => mode.availability === 'on').length;
-
   return (
-    <div
-      ref={surface}
-      tabIndex={-1}
-      data-testid="minor-popup"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose();
-      }}
-      onBlur={(event) => {
-        if (!surface.current?.contains(event.relatedTarget as Node | null)) onClose();
-      }}
-      className="absolute bottom-[42px] left-[170px] z-30 w-[430px] overflow-hidden rounded-lg border border-[#4A3358] bg-doom-panel shadow-2xl outline-none"
-    >
-      <div className="flex h-[34px] items-center justify-between border-b border-doom-border-soft bg-doom-deep px-3">
-        <span className="text-[10px] font-bold tracking-wide text-doom-magenta">MINOR MODES</span>
+    <PopoverContent side="top" align="start" data-testid="minor-popup" className="w-[430px] border-doom-edge-magenta">
+      <PopoverHeader>
+        <SectionLabel className="tracking-wide text-doom-magenta">minor modes</SectionLabel>
         <span className="text-[9px] text-doom-faint">{on} on</span>
-      </div>
-      <div className="flex flex-col gap-0.5 p-1.5">
+      </PopoverHeader>
+      <div className="flex max-h-[320px] flex-col gap-0.5 overflow-y-auto p-1.5">
         {modes.map((mode) => (
           <button
             key={mode.name}
             type="button"
             data-testid={`minor-${mode.name}`}
             data-availability={mode.availability}
-            title={`toggle ${mode.name}`}
+            title={`drive ${mode.name}`}
             onClick={() => {
+              // The runtime may answer with an opt-in picker; claiming the menu
+              // keeps that question on this chip, where it was asked, instead
+              // of throwing it to the middle of the screen.
+              setPendingMenu('minor');
               runCommand(`/minor ${mode.id}`);
               onClose();
             }}
-            className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left hover:bg-doom-deep ${mode.availability === 'on' ? 'bg-[#2E2136] hover:bg-[#382842]' : ''}`}
+            className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left outline-none transition-colors hover:bg-doom-deep focus-visible:bg-doom-deep ${
+              mode.availability === 'on' ? 'bg-doom-tint-magenta hover:brightness-125' : ''
+            }`}
           >
-            <span
-              className={`w-8 shrink-0 rounded px-1 py-0.5 text-center text-[8px] font-bold ${
-                mode.availability === 'on' ? 'bg-doom-magenta/25 text-doom-magenta' : 'bg-doom-deep text-doom-faint'
+            <Kbd
+              className={`w-8 justify-center ${
+                mode.availability === 'on' ? 'bg-doom-magenta/25 text-doom-magenta' : ''
               }`}
             >
               {mode.keys}
-            </span>
+            </Kbd>
             <span className={`flex-1 truncate text-[12px] ${AVAILABILITY_TONE[mode.availability]}`}>{mode.name}</span>
             {mode.detail ? (
               <span data-testid={`minor-detail-${mode.name}`} className="truncate text-[9px] text-doom-magenta">
@@ -99,18 +228,18 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
               <span className="text-[8px] text-doom-faint/60">n/a</span>
             ) : (
               <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${mode.availability === 'on' ? 'bg-doom-magenta' : 'bg-doom-faint/40'}`}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  mode.availability === 'on' ? 'bg-doom-magenta' : 'bg-doom-faint/40'
+                }`}
               />
             )}
           </button>
         ))}
       </div>
-      <div className="flex h-[30px] items-center border-t border-doom-border-soft bg-doom-deep px-3">
-        <span className="text-[9px] text-doom-faint">
-          click to toggle · a mode with several opt-ins asks · esc closes
-        </span>
-      </div>
-    </div>
+      <PopoverFooter>
+        <span>click to toggle · a mode with several opt-ins asks · esc closes</span>
+      </PopoverFooter>
+    </PopoverContent>
   );
 }
 
@@ -131,12 +260,10 @@ function ModelPopup({
   levels: string[];
   onClose: () => void;
 }) {
-  const surface = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
     loadModelChoices();
-    surface.current?.querySelector('input')?.focus();
   }, []);
 
   const needle = filter.trim().toLowerCase();
@@ -145,34 +272,27 @@ function ModelPopup({
     : models;
 
   return (
-    <div
-      ref={surface}
-      tabIndex={-1}
-      data-testid="model-popup"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') onClose();
-      }}
-      onBlur={(event) => {
-        if (!surface.current?.contains(event.relatedTarget as Node | null)) onClose();
-      }}
-      className="absolute bottom-[28px] right-0 z-30 w-[400px] overflow-hidden rounded-lg border border-[#4A4A33] bg-doom-panel shadow-2xl outline-none"
-    >
-      <div className="flex h-[34px] items-center justify-between border-b border-doom-border-soft bg-doom-deep px-3">
-        <span className="text-[10px] font-bold tracking-wide text-doom-yellow">MODEL</span>
-        <span className="text-[9px] text-doom-faint">{agent ? `${agent.provider}/${agent.model}` : ''}</span>
-      </div>
+    <PopoverContent side="top" align="end" data-testid="model-popup" className="w-[400px] border-doom-edge-yellow">
+      <PopoverHeader>
+        <SectionLabel className="tracking-wide text-doom-yellow">model</SectionLabel>
+        <span className="truncate text-[9px] text-doom-faint">{agent ? `${agent.provider}/${agent.model}` : ''}</span>
+      </PopoverHeader>
       <div className="border-b border-doom-border-soft p-1.5">
-        <input
+        <Input
           data-testid="model-filter"
           value={filter}
+          autoFocus
           placeholder="filter models…"
           onChange={(event) => setFilter(event.target.value)}
-          className="w-full rounded border border-doom-border bg-doom-deep px-2 py-1 text-[11px] text-doom-hi outline-none placeholder:text-doom-faint"
+          className="w-full px-2 py-1 text-[11px]"
         />
       </div>
       <div className="flex max-h-[260px] flex-col gap-0.5 overflow-y-auto p-1.5">
         {models.length === 0 ? (
-          <span className="px-2 py-1.5 text-[10px] text-doom-faint">asking the session for its models…</span>
+          <span className="flex items-center gap-2 px-2 py-1.5 text-[10px] text-doom-faint">
+            <Spinner />
+            asking the session for its models…
+          </span>
         ) : shown.length === 0 ? (
           <span className="px-2 py-1.5 text-[10px] text-doom-faint">no model matches</span>
         ) : null}
@@ -188,7 +308,9 @@ function ModelPopup({
                 selectModel(model.provider, model.id);
                 onClose();
               }}
-              className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left hover:bg-doom-deep ${current ? 'bg-[#33321F] hover:bg-[#3E3D26]' : ''}`}
+              className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left outline-none transition-colors hover:bg-doom-deep focus-visible:bg-doom-deep ${
+                current ? 'bg-doom-tint-yellow hover:brightness-125' : ''
+              }`}
             >
               <span className="w-20 shrink-0 truncate text-[9px] text-doom-faint">{model.provider}</span>
               <span className={`flex-1 truncate text-[12px] ${current ? 'text-doom-yellow' : 'text-doom-hi'}`}>
@@ -217,10 +339,10 @@ function ModelPopup({
                 selectThinkingLevel(level);
                 onClose();
               }}
-              className={`rounded px-1.5 py-0.5 text-[10px] ${
+              className={`rounded px-1.5 py-0.5 text-[10px] outline-none transition-colors ${
                 current
                   ? 'bg-doom-yellow/25 font-bold text-doom-yellow'
-                  : 'text-doom-dim hover:bg-doom-panel hover:text-doom-hi'
+                  : 'text-doom-dim hover:bg-doom-panel hover:text-doom-hi focus-visible:bg-doom-panel'
               }`}
             >
               {level}
@@ -228,14 +350,14 @@ function ModelPopup({
           );
         })}
       </div>
-    </div>
+    </PopoverContent>
   );
 }
 
 /**
  * The mockup's bottom bar: the DoomPi selection axes as buttons, the model,
  * and the context gauge. Buttons route through the same slash commands the
- * TUI uses; the agent's select dialog then opens as this bar's popover menu.
+ * TUI uses; the agent's select dialog then opens as that button's popover.
  */
 export function SelectionBar() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
@@ -247,6 +369,9 @@ export function SelectionBar() {
   const stats = useActiveSession((state) => state.stats);
   const models = useActiveSession((state) => state.models);
   const thinkingLevels = useActiveSession((state) => state.thinkingLevels);
+  const dialog = useActiveSession((state) => state.dialog);
+  const pendingMenu = useStore(menuStore, (state) => state.pending);
+  const claimed = useStore(menuStore, (state) => state.claimed);
   const [minorOpen, setMinorOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
 
@@ -255,10 +380,16 @@ export function SelectionBar() {
   const modes = minorModes(statuses, widgets, catalog);
   const activeMinors = modes.filter((mode) => mode.availability === 'on');
 
-  const ask = (menu: string, command: string): void => {
-    setPendingMenu(menu);
-    runCommand(command);
-  };
+  /** The dialog this axis asked for, when the claim named it and it is still open. */
+  const dialogFor = (name: string): DialogRequest | null =>
+    dialog !== null && claimed !== null && claimed.dialogId === dialog.id && claimed.menu === name ? dialog : null;
+  const minorDialog = dialogFor('minor');
+
+  const modeClass = `flex h-[21px] items-center gap-1.5 rounded-[3px] px-2 text-doom-rail transition-[filter,background-color] outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-doom-blue/50 ${
+    selection.pending ? 'bg-doom-yellow' : 'bg-doom-blue'
+  }`;
+  const axisClass =
+    'flex h-[21px] min-w-0 items-center gap-1.5 rounded-[3px] border border-doom-border px-2 transition-colors outline-none hover:border-doom-blue/50 focus-visible:ring-2 focus-visible:ring-doom-blue/50';
 
   return (
     <footer
@@ -266,27 +397,26 @@ export function SelectionBar() {
       data-pending={selection.pending}
       className="relative flex h-[34px] shrink-0 items-center gap-2 border-t border-doom-border bg-doom-rail px-3.5"
     >
-      <button
-        type="button"
-        data-testid="axis-mode"
-        onClick={() => ask('mode', 'mode')}
-        className={`flex h-[21px] items-center gap-1.5 rounded-[3px] px-2 ${
-          selection.pending ? 'bg-doom-yellow' : 'bg-doom-blue'
-        } text-doom-rail`}
+      <AxisButton
+        name="mode"
+        command="mode"
+        pending={pendingMenu === 'mode'}
+        claimedDialog={dialogFor('mode')}
+        className={modeClass}
       >
         <span data-testid="selection-mode" className="text-[10px] font-bold tracking-[0.08em]">
           {(selection.majorMode || 'mode').toUpperCase()}
         </span>
-        <Caret className="text-doom-rail" />
-      </button>
+      </AxisButton>
 
       {axes.map((axis) => (
-        <button
+        <AxisButton
           key={axis.name}
-          type="button"
-          data-testid={`axis-${axis.name}`}
-          onClick={() => ask(axis.name, axis.command)}
-          className="flex h-[21px] min-w-0 items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
+          name={axis.name}
+          command={axis.command}
+          pending={pendingMenu === axis.name}
+          claimedDialog={dialogFor(axis.name)}
+          className={axisClass}
         >
           <span
             data-testid={`selection-${axis.name}`}
@@ -296,56 +426,84 @@ export function SelectionBar() {
           >
             {axis.values.length === 0 ? axis.emptyLabel : axis.multi ? axis.values.join(', ') : `*${axis.values[0]}*`}
           </span>
-          <Caret className="text-doom-faint" />
-        </button>
+        </AxisButton>
       ))}
 
-      <button
-        type="button"
-        data-testid="axis-minor"
-        onClick={() => setMinorOpen((open) => !open)}
-        className={`flex h-[21px] items-center gap-1.5 rounded-[3px] px-2 ${
-          activeMinors.length > 0 ? 'bg-[#2E2136] text-doom-magenta' : 'border border-doom-border text-doom-faint'
-        }`}
+      <Popover
+        open={minorOpen || minorDialog !== null}
+        onOpenChange={(next) => {
+          if (next) {
+            setMinorOpen(true);
+            return;
+          }
+          if (minorDialog) cancelDialog(minorDialog.id);
+          setMinorOpen(false);
+        }}
       >
-        <span data-testid="minor-summary" className="text-[10px] font-bold">
-          {activeMinors[0]?.name ?? 'minor'}
-        </span>
-        {activeMinors.length > 1 ? <span className="text-[9px]">+{activeMinors.length - 1}</span> : null}
-        <Caret className={activeMinors.length > 0 ? 'text-doom-magenta' : 'text-doom-faint'} />
-      </button>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            data-testid="axis-minor"
+            title="minor modes"
+            className={`flex h-[21px] items-center gap-1.5 rounded-[3px] px-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-doom-blue/50 ${
+              activeMinors.length > 0
+                ? 'bg-doom-tint-magenta text-doom-magenta hover:brightness-125'
+                : 'border border-doom-border text-doom-faint hover:border-doom-blue/50'
+            }`}
+          >
+            <span data-testid="minor-summary" className="text-[10px] font-bold">
+              {activeMinors[0]?.name ?? 'minor'}
+            </span>
+            {activeMinors.length > 1 ? <span className="text-[9px]">+{activeMinors.length - 1}</span> : null}
+            <ChevronDownIcon className="h-[10px] w-[10px]" />
+          </button>
+        </PopoverTrigger>
+        {minorDialog ? (
+          <AxisMenu menu="minor" dialog={minorDialog} />
+        ) : minorOpen ? (
+          <MinorModesPopup modes={modes} onClose={() => setMinorOpen(false)} />
+        ) : null}
+      </Popover>
 
-      <PluginSurface slot="selectionBar" sessionId={activeId} />
+      <PluginSurface slot={HOST_SLOTS.selectionBar} sessionId={activeId} />
 
       <div className="min-w-0 flex-1" />
 
-      <div className="relative">
-        <button
-          type="button"
-          data-testid="axis-model"
-          onClick={() => setModelOpen((open) => !open)}
-          className="flex h-[21px] items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
-        >
-          <span data-testid="agent-model" className="text-[10px] text-doom-hi">
-            {agent?.model ?? '—'}
-          </span>
-          <span data-testid="agent-thinking" className="text-[10px] text-doom-yellow">
-            {agent?.thinkingLevel ?? ''}
-          </span>
-          <Caret className="text-doom-faint" />
-        </button>
+      <Popover open={modelOpen} onOpenChange={setModelOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" data-testid="axis-model" title="model and thinking level" className={axisClass}>
+            <span data-testid="agent-model" className="text-[10px] text-doom-hi">
+              {agent?.model ?? '—'}
+            </span>
+            <span data-testid="agent-thinking" className="text-[10px] text-doom-yellow">
+              {agent?.thinkingLevel ?? ''}
+            </span>
+            <ChevronDownIcon className="h-[10px] w-[10px] text-doom-faint" />
+          </button>
+        </PopoverTrigger>
         {modelOpen ? (
           <ModelPopup agent={agent} models={models} levels={thinkingLevels} onClose={() => setModelOpen(false)} />
         ) : null}
-      </div>
-      <span data-testid="top-context" className="text-[10px] text-doom-dim">
-        {stats?.contextPercent === null || stats === null ? 'ctx —' : `ctx ${Math.round(stats.contextPercent)}%`}
+      </Popover>
+
+      <span
+        data-testid="top-context"
+        title={
+          stats?.contextTokens != null && stats.contextWindow != null
+            ? `${stats.contextTokens.toLocaleString()} of ${stats.contextWindow.toLocaleString()} tokens`
+            : 'context usage, once the session reports it'
+        }
+        className="text-[10px] text-doom-dim"
+      >
+        {stats?.contextPercent == null ? 'ctx —' : `ctx ${Math.round(stats.contextPercent)}%`}
       </span>
-      <span data-testid="top-cost" className="text-[10px] text-doom-dim">
+      <span
+        data-testid="top-cost"
+        title={stats ? `${stats.totalTokens.toLocaleString()} tokens this session` : ''}
+        className="text-[10px] text-doom-dim"
+      >
         {stats ? `$${stats.cost.toFixed(2)}` : ''}
       </span>
-
-      {minorOpen ? <MinorModesPopup modes={modes} onClose={() => setMinorOpen(false)} /> : null}
     </footer>
   );
 }

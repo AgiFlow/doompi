@@ -42,12 +42,12 @@ describe('sessionStatusLine', () => {
 
   it('treats an unprompted but settled session as finished, not fresh', () => {
     expect(sessionStatusLine(input({ everPrompted: false, lastSettledAt: '2026-08-24T10:05:00.000Z' }), NOW)).toBe(
-      'The agent finished its work and is waiting for you.',
+      'done · waiting for you',
     );
   });
 
   it('falls back to the settled line', () => {
-    expect(sessionStatusLine(input(), NOW)).toBe('The agent finished its work and is waiting for you.');
+    expect(sessionStatusLine(input(), NOW)).toBe('done · waiting for you');
   });
 
   it('survives an unparseable timestamp', () => {

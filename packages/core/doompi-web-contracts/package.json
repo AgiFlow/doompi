@@ -50,6 +50,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "devDependencies": {
+    "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
     "@types/react": "19.2.7",
     "@vitest/coverage-v8": "4.1.11",
@@ -57,6 +58,9 @@
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@tanstack/store": "0.11.1"
   },
   "engines": {
     "node": ">=22.19.0"

@@ -28,6 +28,10 @@ const runnerNativePackages = new Set([
 ]);
 const toolingPackageDirectory = path.join(root, 'packages', 'tooling', 'vibe-lint-plugin-doom-extension');
 const toolingPackageName = '@agimon-ai/vibe-lint-plugin-doom-extension';
+// Rule plugins that govern a stack still in development: consumed inside the
+// repository as workspace dependencies, not released, so they are legal
+// workspace targets without joining the release group.
+const unreleasedToolingPackageNames = ['@agimon-ai/vibe-lint-plugin-doom-web'];
 const vibeLintVersion = '0.0.1-alpha.26';
 
 function readJson(file) {
@@ -74,11 +78,11 @@ const packageRecords = packageDirectories.map((directory, index) => ({
 }));
 const packageByName = new Map(packageRecords.map((record) => [record.manifest.name, record]));
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
-const workspacePackageNames = new Set([...ownedNames, toolingPackageName]);
+const workspacePackageNames = new Set([...ownedNames, toolingPackageName, ...unreleasedToolingPackageNames]);
 
-if (packageDirectories.length !== 41 || ownedNames.size !== 41) {
+if (packageDirectories.length !== 44 || ownedNames.size !== 44) {
   fail(
-    `Expected exactly 41 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 44 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {
@@ -266,5 +270,5 @@ if (rmuxPayloadCount !== 12) fail(`Expected 12 RMUX vendor files, found ${rmuxPa
 if (rtkPayloadCount !== 4) fail(`Expected 4 RTK vendor files, found ${rtkPayloadCount}`);
 
 console.log(
-  'Workspace audit passed: 41 runtime packages, 1 tooling package, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
+  'Workspace audit passed: 44 runtime packages, 2 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
 );

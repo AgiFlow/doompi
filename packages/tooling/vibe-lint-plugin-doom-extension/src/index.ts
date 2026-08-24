@@ -26,4 +26,8 @@ export {
   schemaPlacement,
   serviceBoundary,
   thinPiAdapter,
+  webPluginEntry,
+  webPluginImportAllowlist,
+  webPluginManifest,
+  webPluginNoModuleState,
 } from './rules/index.js';

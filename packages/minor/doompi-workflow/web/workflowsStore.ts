@@ -1,17 +1,15 @@
-import { defineSessionChannel } from '@agimon-ai/doompi-web-contracts';
-import { Store } from '@tanstack/store';
+import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
 import { WORKFLOW_RUNS_TYPE, type WorkflowRunView } from '../src/types/webWorkflows.ts';
 
-export interface WorkflowsState {
-  /** The workflow runs the hub last reported, per session id; presented order preserved. */
-  bySession: Record<string, WorkflowRunView[]>;
-  /** The run (workspace/runKey) the workflows tab shows, per session; the first run until someone picks. */
-  focusedRun: Record<string, string | undefined>;
+/** One session's record: the hub's last report plus the run this page is looking at. */
+export interface WorkflowsSession {
+  /** The workflow runs the hub last reported; presented order preserved. */
+  runs: WorkflowRunView[];
+  /** The run (workspace/runKey) the workflows tab shows; the first run until someone picks. */
+  focusedRun: string | undefined;
 }
 
-const initialState: WorkflowsState = { bySession: {}, focusedRun: {} };
-
-export const workflowsStore = new Store<WorkflowsState>(initialState);
+export const workflows = defineSessionStore<WorkflowsSession>({ runs: [], focusedRun: undefined });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -19,7 +17,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** Points the workflows tab at one run; the activity dock uses this before opening the tab. */
 export function focusRun(sessionId: string, identity: string | undefined): void {
-  workflowsStore.setState((state) => ({ ...state, focusedRun: { ...state.focusedRun, [sessionId]: identity } }));
+  workflows.update(sessionId, (current) => ({ ...current, focusedRun: identity }));
 }
 
 export interface WorkflowRunsPayload {
@@ -27,27 +25,11 @@ export interface WorkflowRunsPayload {
 }
 
 /** The plugin's session data channel: 'workflow_runs' payloads into the store. */
-export const workflowRunsChannel = defineSessionChannel<WorkflowRunsPayload>({
+export const workflowRunsChannel = workflows.channel<WorkflowRunsPayload>({
   channel: WORKFLOW_RUNS_TYPE,
   parse(input) {
     if (!isRecord(input) || !Array.isArray(input.runs)) return null;
     return { runs: input.runs.filter(isRecord) as unknown as WorkflowRunView[] };
   },
-  apply(sessionId, { runs }) {
-    workflowsStore.setState((state) => ({ ...state, bySession: { ...state.bySession, [sessionId]: runs } }));
-  },
-  drop(sessionId) {
-    workflowsStore.setState((state) => {
-      if (!(sessionId in state.bySession)) return state;
-      const bySession = { ...state.bySession };
-      const focusedRun = { ...state.focusedRun };
-      delete bySession[sessionId];
-      delete focusedRun[sessionId];
-      return { bySession, focusedRun };
-    });
-  },
+  reduce: (current, { runs }) => ({ ...current, runs }),
 });
-
-export function resetWorkflows(): void {
-  workflowsStore.setState(() => initialState);
-}

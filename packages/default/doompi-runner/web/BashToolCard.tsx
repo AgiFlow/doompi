@@ -1,5 +1,11 @@
 import type { ToolCallRenderProps, ToolResultRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { type BashStatusTone, bashResultView, formatBashCommand, formatBashFlags } from './bashToolFormat.ts';
+import {
+  type BashStatusTone,
+  bashResultDetails,
+  bashResultView,
+  formatBashCommand,
+  formatBashFlags,
+} from './bashToolFormat.ts';
 
 const STATUS_TONE: Record<BashStatusTone, string> = {
   running: 'text-doom-yellow',
@@ -27,6 +33,7 @@ export function BashCall({ args }: ToolCallRenderProps) {
  */
 export function BashResult({ result, output, expanded, isPartial, isError }: ToolResultRenderProps) {
   const view = bashResultView({ details: result?.details, output, expanded, isPartial, isError });
+  const logPath = bashResultDetails(result?.details).logPath;
   if (view.lines.length === 0 && view.status === null) return null;
   return (
     <div data-testid="tool-result-bash" className="flex flex-col gap-1">
@@ -42,6 +49,13 @@ export function BashResult({ result, output, expanded, isPartial, isError }: Too
           <span className={STATUS_TONE[view.status.tone]}>{view.status.glyph}</span>
           <span>{view.status.text}</span>
           {view.hidden > 0 ? <span>· {view.hidden} more line(s) above</span> : null}
+        </span>
+      ) : null}
+      {expanded && logPath !== undefined ? (
+        // The tail is bounded by the runner; the whole log only ever exists on
+        // disk, so the card names the file rather than pretending this is all.
+        <span data-testid="tool-result-bash-log" className="truncate text-doom-faint">
+          full log · <span className="text-doom-dim">{logPath}</span>
         </span>
       ) : null}
     </div>

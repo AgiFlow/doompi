@@ -62,12 +62,14 @@ describe('doompi-web package contract', () => {
     // doompi sync time, against whatever plugin packages the composition
     // installed. That makes the client toolchain a runtime concern: the
     // bundler subpath must work from an installed package, so Vite, React,
-    // Tailwind, the TanStack runtimes, and the plugin contracts ship as
-    // dependencies alongside the hono trio. Pi's coding agent ships too: the
-    // hub signs in to model providers through its ModelRuntime. No plugin
-    // package ever appears here: plugins are discovered from manifests,
-    // never depended on.
+    // Tailwind, the TanStack runtimes, the plugin contracts, and the shared
+    // component library ship as dependencies alongside the hono trio. Pi's
+    // coding agent ships too: the hub signs in to model providers through its
+    // ModelRuntime. The two foundation packages are the only DoomPi names
+    // here: a plugin package never is, because plugins are discovered from
+    // manifests, never depended on.
     expect(runtime).toEqual([
+      '@agimon-ai/doompi-web-components',
       '@agimon-ai/doompi-web-contracts',
       '@earendil-works/pi-coding-agent',
       '@hono/node-server',
@@ -86,7 +88,8 @@ describe('doompi-web package contract', () => {
       'tailwindcss',
       'vite',
     ]);
-    expect(runtime.some((name) => name.includes('doompi-') && name !== '@agimon-ai/doompi-web-contracts')).toBe(false);
+    const foundations = new Set(['@agimon-ai/doompi-web-components', '@agimon-ai/doompi-web-contracts']);
+    expect(runtime.some((name) => name.includes('doompi-') && !foundations.has(name))).toBe(false);
     // The bundler compiles src/web from the installed package, so the source
     // has to ship with it.
     expect(manifest.files).toEqual(expect.arrayContaining(['src']));

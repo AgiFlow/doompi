@@ -16,22 +16,6 @@ const MAX_ARGUMENTS = 3;
 /** Text lines kept in the collapsed result, before the card is expanded. */
 const COLLAPSED_RESULT_LINES = 12;
 
-/**
- * The statuses the matcher last saw. The host calls `matches` with the
- * session's statuses right before rendering a card, and the card itself
- * receives none, so the split it shows is remade from the same picture; a
- * stale value only degrades the label, never a claim.
- */
-let rememberedStatuses: Readonly<Record<string, string>> = {};
-
-export function rememberMcpStatuses(statuses: Readonly<Record<string, string>>): void {
-  rememberedStatuses = statuses;
-}
-
-export function rememberedMcpStatuses(): Readonly<Record<string, string>> {
-  return rememberedStatuses;
-}
-
 export interface McpToolIdentity {
   server: string;
   tool: string;

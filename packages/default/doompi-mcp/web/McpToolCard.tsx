@@ -5,7 +5,6 @@ import {
   mcpArgumentSummary,
   mcpIdentityFromDetails,
   mcpResultView,
-  rememberedMcpStatuses,
 } from './mcpToolMatch.ts';
 
 const STATUS_TONE: Record<McpStatusTone, string> = {
@@ -25,10 +24,10 @@ function fallbackIdentity(toolName: string): { server: string; tool: string } {
 /**
  * The call half of an MCP card: `server / tool · k=v`, as renderMcpCall shows
  * it. The identity is the split the matcher made when it claimed the tool,
- * remade here from the statuses it remembered.
+ * remade here from the same session statuses the card receives.
  */
-export function McpCall({ toolName, args }: ToolCallRenderProps) {
-  const identity = matchMcpTool(toolName, rememberedMcpStatuses()) ?? fallbackIdentity(toolName);
+export function McpCall({ toolName, args, statuses }: ToolCallRenderProps) {
+  const identity = matchMcpTool(toolName, statuses) ?? fallbackIdentity(toolName);
   const summary = mcpArgumentSummary(args);
   return (
     <span data-testid="tool-call-mcp" className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -44,9 +43,9 @@ export function McpCall({ toolName, args }: ToolCallRenderProps) {
 }
 
 /** The result half: the text lines, collapsed to twelve, with the running, failed, done, or more-lines status. */
-export function McpResult({ toolName, result, output, expanded, isPartial, isError }: ToolResultRenderProps) {
+export function McpResult({ toolName, result, output, expanded, isPartial, isError, statuses }: ToolResultRenderProps) {
   const view = mcpResultView({ output, expanded, isPartial, isError });
-  const identity = mcpIdentityFromDetails(result?.details) ?? matchMcpTool(toolName, rememberedMcpStatuses());
+  const identity = mcpIdentityFromDetails(result?.details) ?? matchMcpTool(toolName, statuses);
   return (
     <div data-testid="tool-result-mcp" data-mcp-server={identity?.server} className="flex flex-col gap-1">
       {view.lines.length > 0 ? (

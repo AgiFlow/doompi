@@ -1,5 +1,4 @@
-import { defineSessionChannel, type WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
-import { Store } from '@tanstack/store';
+import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../src/types/webSubagents.ts';
 
 /** The runtime's slash verb that files a stop request for one run. */
@@ -11,51 +10,38 @@ export function isTerminalRun(run: SubagentRun): boolean {
   return TERMINAL_STATES.has(run.state);
 }
 
-export interface SubagentsState {
-  /** The fleet the hub last reported, per session id; presented order preserved. */
-  bySession: Record<string, SubagentRun[]>;
+/** One session's record: the fleet the hub last reported plus what this page did with it. */
+export interface SubagentsSession {
+  /** The fleet the hub last reported; presented order preserved. */
+  runs: SubagentRun[];
   /** Finished runs the reader cleared from the grid; they stay on disk and in the hub's feed. */
-  dismissed: Record<string, string[]>;
+  dismissed: string[];
   /** Runs a stop was asked for and that have not yet reported a final state. */
-  stopRequested: Record<string, string[]>;
-  /** The run whose drawer the subagents tab shows, per session. */
-  openRunId: Record<string, string | undefined>;
+  stopRequested: string[];
+  /** The run whose drawer the subagents tab shows. */
+  openRunId: string | undefined;
 }
 
-const initialState: SubagentsState = { bySession: {}, dismissed: {}, stopRequested: {}, openRunId: {} };
-
-export const subagentsStore = new Store<SubagentsState>(initialState);
-
-let runtime: WebPluginRuntime | undefined;
-
-/** Holds the host's sender for the life of the page; the plugin's start hook binds it. */
-export function bindSubagentsRuntime(next: WebPluginRuntime): () => void {
-  runtime = next;
-  return () => {
-    if (runtime === next) runtime = undefined;
-  };
-}
+export const subagents = defineSessionStore<SubagentsSession>({
+  runs: [],
+  dismissed: [],
+  stopRequested: [],
+  openRunId: undefined,
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function without(list: readonly string[] | undefined, runId: string): string[] {
-  return (list ?? []).filter((id) => id !== runId);
+function without(list: readonly string[], runId: string): string[] {
+  return list.filter((id) => id !== runId);
 }
 
-/** The session's runs minus the ones the reader dismissed. */
-export function visibleRuns(state: SubagentsState, sessionId: string | null): SubagentRun[] {
-  if (sessionId === null) return [];
-  const dismissed = state.dismissed[sessionId];
-  const runs = state.bySession[sessionId] ?? [];
-  return dismissed === undefined || dismissed.length === 0
-    ? runs
-    : runs.filter((run) => !dismissed.includes(run.runId));
-}
-
-export function isStopRequested(state: SubagentsState, sessionId: string, runId: string): boolean {
-  return state.stopRequested[sessionId]?.includes(runId) ?? false;
+/** The session's runs minus the ones the reader dismissed; the reported list itself while nothing is. */
+export function visibleRuns(session: SubagentsSession): SubagentRun[] {
+  return session.dismissed.length === 0
+    ? session.runs
+    : session.runs.filter((run) => !session.dismissed.includes(run.runId));
 }
 
 /**
@@ -65,28 +51,25 @@ export function isStopRequested(state: SubagentsState, sessionId: string, runId:
  * until the run reports a final state; the runtime, not this click, decides
  * when that is.
  */
-export function requestRunStop(sessionId: string, runId: string): void {
-  runtime?.sendSessionFrame(sessionId, { type: 'prompt', message: `${STOP_COMMAND} ${runId}` });
-  subagentsStore.setState((state) => ({
-    ...state,
-    stopRequested: { ...state.stopRequested, [sessionId]: [...without(state.stopRequested[sessionId], runId), runId] },
+export function requestRunStop(send: SessionFrameSender, sessionId: string, runId: string): void {
+  send(sessionId, { type: 'prompt', message: `${STOP_COMMAND} ${runId}` });
+  subagents.update(sessionId, (current) => ({
+    ...current,
+    stopRequested: [...without(current.stopRequested, runId), runId],
   }));
 }
 
 /** Hides a finished run from this page; nothing is deleted. */
 export function dismissRun(sessionId: string, runId: string): void {
-  subagentsStore.setState((state) => ({
-    ...state,
-    dismissed: { ...state.dismissed, [sessionId]: [...without(state.dismissed[sessionId], runId), runId] },
-    openRunId: {
-      ...state.openRunId,
-      [sessionId]: state.openRunId[sessionId] === runId ? undefined : state.openRunId[sessionId],
-    },
+  subagents.update(sessionId, (current) => ({
+    ...current,
+    dismissed: [...without(current.dismissed, runId), runId],
+    openRunId: current.openRunId === runId ? undefined : current.openRunId,
   }));
 }
 
 export function openRun(sessionId: string, runId: string | undefined): void {
-  subagentsStore.setState((state) => ({ ...state, openRunId: { ...state.openRunId, [sessionId]: runId } }));
+  subagents.update(sessionId, (current) => ({ ...current, openRunId: runId }));
 }
 
 export interface SubagentRunsPayload {
@@ -94,46 +77,21 @@ export interface SubagentRunsPayload {
 }
 
 /** The plugin's session data channel: 'subagent_runs' payloads into the store. */
-export const subagentRunsChannel = defineSessionChannel<SubagentRunsPayload>({
+export const subagentRunsChannel = subagents.channel<SubagentRunsPayload>({
   channel: SUBAGENT_RUNS_TYPE,
   parse(input) {
     if (!isRecord(input) || !Array.isArray(input.runs)) return null;
     return { runs: input.runs.filter(isRecord) as unknown as SubagentRun[] };
   },
-  apply(sessionId, { runs }) {
-    subagentsStore.setState((state) => {
-      const present = new Map(runs.map((run) => [run.runId, run]));
-      // A stop request is spent once the run reports a final state or leaves
-      // the feed; a dismissal is forgotten once the run is gone from the feed.
-      const stopRequested = (state.stopRequested[sessionId] ?? []).filter((runId) => {
-        const run = present.get(runId);
-        return run !== undefined && !isTerminalRun(run);
-      });
-      const dismissed = (state.dismissed[sessionId] ?? []).filter((runId) => present.has(runId));
-      return {
-        ...state,
-        bySession: { ...state.bySession, [sessionId]: runs },
-        stopRequested: { ...state.stopRequested, [sessionId]: stopRequested },
-        dismissed: { ...state.dismissed, [sessionId]: dismissed },
-      };
+  reduce(current, { runs }) {
+    const present = new Map(runs.map((run) => [run.runId, run]));
+    // A stop request is spent once the run reports a final state or leaves
+    // the feed; a dismissal is forgotten once the run is gone from the feed.
+    const stopRequested = current.stopRequested.filter((runId) => {
+      const run = present.get(runId);
+      return run !== undefined && !isTerminalRun(run);
     });
-  },
-  drop(sessionId) {
-    subagentsStore.setState((state) => {
-      if (!(sessionId in state.bySession)) return state;
-      const bySession = { ...state.bySession };
-      const dismissed = { ...state.dismissed };
-      const stopRequested = { ...state.stopRequested };
-      const openRunId = { ...state.openRunId };
-      delete bySession[sessionId];
-      delete dismissed[sessionId];
-      delete stopRequested[sessionId];
-      delete openRunId[sessionId];
-      return { bySession, dismissed, stopRequested, openRunId };
-    });
+    const dismissed = current.dismissed.filter((runId) => present.has(runId));
+    return { ...current, runs, stopRequested, dismissed };
   },
 });
-
-export function resetSubagents(): void {
-  subagentsStore.setState(() => initialState);
-}

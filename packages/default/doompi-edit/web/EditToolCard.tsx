@@ -15,8 +15,8 @@ export function EditToolCall({ args }: ToolCallRenderProps) {
 // Doom carries a diff on the background the way Magit does: a green wash on
 // added rows, a red wash on removed ones, and the foreground left to the text.
 const ROW_TONE: Readonly<Record<DiffRow['marker'], string>> = {
-  '+': 'bg-[#262E1E] text-doom-green',
-  '-': 'bg-[#332428] text-doom-red',
+  '+': 'bg-doom-tint-green text-doom-green',
+  '-': 'bg-doom-tint-red text-doom-red',
   ' ': 'text-doom-dim',
 };
 

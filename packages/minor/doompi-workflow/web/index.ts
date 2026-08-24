@@ -3,12 +3,13 @@ import { useStore } from '@tanstack/react-store';
 import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
 import { WorkflowsPanel } from './WorkflowsPanel.tsx';
 import { WorkflowCall, WorkflowResult } from './WorkflowToolCard.tsx';
-import { workflowRunsChannel, workflowsStore } from './workflowsStore.ts';
+import { workflowRunsChannel, workflows } from './workflowsStore.ts';
 
 /** The tab badge: only runs still in the running stage. */
 export function useWorkflowsBadge(sessionId: string | null): number {
-  return useStore(workflowsStore, (state) =>
-    sessionId === null ? 0 : (state.bySession[sessionId]?.filter((run) => run.stage === 'running').length ?? 0),
+  return useStore(
+    workflows.store,
+    (state) => workflows.select(state, sessionId).runs.filter((run) => run.stage === 'running').length,
   );
 }
 

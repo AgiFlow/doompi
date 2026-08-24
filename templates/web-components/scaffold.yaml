@@ -1,0 +1,139 @@
+boilerplate:
+  - name: scaffold-web-components
+    targetFolder: packages/core
+    description: |-
+      Create a publishable DoomPi web component library: the React primitives every browser surface is built from, on the shared Doom palette, with a runtime theme system.
+
+      The generated package builds and tests on the first run. It ships the theme contract (the palette a theme must fill, the tints and accented borders derived from it, the validator that refuses a malformed config, and the call that writes the tokens onto the document), three theme configs, the token stylesheet a host imports after Tailwind, and shadcn-style primitives on Radix restyled so every colour is a token: buttons, badges, status pills, dots, fields, dialogs, popovers, dropdown menus, tooltips, panels, empty states, and the small typographic pieces a cockpit repeats.
+
+      Use it for the shared browser vocabulary of a DoomPi surface. It registers no Pi extension, serves nothing, and belongs to no mode; it is a library the web host and every web plugin import.
+    variables_schema:
+      type: object
+      properties:
+        packageName:
+          type: string
+          description: Unscoped npm package name
+          pattern: "^doompi-[a-z0-9]+(-[a-z0-9]+)*$"
+          minLength: 8
+          maxLength: 58
+          example: doompi-web-components
+        packageDescription:
+          type: string
+          description: Public npm package description; quotes, backslashes, and newlines are rejected so generated JSON stays valid
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Shared web components and theme tokens for the DoomPi cockpit
+        packageKeyword:
+          type: string
+          description: Lowercase capability-specific npm search keyword
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: web
+        author:
+          type: string
+          description: Package author and copyright holder
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,'()-]*$"
+          minLength: 1
+          maxLength: 120
+          default: Vuong Ngo
+          example: Vuong Ngo
+        copyrightYear:
+          type: string
+          description: Year recorded in the LICENSE copyright line
+          pattern: "^[0-9]{4}$"
+          default: "2026"
+          example: "2026"
+      required:
+        - packageName
+        - packageDescription
+        - packageKeyword
+      additionalProperties: false
+    includes:
+      - .oxlintrc.json
+      - LICENSE
+      - README.md
+      - llms.txt
+      - package.json
+      - project.json
+      - src/components/Badge.tsx
+      - src/components/Button.tsx
+      - src/components/Dialog.tsx
+      - src/components/Dot.tsx
+      - src/components/DropdownMenu.tsx
+      - src/components/EmptyState.tsx
+      - src/components/Input.tsx
+      - src/components/Kbd.tsx
+      - src/components/Panel.tsx
+      - src/components/Popover.tsx
+      - src/components/SectionLabel.tsx
+      - src/components/Separator.tsx
+      - src/components/Spinner.tsx
+      - src/components/StatusBadge.tsx
+      - src/components/StreamCursor.tsx
+      - src/components/Textarea.tsx
+      - src/components/Tooltip.tsx
+      - src/exports/index.ts
+      - src/exports/theme.ts
+      - src/icons/icons.ts
+      - src/lib/cn.ts
+      - src/theme/apply.ts
+      - src/theme/builtinThemes.ts
+      - src/theme/derive.ts
+      - src/theme/parse.ts
+      - src/theme/preference.ts
+      - src/types/theme.ts
+      - styles/tokens.css
+      - tests/components/render.test.tsx
+      - tests/packageContract.test.ts
+      - tests/theme/theme.test.ts
+      - themes/doom-nord-dark.json
+      - themes/doom-one-dark.json
+      - themes/doom-one-light.json
+      - tsconfig.json
+      - tsdown.config.ts
+      - vibe-lint.config.yaml
+      - vitest.config.ts
+    instruction: |-
+      The generated package already builds. Verify it before changing anything:
+      - `pnpm install` at the repository root, then `pnpm build` in the package, then `pnpm test` and `pnpm typecheck`.
+      - Register it: add the project to `nx.json` under `release.groups.alpha.projects`, bump the package count in `scripts/audit-workspace.mjs`, and add it to `docs/features.md`.
+
+      Respect the layer graph; the doom-web vibe-lint preset enforces it.
+      - `src/types` is the theme contract and imports nothing. `src/lib` holds pure helpers, `src/icons` the curated icon set, `src/theme` the runtime that validates and applies a config.
+      - `src/components` may reach components, icons, lib, and types. It may not reach `src/theme`: a component takes its colours from CSS custom properties, never from a theme value it read, which is what lets a theme swap recolour a rendered tree without re-rendering it.
+      - `src/exports` is the only public surface, one file per package.json exports subpath, pure re-exports.
+
+      Every colour is a token. `no-raw-theme-color` refuses a hex, `rgb()`, or `hsl()` literal anywhere in browser code, including the `bg-[#312A1C]` Tailwind shape. The palette a theme must supply is the twenty tokens in `src/types/theme.ts`; the tints and accented borders are derived with `color-mix()` unless a theme pins them. If a surface needs a colour the palette has no name for, add the token to the contract, the stylesheet, and every shipped theme rather than spelling it at the call site.
+
+      Keep the tokens named `doom`. They are DoomPi's shared design vocabulary, not this package's private one: the cockpit, every web plugin, and this library all resolve `bg-doom-panel` to the same custom property, and a second prefix would split the palette in two and silently break theming for whichever half a host did not import.
+
+      Components stay presentational. No store, no fetch, no router, no session knowledge: a primitive takes props and renders. Anything that knows about a session belongs in the surface that uses it. `asChild` is how a primitive lends its styling to another element, so a link can look like a button without a second implementation.
+feature:
+  - name: scaffold-web-component
+    description: |-
+      Add one primitive to a DoomPi web component library: a PascalCase component file with its class-variance-authority variants, and its render assertion in the shared smoke test.
+
+      Use it when several surfaces need the same visual element. Do not use it for something a single feature renders; that belongs in the feature.
+    variables_schema:
+      type: object
+      properties:
+        componentName:
+          type: string
+          description: Component name in PascalCase, which is also the file name
+          pattern: "^[A-Z][A-Za-z0-9]*$"
+          minLength: 2
+          maxLength: 60
+          example: Toolbar
+      required:
+        - componentName
+      additionalProperties: false
+    includes:
+      - src/components/Badge.tsx->src/components/{{ componentName }}.tsx
+    instruction: |-
+      Replace the copied body; Badge is there to show the shape, not to be kept.
+
+      A primitive is a function component taking `ComponentProps<'element'>` plus its variants, spreading the rest onto the element, merging `className` last through `cn` so a caller can always override, and carrying a `data-slot` attribute so a consumer can target it without a class. Variants go in a `cva` table exported beside the component, because a surface sometimes needs the classes without the element.
+
+      Colours are tokens. Reach for `bg-doom-panel`, `text-doom-hi`, `border-doom-edge-red`, `bg-doom-tint-yellow`; never a hex. Re-export the component and its variant table from `src/exports/index.ts`, and add a render assertion to `tests/components/render.test.tsx`, which renders through `react-dom/server` and needs no DOM.

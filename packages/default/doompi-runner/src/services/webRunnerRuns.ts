@@ -27,6 +27,7 @@ export function toRunnerRunView(record: RunnerRecord): RunnerRunView {
     state: record.state,
     promoted: record.promoted,
     startedAt: record.startedAt,
+    logPath: record.logPath,
     ...(record.exit
       ? {
           exit: {

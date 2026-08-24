@@ -1,0 +1,191 @@
+/*
+ * DoomPi web theme tokens and base styles.
+ *
+ * Import after Tailwind in the host stylesheet:
+ *   @import 'tailwindcss';
+ *   @import '@agimon-ai/doompi-web-components/styles.css';
+ *
+ * Tokens are plain custom properties on :root (the shipped dark theme, so a
+ * page without JavaScript already looks right) mapped inline into Tailwind's
+ * theme, which is what lets applyTheme() swap every utility's colour at
+ * runtime by rewriting the properties. The shadcn semantic names alias the
+ * same tokens so stock component code renders on the Doom palette untouched.
+ */
+@source "../dist";
+
+:root {
+  color-scheme: dark;
+  --doom-bg: #282c34;
+  --doom-rail: #21242b;
+  --doom-panel: #23272e;
+  --doom-deep: #1c1f24;
+  --doom-border: #3f444a;
+  --doom-border-soft: #2a2e35;
+  --doom-hi: #dfdfdf;
+  --doom-text: #bbc2cf;
+  --doom-dim: #9ca0a4;
+  --doom-faint: #5b6268;
+  --doom-blue: #51afef;
+  --doom-green: #98be65;
+  --doom-yellow: #ecbe7b;
+  --doom-red: #ff6c6b;
+  --doom-magenta: #c678dd;
+  --doom-violet: #a9a1e1;
+  --doom-cyan: #46d9ff;
+  --doom-orange: #da8548;
+  --doom-teal: #4db5bd;
+  --doom-selected: #2257a0;
+  --doom-tint-blue: #21313f;
+  --doom-tint-green: #262e1e;
+  --doom-tint-yellow: #312a1c;
+  --doom-tint-red: #332428;
+  --doom-tint-magenta: #2e2136;
+  --doom-tint-violet: #2d253f;
+  --doom-tint-cyan: color-mix(in srgb, var(--doom-cyan) 16%, var(--doom-panel));
+  --doom-edge-blue: #2f4a68;
+  --doom-edge-green: #35452e;
+  --doom-edge-yellow: #574427;
+  --doom-edge-red: #6b3a3a;
+  --doom-edge-magenta: #4a3358;
+  --doom-edge-violet: #3b3558;
+  --doom-edge-cyan: color-mix(in srgb, var(--doom-cyan) 40%, var(--doom-border));
+  --doom-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@theme inline {
+  --color-doom-bg: var(--doom-bg);
+  --color-doom-rail: var(--doom-rail);
+  --color-doom-panel: var(--doom-panel);
+  --color-doom-deep: var(--doom-deep);
+  --color-doom-border: var(--doom-border);
+  --color-doom-border-soft: var(--doom-border-soft);
+  --color-doom-hi: var(--doom-hi);
+  --color-doom-text: var(--doom-text);
+  --color-doom-dim: var(--doom-dim);
+  --color-doom-faint: var(--doom-faint);
+  --color-doom-blue: var(--doom-blue);
+  --color-doom-green: var(--doom-green);
+  --color-doom-yellow: var(--doom-yellow);
+  --color-doom-red: var(--doom-red);
+  --color-doom-magenta: var(--doom-magenta);
+  --color-doom-violet: var(--doom-violet);
+  --color-doom-cyan: var(--doom-cyan);
+  --color-doom-orange: var(--doom-orange);
+  --color-doom-teal: var(--doom-teal);
+  --color-doom-selected: var(--doom-selected);
+  --color-doom-tint-blue: var(--doom-tint-blue);
+  --color-doom-tint-green: var(--doom-tint-green);
+  --color-doom-tint-yellow: var(--doom-tint-yellow);
+  --color-doom-tint-red: var(--doom-tint-red);
+  --color-doom-tint-magenta: var(--doom-tint-magenta);
+  --color-doom-tint-violet: var(--doom-tint-violet);
+  --color-doom-tint-cyan: var(--doom-tint-cyan);
+  --color-doom-edge-blue: var(--doom-edge-blue);
+  --color-doom-edge-green: var(--doom-edge-green);
+  --color-doom-edge-yellow: var(--doom-edge-yellow);
+  --color-doom-edge-red: var(--doom-edge-red);
+  --color-doom-edge-magenta: var(--doom-edge-magenta);
+  --color-doom-edge-violet: var(--doom-edge-violet);
+  --color-doom-edge-cyan: var(--doom-edge-cyan);
+
+  /* shadcn semantic aliases, so stock component code lands on the palette. */
+  --color-background: var(--doom-bg);
+  --color-foreground: var(--doom-text);
+  --color-card: var(--doom-panel);
+  --color-card-foreground: var(--doom-text);
+  --color-popover: var(--doom-panel);
+  --color-popover-foreground: var(--doom-text);
+  --color-primary: var(--doom-blue);
+  --color-primary-foreground: var(--doom-rail);
+  --color-secondary: var(--doom-deep);
+  --color-secondary-foreground: var(--doom-hi);
+  --color-muted: var(--doom-deep);
+  --color-muted-foreground: var(--doom-dim);
+  --color-accent: var(--doom-tint-blue);
+  --color-accent-foreground: var(--doom-hi);
+  --color-destructive: var(--doom-red);
+  --color-destructive-foreground: var(--doom-rail);
+  --color-border: var(--doom-border);
+  --color-input: var(--doom-border);
+  --color-ring: var(--doom-blue);
+
+  --font-mono: var(--doom-font-mono);
+
+  --animate-doom-fade: doom-fade 140ms ease-out;
+  --animate-doom-pop: doom-pop 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-doom-rise: doom-rise 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-doom-blink: doom-blink 1s steps(2, start) infinite;
+
+  @keyframes doom-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes doom-pop {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes doom-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes doom-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--doom-bg);
+    color: var(--doom-text);
+    font-family: var(--doom-font-mono);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--doom-border);
+    border-radius: 5px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--doom-blue) 35%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

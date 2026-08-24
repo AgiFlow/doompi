@@ -40,7 +40,7 @@ export function sessionStatusLine(input: StatusLineInput, now: number): string {
     return `running · ${formatRunDuration(Number.isFinite(since) ? Math.max(0, now - since) : 0)}`;
   }
   if (!input.everPrompted && input.lastSettledAt === undefined) return 'fresh session · nothing sent yet';
-  return 'The agent finished its work and is waiting for you.';
+  return 'done · waiting for you';
 }
 
 /** Sessions counted as running by the rail header and the top bar chip. */

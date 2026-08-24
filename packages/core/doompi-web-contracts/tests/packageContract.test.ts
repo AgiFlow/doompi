@@ -29,10 +29,12 @@ describe('doompi-web-contracts package boundary', () => {
     expect(manifest.version).toMatch(SEMVER_PATTERN);
     expect(manifest.type).toBe('module');
     expect(manifest.pi).toBeUndefined();
-    // Contracts stay dependency-free so any plugin author can adopt them; react
-    // appears only as a devDependency for its component types.
+    // Contracts carry no runtime dependency of their own, so any plugin author
+    // can adopt them; react appears only as a devDependency for its component
+    // types. defineSessionStore constructs a TanStack store, but the host owns
+    // the one instance the cockpit bundle dedupes on, so it is a peer.
     expect(manifest.dependencies).toBeUndefined();
-    expect(manifest.peerDependencies).toBeUndefined();
+    expect(manifest.peerDependencies).toEqual({ '@tanstack/store': '0.11.1' });
     expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './package.json']);
     expect(manifest.files).toEqual(['dist']);
   });

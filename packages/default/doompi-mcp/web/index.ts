@@ -1,6 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { McpCall, McpResult } from './McpToolCard.tsx';
-import { matchMcpTool, rememberMcpStatuses } from './mcpToolMatch.ts';
+import { matchMcpTool } from './mcpToolMatch.ts';
 
 /**
  * This package's cockpit presence: timeline cards for MCP tool calls, the web
@@ -14,11 +14,7 @@ export const webPlugin = defineWebPlugin({
   toolRenderers: [
     {
       tools: [],
-      matches(toolName, statuses) {
-        // Remembered for the card, which is rendered without the statuses.
-        rememberMcpStatuses(statuses);
-        return matchMcpTool(toolName, statuses) !== null;
-      },
+      matches: (toolName, statuses) => matchMcpTool(toolName, statuses) !== null,
       call: McpCall,
       result: McpResult,
     },

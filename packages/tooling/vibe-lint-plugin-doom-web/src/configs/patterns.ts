@@ -66,6 +66,36 @@ export const patterns: Record<string, PatternDefinition> = {
       'The bundler entry: the HTML document, the mount script, global stylesheet, and ambient client type declarations. Holds wiring only, never behavior worth testing, because nothing can import it.',
     includes: ['src/web/index.html', 'src/web/main.tsx', 'src/web/vite-env.d.ts', 'src/web/styles/**'],
   },
+  'doom-components-types': {
+    description:
+      'The theme contract: the token names a theme must fill, the config shape, and the CSS custom property each token is published as. Imports nothing else, which is what lets both the components and the theme runtime read it.',
+    includes: ['src/types/**'],
+  },
+  'doom-components-lib': {
+    description:
+      'Pure helpers shared by every component, `cn` above all. No React state, no theme value, no DOM access beyond what a helper is handed.',
+    includes: ['src/lib/**'],
+  },
+  'doom-components-theme': {
+    description:
+      'The theme runtime: the shipped configs, the validator that refuses a malformed one, the derivation of tinted and accented tokens from a palette, and the call that writes them onto the document. It renders nothing, so a host may apply a theme before the first paint.',
+    includes: ['src/theme/**', 'themes/**'],
+  },
+  'doom-components-icons': {
+    description:
+      'The curated icon set, re-exported from one module so every surface draws from the same family and no consumer needs an icon dependency of its own.',
+    includes: ['src/icons/**'],
+  },
+  'doom-components-components': {
+    description:
+      'The shared primitives, one PascalCase .tsx file per component. Props-driven and theme-agnostic: colours come from token classes, never from a theme value the component read, so a theme swap recolours a rendered tree without re-rendering it.',
+    includes: ['src/components/**'],
+  },
+  'doom-components-styles': {
+    description:
+      'The token stylesheet a host imports after Tailwind: the :root defaults, the @theme mapping that turns each token into a utility, the semantic aliases, and the base styles.',
+    includes: ['styles/**'],
+  },
   'doom-web-tests': {
     description: 'Unit, integration, and package-contract verification.',
     includes: ['tests/**'],

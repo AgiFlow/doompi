@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkflowRunView } from '../src/types/webWorkflows.ts';
 import { workflowActivityRows, workflowRunIdentity } from '../web/workflowActivity.ts';
-import { focusRun, resetWorkflows, workflowRunsChannel, workflowsStore } from '../web/workflowsStore.ts';
+import { focusRun, workflowRunsChannel, workflows } from '../web/workflowsStore.ts';
 
 const NOW = Date.parse('2026-08-24T12:00:00.000Z');
 
@@ -55,15 +55,16 @@ describe('workflow activity rows', () => {
   });
 
   it('keeps the focused run per session and drops it with the session', () => {
-    resetWorkflows();
+    workflows.reset();
+    const focused = () => workflows.select(workflows.store.state, 's1').focusedRun;
     workflowRunsChannel.apply('s1', workflowRunsChannel.parse({ runs: [run({})] })!);
     focusRun('s1', 'default/release');
-    expect(workflowsStore.state.focusedRun.s1).toBe('default/release');
+    expect(focused()).toBe('default/release');
     // A feed update keeps the focus.
     workflowRunsChannel.apply('s1', workflowRunsChannel.parse({ runs: [run({})] })!);
-    expect(workflowsStore.state.focusedRun.s1).toBe('default/release');
+    expect(focused()).toBe('default/release');
     workflowRunsChannel.drop('s1');
-    expect(workflowsStore.state.focusedRun.s1).toBeUndefined();
-    resetWorkflows();
+    expect(focused()).toBeUndefined();
+    workflows.reset();
   });
 });

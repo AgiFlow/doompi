@@ -1,15 +1,12 @@
+import { Badge, Button, Dot } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useState } from 'react';
 import type { AuthMethodType, LoginFlowSnapshot, ProviderAuthSummary } from '../../../types/auth.ts';
-import { Chip, Dot } from '../../components/Chip.tsx';
 import { answerLogin, cancelLogin, listProviders, logoutProvider, readLogin, startLogin } from '../../lib/authApi.ts';
 import { LoginFlowDialog, METHOD_LABEL } from './LoginFlowDialog.tsx';
 
 const FLOW_POLL_MS = 500;
 /** The auth source Pi reports for a credential its own /login stored; the only kind /logout removes. */
 const STORED_SOURCE = 'stored';
-
-const actionClass =
-  'rounded border border-doom-border px-2.5 py-1 text-[10px] text-doom-dim hover:border-doom-blue/50 hover:text-doom-hi disabled:opacity-40';
 
 function statusText(provider: ProviderAuthSummary): string {
   if (!provider.authenticated) return 'not authenticated';
@@ -34,39 +31,40 @@ function ProviderRow({
     <li
       data-testid={`provider-${provider.id}`}
       data-authenticated={authenticated}
-      className="flex items-center gap-3 rounded-md border border-doom-border bg-doom-panel px-3.5 py-2.5"
+      className="flex items-center gap-3 rounded-md border border-doom-border bg-doom-panel px-3.5 py-2.5 transition-colors hover:border-doom-blue/30"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
         <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
       </div>
-      <Chip tone={authenticated ? 'green' : 'neutral'} testId={`provider-status-${provider.id}`}>
+      <Badge tone={authenticated ? 'green' : 'neutral'} data-testid={`provider-status-${provider.id}`}>
         <Dot tone={authenticated ? 'green' : 'neutral'} />
         {statusText(provider)}
-      </Chip>
+      </Badge>
       {provider.methods.map((method) => (
-        <button
+        <Button
           key={method.type}
-          type="button"
+          variant="outline"
+          size="sm"
           data-testid={`provider-login-${method.type}-${provider.id}`}
           title={method.label}
           disabled={busy}
           onClick={() => onLogin(method.type)}
-          className={actionClass}
         >
           sign in · {METHOD_LABEL[method.type]}
-        </button>
+        </Button>
       ))}
       {provider.authenticated?.source === STORED_SOURCE ? (
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           data-testid={`provider-logout-${provider.id}`}
           disabled={busy}
           onClick={onLogout}
-          className={`${actionClass} hover:border-doom-red/50 hover:text-doom-red`}
+          className="hover:border-doom-red/50 hover:text-doom-red"
         >
           sign out
-        </button>
+        </Button>
       ) : null}
       {provider.methods.length === 0 ? (
         <span className="text-[10px] text-doom-faint">ambient credentials only</span>
@@ -86,6 +84,7 @@ export function ProviderSettings() {
   const [flow, setFlow] = useState<LoginFlowSnapshot | null>(null);
   /** The provider with a request in flight, so its buttons cannot double-fire. */
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
 
   const reload = useCallback(async (): Promise<void> => {
     const result = await listProviders();
@@ -162,6 +161,14 @@ export function ProviderSettings() {
     setBusyId(null);
   };
 
+  // The list is long enough that finding a provider by eye is work; signed-in
+  // ones lead because they are the ones a reader came to check.
+  const needle = filter.trim().toLowerCase();
+  const shown = (providers ?? [])
+    .filter((provider) => `${provider.name} ${provider.id}`.toLowerCase().includes(needle))
+    .sort((left, right) => Number(right.authenticated !== undefined) - Number(left.authenticated !== undefined));
+  const authenticatedCount = (providers ?? []).filter((provider) => provider.authenticated !== undefined).length;
+
   return (
     <div data-testid="provider-settings" className="flex max-w-[780px] flex-col gap-4">
       <div className="flex flex-col gap-1">
@@ -178,17 +185,37 @@ export function ProviderSettings() {
       ) : null}
       {providers === null && !error ? <p className="text-[11px] text-doom-faint">reading providers…</p> : null}
       {providers ? (
-        <ul data-testid="provider-list" className="flex flex-col gap-1.5">
-          {providers.map((provider) => (
-            <ProviderRow
-              key={provider.id}
-              provider={provider}
-              busy={busyId === provider.id}
-              onLogin={(type) => void begin(provider.id, type)}
-              onLogout={() => void signOut(provider.id)}
+        <>
+          <div className="flex items-center gap-3">
+            <input
+              data-testid="provider-filter"
+              value={filter}
+              placeholder="filter providers…"
+              spellCheck={false}
+              onChange={(event) => setFilter(event.target.value)}
+              className="min-w-0 flex-1 rounded border border-doom-border bg-doom-deep px-2.5 py-1.5 text-[12px] text-doom-hi outline-none transition-colors placeholder:text-doom-faint focus:border-doom-blue/60"
             />
-          ))}
-        </ul>
+            <span className="shrink-0 text-[10px] text-doom-faint">
+              {authenticatedCount} of {providers.length} signed in
+            </span>
+          </div>
+          <ul data-testid="provider-list" className="flex flex-col gap-1.5">
+            {shown.map((provider) => (
+              <ProviderRow
+                key={provider.id}
+                provider={provider}
+                busy={busyId === provider.id}
+                onLogin={(type) => void begin(provider.id, type)}
+                onLogout={() => void signOut(provider.id)}
+              />
+            ))}
+            {shown.length === 0 ? (
+              <li data-testid="provider-no-match" className="px-1 py-3 text-[11px] text-doom-faint">
+                no provider matches “{filter.trim()}”
+              </li>
+            ) : null}
+          </ul>
+        </>
       ) : null}
       {flow ? (
         <LoginFlowDialog

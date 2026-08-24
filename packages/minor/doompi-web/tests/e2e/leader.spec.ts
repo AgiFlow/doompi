@@ -146,4 +146,22 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     await page.keyboard.press('r');
     await expect(page).toHaveURL(/\/subagents$/);
   });
+
+  test('closing the palette hands the keyboard back to the composer', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+
+    await page.getByTestId('composer-input').click();
+    await page.keyboard.press('Control+k');
+    await expect(page.getByTestId('palette')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('palette')).toBeHidden();
+
+    // Opened by a shortcut, so nothing on the page can restore focus for it:
+    // the caret has to be handed back, or the next keystroke goes nowhere.
+    await expect(page.getByTestId('composer-input')).toBeFocused();
+    await page.keyboard.type('still typing');
+    await expect(page.getByTestId('composer-input')).toHaveValue('still typing');
+  });
 });

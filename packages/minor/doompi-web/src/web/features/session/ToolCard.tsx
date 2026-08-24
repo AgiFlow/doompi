@@ -1,18 +1,17 @@
+import {
+  Button,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  STATUS_EDGE,
+  StatusBadge,
+  type StatusTone,
+} from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 import type { ToolEntry } from '../../lib/sessionModel.ts';
 import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 
 const MAX_PREVIEW_LINES = 12;
-
-// The mockup tints the whole card by outcome: amber while running, red on
-// failure, and the resting border once it exited cleanly.
-const CARD_BORDER = { running: 'border-[#574427]', error: 'border-[#6B3A3A]', ok: 'border-doom-border' };
-const BADGE = {
-  running: 'bg-[#312A1C] text-doom-yellow',
-  error: 'bg-[#332428] text-doom-red',
-  ok: 'bg-[#262E1E] text-doom-green',
-};
 
 /** The host's own body: the result's text, clipped until expanded. */
 function DefaultOutput({ output, expanded, onExpand }: { output: string; expanded: boolean; onExpand: () => void }) {
@@ -26,14 +25,9 @@ function DefaultOutput({ output, expanded, onExpand }: { output: string; expande
         {shown.join('\n')}
       </pre>
       {clipped ? (
-        <button
-          type="button"
-          data-testid="tool-expand"
-          onClick={onExpand}
-          className="mt-1 text-[10px] text-doom-blue hover:underline"
-        >
+        <Button variant="link" size="xs" data-testid="tool-expand" onClick={onExpand} className="mt-1 px-0">
           show {lines.length - MAX_PREVIEW_LINES} more line(s)
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -54,8 +48,25 @@ export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: st
   const Result = renderer?.result;
 
   const state = entry.running ? 'running' : entry.isError ? 'error' : 'ok';
+  const tone: StatusTone = state;
   const label = entry.running ? 'RUNNING' : entry.isError ? 'ERROR' : 'OK';
-  const callProps = { sessionId, toolCallId: entry.toolCallId, toolName: entry.name, args: entry.args };
+  const callProps = { sessionId, toolCallId: entry.toolCallId, toolName: entry.name, args: entry.args, statuses };
+  const resultProps = {
+    ...callProps,
+    result: entry.result,
+    output: entry.output,
+    isPartial: entry.running,
+    isError: entry.isError,
+    expanded,
+  };
+  // A toggle that would reveal nothing reads as a broken control, so the card
+  // only offers one when something is actually hidden. The plugin contract has
+  // no expandability probe, so this is decided from what the host can see: a
+  // result the preview clips, or structured details a renderer can unfold
+  // (the runner's log path and byte count, a diff's full hunks). A tool that
+  // threw carries neither, and its card correctly offers nothing.
+  const clipped = entry.output.split('\n').length > MAX_PREVIEW_LINES;
+  const expandable = Result !== undefined && (clipped || entry.result?.details !== undefined);
 
   return (
     <div
@@ -63,7 +74,7 @@ export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: st
       data-tool-name={entry.name}
       data-tool-state={state}
       data-tool-renderer={renderer ? 'plugin' : 'host'}
-      className={`overflow-hidden rounded-md border bg-doom-panel ${CARD_BORDER[state]}`}
+      className={`overflow-hidden rounded-md border bg-doom-panel transition-colors ${STATUS_EDGE[tone]}`}
     >
       <div className="flex min-h-8 items-center gap-2 px-[11px]">
         <span className="text-[11px] font-bold text-doom-hi">{entry.name}</span>
@@ -74,22 +85,20 @@ export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: st
         ) : (
           <span className="min-w-0 flex-1 truncate text-[11px] text-doom-dim">{entry.argSummary}</span>
         )}
-        <span
-          data-testid="tool-status"
-          className={`rounded-[3px] px-[7px] py-[3px] text-[9px] font-bold ${BADGE[state]}`}
-        >
+        <StatusBadge tone={tone} data-testid="tool-status">
           {label}
-        </span>
-        {Result ? (
-          <button
-            type="button"
+        </StatusBadge>
+        {expandable ? (
+          <Button
+            variant="ghost"
+            size="icon"
             data-testid="tool-expand"
             onClick={() => setExpanded((value) => !value)}
-            className="text-[10px] text-doom-faint hover:text-doom-blue"
+            className="text-doom-faint hover:text-doom-blue"
             aria-label={expanded ? 'collapse tool result' : 'expand tool result'}
           >
-            {expanded ? '▴' : '▾'}
-          </button>
+            {expanded ? <ChevronUpIcon className="h-3 w-3" /> : <ChevronDownIcon className="h-3 w-3" />}
+          </Button>
         ) : null}
       </div>
       {Result ? (
@@ -97,14 +106,7 @@ export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: st
           data-testid="tool-result"
           className="border-t border-doom-border-soft bg-doom-deep px-3 py-2 text-[11px] text-doom-dim"
         >
-          <Result
-            {...callProps}
-            result={entry.result}
-            output={entry.output}
-            isPartial={entry.running}
-            isError={entry.isError}
-            expanded={expanded}
-          />
+          <Result {...resultProps} />
         </div>
       ) : (
         <DefaultOutput output={entry.output} expanded={expanded} onExpand={() => setExpanded(true)} />

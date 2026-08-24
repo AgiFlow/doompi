@@ -37,6 +37,10 @@ const EXPECTED_RULE_IDS = [
   'schema-placement',
   'service-boundary',
   'thin-pi-adapter',
+  'web-plugin-entry',
+  'web-plugin-import-allowlist',
+  'web-plugin-manifest',
+  'web-plugin-no-module-state',
 ] as const;
 
 describe('Doom extension plugin contract', () => {
@@ -95,6 +99,27 @@ describe('Doom extension plugin contract', () => {
 
   it('provides a warning-only migration preset', () => {
     expect(migration.rules).toEqual(Object.fromEntries(EXPECTED_RULE_IDS.map((ruleId) => [ruleId, 'warn'])));
+  });
+
+  it('publishes the web plugin boundary and lets tests reach it', () => {
+    expect(recommended.boundaries).toContainEqual({
+      name: 'web-plugin',
+      pattern: 'web/**',
+      allowedImports: ['web/**', 'src/types', 'src/types/**'],
+    });
+    expect(recommended.boundaries).toContainEqual({
+      name: 'tests',
+      pattern: 'tests/**',
+      allowedImports: ['src/**', 'tests/**', 'web/**'],
+    });
+    for (const id of [
+      'doom-web-plugin-entry',
+      'doom-web-plugin-store',
+      'doom-web-plugin-components',
+      'doom-web-plugin-lib',
+    ]) {
+      expect(doomExtensionPlugin.patterns?.[id]?.includes.length, id).toBeGreaterThan(0);
+    }
   });
 
   it('publishes prompts as a resource pattern and isolated boundary', () => {

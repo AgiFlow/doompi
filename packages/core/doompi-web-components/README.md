@@ -1,0 +1,82 @@
+# @agimon-ai/doompi-web-components
+
+Shared web components and theme tokens for the DoomPi cockpit and its web plugins. It is the
+browser counterpart of [doompi-ui](https://www.npmjs.com/package/@agimon-ai/doompi-ui): where that
+package holds the terminal's shared chrome, this one holds the React primitives every cockpit
+surface is built from, on the same Doom One palette.
+
+The primitives are [shadcn/ui](https://ui.shadcn.com) components on [Radix](https://www.radix-ui.com)
+(the unified `radix-ui` package), restyled with Tailwind utilities that name theme tokens only.
+Because every colour is a token, a theme config recolours the whole cockpit at runtime.
+
+## What it ships
+
+| Export            | Components                                                                                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`               | `Button`, `Badge`, `StatusBadge`, `Dot`, `Input`, `Textarea`, `Dialog*`, `Popover*`, `DropdownMenu*`, `Tooltip*`, `Kbd`, `SectionLabel`, `EmptyState`, `Panel*`, `Spinner`, `Separator`, `StreamCursor`, the curated icon set, and `cn` |
+| `./theme`         | `ThemeConfig`, the token lists, `BUILTIN_THEMES`, `applyTheme`, `parseThemeConfig`, `themeFromPiTheme`, the stored-preference helpers                                                                                                   |
+| `./styles.css`    | The token stylesheet: `:root` defaults, the Tailwind `@theme inline` mapping, shadcn semantic aliases, base styles, and the `@source` for this package's classes                                                                        |
+| `./themes/*.json` | The shipped theme configs: `doom-one-dark` (default), `doom-one-light`, `doom-nord-dark`                                                                                                                                                |
+
+## Using it from the cockpit host
+
+```css
+/* src/web/styles/app.css */
+@import 'tailwindcss';
+@import '@agimon-ai/doompi-web-components/styles.css';
+```
+
+```tsx
+import { Button, Dialog, DialogContent, StatusBadge } from '@agimon-ai/doompi-web-components';
+import { applyTheme, builtinTheme, readThemePreference } from '@agimon-ai/doompi-web-components/theme';
+
+applyTheme(builtinTheme(readThemePreference(localStorage) ?? 'doom-one-dark')!, document.documentElement);
+```
+
+## Using it from a plugin's `web/` client
+
+A web plugin's client code may import `react`, the `@tanstack` store packages,
+`@agimon-ai/doompi-web-contracts`, and this package. Declare it as a `workspace:*` dependency and
+import the same way the host does; the cockpit bundler dedupes it so one copy renders everywhere.
+Do not import `radix-ui` or `class-variance-authority` directly from plugin code: the doom-web
+vibe-lint rules route every primitive through this package so a theme change reaches all of them.
+
+## Theme tokens
+
+The palette a theme must supply: `bg`, `rail`, `panel`, `deep`, `border`, `border-soft`, `hi`,
+`text`, `dim`, `faint`, `blue`, `green`, `yellow`, `red`, `magenta`, `violet`, `cyan`, `orange`,
+`teal`, `selected`. The derived tokens (`tint-<accent>`, `edge-<accent>`, `font-mono`) are computed
+from the palette with `color-mix()` unless the theme pins them; the shipped dark theme pins the exact
+mockup values.
+
+Each token is published as `--doom-<token>` on the root element and mapped to Tailwind as
+`doom-<token>` (`bg-doom-panel`, `text-doom-hi`, `border-doom-edge-red`), and to shadcn's semantic
+names (`bg-background`, `text-muted-foreground`, `border-input`).
+
+## Writing a theme
+
+```json
+{
+  "name": "my-theme",
+  "label": "My theme",
+  "scheme": "dark",
+  "tokens": { "bg": "#1e1e2e", "rail": "#181825", "panel": "#1e1e2e", "deep": "#11111b", "...": "..." }
+}
+```
+
+`parseThemeConfig(json)` validates it (null on any problem, so a bad file never takes the page
+down) and `applyTheme(theme, document.documentElement)` writes it. `themeFromPiTheme(piThemeJson)`
+builds a web theme from a Pi TUI theme, so the palette DoomPi ships for the terminal drives the
+browser too.
+
+## Development
+
+```bash
+pnpm build      # tsdown: one entry per src/exports module, ESM and CJS, browser platform
+pnpm test       # theme, bridge, and render smoke tests (react-dom/server, no DOM needed)
+pnpm typecheck
+```
+
+The `doom-web` vibe-lint preset governs the layout: `src/types` (the theme contract), `src/lib`
+(`cn`), `src/theme`, `src/icons`, `src/components` (one PascalCase component per file, props-driven,
+no application state), and `src/exports` (pure re-exports, one file per subpath).

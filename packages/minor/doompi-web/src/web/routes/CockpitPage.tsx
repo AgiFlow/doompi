@@ -1,8 +1,9 @@
+import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { PluginSurface } from '../components/PluginSurface.tsx';
-import { useOpenTab } from '../stores/useOpenTab.ts';
+import { usePluginSlotProps } from '../stores/usePluginSlotProps.ts';
 import { ActivityDock } from '../features/activity/ActivityDock.tsx';
 import { RefusedCard } from '../features/connection/RefusedCard.tsx';
 import { DialogOverlay } from '../features/dialogs/DialogOverlay.tsx';
@@ -12,14 +13,15 @@ import { Composer } from '../features/session/Composer.tsx';
 import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { Timeline } from '../features/session/Timeline.tsx';
 import { TopBar } from '../features/status/TopBar.tsx';
-import { webTabs } from '../lib/pluginRegistry.ts';
+import { HOST_SLOTS, webTabs } from '../lib/pluginRegistry.ts';
 import { sessionsStore, setActiveSession } from '../stores/sessionsStore.ts';
+import { setDockOpen, uiStore } from '../stores/uiStore.ts';
 
 export function CockpitPage() {
-  const [dockOpen, setDockOpen] = useState(true);
+  const dockOpen = useStore(uiStore, (state) => state.dockOpen);
   const { sessionId, tabId } = useParams({ strict: false });
   const navigate = useNavigate();
-  const openTab = useOpenTab();
+  const slotProps = usePluginSlotProps(sessionId ?? null);
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
   const tab = tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId);
@@ -56,27 +58,28 @@ export function CockpitPage() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar view={tab?.id ?? 'conversation'} />
-        {tab ? <tab.panel sessionId={sessionId ?? null} openTab={openTab} /> : <Timeline />}
+        {tab ? <tab.panel {...slotProps} /> : <Timeline />}
         <Composer />
         <SelectionBar />
       </main>
       {dockOpen ? (
         <ActivityDock onClose={() => setDockOpen(false)} />
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           data-testid="activity-show"
+          title="show the activity dock"
           onClick={() => setDockOpen(true)}
-          className="shrink-0 border-l border-doom-border bg-doom-rail px-2 text-[9px] tracking-widest text-doom-dim hover:text-doom-hi"
+          className="h-auto shrink-0 rounded-none border-l border-doom-border bg-doom-rail px-2 py-3 text-[9px] tracking-widest text-doom-dim hover:bg-doom-rail"
           style={{ writingMode: 'vertical-rl' }}
         >
           ACTIVITY
-        </button>
+        </Button>
       )}
       <DialogOverlay />
       <RefusedCard />
       <CommandPalette />
-      <PluginSurface slot="overlay" sessionId={sessionId ?? null} />
+      <PluginSurface slot={HOST_SLOTS.overlay} sessionId={sessionId ?? null} />
     </div>
   );
 }

@@ -10,6 +10,7 @@ export interface SettingsSection {
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'providers', label: 'providers', detail: 'sign in to the model providers Pi can use' },
+  { id: 'appearance', label: 'appearance', detail: 'pick the theme the cockpit renders with' },
 ];
 
 export const DEFAULT_SETTINGS_SECTION = SETTINGS_SECTIONS[0].id;

@@ -1,7 +1,31 @@
+import {
+  BranchIcon,
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  GearIcon,
+  Input,
+  KebabIcon,
+  PlusIcon,
+  SectionLabel,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@agimon-ai/doompi-web-components';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
+import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { stopSession } from '../../lib/hubApi.ts';
 import { abbreviateCwd, runningCount, sessionStatusLine } from '../../lib/sessionSummary.ts';
 import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections.ts';
@@ -11,49 +35,6 @@ import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
 import { NewSessionDialog } from './NewSessionDialog.tsx';
 
 const STATUS_REFRESH_MS = 30_000;
-
-function BranchIcon({ className }: { className: string }) {
-  return (
-    <svg viewBox="0 0 10 10" className={`h-[10px] w-[10px] shrink-0 ${className}`} aria-hidden>
-      <circle cx="2.5" cy="2" r="1.3" fill="none" stroke="currentColor" strokeWidth="1" />
-      <circle cx="2.5" cy="8" r="1.3" fill="none" stroke="currentColor" strokeWidth="1" />
-      <circle cx="7.5" cy="3.5" r="1.3" fill="none" stroke="currentColor" strokeWidth="1" />
-      <path d="M2.5 3.3 V6.7 M7.5 4.8 Q7.5 6.5 4 6.8" fill="none" stroke="currentColor" strokeWidth="1" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden>
-      <path d="M6 2 V10 M2 6 H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden>
-      <circle cx="6" cy="6" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.1" />
-      <path
-        d="M6 1.2 V2.6 M6 9.4 V10.8 M1.2 6 H2.6 M9.4 6 H10.8 M2.6 2.6 L3.6 3.6 M8.4 8.4 L9.4 9.4 M9.4 2.6 L8.4 3.6 M3.6 8.4 L2.6 9.4"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function KebabIcon() {
-  return (
-    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden>
-      <circle cx="6" cy="2.5" r="1.1" fill="currentColor" />
-      <circle cx="6" cy="6" r="1.1" fill="currentColor" />
-      <circle cx="6" cy="9.5" r="1.1" fill="currentColor" />
-    </svg>
-  );
-}
 
 /**
  * What the card is doing besides showing its session: nothing, showing its
@@ -65,61 +46,49 @@ type CardMode = 'view' | 'menu' | 'rename' | 'confirm';
 function RemoveSessionDialog({
   sessionId,
   name,
+  open,
   onConfirm,
   onCancel,
 }: {
   sessionId: string;
   name: string;
+  open: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onCancel]);
-
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-doom-deep/70" onMouseDown={onCancel}>
-      <div
-        role="dialog"
-        aria-modal
-        data-testid={`session-stop-dialog-${sessionId}`}
-        onMouseDown={(event) => event.stopPropagation()}
-        className="w-[360px] overflow-hidden rounded-lg border border-doom-border bg-doom-panel shadow-2xl"
-      >
-        <div className="border-b border-doom-border px-4 py-3">
-          <span className="text-[12px] font-bold tracking-wide text-doom-hi">remove session</span>
-        </div>
-        <div className="flex flex-col gap-3 px-4 py-4">
-          <p className="text-[11px] leading-relaxed text-doom-dim">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
+    >
+      <DialogContent width="sm" data-testid={`session-stop-dialog-${sessionId}`} aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>remove session</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <DialogDescription>
             this stops <span className="font-bold text-doom-hi">{name || 'untitled'}</span> and removes it from the
             rail. anything it is running ends now.
-          </p>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="md"
               data-testid={`session-stop-cancel-${sessionId}`}
               autoFocus
               onClick={onCancel}
-              className="rounded border border-doom-border px-3 py-1 text-[11px] text-doom-dim hover:text-doom-hi"
             >
               cancel
-            </button>
-            <button
-              type="button"
-              data-testid={`session-stop-confirm-${sessionId}`}
-              onClick={onConfirm}
-              className="rounded bg-doom-red px-3 py-1 text-[11px] font-bold text-doom-rail"
-            >
+            </Button>
+            <Button variant="danger" size="md" data-testid={`session-stop-confirm-${sessionId}`} onClick={onConfirm}>
               remove
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+            </Button>
+          </DialogFooter>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -139,7 +108,10 @@ function SessionCard({
   const [mode, setMode] = useState<CardMode>('view');
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
-  const menuRef = useRef<HTMLDivElement>(null);
+  // Read when the menu closes: a choice that moved the card into another
+  // mode keeps the focus it took, rather than handing it back to the kebab.
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const status = sessionStatusLine(
     {
       attach: meta.attach,
@@ -151,23 +123,6 @@ function SessionCard({
     },
     now,
   );
-
-  // The menu closes on a click anywhere else or on escape, like any popover.
-  useEffect(() => {
-    if (mode !== 'menu') return;
-    const onPointerDown = (event: MouseEvent): void => {
-      if (menuRef.current && event.target instanceof Node && !menuRef.current.contains(event.target)) setMode('view');
-    };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setMode('view');
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [mode]);
 
   const beginRename = (): void => {
     setDraft(summary.name);
@@ -185,39 +140,33 @@ function SessionCard({
     if ('error' in result) setError(result.error);
   };
 
-  const cardClass = `flex w-full flex-col gap-1 rounded-md px-[11px] py-2.5 text-left ${
-    active ? 'bg-[#2257A0]' : 'hover:bg-doom-panel'
+  const cardClass = `flex w-full flex-col gap-1 rounded-md px-[11px] py-2.5 text-left transition-colors ${
+    active ? 'bg-doom-selected' : 'hover:bg-doom-panel'
   }`;
   const menuOpen = mode === 'menu';
-  const menuButtonClass = `flex h-5 w-5 items-center justify-center rounded ${
-    active
-      ? 'text-white/80 hover:bg-white/20 hover:text-white'
-      : 'text-doom-faint hover:bg-doom-deep hover:text-doom-hi'
-  } ${menuOpen ? (active ? 'bg-white/20 text-white' : 'bg-doom-deep text-doom-hi') : ''}`;
-  const menuItemClass = 'w-full px-2.5 py-1.5 text-left text-[11px] hover:bg-doom-deep';
   const details = (
     <>
       <span
-        data-testid="session-card-status"
-        className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-[#DDE9FA]' : 'truncate text-doom-dim'}`}
+        data-testid="session-status"
+        className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-white/85' : 'truncate text-doom-dim'}`}
       >
         {status}
       </span>
       {summary.git ? (
         <span
-          data-testid="session-card-branch"
-          className={`flex items-center gap-[7px] pt-0.5 text-[10px] ${active ? 'text-[#DDE9FA]' : 'text-doom-faint'}`}
+          data-testid="session-branch"
+          className={`flex items-center gap-[7px] pt-0.5 text-[10px] ${active ? 'text-white/85' : 'text-doom-faint'}`}
         >
-          <BranchIcon className={active ? 'text-white/70' : 'text-doom-faint'} />
+          <BranchIcon className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-white/70' : 'text-doom-faint'}`} />
           {summary.git.branch}
           {summary.git.dirty ? '*' : ''}
         </span>
       ) : null}
-      <span className={`truncate text-[10px] ${active ? 'text-[#B9D3F2]' : 'text-doom-faint'}`}>
+      <span className={`truncate text-[10px] ${active ? 'text-white/70' : 'text-doom-faint'}`}>
         {abbreviateCwd(summary.cwd)}
       </span>
       {error ? (
-        <span data-testid="session-card-error" className="text-[10px] text-doom-red">
+        <span data-testid="session-error" className="line-clamp-3 text-[10px] break-words text-doom-red">
           {error}
         </span>
       ) : null}
@@ -230,18 +179,17 @@ function SessionCard({
         // The name field cannot live inside the card button, so the card
         // briefly stops being one while it takes a name.
         <div className={cardClass}>
-          <input
+          <Input
             data-testid={`session-name-input-${summary.id}`}
             value={draft}
             autoFocus
-            spellCheck={false}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') commitRename();
               if (event.key === 'Escape') setMode('view');
             }}
             onBlur={() => setMode('view')}
-            className="min-w-0 rounded border border-doom-blue/60 bg-doom-deep px-1.5 py-0.5 text-[13px] font-bold text-doom-hi outline-none"
+            className="border-doom-blue/60 px-1.5 py-0.5 text-[13px] font-bold"
           />
           {details}
         </div>
@@ -258,8 +206,9 @@ function SessionCard({
             </span>
             {ordinal <= 9 ? (
               <span
-                className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold group-focus-within:opacity-0 group-hover:opacity-0 ${
-                  active ? 'bg-white/20 text-white' : 'bg-[#2E2136] text-doom-magenta'
+                title={`press ${String(ordinal)} to focus`}
+                className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
+                  active ? 'bg-white/20 text-white' : 'bg-doom-tint-magenta text-doom-magenta'
                 }`}
               >
                 {ordinal}
@@ -272,58 +221,56 @@ function SessionCard({
 
       {mode === 'view' || menuOpen ? (
         <div
-          ref={menuRef}
-          className={`absolute top-2 right-2 ${
-            menuOpen ? 'z-10 opacity-100' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
+          className={`absolute top-2 right-2 transition-opacity ${
+            menuOpen ? 'opacity-100' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
           }`}
         >
-          <button
-            type="button"
-            data-testid={`session-menu-${summary.id}`}
-            title="session actions"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMode(menuOpen ? 'view' : 'menu')}
-            className={menuButtonClass}
+          <DropdownMenu
+            open={menuOpen}
+            onOpenChange={(next) => setMode((current) => (next ? 'menu' : current === 'menu' ? 'view' : current))}
           >
-            <KebabIcon />
-          </button>
-          {menuOpen ? (
-            <div
-              role="menu"
-              data-testid={`session-menu-list-${summary.id}`}
-              className="absolute top-full right-0 mt-1 flex w-[120px] flex-col overflow-hidden rounded border border-doom-border bg-doom-panel py-1 shadow-xl"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                data-testid={`session-rename-${summary.id}`}
-                onClick={beginRename}
-                className={`${menuItemClass} text-doom-hi`}
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-testid={`session-menu-${summary.id}`}
+                title="session actions"
+                className={
+                  active
+                    ? 'text-white/80 hover:bg-white/20 hover:text-white data-[state=open]:bg-white/20 data-[state=open]:text-white'
+                    : 'text-doom-faint hover:bg-doom-deep hover:text-doom-hi data-[state=open]:bg-doom-deep data-[state=open]:text-doom-hi'
+                }
               >
+                <KebabIcon className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              data-testid={`session-menu-list-${summary.id}`}
+              onCloseAutoFocus={(event) => {
+                if (modeRef.current !== 'view') event.preventDefault();
+              }}
+            >
+              <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
                 edit
-              </button>
-              <button
-                type="button"
-                role="menuitem"
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
                 data-testid={`session-stop-${summary.id}`}
-                onClick={() => setMode('confirm')}
-                className={`${menuItemClass} text-doom-red`}
+                onSelect={() => setMode('confirm')}
               >
                 remove
-              </button>
-            </div>
-          ) : null}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ) : null}
-      {mode === 'confirm' ? (
-        <RemoveSessionDialog
-          sessionId={summary.id}
-          name={summary.name}
-          onConfirm={() => void stop()}
-          onCancel={() => setMode('view')}
-        />
-      ) : null}
+      <RemoveSessionDialog
+        sessionId={summary.id}
+        name={summary.name}
+        open={mode === 'confirm'}
+        onConfirm={() => void stop()}
+        onCancel={() => setMode('view')}
+      />
     </div>
   );
 }
@@ -331,6 +278,11 @@ function SessionCard({
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+}
+
+/** A key pressed inside an overlay belongs to that overlay, never to the rail. */
+function insideOverlay(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[role="dialog"], [role="menu"], [role="alertdialog"]') !== null;
 }
 
 /** The mockup's rail: brand, live session cards, the new-session flow, and nothing else. */
@@ -356,8 +308,8 @@ export function SessionRail() {
         setCreating(true);
         return;
       }
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (isEditable(event.target) || paletteStore.state.open || hasDialog) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      if (isEditable(event.target) || insideOverlay(event.target) || paletteStore.state.open || hasDialog) return;
       const ordinal = Number.parseInt(event.key, 10);
       if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 9) return;
       const target = order[ordinal - 1];
@@ -375,13 +327,13 @@ export function SessionRail() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-[9px] border-b border-doom-border px-4 pt-4 pb-3.5">
         <span className="text-[15px] font-bold tracking-[0.16em] text-doom-hi">DOOMPI</span>
-        <span className="rounded-[3px] bg-[#2E2136] px-1.5 py-[3px] text-[8px] font-bold tracking-[0.12em] text-doom-magenta">
+        <span className="rounded-[3px] bg-doom-tint-magenta px-1.5 py-[3px] text-[8px] font-bold tracking-[0.12em] text-doom-magenta">
           WEB
         </span>
       </div>
 
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-        <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">SESSIONS</span>
+        <SectionLabel>sessions</SectionLabel>
         <span data-testid="sessions-running-rail" className="text-[9px] text-doom-faint">
           {running} running
         </span>
@@ -392,29 +344,36 @@ export function SessionRail() {
         ))}
       </div>
       <div className="px-2.5 pt-2">
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="lg"
           data-testid="new-session-open"
           onClick={() => setCreating(true)}
-          className="flex h-8 w-full items-center gap-2 rounded-md border border-doom-border px-[11px] text-[11px] text-doom-dim hover:border-doom-blue/50 hover:text-doom-hi"
+          className="w-full justify-start px-[11px] text-[11px]"
         >
-          <PlusIcon />
+          <PlusIcon className="h-3 w-3" />
           new session
-        </button>
+        </Button>
       </div>
 
-      <PluginSurface slot="rail" sessionId={activeId} />
+      <PluginSurface slot={HOST_SLOTS.rail} sessionId={activeId} />
       <div className="flex-1" />
       <div className="flex items-center gap-2.5 border-t border-doom-border px-4 py-3">
-        <Link
-          to="/settings/$section"
-          params={{ section: DEFAULT_SETTINGS_SECTION }}
-          data-testid="settings-open"
-          title="settings"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-doom-faint hover:bg-doom-panel hover:text-doom-hi"
-        >
-          <GearIcon />
-        </Link>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button asChild variant="ghost" size="icon" className="text-doom-faint">
+              <Link
+                to="/settings/$section"
+                params={{ section: DEFAULT_SETTINGS_SECTION }}
+                data-testid="settings-open"
+                aria-label="settings"
+              >
+                <GearIcon className="h-3 w-3" />
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">settings</TooltipContent>
+        </Tooltip>
         <span className="text-[9px] text-doom-faint">ctrl+k commands · ctrl+t new session</span>
       </div>
 

@@ -1,4 +1,13 @@
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import {
+  Button,
+  CloseIcon,
+  EmptyState,
+  STATUS_EDGE,
+  StatusBadge,
+  type StatusTone,
+  StreamCursor,
+} from '@agimon-ai/doompi-web-components';
+import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -8,16 +17,18 @@ import {
 } from 'react';
 import type { SubagentRun, SubagentRunState } from '../src/types/webSubagents.ts';
 import { abbreviateCwd, formatRunDuration } from './format.ts';
-import { dismissRun, isTerminalRun, openRun, requestRunStop, subagentsStore, visibleRuns } from './subagentsStore.ts';
+import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
+import { dismissRun, isTerminalRun, openRun, requestRunStop, subagents, visibleRuns } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
 
-const BADGE: Readonly<Record<SubagentRunState, { label: string; className: string; border: string }>> = {
-  queued: { label: 'QUEUED', className: 'bg-doom-panel text-doom-faint', border: 'border-doom-border' },
-  running: { label: 'RUNNING', className: 'bg-[#312A1C] text-doom-yellow', border: 'border-[#574427]' },
-  done: { label: 'DONE', className: 'bg-[#262E1E] text-doom-green', border: 'border-doom-border' },
-  failed: { label: 'FAILED', className: 'bg-[#332428] text-doom-red', border: 'border-[#6B3A3A]' },
-  stopped: { label: 'STOPPED', className: 'bg-doom-panel text-doom-faint', border: 'border-doom-border' },
+/** One run state, in the host's shared outcome vocabulary. */
+const BADGE: Readonly<Record<SubagentRunState, { label: string; tone: StatusTone }>> = {
+  queued: { label: 'QUEUED', tone: 'neutral' },
+  running: { label: 'RUNNING', tone: 'running' },
+  done: { label: 'DONE', tone: 'ok' },
+  failed: { label: 'FAILED', tone: 'error' },
+  stopped: { label: 'STOPPED', tone: 'neutral' },
 };
 
 function elapsed(run: SubagentRun, now: number): string {
@@ -75,38 +86,46 @@ function tailLines(run: SubagentRun): { text: string; className: string }[] {
  * not. Stop is a request the runtime acknowledges in its own time, so the
  * button reads "stopping" until the run's own status says otherwise.
  */
-function RunControl({ sessionId, run, stopping }: { sessionId: string; run: SubagentRun; stopping: boolean }) {
+function RunControl({
+  sessionId,
+  run,
+  stopping,
+  send,
+}: {
+  sessionId: string;
+  run: SubagentRun;
+  stopping: boolean;
+  send: SessionFrameSender;
+}) {
   const act = (event: ReactMouseEvent, action: () => void): void => {
     event.stopPropagation();
     action();
   };
   if (isTerminalRun(run)) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="outline"
+        size="xs"
         data-testid={`run-clear-${run.runId}`}
         title="clear this run from the grid"
         onClick={(event) => act(event, () => dismissRun(sessionId, run.runId))}
-        className="rounded-[3px] border border-doom-border px-1.5 py-[2px] text-[9px] text-doom-dim hover:border-doom-blue/50 hover:text-doom-hi"
       >
         clear
-      </button>
+      </Button>
     );
   }
   return (
-    <button
-      type="button"
+    <Button
+      variant={stopping ? 'outline' : 'danger-outline'}
+      size="xs"
       data-testid={`run-stop-${run.runId}`}
       data-stopping={stopping}
       disabled={stopping}
       title={stopping ? 'stop requested; the run reports its own final state' : 'ask the runtime to stop this run'}
-      onClick={(event) => act(event, () => requestRunStop(sessionId, run.runId))}
-      className={`rounded-[3px] border px-1.5 py-[2px] text-[9px] ${
-        stopping ? 'border-doom-border text-doom-faint' : 'border-[#6B3A3A] text-doom-red hover:bg-[#332428]'
-      }`}
+      onClick={(event) => act(event, () => requestRunStop(send, sessionId, run.runId))}
     >
       {stopping ? 'stopping…' : 'stop'}
-    </button>
+    </Button>
   );
 }
 
@@ -115,12 +134,14 @@ function RunCard({
   run,
   now,
   stopping,
+  send,
   onOpen,
 }: {
   sessionId: string;
   run: SubagentRun;
   now: number;
   stopping: boolean;
+  send: SessionFrameSender;
   onOpen: () => void;
 }) {
   const badge = BADGE[run.state];
@@ -141,7 +162,7 @@ function RunCard({
       data-run-state={run.state}
       onClick={onOpen}
       onKeyDown={onKeyDown}
-      className={`flex min-h-[210px] min-w-0 cursor-pointer flex-col overflow-hidden rounded-md border bg-doom-panel text-left ${badge.border} hover:border-doom-blue/50`}
+      className={`flex min-h-[210px] min-w-0 cursor-pointer flex-col overflow-hidden rounded-md border bg-doom-panel text-left transition-colors outline-none ${STATUS_EDGE[badge.tone]} hover:border-doom-blue/50 focus-visible:border-doom-blue`}
     >
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
         <span data-testid="run-agent" className="truncate text-[12px] font-bold text-doom-hi">
@@ -149,12 +170,9 @@ function RunCard({
         </span>
         <span className="min-w-0 flex-1" />
         <span className="shrink-0 text-[9px] text-doom-faint">{elapsed(run, now)}</span>
-        <span
-          data-testid="run-state"
-          className={`shrink-0 rounded-[3px] px-[7px] py-[3px] text-[9px] font-bold ${badge.className}`}
-        >
+        <StatusBadge tone={badge.tone} data-testid="run-state">
           {badge.label}
-        </span>
+        </StatusBadge>
       </div>
       <WorkLine run={run} />
       <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden border-t border-doom-border-soft bg-doom-deep px-3 py-2.5">
@@ -163,7 +181,7 @@ function RunCard({
             {line.text}
           </span>
         ))}
-        {run.state === 'running' ? <span className="mt-0.5 inline-block h-[11px] w-1.5 bg-doom-blue" /> : null}
+        {run.state === 'running' ? <StreamCursor className="mt-0.5 ml-0 h-[11px] w-1.5 translate-y-0" /> : null}
       </div>
       <div className="flex items-center gap-3 px-3 py-2">
         <span className="truncate text-[9px] text-doom-faint">
@@ -172,7 +190,7 @@ function RunCard({
           {run.model ? ` · ${run.model.split('/').pop() ?? run.model}` : ''}
         </span>
         <span className="min-w-0 flex-1" />
-        <RunControl sessionId={sessionId} run={run} stopping={stopping} />
+        <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
         <span className="text-[9px] font-bold text-doom-blue">detail</span>
       </div>
     </div>
@@ -193,12 +211,16 @@ function RunDrawer({
   run,
   now,
   stopping,
+  send,
+  renderSlot,
   onClose,
 }: {
   sessionId: string;
   run: SubagentRun;
   now: number;
   stopping: boolean;
+  send: SessionFrameSender;
+  renderSlot: WebPluginSlotProps['renderSlot'];
   onClose: () => void;
 }) {
   const badge = BADGE[run.state];
@@ -212,20 +234,14 @@ function RunDrawer({
         <span data-testid="drawer-agent" className="truncate text-[13px] font-bold text-doom-hi">
           {run.agent}
         </span>
-        <span className={`shrink-0 rounded-[3px] px-[7px] py-[3px] text-[9px] font-bold ${badge.className}`}>
-          {badge.label}
-        </span>
+        <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
         <span className="min-w-0 flex-1" />
         <span className="text-[10px] text-doom-faint">{elapsed(run, now)}</span>
-        <RunControl sessionId={sessionId} run={run} stopping={stopping} />
-        <button
-          type="button"
-          data-testid="drawer-close"
-          onClick={onClose}
-          className="text-[11px] text-doom-faint hover:text-doom-hi"
-        >
-          ✕
-        </button>
+        {renderSlot(RUN_ACTIONS_SLOT.slot)}
+        <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
+        <Button variant="ghost" size="icon" data-testid="drawer-close" title="close the run detail" onClick={onClose}>
+          <CloseIcon className="h-3 w-3" />
+        </Button>
       </div>
       <div className="flex flex-col gap-1.5 px-4 py-2.5">
         <DrawerRow label="run" value={run.runId.slice(0, 8)} />
@@ -259,7 +275,7 @@ function RunDrawer({
         >
           {run.state === 'failed' && run.error ? run.error : output || run.currentTool || '(nothing reported yet)'}
         </pre>
-        {run.state === 'running' ? <span className="mt-1 inline-block h-[11px] w-1.5 bg-doom-blue" /> : null}
+        {run.state === 'running' ? <StreamCursor className="mt-1 ml-0 h-[11px] w-1.5 translate-y-0" /> : null}
       </div>
     </aside>
   );
@@ -273,12 +289,9 @@ function RunDrawer({
  * so short runs read as calmly as busy ones. Clicking a card opens the detail
  * drawer, which narrows the grid and lets it recompute.
  */
-export function SubagentsPanel({ sessionId }: WebPluginSlotProps) {
-  const runs = useStore(subagentsStore, (state) => visibleRuns(state, sessionId));
-  const openRunId = useStore(subagentsStore, (state) => (sessionId === null ? undefined : state.openRunId[sessionId]));
-  const stopRequested = useStore(subagentsStore, (state) =>
-    sessionId === null ? [] : (state.stopRequested[sessionId] ?? []),
-  );
+export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot }: WebPluginSlotProps) {
+  const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
+  const { openRunId, stopRequested } = useStore(subagents.store, (state) => subagents.select(state, sessionId));
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -303,14 +316,11 @@ export function SubagentsPanel({ sessionId }: WebPluginSlotProps) {
           </span>
         </div>
         {runs.length === 0 ? (
-          <div data-testid="subagents-empty" className="flex flex-1 items-center justify-center">
-            <div className="flex w-[420px] flex-col items-center gap-2 text-center">
-              <span className="text-[13px] font-bold text-doom-hi">no subagent runs yet</span>
-              <span className="text-[11px] leading-relaxed text-doom-dim">
-                the main agent starts them with its subagent tool; every run will show up here live.
-              </span>
-            </div>
-          </div>
+          <EmptyState
+            data-testid="subagents-empty"
+            title="no subagent runs yet"
+            description="the main agent starts them with its subagent tool; every run will show up here live."
+          />
         ) : (
           <>
             <div data-testid="subagents-grid" className="grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-4">
@@ -323,6 +333,7 @@ export function SubagentsPanel({ sessionId }: WebPluginSlotProps) {
                       run={run}
                       now={now}
                       stopping={stopping(run)}
+                      send={sendSessionFrame}
                       onOpen={() => openRun(sessionId, run.runId)}
                     />
                   ))}
@@ -340,6 +351,8 @@ export function SubagentsPanel({ sessionId }: WebPluginSlotProps) {
           run={shownRun}
           now={now}
           stopping={stopping(shownRun)}
+          send={sendSessionFrame}
+          renderSlot={renderSlot}
           onClose={() => openRun(sessionId, undefined)}
         />
       ) : null}

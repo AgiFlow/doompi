@@ -112,6 +112,23 @@ pnpm exec vibe-lint check .
 npm pack --dry-run
 ```
 
+### Plugin dev loop
+
+`pnpm dev` serves the cockpit from source on port 7434 and proxies `/api` (including the socket)
+to a hub on 7433. Point it at plugin packages and their `web/` sources hot-reload too, generated
+into `.dev/` and aliased over the empty committed registry exactly as `doompi sync` does:
+
+```bash
+doompi-web                                   # the hub, serving the synced bundle on 7433
+pnpm dev                                     # serves the composition the last doompi sync bundled
+DOOMPI_WEB_PLUGIN_ROOTS=/path/to/pkg pnpm dev  # or an explicit list, path-delimiter separated
+```
+
+The roots come from `pluginRoots.json`, which `doompi sync` writes beside its bundle under
+`~/.doompi/web/current`, unless the environment names them. The hub side is unchanged: a plugin's
+hub channel is still the built `dist/webHub.mjs` the synced registry names, so a hub-side change
+needs `pnpm build` in that package and a hub restart.
+
 `pnpm test:e2e` drives the built executable in a real browser against a scripted session socket, so
 run `pnpm build` first.
 
@@ -122,16 +139,29 @@ Maintained by [Agimon](https://agimon.ai/about).
 Tabs beyond the conversation are plugins, and no plugin package is a dependency of this one. A
 package declares a `doompiWeb` block in its package.json naming a client entry (a `webPlugin`
 definition: tab, panel, badge, session data channels, tool renderers for the timeline cards of
-the tools the package registers, and other slot contributions) and an
-optional hub entry (`webHubChannels` plus its built dist). This package's own bundle carries only
-its built-in plugins; the full set is assembled on your machine: `doompi sync` discovers the
-installed composition's manifests, generates the import entries, and rebuilds the SPA through the
-`./bundler` subpath into `~/.doompi/web/current`, which the server prefers over the packaged
-bundle (`--assets` and `DOOMPI_WEB_DIST` override it). The synced bundle carries
-`webPlugins.server.json` naming each plugin's built hub entry, imported lazily: a missing plugin
-package logs a notice and its tab shows an empty state. The subagents tab is the in-package
-reference plugin; the workflows tab ships with `@agimon-ai/doompi-workflow`. Contracts come from
-`@agimon-ai/doompi-web-contracts`.
+the tools the package registers, slots it opens for other plugins, fills into slots others open,
+and the host's own slot contributions) and an optional hub entry (`webHubChannels` plus its built
+dist). This package's own bundle carries no plugins; the full set is assembled on your machine:
+`doompi sync` discovers the installed composition's manifests, generates the import entries, and
+rebuilds the SPA through the `./bundler` subpath into `~/.doompi/web/current`, which the server
+prefers over the packaged bundle (`--assets` and `DOOMPI_WEB_DIST` override it). The synced bundle
+carries `webPlugins.server.json` naming each plugin's built hub entry, imported lazily: a missing
+plugin package logs a notice and its tab shows an empty state. The subagents tab in
+`@agimon-ai/doompi-team` is the reference plugin; the workflows tab ships with
+`@agimon-ai/doompi-workflow`. Contracts come from `@agimon-ai/doompi-web-contracts`.
+
+Plugins are independent. A manifest names no other plugin and `registrationOrder` is only an
+optional tiebreak (default 1000, then plugin id): every relation between two plugins resolves by
+name once all of them are installed. A plugin opens slots named `<pluginId>.<name>` and renders
+them with the `renderSlot` and `slotData` props its components receive; any plugin fills them, and
+the host's `overlay`, `rail`, `selection-bar`, `activity`, and `activity.<group>` slots, without
+knowing whether the owner is installed. A fill into a slot nobody declares, or two plugins wanting
+one tab id, tool name, group name, or Leader Space leaf, never fails the page: the install resolves
+it (the first plugin keeps a shared name, a later binding takes a leaf over as the TUI documents)
+and records an install diagnostic, which `webPluginDiagnostics()` lists and the page logs once with
+`console.warn`. `doompi sync` treats a malformed or half-installed plugin package the same way, as a
+notice that skips that package. The repository's own composition is held to zero notices and zero
+diagnostics by `tests/contract/workspaceWebPlugins.test.ts`.
 
 ## License
 

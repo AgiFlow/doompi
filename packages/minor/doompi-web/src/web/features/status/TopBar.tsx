@@ -1,3 +1,4 @@
+import { ActivityIcon, Dot, type DotTone, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
 import type { TabContribution } from '@agimon-ai/doompi-web-contracts';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
@@ -6,36 +7,23 @@ import { webTabs } from '../../lib/pluginRegistry.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 
-function ActIcon() {
-  return (
-    <svg viewBox="0 0 10 10" className="h-[10px] w-[10px] shrink-0" aria-hidden>
-      <path
-        d="M1 5.5 H3 L4.2 2.5 L5.8 7.5 L7 5.5 H9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 /**
  * The pill folds attach state and run state into one word, the way the mockup
  * does: a healthy idle session says "attached", a healthy busy one says
  * "running", and anything else names its trouble.
  */
-function pill(attach: AttachPhase, busy: boolean): { text: string; className: string; dot: string } {
-  if (attach === 'attached' && busy)
-    return { text: 'running', className: 'bg-[#312A1C] text-doom-yellow', dot: 'bg-doom-yellow' };
-  if (attach === 'attached')
-    return { text: 'attached', className: 'bg-[#262E1E] text-doom-green', dot: 'bg-doom-green' };
+function pill(attach: AttachPhase, busy: boolean): { text: string; tone: StatusTone; dot: DotTone; pulse: boolean } {
+  if (attach === 'attached' && busy) return { text: 'running', tone: 'running', dot: 'yellow', pulse: true };
+  if (attach === 'attached') return { text: 'attached', tone: 'ok', dot: 'green', pulse: false };
   if (attach === 'connecting' || attach === 'detached') {
-    return { text: attach, className: 'bg-[#312A1C] text-doom-yellow', dot: 'bg-doom-yellow' };
+    return { text: attach, tone: 'running', dot: 'yellow', pulse: attach === 'connecting' };
   }
-  return { text: attach, className: 'bg-[#332428] text-doom-red', dot: 'bg-doom-red' };
+  return { text: attach, tone: 'error', dot: 'red', pulse: false };
 }
+
+const TAB_CLASS = 'flex items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors';
+const TAB_ACTIVE = 'bg-doom-tint-blue font-bold text-doom-blue';
+const TAB_IDLE = 'text-doom-dim hover:bg-doom-panel hover:text-doom-hi';
 
 /** One registry tab: the badge hook is stable per tab, so the call is unconditional. */
 function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId: string; active: boolean }) {
@@ -47,9 +35,7 @@ function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId
       params={{ sessionId, tabId: tab.id }}
       data-testid={`tab-${tab.id}`}
       data-active={active}
-      className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] ${
-        active ? 'bg-[#21313F] font-bold text-doom-blue' : 'text-doom-dim hover:text-doom-hi'
-      }`}
+      className={`${TAB_CLASS} ${active ? TAB_ACTIVE : TAB_IDLE}`}
     >
       {tab.label}
       {count > 0 ? (
@@ -105,9 +91,7 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
               params={{ sessionId: activeId }}
               data-testid="tab-conversation"
               data-active={view === 'conversation'}
-              className={`rounded px-2 py-1 text-[10px] ${
-                view === 'conversation' ? 'bg-[#21313F] font-bold text-doom-blue' : 'text-doom-dim hover:text-doom-hi'
-              }`}
+              className={`${TAB_CLASS} ${view === 'conversation' ? TAB_ACTIVE : TAB_IDLE}`}
             >
               conversation
             </Link>
@@ -120,29 +104,31 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
 
       <div className="flex shrink-0 items-center gap-2">
         {meta && meta.replayed > 0 ? (
-          <span data-testid="replayed-count" className="text-[10px] text-doom-faint">
+          <span
+            data-testid="replayed-count"
+            title="frames replayed into this page"
+            className="text-[10px] text-doom-faint"
+          >
             replayed {meta.replayed}
           </span>
         ) : null}
         {meta && meta.dropped > 0 ? (
-          <span data-testid="dropped-count" className="text-[10px] text-doom-yellow">
+          <span
+            data-testid="dropped-count"
+            title="frames the hub's ring lost before this page subscribed"
+            className="text-[10px] text-doom-yellow"
+          >
             {meta.dropped} dropped
           </span>
         ) : null}
-        <span
-          data-testid="connection-status"
-          className={`flex h-[21px] items-center gap-1.5 rounded px-2 text-[10px] ${state.className}`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${state.dot}`} />
+        <StatusBadge size="md" tone={state.tone} data-testid="connection-status" className="font-normal">
+          <Dot tone={state.dot} pulse={state.pulse} />
           {state.text}
-        </span>
-        <span
-          data-testid="sessions-running"
-          className="flex h-[21px] items-center gap-1.5 rounded bg-[#312A1C] px-2 text-[10px] text-doom-yellow"
-        >
-          <ActIcon />
+        </StatusBadge>
+        <StatusBadge size="md" tone="running" data-testid="sessions-running" className="font-normal">
+          <ActivityIcon className="h-[10px] w-[10px]" />
           {running} running
-        </span>
+        </StatusBadge>
       </div>
     </header>
   );

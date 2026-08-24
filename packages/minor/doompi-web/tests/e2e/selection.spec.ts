@@ -88,6 +88,47 @@ test('invokes the command that changes the domains', async ({ page, cockpit }) =
   expect(sent.message).toBe('/domains');
 });
 
+test('says the axis is asking until the agent answers', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('doom-major-mode', LIVE));
+  const button = page.getByTestId('axis-mode');
+  await expect(button).toHaveAttribute('data-pending', 'false');
+
+  await button.click();
+  await cockpit.session.waitForCommand('prompt');
+
+  // The question is with the session; the button says so rather than looking
+  // like a click that did nothing.
+  await expect(button).toHaveAttribute('data-pending', 'true');
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'mode-menu-pending',
+    method: 'select',
+    title: 'pick a major mode',
+    options: ['minimal', 'copilot'],
+  });
+
+  await expect(page.getByTestId('dialog')).toBeVisible();
+  await expect(button).toHaveAttribute('data-pending', 'false');
+});
+
+test('stops asking when the run settles without a menu', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('doom-major-mode', LIVE));
+  await page.getByTestId('axis-mode').click();
+  await cockpit.session.waitForCommand('prompt');
+  await expect(page.getByTestId('axis-mode')).toHaveAttribute('data-pending', 'true');
+
+  // A command that answers with no dialog must not leave the button asking.
+  cockpit.session.emit({ type: 'agent_settled' });
+  await expect(page.getByTestId('axis-mode')).toHaveAttribute('data-pending', 'false');
+});
+
 test('opens the mode menu as the bar popover when the agent answers', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
@@ -194,4 +235,63 @@ test('clearing a mode status turns it back off in the open popup', async ({ page
 
   cockpit.session.emit(status('doom-loop'));
   await expect(page.getByTestId('minor-loop')).toHaveAttribute('data-availability', 'off');
+});
+
+test('a minor mode opt-in question opens on the minor chip, not in the middle', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('plan-mode'));
+  await page.getByTestId('axis-minor').click();
+  await page.getByTestId('minor-plan').click();
+
+  const prompt = await cockpit.session.waitForCommand('prompt');
+  expect(prompt.message).toBe('/minor plan');
+  await expect(page.getByTestId('minor-popup')).toBeHidden();
+
+  // The runtime answers a multi-opt-in mode with a picker. It was asked from
+  // the bar, so it belongs on the bar.
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'plan-flavor',
+    method: 'select',
+    title: 'Activate: Flavor',
+    options: ['Normal', 'Debug', 'Fable'],
+  });
+
+  const dialog = page.getByTestId('dialog');
+  await expect(dialog).toHaveAttribute('data-dialog-menu', 'minor');
+  await expect(page.getByTestId('dialog-title')).toHaveText('MINOR MODES');
+
+  await page.getByTestId('dialog-option-1').click();
+  const answer = await cockpit.session.waitForCommand('extension_ui_response');
+  expect(answer.value).toBe('Debug');
+  await expect(dialog).toBeHidden();
+});
+
+test('escaping a minor opt-in question tells the agent and leaves the bar alone', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('plan-mode'));
+  await page.getByTestId('axis-minor').click();
+  await page.getByTestId('minor-plan').click();
+  await cockpit.session.waitForCommand('prompt');
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'plan-flavor-2',
+    method: 'select',
+    title: 'Activate: Flavor',
+    options: ['Normal', 'Debug'],
+  });
+  await expect(page.getByTestId('dialog')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  // An unanswered request would strand the run, so escape cancels it out loud.
+  const answer = await cockpit.session.waitForCommand('extension_ui_response');
+  expect(answer.cancelled).toBe(true);
+  await expect(page.getByTestId('dialog')).toBeHidden();
+  await expect(page.getByTestId('minor-popup')).toBeHidden();
 });

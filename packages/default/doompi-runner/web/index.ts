@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { BashCall, BashResult } from './BashToolCard.tsx';
 import { RunnersActivitySection } from './RunnersActivitySection.tsx';
-import { bindRunnersRuntime, runnerRunsChannel } from './runnersStore.ts';
+import { runnerRunsChannel } from './runnersStore.ts';
 
 /**
  * This package's cockpit presence. The activity dock shows the runners group
@@ -18,5 +18,4 @@ export const webPlugin = defineWebPlugin({
   activitySections: [{ id: 'runners', component: RunnersActivitySection }],
   // The bash tool's timeline card, the web half of src/tui/bashRender.ts.
   toolRenderers: [{ tools: ['bash'], call: BashCall, result: BashResult }],
-  start: bindRunnersRuntime,
 });

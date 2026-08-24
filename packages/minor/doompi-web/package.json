@@ -62,6 +62,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
+    "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@hono/node-server": "2.1.1",

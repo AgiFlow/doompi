@@ -1,19 +1,20 @@
+import { Button, ChevronDownIcon, ChevronRightIcon, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import type { RunnerRunView } from '../src/types/webRunners.ts';
 import { formatRunnerUptime } from './format.ts';
-import { isStopRequested, requestRunnerStop, runnersStore, sessionRunners } from './runnersStore.ts';
+import { requestRunnerStop, runners } from './runnersStore.ts';
 
 const TICK_MS = 10_000;
 
 type RunnerTone = 'running' | 'done' | 'failed' | 'stopped';
 
-const TONE_DOT: Readonly<Record<RunnerTone, string>> = {
-  running: 'bg-doom-yellow',
-  done: 'bg-doom-green',
-  failed: 'bg-doom-red',
-  stopped: 'bg-doom-faint/40',
+const TONE_DOT: Readonly<Record<RunnerTone, DotTone>> = {
+  running: 'yellow',
+  done: 'green',
+  failed: 'red',
+  stopped: 'muted',
 };
 
 function toneOf(run: RunnerRunView): RunnerTone {
@@ -36,16 +37,27 @@ function span(run: RunnerRunView, now: number): string {
   return formatRunnerUptime(run.startedAt, Number.isFinite(end) ? end : now);
 }
 
+/** One fact of an opened run, on its own line so nothing is truncated away. */
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex min-w-0 gap-2">
+      <span className="w-11 shrink-0 text-[9px] text-doom-faint">{label}</span>
+      <span className="min-w-0 flex-1 break-all text-[9px] text-doom-dim">{value}</span>
+    </span>
+  );
+}
+
 /**
  * The runners group's body in the activity dock: the session's supervised
  * commands, with a stop control while one is running. This replaces the
  * runtime's footer count, which only says how many are up.
  */
-export function RunnersActivitySection({ sessionId }: WebPluginSlotProps) {
-  const runs = useStore(runnersStore, (state) => sessionRunners(state, sessionId));
-  const stopping = useStore(runnersStore, (state) =>
-    sessionId === null ? [] : runs.filter((run) => isStopRequested(state, sessionId, run.id)).map((run) => run.id),
-  );
+export function RunnersActivitySection({ sessionId, sendSessionFrame }: WebPluginSlotProps) {
+  const session = useStore(runners.store, (state) => runners.select(state, sessionId));
+  const { runs, stopRequested: stopping } = session;
+  // Which run the reader opened. The dock is narrow, so a row's command, cwd
+  // and log path are all elided; opening one is the only way to read them.
+  const [openId, setOpenId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -71,10 +83,25 @@ export function RunnersActivitySection({ sessionId }: WebPluginSlotProps) {
             key={run.id}
             data-testid={`activity-runner-${run.id}`}
             data-runner-tone={tone}
+            data-open={openId === run.id}
             className="flex min-w-0 flex-col gap-0.5 rounded-[5px] px-1 py-1"
           >
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[tone]}`} />
+              <button
+                type="button"
+                data-testid={`activity-runner-open-${run.id}`}
+                aria-expanded={openId === run.id}
+                title={openId === run.id ? 'hide this runner' : 'show this runner in full'}
+                onClick={() => setOpenId((current) => (current === run.id ? null : run.id))}
+                className="flex h-3 w-3 shrink-0 items-center justify-center rounded text-doom-faint outline-none hover:text-doom-hi focus-visible:text-doom-hi"
+              >
+                {openId === run.id ? (
+                  <ChevronDownIcon className="h-2.5 w-2.5" />
+                ) : (
+                  <ChevronRightIcon className="h-2.5 w-2.5" />
+                )}
+              </button>
+              <Dot tone={TONE_DOT[tone]} pulse={tone === 'running'} />
               <span
                 className={`min-w-0 flex-1 truncate text-[10px] font-bold ${
                   tone === 'running' ? 'text-doom-hi' : 'text-doom-dim'
@@ -87,8 +114,9 @@ export function RunnersActivitySection({ sessionId }: WebPluginSlotProps) {
                 {run.interactive ? ' · tty' : ''}
               </span>
               {tone === 'running' && sessionId !== null ? (
-                <button
-                  type="button"
+                <Button
+                  variant={stopRequested ? 'outline' : 'danger-outline'}
+                  size="xs"
                   data-testid={`activity-runner-stop-${run.id}`}
                   data-stopping={stopRequested}
                   disabled={stopRequested}
@@ -97,20 +125,29 @@ export function RunnersActivitySection({ sessionId }: WebPluginSlotProps) {
                       ? 'stop requested; the runner reports its own exit'
                       : 'ask the runtime to stop this runner'
                   }
-                  onClick={() => requestRunnerStop(sessionId, run.id)}
-                  className={`shrink-0 rounded border px-1.5 py-0.5 text-[8px] font-bold ${
-                    stopRequested
-                      ? 'border-doom-border text-doom-faint'
-                      : 'border-[#6B3A3A] text-doom-red hover:bg-[#332428]'
-                  }`}
+                  onClick={() => requestRunnerStop(sendSessionFrame, sessionId, run.id)}
+                  className="px-1.5 text-[8px] font-bold"
                 >
                   {stopRequested ? 'stopping…' : 'stop'}
-                </button>
+                </Button>
               ) : null}
             </span>
-            <span className={`truncate pl-3 text-[9px] ${tone === 'failed' ? 'text-doom-red' : 'text-doom-faint'}`}>
+            <span className={`truncate pl-6 text-[9px] ${tone === 'failed' ? 'text-doom-red' : 'text-doom-faint'}`}>
               {detail(run, tone)}
             </span>
+            {openId === run.id ? (
+              <div data-testid={`activity-runner-detail-${run.id}`} className="flex flex-col gap-0.5 pt-1 pl-6">
+                <DetailRow label="command" value={run.command} />
+                <DetailRow label="cwd" value={run.cwd} />
+                <DetailRow
+                  label="runner"
+                  value={`${run.backend} · pid ${String(run.pid)}${run.interactive ? ' · tty' : ''}`}
+                />
+                {/* The cockpit only ever sees a bounded tail, so the whole log
+                    is named rather than implied. */}
+                <DetailRow label="log" value={run.logPath} />
+              </div>
+            ) : null}
           </div>
         );
       })}

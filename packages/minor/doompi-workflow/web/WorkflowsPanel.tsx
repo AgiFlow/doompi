@@ -1,3 +1,4 @@
+import { Dot, type DotTone, EmptyState, STATUS_EDGE, StatusBadge } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
@@ -9,28 +10,26 @@ import type {
 } from '../src/types/webWorkflows.ts';
 import { formatRunDuration } from './runDuration.ts';
 import { workflowRunIdentity } from './workflowActivity.ts';
-import { focusRun, workflowsStore } from './workflowsStore.ts';
+import { focusRun, workflows } from './workflowsStore.ts';
 
 const TICK_MS = 10_000;
 
+/** One run's colour on the chip strip. */
 interface RunTone {
-  label: string;
-  className: string;
-  dot: string;
+  dot: DotTone;
 }
 
 /** One word per run, the way the mockup's chips read: state first, outcome when finished. */
 function runTone(run: WorkflowRunView): RunTone {
   if (run.stage === 'running' && (run.executionState === 'paused' || run.executionState === 'pause_requested')) {
-    return { label: 'PAUSED', className: 'bg-[#312A1C] text-doom-yellow', dot: 'bg-doom-yellow' };
+    return { dot: 'yellow' };
   }
-  if (run.stage === 'running')
-    return { label: 'RUNNING', className: 'bg-[#312A1C] text-doom-yellow', dot: 'bg-doom-yellow' };
-  if (run.stage === 'error') return { label: 'FAILED', className: 'bg-[#332428] text-doom-red', dot: 'bg-doom-red' };
+  if (run.stage === 'running') return { dot: 'yellow' };
+  if (run.stage === 'error') return { dot: 'red' };
   if (run.outcome !== undefined && run.outcome !== 'success') {
-    return { label: run.outcome.toUpperCase(), className: 'bg-doom-panel text-doom-faint', dot: 'bg-doom-faint' };
+    return { dot: 'neutral' };
   }
-  return { label: 'DONE', className: 'bg-[#262E1E] text-doom-green', dot: 'bg-doom-green' };
+  return { dot: 'green' };
 }
 
 const STATE_ICON: Readonly<Record<WorkflowProgressState, { glyph: string; className: string }>> = {
@@ -70,7 +69,7 @@ function NowLine({ run }: { run: WorkflowRunView }) {
   if (run.stage !== 'running' || run.position === undefined) return null;
   return (
     <div data-testid="workflow-now" className="flex items-center gap-2 pb-3">
-      <span className="rounded-[3px] bg-[#21313F] px-1.5 py-0.5 text-[8px] font-bold text-doom-blue">NOW</span>
+      <span className="rounded-[3px] bg-doom-tint-blue px-1.5 py-0.5 text-[8px] font-bold text-doom-blue">NOW</span>
       <span className="truncate text-[11px] text-doom-hi">
         {run.workflowName ?? run.displayName}
         <span className="text-doom-faint"> › </span>
@@ -107,17 +106,15 @@ function AttentionStrip({ runs }: { runs: WorkflowRunView[] }) {
           key={workflowRunIdentity(run)}
           data-testid={`needs-card-${run.runKey}`}
           className={`flex flex-col gap-1 rounded-md border px-3 py-2.5 ${
-            attention.kind === 'error' ? 'border-[#6B3A3A] bg-[#332428]/40' : 'border-[#574427] bg-[#312A1C]/40'
+            attention.kind === 'error'
+              ? `${STATUS_EDGE.error} bg-doom-tint-red/40`
+              : `${STATUS_EDGE.running} bg-doom-tint-yellow/40`
           }`}
         >
           <div className="flex items-center gap-2">
-            <span
-              className={`rounded-[3px] px-1.5 py-0.5 text-[8px] font-bold ${
-                attention.kind === 'error' ? 'bg-[#332428] text-doom-red' : 'bg-[#312A1C] text-doom-yellow'
-              }`}
-            >
+            <StatusBadge size="xs" tone={attention.kind === 'error' ? 'error' : 'running'}>
               {attention.kind === 'error' ? 'ERROR' : 'PAUSED'}
-            </span>
+            </StatusBadge>
             <span className="truncate text-[11px] font-bold text-doom-hi">{run.displayName}</span>
           </div>
           <span className="text-[10px] leading-relaxed text-doom-text">{attention.text}</span>
@@ -152,7 +149,7 @@ function JobRow({
       data-job-status={job.status}
       onClick={onSelect}
       className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-left ${
-        selected ? 'bg-[#21313F]' : 'hover:bg-doom-panel'
+        selected ? 'bg-doom-tint-blue' : 'hover:bg-doom-panel'
       }`}
     >
       <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
@@ -202,12 +199,10 @@ function StepRow({ step, now }: { step: WorkflowStepView; now: number }) {
  * owns the run.
  */
 export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
-  const runs = useStore(workflowsStore, (state) => (sessionId === null ? [] : (state.bySession[sessionId] ?? [])));
+  const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   // The focused run lives in the store so the activity dock can point the tab
   // at a run before opening it.
-  const selectedRun = useStore(workflowsStore, (state) =>
-    sessionId === null ? undefined : state.focusedRun[sessionId],
-  );
+  const selectedRun = useStore(workflows.store, (state) => workflows.select(state, sessionId).focusedRun);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -237,15 +232,11 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
           </span>
         </div>
         {runs.length === 0 ? (
-          <div data-testid="workflows-empty" className="flex flex-1 items-center justify-center">
-            <div className="flex w-[420px] flex-col items-center gap-2 text-center">
-              <span className="text-[13px] font-bold text-doom-hi">no workflow runs yet</span>
-              <span className="text-[11px] leading-relaxed text-doom-dim">
-                launch one from the session (its workflow tools or SPC w l) and the run will show up here live, jobs and
-                steps included.
-              </span>
-            </div>
-          </div>
+          <EmptyState
+            data-testid="workflows-empty"
+            title="no workflow runs yet"
+            description="launch one from the session (its workflow tools or SPC w l) and the run will show up here live, jobs and steps included."
+          />
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2 pb-3">
@@ -265,11 +256,11 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
                     }}
                     className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-[10px] ${
                       active
-                        ? 'border-doom-blue/60 bg-[#21313F] font-bold text-doom-hi'
+                        ? 'border-doom-blue/60 bg-doom-tint-blue font-bold text-doom-hi'
                         : 'border-doom-border bg-doom-panel text-doom-dim hover:text-doom-hi'
                     }`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                    <Dot tone={tone.dot} pulse={candidate.stage === 'running'} />
                     {candidate.displayName}
                   </button>
                 );

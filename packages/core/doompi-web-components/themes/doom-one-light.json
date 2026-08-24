@@ -1,0 +1,27 @@
+{
+  "name": "doom-one-light",
+  "label": "Doom One (light)",
+  "scheme": "light",
+  "tokens": {
+    "bg": "#fafafa",
+    "rail": "#f0f0f0",
+    "panel": "#f4f4f5",
+    "deep": "#e7e7e8",
+    "border": "#d4d4d8",
+    "border-soft": "#e4e4e7",
+    "hi": "#1c1f24",
+    "text": "#383a42",
+    "dim": "#6b6f78",
+    "faint": "#9ca0a4",
+    "blue": "#4078f2",
+    "green": "#50a14f",
+    "yellow": "#986801",
+    "red": "#e45649",
+    "magenta": "#a626a4",
+    "violet": "#7c5bcf",
+    "cyan": "#0184bc",
+    "orange": "#da8548",
+    "teal": "#2f9c9c",
+    "selected": "#4078f2"
+  }
+}

@@ -26,3 +26,5 @@ tmp/
 # rather than stored here. See CONTRIBUTING.md.
 packages/default/doompi-runner-rmux-*/vendor/
 packages/default/doompi-runner-rtk-*/vendor/
+# The cockpit dev loop's generated plugin registry (packages/minor/doompi-web/vite.config.ts).
+packages/minor/doompi-web/.dev/

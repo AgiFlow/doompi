@@ -27,6 +27,14 @@ function bundledCssHas(assetsDir: string, needle: string): boolean {
 
 let cleanups: Array<() => void> = [];
 
+/** A package root with only a manifest, for the failure paths the sync must survive. */
+function brokenPackage(manifest: Record<string, unknown>): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `doompi-web-${String(manifest.name)}-`));
+  cleanups.push(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(manifest));
+  return root;
+}
+
 afterEach(() => {
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 });
@@ -37,19 +45,44 @@ describe('the sync-time cockpit bundler', () => {
     cleanups.push(() => fs.rmSync(outDir, { recursive: true, force: true }));
     const notices: string[] = [];
 
+    // Two broken packages ride along: one with a malformed block, one whose
+    // entry file is missing. A user can install anything, so each is a notice
+    // and the bundle still builds from the rest.
+    const malformed = brokenPackage({
+      name: 'malformed',
+      doompiWeb: { pluginId: 'Bad Case', client: './web/index.ts' },
+    });
+    const entryless = brokenPackage({
+      name: 'entryless',
+      doompiWeb: { pluginId: 'entryless', client: './web/index.ts' },
+    });
+
     // The real thing: Vite compiles the host shell plus doompi-workflow's
     // shipped web source, discovered from its doompiWeb manifest alone.
     const result = await bundleCockpitWeb({
-      pluginRoots: [teamRoot, workflowRoot, planRoot],
+      pluginRoots: [teamRoot, malformed, workflowRoot, entryless, planRoot],
       outDir,
       onNotice: (message) => notices.push(message),
     });
     // doompi-plan proves the metadata-only plugin shape: no tab, no channel,
     // just a minor-mode declaration compiled into the bundle.
     expect(result.pluginIds).toEqual(['subagents', 'workflows', 'plan']);
+    expect(notices.filter((message) => message.includes('skipped'))).toEqual([
+      expect.stringMatching(/malformed.*skipped: .*kebab-case/),
+      expect.stringMatching(/entryless.*skipped: .*client\.entry/),
+    ]);
     expect(bundledJsHas(result.assetsDir, 'no subagent runs yet')).toBe(true);
     expect(fs.existsSync(path.join(result.assetsDir, 'index.html'))).toBe(true);
     expect(fs.existsSync(path.join(result.assetsDir, 'webPlugins.server.json'))).toBe(true);
+    // The roots file beside the bundle is what the dev server reads to serve
+    // the same composition with hot reload.
+    expect(JSON.parse(fs.readFileSync(path.join(outDir, 'pluginRoots.json'), 'utf8'))).toEqual([
+      teamRoot,
+      malformed,
+      workflowRoot,
+      entryless,
+      planRoot,
+    ]);
     // Both moved panels really are compiled in: their empty-state copy appears.
     expect(bundledJsHas(result.assetsDir, 'no workflow runs yet')).toBe(true);
     // Tailwind scanned the plugin sources too: the subagents grid uses an

@@ -203,6 +203,53 @@ describe('menuStore', () => {
     clearPendingMenu();
     expect(pendingMenuFor(Date.now())).toBeNull();
   });
+
+  it('spends the anchor on the dialog that answers it, and releases the claim', async () => {
+    const { claimDialogMenu, menuStore, releaseDialogMenu, resetMenuStore, setPendingMenu } =
+      await import('../../src/web/stores/menuStore.ts');
+    resetMenuStore();
+
+    setPendingMenu('domains');
+    expect(claimDialogMenu('d1')).toEqual({ dialogId: 'd1', menu: 'domains' });
+    expect(menuStore.state.claimed).toEqual({ dialogId: 'd1', menu: 'domains' });
+    // The anchor is spent: a second dialog is nobody's menu.
+    expect(claimDialogMenu('d2')).toBeNull();
+    expect(menuStore.state.pending).toBeNull();
+
+    setPendingMenu('mode');
+    claimDialogMenu('d3');
+    releaseDialogMenu('other');
+    expect(menuStore.state.claimed).toEqual({ dialogId: 'd3', menu: 'mode' });
+    releaseDialogMenu('d3');
+    expect(menuStore.state.claimed).toBeNull();
+    resetMenuStore();
+  });
+});
+
+describe('promptFocus', () => {
+  it('hands the keyboard back to the registered input, and never to a disabled one', async () => {
+    const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus.ts');
+
+    let focused = 0;
+    const input = { disabled: false, focus: () => (focused += 1) } as unknown as HTMLTextAreaElement;
+    const release = registerPromptInput(input);
+    focusPrompt();
+    expect(focused).toBe(1);
+
+    // A composer with no session behind it cannot take the caret.
+    (input as unknown as { disabled: boolean }).disabled = true;
+    focusPrompt();
+    expect(focused).toBe(1);
+
+    (input as unknown as { disabled: boolean }).disabled = false;
+    release();
+    focusPrompt();
+    expect(focused).toBe(1);
+
+    // Registering null is how a composer that never mounted stays harmless.
+    registerPromptInput(null);
+    expect(() => focusPrompt()).not.toThrow();
+  });
 });
 
 describe('paletteStore', () => {

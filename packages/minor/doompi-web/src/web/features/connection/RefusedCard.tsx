@@ -1,10 +1,11 @@
+import { Dialog, DialogContent, DialogHeader, DialogTitle, Spinner } from '@agimon-ai/doompi-web-components';
 import { abbreviateCwd } from '../../lib/sessionSummary.ts';
 import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-[10px] text-doom-faint">{label}</span>
+      <span className="shrink-0 text-[10px] text-doom-faint">{label}</span>
       <span className="truncate text-[10px] text-doom-text">{value}</span>
     </div>
   );
@@ -15,7 +16,8 @@ function Detail({ label, value }: { label: string; value: string }) {
  *
  * doompi-server holds one client at a time so two views cannot fight over the
  * same agent. The hub keeps retrying underneath, so this explains the wait
- * rather than offering a button that would do the same thing again. Other
+ * rather than offering a button that would do the same thing again. It is not
+ * dismissible for the same reason: nothing behind it would work. Other
  * sessions' refusals stay in their rail cards; only the focused one earns the
  * overlay.
  */
@@ -24,16 +26,22 @@ export function RefusedCard() {
   if (meta === null || meta.attach !== 'refused') return null;
 
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-doom-deep/70">
-      <div
+    <Dialog open>
+      <DialogContent
+        width="lg"
         data-testid="refused-card"
-        className="w-[520px] overflow-hidden rounded-lg border border-doom-red/50 bg-doom-panel shadow-2xl"
+        aria-describedby={undefined}
+        className="w-[520px] border-doom-red/50"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
       >
-        <div className="border-b border-doom-red/40 bg-doom-red/10 px-4 py-3">
-          <span data-testid="refused-title" className="text-[12px] font-bold tracking-wide text-doom-red">
+        <DialogHeader className="border-doom-red/40 bg-doom-red/10">
+          <DialogTitle data-testid="refused-title" className="text-doom-red">
             session already attached
-          </span>
-        </div>
+          </DialogTitle>
+          <Spinner className="text-doom-red/70" />
+        </DialogHeader>
         <div className="flex flex-col gap-3 px-4 py-4">
           <p className="text-[12px] leading-relaxed text-doom-text">
             doompi-server holds one client at a time so two views cannot fight over the same agent. Another cockpit is
@@ -49,7 +57,7 @@ export function RefusedCard() {
             close the other cockpit and this one takes over on the next attempt.
           </p>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,8 +1,10 @@
+import { Dialog, DialogContent, DialogTitle, Kbd } from '@agimon-ai/doompi-web-components';
 import type { LeaderBindingContribution } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { type LeaderOption, leaderGroup } from '../../lib/leaderTree.ts';
 import { paletteCommands, pluginLeaderBindings } from '../../lib/pluginRegistry.ts';
+import { focusPrompt } from '../../lib/promptFocus.ts';
 import { sendFrame } from '../../lib/transport.ts';
 import { useOpenTab } from '../../stores/useOpenTab.ts';
 import { closePalette, paletteStore, setPalettePath, togglePalette } from '../../stores/paletteStore.ts';
@@ -24,7 +26,8 @@ function pathLabel(keys: readonly string[]): string {
  * is what the installed web plugins declared: each package's cockpit half of
  * the key paths its TUI documents. Keys walk the tree the way the TUI does,
  * backspace climbs, and the slash search is the road to the commands no
- * package has put on a key.
+ * package has put on a key. The surface is a modal dialog, so focus comes
+ * back to wherever it was (usually the composer) when it closes.
  */
 export function CommandPalette() {
   const commands = useActiveSession((state) => state.commands);
@@ -44,18 +47,18 @@ export function CommandPalette() {
       if (leaderKey && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         togglePalette();
-        setSearch('');
-        setSelected(0);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // The palette owns the keyboard while open: focus lands on the surface, not
-  // the search box, so a typed letter is a leader key rather than filter text.
+  // Every opening starts at the root with an empty search.
   useEffect(() => {
-    if (open) surface.current?.focus();
+    if (open) {
+      setSearch('');
+      setSelected(0);
+    }
   }, [open]);
 
   const keys = useMemo(() => path.split(''), [path]);
@@ -75,8 +78,6 @@ export function CommandPalette() {
   const cursor = Math.min(selected, Math.max(rowCount - 1, 0));
   const current = searching ? undefined : options[cursor];
   const currentMatch = searching ? matches[cursor] : undefined;
-
-  if (!open) return null;
 
   const fire = (binding: LeaderBindingContribution): void => {
     closePalette();
@@ -120,11 +121,6 @@ export function CommandPalette() {
   const onSurfaceKey = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     // The search box handles its own keys; letters typed there are text.
     if (event.target === searchInput.current) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closePalette();
-      return;
-    }
     if (event.key === 'Backspace') {
       event.preventDefault();
       climb();
@@ -160,17 +156,6 @@ export function CommandPalette() {
   };
 
   const onSearchKey = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (!searching) {
-        closePalette();
-        return;
-      }
-      setSearch('');
-      setSelected(0);
-      surface.current?.focus();
-      return;
-    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setSelected(Math.min(cursor + 1, Math.max(rowCount - 1, 0)));
@@ -188,20 +173,42 @@ export function CommandPalette() {
   };
 
   return (
-    <div
-      className="absolute inset-0 z-30 flex items-start justify-center bg-doom-deep/70 pt-[12vh]"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) closePalette();
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) closePalette();
       }}
     >
-      <div
+      <DialogContent
         ref={surface}
-        tabIndex={-1}
+        width="lg"
         data-testid="palette"
         data-path={path}
+        aria-describedby={undefined}
         onKeyDown={onSurfaceKey}
-        className="flex w-[720px] flex-col overflow-hidden rounded-lg border border-doom-border bg-doom-panel shadow-2xl outline-none"
+        // The palette owns the keyboard: focus lands on the surface, not the
+        // search box, so a typed letter is a leader key rather than filter text.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          surface.current?.focus();
+        }}
+        // Opened by a shortcut, so there is no trigger to restore focus to.
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          focusPrompt();
+        }}
+        // Escape in a live search clears the search; only an empty one closes.
+        onEscapeKeyDown={(event) => {
+          if (searching && document.activeElement === searchInput.current) {
+            event.preventDefault();
+            setSearch('');
+            setSelected(0);
+            surface.current?.focus();
+          }
+        }}
+        className="top-[12vh] w-[720px] max-w-[92vw] translate-y-0"
       >
+        <DialogTitle className="sr-only">Leader Space</DialogTitle>
         <div className="flex items-center gap-3 border-b border-doom-border px-4 py-3">
           <span className="rounded bg-doom-magenta/20 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-doom-magenta">
             {LEADER_PREFIX}
@@ -214,6 +221,7 @@ export function CommandPalette() {
             data-testid="palette-filter"
             value={search}
             placeholder="/ search commands…"
+            spellCheck={false}
             onChange={(event) => {
               setSearch(event.target.value);
               setSelected(0);
@@ -290,7 +298,7 @@ export function CommandPalette() {
             )}
             {pluginEntries.length > 0 ? (
               <>
-                <p className="px-3 pb-1 pt-2 text-[8px] font-bold tracking-[0.14em] text-doom-faint">PLUGINS</p>
+                <p className="px-3 pt-2 pb-1 text-[8px] font-bold tracking-[0.14em] text-doom-faint">PLUGINS</p>
                 {pluginEntries.map((command) => (
                   <button
                     key={command.id}
@@ -335,7 +343,7 @@ export function CommandPalette() {
                         type="button"
                         data-testid={`palette-child-${child.key}`}
                         onClick={() => descend(child, [...keys, current.key])}
-                        className="flex items-center gap-3 rounded border border-doom-border-soft bg-doom-deep px-3 py-1.5 text-left hover:border-doom-blue/50"
+                        className="flex items-center gap-3 rounded border border-doom-border-soft bg-doom-deep px-3 py-1.5 text-left transition-colors hover:border-doom-blue/50"
                       >
                         <span className="w-5 text-center text-[10px] font-bold text-doom-magenta">{child.key}</span>
                         <span className="text-[11px] font-bold text-doom-hi">{child.label}</span>
@@ -350,16 +358,22 @@ export function CommandPalette() {
         </div>
 
         <div className="flex items-center justify-between border-t border-doom-border-soft bg-doom-deep px-4 py-2.5">
-          <span className="text-[10px] text-doom-faint">
-            {searching
-              ? 'up/down move · enter run · esc back to keys'
-              : 'keys walk · backspace up · enter select · / search · esc close'}
+          <span className="flex items-center gap-1.5 text-[10px] text-doom-faint">
+            {searching ? (
+              <>
+                <Kbd>↑↓</Kbd> move · <Kbd>enter</Kbd> run · <Kbd>esc</Kbd> back to keys
+              </>
+            ) : (
+              <>
+                keys walk · <Kbd>⌫</Kbd> up · <Kbd>enter</Kbd> select · <Kbd>/</Kbd> search · <Kbd>esc</Kbd> close
+              </>
+            )}
           </span>
           <span className="text-[10px] text-doom-dim">
             {bindings.length} keys · {commands.length} commands
           </span>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -7,8 +7,6 @@ import {
   mcpIdentityFromDetails,
   mcpResultView,
   mcpServers,
-  rememberMcpStatuses,
-  rememberedMcpStatuses,
 } from '../web/mcpToolMatch.ts';
 
 describe('the mcp web tool matcher', () => {
@@ -28,12 +26,6 @@ describe('the mcp web tool matcher', () => {
     // A bare server name is not a tool of it.
     expect(matchMcpTool('github_', statuses)).toBeNull();
     expect(matchMcpTool('github_search', {})).toBeNull();
-  });
-
-  it('remembers the statuses the matcher last saw for the card', () => {
-    expect(rememberedMcpStatuses()).toEqual({});
-    rememberMcpStatuses({ [MCP_STATUS_KEY]: 'pencil' });
-    expect(rememberedMcpStatuses()).toEqual({ [MCP_STATUS_KEY]: 'pencil' });
   });
 
   it('prefers the identity the result details carry', () => {

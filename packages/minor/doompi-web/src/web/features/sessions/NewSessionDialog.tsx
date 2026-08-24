@@ -1,3 +1,13 @@
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+} from '@agimon-ai/doompi-web-components';
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
@@ -82,10 +92,6 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
   };
 
   const onCwdKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'Escape') {
-      onClose();
-      return;
-    }
     if (event.key === 'ArrowDown' && suggestions.length > 0) {
       event.preventDefault();
       setHighlight((current) => (current + 1) % suggestions.length);
@@ -104,20 +110,22 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-doom-deep/70">
-      <div
-        data-testid="new-session-dialog"
-        className="w-[440px] overflow-hidden rounded-lg border border-doom-border bg-doom-panel shadow-2xl"
-      >
-        <div className="border-b border-doom-border px-4 py-3">
-          <span className="text-[12px] font-bold tracking-wide text-doom-hi">new session</span>
-        </div>
-        <div className="flex flex-col gap-3 px-4 py-4">
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent width="md" data-testid="new-session-dialog" aria-describedby={undefined} className="w-[440px]">
+        <DialogHeader>
+          <DialogTitle>new session</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
           <label className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">
               working directory <span className="text-doom-faint/70">(last segment filters as a regex)</span>
             </span>
-            <input
+            <Input
               ref={cwdInput}
               data-testid="new-session-cwd"
               value={cwd}
@@ -125,7 +133,6 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
               onChange={(event) => setCwd(event.target.value)}
               onKeyDown={onCwdKeyDown}
               placeholder="/absolute/path/to/project"
-              className="rounded border border-doom-border bg-doom-deep px-2.5 py-1.5 text-[12px] text-doom-hi outline-none placeholder:text-doom-faint focus:border-doom-blue/60"
             />
           </label>
           {suggestions.length > 0 ? (
@@ -154,58 +161,57 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
           {recentCwds.length > 0 ? (
             <div className="flex flex-wrap gap-1">
               {recentCwds.map((recent) => (
-                <button
+                <Button
                   key={recent}
-                  type="button"
+                  variant="outline"
+                  size="xs"
                   data-testid="new-session-recent"
                   onClick={() => setCwd(recent)}
-                  className="rounded border border-doom-border px-1.5 py-0.5 text-[9px] text-doom-dim hover:border-doom-blue/50 hover:text-doom-hi"
+                  className="font-normal"
                 >
                   {recent}
-                </button>
+                </Button>
               ))}
             </div>
           ) : null}
           <label className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">name (optional)</span>
-            <input
+            <Input
               data-testid="new-session-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void submit();
-                if (event.key === 'Escape') onClose();
               }}
               placeholder="untitled"
-              className="rounded border border-doom-border bg-doom-deep px-2.5 py-1.5 text-[12px] text-doom-hi outline-none placeholder:text-doom-faint focus:border-doom-blue/60"
             />
           </label>
           {error ? (
-            <p data-testid="new-session-error" className="text-[10px] leading-relaxed text-doom-red">
-              {error}
-            </p>
-          ) : null}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              data-testid="new-session-cancel"
-              onClick={onClose}
-              className="rounded border border-doom-border px-3 py-1 text-[11px] text-doom-dim hover:text-doom-hi"
+            // A spawn failure arrives as the child's whole stderr, stack trace
+            // and all. It is worth showing (it names the real cause) but not
+            // worth resizing the dialog for, so it lives in its own scroller.
+            <pre
+              data-testid="new-session-error"
+              className="max-h-28 overflow-y-auto rounded border border-doom-edge-red bg-doom-tint-red/40 px-2.5 py-2 text-[10px] leading-relaxed whitespace-pre-wrap break-words text-doom-red"
             >
+              {error}
+            </pre>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" data-testid="new-session-cancel" onClick={onClose}>
               cancel
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
               data-testid="new-session-create"
               onClick={() => void submit()}
               disabled={busy || !cwd.trim()}
-              className="rounded bg-doom-blue px-3 py-1 text-[11px] font-bold text-doom-rail disabled:opacity-40"
             >
               {busy ? 'creating…' : 'create'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+            </Button>
+          </DialogFooter>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,52 +1,40 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  bindRunnersRuntime,
-  isStopRequested,
-  requestRunnerStop,
-  resetRunners,
-  runnerRunsChannel,
-  runnersStore,
-  sessionRunners,
-} from '../web/runnersStore.ts';
+import { requestRunnerStop, runnerRunsChannel, runners } from '../web/runnersStore.ts';
 
 const run = (id: string, state: 'running' | 'completed') => ({ id, name: id, command: 'sleep 60', state });
+const session = (sessionId: string | null) => runners.select(runners.store.state, sessionId);
 
 describe('the runners web store channel', () => {
   it('keeps each session runner set separately and drops one with its session', () => {
-    resetRunners();
+    runners.reset();
     runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'running')] })!);
     runnerRunsChannel.apply('s2', runnerRunsChannel.parse({ runs: [] })!);
-    expect(sessionRunners(runnersStore.state, 's1')).toHaveLength(1);
-    expect(sessionRunners(runnersStore.state, 's2')).toEqual([]);
-    expect(sessionRunners(runnersStore.state, null)).toEqual([]);
+    expect(session('s1').runs).toHaveLength(1);
+    expect(session('s2').runs).toEqual([]);
+    expect(session(null).runs).toEqual([]);
 
     runnerRunsChannel.drop('s1');
-    expect(runnersStore.state.bySession.s1).toBeUndefined();
+    expect(runners.store.state.s1).toBeUndefined();
     // Malformed payloads are rejected at the parse gate.
     expect(runnerRunsChannel.parse('junk')).toBeNull();
     expect(runnerRunsChannel.parse({ runs: 'no' })).toBeNull();
-    resetRunners();
+    runners.reset();
   });
 
   it('sends the stop verb to the session and forgets the request once the runner exits', () => {
-    resetRunners();
-    const sendSessionFrame = vi.fn();
-    const unbind = bindRunnersRuntime({ sendSessionFrame, sendHubFrame: vi.fn() });
+    runners.reset();
+    const send = vi.fn();
     runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'running')] })!);
 
-    requestRunnerStop('s1', 'a');
-    expect(sendSessionFrame).toHaveBeenCalledWith('s1', { type: 'prompt', message: '/runners stop a' });
-    expect(isStopRequested(runnersStore.state, 's1', 'a')).toBe(true);
+    requestRunnerStop(send, 's1', 'a');
+    expect(send).toHaveBeenCalledWith('s1', { type: 'prompt', message: '/runners stop a' });
+    expect(session('s1').stopRequested).toEqual(['a']);
     // Still pending while the hub keeps reporting it running.
     runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'running')] })!);
-    expect(isStopRequested(runnersStore.state, 's1', 'a')).toBe(true);
+    expect(session('s1').stopRequested).toEqual(['a']);
     // Spent once the record reports an exit.
     runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'completed')] })!);
-    expect(isStopRequested(runnersStore.state, 's1', 'a')).toBe(false);
-
-    unbind();
-    requestRunnerStop('s1', 'a');
-    expect(sendSessionFrame).toHaveBeenCalledTimes(1);
-    resetRunners();
+    expect(session('s1').stopRequested).toEqual([]);
+    runners.reset();
   });
 });

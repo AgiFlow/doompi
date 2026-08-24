@@ -31,6 +31,8 @@ export interface RunnerRunView {
   promoted: boolean;
   /** ISO 8601, from the record. */
   startedAt: string;
+  /** Absolute path to the run's full log, which is far larger than any tail the cockpit shows. */
+  logPath: string;
   exit?: RunnerRunExitView;
 }
 

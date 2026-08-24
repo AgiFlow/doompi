@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { Button, ChevronDownIcon, EmptyState, StreamCursor } from '@agimon-ai/doompi-web-components';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { Markdown } from '../../components/Markdown.tsx';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
@@ -13,6 +14,9 @@ const SUGGESTIONS = [
   'run the affected nx targets and report failures',
   'explain how the session socket handshake works',
 ];
+
+/** Closer than this to the end counts as reading the latest, so new frames keep the view pinned. */
+const PINNED_THRESHOLD_PX = 48;
 
 function Gutter({ label, tone }: { label: string; tone: string }) {
   return <span className={`w-11 shrink-0 pt-0.5 text-right text-[10px] font-bold ${tone}`}>{label}</span>;
@@ -37,13 +41,16 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
         <Gutter label="pi" tone="text-doom-magenta" />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {entry.thinking ? (
-            <p data-testid="entry-thinking" className="whitespace-pre-wrap break-words text-[11px] text-doom-violet/80">
-              {entry.thinking}
-            </p>
+            <div
+              data-testid="entry-thinking"
+              className="text-[11px] text-doom-violet/80 [&_strong]:text-doom-violet [&_p]:whitespace-pre-wrap"
+            >
+              <Markdown text={entry.thinking} />
+            </div>
           ) : null}
           <div className="text-[13px] text-doom-text">
             <Markdown text={entry.text} />
-            {entry.streaming ? <span className="ml-0.5 inline-block h-3.5 w-2 translate-y-0.5 bg-doom-blue" /> : null}
+            {entry.streaming ? <StreamCursor /> : null}
           </div>
         </div>
       </div>
@@ -84,10 +91,15 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
     );
   }
 
+  // A notice: the agent's own aside (a mode switch, a refusal). Only an error
+  // shouts; an informational one reads as a quiet system line.
+  const isError = entry.tone === 'error';
   return (
-    <div data-testid="entry-notice" className="flex gap-3">
-      <Gutter label="!" tone="text-doom-red" />
-      <p className="min-w-0 flex-1 break-words text-[12px] text-doom-red">{entry.text}</p>
+    <div data-testid="entry-notice" data-tone={entry.tone} className="flex gap-3">
+      <Gutter label={isError ? '!' : '·'} tone={isError ? 'text-doom-red' : 'text-doom-faint'} />
+      <p className={`min-w-0 flex-1 break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}>
+        {entry.text}
+      </p>
     </div>
   );
 }
@@ -95,45 +107,100 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
 export function Timeline() {
   const session = useActiveSession((state) => state);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
-  const bottom = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  // The transcript's height as of the last entry. Whether to follow the newest
+  // line is decided against this rather than against a scroll event, because
+  // an event fires after the fact and a fast run can grow the transcript
+  // before the browser has reported the reader's scroll.
+  const lastHeight = useRef(0);
+  const [unread, setUnread] = useState(false);
 
+  const atBottom = (element: HTMLDivElement, height: number): boolean =>
+    element.scrollTop + element.clientHeight >= height - PINNED_THRESHOLD_PX;
+
+  const jumpToLatest = (): void => {
+    const element = scroller.current;
+    if (!element) return;
+    setUnread(false);
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+  };
+
+  /** Reaching the bottom by hand is the same as never having left it. */
+  const onScroll = (): void => {
+    const element = scroller.current;
+    if (element && atBottom(element, element.scrollHeight)) setUnread(false);
+  };
+
+  // A focus change starts at the bottom of the newly focused transcript.
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' });
+    lastHeight.current = 0;
+    setUnread(false);
+  }, [activeId]);
+
+  useLayoutEffect(() => {
+    const element = scroller.current;
+    if (!element) return;
+    // Was the reader at the end before this entry made the transcript longer?
+    const following = atBottom(element, lastHeight.current);
+    lastHeight.current = element.scrollHeight;
+    if (following) {
+      element.scrollTop = element.scrollHeight;
+      setUnread(false);
+      return;
+    }
+    setUnread(true);
   }, [session.entries]);
 
   if (session.entries.length === 0) {
     return (
-      <div data-testid="timeline" className="flex flex-1 items-center justify-center">
-        <div data-testid="timeline-empty" className="flex w-[520px] flex-col items-center gap-3 text-center">
-          <span className="text-[14px] font-bold text-doom-hi">no messages yet</span>
-          <span className="text-[11px] text-doom-dim">
-            this session is attached and waiting. anything you send goes straight to the supervised agent.
-          </span>
-          <div className="mt-2 flex w-full flex-col gap-1.5">
-            {SUGGESTIONS.map((suggestion, index) => (
-              <button
-                key={suggestion}
-                type="button"
-                data-testid={`suggestion-${index}`}
-                onClick={() => submitMessage(suggestion)}
-                className="flex items-center gap-2 rounded border border-doom-border bg-doom-panel px-3 py-2 text-left text-[11px] text-doom-text hover:border-doom-blue/50"
-              >
-                <span className="flex-1">{suggestion}</span>
-                <span className="text-doom-faint">&#8599;</span>
-              </button>
-            ))}
-          </div>
+      <EmptyState
+        data-testid="timeline"
+        title="no messages yet"
+        description="this session is attached and waiting. anything you send goes straight to the supervised agent."
+      >
+        <div data-testid="timeline-empty" className="mt-2 flex w-full flex-col gap-1.5">
+          {SUGGESTIONS.map((suggestion, index) => (
+            <Button
+              key={suggestion}
+              variant="outline"
+              size="lg"
+              data-testid={`suggestion-${index}`}
+              onClick={() => submitMessage(suggestion)}
+              className="h-auto justify-between bg-doom-panel px-3 py-2 text-left font-normal text-doom-text"
+            >
+              <span className="flex-1 truncate">{suggestion}</span>
+              <span className="text-doom-faint">&#8599;</span>
+            </Button>
+          ))}
         </div>
-      </div>
+      </EmptyState>
     );
   }
 
   return (
-    <div data-testid="timeline" className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]">
-      {session.entries.map((entry) => (
-        <Entry key={entry.id} entry={entry} sessionId={activeId} />
-      ))}
-      <div ref={bottom} />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        data-testid="timeline"
+        className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]"
+      >
+        {session.entries.map((entry) => (
+          <Entry key={entry.id} entry={entry} sessionId={activeId} />
+        ))}
+      </div>
+      {unread ? (
+        <Button
+          variant="subtle"
+          size="sm"
+          data-testid="timeline-jump"
+          onClick={jumpToLatest}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 border border-doom-border shadow-lg animate-doom-rise"
+        >
+          <ChevronDownIcon className="h-3 w-3" />
+          new activity below
+        </Button>
+      ) : null}
     </div>
   );
 }

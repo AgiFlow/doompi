@@ -34,6 +34,10 @@ const rules: Record<string, Severity> = {
   'no-protocol-channel-literals': 'error',
   'dispose-external-subscriptions': 'error',
   'provider-owned-policy': 'error',
+  'web-plugin-entry': 'error',
+  'web-plugin-import-allowlist': 'error',
+  'web-plugin-manifest': 'error',
+  'web-plugin-no-module-state': 'error',
 };
 
 /**
@@ -138,7 +142,12 @@ const boundaries: BoundaryConfig[] = [
       'types',
     ),
   },
-  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**'] },
+  // The web cockpit plugin lives in web/, outside the src vocabulary the
+  // folder rules own. Its browser code may reach its own files and the shared
+  // src/types shapes (web-plugin-import-allowlist checks the bare specifiers);
+  // tests may reach it like any package source.
+  { name: 'web-plugin', pattern: 'web/**', allowedImports: ['web/**', 'src/types', 'src/types/**'] },
+  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**', 'web/**'] },
   {
     name: 'metadata',
     pattern:
