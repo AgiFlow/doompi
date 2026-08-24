@@ -2,6 +2,7 @@ import { useStore } from '@tanstack/react-store';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { PluginSurface } from '../components/PluginSurface.tsx';
+import { useOpenTab } from '../stores/useOpenTab.ts';
 import { ActivityDock } from '../features/activity/ActivityDock.tsx';
 import { RefusedCard } from '../features/connection/RefusedCard.tsx';
 import { DialogOverlay } from '../features/dialogs/DialogOverlay.tsx';
@@ -18,6 +19,7 @@ export function CockpitPage() {
   const [dockOpen, setDockOpen] = useState(true);
   const { sessionId, tabId } = useParams({ strict: false });
   const navigate = useNavigate();
+  const openTab = useOpenTab();
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
   const tab = tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId);
@@ -54,7 +56,7 @@ export function CockpitPage() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar view={tab?.id ?? 'conversation'} />
-        {tab ? <tab.panel sessionId={sessionId ?? null} /> : <Timeline />}
+        {tab ? <tab.panel sessionId={sessionId ?? null} openTab={openTab} /> : <Timeline />}
         <Composer />
         <SelectionBar />
       </main>

@@ -17,6 +17,14 @@ function bundledJsHas(assetsDir: string, needle: string): boolean {
     .some((name) => fs.readFileSync(path.join(assetsDir, 'assets', name), 'utf8').includes(needle));
 }
 
+/** The built stylesheet: plugin utility classes prove the plugin dirs were scanned. */
+function bundledCssHas(assetsDir: string, needle: string): boolean {
+  return fs
+    .readdirSync(path.join(assetsDir, 'assets'))
+    .filter((name) => name.endsWith('.css'))
+    .some((name) => fs.readFileSync(path.join(assetsDir, 'assets', name), 'utf8').includes(needle));
+}
+
 let cleanups: Array<() => void> = [];
 
 afterEach(() => {
@@ -44,6 +52,9 @@ describe('the sync-time cockpit bundler', () => {
     expect(fs.existsSync(path.join(result.assetsDir, 'webPlugins.server.json'))).toBe(true);
     // Both moved panels really are compiled in: their empty-state copy appears.
     expect(bundledJsHas(result.assetsDir, 'no workflow runs yet')).toBe(true);
+    // Tailwind scanned the plugin sources too: the subagents grid uses an
+    // auto-fill column template the host shell never does.
+    expect(bundledCssHas(result.assetsDir, 'auto-fill')).toBe(true);
 
     // The hub loads the plugin's built channel from the registry the bundle carries.
     const channels = await loadHubChannels(result.assetsDir, (message) => notices.push(message));

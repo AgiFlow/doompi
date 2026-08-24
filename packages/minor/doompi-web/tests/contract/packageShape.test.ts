@@ -78,6 +78,8 @@ describe('doompi-web package contract', () => {
       'hono',
       'react',
       'react-dom',
+      'react-markdown',
+      'remark-gfm',
       'tailwindcss',
       'vite',
     ]);

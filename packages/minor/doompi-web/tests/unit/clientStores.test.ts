@@ -6,10 +6,14 @@ import {
   dialogConfirmed,
   dialogValue,
   followUpCommand,
+  getAvailableModelsCommand,
+  getAvailableThinkingLevelsCommand,
   getCommandsCommand,
   getSessionStatsCommand,
   getStateCommand,
   promptCommand,
+  setModelCommand,
+  setThinkingLevelCommand,
   steerCommand,
 } from '../../src/web/lib/commands.ts';
 import { bindTransport, releaseTransport, sendFrame, sendHubFrame } from '../../src/web/lib/transport.ts';
@@ -27,11 +31,15 @@ import {
   applySessionFrame,
   cancelDialog,
   dropSessionStore,
+  loadModelChoices,
   queueFollowUp,
   refreshSessionFacts,
+  renameSession,
   resetSessionStore,
   resetSessionStores,
   runCommand,
+  selectModel,
+  selectThinkingLevel,
   sessionStoreFor,
   submitMessage,
 } from '../../src/web/stores/sessionStore.ts';
@@ -85,6 +93,10 @@ describe('command builders', () => {
     expect(getStateCommand()).toEqual({ type: 'get_state' });
     expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
     expect(getCommandsCommand()).toEqual({ type: 'get_commands' });
+    expect(getAvailableModelsCommand()).toEqual({ type: 'get_available_models' });
+    expect(getAvailableThinkingLevelsCommand()).toEqual({ type: 'get_available_thinking_levels' });
+    expect(setModelCommand('openai', 'gpt-5.6')).toEqual({ type: 'set_model', provider: 'openai', modelId: 'gpt-5.6' });
+    expect(setThinkingLevelCommand('high')).toEqual({ type: 'set_thinking_level', level: 'high' });
     expect(dialogValue('1', 'v')).toEqual({ type: 'extension_ui_response', id: '1', value: 'v' });
     expect(dialogConfirmed('2', false)).toEqual({ type: 'extension_ui_response', id: '2', confirmed: false });
     expect(dialogCancelled('3')).toEqual({ type: 'extension_ui_response', id: '3', cancelled: true });
@@ -243,7 +255,18 @@ describe('session actions', () => {
     submitMessage('lost');
     abortRun();
     queueFollowUp('also lost');
+    renameSession('nobody');
     expect(sent).toHaveLength(0);
+  });
+
+  it('rename through the agent and read the state back', () => {
+    setActiveSession('s1');
+    renameSession('  gate-review ');
+    renameSession('   ');
+    expect(sent).toEqual([
+      { type: 'session_command', sessionId: 's1', frame: { type: 'set_session_name', name: 'gate-review' } },
+      { type: 'session_command', sessionId: 's1', frame: { type: 'get_state' } },
+    ]);
   });
 
   it('prompt when idle and steer when the addressed agent is running', () => {
@@ -280,6 +303,23 @@ describe('session actions', () => {
       'get_state',
       'get_session_stats',
       'get_commands',
+    ]);
+    expect(sent.every((frame) => frame.sessionId === 's1')).toBe(true);
+  });
+
+  it('ask for the picker lists, and re-read what a pick changes', () => {
+    setActiveSession('s1');
+    loadModelChoices();
+    selectModel('openai', 'gpt-5.6');
+    selectThinkingLevel('high');
+    expect(sent.map((frame) => frame.frame)).toEqual([
+      { type: 'get_available_models' },
+      { type: 'get_available_thinking_levels' },
+      { type: 'set_model', provider: 'openai', modelId: 'gpt-5.6' },
+      { type: 'get_state' },
+      { type: 'get_available_thinking_levels' },
+      { type: 'set_thinking_level', level: 'high' },
+      { type: 'get_state' },
     ]);
     expect(sent.every((frame) => frame.sessionId === 's1')).toBe(true);
   });

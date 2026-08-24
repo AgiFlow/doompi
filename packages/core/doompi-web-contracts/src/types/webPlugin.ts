@@ -15,6 +15,8 @@ import type { ComponentType } from 'react';
 /** Every slot component receives the focused session; null while nothing is focused. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
+  /** Host navigation for the focused session; null returns to the conversation tab. */
+  openTab: (tabId: string | null) => void;
 }
 
 export interface TabContribution {
@@ -130,6 +132,11 @@ export interface WebPluginDefinition {
   paletteCommands?: PaletteCommandContribution[];
   railSections?: SurfaceContribution[];
   selectionBarItems?: SurfaceContribution[];
+  /**
+   * A section whose id equals one of the plugin's activity group names renders
+   * inside that group, replacing the session's one-line summary with the
+   * plugin's own detail; any other section renders after the groups.
+   */
   activitySections?: SurfaceContribution[];
   /** Started after the host runtime; the return value disposes. */
   start?(runtime: WebPluginRuntime): (() => void) | void;

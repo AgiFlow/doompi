@@ -39,13 +39,19 @@ export interface SessionHubOptions {
   readToken?: (record: SessionRecord) => string;
   /** The hub's data channels (built-in and plugin-provided sources). */
   channels?: readonly WebHubChannel[];
+  /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
+  signal?: (pid: number) => void;
   ringLimit?: number;
   gitRefreshMs?: number;
   onNotice?: (message: string) => void;
 }
 
+export type StopOutcome = { ok: true } | { ok: false; code: 'unknown' | 'self' | 'signal_failed'; error: string };
+
 export interface SessionHub {
   snapshot(): SessionSummary[];
+  /** Asks a session's server to exit; the session leaves once its record is withdrawn. */
+  stop(sessionId: string): StopOutcome;
   /** Streams every change; pages filter frame events by their subscriptions. */
   onEvent(listener: (event: HubEvent) => void): () => void;
   /** Recent history for one session, or undefined for an unknown id. */
@@ -103,6 +109,11 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const listeners = new Set<(event: HubEvent) => void>();
   const readGit = options.readGit;
   const readToken = options.readToken ?? readTokenFile;
+  const signal =
+    options.signal ??
+    ((pid: number): void => {
+      process.kill(pid, 'SIGTERM');
+    });
   let closed = false;
 
   const emit = (event: HubEvent): void => {
@@ -257,6 +268,23 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
             left.record.id.localeCompare(right.record.id),
         )
         .map(toSummary);
+    },
+    stop(sessionId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return { ok: false, code: 'unknown', error: 'Unknown session.' };
+      // Single-session mode records this very process; killing it would take
+      // the cockpit down with the session.
+      if (managed.record.pid === process.pid) {
+        return { ok: false, code: 'self', error: 'This session hosts the cockpit; stop it from its own terminal.' };
+      }
+      try {
+        signal(managed.record.pid);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return { ok: false, code: 'signal_failed', error: `Could not signal the session server: ${reason}` };
+      }
+      options.onNotice?.(`asked session ${sessionId} to stop`);
+      return { ok: true };
     },
     onEvent(listener) {
       listeners.add(listener);

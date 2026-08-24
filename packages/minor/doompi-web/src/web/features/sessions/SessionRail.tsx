@@ -1,10 +1,11 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
+import { stopSession } from '../../lib/hubApi.ts';
 import { abbreviateCwd, runningCount, sessionStatusLine } from '../../lib/sessionSummary.ts';
 import { paletteStore } from '../../stores/paletteStore.ts';
-import { sessionStoreFor } from '../../stores/sessionStore.ts';
+import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
 import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
 import { NewSessionDialog } from './NewSessionDialog.tsx';
 
@@ -29,6 +30,84 @@ function PlusIcon() {
   );
 }
 
+function KebabIcon() {
+  return (
+    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden>
+      <circle cx="6" cy="2.5" r="1.1" fill="currentColor" />
+      <circle cx="6" cy="6" r="1.1" fill="currentColor" />
+      <circle cx="6" cy="9.5" r="1.1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * What the card is doing besides showing its session: nothing, showing its
+ * action menu, taking a new name, or asking before a stop.
+ */
+type CardMode = 'view' | 'menu' | 'rename' | 'confirm';
+
+/** The confirmation that stands between the "remove" menu item and the stop. */
+function RemoveSessionDialog({
+  sessionId,
+  name,
+  onConfirm,
+  onCancel,
+}: {
+  sessionId: string;
+  name: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-doom-deep/70" onMouseDown={onCancel}>
+      <div
+        role="dialog"
+        aria-modal
+        data-testid={`session-stop-dialog-${sessionId}`}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="w-[360px] overflow-hidden rounded-lg border border-doom-border bg-doom-panel shadow-2xl"
+      >
+        <div className="border-b border-doom-border px-4 py-3">
+          <span className="text-[12px] font-bold tracking-wide text-doom-hi">remove session</span>
+        </div>
+        <div className="flex flex-col gap-3 px-4 py-4">
+          <p className="text-[11px] leading-relaxed text-doom-dim">
+            this stops <span className="font-bold text-doom-hi">{name || 'untitled'}</span> and removes it from the
+            rail. anything it is running ends now.
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              data-testid={`session-stop-cancel-${sessionId}`}
+              autoFocus
+              onClick={onCancel}
+              className="rounded border border-doom-border px-3 py-1 text-[11px] text-doom-dim hover:text-doom-hi"
+            >
+              cancel
+            </button>
+            <button
+              type="button"
+              data-testid={`session-stop-confirm-${sessionId}`}
+              onClick={onConfirm}
+              className="rounded bg-doom-red px-3 py-1 text-[11px] font-bold text-doom-rail"
+            >
+              remove
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionCard({
   meta,
   ordinal,
@@ -42,6 +121,10 @@ function SessionCard({
 }) {
   const navigate = useNavigate();
   const summary = meta.summary;
+  const [mode, setMode] = useState<CardMode>('view');
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+  const menuRef = useRef<HTMLDivElement>(null);
   const status = sessionStatusLine(
     {
       attach: meta.attach,
@@ -54,30 +137,51 @@ function SessionCard({
     now,
   );
 
-  return (
-    <button
-      type="button"
-      data-testid={`session-card-${summary.id}`}
-      data-active={active}
-      onClick={() => void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } })}
-      className={`flex w-full flex-col gap-1 rounded-md px-[11px] py-2.5 text-left ${
-        active ? 'bg-[#2257A0]' : 'hover:bg-doom-panel'
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${active ? 'text-white' : 'text-doom-hi'}`}>
-          {summary.name || 'untitled'}
-        </span>
-        {ordinal <= 9 ? (
-          <span
-            className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-              active ? 'bg-white/20 text-white' : 'bg-[#2E2136] text-doom-magenta'
-            }`}
-          >
-            {ordinal}
-          </span>
-        ) : null}
-      </div>
+  // The menu closes on a click anywhere else or on escape, like any popover.
+  useEffect(() => {
+    if (mode !== 'menu') return;
+    const onPointerDown = (event: MouseEvent): void => {
+      if (menuRef.current && event.target instanceof Node && !menuRef.current.contains(event.target)) setMode('view');
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMode('view');
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mode]);
+
+  const beginRename = (): void => {
+    setDraft(summary.name);
+    setError('');
+    setMode('rename');
+  };
+  const commitRename = (): void => {
+    const name = draft.trim();
+    if (name && name !== summary.name) renameSession(name, summary.id);
+    setMode('view');
+  };
+  const stop = async (): Promise<void> => {
+    setMode('view');
+    const result = await stopSession(summary.id);
+    if ('error' in result) setError(result.error);
+  };
+
+  const cardClass = `flex w-full flex-col gap-1 rounded-md px-[11px] py-2.5 text-left ${
+    active ? 'bg-[#2257A0]' : 'hover:bg-doom-panel'
+  }`;
+  const menuOpen = mode === 'menu';
+  const menuButtonClass = `flex h-5 w-5 items-center justify-center rounded ${
+    active
+      ? 'text-white/80 hover:bg-white/20 hover:text-white'
+      : 'text-doom-faint hover:bg-doom-deep hover:text-doom-hi'
+  } ${menuOpen ? (active ? 'bg-white/20 text-white' : 'bg-doom-deep text-doom-hi') : ''}`;
+  const menuItemClass = 'w-full px-2.5 py-1.5 text-left text-[11px] hover:bg-doom-deep';
+  const details = (
+    <>
       <span
         data-testid="session-card-status"
         className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-[#DDE9FA]' : 'truncate text-doom-dim'}`}
@@ -97,7 +201,115 @@ function SessionCard({
       <span className={`truncate text-[10px] ${active ? 'text-[#B9D3F2]' : 'text-doom-faint'}`}>
         {abbreviateCwd(summary.cwd)}
       </span>
-    </button>
+      {error ? (
+        <span data-testid="session-card-error" className="text-[10px] text-doom-red">
+          {error}
+        </span>
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className="group relative" data-testid={`session-card-${summary.id}`} data-active={active}>
+      {mode === 'rename' ? (
+        // The name field cannot live inside the card button, so the card
+        // briefly stops being one while it takes a name.
+        <div className={cardClass}>
+          <input
+            data-testid={`session-name-input-${summary.id}`}
+            value={draft}
+            autoFocus
+            spellCheck={false}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitRename();
+              if (event.key === 'Escape') setMode('view');
+            }}
+            onBlur={() => setMode('view')}
+            className="min-w-0 rounded border border-doom-blue/60 bg-doom-deep px-1.5 py-0.5 text-[13px] font-bold text-doom-hi outline-none"
+          />
+          {details}
+        </div>
+      ) : (
+        <button
+          type="button"
+          data-testid={`session-open-${summary.id}`}
+          onClick={() => void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } })}
+          className={cardClass}
+        >
+          <div className="flex items-center gap-2">
+            <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${active ? 'text-white' : 'text-doom-hi'}`}>
+              {summary.name || 'untitled'}
+            </span>
+            {ordinal <= 9 ? (
+              <span
+                className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold group-focus-within:opacity-0 group-hover:opacity-0 ${
+                  active ? 'bg-white/20 text-white' : 'bg-[#2E2136] text-doom-magenta'
+                }`}
+              >
+                {ordinal}
+              </span>
+            ) : null}
+          </div>
+          {details}
+        </button>
+      )}
+
+      {mode === 'view' || menuOpen ? (
+        <div
+          ref={menuRef}
+          className={`absolute top-2 right-2 ${
+            menuOpen ? 'z-10 opacity-100' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
+          }`}
+        >
+          <button
+            type="button"
+            data-testid={`session-menu-${summary.id}`}
+            title="session actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMode(menuOpen ? 'view' : 'menu')}
+            className={menuButtonClass}
+          >
+            <KebabIcon />
+          </button>
+          {menuOpen ? (
+            <div
+              role="menu"
+              data-testid={`session-menu-list-${summary.id}`}
+              className="absolute top-full right-0 mt-1 flex w-[120px] flex-col overflow-hidden rounded border border-doom-border bg-doom-panel py-1 shadow-xl"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={`session-rename-${summary.id}`}
+                onClick={beginRename}
+                className={`${menuItemClass} text-doom-hi`}
+              >
+                edit
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={`session-stop-${summary.id}`}
+                onClick={() => setMode('confirm')}
+                className={`${menuItemClass} text-doom-red`}
+              >
+                remove
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {mode === 'confirm' ? (
+        <RemoveSessionDialog
+          sessionId={summary.id}
+          name={summary.name}
+          onConfirm={() => void stop()}
+          onCancel={() => setMode('view')}
+        />
+      ) : null}
+    </div>
   );
 }
 

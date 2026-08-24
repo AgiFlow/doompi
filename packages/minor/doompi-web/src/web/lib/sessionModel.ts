@@ -58,6 +58,8 @@ export interface SessionStats {
 
 export interface AgentInfo {
   model: string;
+  /** The provider Pi resolved the model under; set_model needs both halves. */
+  provider: string;
   thinkingLevel: string;
   sessionId: string;
   sessionName: string;
@@ -68,6 +70,14 @@ export interface AgentInfo {
 export interface CommandInfo {
   name: string;
   description: string;
+}
+
+/** One model the session can switch to, as get_available_models lists it. */
+export interface ModelChoice {
+  provider: string;
+  id: string;
+  name: string;
+  reasoning: boolean;
 }
 
 export type DialogMethod = 'select' | 'confirm' | 'input' | 'editor';
@@ -97,6 +107,10 @@ export interface SessionState {
   stats: SessionStats | null;
   agent: AgentInfo | null;
   commands: CommandInfo[];
+  /** Models the session offered, empty until the picker asks. */
+  models: ModelChoice[];
+  /** Thinking levels the current model accepts, empty until the picker asks. */
+  thinkingLevels: string[];
   dialog: DialogRequest | null;
   /** The runtime's minor-mode catalog as last journaled, or null before it reports. */
   minorModes: MinorModeProjection | null;
@@ -114,6 +128,8 @@ export const initialSessionState: SessionState = {
   stats: null,
   agent: null,
   commands: [],
+  models: [],
+  thinkingLevels: [],
   dialog: null,
   minorModes: null,
   toolsThisRun: 0,
@@ -229,17 +245,40 @@ function updateTool(state: SessionState, toolCallId: string, patch: Partial<Tool
   return { ...state, entries };
 }
 
+/** Commands the picker issues; a refusal must show, or the chip just stays put. */
+const PICKER_COMMANDS = new Set(['set_model', 'set_thinking_level']);
+
+function modelChoice(value: unknown): ModelChoice | undefined {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.provider !== 'string') return undefined;
+  return {
+    provider: value.provider,
+    id: value.id,
+    name: asString(value.name, value.id),
+    reasoning: value.reasoning === true,
+  };
+}
+
 function applyResponse(state: SessionState, frame: Frame): SessionState {
   const command = asString(frame.command);
+  if (frame.success === false && PICKER_COMMANDS.has(command)) {
+    return withEntry(state, {
+      kind: 'notice',
+      id: `n${state.nextId}`,
+      text: asString(frame.error, `The agent refused ${command}.`),
+      tone: 'error',
+    });
+  }
   const data = frame.data;
   if (!isRecord(data)) return state;
 
   if (command === 'get_state') {
     const model = isRecord(data.model) ? asString(data.model.id ?? data.model.name, 'unknown') : 'unknown';
+    const provider = isRecord(data.model) ? asString(data.model.provider) : '';
     return {
       ...state,
       agent: {
         model,
+        provider,
         thinkingLevel: asString(data.thinkingLevel, 'unknown'),
         sessionId: asString(data.sessionId),
         sessionName: asString(data.sessionName),
@@ -247,6 +286,22 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         isStreaming: data.isStreaming === true,
       },
     };
+  }
+
+  if (command === 'get_available_models') {
+    const models = Array.isArray(data.models) ? data.models.map(modelChoice).filter((m) => m !== undefined) : [];
+    return { ...state, models };
+  }
+
+  if (command === 'get_available_thinking_levels') {
+    const levels = Array.isArray(data.levels) ? data.levels.filter((level) => typeof level === 'string') : [];
+    return { ...state, thinkingLevels: levels };
+  }
+
+  // Pi echoes the model it switched to; get_state follows for the rest.
+  if (command === 'set_model' && state.agent) {
+    const chosen = modelChoice(data);
+    return chosen ? { ...state, agent: { ...state.agent, model: chosen.id, provider: chosen.provider } } : state;
   }
 
   if (command === 'get_session_stats') {

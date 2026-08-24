@@ -1,6 +1,56 @@
+import { spawn } from 'node:child_process';
 import { expect, test } from '../support/cockpit.ts';
+import { startFakeSession } from '../support/fakeSession.ts';
 
 test.use({ sessionCount: 2 });
+
+test('renames a session through the agent and shows the name it reports back', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  const card = page.getByTestId('session-card-s1');
+  await expect(card).toBeVisible();
+
+  await card.hover();
+  await page.getByTestId('session-menu-s1').click();
+  await page.getByTestId('session-rename-s1').click();
+  await page.getByTestId('session-name-input-s1').fill('gate-review');
+  await page.keyboard.press('Enter');
+
+  const sent = await cockpit.session.waitForCommand('set_session_name');
+  expect(sent.name).toBe('gate-review');
+  // The agent owns the name; the hub reads it back from state, like any page would.
+  cockpit.session.emit({ type: 'response', command: 'get_state', success: true, data: { sessionName: 'gate-review' } });
+  await expect(card).toContainText('gate-review');
+});
+
+test('stops a session from its card once the stop is confirmed', async ({ page, cockpit }) => {
+  // A throwaway process stands in for the session's server: the hub signals
+  // its pid, and the watcher withdraws the dead record on its next poll.
+  const server = spawn('sleep', ['60'], { stdio: 'ignore' });
+  if (server.pid === undefined) throw new Error('could not start the stand-in server process');
+  const doomed = await startFakeSession({
+    id: 'doomed',
+    name: 'doomed',
+    registryDir: cockpit.registryDir,
+    pid: server.pid,
+  });
+  try {
+    await page.goto(cockpit.url);
+    const card = page.getByTestId('session-card-doomed');
+    await expect(card).toBeVisible();
+
+    await card.hover();
+    await page.getByTestId('session-menu-doomed').click();
+    await page.getByTestId('session-stop-doomed').click();
+    await expect(page.getByTestId('session-stop-dialog-doomed')).toBeVisible();
+    await page.getByTestId('session-stop-confirm-doomed').click();
+
+    await expect(card).toHaveCount(0, { timeout: 10_000 });
+    await expect.poll(() => server.exitCode !== null || server.signalCode !== null).toBe(true);
+  } finally {
+    await doomed.close();
+    if (server.exitCode === null && server.signalCode === null) server.kill();
+  }
+});
 
 test('lists every running session in the rail with its ordinal', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);

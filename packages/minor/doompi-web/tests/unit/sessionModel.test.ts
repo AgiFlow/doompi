@@ -184,6 +184,7 @@ describe('reduceSession', () => {
 
     expect(state.agent).toEqual({
       model: 'gpt-5.3',
+      provider: '',
       thinkingLevel: 'high',
       sessionId: 'abc',
       sessionName: 'work',
@@ -195,6 +196,81 @@ describe('reduceSession', () => {
   it('survives a get_state with no model', () => {
     const state = reduceSession(initialSessionState, { type: 'response', command: 'get_state', data: {} });
     expect(state.agent?.model).toBe('unknown');
+  });
+
+  it('keeps the provider get_state names, so a pick can address the same model', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'get_state',
+      data: { model: { id: 'gpt-5.6', provider: 'openai' }, thinkingLevel: 'high' },
+    });
+    expect(state.agent?.provider).toBe('openai');
+  });
+
+  it('lists the models and thinking levels the session offers, dropping malformed ones', () => {
+    const state = fold([
+      {
+        type: 'response',
+        command: 'get_available_models',
+        data: {
+          models: [
+            { provider: 'openai', id: 'gpt-5.6', name: 'GPT 5.6', reasoning: true, api: 'x' },
+            { provider: 'anthropic', id: 'claude-opus-5' },
+            { id: 'no-provider' },
+            'junk',
+          ],
+        },
+      },
+      { type: 'response', command: 'get_available_thinking_levels', data: { levels: ['off', 'high', 7] } },
+    ]);
+
+    expect(state.models).toEqual([
+      { provider: 'openai', id: 'gpt-5.6', name: 'GPT 5.6', reasoning: true },
+      { provider: 'anthropic', id: 'claude-opus-5', name: 'claude-opus-5', reasoning: false },
+    ]);
+    expect(state.thinkingLevels).toEqual(['off', 'high']);
+  });
+
+  it('moves the chip to the model a set_model reply confirms', () => {
+    const state = fold([
+      { type: 'response', command: 'get_state', data: { model: { id: 'a', provider: 'p' }, thinkingLevel: 'low' } },
+      { type: 'response', command: 'set_model', success: true, data: { id: 'b', provider: 'q', name: 'B' } },
+    ]);
+
+    expect(state.agent).toMatchObject({ model: 'b', provider: 'q', thinkingLevel: 'low' });
+  });
+
+  it('ignores a set_model reply before the agent facts exist', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'set_model',
+      success: true,
+      data: { id: 'b', provider: 'q' },
+    });
+    expect(state).toBe(initialSessionState);
+  });
+
+  it('surfaces a refused pick as an error notice, and stays quiet for other refusals', () => {
+    const refused = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'set_model',
+      success: false,
+      error: 'Model not found: openai/nope',
+    });
+    expect(refused.entries).toEqual([
+      { kind: 'notice', id: 'n1', text: 'Model not found: openai/nope', tone: 'error' },
+    ]);
+
+    const bare = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'set_thinking_level',
+      success: false,
+    });
+    expect(bare.entries[0]).toMatchObject({ kind: 'notice', text: 'The agent refused set_thinking_level.' });
+
+    expect(reduceSession(initialSessionState, { type: 'response', command: 'get_state', success: false })).toBe(
+      initialSessionState,
+    );
   });
 
   it('reads usage out of get_session_stats', () => {

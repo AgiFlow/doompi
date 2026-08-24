@@ -1,24 +1,32 @@
 import { useEffect, useRef } from 'react';
+import { useStore } from '@tanstack/react-store';
+import { Markdown } from '../../components/Markdown.tsx';
+import { parseFileMentions } from '../../lib/fileMentions.ts';
 import type { TimelineEntry } from '../../lib/sessionModel.ts';
 import { submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
+import { sessionsStore } from '../../stores/sessionsStore.ts';
+import { MentionPreviews } from './MentionPreviews.tsx';
+import { ToolCard } from './ToolCard.tsx';
 
 const SUGGESTIONS = [
   'review the working tree and summarise the diff',
   'run the affected nx targets and report failures',
   'explain how the session socket handshake works',
 ];
-import { ToolCard } from './ToolCard.tsx';
 
 function Gutter({ label, tone }: { label: string; tone: string }) {
   return <span className={`w-11 shrink-0 pt-0.5 text-right text-[10px] font-bold ${tone}`}>{label}</span>;
 }
 
-function Entry({ entry }: { entry: TimelineEntry }) {
+function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
   if (entry.kind === 'user') {
     return (
       <div data-testid="entry-user" className="flex gap-3">
         <Gutter label="you" tone="text-doom-cyan" />
-        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[13px] text-doom-hi">{entry.text}</p>
+        <div className="flex min-w-0 flex-1 flex-col gap-2 text-[13px] text-doom-hi">
+          <Markdown text={entry.text} />
+          {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
+        </div>
       </div>
     );
   }
@@ -33,10 +41,10 @@ function Entry({ entry }: { entry: TimelineEntry }) {
               {entry.thinking}
             </p>
           ) : null}
-          <p className="whitespace-pre-wrap break-words text-[13px] text-doom-text">
-            {entry.text}
+          <div className="text-[13px] text-doom-text">
+            <Markdown text={entry.text} />
             {entry.streaming ? <span className="ml-0.5 inline-block h-3.5 w-2 translate-y-0.5 bg-doom-blue" /> : null}
-          </p>
+          </div>
         </div>
       </div>
     );
@@ -86,6 +94,7 @@ function Entry({ entry }: { entry: TimelineEntry }) {
 
 export function Timeline() {
   const session = useActiveSession((state) => state);
+  const activeId = useStore(sessionsStore, (state) => state.activeId);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -122,7 +131,7 @@ export function Timeline() {
   return (
     <div data-testid="timeline" className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]">
       {session.entries.map((entry) => (
-        <Entry key={entry.id} entry={entry} />
+        <Entry key={entry.id} entry={entry} sessionId={activeId} />
       ))}
       <div ref={bottom} />
     </div>

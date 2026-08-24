@@ -127,3 +127,31 @@ test('surfaces an agent error in the timeline', async ({ page, cockpit }) => {
 
   await expect(page.getByTestId('entry-notice')).toContainText('the provider refused the request');
 });
+
+test('previews the files a prompt mentions and renders the reply as markdown', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  await page.getByTestId('composer-input').fill('@docs/happy-jump.svg and @notes/plan.md look');
+  await page.getByTestId('composer-send').click();
+  await cockpit.session.waitForCommand('prompt');
+
+  const previews = page.getByTestId('mention-preview');
+  await expect(previews).toHaveCount(2);
+  await expect(previews.nth(0)).toHaveAttribute('data-kind', 'image');
+  await expect(previews.nth(0).locator('img')).toHaveAttribute('src', /\/file\?path=docs%2Fhappy-jump\.svg$/);
+  await expect(previews.nth(1)).toHaveAttribute('data-kind', 'file');
+  await expect(previews.nth(1).locator('a')).toHaveAttribute('href', /\/file\?path=notes%2Fplan\.md$/);
+
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: '**Bold** and `code`\n\n- item' },
+  });
+  cockpit.session.emit({ type: 'agent_settled' });
+
+  const reply = page.getByTestId('entry-assistant');
+  await expect(reply.locator('strong')).toHaveText('Bold');
+  await expect(reply.locator('code')).toHaveText('code');
+  await expect(reply.locator('li')).toHaveText('item');
+});

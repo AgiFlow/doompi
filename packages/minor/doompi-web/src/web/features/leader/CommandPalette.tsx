@@ -1,9 +1,9 @@
-import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
 import { minorModes } from '../../lib/composition.ts';
 import { paletteCommands } from '../../lib/pluginRegistry.ts';
 import { sendFrame } from '../../lib/transport.ts';
+import { useOpenTab } from '../../stores/useOpenTab.ts';
 import { closePalette, paletteStore, togglePalette } from '../../stores/paletteStore.ts';
 import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
@@ -95,7 +95,7 @@ export function CommandPalette() {
   }, [commands, filter, activeModes]);
 
   const activeId = useStore(sessionsStore, (state) => state.activeId);
-  const navigate = useNavigate();
+  const openTab = useOpenTab();
   const pluginEntries = useMemo(() => {
     const needle = filter.trim().toLowerCase();
     const pool = paletteCommands();
@@ -105,16 +105,7 @@ export function CommandPalette() {
     const command = paletteCommands().find((candidate) => candidate.id === id);
     if (!command) return;
     closePalette();
-    command.run({
-      sessionId: activeId,
-      openTab: (tabId) => {
-        if (activeId === null) return;
-        void (tabId === null
-          ? navigate({ to: '/session/$sessionId', params: { sessionId: activeId } })
-          : navigate({ to: '/session/$sessionId/$tabId', params: { sessionId: activeId, tabId } }));
-      },
-      sendSessionFrame: sendFrame,
-    });
+    command.run({ sessionId: activeId, openTab, sendSessionFrame: sendFrame });
   };
 
   const current = groups[Math.min(selected, Math.max(groups.length - 1, 0))];

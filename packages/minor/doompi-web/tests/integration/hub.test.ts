@@ -33,6 +33,7 @@ function startHub(
   registryDir: string,
   spawn?: (input: { cwd: string; name?: string }) => Promise<SpawnOutcome>,
   extraChannels: WebHubChannel[] = [],
+  signal?: (pid: number) => void,
 ): HubHarness {
   const events: HubEvent[] = [];
   const hub = createSessionHub({
@@ -41,6 +42,7 @@ function startHub(
     // Channels are entirely injected: the packaged host ships no builtin
     // ones since every data source is a plugin now.
     channels: extraChannels,
+    ...(signal === undefined ? {} : { signal }),
   });
   cleanups.push(() => hub.close());
   hub.onEvent((event) => events.push(event));
@@ -65,7 +67,7 @@ function startHub(
 
 async function startRegisteredSession(
   registryDir: string,
-  options: { id?: string; name?: string } = {},
+  options: { id?: string; name?: string; pid?: number } = {},
 ): Promise<FakeSession> {
   const session = await startFakeSession({ ...options, registryDir });
   cleanups.push(() => session.close());
@@ -94,6 +96,25 @@ describe('the session hub over a registry', () => {
       'both sessions attached',
     );
     expect(harness.hub.snapshot().map((summary) => summary.name)).toEqual(['alpha', 'beta']);
+  });
+
+  it('stops a session by signalling its server, and never signals itself', async () => {
+    const registryDir = freshRegistryDir();
+    const own = await startRegisteredSession(registryDir, { id: 'own', name: 'own' });
+    // The parent process is alive (so the record is not stale) but is not this
+    // process; the injected signal keeps it unharmed.
+    const other = await startRegisteredSession(registryDir, { id: 'other', name: 'other', pid: process.ppid });
+    const signalled: number[] = [];
+    const harness = startHub(registryDir, undefined, [], (pid) => signalled.push(pid));
+    await own.waitForAttach();
+    await other.waitForAttach();
+    await waitFor(() => harness.latest('own') !== undefined && harness.latest('other') !== undefined, 'both listed');
+
+    expect(harness.hub.stop('other')).toEqual({ ok: true });
+    expect(signalled).toEqual([process.ppid]);
+    expect(harness.hub.stop('own')).toMatchObject({ ok: false, code: 'self' });
+    expect(harness.hub.stop('nope')).toMatchObject({ ok: false, code: 'unknown' });
+    expect(signalled).toEqual([process.ppid]);
   });
 
   it('picks up a session that registers mid-run and drops one that leaves', async () => {

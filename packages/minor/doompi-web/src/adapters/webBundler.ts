@@ -78,6 +78,11 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
     ],
     resolve: {
       dedupe: [...DEDUPED_RUNTIMES],
+      // The CSS sources module cannot ride the resolveId hook above: Vite and
+      // Tailwind resolve CSS @import through Vite's own id resolver, which
+      // consults aliases but no plugin hooks. Without this the builtin (empty)
+      // @source list ships and every plugin-only utility class is missing.
+      alias: [{ find: /^\.\/webPluginSources\.generated\.css$/, replacement: generated.cssModulePath }],
     },
     build: {
       outDir: assetsDir,

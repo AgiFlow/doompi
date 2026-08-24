@@ -6,7 +6,9 @@ import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import { sessionFileHeaders } from '../services/fileMedia.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
+import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
   HUB_PROTOCOL_VERSION,
@@ -27,7 +29,7 @@ import { readGitStatus } from './gitStatus.ts';
 import { staticRecordSource, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
-import { listSessionFiles } from './sessionFiles.ts';
+import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
 const SESSION_ROUTE = '/api/session';
@@ -174,6 +176,16 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
   });
 
+  app.delete(`${SESSIONS_API_ROUTE}/:sessionId`, (context) => {
+    const sessionId = context.req.param('sessionId');
+    const outcome = hub.stop(sessionId);
+    if (outcome.ok) return context.json({ sessionId }, 202);
+    return context.json(
+      { error: outcome.error },
+      outcome.code === 'unknown' ? 404 : outcome.code === 'self' ? 409 : 502,
+    );
+  });
+
   // File completion for the composer's @ references: bounded, cwd-scoped,
   // and only for sessions the hub actually manages.
   app.get('/api/sessions/:sessionId/files', async (context) => {
@@ -183,6 +195,19 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     const query = context.req.query('q') ?? '';
     const files = await listSessionFiles(summary.cwd, query, 20);
     return context.json({ files });
+  });
+
+  // The timeline's @file previews: one cwd-contained file, capped in size.
+  app.get(SESSION_FILE_ROUTE, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    const relativePath = context.req.query('path') ?? '';
+    const file = await readSessionFile(summary.cwd, relativePath, MAX_SESSION_FILE_BYTES);
+    if (file.status === 'forbidden') return context.json({ error: 'The path leaves the session directory.' }, 403);
+    if (file.status === 'not-found') return context.json({ error: 'No such file.' }, 404);
+    if (file.status === 'too-large') return context.json({ error: 'The file is too large to preview.' }, 413);
+    return context.body(new Uint8Array(file.body), 200, sessionFileHeaders(relativePath));
   });
 
   app.get(

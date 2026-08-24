@@ -34,6 +34,27 @@ export async function createSession(input: { cwd: string; name?: string }): Prom
   return { error };
 }
 
+export type StopSessionResult = { ok: true } | { error: string };
+
+/** Asks the hub to stop a session's server; the rail card leaves once the server withdraws its record. */
+export async function stopSession(sessionId: string): Promise<StopSessionResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+  if (response.ok) return { ok: true };
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    body = undefined;
+  }
+  const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
+  return { error };
+}
+
 /** File paths under a session's cwd matching the query, for @ completion. */
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {
