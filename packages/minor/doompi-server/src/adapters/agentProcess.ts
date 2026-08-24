@@ -41,6 +41,9 @@ export function spawnAgentProcess(options: AgentProcessOptions): AgentProcess {
       listeners.push(listener);
     },
     exited,
+    endInput() {
+      child.stdin?.end();
+    },
     stop() {
       child.stdin?.end();
       child.kill();

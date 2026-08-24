@@ -9,6 +9,8 @@ export interface AgentProcess {
   onFrame(listener: (frame: SessionFrame) => void): void;
   /** Resolves with the agent's exit code. */
   readonly exited: Promise<number>;
+  /** Ends the agent's input stream, asking it to flush and exit gracefully. */
+  endInput(): void;
   stop(): void;
 }
 

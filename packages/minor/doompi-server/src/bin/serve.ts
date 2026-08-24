@@ -4,7 +4,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnAgentProcess } from '../adapters/agentProcess.ts';
+import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
+import { superviseAgentRelaunches } from '../adapters/agentSupervisor.ts';
 import { removeSessionRecord, writeSessionRecord } from '../adapters/sessionRegistry.ts';
 import { removeStaleSocket, serveSessionSocket } from '../adapters/socketServer.ts';
 import { startWebCockpit } from '../adapters/webCockpit.ts';
@@ -14,6 +15,30 @@ import { SESSION_RECORD_VERSION } from '../types/registry.ts';
 
 const DOOMPI_BINARY = 'doompi';
 const RPC_MODE_ARGS = ['--mode', 'rpc'];
+const AGENT_COMMAND_ENV = 'DOOMPI_AGENT_COMMAND';
+const REPO_LOCAL_CLI = ['node_modules', '@agimon-ai', 'doompi', 'dist', 'bin', 'cli.mjs'];
+
+/**
+ * The agent launcher for this session's working directory.
+ *
+ * A repository that pins its own DoomPi runs that exact version, mirroring how
+ * pi.sh resolves the repo-local CLI. DOOMPI_AGENT_COMMAND overrides the lookup
+ * (a .mjs/.js path runs under this node), and the PATH binary is the fallback.
+ */
+function resolveAgentCommand(cwd: string, env: NodeJS.ProcessEnv): { command: string; prefixArgs: string[] } {
+  const override = env[AGENT_COMMAND_ENV];
+  if (override) {
+    return override.endsWith('.mjs') || override.endsWith('.js')
+      ? { command: process.execPath, prefixArgs: [override] }
+      : { command: override, prefixArgs: [] };
+  }
+  for (let directory = cwd; ; directory = path.dirname(directory)) {
+    const cli = path.join(directory, ...REPO_LOCAL_CLI);
+    if (fs.existsSync(cli)) return { command: process.execPath, prefixArgs: [cli] };
+    if (directory === path.dirname(directory)) break;
+  }
+  return { command: DOOMPI_BINARY, prefixArgs: [] };
+}
 
 async function main(): Promise<number> {
   const options = parseServeOptions(process.argv.slice(2));
@@ -30,11 +55,15 @@ async function main(): Promise<number> {
     sessionName: options.sessionName,
   });
 
-  const agent = spawnAgentProcess({
-    command: DOOMPI_BINARY,
-    args: [...agentArgs, ...RPC_MODE_ARGS],
+  const relaunchFile = `${path.resolve(options.socketPath)}.relaunch.json`;
+  const launcher = resolveAgentCommand(process.cwd(), process.env);
+  const agent = superviseAgentRelaunches({
+    command: launcher.command,
+    args: [...launcher.prefixArgs, ...agentArgs, ...RPC_MODE_ARGS],
     cwd: process.cwd(),
-    env: process.env,
+    env: { ...process.env, [DOOM_RELAUNCH_FILE_ENV]: relaunchFile },
+    relaunchFile,
+    onNotice: (message) => process.stderr.write(`[doompi-server] ${message}\n`),
   });
   await removeStaleSocket(options.socketPath);
   const socket = serveSessionSocket({

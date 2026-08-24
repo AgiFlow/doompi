@@ -49,6 +49,10 @@ export interface MajorModeCommandDependencies {
   readonly loadSelectionSwitch: () => Promise<typeof import('@agimon-ai/doompi-config/selectionSwitch')>;
   readonly loadConfigJournal: () => Promise<typeof import('@agimon-ai/doompi-config/piContext')>;
   readonly resolveLayers: (config: MajorModeView['config'], majorMode: string) => string[];
+  /** Whether an owning process supervisor listens for relaunch requests. */
+  readonly supervisedRelaunchAvailable: () => boolean;
+  /** Asks the supervisor to relaunch with the picked mode; call only at idle. */
+  readonly requestSupervisedRelaunch: (majorMode: string, operationId: string) => boolean;
 }
 
 export function registerMajorModeCommand(
@@ -77,6 +81,7 @@ export function registerMajorModeCommand(
       let handoff: VoiceReloadHandoff | undefined;
       let minorModeReloadHandoff: MinorModeReloadHandoffHandle | undefined;
       let reloadRequested = false;
+      let performRelaunch: (() => boolean) | undefined;
       try {
         const { config, majorMode, domains, profile } = await dependencies.currentView(ctx);
         const names = Object.keys(config.majorMode);
@@ -172,7 +177,14 @@ export function registerMajorModeCommand(
                 STATUS_KEY,
                 colorStatus(ctx.ui.theme, harness.majorMode, harness.domains, harness.profile, true),
               );
-              ctx.ui.notify(applySummary(picked, selected, true, composed, plan.strategy), 'info');
+              if (dependencies.supervisedRelaunchAvailable()) {
+                const target = picked;
+                performRelaunch = () => dependencies.requestSupervisedRelaunch(target, plan.operationId);
+              }
+              ctx.ui.notify(
+                applySummary(picked, selected, true, composed, plan.strategy, performRelaunch !== undefined),
+                'info',
+              );
               return 'queued';
             }
             const [{ applyMajorMode }, { persistHarnessSelection }] = await Promise.all([
@@ -242,6 +254,7 @@ export function registerMajorModeCommand(
         if (result.outcome === 'rejected' || result.outcome === 'stale') throw transitionError(result);
       } catch (error) {
         reloadRequested = false;
+        performRelaunch = undefined;
         minorModeReloadHandoff?.discard();
         minorModeReloadHandoff = undefined;
         if (!token) throw error;
@@ -259,6 +272,14 @@ export function registerMajorModeCommand(
           minorModeReloadHandoff?.discard();
           throw error;
         }
+      }
+      if (performRelaunch) {
+        // Written only at idle: the supervisor ends this agent's input for a
+        // graceful exit the moment the file appears, then respawns it with the
+        // pending major mode; the replacement resumes the session and
+        // acknowledges the journal.
+        await ctx.waitForIdle();
+        if (performRelaunch()) ctx.shutdown();
       }
     },
   });

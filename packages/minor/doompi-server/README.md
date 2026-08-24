@@ -40,6 +40,22 @@ The session gets an identity at spawn: the server mints a session id (or takes `
 passes it to Pi together with the `--name` you gave it, so the cockpit knows the session before its
 first frame.
 
+The agent binary resolves per working directory: a repository that pins its own
+`@agimon-ai/doompi` in node_modules runs that exact version (mirroring how launcher scripts
+resolve the repo-local CLI), `DOOMPI_AGENT_COMMAND` overrides the lookup with a binary or a
+`.mjs` path, and the `doompi` on PATH is the fallback.
+
+## Major-mode relaunches
+
+A launcher-class session cannot recompose its extension closure in place, so switching to a major
+mode with a different layer set normally stays pending until someone reruns the launcher. This
+server performs that relaunch itself: the runtime journals the switch, writes a relaunch file the
+server points it at, and the server ends the agent's input for a graceful exit, then respawns it
+with the new `--major-mode` under the same session id and socket. Clients stay attached; the
+replacement resumes the same Pi session and acknowledges the journaled transition. An agent that
+ignores the request is killed after a grace period, and an exit without the file ends the session
+as before.
+
 ## The session registry
 
 Every server announces itself by writing one JSON record to

@@ -139,6 +139,11 @@
       "import": "./dist/readiness.mjs",
       "require": "./dist/readiness.cjs"
     },
+    "./relaunch-handoff": {
+      "types": "./dist/relaunchHandoff.d.mts",
+      "import": "./dist/relaunchHandoff.mjs",
+      "require": "./dist/relaunchHandoff.cjs"
+    },
     "./sandbox-harness": {
       "types": "./dist/sandboxHarness.d.mts",
       "import": "./dist/sandboxHarness.mjs",

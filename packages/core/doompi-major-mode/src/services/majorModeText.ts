@@ -42,9 +42,13 @@ export function applySummary(
   stale: boolean,
   composed = false,
   strategy?: TransitionExecutionStrategy,
+  supervised = false,
 ): string {
   const head = `Switched to ${picked}: ${layers.join(', ') || CORE_ONLY}`;
   if (strategy === 'process-relaunch') {
+    if (supervised) {
+      return `Major mode ${picked} is pending; the supervisor is restarting the agent with it.`;
+    }
     return [
       `Major mode ${picked} is pending; the current process remains active.`,
       `  ./pi.sh ${MAJOR_MODE_OPTION} ${picked}`,

@@ -12,6 +12,7 @@ import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contr
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { registerMajorModeCommand } from '../../commands/majorModeCommand.ts';
+import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from './relaunchRequest.ts';
 import { colorStatus, STATUS_KEY } from '../../services/statusLine.ts';
 import { MAJOR_MODE_SOURCE, type MajorModeView } from '../../types/majorMode.ts';
 import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../../types/telemetry.ts';
@@ -103,6 +104,8 @@ function majorModePlugin(cordis: Context, { pi, telemetry }: MajorModePluginConf
       loadSelectionSwitch: load.selection,
       loadConfigJournal: load.journal,
       resolveLayers: (config, majorMode) => [...(config.majorMode[majorMode]?.layers ?? [])],
+      supervisedRelaunchAvailable,
+      requestSupervisedRelaunch,
     });
     pi.on('session_start', async (_event, ctx) => {
       await runtimeInjection.await();

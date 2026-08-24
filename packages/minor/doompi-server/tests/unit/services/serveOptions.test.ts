@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseServeOptions, resolveSessionIdentity } from '../../../src/services/serveOptions.ts';
+import { parseServeOptions, relaunchAgentArgs, resolveSessionIdentity } from '../../../src/services/serveOptions.ts';
 
 describe('parseServeOptions', () => {
   it('reads the socket, token file, and agent arguments', () => {
@@ -116,5 +116,27 @@ describe('resolveSessionIdentity', () => {
 
     expect(resolved.identity).toEqual({ sessionId: 'given-id', sessionName: 'untitled' });
     expect(resolved.agentArgs).toEqual(['--session-id', 'given-id', '--name', 'untitled']);
+  });
+});
+
+describe('relaunchAgentArgs', () => {
+  it('pins the target mode after untouched agent arguments', () => {
+    expect(relaunchAgentArgs(['--session-id', 'id', '--mode', 'rpc'], 'minimal')).toEqual([
+      '--session-id',
+      'id',
+      '--mode',
+      'rpc',
+      '--major-mode',
+      'minimal',
+    ]);
+  });
+
+  it('replaces a previous selection instead of accumulating flags', () => {
+    expect(relaunchAgentArgs(['--major-mode', 'copilot', '--name', 'web'], 'minimal')).toEqual([
+      '--name',
+      'web',
+      '--major-mode',
+      'minimal',
+    ]);
   });
 });

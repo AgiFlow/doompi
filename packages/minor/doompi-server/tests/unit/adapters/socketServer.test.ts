@@ -32,6 +32,7 @@ function fakeAgent(): FakeAgent {
       for (const listener of listeners) listener(frame);
     },
     exited: new Promise<number>(() => undefined),
+    endInput: () => undefined,
     stop: () => undefined,
   };
 }

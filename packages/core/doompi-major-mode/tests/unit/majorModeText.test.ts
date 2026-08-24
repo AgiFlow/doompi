@@ -42,6 +42,10 @@ describe('major mode picker text', () => {
 describe('switch summaries', () => {
   it('tells a launcher session it must relaunch, and a synced one that it reloaded', () => {
     expect(applySummary('copilot', ['team'], true, false, 'process-relaunch')).toContain('is pending');
+    expect(applySummary('copilot', ['team'], true, false, 'process-relaunch')).toContain('remains active');
+    expect(applySummary('copilot', ['team'], true, false, 'process-relaunch', true)).toContain(
+      'the supervisor is restarting the agent',
+    );
     expect(applySummary('copilot', ['team'], false, true, 'pi-reload')).toContain('Pi reloaded.');
     expect(applySummary('copilot', ['team'], false, false)).toContain('Hooks reloaded.');
     // Stale on a launcher session: hooks change in place, extensions cannot.
