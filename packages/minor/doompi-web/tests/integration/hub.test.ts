@@ -149,9 +149,9 @@ describe('the session hub over a registry', () => {
     const harness = startHub(registryDir);
     await session.waitForAttach();
     // The hub's own socket client authenticates a beat after the session
-    // accepts it, and a command sent before that is dropped.
-    await waitFor(() => harness.latest('one')?.attach === 'attached', 'the hub attachment');
-
+    // accepts it; a command sent in that beat must wait for the handshake
+    // rather than vanish, which is what a click right after a session restart
+    // looks like.
     harness.hub.command('one', { type: 'extension_ui_response', id: 'req-9', value: 'a' });
     await session.waitForCommand('extension_ui_response');
 

@@ -4,6 +4,9 @@ import { createFrameDecoder, encodeFrame } from '../services/sessionFraming.ts';
 import type { AttachOptions, SessionAttachment } from '../types/bridge.ts';
 import { ATTACH_ERROR_TYPE, ATTACH_TYPE, ATTACHED_TYPE, bridgeStatus, type SessionFrame } from '../types/session.ts';
 
+/** Commands held while the handshake is in flight; beyond this the oldest go. */
+const PENDING_LIMIT = 64;
+
 function asCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
@@ -21,6 +24,7 @@ export function attachToSession(options: AttachOptions): SessionAttachment {
   let attempt = 0;
   let stopped = false;
   let authenticated = false;
+  const pending: SessionFrame[] = [];
 
   const connect = (): void => {
     if (stopped) return;
@@ -51,6 +55,7 @@ export function attachToSession(options: AttachOptions): SessionAttachment {
           options.handlers.onStatus(
             bridgeStatus('attached', { replayed: asCount(frame.replayed), dropped: asCount(frame.dropped) }),
           );
+          for (const queued of pending.splice(0)) connection.write(encodeFrame(queued));
           continue;
         }
         if (frame.type === ATTACH_ERROR_TYPE) {
@@ -80,7 +85,14 @@ export function attachToSession(options: AttachOptions): SessionAttachment {
 
   return {
     send(frame) {
-      if (stopped || !authenticated || !socket) return;
+      if (stopped) return;
+      if (!authenticated || !socket) {
+        // A command that lands while the hub is (re)attaching, typically right
+        // after a session restart, waits for the handshake instead of vanishing.
+        pending.push(frame);
+        if (pending.length > PENDING_LIMIT) pending.shift();
+        return;
+      }
       socket.write(encodeFrame(frame));
     },
     close() {
