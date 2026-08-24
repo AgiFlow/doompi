@@ -1,5 +1,6 @@
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
+  DOOM_MINOR_MODE_ENTRY_TYPE,
   type MinorModeActionResponse,
   type MinorModeCatalogService,
 } from '@agimon-ai/doompi-extension-contracts/mode';
@@ -19,11 +20,14 @@ import {
   type TransitionSource,
 } from '@agimon-ai/doompi-extension-contracts/transition';
 import type { Context } from '@deepseek-ai/cordis';
+import { projectMinorModes } from '../../services/minorModeProjection.ts';
 import { createMinorModeCatalogHost } from '../../services/modeCatalog.ts';
 import { registerMinorModeCommand } from './minorModeCommand.ts';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi/mode-catalog';
 const HELP_CONTRIBUTION_SOURCE = '@agimon-ai/doompi';
+/** Registrations and state flips arrive in bursts; one entry covers a burst. */
+const PROJECTION_SETTLE_MS = 50;
 
 function transitionSource(requesterSource: string): TransitionSource {
   if (requesterSource.includes('voice')) return 'voice';
@@ -39,7 +43,7 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
   registerMinorModeCommand(pi, () => activeCatalog.current);
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fiber = connection.root.plugin((cordis: Context) => {
-    modeCatalogPlugin(cordis, activeCatalog);
+    modeCatalogPlugin(cordis, pi, activeCatalog);
   });
   try {
     await fiber;
@@ -62,7 +66,11 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
   );
 }
 
-function modeCatalogPlugin(cordis: Context, activeCatalog: { current: MinorModeCatalogService | undefined }): void {
+function modeCatalogPlugin(
+  cordis: Context,
+  pi: Pick<ExtensionAPI, 'appendEntry'>,
+  activeCatalog: { current: MinorModeCatalogService | undefined },
+): void {
   cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
     const contribution = requireDoomHelpService(helpContext).register({
       source: HELP_CONTRIBUTION_SOURCE,
@@ -86,8 +94,9 @@ function modeCatalogPlugin(cordis: Context, activeCatalog: { current: MinorModeC
     const sessionId = session.sessionId;
     const restoreSnapshot = reloadSession ? consumeMinorModeReloadHandoff(sessionId) : undefined;
     if (!reloadSession) discardMinorModeReloadHandoff(sessionId);
+    const sessionKind = context.hasUI && context.mode === 'tui' ? 'tui' : 'headless';
     const catalog: MinorModeCatalogHost = createMinorModeCatalogHost({
-      sessionKind: context.hasUI && context.mode === 'tui' ? 'tui' : 'headless',
+      sessionKind,
       context,
       restoreSnapshot,
       onRestorationError(error) {
@@ -119,7 +128,26 @@ function modeCatalogPlugin(cordis: Context, activeCatalog: { current: MinorModeC
     });
     sessionContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
     activeCatalog.current = catalog;
+
+    // Journal the projection so RPC clients see catalog state live and on
+    // replay; identical projections are skipped so detail churn stays cheap.
+    let published: string | undefined;
+    let settle: NodeJS.Timeout | undefined;
+    const publish = (): void => {
+      settle = undefined;
+      const projection = projectMinorModes(catalog.getSnapshot(), sessionKind);
+      const serialized = JSON.stringify(projection);
+      if (serialized === published) return;
+      published = serialized;
+      pi.appendEntry(DOOM_MINOR_MODE_ENTRY_TYPE, projection);
+    };
+    const unsubscribe = catalog.subscribe(() => {
+      settle ??= setTimeout(publish, PROJECTION_SETTLE_MS);
+    });
+
     return () => {
+      if (settle) clearTimeout(settle);
+      unsubscribe();
       activeCatalog.current = undefined;
       catalog.dispose();
     };
