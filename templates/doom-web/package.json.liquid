@@ -7,7 +7,6 @@
     "coding-agent",
     "doompi",
     "pi-coding-agent",
-    "session-console",
     "web",
     "{{ packageKeyword }}"
   ],
@@ -27,6 +26,7 @@
   },
   "files": [
     "dist",
+    "src",
     "llms.txt",
     "README.md",
     "LICENSE",
@@ -41,6 +41,11 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
+    },
+    "./bundler": {
+      "types": "./dist/bundler.d.mts",
+      "import": "./dist/bundler.mjs",
+      "require": "./dist/bundler.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -57,43 +62,34 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@hono/node-server": "2.1.1",
     "@hono/node-ws": "1.3.1",
-    "hono": "4.13.3"
-  },
-  "devDependencies": {
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
-    "@agimon-ai/doompi-workflow": "workspace:*",
-    "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
-    "@playwright/test": "1.62.1",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/react-query": "5.102.1",
     "@tanstack/react-router": "1.170.32",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
-    "@types/node": "26.2.0",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "6.1.0",
-    "@vitest/coverage-v8": "4.1.11",
+    "hono": "4.13.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwindcss": "4.3.3",
+    "vite": "8.2.2"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.4",
+    "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
-    "vite": "8.2.2",
     "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=22.19.0"
-  },
-  "peerDependencies": {
-    "@agimon-ai/doompi-workflow": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@agimon-ai/doompi-workflow": {
-      "optional": true
-    }
   },
   "doompiWeb": [
     {

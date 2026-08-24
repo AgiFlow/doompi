@@ -2,29 +2,30 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderWebPluginModules } from '../../scripts/webPlugins/generate.mjs';
+import { renderBuiltinWebPluginModules } from '../../src/adapters/webPluginGenerate.ts';
 
 const packageRoot = fileURLToPath(new URL('../..', import.meta.url));
 
-describe('the generated web plugin registry', () => {
-  it('matches what the doompiWeb manifests produce right now', async () => {
+describe('the committed builtin web plugin registry', () => {
+  it('matches what the host doompiWeb manifest produces right now', async () => {
     // The committed generated modules must equal a fresh render: a manifest
     // edit without regeneration fails here (and in CI's check-mode build).
-    for (const [relativePath, content] of renderWebPluginModules()) {
+    for (const [relativePath, content] of renderBuiltinWebPluginModules()) {
       await expect(readFile(path.join(packageRoot, relativePath), 'utf8'), relativePath).resolves.toBe(content);
     }
   });
 
-  it('registers the internal and cross-package plugins in order', () => {
-    const rendered = renderWebPluginModules();
+  it('contains only the host package plugins, never a hardcoded external', () => {
+    // External plugins reach the cockpit through the doompi sync bundle, not
+    // through this package's own build: the committed registry must not name
+    // any other package.
+    const rendered = renderBuiltinWebPluginModules();
     const client = rendered.get(path.join('src', 'web', 'app', 'webPlugins.generated.ts'));
     expect(client).toContain("from '../features/subagents/index.ts'");
-    expect(client).toContain("from '@agimon-ai/doompi-workflow/web'");
-    expect(client).toContain('subagentsPlugin, workflowsPlugin');
+    expect(client).not.toContain('@agimon-ai/doompi-workflow');
+    expect(client).not.toContain('file://');
     const hub = rendered.get(path.join('src', 'adapters', 'webHubPlugins.generated.ts'));
     expect(hub).toContain('...subagentsChannels');
-    expect(hub).toContain("specifier: '@agimon-ai/doompi-workflow/web-hub'");
-    const css = rendered.get(path.join('src', 'web', 'styles', 'webPluginSources.generated.css'));
-    expect(css).toContain('@source "../../../../doompi-workflow/web";');
+    expect(hub).not.toContain('doompi-workflow');
   });
 });

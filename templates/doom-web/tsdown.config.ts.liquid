@@ -1,9 +1,9 @@
 import { defineConfig } from 'tsdown';
-import { ensureWebPluginModules } from './scripts/webPlugins/generate.mjs';
+import { ensureBuiltinWebPluginModules } from './src/adapters/webPluginGenerate.ts';
 
-// Both build halves refresh the generated plugin registry at config load; CI
+// Both build halves refresh the committed builtin registry at config load; CI
 // only checks, so a stale committed registry fails the build loudly.
-ensureWebPluginModules({ check: Boolean(process.env.CI) });
+ensureBuiltinWebPluginModules({ check: Boolean(process.env.CI) });
 
 export default defineConfig({
   entry: {
