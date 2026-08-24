@@ -152,6 +152,7 @@ boilerplate:
       - tests/unit/pluginRegistry.test.ts
       - tests/unit/hubServices.test.ts
       - tests/unit/serverServices.test.ts
+      - tests/unit/sessionFiles.test.ts
       - tests/unit/sessionModel.test.ts
       - tests/unit/sessionSummary.test.ts
       - tests/unit/wsClient.test.ts

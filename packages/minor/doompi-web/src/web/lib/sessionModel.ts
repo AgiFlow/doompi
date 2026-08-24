@@ -1,3 +1,5 @@
+import { DIALOG_ANSWERED_TYPE } from '../../types/hub.ts';
+
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
 
 export interface UserEntry {
@@ -364,6 +366,11 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
       }
       return applyDialog(state, frame);
     }
+
+    // Hub-synthesized when any tab answers a dialog: closes it on other live
+    // tabs, and on backlog replays keeps an answered request from reopening.
+    case DIALOG_ANSWERED_TYPE:
+      return state.dialog && state.dialog.id === asString(frame.id) ? { ...state, dialog: null } : state;
 
     case 'response':
       return applyResponse(state, frame);

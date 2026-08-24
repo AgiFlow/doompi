@@ -264,6 +264,23 @@ describe('reduceSession', () => {
     expect(state.dialog?.options).toEqual([]);
   });
 
+  it('closes only the matching dialog when the hub reports it answered', () => {
+    const opened = reduceSession(initialSessionState, {
+      type: 'extension_ui_request',
+      id: 'r1',
+      method: 'select',
+      options: ['a'],
+    });
+    expect(reduceSession(opened, { type: 'extension_ui_answered', id: 'other' }).dialog).not.toBeNull();
+    expect(reduceSession(opened, { type: 'extension_ui_answered', id: 'r1' }).dialog).toBeNull();
+    // Replay order: an answered request opens and closes again, ending shut.
+    const replayed = [
+      { type: 'extension_ui_request', id: 'r1', method: 'select', options: ['a'] },
+      { type: 'extension_ui_answered', id: 'r1' },
+    ].reduce(reduceSession, initialSessionState);
+    expect(replayed.dialog).toBeNull();
+  });
+
   it('records errors as notices', () => {
     const state = fold([
       { type: 'error', message: 'provider refused' },

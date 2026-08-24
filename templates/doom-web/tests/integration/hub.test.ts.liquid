@@ -143,6 +143,33 @@ describe('the session hub over a registry', () => {
     expect(harness.hub.backlog('unknown')).toBeUndefined();
   });
 
+  it('records a synthetic close when a dialog answer passes through', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir);
+    await session.waitForAttach();
+    // The hub's own socket client authenticates a beat after the session
+    // accepts it, and a command sent before that is dropped.
+    await waitFor(() => harness.latest('one')?.attach === 'attached', 'the hub attachment');
+
+    harness.hub.command('one', { type: 'extension_ui_response', id: 'req-9', value: 'a' });
+    await session.waitForCommand('extension_ui_response');
+
+    // Live subscribers and future backlog replays both see the close.
+    await waitFor(
+      () => harness.framesFor('one').some((frame) => frame.type === 'extension_ui_answered' && frame.id === 'req-9'),
+      'the synthetic close',
+    );
+    expect(
+      harness.hub.backlog('one')?.frames.some((frame) => frame.type === 'extension_ui_answered' && frame.id === 'req-9'),
+    ).toBe(true);
+
+    // Other command types stay unannotated.
+    harness.hub.command('one', { type: 'prompt', message: 'hello' });
+    await session.waitForCommand('prompt');
+    expect(harness.hub.backlog('one')?.frames.filter((frame) => frame.type === 'extension_ui_answered')).toHaveLength(1);
+  });
+
   it('derives the rail phase from the frame stream', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });

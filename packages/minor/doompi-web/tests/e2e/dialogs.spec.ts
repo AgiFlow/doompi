@@ -24,6 +24,30 @@ test('answers a select request, the shape a permission prompt uses', async ({ pa
   expect(answer.id).toBe('req-1');
   expect(answer.value).toBe('allow once');
   await expect(dialog).toBeHidden();
+
+  // The backlog replays the request, but the hub recorded the answer, so a
+  // reload must not reopen a dialog nobody is waiting on.
+  await page.reload();
+  await expect(page.getByTestId('composer-input')).toBeVisible();
+  await expect(dialog).toBeHidden();
+});
+
+test('an unanswered dialog survives a reload', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'req-pending',
+    method: 'select',
+    title: 'still waiting',
+    options: ['a', 'b'],
+  });
+  await expect(page.getByTestId('dialog')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('dialog')).toBeVisible();
+  await expect(page.getByTestId('dialog-title')).toHaveText('still waiting');
 });
 
 test('answers a confirm request', async ({ page, cockpit }) => {

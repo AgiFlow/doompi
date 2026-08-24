@@ -69,6 +69,8 @@ export const SESSION_UPSERT_TYPE = 'session_upsert';
 export const SESSION_REMOVED_TYPE = 'session_removed';
 export const SESSION_BACKLOG_TYPE = 'session_backlog';
 export const SESSION_FRAME_TYPE = 'session_frame';
+/** Hub-synthesized close for an answered dialog; Pi itself never announces one. */
+export const DIALOG_ANSWERED_TYPE = 'extension_ui_answered';
 export const SUBSCRIBE_TYPE = 'subscribe';
 export const UNSUBSCRIBE_TYPE = 'unsubscribe';
 export const SESSION_COMMAND_TYPE = 'session_command';

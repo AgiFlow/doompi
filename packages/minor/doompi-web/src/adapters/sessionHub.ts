@@ -9,6 +9,7 @@ import {
 } from '../services/sessionPresence.ts';
 import type { SessionAttachment } from '../types/bridge.ts';
 import {
+  DIALOG_ANSWERED_TYPE,
   SESSION_BACKLOG_TYPE,
   type SessionBacklogFrame,
   type SessionGitStatus,
@@ -285,6 +286,15 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const managed = sessions.get(sessionId);
       if (!managed) return;
       managed.attachment?.send(frame);
+      // The agent never announces that a dialog was answered, so an
+      // extension_ui_request in the ring would reopen on every replay. This
+      // synthetic close travels the same path as agent frames: it closes the
+      // dialog on other live tabs now and on backlog replays forever after.
+      if (frame.type === 'extension_ui_response' && typeof frame.id === 'string') {
+        const closed = { type: DIALOG_ANSWERED_TYPE, id: frame.id };
+        managed.ring.record(closed);
+        emit({ kind: 'frame', sessionId: managed.record.id, frame: closed });
+      }
       const next = presenceAfterCommand(managed.presence, frame, new Date().toISOString());
       if (next !== managed.presence) {
         managed.presence = next;
