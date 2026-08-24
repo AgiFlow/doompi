@@ -114,15 +114,18 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 ## Web plugins
 
-Tabs beyond the conversation are plugins. A package declares a `doompiWeb` block in its
-package.json naming a client entry (a `webPlugin` definition: tab, panel, badge, session data
-channels, and other slot contributions) and an optional hub entry (`webHubChannels`: data sources
-the hub runs server-side). The build scans the workspace, generates the registration modules and
-the Tailwind source list, and compiles every client entry into the one bundle; CI fails on a stale
-registry, so regenerate with `pnpm build` and commit the generated files with a manifest change.
-The hub imports external hub entries lazily: a missing plugin package logs a notice and its tab
-shows an empty state. The subagents tab is the in-package reference plugin; the workflows tab lives
-in `@agimon-ai/doompi-workflow`. Contracts come from `@agimon-ai/doompi-web-contracts`.
+Tabs beyond the conversation are plugins, and no plugin package is a dependency of this one. A
+package declares a `doompiWeb` block in its package.json naming a client entry (a `webPlugin`
+definition: tab, panel, badge, session data channels, and other slot contributions) and an
+optional hub entry (`webHubChannels` plus its built dist). This package's own bundle carries only
+its built-in plugins; the full set is assembled on your machine: `doompi sync` discovers the
+installed composition's manifests, generates the import entries, and rebuilds the SPA through the
+`./bundler` subpath into `~/.doompi/web/current`, which the server prefers over the packaged
+bundle (`--assets` and `DOOMPI_WEB_DIST` override it). The synced bundle carries
+`webPlugins.server.json` naming each plugin's built hub entry, imported lazily: a missing plugin
+package logs a notice and its tab shows an empty state. The subagents tab is the in-package
+reference plugin; the workflows tab ships with `@agimon-ai/doompi-workflow`. Contracts come from
+`@agimon-ai/doompi-web-contracts`.
 
 ## License
 

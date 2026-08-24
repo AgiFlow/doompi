@@ -103,6 +103,8 @@ interface CockpitOptions {
   sessionCount: number;
   /** Which stand-in the hub launches for created sessions: one that registers, or one that fails. */
   spawnStub: 'ok' | 'fail';
+  /** Which bundle to serve: the package's own dist, or the synced-style bundle global setup built. */
+  assets: 'packaged' | 'synced';
 }
 
 /**
@@ -116,7 +118,8 @@ interface CockpitOptions {
 export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
   spawnStub: ['ok', { option: true }],
-  cockpit: async ({ sessionCount, spawnStub }, use) => {
+  assets: ['packaged', { option: true }],
+  cockpit: async ({ sessionCount, spawnStub, assets }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
     const registryDir = path.join(root, 'run');
     const stub = path.join(root, 'fake-doompi-server');
@@ -131,9 +134,20 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     // An isolated workflow home: the hub must never watch the developer's
     // real registry from a test, and workflow specs write runs into this one.
     const workflowHome = path.join(root, 'workflow-mcp');
+    const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
+    if (assets === 'synced' && !syncedDist) throw new Error('global setup did not publish the synced bundle');
     const child: ChildProcess = spawn(
       process.execPath,
-      [binary, '--registry-dir', registryDir, '--spawn-command', stub, '--port', String(port)],
+      [
+        binary,
+        '--registry-dir',
+        registryDir,
+        '--spawn-command',
+        stub,
+        '--port',
+        String(port),
+        ...(assets === 'synced' && syncedDist ? ['--assets', syncedDist] : []),
+      ],
       { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WORKFLOW_MCP_HOME: workflowHome } },
     );
 

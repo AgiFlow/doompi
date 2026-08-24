@@ -1,25 +1,51 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
-import { BUILTIN_HUB_CHANNELS, EXTERNAL_HUB_PLUGINS } from './webHubPlugins.generated.ts';
+import { SERVER_REGISTRY_FILE } from './webPluginGenerate.ts';
+import { BUILTIN_HUB_CHANNELS } from './webHubPlugins.generated.ts';
+
+interface RegistryEntry {
+  pluginId?: unknown;
+  hubEntry?: unknown;
+}
 
 /**
- * Assembles the hub's data channels: built-ins statically, external plugin
- * packages by dynamic import (the same lazy-import posture doompi-server
- * takes toward this package). An absent or broken plugin package is a notice
- * and an empty tab, never a crash; the client tab is always compiled in, so
- * its empty state is what the user sees.
+ * Assembles the hub's data channels for the assets being served.
+ *
+ * A synced bundle carries webPlugins.server.json naming each plugin's built
+ * hub entry by absolute path; those are imported lazily so an absent or
+ * broken plugin package is a notice and an empty tab, never a crash. Without
+ * a registry (the package's own prebuilt bundle, or a custom assets dir) the
+ * built-in channels are the whole set.
  */
-export async function loadHubChannels(onNotice: (message: string) => void): Promise<WebHubChannel[]> {
+export async function loadHubChannels(
+  assetsDir: string,
+  onNotice: (message: string) => void,
+): Promise<WebHubChannel[]> {
   const channels: WebHubChannel[] = [...BUILTIN_HUB_CHANNELS];
-  for (const plugin of EXTERNAL_HUB_PLUGINS) {
+  const registryPath = path.join(assetsDir, SERVER_REGISTRY_FILE);
+  let entries: RegistryEntry[] = [];
+  if (fs.existsSync(registryPath)) {
     try {
-      const module = (await import(plugin.specifier)) as { webHubChannels?: unknown };
+      const parsed: unknown = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      if (Array.isArray(parsed)) entries = parsed as RegistryEntry[];
+    } catch (error) {
+      onNotice(`web plugin registry ${registryPath} is unreadable (${String(error)}); plugin channels skipped`);
+    }
+  }
+  for (const entry of entries) {
+    const pluginId = typeof entry.pluginId === 'string' ? entry.pluginId : 'unknown';
+    if (typeof entry.hubEntry !== 'string') continue;
+    try {
+      const module = (await import(pathToFileURL(entry.hubEntry).href)) as { webHubChannels?: unknown };
       if (!Array.isArray(module.webHubChannels)) {
-        throw new Error(`'${plugin.specifier}' exports no webHubChannels array`);
+        throw new Error(`'${entry.hubEntry}' exports no webHubChannels array`);
       }
       channels.push(...(module.webHubChannels as WebHubChannel[]));
     } catch (error) {
       const cause = error instanceof Error ? error.message : String(error);
-      onNotice(`web plugin '${plugin.pluginId}' hub channels unavailable (${cause}); its panels stay empty`);
+      onNotice(`web plugin '${pluginId}' hub channels unavailable (${cause}); its panels stay empty`);
     }
   }
   const seen = new Set<string>();

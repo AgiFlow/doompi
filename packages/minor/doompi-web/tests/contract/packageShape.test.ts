@@ -51,17 +51,40 @@ describe('doompi-web package contract', () => {
     const manifest = await readManifest();
 
     expect(manifest.bin).toEqual({ 'doompi-web': './dist/bin/serve.mjs' });
-    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './package.json']);
+    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './bundler', './package.json']);
   });
 
-  it('ships the runtime the bridge needs and bundles the rest', async () => {
+  it('ships the runtime the bridge and the sync-time bundler need', async () => {
     const manifest = await readManifest();
     const runtime = Object.keys(manifest.dependencies ?? {});
 
-    // The SPA is compiled into dist/web, so React and friends are build-time
-    // only; shipping them would make a global install pay for a bundle it
-    // already contains.
-    expect(runtime).toEqual(['@hono/node-server', '@hono/node-ws', 'hono']);
+    // The web plugin system rebundles the SPA on the user's machine at
+    // doompi sync time, against whatever plugin packages the composition
+    // installed. That makes the client toolchain a runtime concern: the
+    // bundler subpath must work from an installed package, so Vite, React,
+    // Tailwind, the TanStack runtimes, and the plugin contracts ship as
+    // dependencies alongside the hono trio. No plugin package ever appears
+    // here: plugins are discovered from manifests, never depended on.
+    expect(runtime).toEqual([
+      '@agimon-ai/doompi-web-contracts',
+      '@hono/node-server',
+      '@hono/node-ws',
+      '@tailwindcss/vite',
+      '@tanstack/react-query',
+      '@tanstack/react-router',
+      '@tanstack/react-store',
+      '@tanstack/store',
+      '@vitejs/plugin-react',
+      'hono',
+      'react',
+      'react-dom',
+      'tailwindcss',
+      'vite',
+    ]);
+    expect(runtime.some((name) => name.includes('doompi-') && name !== '@agimon-ai/doompi-web-contracts')).toBe(false);
+    // The bundler compiles src/web from the installed package, so the source
+    // has to ship with it.
+    expect(manifest.files).toEqual(expect.arrayContaining(['src']));
   });
 
   it('builds the server before the client so the bundle survives the clean', async () => {

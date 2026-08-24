@@ -112,13 +112,10 @@
     "channels": [
       "workflow_runs"
     ],
-    "client": {
-      "entry": "./web/index.ts",
-      "specifier": "@agimon-ai/doompi-workflow/web"
-    },
+    "client": "./web/index.ts",
     "hub": {
       "entry": "./src/exports/webHub.ts",
-      "specifier": "@agimon-ai/doompi-workflow/web-hub"
+      "dist": "./dist/webHub.mjs"
     }
   },
   "pi": {

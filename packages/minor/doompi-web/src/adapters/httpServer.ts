@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
@@ -32,6 +33,10 @@ const SESSION_ROUTE = '/api/session';
 const INDEX_FILE = 'index.html';
 /** Stands in for a registry id in fixed single-session mode. */
 const LOCAL_SESSION_ID = 'local';
+/** Env override for the assets directory, set by launchers that know a synced bundle. */
+const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
+/** Where `doompi sync` publishes the machine's cockpit bundle. */
+const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
 
 /**
  * Locates the built SPA next to the package that owns this module.
@@ -40,7 +45,7 @@ const LOCAL_SESSION_ID = 'local';
  * whether the code runs from `src` in development or from the unbundled `dist`
  * tree, whose depth is a build detail.
  */
-function defaultAssetsDir(): string {
+function packagedAssetsDir(): string {
   let dir = path.dirname(fileURLToPath(import.meta.url));
   for (;;) {
     if (fs.existsSync(path.join(dir, 'package.json'))) return path.join(dir, 'dist', 'web');
@@ -48,6 +53,24 @@ function defaultAssetsDir(): string {
     if (parent === dir) throw new Error('doompi-web could not locate its own package root.');
     dir = parent;
   }
+}
+
+/**
+ * The assets to serve, in preference order: an explicit option, the env
+ * override, the bundle `doompi sync` published for this machine (which
+ * carries the installed plugin set), then the package's own prebuilt bundle
+ * (built-in plugins only).
+ */
+function resolveAssetsDir(explicit: string | undefined, notice: (message: string) => void): string {
+  if (explicit !== undefined) return explicit;
+  const fromEnv = process.env[WEB_DIST_ENV];
+  if (fromEnv !== undefined && fromEnv !== '') return fromEnv;
+  const synced = path.join(os.homedir(), ...SYNCED_WEB_DIRECTORY);
+  if (fs.existsSync(path.join(synced, INDEX_FILE))) {
+    notice(`serving the synced cockpit bundle from ${synced}`);
+    return synced;
+  }
+  return packagedAssetsDir();
 }
 
 function readAsset(filePath: string): Buffer | undefined {
@@ -117,10 +140,10 @@ function buildHub(
  * describe the set, and session traffic travels enveloped by session id.
  */
 export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
-  const assetsDir = options.assetsDir ?? defaultAssetsDir();
   const host = options.host ?? '127.0.0.1';
   const notice = options.onNotice ?? ((): void => {});
-  const hub = buildHub(options, notice, await loadHubChannels(notice));
+  const assetsDir = resolveAssetsDir(options.assetsDir, notice);
+  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice));
   const app = new Hono();
   const nodeWs = createNodeWebSocket({ app });
 

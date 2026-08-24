@@ -127,7 +127,9 @@ describe('the hub bridge', () => {
     const { frames } = await openSocket(server.url);
 
     await waitFor(() => frames.length >= 2, 'the hello and snapshot');
-    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: 1, channels: ['subagent_runs', 'workflow_runs'] });
+    // Only the built-in channel: external plugins arrive via a synced bundle's
+    // server registry, and this server runs on a bare assets dir.
+    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: 1, channels: ['subagent_runs'] });
     expect(frames[1].type).toBe('sessions_snapshot');
 
     await session.waitForAttach();

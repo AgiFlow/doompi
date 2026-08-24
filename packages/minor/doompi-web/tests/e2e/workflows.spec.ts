@@ -1,6 +1,11 @@
 import { expect, test } from '../support/cockpit.ts';
 import { moveWorkflowRun, writeWorkflowRun } from '../support/workflowRuns.ts';
 
+// The workflows tab is not in the package's own bundle: it arrives through
+// the doompi sync path, so this suite serves the synced-style bundle the
+// Playwright global setup built from doompi-workflow's manifest.
+test.use({ assets: 'synced' });
+
 // Runs are tied to the fixture's first session ('s1') the way doompi-workflow
 // ties them: the PI_SESSION_ID the launcher stamped into the record's env.
 const OWNED = { env: { PI_SESSION_ID: 's1' } };
