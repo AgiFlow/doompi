@@ -18,7 +18,7 @@ const telemetry: ProfileTelemetry = {
 };
 
 function harness(registerCommand = vi.fn()) {
-  const handlers = new Map<string, () => Promise<void> | void>();
+  const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   const eventHandlers = new Map<string, Set<(value: unknown) => void>>();
   const pi = {
     registerCommand,
@@ -33,7 +33,7 @@ function harness(registerCommand = vi.fn()) {
         return () => subscriptions.delete(handler);
       },
     },
-    on(event: string, handler: () => Promise<void> | void) {
+    on(event: string, handler: (...args: unknown[]) => Promise<void> | void) {
       handlers.set(event, handler);
     },
   } as unknown as ExtensionAPI;
@@ -44,6 +44,7 @@ async function bindRuntime(
   pi: ExtensionAPI,
   source: string,
   root: string,
+  profile?: string,
 ): Promise<{ readonly cordis: Context; dispose(): Promise<void> }> {
   const connection = await connectDoomCordisHost(pi, source);
   const fiber = connection.root.plugin((cordis) => {
@@ -51,7 +52,13 @@ async function bindRuntime(
       cordis,
       {
         settings: { projectTrust: 'ask' },
-        harness: { ...readHarnessState({}), root, domains: ['default'], majorMode: 'copilot' },
+        harness: {
+          ...readHarnessState({}),
+          root,
+          domains: ['default'],
+          majorMode: 'copilot',
+          ...(profile === undefined ? {} : { profile }),
+        },
         requiresRelaunch: false,
       },
       `${source}:config`,
@@ -172,6 +179,60 @@ describe('profile Pi factory', () => {
       expect(notify).toHaveBeenCalledTimes(2);
     } finally {
       await replacement.dispose();
+      await handlers.get('session_shutdown')?.();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('publishes the profile axis status on session start', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-profile-status-'));
+    const personaDirectory = path.join(root, 'agents', 'agiflow', 'mara-voss');
+    fs.mkdirSync(personaDirectory, { recursive: true });
+    fs.mkdirSync(path.join(root, '.doom'), { recursive: true });
+    fs.writeFileSync(path.join(personaDirectory, 'profile.md'), '# Mara');
+    fs.writeFileSync(path.join(root, '.doom', 'profiles.yaml'), 'profiles:\n  roots: [agents/agiflow]\n');
+    const { pi, handlers } = harness();
+    await profileExtension(pi, telemetry);
+    const runtime = await bindRuntime(pi, 'profile-status-catalogue', root);
+    const setStatus = vi.fn();
+    try {
+      await handlers.get('session_start')?.(undefined, { ui: { setStatus } });
+      // Profiles exist with none active: published empty so the axis shows.
+      expect(setStatus).toHaveBeenCalledWith('doom-profile', '');
+    } finally {
+      await runtime.dispose();
+      await handlers.get('session_shutdown')?.();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('publishes the active profile name on session start', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-profile-status-active-'));
+    const { pi, handlers } = harness();
+    await profileExtension(pi, telemetry);
+    const runtime = await bindRuntime(pi, 'profile-status-active', root, 'marketing-agiflow');
+    const setStatus = vi.fn();
+    try {
+      await handlers.get('session_start')?.(undefined, { ui: { setStatus } });
+      expect(setStatus).toHaveBeenCalledWith('doom-profile', 'marketing-agiflow');
+    } finally {
+      await runtime.dispose();
+      await handlers.get('session_shutdown')?.();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('withholds the axis status when the session has no profiles', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-profile-status-none-'));
+    const { pi, handlers } = harness();
+    await profileExtension(pi, telemetry);
+    const runtime = await bindRuntime(pi, 'profile-status-none', root);
+    const setStatus = vi.fn();
+    try {
+      await handlers.get('session_start')?.(undefined, { ui: { setStatus } });
+      expect(setStatus).not.toHaveBeenCalled();
+    } finally {
+      await runtime.dispose();
       await handlers.get('session_shutdown')?.();
       fs.rmSync(root, { recursive: true, force: true });
     }

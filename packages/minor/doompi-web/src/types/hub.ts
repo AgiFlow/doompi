@@ -71,6 +71,39 @@ export const SESSION_BACKLOG_TYPE = 'session_backlog';
 export const SESSION_FRAME_TYPE = 'session_frame';
 /** Hub-synthesized close for an answered dialog; Pi itself never announces one. */
 export const DIALOG_ANSWERED_TYPE = 'extension_ui_answered';
+
+/**
+ * The custom session entry the DoomPi runtime journals with its minor-mode
+ * catalog projection; it arrives inside Pi's entry_appended frames. The shape
+ * mirrors MinorModeProjection in doompi-extension-contracts.
+ */
+export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
+
+export interface MinorModeActionProjection {
+  id: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  disabledReason?: string;
+  needsInput: boolean;
+}
+
+export interface MinorModeRecordProjection {
+  id: string;
+  label: string;
+  description: string;
+  order: number;
+  activation: 'inactive' | 'activating' | 'active' | 'deactivating';
+  condition: string;
+  detail?: string;
+  actions: MinorModeActionProjection[];
+}
+
+export interface MinorModeProjection {
+  version: 1;
+  revision: number;
+  modes: MinorModeRecordProjection[];
+}
 export const SUBSCRIBE_TYPE = 'subscribe';
 export const UNSUBSCRIBE_TYPE = 'unsubscribe';
 export const SESSION_COMMAND_TYPE = 'session_command';

@@ -2,7 +2,9 @@ import type { DoomTransitionResult } from '@agimon-ai/doompi-extension-contracts
 import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { describe, expect, it } from 'vitest';
 import {
+  DOMAIN_STATUS_KEY,
   domainItems,
+  domainStatus,
   domainSummary,
   errorMessage,
   normalizeDomainNames,
@@ -111,5 +113,17 @@ describe('error rendering', () => {
       outcome: 'rejected',
     };
     expect(transitionError(result).message).toBe('Domain transition was rejected: transition.rejected.duplicate');
+  });
+});
+
+describe('domainStatus', () => {
+  it('publishes the active domains in the shape splitDomains reads back', () => {
+    expect(domainStatus(['development', 'testing'])).toBe('development,testing');
+    expect(splitDomains(domainStatus(['development', 'testing']))).toEqual(['development', 'testing']);
+  });
+
+  it('publishes empty for no active domains, which keeps the axis on the bar', () => {
+    expect(domainStatus([])).toBe('');
+    expect(DOMAIN_STATUS_KEY).toBe('doom-domain');
   });
 });

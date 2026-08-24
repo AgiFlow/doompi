@@ -264,6 +264,22 @@ describe('reduceSession', () => {
     expect(state.dialog?.options).toEqual([]);
   });
 
+  it('keeps the minor-mode catalog the runtime journals and ignores other custom entries', () => {
+    const projection = { version: 1, revision: 2, modes: [{ id: 'help', label: 'Help', activation: 'active' }] };
+    const reported = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'doom-minor-modes', data: projection },
+    });
+    expect(reported.minorModes).toEqual(projection);
+
+    const other = reduceSession(reported, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'agent-harness-plan-mode', data: { version: 2 } },
+    });
+    expect(other.minorModes).toEqual(projection);
+    expect(reduceSession(initialSessionState, { type: 'entry_appended', entry: 'junk' }).minorModes).toBeNull();
+  });
+
   it('closes only the matching dialog when the hub reports it answered', () => {
     const opened = reduceSession(initialSessionState, {
       type: 'extension_ui_request',

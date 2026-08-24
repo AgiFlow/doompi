@@ -15,6 +15,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiWeb?: { pluginId?: string; registrationOrder?: number; channels?: string[]; client?: string };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -37,7 +38,7 @@ describe('doompi-profile package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.files).toEqual(
-      expect.arrayContaining(['dist', 'llms.txt', 'README.md', 'src/prompts', 'package.json']),
+      expect.arrayContaining(['dist', 'web', 'llms.txt', 'README.md', 'src/prompts', 'package.json']),
     );
     expect(manifest.keywords).toEqual([
       'agent-persona',
@@ -67,6 +68,20 @@ describe('doompi-profile package contract', () => {
     // children load ./extensions/persona by explicit subpath instead, because
     // they have no transition coordinator to run a switch through.
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+  });
+
+  it('declares the cockpit profile axis as its web plugin', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.doompiWeb).toEqual({
+      pluginId: 'profile',
+      registrationOrder: 5,
+      channels: [],
+      client: './web/index.ts',
+    });
+    const entry = await readFile(path.join(packageDirectory, 'web/index.ts'), 'utf8');
+    expect(entry).toContain('defineWebPlugin');
+    expect(entry).toContain("statusKey: 'doom-profile'");
   });
 
   it('routes both Pi entries through a default-exported factory', async () => {

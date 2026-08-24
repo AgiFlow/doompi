@@ -20,6 +20,7 @@ test('renders the selection the session publishes on the bar', async ({ page, co
   await cockpit.session.waitForAttach();
 
   cockpit.session.emit(status('doom-major-mode', LIVE));
+  cockpit.session.emit(status('doom-domain', 'development,testing'));
 
   await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
   await expect(page.getByTestId('selection-domains')).toHaveText('development, testing');
@@ -67,17 +68,20 @@ test('falls back to placeholders when the session publishes no selection', async
   await cockpit.session.waitForAttach();
 
   await expect(page.getByTestId('selection-mode')).toHaveText('MODE');
-  await expect(page.getByTestId('selection-domains')).toHaveText('no domains');
-  // No doom-profile status means the session has no profiles to offer: the
-  // axis stays off the bar instead of dangling an empty menu.
+  // An axis the session has not published stays off the bar instead of
+  // dangling an empty menu; an empty publish is what shows the placeholder.
   await expect(page.getByTestId('axis-profile')).toHaveCount(0);
+  await expect(page.getByTestId('axis-domains')).toHaveCount(0);
+
+  cockpit.session.emit(status('doom-domain', ''));
+  await expect(page.getByTestId('selection-domains')).toHaveText('no domains');
 });
 
 test('invokes the command that changes the domains', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
-  cockpit.session.emit(status('doom-major-mode', LIVE));
+  cockpit.session.emit(status('doom-domain', 'development,testing'));
   await page.getByTestId('axis-domains').click();
 
   const sent = await cockpit.session.waitForCommand('prompt');
@@ -127,6 +131,56 @@ test('summarises the minor modes and lists them in the popup', async ({ page, co
   await expect(page.getByTestId('minor-loop')).toHaveAttribute('data-availability', 'unavailable');
 
   await page.keyboard.press('Escape');
+  await expect(page.getByTestId('minor-popup')).toBeHidden();
+});
+
+test('the journaled catalog drives the popup and rows send /minor for their mode', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      customType: 'doom-minor-modes',
+      data: {
+        version: 1,
+        revision: 1,
+        modes: [
+          {
+            id: 'help',
+            label: 'Help',
+            description: '',
+            order: 10,
+            activation: 'active',
+            condition: 'ready',
+            actions: [],
+          },
+          {
+            id: 'loop.active',
+            label: 'Loop',
+            description: '',
+            order: 30,
+            activation: 'inactive',
+            condition: 'ready',
+            actions: [],
+          },
+        ],
+      },
+    },
+  });
+
+  // Help publishes no status, yet the catalog says it is on.
+  await expect(page.getByTestId('minor-summary')).toHaveText('help');
+  await page.getByTestId('axis-minor').click();
+  await expect(page.getByTestId('minor-help')).toHaveAttribute('data-availability', 'on');
+  await expect(page.getByTestId('minor-loop')).toHaveAttribute('data-availability', 'off');
+  await expect(page.getByTestId('minor-plan')).toHaveAttribute('data-availability', 'unavailable');
+
+  // A row hands its catalog id to /minor and the popup closes.
+  await page.getByTestId('minor-loop').click();
+  const prompt = await cockpit.session.waitForCommand('prompt');
+  expect(prompt.message).toBe('/minor loop.active');
   await expect(page.getByTestId('minor-popup')).toBeHidden();
 });
 

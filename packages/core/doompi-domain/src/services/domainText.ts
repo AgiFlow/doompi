@@ -8,6 +8,8 @@ import { type DomainListing, SAFE_DOMAIN_NAME } from '../types/domains.ts';
 
 const DOMAIN_SEPARATOR = ',';
 export const DOMAIN_COMMAND = 'domains';
+/** Footer status key the cockpit's domains axis reads. */
+export const DOMAIN_STATUS_KEY = 'doom-domain';
 export const VOICE_SWITCH_TOKEN_PREFIX = '--voice-switch-token=';
 /** What an empty selection reads as, which is a real state rather than an error. */
 export const NONE = '(none)';
@@ -18,6 +20,11 @@ export function splitDomains(value: string): string[] {
     .split(DOMAIN_SEPARATOR)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/** The published axis content: the active domains in the same comma-separated shape splitDomains reads. */
+export function domainStatus(domains: readonly string[]): string {
+  return domains.join(DOMAIN_SEPARATOR);
 }
 
 /** Picker rows for the domain multi-select. */

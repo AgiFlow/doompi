@@ -3,6 +3,19 @@ import type { SelectItem } from '@earendil-works/pi-tui';
 
 const NONE = '(none)';
 
+/** Footer status key the cockpit's profile axis reads. */
+export const PROFILE_STATUS_KEY = 'doom-profile';
+
+/**
+ * The published axis content: the active profile's name, empty while
+ * profiles exist with none active, and undefined to withhold the status so
+ * the cockpit keeps the axis off the bar entirely.
+ */
+export function profileStatus(current: string | undefined, hasProfiles: boolean): string | undefined {
+  if (current) return current;
+  return hasProfiles ? '' : undefined;
+}
+
 /** Rows for the single-select profile picker. */
 export function profileItems(profiles: AgentProfile[]): SelectItem[] {
   return profiles.map((profile) => ({

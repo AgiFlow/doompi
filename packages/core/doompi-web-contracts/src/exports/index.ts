@@ -11,6 +11,7 @@ export type {
   MinorModeContribution,
   PaletteCommandContext,
   PaletteCommandContribution,
+  SelectionAxisContribution,
   SessionChannelContribution,
   SurfaceContribution,
   TabContribution,

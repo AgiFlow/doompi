@@ -63,6 +63,52 @@ describe('parseSelection', () => {
 });
 
 describe('minorModes', () => {
+  it('prefers the journaled catalog over status inference when the runtime reports one', () => {
+    const modes = minorModes({ 'plan-mode': '' }, [], {
+      version: 1,
+      revision: 3,
+      modes: [
+        {
+          id: 'help',
+          label: 'Help',
+          description: '',
+          order: 10,
+          activation: 'active',
+          condition: 'ready',
+          actions: [],
+        },
+        {
+          id: 'loop.active',
+          label: 'Loop',
+          description: '',
+          order: 30,
+          activation: 'activating',
+          condition: 'ready',
+          actions: [],
+        },
+        {
+          id: 'plan',
+          label: 'Plan',
+          description: '',
+          order: 20,
+          activation: 'inactive',
+          condition: 'ready',
+          actions: [],
+        },
+      ],
+    });
+    const byName = Object.fromEntries(modes.map((mode) => [mode.name, mode]));
+
+    // Help publishes no status yet reads on, straight from the catalog.
+    expect(byName.help).toMatchObject({ id: 'help', availability: 'on', keys: 'h e' });
+    expect(byName.plan).toMatchObject({ id: 'plan', availability: 'off' });
+    // The id stem links the catalog record to the declared row and its keys.
+    expect(byName.loop).toMatchObject({ id: 'loop.active', availability: 'off', detail: 'activating', keys: 'l l' });
+    // Declared modes the catalog lacks stay listed as unavailable.
+    expect(byName.goal.availability).toBe('unavailable');
+    expect(byName.workflow.availability).toBe('unavailable');
+  });
+
   it('separates a mode that is absent from one that is merely off', () => {
     const modes = minorModes({ 'plan-mode': '', goal: 'ship the gate' }, []);
     const byName = Object.fromEntries(modes.map((mode) => [mode.name, mode]));
@@ -115,13 +161,33 @@ describe('selectionAxes', () => {
   it('keeps an unpublished axis off the bar and reads the published one', () => {
     expect(selectionAxes({})).toEqual([]);
     expect(selectionAxes({ 'doom-profile': '' })).toEqual([
-      { name: 'profile', command: 'profile', value: '', emptyLabel: 'no profile' },
+      { name: 'profile', command: 'profile', values: [], emptyLabel: 'no profile', multi: false },
     ]);
   });
 
   it('strips colour out of the selection it shows', () => {
     const axes = selectionAxes({ 'doom-profile': '\u001B[38;2;152;190;101mreviewer\u001B[39m' });
-    expect(axes[0]?.value).toBe('reviewer');
+    expect(axes[0]?.values).toEqual(['reviewer']);
+  });
+
+  it('splits a multi axis on commas, since several domains compose at once', () => {
+    expect(selectionAxes({ 'doom-domain': 'development, testing,' })).toEqual([
+      {
+        name: 'domains',
+        command: 'domains',
+        values: ['development', 'testing'],
+        emptyLabel: 'no domains',
+        multi: true,
+      },
+    ]);
+    expect(selectionAxes({ 'doom-domain': '' })[0]?.values).toEqual([]);
+  });
+
+  it('lists the axes in their declared order', () => {
+    expect(selectionAxes({ 'doom-domain': 'default', 'doom-profile': 'reviewer' }).map((axis) => axis.name)).toEqual([
+      'profile',
+      'domains',
+    ]);
   });
 
   it('prefers plugin-declared axes over the packaged fallback, in declared order', () => {
@@ -137,8 +203,8 @@ describe('selectionAxes', () => {
     ]);
     try {
       expect(selectionAxes({ 'zeta-axis': 'z', 'alpha-axis': '', 'doom-profile': 'not declared any more' })).toEqual([
-        { name: 'alpha', command: 'alpha', value: '', emptyLabel: 'no alpha' },
-        { name: 'zeta', command: 'zeta', value: 'z', emptyLabel: 'no zeta' },
+        { name: 'alpha', command: 'alpha', values: [], emptyLabel: 'no alpha', multi: false },
+        { name: 'zeta', command: 'zeta', values: ['z'], emptyLabel: 'no zeta', multi: false },
       ]);
     } finally {
       resetWebPlugins();

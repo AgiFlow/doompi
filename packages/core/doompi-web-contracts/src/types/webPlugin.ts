@@ -64,6 +64,27 @@ export interface MinorModeContribution {
 }
 
 /**
+ * A selection-bar axis, declared as data: the host renders the chip and
+ * routes its click through the axis's slash command. The axis shows only
+ * while the session publishes the status key; the content is the current
+ * selection, and emptyLabel shows while it is published empty.
+ */
+export interface SelectionAxisContribution {
+  /** Chip identity: testid axis-<name> and the popover menu it claims. */
+  name: string;
+  /** Slash command the host runs when the chip is clicked. */
+  command: string;
+  /** Footer status key: absent hides the axis, content is the selection. */
+  statusKey: string;
+  /** Shown while the status is published with nothing selected. */
+  emptyLabel: string;
+  /** The status content is a comma-separated list: several selections can be active at once. */
+  multi?: boolean;
+  /** Sort position in the bar; lower first, name breaks ties. */
+  order?: number;
+}
+
+/**
  * An activity-dock group, declared as data: the host renders the group when
  * the session publishes its signal (the footer status key, or any of the
  * widget keys), with the status content as the live summary.
@@ -102,6 +123,7 @@ export interface WebPluginDefinition {
   id: string;
   tabs?: TabContribution[];
   channels?: SessionChannelContribution[];
+  selectionAxes?: SelectionAxisContribution[];
   minorModes?: MinorModeContribution[];
   activityGroups?: ActivityGroupContribution[];
   overlays?: SurfaceContribution[];

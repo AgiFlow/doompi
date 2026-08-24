@@ -26,7 +26,9 @@ export {
 } from '../schemas/domainVoiceTools.ts';
 export {
   DOMAIN_COMMAND,
+  DOMAIN_STATUS_KEY,
   domainItems,
+  domainStatus,
   domainSummary,
   errorMessage,
   NONE,

@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "web",
     "llms.txt",
     "README.md",
     "src/prompts",
@@ -70,6 +71,7 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
@@ -97,6 +99,12 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "profile",
+    "registrationOrder": 5,
+    "channels": [],
+    "client": "./web/index.ts"
   },
   "pi": {
     "extensions": [

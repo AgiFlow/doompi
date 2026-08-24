@@ -1,4 +1,4 @@
-import { DIALOG_ANSWERED_TYPE } from '../../types/hub.ts';
+import { DIALOG_ANSWERED_TYPE, MINOR_MODE_ENTRY_TYPE, type MinorModeProjection } from '../../types/hub.ts';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
 
@@ -98,6 +98,8 @@ export interface SessionState {
   agent: AgentInfo | null;
   commands: CommandInfo[];
   dialog: DialogRequest | null;
+  /** The runtime's minor-mode catalog as last journaled, or null before it reports. */
+  minorModes: MinorModeProjection | null;
   /** Tool calls seen since the current run began, reported when it settles. */
   toolsThisRun: number;
   nextId: number;
@@ -113,6 +115,7 @@ export const initialSessionState: SessionState = {
   agent: null,
   commands: [],
   dialog: null,
+  minorModes: null,
   toolsThisRun: 0,
   nextId: 1,
 };
@@ -371,6 +374,16 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
     // tabs, and on backlog replays keeps an answered request from reopening.
     case DIALOG_ANSWERED_TYPE:
       return state.dialog && state.dialog.id === asString(frame.id) ? { ...state, dialog: null } : state;
+
+    // The runtime journals its minor-mode catalog as a custom entry; every
+    // other custom entry belongs to some extension's own bookkeeping.
+    case 'entry_appended': {
+      const entry = isRecord(frame.entry) ? frame.entry : undefined;
+      if (!entry || entry.type !== 'custom' || entry.customType !== MINOR_MODE_ENTRY_TYPE) return state;
+      const data = isRecord(entry.data) ? entry.data : undefined;
+      if (!data || !Array.isArray(data.modes)) return state;
+      return { ...state, minorModes: data as unknown as MinorModeProjection };
+    }
 
     case 'response':
       return applyResponse(state, frame);

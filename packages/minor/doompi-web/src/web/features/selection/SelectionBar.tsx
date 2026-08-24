@@ -15,6 +15,13 @@ function Caret({ className }: { className: string }) {
   );
 }
 
+// The mockup's colour per axis; a plugin axis the host has no entry for reads
+// in the neutral tone.
+const AXIS_TONE: Readonly<Record<string, string>> = {
+  profile: 'text-doom-green',
+  domains: 'text-doom-violet',
+};
+
 const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
   on: 'text-doom-hi',
   off: 'text-doom-dim',
@@ -63,7 +70,7 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
             data-availability={mode.availability}
             title={`toggle ${mode.name}`}
             onClick={() => {
-              runCommand(`/minor ${mode.name}`);
+              runCommand(`/minor ${mode.id}`);
               onClose();
             }}
             className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left hover:bg-doom-deep ${mode.availability === 'on' ? 'bg-[#2E2136] hover:bg-[#382842]' : ''}`}
@@ -110,13 +117,14 @@ export function SelectionBar() {
   const raw = useActiveSession((state) => state.statuses['doom-major-mode'] ?? '');
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
+  const catalog = useActiveSession((state) => state.minorModes);
   const agent = useActiveSession((state) => state.agent);
   const stats = useActiveSession((state) => state.stats);
   const [minorOpen, setMinorOpen] = useState(false);
 
   const selection = parseSelection(raw);
   const axes = selectionAxes(statuses);
-  const modes = minorModes(statuses, widgets);
+  const modes = minorModes(statuses, widgets, catalog);
   const activeMinors = modes.filter((mode) => mode.availability === 'on');
 
   const ask = (menu: string, command: string): void => {
@@ -150,13 +158,15 @@ export function SelectionBar() {
           type="button"
           data-testid={`axis-${axis.name}`}
           onClick={() => ask(axis.name, axis.command)}
-          className="flex h-[21px] items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
+          className="flex h-[21px] min-w-0 items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
         >
           <span
             data-testid={`selection-${axis.name}`}
-            className={`text-[10px] font-bold ${axis.value ? 'text-doom-green' : 'text-doom-faint'}`}
+            className={`truncate text-[10px] ${axis.multi ? '' : 'font-bold'} ${
+              axis.values.length > 0 ? (AXIS_TONE[axis.name] ?? 'text-doom-hi') : 'text-doom-faint'
+            }`}
           >
-            {axis.value ? `*${axis.value}*` : axis.emptyLabel}
+            {axis.values.length === 0 ? axis.emptyLabel : axis.multi ? axis.values.join(', ') : `*${axis.values[0]}*`}
           </span>
           <Caret className="text-doom-faint" />
         </button>
@@ -175,21 +185,6 @@ export function SelectionBar() {
         </span>
         {activeMinors.length > 1 ? <span className="text-[9px]">+{activeMinors.length - 1}</span> : null}
         <Caret className={activeMinors.length > 0 ? 'text-doom-magenta' : 'text-doom-faint'} />
-      </button>
-
-      <button
-        type="button"
-        data-testid="axis-domains"
-        onClick={() => ask('domains', 'domains')}
-        className="flex h-[21px] min-w-0 items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
-      >
-        <span
-          data-testid="selection-domains"
-          className={`truncate text-[10px] ${selection.domains.length > 0 ? 'text-doom-violet' : 'text-doom-faint'}`}
-        >
-          {selection.domains.length > 0 ? selection.domains.join(', ') : 'no domains'}
-        </span>
-        <Caret className="text-doom-faint" />
       </button>
 
       <PluginSurface slot="selectionBar" sessionId={activeId} />

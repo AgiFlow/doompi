@@ -1,14 +1,18 @@
 import type { SelectionAxisContribution } from '@agimon-ai/doompi-web-contracts';
+import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
 import { pluginActivityGroups, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
 
 export interface SelectionAxis {
   name: string;
   command: string;
-  /** The current selection, empty while the session reports none. */
-  value: string;
+  /** The current selections, empty while the session reports none; one at most unless multi. */
+  values: string[];
   emptyLabel: string;
+  multi: boolean;
 }
+
+const AXIS_LIST_SEPARATOR = ',';
 
 /**
  * The fallback axis table for the packaged bundle; a synced bundle carries
@@ -16,7 +20,8 @@ export interface SelectionAxis {
  * list wins whenever any plugin declares one.
  */
 const FALLBACK_SELECTION_AXES: readonly SelectionAxisContribution[] = [
-  { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile' },
+  { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile', order: 10 },
+  { name: 'domains', command: 'domains', statusKey: 'doom-domain', emptyLabel: 'no domains', multi: true, order: 20 },
 ];
 
 /**
@@ -30,9 +35,11 @@ export function selectionAxes(statuses: Record<string, string>): SelectionAxis[]
   return sources.flatMap((source) => {
     const raw = statuses[source.statusKey];
     if (raw === undefined) return [];
-    return [
-      { name: source.name, command: source.command, value: stripAnsi(raw).trim(), emptyLabel: source.emptyLabel },
-    ];
+    const multi = source.multi === true;
+    const values = (multi ? stripAnsi(raw).split(AXIS_LIST_SEPARATOR) : [stripAnsi(raw)])
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return [{ name: source.name, command: source.command, values, emptyLabel: source.emptyLabel, multi }];
   });
 }
 
@@ -40,6 +47,8 @@ export type MinorModeAvailability = 'unavailable' | 'off' | 'on';
 
 export interface MinorMode {
   name: string;
+  /** The catalog id /minor accepts; the display name until the catalog reports. */
+  id: string;
   /** Leader Space key path, as the TUI documents it. */
   keys: string;
   availability: MinorModeAvailability;
@@ -73,26 +82,72 @@ const FALLBACK_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'voice', keys: 'v e', statusKey: 'doom-voice' },
 ];
 
-export function minorModes(statuses: Record<string, string>, widgets: readonly string[]): MinorMode[] {
+/** The declared source a catalog mode corresponds to, by id, id stem, or label. */
+function sourceFor(sources: readonly MinorModeSource[], mode: MinorModeRecordProjection): MinorModeSource | undefined {
+  const candidates = new Set([mode.id.toLowerCase(), mode.id.toLowerCase().split('.')[0], mode.label.toLowerCase()]);
+  return sources.find((source) => candidates.has(source.name.toLowerCase()));
+}
+
+/**
+ * Catalog-backed rows: the runtime's own activation state per mode, with the
+ * declared leader keys attached where a plugin documents them. Declared modes
+ * the catalog does not know are still listed, as unavailable, so a mode that
+ * is missing from a composition stays visible rather than silently gone.
+ */
+function catalogMinorModes(sources: readonly MinorModeSource[], projection: MinorModeProjection): MinorMode[] {
+  const rows: MinorMode[] = projection.modes.map((mode) => {
+    const source = sourceFor(sources, mode);
+    const on = mode.activation === 'active' || mode.activation === 'deactivating';
+    return {
+      name: source?.name ?? mode.label.toLowerCase(),
+      id: mode.id,
+      keys: source?.keys ?? '',
+      availability: on ? 'on' : 'off',
+      detail: mode.detail ?? (mode.activation === 'activating' ? 'activating' : ''),
+    };
+  });
+  const seen = new Set(rows.map((row) => row.name));
+  for (const source of sources) {
+    if (!seen.has(source.name)) {
+      rows.push({ name: source.name, id: source.name, keys: source.keys, availability: 'unavailable', detail: '' });
+    }
+  }
+  return rows;
+}
+
+export function minorModes(
+  statuses: Record<string, string>,
+  widgets: readonly string[],
+  projection: MinorModeProjection | null = null,
+): MinorMode[] {
   const declared = pluginMinorModes();
   const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : FALLBACK_MINOR_MODES;
+  if (projection) return catalogMinorModes(sources, projection);
   return sources.map((source) => {
     if (source.statusKey !== undefined) {
       const raw = statuses[source.statusKey];
-      if (raw === undefined)
-        return { name: source.name, keys: source.keys, availability: 'unavailable' as const, detail: '' };
+      if (raw === undefined) {
+        return {
+          name: source.name,
+          id: source.name,
+          keys: source.keys,
+          availability: 'unavailable' as const,
+          detail: '',
+        };
+      }
       const detail = stripAnsi(raw).trim();
       return {
         name: source.name,
+        id: source.name,
         keys: source.keys,
         availability: detail ? ('on' as const) : ('off' as const),
         detail,
       };
     }
     if (source.widgetKey !== undefined && widgets.includes(source.widgetKey)) {
-      return { name: source.name, keys: source.keys, availability: 'off' as const, detail: '' };
+      return { name: source.name, id: source.name, keys: source.keys, availability: 'off' as const, detail: '' };
     }
-    return { name: source.name, keys: source.keys, availability: 'unavailable' as const, detail: '' };
+    return { name: source.name, id: source.name, keys: source.keys, availability: 'unavailable' as const, detail: '' };
   });
 }
 

@@ -13,6 +13,7 @@ import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contr
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { registerDomainsCommand } from '../../commands/domainsCommand.ts';
+import { DOMAIN_STATUS_KEY, domainStatus } from '../../services/domainText.ts';
 import { DOMAIN_SOURCE } from '../../types/domains.ts';
 import type { DomainTelemetry } from '../../types/telemetry.ts';
 import { createDomainCatalog } from '../domainCatalog.ts';
@@ -113,6 +114,8 @@ function domainPlugin(cordis: Context, { pi, telemetry }: DomainPluginConfig): v
     pi.on('session_start', async (_event, ctx) => {
       await runtimeInjection.await();
       const state = requireDoomConfigContext(requireRuntimeContext()).harness;
+      // A switch reloads the session, so the start-time selection is the live one.
+      ctx.ui.setStatus(DOMAIN_STATUS_KEY, domainStatus(state.domains));
       ctx.ui.addAutocompleteProvider((current) => ({
         triggerCharacters: [','],
         async getSuggestions(lines, cursorLine, cursorCol, options) {
