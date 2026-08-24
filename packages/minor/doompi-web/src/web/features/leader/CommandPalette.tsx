@@ -1,8 +1,12 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
 import { minorModes } from '../../lib/composition.ts';
+import { paletteCommands } from '../../lib/pluginRegistry.ts';
+import { sendFrame } from '../../lib/transport.ts';
 import { closePalette, paletteStore, togglePalette } from '../../stores/paletteStore.ts';
 import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
+import { sessionsStore } from '../../stores/sessionsStore.ts';
 
 interface Group {
   key: string;
@@ -90,6 +94,29 @@ export function CommandPalette() {
     return groupCommands(pool, activeModes);
   }, [commands, filter, activeModes]);
 
+  const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const navigate = useNavigate();
+  const pluginEntries = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    const pool = paletteCommands();
+    return needle ? pool.filter((command) => command.title.toLowerCase().includes(needle)) : pool;
+  }, [filter]);
+  const runPluginCommand = (id: string): void => {
+    const command = paletteCommands().find((candidate) => candidate.id === id);
+    if (!command) return;
+    closePalette();
+    command.run({
+      sessionId: activeId,
+      openTab: (tabId) => {
+        if (activeId === null) return;
+        void (tabId === null
+          ? navigate({ to: '/session/$sessionId', params: { sessionId: activeId } })
+          : navigate({ to: '/session/$sessionId/$tabId', params: { sessionId: activeId, tabId } }));
+      },
+      sendSessionFrame: sendFrame,
+    });
+  };
+
   const current = groups[Math.min(selected, Math.max(groups.length - 1, 0))];
 
   if (!open) return null;
@@ -165,6 +192,25 @@ export function CommandPalette() {
                 </button>
               ))
             )}
+            {pluginEntries.length > 0 ? (
+              <>
+                <p className="px-3 pb-1 pt-2 text-[8px] font-bold tracking-[0.14em] text-doom-faint">PLUGINS</p>
+                {pluginEntries.map((command) => (
+                  <button
+                    key={command.id}
+                    type="button"
+                    data-testid={`palette-plugin-${command.id}`}
+                    onClick={() => runPluginCommand(command.id)}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-doom-magenta/10"
+                  >
+                    <span className="flex-1 truncate text-[11px] text-doom-text">{command.title}</span>
+                    {command.description ? (
+                      <span className="truncate text-[9px] text-doom-faint">{command.description}</span>
+                    ) : null}
+                  </button>
+                ))}
+              </>
+            ) : null}
           </div>
 
           <div data-testid="palette-detail" className="flex min-w-0 flex-1 flex-col gap-2 px-4 py-3">

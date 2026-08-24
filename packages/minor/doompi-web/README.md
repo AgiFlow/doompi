@@ -112,6 +112,18 @@ run `pnpm build` first.
 
 Maintained by [Agimon](https://agimon.ai/about).
 
+## Web plugins
+
+Tabs beyond the conversation are plugins. A package declares a `doompiWeb` block in its
+package.json naming a client entry (a `webPlugin` definition: tab, panel, badge, session data
+channels, and other slot contributions) and an optional hub entry (`webHubChannels`: data sources
+the hub runs server-side). The build scans the workspace, generates the registration modules and
+the Tailwind source list, and compiles every client entry into the one bundle; CI fails on a stale
+registry, so regenerate with `pnpm build` and commit the generated files with a manifest change.
+The hub imports external hub entries lazily: a missing plugin package logs a notice and its tab
+shows an empty state. The subagents tab is the in-package reference plugin; the workflows tab lives
+in `@agimon-ai/doompi-workflow`. Contracts come from `@agimon-ai/doompi-web-contracts`.
+
 ## License
 
 Source available under the DoomPi Web License (see LICENSE). Use is free for any purpose, including

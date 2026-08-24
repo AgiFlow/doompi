@@ -14,3 +14,12 @@ ignore:
   - "coverage/**"
   - "playwright-report/**"
   - "test-results/**"
+
+# The web plugin scanner and its generators run at build-config load time,
+# outside both layer graphs; they may only read package manifests and write
+# the generated registry modules.
+boundaries:
+  - name: web-plugin-scripts
+    pattern: scripts/webPlugins/**
+    allowedImports:
+      - scripts/webPlugins/**

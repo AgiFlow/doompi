@@ -127,7 +127,7 @@ describe('the hub bridge', () => {
     const { frames } = await openSocket(server.url);
 
     await waitFor(() => frames.length >= 2, 'the hello and snapshot');
-    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: 1 });
+    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: 1, channels: ['subagent_runs', 'workflow_runs'] });
     expect(frames[1].type).toBe('sessions_snapshot');
 
     await session.waitForAttach();

@@ -1,7 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROGRESS_FILE_NAME, RUN_RECORD_FILE_NAME, WORKSPACES_DIR_NAME } from '../../src/services/workflowRuns.ts';
-import type { WorkflowStage } from '../../src/types/hub.ts';
+
+// Self-contained mirror of workflow-mcp's registry layout: the e2e suite
+// writes real files the doompi-workflow plugin's watcher reads, so this
+// fixture depends on the ENGINE's disk contract, not on any package source.
+const WORKSPACES_DIR_NAME = 'workspaces';
+const RUN_RECORD_FILE_NAME = 'run.json';
+const PROGRESS_FILE_NAME = 'progress.ndjson';
+
+export type WorkflowStage = 'running' | 'completed' | 'error';
 
 export interface WorkflowRunFixture {
   workspace: string;

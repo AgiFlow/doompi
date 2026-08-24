@@ -1,6 +1,9 @@
+import { useStore } from '@tanstack/react-store';
 import { Dot } from '../../components/Chip.tsx';
+import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { activityGroups } from '../../lib/composition.ts';
 import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
+import { sessionsStore } from '../../stores/sessionsStore.ts';
 
 /**
  * Asynchronous work that outlives the turn that started it.
@@ -12,6 +15,7 @@ import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
  * yet, so the dock stays a summary surface.
  */
 export function ActivityDock({ onClose }: { onClose: () => void }) {
+  const activeId = useStore(sessionsStore, (state) => state.activeId);
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
   const groups = activityGroups(statuses, widgets);
@@ -79,6 +83,8 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
           ))}
         </div>
       )}
+
+      <PluginSurface slot="activity" sessionId={activeId} />
 
       <div className="mt-auto border-t border-doom-border px-4 py-3">
         <span className="text-[9px] leading-relaxed text-doom-faint">

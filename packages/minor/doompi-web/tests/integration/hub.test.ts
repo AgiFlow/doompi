@@ -3,13 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { watchRegistry } from '../../src/adapters/registryWatcher.ts';
+import type { HubChannelHost, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { createSessionHub, type HubEvent, type SessionHub } from '../../src/adapters/sessionHub.ts';
 import type { SpawnOutcome } from '../../src/adapters/serverSpawner.ts';
-import { watchWorkflowRuns } from '../../src/adapters/workflowWatcher.ts';
+import { createSubagentsChannel } from '../../src/adapters/subagentsChannel.ts';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession, writeStaleRecord } from '../support/fakeSession.ts';
 import { removeRunsScope, writeRunStatus } from '../support/subagentRuns.ts';
-import { moveWorkflowRun, writeWorkflowRun } from '../support/workflowRuns.ts';
 
 let cleanups: Array<() => Promise<void> | void> = [];
 
@@ -34,18 +34,15 @@ interface HubHarness {
 function startHub(
   registryDir: string,
   spawn?: (input: { cwd: string; name?: string }) => Promise<SpawnOutcome>,
-  workflowHome?: string,
+  extraChannels: WebHubChannel[] = [],
 ): HubHarness {
   const events: HubEvent[] = [];
   const hub = createSessionHub({
     source: watchRegistry(registryDir),
     spawner: spawn === undefined ? undefined : { spawn },
-    // The default watcher would read the env-pinned throwaway home; tests
-    // that exercise workflows point the real watcher at their own registry.
-    watchWorkflows:
-      workflowHome === undefined
-        ? () => ({ close: () => undefined })
-        : (onRuns) => watchWorkflowRuns(onRuns, { homeDir: workflowHome }),
+    // The real subagents channel (its watcher reads a per-session temp
+    // scope) plus whatever fakes the test injects.
+    channels: [createSubagentsChannel(), ...extraChannels],
   });
   cleanups.push(() => hub.close());
   hub.onEvent((event) => events.push(event));
@@ -84,6 +81,31 @@ const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 8000)
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 };
+
+/** The runs array a channel's subscribe-time snapshot carries for one session. */
+function snapshotRuns(
+  harness: HubHarness,
+  sessionId: string,
+  frameType: string,
+): Record<string, unknown>[] | undefined {
+  const frame = harness.hub.channelFrames(sessionId).find((candidate) => candidate.type === frameType);
+  if (!frame) return undefined;
+  return (frame.payload as { runs: Record<string, unknown>[] }).runs;
+}
+
+/** Whether any published channel event for the frame type satisfies the predicate. */
+function sawChannelRun(
+  events: HubEvent[],
+  frameType: string,
+  predicate: (run: Record<string, unknown>) => boolean,
+): boolean {
+  return events.some(
+    (event) =>
+      event.kind === 'channel' &&
+      event.frameType === frameType &&
+      (event.payload as { runs: Record<string, unknown>[] }).runs.some(predicate),
+  );
+}
 
 describe('the session hub over a registry', () => {
   it('discovers registered sessions and attaches to each', async () => {
@@ -209,14 +231,13 @@ describe('the session hub over a registry', () => {
       currentTool: 'working: reading',
     });
     await waitFor(
-      () =>
-        harness.events.some(
-          (event) =>
-            event.kind === 'runs' && event.runs.some((run) => run.runId === 'run-1' && run.state === 'running'),
-        ),
+      () => sawChannelRun(harness.events, 'subagent_runs', (run) => run.runId === 'run-1' && run.state === 'running'),
       'the running run reaching the hub',
     );
-    expect(harness.hub.runsFor(sessionId)?.runs[0]).toMatchObject({ agent: 'reviewer', state: 'running' });
+    expect(snapshotRuns(harness, sessionId, 'subagent_runs')?.[0]).toMatchObject({
+      agent: 'reviewer',
+      state: 'running',
+    });
 
     writeRunStatus(sessionId, {
       version: 1,
@@ -230,66 +251,49 @@ describe('the session hub over a registry', () => {
       cwd: '/workspace',
       summary: 'All good.',
     });
-    await waitFor(() => harness.hub.runsFor(sessionId)?.runs[0]?.state === 'done', 'the completed state');
-    expect(harness.hub.runsFor(sessionId)?.runs[0]?.summary).toBe('All good.');
-    expect(harness.hub.runsFor('unknown')).toBeUndefined();
+    await waitFor(
+      () => snapshotRuns(harness, sessionId, 'subagent_runs')?.[0]?.state === 'done',
+      'the completed state',
+    );
+    expect(snapshotRuns(harness, sessionId, 'subagent_runs')?.[0]?.summary).toBe('All good.');
+    expect(harness.hub.channelFrames('unknown')).toEqual([]);
   });
 
-  it('streams session workflow runs from the registry and follows a failure', { timeout: 15_000 }, async () => {
+  it('runs channel lifecycle hooks and fans published payloads out as channel events', async () => {
     const registryDir = freshRegistryDir();
-    const workflowHome = path.join(path.dirname(registryDir), 'workflow-mcp');
-    const session = await startRegisteredSession(registryDir, { id: 'wf-owner' });
-    const harness = startHub(registryDir, undefined, workflowHome);
+    const lifecycle: string[] = [];
+    let host: HubChannelHost | undefined;
+    const fake: WebHubChannel = {
+      frameType: 'fake_data',
+      start(channelHost) {
+        host = channelHost;
+        return {
+          payloadFor: (scope) => ({ marker: `snapshot:${scope.sessionId}` }),
+          sessionAdded: (scope) => lifecycle.push(`added:${scope.sessionId}`),
+          sessionRemoved: (sessionId) => lifecycle.push(`removed:${sessionId}`),
+          close: () => lifecycle.push('closed'),
+        };
+      },
+    };
+    const session = await startRegisteredSession(registryDir, { id: 'chan' });
+    const harness = startHub(registryDir, undefined, [fake]);
     await session.waitForAttach();
+    await waitFor(() => lifecycle.includes('added:chan'), 'the session reaching the channel');
 
-    // A run owned by another session, in a repository this session is not in:
-    // it must never reach this session's tab.
-    writeWorkflowRun(workflowHome, {
-      workspace: 'default',
-      stage: 'running',
-      runKey: 'foreign',
-      record: { env: { PI_SESSION_ID: 'someone-else' }, workflowPath: '/elsewhere/wf.workflow.yml' },
-    });
-    writeWorkflowRun(workflowHome, {
-      workspace: 'default',
-      stage: 'running',
-      runKey: 'verify-a',
-      record: { env: { PI_SESSION_ID: 'wf-owner' }, workflowName: 'Verify' },
-      progress: [
-        { type: 'job', status: 'running', job: 'build', index: 0, total: 1, at: new Date().toISOString() },
-        { type: 'step', status: 'running', job: 'build', step: 'compile', at: new Date().toISOString() },
-      ],
-    });
-    await waitFor(
-      () =>
-        harness.events.some(
-          (event) =>
-            event.kind === 'workflows' &&
-            event.runs.some((run) => run.runKey === 'verify-a' && run.stage === 'running'),
-        ),
-      'the running workflow reaching the hub',
-    );
-    const frame = harness.hub.workflowsFor('wf-owner');
-    expect(frame?.runs.map((run) => run.runKey)).toEqual(['verify-a']);
-    expect(frame?.runs[0]?.position).toEqual({ job: 'build', step: 'compile', index: 0, total: 1 });
-    expect(frame?.runs[0]?.jobs[0]?.steps[0]).toMatchObject({ name: 'compile', status: 'running' });
+    host?.publish('chan', { marker: 'live' });
+    expect(
+      harness.events.some(
+        (event) => event.kind === 'channel' && event.frameType === 'fake_data' && event.sessionId === 'chan',
+      ),
+    ).toBe(true);
+    expect(harness.hub.channelTypes()).toEqual(['subagent_runs', 'fake_data']);
+    const frame = harness.hub.channelFrames('chan').find((candidate) => candidate.type === 'fake_data');
+    expect(frame?.payload).toEqual({ marker: 'snapshot:chan' });
 
-    moveWorkflowRun(workflowHome, { workspace: 'default', runKey: 'verify-a' }, 'running', 'error', {
-      outcome: 'failed',
-      errorMessage: 'compile blew up',
-      failedJob: 'build',
-      finishedAt: new Date().toISOString(),
-    });
-    await waitFor(
-      () => harness.hub.workflowsFor('wf-owner')?.runs[0]?.stage === 'error',
-      'the failure reaching the hub',
-    );
-    expect(harness.hub.workflowsFor('wf-owner')?.runs[0]).toMatchObject({
-      errorMessage: 'compile blew up',
-      failedJob: 'build',
-      outcome: 'failed',
-    });
-    expect(harness.hub.workflowsFor('unknown')).toBeUndefined();
+    await session.close();
+    await waitFor(() => lifecycle.includes('removed:chan'), 'the removal reaching the channel');
+    harness.hub.close();
+    expect(lifecycle.at(-1)).toBe('closed');
   });
 
   it('creates sessions through the injected spawner', async () => {

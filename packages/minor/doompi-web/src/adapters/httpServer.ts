@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
+import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
@@ -16,8 +17,6 @@ import {
   sessionFrameEnvelope,
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
-  SUBAGENT_RUNS_TYPE,
-  WORKFLOW_RUNS_TYPE,
   SUBSCRIBE_TYPE,
   UNSUBSCRIBE_TYPE,
 } from '../types/hub.ts';
@@ -27,6 +26,7 @@ import { readGitStatus } from './gitStatus.ts';
 import { staticRecordSource, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
+import { loadHubChannels } from './webHubPluginLoader.ts';
 
 const SESSION_ROUTE = '/api/session';
 const INDEX_FILE = 'index.html';
@@ -64,7 +64,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function buildHub(options: WebServerOptions, notice: (message: string) => void): SessionHub {
+function buildHub(
+  options: WebServerOptions,
+  notice: (message: string) => void,
+  channels: readonly WebHubChannel[],
+): SessionHub {
   if (options.registryDir !== undefined) {
     if (options.socketPath !== undefined || options.token !== undefined) {
       throw new Error('Pass either a registry directory or a socket, not both.');
@@ -77,6 +81,7 @@ function buildHub(options: WebServerOptions, notice: (message: string) => void):
         onNotice: notice,
       }),
       readGit: readGitStatus,
+      channels,
       onNotice: notice,
     });
   }
@@ -98,6 +103,7 @@ function buildHub(options: WebServerOptions, notice: (message: string) => void):
     source: staticRecordSource(record),
     readGit: readGitStatus,
     readToken: () => token,
+    channels,
     onNotice: notice,
   });
 }
@@ -110,11 +116,11 @@ function buildHub(options: WebServerOptions, notice: (message: string) => void):
  * a session directly. One page WebSocket carries all sessions: hub frames
  * describe the set, and session traffic travels enveloped by session id.
  */
-export function serveWeb(options: WebServerOptions): Promise<WebServer> {
+export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const assetsDir = options.assetsDir ?? defaultAssetsDir();
   const host = options.host ?? '127.0.0.1';
   const notice = options.onNotice ?? ((): void => {});
-  const hub = buildHub(options, notice);
+  const hub = buildHub(options, notice, await loadHubChannels(notice));
   const app = new Hono();
   const nodeWs = createNodeWebSocket({ app });
 
@@ -158,20 +164,16 @@ export function serveWeb(options: WebServerOptions): Promise<WebServer> {
               // The browser went away mid-write; onClose tears the socket down.
             }
           };
-          post(hubHello());
+          post(hubHello(hub.channelTypes()));
           post({ type: SESSIONS_SNAPSHOT_TYPE, sessions: hub.snapshot() });
           disconnect = hub.onEvent((event) => {
             if (event.kind === 'upsert') post({ type: SESSION_UPSERT_TYPE, session: event.session });
             else if (event.kind === 'removed') {
               subscriptions.delete(event.sessionId);
               post({ type: SESSION_REMOVED_TYPE, sessionId: event.sessionId });
-            } else if (event.kind === 'runs') {
+            } else if (event.kind === 'channel') {
               if (subscriptions.has(event.sessionId)) {
-                post({ type: SUBAGENT_RUNS_TYPE, sessionId: event.sessionId, runs: event.runs });
-              }
-            } else if (event.kind === 'workflows') {
-              if (subscriptions.has(event.sessionId)) {
-                post({ type: WORKFLOW_RUNS_TYPE, sessionId: event.sessionId, runs: event.runs });
+                post({ type: event.frameType, sessionId: event.sessionId, payload: event.payload });
               }
             } else if (subscriptions.has(event.sessionId)) {
               post(sessionFrameEnvelope(event.sessionId, event.frame));
@@ -195,10 +197,7 @@ export function serveWeb(options: WebServerOptions): Promise<WebServer> {
             subscriptions.add(sessionId);
             try {
               ws.send(JSON.stringify(backlog));
-              const runs = hub.runsFor(sessionId);
-              if (runs) ws.send(JSON.stringify(runs));
-              const workflows = hub.workflowsFor(sessionId);
-              if (workflows) ws.send(JSON.stringify(workflows));
+              for (const frame of hub.channelFrames(sessionId)) ws.send(JSON.stringify(frame));
             } catch {
               // The browser went away mid-write; onClose tears the socket down.
             }

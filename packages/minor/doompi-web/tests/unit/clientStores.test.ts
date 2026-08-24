@@ -177,46 +177,26 @@ describe('sessionsStore', () => {
   });
 });
 
-describe('subagentsStore', () => {
+describe('subagents plugin channel', () => {
   it('keeps each session fleet separately and drops one with its session', async () => {
-    const { applySubagentRuns, dropSubagentRuns, resetSubagents, subagentsStore } =
-      await import('../../src/web/stores/subagentsStore.ts');
+    const { subagentRunsChannel, resetSubagents, subagentsStore } =
+      await import('../../src/web/features/subagents/subagentsStore.ts');
     resetSubagents();
     const run = { runId: 'r1', agent: 'reviewer', state: 'running' };
-    applySubagentRuns({ type: 'subagent_runs', sessionId: 's1', runs: [run] });
-    applySubagentRuns({ type: 'subagent_runs', sessionId: 's2', runs: [] });
+    subagentRunsChannel.apply('s1', subagentRunsChannel.parse({ runs: [run] })!);
+    subagentRunsChannel.apply('s2', subagentRunsChannel.parse({ runs: [] })!);
     expect(subagentsStore.state.bySession.s1).toHaveLength(1);
     expect(subagentsStore.state.bySession.s2).toEqual([]);
 
-    applySubagentRuns({ type: 'subagent_runs', sessionId: 's1', runs: [] });
+    subagentRunsChannel.apply('s1', subagentRunsChannel.parse({ runs: [] })!);
     expect(subagentsStore.state.bySession.s1).toEqual([]);
 
-    dropSubagentRuns('s1');
+    subagentRunsChannel.drop('s1');
     expect(subagentsStore.state.bySession.s1).toBeUndefined();
-    // Malformed frames change nothing.
-    applySubagentRuns({ type: 'subagent_runs', runs: [run] });
-    expect(Object.keys(subagentsStore.state.bySession)).toEqual(['s2']);
+    // Malformed payloads are rejected at the parse gate.
+    expect(subagentRunsChannel.parse('junk')).toBeNull();
+    expect(subagentRunsChannel.parse({ runs: 'no' })).toBeNull();
     resetSubagents();
-  });
-});
-
-describe('workflowsStore', () => {
-  it('keeps each session workflow set separately and drops one with its session', async () => {
-    const { applyWorkflowRuns, dropWorkflowRuns, resetWorkflows, workflowsStore } =
-      await import('../../src/web/stores/workflowsStore.ts');
-    resetWorkflows();
-    const run = { runKey: 'wf-1', workspace: 'w', displayName: 'wf-1', stage: 'running', jobs: [] };
-    applyWorkflowRuns({ type: 'workflow_runs', sessionId: 's1', runs: [run] });
-    applyWorkflowRuns({ type: 'workflow_runs', sessionId: 's2', runs: [] });
-    expect(workflowsStore.state.bySession.s1).toHaveLength(1);
-    expect(workflowsStore.state.bySession.s2).toEqual([]);
-
-    dropWorkflowRuns('s1');
-    expect(workflowsStore.state.bySession.s1).toBeUndefined();
-    // Malformed frames change nothing.
-    applyWorkflowRuns({ type: 'workflow_runs', runs: [run] });
-    expect(Object.keys(workflowsStore.state.bySession)).toEqual(['s2']);
-    resetWorkflows();
   });
 });
 

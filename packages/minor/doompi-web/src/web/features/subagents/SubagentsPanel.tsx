@@ -1,9 +1,9 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import type { SubagentRun, SubagentRunState } from '../../../types/hub.ts';
 import { abbreviateCwd, formatRunDuration } from '../../lib/sessionSummary.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { subagentsStore } from '../../stores/subagentsStore.ts';
+import { subagentsStore } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
 
@@ -189,9 +189,8 @@ function RunDrawer({ run, now, onClose }: { run: SubagentRun; now: number; onClo
  * so short runs read as calmly as busy ones. Clicking a card opens the detail
  * drawer, which narrows the grid and lets it recompute.
  */
-export function SubagentsPanel() {
-  const activeId = useStore(sessionsStore, (state) => state.activeId);
-  const runs = useStore(subagentsStore, (state) => (activeId === null ? [] : (state.bySession[activeId] ?? [])));
+export function SubagentsPanel({ sessionId }: WebPluginSlotProps) {
+  const runs = useStore(subagentsStore, (state) => (sessionId === null ? [] : (state.bySession[sessionId] ?? [])));
   const [openRunId, setOpenRunId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
