@@ -115,6 +115,21 @@ describe('the hub bridge', () => {
     expect(await fixed.json()).toMatchObject({ error: expect.stringMatching(/fixed session/) as string });
   });
 
+  it('answers file completion queries scoped to a known session', async () => {
+    const { server } = await bridge();
+    // Single-session mode records process.cwd() as the session cwd, which is
+    // this package: a real repository for git-backed listing.
+    const hit = await fetch(`${server.url}/api/sessions/${LOCAL}/files?q=composer`);
+    expect(hit.ok).toBe(true);
+    const body = (await hit.json()) as { files: string[] };
+    expect(body.files.length).toBeGreaterThan(0);
+    expect(body.files.some((file) => file.toLowerCase().includes('composer'))).toBe(true);
+    expect(body.files.length).toBeLessThanOrEqual(20);
+
+    const miss = await fetch(`${server.url}/api/sessions/unknown/files?q=x`);
+    expect(miss.status).toBe(404);
+  });
+
   it('explains itself when the bundle is missing instead of serving a blank page', async () => {
     const { server } = await bridge();
     const response = await fetch(server.url);

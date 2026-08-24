@@ -62,6 +62,7 @@ boilerplate:
       - src/adapters/httpServer.ts
       - src/adapters/registryWatcher.ts
       - src/adapters/serverSpawner.ts
+      - src/adapters/sessionFiles.ts
       - src/adapters/sessionHub.ts
       - src/adapters/sessionSocketClient.ts
       - src/adapters/webBundler.ts
@@ -72,6 +73,7 @@ boilerplate:
       - src/bin/serve.ts
       - src/exports/index.ts
       - src/exports/bundler.ts
+      - src/services/fileMatch.ts
       - src/services/frameRing.ts
       - src/services/registryStore.ts
       - src/services/retryPolicy.ts
@@ -123,6 +125,7 @@ boilerplate:
       - tests/contract/packageShape.test.ts
       - tests/contract/webPluginRegistry.test.ts
       - tests/e2e/activity.spec.ts
+      - tests/e2e/composer.spec.ts
       - tests/e2e/connection.spec.ts
       - tests/e2e/dialogs.spec.ts
       - tests/e2e/leader.spec.ts
@@ -143,6 +146,7 @@ boilerplate:
       - tests/support/vitestEnv.ts
       - tests/unit/clientStores.test.ts
       - tests/unit/composition.test.ts
+      - tests/unit/fileMatch.test.ts
       - tests/unit/hubApi.test.ts
       - tests/unit/webPluginManifest.test.ts
       - tests/unit/pluginRegistry.test.ts

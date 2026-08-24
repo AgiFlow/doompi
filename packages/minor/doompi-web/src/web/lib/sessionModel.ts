@@ -348,8 +348,22 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
       return { ...marked, streaming: false, settled: true };
     }
 
-    case 'extension_ui_request':
+    case 'extension_ui_request': {
+      // Agent notifications carry the outcome a TUI user would see (a mode
+      // switch pending a relaunch, a refused action); dropping them reads as
+      // the agent doing nothing.
+      if (frame.method === 'notify') {
+        const text = asString(frame.message, '');
+        if (text === '') return state;
+        return withEntry(state, {
+          kind: 'notice',
+          id: `n${state.nextId}`,
+          text,
+          tone: frame.notifyType === 'error' ? 'error' : 'info',
+        });
+      }
       return applyDialog(state, frame);
+    }
 
     case 'response':
       return applyResponse(state, frame);

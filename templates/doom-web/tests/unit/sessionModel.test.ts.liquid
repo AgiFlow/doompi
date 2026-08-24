@@ -284,3 +284,29 @@ describe('reduceSession', () => {
     expect(state.entries[0]).toMatchObject({ kind: 'user', text: 'do the thing' });
   });
 });
+
+describe('agent notifications', () => {
+  it('renders notify requests as timeline notices with their tone', () => {
+    let state = initialSessionState;
+    state = reduceSession(state, {
+      type: 'extension_ui_request',
+      id: 'n1',
+      method: 'notify',
+      message: 'Major mode minimal is pending; the current process remains active.',
+      notifyType: 'info',
+    });
+    state = reduceSession(state, {
+      type: 'extension_ui_request',
+      id: 'n2',
+      method: 'notify',
+      message: 'The switch failed.',
+      notifyType: 'error',
+    });
+    const notices = state.entries.filter((entry) => entry.kind === 'notice');
+    expect(notices).toHaveLength(2);
+    expect(notices[0]).toMatchObject({ tone: 'info', text: expect.stringContaining('minimal is pending') });
+    expect(notices[1]).toMatchObject({ tone: 'error' });
+    // A notify never opens a dialog.
+    expect(state.dialog).toBeNull();
+  });
+});

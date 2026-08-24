@@ -33,3 +33,15 @@ export async function createSession(input: { cwd: string; name?: string }): Prom
   const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
   return { error };
 }
+
+/** File paths under a session's cwd matching the query, for @ completion. */
+export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
+  try {
+    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`);
+    if (!response.ok) return [];
+    const body = (await response.json()) as { files?: unknown };
+    return Array.isArray(body.files) ? body.files.filter((file): file is string => typeof file === 'string') : [];
+  } catch {
+    return []; // Completion is a convenience; a failed lookup just shows nothing.
+  }
+}

@@ -136,18 +136,12 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const workflowHome = path.join(root, 'workflow-mcp');
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
     if (assets === 'synced' && !syncedDist) throw new Error('global setup did not publish the synced bundle');
+    // Assets are always explicit: without this, the server would prefer the
+    // developer's machine-wide ~/.doompi/web bundle over the freshly built one.
+    const assetsDir = assets === 'synced' && syncedDist ? syncedDist : path.join(packageRoot, 'dist', 'web');
     const child: ChildProcess = spawn(
       process.execPath,
-      [
-        binary,
-        '--registry-dir',
-        registryDir,
-        '--spawn-command',
-        stub,
-        '--port',
-        String(port),
-        ...(assets === 'synced' && syncedDist ? ['--assets', syncedDist] : []),
-      ],
+      [binary, '--registry-dir', registryDir, '--spawn-command', stub, '--port', String(port), '--assets', assetsDir],
       { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WORKFLOW_MCP_HOME: workflowHome } },
     );
 

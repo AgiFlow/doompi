@@ -27,6 +27,7 @@ import { readGitStatus } from './gitStatus.ts';
 import { staticRecordSource, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
+import { listSessionFiles } from './sessionFiles.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
 const SESSION_ROUTE = '/api/session';
@@ -171,6 +172,17 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     const outcome = await hub.create({ cwd: body.cwd, name });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
+  });
+
+  // File completion for the composer's @ references: bounded, cwd-scoped,
+  // and only for sessions the hub actually manages.
+  app.get('/api/sessions/:sessionId/files', async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    const query = context.req.query('q') ?? '';
+    const files = await listSessionFiles(summary.cwd, query, 20);
+    return context.json({ files });
   });
 
   app.get(
