@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "web",
     "themes"
   ],
   "type": "module",
@@ -168,7 +169,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -176,14 +177,19 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-hashline": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@earendil-works/pi-tui": "0.84.2",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
@@ -194,6 +200,12 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "builtin-tools",
+    "registrationOrder": 8,
+    "channels": [],
+    "client": "./web/index.ts"
   },
   "pi": {
     "extensions": [

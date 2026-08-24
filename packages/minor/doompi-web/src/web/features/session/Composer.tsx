@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
 import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
 import { activeSessionId, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
+import { openPalette } from '../../stores/paletteStore.ts';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
 const MAX_INPUT_HEIGHT_PX = 192;
@@ -215,6 +216,12 @@ export function Composer() {
             onClick={(event) => setCaret(event.currentTarget.selectionStart)}
             onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
             onKeyDown={(event) => {
+              // The TUI's leader key: space with nothing typed opens Leader Space.
+              if (event.key === ' ' && draft === '') {
+                event.preventDefault();
+                openPalette();
+                return;
+              }
               if (completion) {
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                   event.preventDefault();
@@ -250,7 +257,9 @@ export function Composer() {
         </div>
         <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
           <span data-testid="composer-hint" className="text-[10px] text-doom-faint">
-            {streaming ? 'enter steers the run · esc aborts' : 'enter sends · shift+enter for a new line'}
+            {streaming
+              ? 'enter steers the run · esc aborts'
+              : 'enter sends · shift+enter for a new line · space opens leader'}
           </span>
           {queued > 0 ? (
             <span

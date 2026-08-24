@@ -5,6 +5,8 @@ import {
   dropPluginSessionData,
   installWebPlugins,
   paletteCommands,
+  pluginLeaderBindings,
+  pluginToolRenderer,
   resetWebPlugins,
   startWebPlugins,
   surfaceContributions,
@@ -39,6 +41,39 @@ function itemsChannel(log: string[], channel = 'demo_items') {
 afterEach(() => resetWebPlugins());
 
 describe('the web plugin registry', () => {
+  it('serves a tool renderer by tool name and refuses a second claim on the same tool', () => {
+    const renderer = { tools: ['bash', 'read'], call: Panel };
+    installWebPlugins([defineWebPlugin({ id: 'tools', toolRenderers: [renderer] })]);
+    expect(pluginToolRenderer('bash')).toBe(renderer);
+    expect(pluginToolRenderer('read')).toBe(renderer);
+    expect(pluginToolRenderer('edit')).toBeUndefined();
+
+    resetWebPlugins();
+    const family = {
+      tools: [],
+      matches: (name: string, statuses: Readonly<Record<string, string>>) =>
+        (statuses['doom-mcp'] ?? '').split(',').some((server) => name.startsWith(`${server}_`)),
+      call: Panel,
+    };
+    installWebPlugins([
+      defineWebPlugin({ id: 'exact', toolRenderers: [{ tools: ['github_issues'], result: Panel }] }),
+      defineWebPlugin({ id: 'family', toolRenderers: [family] }),
+    ]);
+    // The exact claim wins over the matcher; the matcher covers the rest of the family.
+    expect(pluginToolRenderer('github_issues', { 'doom-mcp': 'github' })?.result).toBe(Panel);
+    expect(pluginToolRenderer('github_search', { 'doom-mcp': 'github' })).toBe(family);
+    expect(pluginToolRenderer('github_search', {})).toBeUndefined();
+    expect(pluginToolRenderer('github_search')).toBeUndefined();
+
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({ id: 'one', toolRenderers: [{ tools: ['bash'], call: Panel }] }),
+        defineWebPlugin({ id: 'two', toolRenderers: [{ tools: ['bash'], result: Panel }] }),
+      ]),
+    ).toThrow(/'two' claims tool 'bash'/);
+  });
+
   it('installs contributions once and serves them per surface', () => {
     installWebPlugins([
       defineWebPlugin({
@@ -59,6 +94,50 @@ describe('the web plugin registry', () => {
     expect(paletteCommands().map((command) => command.id)).toEqual(['demo-command']);
 
     expect(() => installWebPlugins([])).toThrow(/already installed/);
+  });
+
+  it('collects leader bindings in install order and refuses keys the TUI would', () => {
+    const group = { key: 'w', label: 'workflows' };
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'workflows',
+        leaderBindings: [
+          { id: 'w.runs', path: [group, { key: 'r', label: 'runs' }], run: () => undefined },
+          { id: 'w.toggle', path: [group, { key: 'e', label: 'toggle' }], command: 'minor workflow' },
+        ],
+      }),
+      defineWebPlugin({
+        id: 'goal',
+        leaderBindings: [
+          {
+            id: 'g.toggle',
+            path: [
+              { key: 'g', label: 'goal' },
+              { key: 'e', label: 'toggle' },
+            ],
+            command: 'minor goal',
+          },
+        ],
+      }),
+    ]);
+    expect(pluginLeaderBindings().map((binding) => binding.id)).toEqual(['w.runs', 'w.toggle', 'g.toggle']);
+
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({ id: 'bad', leaderBindings: [{ id: 'x', path: [{ key: 'W', label: 'w' }], command: 'w' }] }),
+      ]),
+    ).toThrow(/key 'W' must be one lowercase letter or digit/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([defineWebPlugin({ id: 'bad', leaderBindings: [{ id: 'x', path: [], command: 'w' }] })]),
+    ).toThrow(/needs 1 to 4 path segments/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({ id: 'bad', leaderBindings: [{ id: 'x', path: [{ key: 'a', label: ' ' }], command: 'w' }] }),
+      ]),
+    ).toThrow(/unlabeled segment/);
   });
 
   it('rejects duplicate plugin, tab, and channel ids', () => {

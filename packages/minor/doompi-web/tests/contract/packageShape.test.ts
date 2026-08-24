@@ -63,10 +63,13 @@ describe('doompi-web package contract', () => {
     // installed. That makes the client toolchain a runtime concern: the
     // bundler subpath must work from an installed package, so Vite, React,
     // Tailwind, the TanStack runtimes, and the plugin contracts ship as
-    // dependencies alongside the hono trio. No plugin package ever appears
-    // here: plugins are discovered from manifests, never depended on.
+    // dependencies alongside the hono trio. Pi's coding agent ships too: the
+    // hub signs in to model providers through its ModelRuntime. No plugin
+    // package ever appears here: plugins are discovered from manifests,
+    // never depended on.
     expect(runtime).toEqual([
       '@agimon-ai/doompi-web-contracts',
+      '@earendil-works/pi-coding-agent',
       '@hono/node-server',
       '@hono/node-ws',
       '@tailwindcss/vite',

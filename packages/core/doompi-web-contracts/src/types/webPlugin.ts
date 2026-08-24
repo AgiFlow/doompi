@@ -48,6 +48,37 @@ export interface PaletteCommandContribution {
 }
 
 /**
+ * One step of a Leader Space key path: the key pressed and the label the
+ * menu shows beside it. Keys are one lowercase letter or digit, the same
+ * alphabet the TUI's leader registry accepts.
+ */
+export interface LeaderKeyContribution {
+  key: string;
+  label: string;
+  detail?: string;
+}
+
+interface LeaderBindingBase {
+  id: string;
+  /** The SPC path, group segments first; the last segment is the key that fires. */
+  path: LeaderKeyContribution[];
+}
+
+/**
+ * A Leader Space binding, the cockpit's half of the TUI's leader contract.
+ *
+ * The session's own leader tree never reaches an RPC client, so each package
+ * declares here the paths its TUI documents that a browser can honor: a slash
+ * command line the host sends through the prompt channel (without the leading
+ * slash), or a client action such as opening the plugin's tab. Plugins that
+ * share a group prefix (SPC w) word it the same way; the first to register a
+ * segment names it, and a later binding on an already-bound leaf takes it over.
+ */
+export type LeaderBindingContribution =
+  | (LeaderBindingBase & { command: string })
+  | (LeaderBindingBase & { run(context: PaletteCommandContext): void });
+
+/**
  * A minor mode's presence in the cockpit, declared as data rather than a
  * component: the host's selection bar renders the list, folding in what the
  * session reports. A mode with neither signal key shows as unavailable until
@@ -119,6 +150,59 @@ export interface SessionChannelContribution<Payload = unknown> {
   drop(sessionId: string): void;
 }
 
+/**
+ * A tool result as Pi's tool_execution frames carry it: the content blocks
+ * the model sees and the structured `details` the tool attached for its own
+ * renderer. Both are wire JSON; the plugin that owns the tool narrows them.
+ */
+export interface ToolResultView {
+  content: unknown[];
+  details: unknown;
+}
+
+/** The call half of a tool card, the cockpit's analog of the TUI's renderCall arguments. */
+export interface ToolCallRenderProps {
+  sessionId: string | null;
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+}
+
+/** The result half, the analog of the TUI's renderResult arguments and options. */
+export interface ToolResultRenderProps extends ToolCallRenderProps {
+  /** The newest result: partial while the tool runs, final once it ends; null before any output. */
+  result: ToolResultView | null;
+  /** The result's text blocks joined, which is what the host's default body shows. */
+  output: string;
+  /** True while the tool is still running, so `result` is a partial one. */
+  isPartial: boolean;
+  isError: boolean;
+  /** The card's expand toggle; a renderer decides what it hides while collapsed. */
+  expanded: boolean;
+}
+
+/**
+ * Custom timeline rendering for the tools a package registers, the web half
+ * of the TUI's renderCall/renderResult. The host keeps the card frame (the
+ * outcome tint, the status badge, the expand toggle) and hands the plugin the
+ * header summary and the body: `call` replaces the argument summary beside
+ * the tool name, `result` replaces the preformatted output. A half left out
+ * keeps the host default. One tool name belongs to one renderer.
+ */
+export interface ToolRendererContribution {
+  /** Tool names as registered with Pi (registerTool's `name`). */
+  tools: string[];
+  /**
+   * Claims a tool named only at runtime (an MCP server's tools) when no
+   * plugin lists the name. The session's footer statuses come along so the
+   * plugin can read whatever its session half published, such as the server
+   * names; the first renderer to match, in install order, wins.
+   */
+  matches?(toolName: string, statuses: Readonly<Record<string, string>>): boolean;
+  call?: ComponentType<ToolCallRenderProps>;
+  result?: ComponentType<ToolResultRenderProps>;
+}
+
 /** What a plugin's optional runtime may do; both send on the page's hub socket. */
 export interface WebPluginRuntime {
   sendSessionFrame(sessionId: string, frame: Record<string, unknown>): void;
@@ -134,8 +218,10 @@ export interface WebPluginDefinition {
   activityGroups?: ActivityGroupContribution[];
   overlays?: SurfaceContribution[];
   paletteCommands?: PaletteCommandContribution[];
+  leaderBindings?: LeaderBindingContribution[];
   railSections?: SurfaceContribution[];
   selectionBarItems?: SurfaceContribution[];
+  toolRenderers?: ToolRendererContribution[];
   /**
    * A section whose id equals one of the plugin's activity group names renders
    * inside that group, replacing the session's one-line summary with the

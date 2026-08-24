@@ -55,7 +55,7 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
       <div className="flex gap-3">
         <Gutter label="tool" tone="text-doom-faint" />
         <div className="min-w-0 flex-1">
-          <ToolCard entry={entry} />
+          <ToolCard entry={entry} sessionId={sessionId} />
         </div>
       </div>
     );

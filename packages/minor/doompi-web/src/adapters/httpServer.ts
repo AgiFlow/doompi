@@ -18,6 +18,7 @@ import {
   SESSION_REMOVED_TYPE,
   SESSION_UPSERT_TYPE,
   sessionFrameEnvelope,
+  DIRECTORIES_API_ROUTE,
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
   SUBSCRIBE_TYPE,
@@ -29,10 +30,15 @@ import { readGitStatus } from './gitStatus.ts';
 import { staticRecordSource, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
+import { registerAuthRoutes } from './authRoutes.ts';
+import { createProviderAuth } from './providerAuth.ts';
+import { listDirectories } from './directoryListing.ts';
 import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
 const SESSION_ROUTE = '/api/session';
+/** Directory suggestions per picker query; more than this means "type further". */
+const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
 /** Stands in for a registry id in fixed single-session mode. */
 const LOCAL_SESSION_ID = 'local';
@@ -149,6 +155,10 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice));
   const app = new Hono();
   const nodeWs = createNodeWebSocket({ app });
+  // Provider credentials belong to the machine, not to a session: the hub
+  // keeps one Pi runtime over the shared auth.json and signs in for all.
+  const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
+  registerAuthRoutes(app, providerAuth);
 
   app.get('/api/health', (context) =>
     context.json({
@@ -195,6 +205,13 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     const query = context.req.query('q') ?? '';
     const files = await listSessionFiles(summary.cwd, query, 20);
     return context.json({ files });
+  });
+
+  // Directory completion for the new-session picker: the children of the
+  // typed parent directory, filtered by the trailing segment as a regex.
+  app.get(DIRECTORIES_API_ROUTE, async (context) => {
+    const directories = await listDirectories(context.req.query('q') ?? '', DIRECTORY_SUGGESTION_LIMIT);
+    return context.json({ directories });
   });
 
   // The timeline's @file previews: one cwd-contained file, capped in size.
@@ -306,6 +323,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         close: () =>
           new Promise<void>((done) => {
             hub.close();
+            providerAuth.close();
             // An upgraded socket leaves the HTTP server's connection tracking,
             // so only the WebSocket server can let go of it. Without this the
             // close callback waits on a browser that has no reason to leave.
@@ -318,6 +336,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     });
     server.once('error', (error) => {
       hub.close();
+      providerAuth.close();
       reject(error);
     });
   });

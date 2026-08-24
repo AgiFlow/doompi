@@ -1,11 +1,13 @@
 import type {
   ActivityGroupContribution,
+  LeaderBindingContribution,
   MinorModeContribution,
   PaletteCommandContribution,
   SelectionAxisContribution,
   SessionChannelContribution,
   SurfaceContribution,
   TabContribution,
+  ToolRendererContribution,
   WebPluginDefinition,
   WebPluginRuntime,
 } from '@agimon-ai/doompi-web-contracts';
@@ -18,9 +20,12 @@ interface RegistryState {
   channels: Map<string, SessionChannelContribution>;
   surfaces: Record<SurfaceSlot, SurfaceContribution[]>;
   commands: PaletteCommandContribution[];
+  leaderBindings: LeaderBindingContribution[];
   selectionAxes: SelectionAxisContribution[];
   minorModes: MinorModeContribution[];
   activityGroups: ActivityGroupContribution[];
+  toolRenderers: Map<string, ToolRendererContribution>;
+  toolMatchers: ToolRendererContribution[];
 }
 
 function emptyState(): RegistryState {
@@ -30,9 +35,12 @@ function emptyState(): RegistryState {
     channels: new Map(),
     surfaces: { overlay: [], rail: [], selectionBar: [], activity: [] },
     commands: [],
+    leaderBindings: [],
     selectionAxes: [],
     minorModes: [],
     activityGroups: [],
+    toolRenderers: new Map(),
+    toolMatchers: [],
   };
 }
 
@@ -44,6 +52,33 @@ function emptyState(): RegistryState {
  */
 let state = emptyState();
 let installed = false;
+
+/** The TUI's leader alphabet: one lowercase letter or digit per segment. */
+const LEADER_KEY = /^[a-z0-9]$/;
+const MAX_LEADER_PATH = 4;
+
+/**
+ * A malformed binding fails the install rather than the keypress: the plugin
+ * set is generated at build time, so this is a developer error, and the TUI's
+ * registry refuses the same shapes.
+ */
+function checkLeaderBinding(pluginId: string, binding: LeaderBindingContribution): void {
+  if (binding.path.length === 0 || binding.path.length > MAX_LEADER_PATH) {
+    throw new Error(
+      `Web plugin '${pluginId}' leader binding '${binding.id}' needs 1 to ${MAX_LEADER_PATH} path segments.`,
+    );
+  }
+  for (const segment of binding.path) {
+    if (!LEADER_KEY.test(segment.key)) {
+      throw new Error(
+        `Web plugin '${pluginId}' leader binding '${binding.id}' key '${segment.key}' must be one lowercase letter or digit.`,
+      );
+    }
+    if (segment.label.trim() === '') {
+      throw new Error(`Web plugin '${pluginId}' leader binding '${binding.id}' has an unlabeled segment.`);
+    }
+  }
+}
 
 export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void {
   if (installed) throw new Error('Web plugins are already installed.');
@@ -69,9 +104,22 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     for (const surface of plugin.selectionBarItems ?? []) state.surfaces.selectionBar.push(surface);
     for (const surface of plugin.activitySections ?? []) state.surfaces.activity.push(surface);
     state.commands.push(...(plugin.paletteCommands ?? []));
+    for (const binding of plugin.leaderBindings ?? []) {
+      checkLeaderBinding(plugin.id, binding);
+      state.leaderBindings.push(binding);
+    }
     state.selectionAxes.push(...(plugin.selectionAxes ?? []));
     state.minorModes.push(...(plugin.minorModes ?? []));
     state.activityGroups.push(...(plugin.activityGroups ?? []));
+    for (const renderer of plugin.toolRenderers ?? []) {
+      for (const tool of renderer.tools) {
+        if (state.toolRenderers.has(tool)) {
+          throw new Error(`Web plugin '${plugin.id}' claims tool '${tool}', which another plugin already renders.`);
+        }
+        state.toolRenderers.set(tool, renderer);
+      }
+      if (renderer.matches !== undefined) state.toolMatchers.push(renderer);
+    }
   }
   const byDisplayOrder = (left: { order?: number; name: string }, right: { order?: number; name: string }): number =>
     (left.order ?? 1000) - (right.order ?? 1000) || left.name.localeCompare(right.name);
@@ -99,6 +147,11 @@ export function paletteCommands(): readonly PaletteCommandContribution[] {
   return state.commands;
 }
 
+/** Leader Space bindings from every installed plugin, in install order: a later binding on a bound leaf wins. */
+export function pluginLeaderBindings(): readonly LeaderBindingContribution[] {
+  return state.leaderBindings;
+}
+
 /** Selection-axis declarations from every installed plugin, in display order. */
 export function pluginSelectionAxes(): readonly SelectionAxisContribution[] {
   return state.selectionAxes;
@@ -112,6 +165,20 @@ export function pluginMinorModes(): readonly MinorModeContribution[] {
 /** Activity-dock group declarations from every installed plugin, in display order. */
 export function pluginActivityGroups(): readonly ActivityGroupContribution[] {
   return state.activityGroups;
+}
+
+/**
+ * The renderer a plugin registered for one tool: the exact name claim first,
+ * then the first runtime matcher that accepts it; undefined leaves the host's
+ * default card.
+ */
+export function pluginToolRenderer(
+  toolName: string,
+  statuses: Readonly<Record<string, string>> = {},
+): ToolRendererContribution | undefined {
+  return (
+    state.toolRenderers.get(toolName) ?? state.toolMatchers.find((renderer) => renderer.matches?.(toolName, statuses))
+  );
 }
 
 /**

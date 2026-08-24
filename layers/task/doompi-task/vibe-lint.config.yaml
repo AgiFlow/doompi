@@ -31,3 +31,20 @@ overrides:
       - src/services/store/reducer.ts # new Date()
     rules:
       no-ambient-host-access: off
+
+# The web cockpit plugin lives in web/ (outside src/, which the doom-extension
+# folder vocabulary owns). Its browser code may reach its own files and the
+# shared src/types shapes; tests may reach it like any package source.
+boundaries:
+  - name: web-plugin
+    pattern: web/**
+    allowedImports:
+      - web/**
+      - src/types
+      - src/types/**
+  - name: tests
+    pattern: tests/**
+    allowedImports:
+      - src/**
+      - tests/**
+      - web/**

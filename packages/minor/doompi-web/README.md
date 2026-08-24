@@ -68,8 +68,13 @@ neither is shown facts it did not report:
   usage, cost, and session identity.
 - **Dialogs:** the extension UI sub-protocol (`select`, `confirm`, `input`, `editor`), which is how
   a permission prompt reaches the browser. Cancelling answers the agent rather than stranding it.
-- **Command palette:** `ctrl+k`, listing whatever `get_commands` reported and invoking it as a slash
-  prompt. A DoomPi session therefore offers `/mode`, `/domains` and `/profile` here.
+- **Leader Space:** `ctrl+k`, `ctrl+space`, or space in an empty composer. Keys walk the tree the
+  installed web plugins declared (`SPC w r` opens the workflows tab, `SPC g e` toggles goal mode),
+  backspace climbs, and `/` searches whatever `get_commands` reported to run it as a slash prompt.
+- **Settings:** the gear at the foot of the rail opens the settings pages. The providers page lists
+  every model provider Pi knows with whether it is authenticated, signs in with an API key or OAuth
+  through the hub, and signs out. The hub uses the same `auth.json` as the sessions, so a login
+  here is a login for every session on the machine.
 
 ## Attach and reattach
 
@@ -116,7 +121,8 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 Tabs beyond the conversation are plugins, and no plugin package is a dependency of this one. A
 package declares a `doompiWeb` block in its package.json naming a client entry (a `webPlugin`
-definition: tab, panel, badge, session data channels, and other slot contributions) and an
+definition: tab, panel, badge, session data channels, tool renderers for the timeline cards of
+the tools the package registers, and other slot contributions) and an
 optional hub entry (`webHubChannels` plus its built dist). This package's own bundle carries only
 its built-in plugins; the full set is assembled on your machine: `doompi sync` discovers the
 installed composition's manifests, generates the import entries, and rebuilds the SPA through the

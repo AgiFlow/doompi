@@ -33,3 +33,9 @@ boundaries:
       - web/**
       - src/types
       - src/types/**
+  - name: tests
+    pattern: tests/**
+    allowedImports:
+      - src/**
+      - tests/**
+      - web/**

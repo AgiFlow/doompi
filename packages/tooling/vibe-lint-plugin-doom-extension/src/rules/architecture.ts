@@ -117,6 +117,7 @@ const DEFAULT_PACKAGE_LAYER_FALLBACK = 'extension';
 const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-extension-contracts': 'contracts',
   '@agimon-ai/doompi-telemetry': 'contracts',
+  '@agimon-ai/doompi-web-contracts': 'contracts',
   '@agimon-ai/doompi-config': 'platform',
   '@agimon-ai/doompi-ui': 'platform',
   '@agimon-ai/doompi-cache': 'integration',

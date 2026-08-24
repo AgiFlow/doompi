@@ -115,6 +115,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -128,12 +131,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -186,6 +201,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -199,12 +217,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -775,6 +805,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -788,12 +821,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -870,6 +915,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -883,12 +931,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -956,6 +1016,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -969,12 +1032,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -1076,6 +1151,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@agimon-ai/mcp-proxy':
         specifier: 0.31.16
         version: 0.31.16(@earendil-works/pi-coding-agent@0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
@@ -1104,12 +1182,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -1131,6 +1221,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1144,12 +1237,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -1286,12 +1391,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -1394,12 +1511,24 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.2
         version: 0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1471,12 +1600,24 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.2
         version: 0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -1492,6 +1633,9 @@ importers:
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.84.2
+        version: 0.84.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.3)

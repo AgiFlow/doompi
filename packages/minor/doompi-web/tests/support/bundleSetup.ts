@@ -7,20 +7,26 @@ import { bundleCockpitWeb } from '../../src/adapters/webBundler.ts';
 const workflowRoot = fileURLToPath(new URL('../../../doompi-workflow', import.meta.url));
 const runnerRoot = fileURLToPath(new URL('../../../../default/doompi-runner', import.meta.url));
 const teamRoot = fileURLToPath(new URL('../../../../../layers/team/doompi-team', import.meta.url));
+const readRoot = fileURLToPath(new URL('../../../../default/doompi-read', import.meta.url));
+const editRoot = fileURLToPath(new URL('../../../../default/doompi-edit', import.meta.url));
 
 /** Env var the cockpit fixture reads to serve the synced-style bundle. */
 export const SYNCED_DIST_ENV = 'DOOMPI_E2E_SYNCED_DIST';
 
 /**
  * Playwright global setup: build one synced-style bundle (host shell plus the
- * workspace's doompi-team, doompi-runner, and doompi-workflow plugins,
+ * workspace's doompi-team, doompi-runner, doompi-workflow, doompi-read, and
+ * doompi-edit plugins,
  * discovered from their manifests) that the specs opting into
  * `assets: 'synced'` serve. This is the same code path
  * `doompi sync` runs, so the e2e suite proves it end to end.
  */
 export default async function globalSetup(): Promise<() => void> {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-sync-'));
-  const result = await bundleCockpitWeb({ pluginRoots: [teamRoot, runnerRoot, workflowRoot], outDir });
+  const result = await bundleCockpitWeb({
+    pluginRoots: [teamRoot, runnerRoot, workflowRoot, readRoot, editRoot],
+    outDir,
+  });
   process.env[SYNCED_DIST_ENV] = result.assetsDir;
   return () => {
     fs.rmSync(outDir, { recursive: true, force: true });

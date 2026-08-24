@@ -14,53 +14,136 @@ const COMMANDS = {
   },
 };
 
-test('lists the commands the session reports', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await cockpit.session.waitForCommand('get_commands');
-  cockpit.session.emit(COMMANDS);
+test.describe('with the package bundle, which installs no plugins', () => {
+  test('says so when no package registered leader keys', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
 
-  await page.keyboard.press('Control+k');
+    await page.keyboard.press('Control+k');
 
-  await expect(page.getByTestId('palette')).toBeVisible();
-  // Groups are keyed by first letter, the way Leader Space's prefix map is.
-  await expect(page.getByTestId('palette-item-0')).toContainText('domains');
-  await expect(page.getByTestId('palette-count')).toHaveText('4');
-  await expect(page.getByTestId('palette-sub-domains')).toBeVisible();
+    await expect(page.getByTestId('palette')).toBeVisible();
+    await expect(page.getByTestId('palette-empty')).toBeVisible();
+    await expect(page.getByTestId('palette-count')).toHaveText('0');
+  });
+
+  test('slash searches the commands the session reports and runs one as a slash prompt', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
+
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('/');
+    await expect(page.getByTestId('palette-filter')).toBeFocused();
+    await page.keyboard.type('dom');
+    await expect(page.getByTestId('palette-count')).toHaveText('1');
+
+    await page.getByTestId('palette-sub-domains').click();
+
+    const sent = await cockpit.session.waitForCommand('prompt');
+    expect(sent.message).toBe('/domains');
+    await expect(page.getByTestId('palette')).toBeHidden();
+  });
+
+  test('enter runs the top search match', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
+
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('/');
+    await page.keyboard.type('pro');
+    await page.keyboard.press('Enter');
+
+    const sent = await cockpit.session.waitForCommand('prompt');
+    expect(sent.message).toBe('/profile');
+  });
+
+  test('escape closes the palette, and space in an empty composer opens it', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
+
+    await page.keyboard.press('Control+k');
+    await expect(page.getByTestId('palette')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('palette')).toBeHidden();
+
+    await page.getByTestId('composer-input').focus();
+    await page.keyboard.press(' ');
+    await expect(page.getByTestId('palette')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // With a draft in progress, space is a space.
+    await page.getByTestId('composer-input').fill('hello');
+    await page.keyboard.press(' ');
+    await expect(page.getByTestId('palette')).toBeHidden();
+    await expect(page.getByTestId('composer-input')).toHaveValue('hello ');
+  });
 });
 
-test('filters and invokes a command as a slash prompt', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await cockpit.session.waitForCommand('get_commands');
-  cockpit.session.emit(COMMANDS);
+test.describe('with the synced bundle, whose plugins declare leader keys', () => {
+  test.use({ assets: 'synced' });
 
-  await page.keyboard.press('Control+k');
-  await page.getByTestId('palette-filter').fill('dom');
-  await expect(page.getByTestId('palette-count')).toHaveText('1');
+  test('keys walk the plugin tree: SPC w r opens the workflows tab', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
 
-  await page.getByTestId('palette-sub-domains').click();
+    await page.keyboard.press('Control+k');
+    // Root: the groups the installed plugins declared, sorted by key.
+    await expect(page.getByTestId('palette-item-0')).toHaveAttribute('data-key', 'a');
+    await expect(page.getByTestId('palette-item-1')).toHaveAttribute('data-key', 'w');
 
-  const sent = await cockpit.session.waitForCommand('prompt');
-  expect(sent.message).toBe('/domains');
-  await expect(page.getByTestId('palette')).toBeHidden();
-});
+    await page.keyboard.press('w');
+    await expect(page.getByTestId('palette')).toHaveAttribute('data-path', 'w');
+    await expect(page.getByTestId('palette-path')).toContainText('workflows');
+    await expect(page.getByTestId('palette-item-0')).toHaveAttribute('data-key', 'e');
+    await expect(page.getByTestId('palette-item-1')).toHaveAttribute('data-key', 'r');
 
-test('says so when the session reports no commands', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await cockpit.session.waitForCommand('get_commands');
-  cockpit.session.emit({ type: 'response', command: 'get_commands', success: true, data: { commands: [] } });
+    // Backspace climbs, then the same key descends again.
+    await page.keyboard.press('Backspace');
+    await expect(page.getByTestId('palette')).toHaveAttribute('data-path', '');
+    await page.keyboard.press('w');
+    await page.keyboard.press('r');
 
-  await page.keyboard.press('Control+k');
+    await expect(page.getByTestId('palette')).toBeHidden();
+    await expect(page).toHaveURL(/\/workflows$/);
+  });
 
-  await expect(page.getByTestId('palette-empty')).toBeVisible();
-});
+  test('a command leaf runs as a slash prompt: SPC w e toggles workflow mode', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
 
-test('escape closes the palette', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await cockpit.session.waitForCommand('get_commands');
-  cockpit.session.emit(COMMANDS);
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('w');
+    await page.keyboard.press('e');
 
-  await page.keyboard.press('Control+k');
-  await expect(page.getByTestId('palette')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('palette')).toBeHidden();
+    const sent = await cockpit.session.waitForCommand('prompt');
+    expect(sent.message).toBe('/minor workflow');
+    await expect(page.getByTestId('palette')).toBeHidden();
+  });
+
+  test('an unbound key is ignored rather than typed into the search', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
+
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('z');
+    await expect(page.getByTestId('palette')).toHaveAttribute('data-path', '');
+    await expect(page.getByTestId('palette-filter')).toHaveValue('');
+  });
+
+  test('SPC a r opens the subagents tab', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForCommand('get_commands');
+    cockpit.session.emit(COMMANDS);
+
+    await page.keyboard.press('Control+k');
+    await page.keyboard.press('a');
+    await page.keyboard.press('r');
+    await expect(page).toHaveURL(/\/subagents$/);
+  });
 });

@@ -1,9 +1,10 @@
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { stopSession } from '../../lib/hubApi.ts';
 import { abbreviateCwd, runningCount, sessionStatusLine } from '../../lib/sessionSummary.ts';
+import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections.ts';
 import { paletteStore } from '../../stores/paletteStore.ts';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
 import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
@@ -26,6 +27,20 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden>
       <path d="M6 2 V10 M2 6 H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden>
+      <circle cx="6" cy="6" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <path
+        d="M6 1.2 V2.6 M6 9.4 V10.8 M1.2 6 H2.6 M9.4 6 H10.8 M2.6 2.6 L3.6 3.6 M8.4 8.4 L9.4 9.4 M9.4 2.6 L8.4 3.6 M3.6 8.4 L2.6 9.4"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -390,7 +405,16 @@ export function SessionRail() {
 
       <PluginSurface slot="rail" sessionId={activeId} />
       <div className="flex-1" />
-      <div className="border-t border-doom-border px-4 py-3">
+      <div className="flex items-center gap-2.5 border-t border-doom-border px-4 py-3">
+        <Link
+          to="/settings/$section"
+          params={{ section: DEFAULT_SETTINGS_SECTION }}
+          data-testid="settings-open"
+          title="settings"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-doom-faint hover:bg-doom-panel hover:text-doom-hi"
+        >
+          <GearIcon />
+        </Link>
         <span className="text-[9px] text-doom-faint">ctrl+k commands · ctrl+t new session</span>
       </div>
 

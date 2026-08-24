@@ -16,6 +16,13 @@ export const HUB_ROLE = 'hub';
 /** REST endpoint for creating sessions; the page posts {cwd, name?} and receives {sessionId}. */
 export const SESSIONS_API_ROUTE = '/api/sessions';
 
+/**
+ * REST endpoint behind the new-session directory picker; the page sends the
+ * typed path as ?q= and receives {directories}: the children of the parent
+ * directory whose names match the trailing segment as a regular expression.
+ */
+export const DIRECTORIES_API_ROUTE = '/api/directories';
+
 /** What the agent is doing right now, derived from its frame stream. */
 export type SessionPhase = 'idle' | 'turn' | 'compaction' | 'retry';
 

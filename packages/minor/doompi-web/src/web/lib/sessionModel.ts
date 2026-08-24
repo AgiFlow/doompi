@@ -1,3 +1,4 @@
+import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 import { DIALOG_ANSWERED_TYPE, MINOR_MODE_ENTRY_TYPE, type MinorModeProjection } from '../../types/hub.ts';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
@@ -21,7 +22,11 @@ export interface ToolEntry {
   id: string;
   toolCallId: string;
   name: string;
+  /** The call arguments as the frame carried them, for a plugin's own renderer. */
+  args: Record<string, unknown>;
   argSummary: string;
+  /** The newest result, partial while running; null before the tool produced any. */
+  result: ToolResultView | null;
   output: string;
   isError: boolean;
   running: boolean;
@@ -228,13 +233,25 @@ function applyToolStart(state: SessionState, frame: Frame): SessionState {
     id: `t${state.nextId}`,
     toolCallId: asString(frame.toolCallId),
     name: asString(frame.toolName, 'tool'),
+    args: isRecord(frame.args) ? frame.args : {},
     argSummary: summariseArgs(frame.args),
+    result: null,
     output: '',
     isError: false,
     running: true,
   };
   const opened = withEntry(closeAssistant(state, undefined), entry);
   return { ...opened, toolsThisRun: opened.toolsThisRun + 1 };
+}
+
+/**
+ * The result a tool frame carries, kept whole: the text blocks feed the
+ * default card, and the content plus details reach the owning plugin's
+ * renderer untouched, the way Pi hands them to a TUI renderResult.
+ */
+function toolResult(raw: unknown): ToolResultView | null {
+  if (!isRecord(raw)) return null;
+  return { content: Array.isArray(raw.content) ? raw.content : [], details: raw.details };
 }
 
 function updateTool(state: SessionState, toolCallId: string, patch: Partial<ToolEntry>): SessionState {
@@ -392,11 +409,13 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
 
     case 'tool_execution_update':
       return updateTool(state, asString(frame.toolCallId), {
+        result: toolResult(frame.partialResult),
         output: textFromContent(isRecord(frame.partialResult) ? frame.partialResult.content : undefined),
       });
 
     case 'tool_execution_end':
       return updateTool(state, asString(frame.toolCallId), {
+        result: toolResult(frame.result),
         output: textFromContent(isRecord(frame.result) ? frame.result.content : undefined),
         isError: frame.isError === true,
         running: false,

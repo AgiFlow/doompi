@@ -23,7 +23,7 @@ import type { McpSessionConfig } from '../../types/mcpConfig.ts';
 import { mcpSessionConfigFromProjection } from '../node/projection.ts';
 import { readSessionConfig } from '../process/sessionConfig.ts';
 import { registerLeaderContribution } from './leader.ts';
-import { PACKAGE_SOURCE } from './mcpConstants.ts';
+import { MCP_STATUS_KEY, PACKAGE_SOURCE } from './mcpConstants.ts';
 import { McpSession } from './mcpSession.ts';
 
 const INFO = 'info';
@@ -136,6 +136,17 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
     const expectedSessionId = hostSession.sessionId;
     let sessionActive = true;
     activeContext = context;
+    // Published for RPC clients as much as the TUI: the cockpit matches MCP
+    // tool calls by these names. Absent UI (a bare headless host) is skipped.
+    const publishServerStatus = (): void => {
+      const names = session
+        .getSnapshot()
+        .servers.map((server) => server.name)
+        .join(',');
+      context.ui?.setStatus(MCP_STATUS_KEY, names);
+    };
+    const stopPublishing = session.onChange(publishServerStatus);
+    publishServerStatus();
 
     if (mode === 'standalone') {
       await session.reconfigure(readSessionConfig(process.env, context.cwd));
@@ -173,6 +184,8 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
     for (const diagnostic of session.getDiagnostics()) context.ui?.notify(diagnostic, WARNING);
     return async () => {
       sessionActive = false;
+      stopPublishing();
+      context.ui?.setStatus(MCP_STATUS_KEY, undefined);
       if (activeContext === context) activeContext = undefined;
       if (!disposed) await session.reconfigure(failClosedSessionConfig(context.cwd));
     };

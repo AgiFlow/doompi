@@ -15,7 +15,25 @@ rules:
         "@agimon-ai/doompi-extension-contracts": contracts
         "@agimon-ai/doompi-hashline": contracts
         "@agimon-ai/doompi-telemetry": contracts
+        "@agimon-ai/doompi-web-contracts": contracts
         "@agimon-ai/doompi-config": platform
         "@agimon-ai/doompi-ui": platform
         "@agimon-ai/doompi-mcp": integration
         "@agimon-ai/doompi": host
+
+# The web cockpit plugin lives in web/ (outside src/, which the doom-extension
+# folder vocabulary owns). Its browser code may reach its own files and the
+# shared src/types shapes; tests may reach it like any package source.
+boundaries:
+  - name: web-plugin
+    pattern: web/**
+    allowedImports:
+      - web/**
+      - src/types
+      - src/types/**
+  - name: tests
+    pattern: tests/**
+    allowedImports:
+      - src/**
+      - tests/**
+      - web/**

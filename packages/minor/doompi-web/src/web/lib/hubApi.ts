@@ -1,4 +1,4 @@
-import { SESSIONS_API_ROUTE } from '../../types/hub.ts';
+import { DIRECTORIES_API_ROUTE, SESSIONS_API_ROUTE } from '../../types/hub.ts';
 
 export type CreateSessionResult = { sessionId: string } | { error: string };
 
@@ -64,5 +64,23 @@ export async function searchSessionFiles(sessionId: string, query: string): Prom
     return Array.isArray(body.files) ? body.files.filter((file): file is string => typeof file === 'string') : [];
   } catch {
     return []; // Completion is a convenience; a failed lookup just shows nothing.
+  }
+}
+
+/**
+ * Directories the typed path could complete to, for the new-session picker.
+ * The hub lists the parent directory's children and filters them by the
+ * trailing segment as a regular expression.
+ */
+export async function searchDirectories(query: string): Promise<string[]> {
+  try {
+    const response = await fetch(`${DIRECTORIES_API_ROUTE}?q=${encodeURIComponent(query)}`);
+    if (!response.ok) return [];
+    const body = (await response.json()) as { directories?: unknown };
+    return Array.isArray(body.directories)
+      ? body.directories.filter((directory): directory is string => typeof directory === 'string')
+      : [];
+  } catch {
+    return []; // Suggestions are a convenience; a failed lookup just shows nothing.
   }
 }

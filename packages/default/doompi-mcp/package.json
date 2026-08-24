@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "web",
     "llms.txt",
     "src/prompts",
     "README.md",
@@ -61,7 +62,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -69,6 +70,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/mcp-proxy": "0.31.16",
     "@deepseek-ai/cordis": "4.0.1",
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -80,8 +82,12 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@earendil-works/pi-tui": "0.84.2",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
@@ -100,6 +106,12 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "mcp",
+    "registrationOrder": 88,
+    "channels": [],
+    "client": "./web/index.ts"
   },
   "pi": {
     "extensions": [

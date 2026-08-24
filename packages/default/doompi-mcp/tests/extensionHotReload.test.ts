@@ -153,7 +153,7 @@ describe('MCP extension Cordis hot reload', () => {
       mode: 'headless',
       hasUI: false,
       sessionManager: { getSessionId: () => 'hot-reload-session' },
-      ui: { notify: vi.fn() },
+      ui: { notify: vi.fn(), setStatus: vi.fn() },
     } as unknown as ExtensionContext;
     const serviceA = createDoomMcpProjectionService({
       sessionId: 'hot-reload-session',

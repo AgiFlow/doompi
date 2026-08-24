@@ -126,6 +126,51 @@ describe('reduceSession', () => {
     });
   });
 
+  it('keeps the raw call and result for a plugin renderer, partial first', () => {
+    const start = fold([
+      { type: 'tool_execution_start', toolCallId: 'c1', toolName: 'read', args: { path: 'a.ts', offset: 3 } },
+    ]);
+    expect(tool(start).args).toEqual({ path: 'a.ts', offset: 3 });
+    expect(tool(start).result).toBeNull();
+
+    const partial = reduceSession(start, {
+      type: 'tool_execution_update',
+      toolCallId: 'c1',
+      partialResult: { content: [{ type: 'text', text: 'half' }], details: { lines: 1 } },
+    });
+    expect(tool(partial).result).toEqual({ content: [{ type: 'text', text: 'half' }], details: { lines: 1 } });
+
+    const done = reduceSession(partial, {
+      type: 'tool_execution_end',
+      toolCallId: 'c1',
+      result: {
+        content: [
+          { type: 'text', text: 'all' },
+          { type: 'image', data: 'x' },
+        ],
+        details: { lines: 2 },
+      },
+      isError: false,
+    });
+    expect(tool(done).result).toEqual({
+      content: [
+        { type: 'text', text: 'all' },
+        { type: 'image', data: 'x' },
+      ],
+      details: { lines: 2 },
+    });
+    expect(tool(done).output).toBe('all');
+  });
+
+  it('tolerates a tool start without args and a result without content', () => {
+    const state = fold([
+      { type: 'tool_execution_start', toolCallId: 'c9', toolName: 'read' },
+      { type: 'tool_execution_end', toolCallId: 'c9', result: { details: 'only' }, isError: false },
+    ]);
+    expect(tool(state).args).toEqual({});
+    expect(tool(state).result).toEqual({ content: [], details: 'only' });
+  });
+
   it('marks a failing tool call', () => {
     const state = fold([
       { type: 'tool_execution_start', toolCallId: 'c2', toolName: 'bash', args: {} },
