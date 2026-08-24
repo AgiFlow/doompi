@@ -1,0 +1,77 @@
+import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+interface PackageManifest {
+  name: string;
+  type?: string;
+  private?: boolean;
+  bin?: Record<string, string>;
+  files?: string[];
+  keywords?: string[];
+  exports?: Record<string, unknown>;
+  publishConfig?: Record<string, unknown>;
+  dependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+}
+
+const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
+
+async function readManifest(): Promise<PackageManifest> {
+  return JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8')) as PackageManifest;
+}
+
+async function exists(relativePath: string): Promise<boolean> {
+  try {
+    await access(path.join(packageRoot, relativePath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+describe('{{ packageName }} package contract', () => {
+  it('is a public ESM package with an explicit publish allowlist', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.name).toBe('@agimon-ai/{{ packageName }}');
+    expect(manifest.private).toBeUndefined();
+    expect(manifest.type).toBe('module');
+    expect(manifest.publishConfig).toEqual({ access: 'public' });
+    expect(manifest.files).toEqual(expect.arrayContaining(['dist', 'llms.txt', 'README.md', 'package.json']));
+
+    const keywords = manifest.keywords ?? [];
+    expect(keywords).toEqual(expect.arrayContaining(['coding-agent', 'doompi', 'pi-coding-agent', 'web']));
+    expect(new Set(keywords).size).toBe(keywords.length);
+    expect(keywords).toEqual(keywords.map((keyword) => keyword.toLowerCase()));
+  });
+
+  it('publishes one executable and a closed export surface', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.bin).toEqual({ '{{ packageName }}': './dist/bin/serve.mjs' });
+    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './package.json']);
+  });
+
+  it('ships the runtime the bridge needs and bundles the rest', async () => {
+    const manifest = await readManifest();
+    const runtime = Object.keys(manifest.dependencies ?? {});
+
+    // The SPA is compiled into dist/web, so React and friends are build-time
+    // only; shipping them would make a global install pay for a bundle it
+    // already contains.
+    expect(runtime).toEqual(['@hono/node-server', '@hono/node-ws', 'hono']);
+  });
+
+  it('builds the server before the client so the bundle survives the clean', async () => {
+    const manifest = await readManifest();
+    expect(manifest.scripts?.build).toBe('tsdown && vite build');
+  });
+
+  it('keeps the documents the manifest promises', async () => {
+    for (const file of ['README.md', 'LICENSE', 'llms.txt']) {
+      expect(await exists(file), `${file} is listed in files but missing`).toBe(true);
+    }
+  });
+});

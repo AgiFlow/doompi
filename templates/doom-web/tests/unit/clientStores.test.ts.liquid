@@ -1,0 +1,338 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { SessionSummary } from '../../src/types/hub.ts';
+import {
+  abortCommand,
+  dialogCancelled,
+  dialogConfirmed,
+  dialogValue,
+  followUpCommand,
+  getCommandsCommand,
+  getSessionStatsCommand,
+  getStateCommand,
+  promptCommand,
+  steerCommand,
+} from '../../src/web/lib/commands.ts';
+import { bindTransport, releaseTransport, sendFrame, sendHubFrame } from '../../src/web/lib/transport.ts';
+import {
+  closePalette,
+  openPalette,
+  paletteStore,
+  setPalettePath,
+  togglePalette,
+} from '../../src/web/stores/paletteStore.ts';
+import {
+  abortRun,
+  answerDialogConfirm,
+  answerDialogValue,
+  applySessionFrame,
+  cancelDialog,
+  dropSessionStore,
+  queueFollowUp,
+  refreshSessionFacts,
+  resetSessionStore,
+  resetSessionStores,
+  runCommand,
+  sessionStoreFor,
+  submitMessage,
+} from '../../src/web/stores/sessionStore.ts';
+import {
+  applySessionBacklog,
+  applySessionRemoved,
+  applySessionsSnapshot,
+  applySessionUpsert,
+  markSocketClosed,
+  resetSessions,
+  sessionsStore,
+  setActiveSession,
+  waitForSession,
+} from '../../src/web/stores/sessionsStore.ts';
+
+type Frame = Record<string, unknown>;
+
+let sent: Frame[] = [];
+
+function summary(id: string, overrides: Partial<SessionSummary> = {}): SessionSummary {
+  return {
+    id,
+    name: 'untitled',
+    cwd: `/workspace/${id}`,
+    createdAt: `2026-08-24T00:00:0${id.length}.000Z`,
+    updatedAt: '2026-08-24T00:00:00.000Z',
+    phase: 'idle',
+    phaseSince: '2026-08-24T00:00:00.000Z',
+    attach: 'attached',
+    pendingMessageCount: 0,
+    everPrompted: false,
+    awaitingInput: false,
+    socketPath: `/run/${id}.sock`,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  sent = [];
+  resetSessionStores();
+  resetSessions();
+  bindTransport((frame) => sent.push(frame as Frame));
+});
+
+describe('command builders', () => {
+  it('name the frames the RPC protocol expects', () => {
+    expect(promptCommand('a')).toEqual({ type: 'prompt', message: 'a' });
+    expect(steerCommand('b')).toEqual({ type: 'steer', message: 'b' });
+    expect(followUpCommand('c')).toEqual({ type: 'follow_up', message: 'c' });
+    expect(abortCommand()).toEqual({ type: 'abort' });
+    expect(getStateCommand()).toEqual({ type: 'get_state' });
+    expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
+    expect(getCommandsCommand()).toEqual({ type: 'get_commands' });
+    expect(dialogValue('1', 'v')).toEqual({ type: 'extension_ui_response', id: '1', value: 'v' });
+    expect(dialogConfirmed('2', false)).toEqual({ type: 'extension_ui_response', id: '2', confirmed: false });
+    expect(dialogCancelled('3')).toEqual({ type: 'extension_ui_response', id: '3', cancelled: true });
+  });
+});
+
+describe('transport', () => {
+  it('envelopes session commands with the session id', () => {
+    sendFrame('s1', promptCommand('hello'));
+    expect(sent).toEqual([{ type: 'session_command', sessionId: 's1', frame: { type: 'prompt', message: 'hello' } }]);
+  });
+
+  it('sends hub frames unenveloped', () => {
+    sendHubFrame({ type: 'subscribe', sessionId: 's1' });
+    expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
+  });
+
+  it('drops frames when nothing is bound rather than throwing', () => {
+    releaseTransport();
+    expect(() => sendFrame('s1', { type: 'prompt' })).not.toThrow();
+    bindTransport((frame) => sent.push(frame as Frame));
+  });
+});
+
+describe('sessionsStore', () => {
+  it('hydrates from a snapshot and sorts the rail by creation', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('late'), summary('x')] });
+    expect(sessionsStore.state.hydrated).toBe(true);
+    // 'x' is older by the createdAt scheme above (shorter id).
+    expect(sessionsStore.state.order).toEqual(['x', 'late']);
+  });
+
+  it('upserts one session without touching the others', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a'), summary('b')] });
+    applySessionUpsert({ type: 'session_upsert', session: summary('b', { phase: 'turn' }) });
+    expect(sessionsStore.state.byId.b.summary.phase).toBe('turn');
+    expect(sessionsStore.state.byId.a.summary.phase).toBe('idle');
+  });
+
+  it('removes a session that left', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a'), summary('b')] });
+    applySessionRemoved({ type: 'session_removed', sessionId: 'a' });
+    expect(sessionsStore.state.order).toEqual(['b']);
+  });
+
+  it('keeps a refusal sticky per session while the hub retries underneath', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a'), summary('b')] });
+    applySessionUpsert({
+      type: 'session_upsert',
+      session: summary('a', { attach: 'refused', attachReason: 'Another client already holds this session.' }),
+    });
+    applySessionUpsert({ type: 'session_upsert', session: summary('a', { attach: 'connecting' }) });
+    expect(sessionsStore.state.byId.a.attach).toBe('refused');
+    expect(sessionsStore.state.byId.a.reason).toMatch(/Another client/);
+    // The other session's churn is unaffected.
+    expect(sessionsStore.state.byId.b.attach).toBe('attached');
+
+    applySessionUpsert({ type: 'session_upsert', session: summary('a', { attach: 'attached' }) });
+    expect(sessionsStore.state.byId.a.attach).toBe('attached');
+  });
+
+  it('records what a subscribe replayed', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a')] });
+    applySessionBacklog('a', 7, 2);
+    expect(sessionsStore.state.byId.a).toMatchObject({ replayed: 7, dropped: 2 });
+  });
+
+  it('marks every session offline when the page socket dies', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a'), summary('b')] });
+    markSocketClosed();
+    expect(sessionsStore.state.byId.a.attach).toBe('offline');
+    expect(sessionsStore.state.byId.b.attach).toBe('offline');
+    expect(sessionsStore.state.byId.a.reason).toBe('The cockpit lost its bridge.');
+  });
+
+  it('ignores a malformed summary', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [{ name: 'no-id' }] });
+    expect(sessionsStore.state.order).toEqual([]);
+  });
+
+  it('waits for a created session to appear before reporting it', async () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a')] });
+    await expect(waitForSession('a')).resolves.toBe(true);
+
+    const pending = waitForSession('fresh');
+    applySessionUpsert({ type: 'session_upsert', session: summary('fresh') });
+    await expect(pending).resolves.toBe(true);
+
+    await expect(waitForSession('never', 20)).resolves.toBe(false);
+  });
+});
+
+describe('subagentsStore', () => {
+  it('keeps each session fleet separately and drops one with its session', async () => {
+    const { applySubagentRuns, dropSubagentRuns, resetSubagents, subagentsStore } =
+      await import('../../src/web/stores/subagentsStore.ts');
+    resetSubagents();
+    const run = { runId: 'r1', agent: 'reviewer', state: 'running' };
+    applySubagentRuns({ type: 'subagent_runs', sessionId: 's1', runs: [run] });
+    applySubagentRuns({ type: 'subagent_runs', sessionId: 's2', runs: [] });
+    expect(subagentsStore.state.bySession.s1).toHaveLength(1);
+    expect(subagentsStore.state.bySession.s2).toEqual([]);
+
+    applySubagentRuns({ type: 'subagent_runs', sessionId: 's1', runs: [] });
+    expect(subagentsStore.state.bySession.s1).toEqual([]);
+
+    dropSubagentRuns('s1');
+    expect(subagentsStore.state.bySession.s1).toBeUndefined();
+    // Malformed frames change nothing.
+    applySubagentRuns({ type: 'subagent_runs', runs: [run] });
+    expect(Object.keys(subagentsStore.state.bySession)).toEqual(['s2']);
+    resetSubagents();
+  });
+});
+
+describe('menuStore', () => {
+  it('anchors a fresh selection command and expires a stale one', async () => {
+    const { setPendingMenu, clearPendingMenu, pendingMenuFor } = await import('../../src/web/stores/menuStore.ts');
+    clearPendingMenu();
+    expect(pendingMenuFor(Date.now())).toBeNull();
+
+    setPendingMenu('mode');
+    expect(pendingMenuFor(Date.now())).toBe('mode');
+    // A dialog arriving long after the click is not this menu.
+    expect(pendingMenuFor(Date.now() + 60_000)).toBeNull();
+
+    clearPendingMenu();
+    expect(pendingMenuFor(Date.now())).toBeNull();
+  });
+});
+
+describe('paletteStore', () => {
+  it('opens, toggles, and always resets the key path', () => {
+    setPalettePath('p');
+    openPalette();
+    expect(paletteStore.state).toEqual({ open: true, path: '' });
+
+    setPalettePath('p');
+    togglePalette();
+    expect(paletteStore.state).toEqual({ open: false, path: '' });
+
+    togglePalette();
+    expect(paletteStore.state.open).toBe(true);
+    closePalette();
+    expect(paletteStore.state.open).toBe(false);
+  });
+});
+
+describe('session store registry', () => {
+  it('folds frames into the addressed session only', () => {
+    applySessionFrame('a', { type: 'agent_start' });
+    expect(sessionStoreFor('a').state.streaming).toBe(true);
+    expect(sessionStoreFor('b').state.streaming).toBe(false);
+  });
+
+  it('resets one session for a replay without touching the rest', () => {
+    applySessionFrame('a', { type: 'agent_start' });
+    applySessionFrame('b', { type: 'agent_start' });
+    resetSessionStore('a');
+    expect(sessionStoreFor('a').state.streaming).toBe(false);
+    expect(sessionStoreFor('b').state.streaming).toBe(true);
+  });
+
+  it('drops a removed session outright', () => {
+    applySessionFrame('a', { type: 'agent_start' });
+    dropSessionStore('a');
+    expect(sessionStoreFor('a').state.streaming).toBe(false);
+  });
+});
+
+describe('session actions', () => {
+  it('address the focused session by default', () => {
+    setActiveSession('s1');
+    submitMessage('first');
+    expect(sent).toEqual([{ type: 'session_command', sessionId: 's1', frame: { type: 'prompt', message: 'first' } }]);
+  });
+
+  it('are a silent no-op while nothing is focused', () => {
+    submitMessage('lost');
+    abortRun();
+    queueFollowUp('also lost');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('prompt when idle and steer when the addressed agent is running', () => {
+    setActiveSession('s1');
+    submitMessage('first');
+    applySessionFrame('s1', { type: 'agent_start' });
+    submitMessage('second');
+    expect((sent[1].frame as Frame).type).toBe('steer');
+    expect(sessionStoreFor('s1').state.entries).toHaveLength(2);
+  });
+
+  it('take an explicit session id past the focus', () => {
+    setActiveSession('s1');
+    abortRun('s2');
+    expect(sent).toEqual([{ type: 'session_command', sessionId: 's2', frame: { type: 'abort' } }]);
+  });
+
+  it('refuse to send blank drafts', () => {
+    setActiveSession('s1');
+    submitMessage('   ');
+    queueFollowUp('  ');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('queue a follow-up', () => {
+    setActiveSession('s1');
+    queueFollowUp('later');
+    expect((sent[0].frame as Frame).type).toBe('follow_up');
+  });
+
+  it('ask for every fact the rail shows', () => {
+    refreshSessionFacts('s1');
+    expect(sent.map((frame) => (frame.frame as Frame).type)).toEqual([
+      'get_state',
+      'get_session_stats',
+      'get_commands',
+    ]);
+    expect(sent.every((frame) => frame.sessionId === 's1')).toBe(true);
+  });
+
+  it('invoke a command as a slash prompt, adding the slash when needed', () => {
+    setActiveSession('s1');
+    runCommand('domains');
+    runCommand('/mode');
+    expect(sent.map((frame) => (frame.frame as Frame).message)).toEqual(['/domains', '/mode']);
+  });
+
+  it('answer dialogs on the session that asked', () => {
+    setActiveSession('s1');
+    applySessionFrame('s1', { type: 'extension_ui_request', id: 'r1', method: 'select', options: ['a'] });
+    answerDialogValue('r1', 'a');
+    expect(sent[0]).toEqual({
+      type: 'session_command',
+      sessionId: 's1',
+      frame: { type: 'extension_ui_response', id: 'r1', value: 'a' },
+    });
+    expect(sessionStoreFor('s1').state.dialog).toBeNull();
+
+    applySessionFrame('s1', { type: 'extension_ui_request', id: 'r2', method: 'confirm' });
+    answerDialogConfirm('r2', true);
+    expect(sessionStoreFor('s1').state.dialog).toBeNull();
+
+    applySessionFrame('s1', { type: 'extension_ui_request', id: 'r3', method: 'input' });
+    cancelDialog('r3');
+    const last = sent.at(-1) as Frame;
+    expect((last.frame as Frame).cancelled).toBe(true);
+    expect(sessionStoreFor('s1').state.dialog).toBeNull();
+  });
+});

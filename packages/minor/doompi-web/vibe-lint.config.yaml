@@ -1,0 +1,16 @@
+# The client and server layer graphs, the feature isolation rule, and the
+# naming conventions come from the doom-web plugin preset. Declare only what is
+# specific to this package.
+plugins:
+  - core
+  - doom-web
+
+extends:
+  - core/recommended
+  - doom-web/recommended
+
+ignore:
+  - "dist/**"
+  - "coverage/**"
+  - "playwright-report/**"
+  - "test-results/**"

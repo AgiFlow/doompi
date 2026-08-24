@@ -1,0 +1,54 @@
+@import 'tailwindcss';
+
+/*
+ * Doom One, the palette the DoomPi TUI theme already ships
+ * (packages/core/doompi-ui/themes/doom-pi-dark.json). Keeping the cockpit on
+ * the same values means a screenshot of the browser and a screenshot of the
+ * terminal describe the same session.
+ */
+@theme {
+  --color-doom-bg: #282c34;
+  --color-doom-rail: #21242b;
+  --color-doom-panel: #23272e;
+  --color-doom-deep: #1c1f24;
+  --color-doom-border: #3f444a;
+  --color-doom-border-soft: #2a2e35;
+  --color-doom-hi: #dfdfdf;
+  --color-doom-text: #bbc2cf;
+  --color-doom-dim: #9ca0a4;
+  --color-doom-faint: #5b6268;
+  --color-doom-blue: #51afef;
+  --color-doom-green: #98be65;
+  --color-doom-yellow: #ecbe7b;
+  --color-doom-red: #ff6c6b;
+  --color-doom-magenta: #c678dd;
+  --color-doom-violet: #a9a1e1;
+  --color-doom-cyan: #46d9ff;
+
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-doom-bg);
+  color: var(--color-doom-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-doom-border);
+  border-radius: 5px;
+}

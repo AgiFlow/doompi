@@ -1,0 +1,88 @@
+{
+  "name": "@agimon-ai/{{ packageName }}",
+  "version": "0.0.0",
+  "description": "{{ packageDescription }}",
+  "keywords": [
+    "cockpit",
+    "coding-agent",
+    "doompi",
+    "pi-coding-agent",
+    "session-console",
+    "web",
+    "{{ packageKeyword }}"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "{{ author }}",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/minor/{{ packageName }}"
+  },
+  "bin": {
+    "{{ packageName }}": "./dist/bin/serve.mjs"
+  },
+  "files": [
+    "dist",
+    "llms.txt",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && vite build",
+    "dev": "vite",
+    "test": "vitest --run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "@hono/node-ws": "1.3.1",
+    "hono": "4.13.3"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
+    "@playwright/test": "1.62.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/react-query": "5.102.1",
+    "@tanstack/react-router": "1.170.32",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwindcss": "4.3.3",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

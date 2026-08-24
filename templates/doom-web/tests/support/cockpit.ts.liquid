@@ -1,0 +1,157 @@
+import { type ChildProcess, spawn } from 'node:child_process';
+import fs from 'node:fs';
+import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test as base } from '@playwright/test';
+import { type FakeSession, startFakeSession } from './fakeSession.ts';
+
+const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
+const binary = path.join(packageRoot, 'dist', 'bin', 'serve.mjs');
+
+/**
+ * A stand-in doompi-server for the create-session flow: registers itself the
+ * way the real bin would and stays alive until the fixture kills it.
+ */
+const REGISTERING_SERVER = `#!/usr/bin/env node
+const args = process.argv.slice(2);
+const value = (flag) => args[args.indexOf(flag) + 1];
+const fs = require('node:fs');
+const path = require('node:path');
+const dir = path.join(value('--registry-dir'), 'sessions');
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(path.join(dir, value('--session-id') + '.json'), JSON.stringify({
+  version: 1,
+  id: value('--session-id'),
+  name: value('--name'),
+  cwd: process.cwd(),
+  socketPath: value('--listen'),
+  tokenFile: value('--auth-token-file'),
+  pid: process.pid,
+  createdAt: new Date().toISOString(),
+}));
+setInterval(() => {}, 1000);
+`;
+
+const FAILING_SERVER = `#!/usr/bin/env node
+process.stderr.write('the agent binary is missing\\n');
+process.exit(3);
+`;
+
+async function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      if (typeof address === 'string' || address === null) {
+        probe.close(() => reject(new Error('Could not reserve a port.')));
+        return;
+      }
+      const { port } = address;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+async function waitForHealth(url: string, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const response = await fetch(`${url}/api/health`);
+      if (response.ok) return;
+    } catch {
+      // The server is still binding.
+    }
+    if (Date.now() > deadline) throw new Error(`doompi-web did not answer on ${url}.`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+/** Kills every process the registry still names, except this one. */
+function killRegistered(registryDir: string): void {
+  const recordsDir = path.join(registryDir, 'sessions');
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(recordsDir);
+  } catch {
+    return;
+  }
+  for (const name of names.filter((entry) => entry.endsWith('.json'))) {
+    try {
+      const record = JSON.parse(fs.readFileSync(path.join(recordsDir, name), 'utf8')) as { pid?: number };
+      if (typeof record.pid === 'number' && record.pid !== process.pid) process.kill(record.pid);
+    } catch {
+      // Already gone, or not ours to kill.
+    }
+  }
+}
+
+export interface CockpitFixture {
+  /** Every registered fake session, in registration order. */
+  sessions: FakeSession[];
+  /** The first session, which the cockpit auto-focuses; single-session specs read this. */
+  session: FakeSession;
+  registryDir: string;
+  url: string;
+}
+
+interface CockpitOptions {
+  sessionCount: number;
+  /** Which stand-in the hub launches for created sessions: one that registers, or one that fails. */
+  spawnStub: 'ok' | 'fail';
+}
+
+/**
+ * Runs the published executable in hub mode against scripted sessions.
+ *
+ * Spawning `dist/bin/serve.mjs` rather than importing the server keeps the
+ * static asset resolution and the bin wiring inside what the test covers. Each
+ * fake session registers itself in a throwaway registry directory, exactly the
+ * way a real doompi-server announces itself.
+ */
+export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
+  sessionCount: [1, { option: true }],
+  spawnStub: ['ok', { option: true }],
+  cockpit: async ({ sessionCount, spawnStub }, use) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
+    const registryDir = path.join(root, 'run');
+    const stub = path.join(root, 'fake-doompi-server');
+    fs.writeFileSync(stub, spawnStub === 'ok' ? REGISTERING_SERVER : FAILING_SERVER, { mode: 0o755 });
+
+    const sessions: FakeSession[] = [];
+    for (let index = 0; index < sessionCount; index += 1) {
+      sessions.push(await startFakeSession({ id: `s${index + 1}`, name: `session-${index + 1}`, registryDir }));
+    }
+
+    const port = await freePort();
+    const child: ChildProcess = spawn(
+      process.execPath,
+      [binary, '--registry-dir', registryDir, '--spawn-command', stub, '--port', String(port)],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+
+    const logs: string[] = [];
+    child.stderr?.on('data', (chunk: Buffer) => logs.push(chunk.toString()));
+    child.stdout?.on('data', (chunk: Buffer) => logs.push(chunk.toString()));
+
+    const url = `http://127.0.0.1:${port}`;
+    try {
+      await waitForHealth(url);
+    } catch (error) {
+      child.kill('SIGKILL');
+      for (const session of sessions) await session.close();
+      throw new Error(`${(error as Error).message}\n${logs.join('')}`);
+    }
+
+    await use({ sessions, session: sessions[0], registryDir, url });
+
+    child.kill('SIGTERM');
+    for (const session of sessions) await session.close();
+    killRegistered(registryDir);
+    fs.rmSync(root, { recursive: true, force: true });
+  },
+});
+
+export { expect } from '@playwright/test';

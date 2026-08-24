@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-web",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/minor/doompi-web/src",
+  "projectType": "application",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-web"
+}

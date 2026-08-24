@@ -1,0 +1,270 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { serveWeb } from '../../src/adapters/httpServer.ts';
+import type { WebServer } from '../../src/types/bridge.ts';
+import type { SessionSummary } from '../../src/types/hub.ts';
+import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
+
+type Frame = Record<string, unknown>;
+
+const LOCAL = 'local';
+
+let running: Array<{ server: WebServer; session: FakeSession }> = [];
+
+afterEach(async () => {
+  for (const { server, session } of running) {
+    await server.close();
+    await session.close();
+  }
+  running = [];
+});
+
+async function bridge(overrides: { token?: string } = {}): Promise<{ session: FakeSession; server: WebServer }> {
+  const session = await startFakeSession();
+  const server = await serveWeb({
+    socketPath: session.socketPath,
+    token: overrides.token ?? session.token,
+    port: 0,
+    assetsDir: '/nonexistent-assets',
+  });
+  const pair = { server, session };
+  running.push(pair);
+  return pair;
+}
+
+function openSocket(url: string): Promise<{ socket: WebSocket; frames: Frame[] }> {
+  const socket = new WebSocket(`${url.replace('http', 'ws')}/api/session`);
+  const frames: Frame[] = [];
+  socket.addEventListener('message', (event: MessageEvent) => {
+    if (typeof event.data === 'string') frames.push(JSON.parse(event.data) as Frame);
+  });
+  return new Promise((resolve, reject) => {
+    socket.addEventListener('open', () => resolve({ socket, frames }));
+    socket.addEventListener('error', () => reject(new Error('The hub socket refused the browser.')));
+  });
+}
+
+const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 5000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}.`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+};
+
+/** The latest summary the page has seen for a session, across snapshot and upserts. */
+function latestSummary(frames: readonly Frame[], sessionId: string): SessionSummary | undefined {
+  let found: SessionSummary | undefined;
+  for (const frame of frames) {
+    if (frame.type === 'sessions_snapshot' && Array.isArray(frame.sessions)) {
+      const inSnapshot = (frame.sessions as SessionSummary[]).find((summary) => summary.id === sessionId);
+      if (inSnapshot) found = inSnapshot;
+    }
+    if (frame.type === 'session_upsert') {
+      const summary = frame.session as SessionSummary;
+      if (summary.id === sessionId) found = summary;
+    }
+  }
+  return found;
+}
+
+function subscribe(socket: WebSocket, sessionId: string): void {
+  socket.send(JSON.stringify({ type: 'subscribe', sessionId }));
+}
+
+function command(socket: WebSocket, sessionId: string, frame: Frame): void {
+  socket.send(JSON.stringify({ type: 'session_command', sessionId, frame }));
+}
+
+const sessionFrames = (frames: readonly Frame[]): Frame[] =>
+  frames.filter((frame) => frame.type === 'session_frame').map((frame) => frame.frame as Frame);
+
+const backlogFrames = (frames: readonly Frame[]): Frame[] => {
+  const backlog = frames.find((frame) => frame.type === 'session_backlog');
+  return (backlog?.frames as Frame[] | undefined) ?? [];
+};
+
+describe('the hub bridge', () => {
+  it('answers a health probe with its role', async () => {
+    const { server } = await bridge();
+    const response = await fetch(`${server.url}/api/health`);
+    expect(response.ok).toBe(true);
+    expect(await response.json()).toMatchObject({ ok: true, role: 'hub', protocol: 1, sessions: 1 });
+  });
+
+  it('validates a create request and refuses creation in fixed mode', async () => {
+    const { server } = await bridge();
+
+    const badBody = await fetch(`${server.url}/api/sessions`, { method: 'POST', body: 'not json' });
+    expect(badBody.status).toBe(400);
+
+    const noCwd = await fetch(`${server.url}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'x' }),
+    });
+    expect(noCwd.status).toBe(400);
+    expect(await noCwd.json()).toMatchObject({ error: expect.stringMatching(/cwd/) as string });
+
+    // Fixed single-session mode has no spawner by design.
+    const fixed = await fetch(`${server.url}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: '/anywhere' }),
+    });
+    expect(fixed.status).toBe(400);
+    expect(await fixed.json()).toMatchObject({ error: expect.stringMatching(/fixed session/) as string });
+  });
+
+  it('explains itself when the bundle is missing instead of serving a blank page', async () => {
+    const { server } = await bridge();
+    const response = await fetch(server.url);
+    expect(response.status).toBe(500);
+    expect(await response.text()).toMatch(/bundle is missing/);
+  });
+
+  it('greets a page with the protocol and the session set', async () => {
+    const { server, session } = await bridge();
+    const { frames } = await openSocket(server.url);
+
+    await waitFor(() => frames.length >= 2, 'the hello and snapshot');
+    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: 1 });
+    expect(frames[1].type).toBe('sessions_snapshot');
+
+    await session.waitForAttach();
+    await waitFor(() => latestSummary(frames, LOCAL)?.attach === 'attached', 'the attached summary');
+  });
+
+  it('never hands the browser the attach token', async () => {
+    const { server, session } = await bridge();
+    const { socket, frames } = await openSocket(server.url);
+
+    await session.waitForAttach();
+    subscribe(socket, LOCAL);
+    await waitFor(() => frames.some((frame) => frame.type === 'session_backlog'), 'the backlog');
+    expect(JSON.stringify(frames)).not.toContain(session.token);
+  });
+
+  it('routes commands to the session and its events back to subscribers', async () => {
+    const { server, session } = await bridge();
+    const { socket, frames } = await openSocket(server.url);
+
+    await session.waitForAttach();
+    subscribe(socket, LOCAL);
+    command(socket, LOCAL, { type: 'prompt', message: 'hello' });
+    const received = await session.waitForCommand('prompt');
+    expect(received.message).toBe('hello');
+
+    session.emit({ type: 'agent_start' });
+    await waitFor(() => sessionFrames(frames).some((frame) => frame.type === 'agent_start'), 'the agent_start event');
+  });
+
+  it('keeps frames from a page that did not subscribe', async () => {
+    const { server, session } = await bridge();
+    const { frames } = await openSocket(server.url);
+
+    await session.waitForAttach();
+    session.emit({ type: 'agent_start' });
+    // The phase upsert still arrives; the raw frame does not.
+    await waitFor(() => latestSummary(frames, LOCAL)?.phase === 'turn', 'the phase upsert');
+    expect(sessionFrames(frames)).toHaveLength(0);
+  });
+
+  it('refuses to let a page perform the handshake itself', async () => {
+    const { server, session } = await bridge();
+    const { socket } = await openSocket(server.url);
+
+    await session.waitForAttach();
+    command(socket, LOCAL, { type: 'attach', token: 'stolen' });
+    command(socket, LOCAL, { type: 'abort' });
+
+    await session.waitForCommand('abort');
+    expect(session.received.some((frame) => frame.type === 'attach')).toBe(false);
+  });
+
+  it('ignores payloads that are not enveloped command objects', async () => {
+    const { server, session } = await bridge();
+    const { socket } = await openSocket(server.url);
+
+    await session.waitForAttach();
+    socket.send('not json');
+    socket.send(JSON.stringify([1, 2]));
+    // An un-enveloped command has no session address and goes nowhere.
+    socket.send(JSON.stringify({ type: 'steer', message: 'lost' }));
+    command(socket, LOCAL, { type: 'abort' });
+
+    await session.waitForCommand('abort');
+    expect(session.received.some((frame) => frame.type === 'steer')).toBe(false);
+  });
+
+  it('reports a refusal in the session summary when the token is wrong', async () => {
+    const { server } = await bridge({ token: 'wrong-token' });
+    const { frames } = await openSocket(server.url);
+
+    // The retry loop flips the live state back to connecting right away; the
+    // page-side store is what keeps a refusal sticky. Seeing the refusal
+    // upsert with its reason is the contract here.
+    const refusal = (): Frame | undefined =>
+      frames.find((frame) => frame.type === 'session_upsert' && (frame.session as SessionSummary).attach === 'refused');
+    await waitFor(() => refusal() !== undefined, 'the refusal');
+    const seen = refusal() as Frame;
+    expect((seen.session as SessionSummary).attachReason).toMatch(/token was rejected/);
+  });
+
+  it('replays through its ring what the session buffered while the hub was detached', async () => {
+    const { server, session } = await bridge();
+    const { socket, frames } = await openSocket(server.url);
+    await session.waitForAttach();
+    subscribe(socket, LOCAL);
+
+    session.dropClient();
+    session.emit({ type: 'agent_start' });
+    session.emit({ type: 'agent_settled' });
+
+    // The hub reattaches on its own; the session's backlog reaches the page as
+    // replay-wrapped session frames.
+    await waitFor(
+      () => sessionFrames(frames).filter((frame) => frame.type === 'replay').length >= 2,
+      'the replayed frames after the hub reattached',
+    );
+  });
+
+  it('hands a late page the history it missed', { timeout: 15_000 }, async () => {
+    const { server, session } = await bridge();
+    const first = await openSocket(server.url);
+    await session.waitForAttach();
+    subscribe(first.socket, LOCAL);
+    // The backlog reply proves the subscription is registered; only then is a
+    // fresh emit guaranteed to arrive live rather than racing the subscribe.
+    await waitFor(() => first.frames.some((frame) => frame.type === 'session_backlog'), 'the first backlog');
+    session.emit({ type: 'agent_start' });
+    await waitFor(() => sessionFrames(first.frames).length >= 1, 'the live frame on the first page');
+
+    // A second page starts blind and catches up from the hub's ring; both
+    // pages then see live frames, which the per-tab attachment model forbade.
+    const second = await openSocket(server.url);
+    subscribe(second.socket, LOCAL);
+    await waitFor(() => second.frames.some((frame) => frame.type === 'session_backlog'), 'the backlog');
+    expect(backlogFrames(second.frames).some((frame) => frame.type === 'agent_start')).toBe(true);
+
+    session.emit({ type: 'agent_settled' });
+    await waitFor(() => sessionFrames(second.frames).some((frame) => frame.type === 'agent_settled'), 'the live frame');
+    await waitFor(() => sessionFrames(first.frames).some((frame) => frame.type === 'agent_settled'), 'both pages live');
+  });
+
+  it('stays attached when the last browser leaves, keeping the session covered', async () => {
+    const { server, session } = await bridge();
+    const { socket } = await openSocket(server.url);
+    await session.waitForAttach();
+
+    socket.close();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // With no browser around, the frame still lands in the hub's ring, which
+    // is exactly what a per-tab attachment could not do.
+    session.emit({ type: 'agent_start' });
+
+    const second = await openSocket(server.url);
+    subscribe(second.socket, LOCAL);
+    await waitFor(() => second.frames.some((frame) => frame.type === 'session_backlog'), 'the backlog');
+    expect(backlogFrames(second.frames).some((frame) => frame.type === 'agent_start')).toBe(true);
+  });
+});

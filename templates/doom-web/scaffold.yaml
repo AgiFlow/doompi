@@ -1,0 +1,200 @@
+boilerplate:
+  - name: scaffold-doom-web
+    targetFolder: packages/minor
+    description: |-
+      Create a publishable DoomPi web package: a Hono executable hosting a multi-session cockpit hub that discovers running doompi-server sessions through the registry directory, multiplexes their authenticated sockets behind one page WebSocket, and serves a React cockpit built by Vite.
+
+      The generated package boots against real sessions on the first run. It ships the session hub (registry watcher, one socket attachment per session, a bounded replay ring, presence derivation, a spawner for sessions created from the page), the frame reducer, a feature-sliced client (sessions rail, session timeline and composer, status rail, extension-UI dialogs, command palette), and the test pyramid that covers them: vitest unit and integration suites plus Playwright end-to-end specs driving the built executable against scripted session sockets.
+
+      Use it for any browser surface that attaches to supervised Pi sessions. It registers no Pi extension and is not part of a mode; it is a standalone executable, or the process doompi-server --web starts.
+    variables_schema:
+      type: object
+      properties:
+        packageName:
+          type: string
+          description: Unscoped npm package name, also the executable name
+          pattern: "^doompi-[a-z0-9]+(-[a-z0-9]+)*$"
+          minLength: 8
+          maxLength: 58
+          example: doompi-web
+        packageDescription:
+          type: string
+          description: Public npm package description; quotes, backslashes, and newlines are rejected so generated JSON stays valid
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Web cockpit for DoomPi sessions
+        packageKeyword:
+          type: string
+          description: Lowercase capability-specific npm search keyword
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: session-console
+        author:
+          type: string
+          description: Package author and copyright holder
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,'()-]*$"
+          minLength: 1
+          maxLength: 120
+          default: Vuong Ngo
+          example: Vuong Ngo
+        copyrightYear:
+          type: string
+          description: Year recorded in the LICENSE copyright line
+          pattern: "^[0-9]{4}$"
+          default: "2026"
+          example: "2026"
+      required:
+        - packageName
+        - packageDescription
+        - packageKeyword
+      additionalProperties: false
+    includes:
+      - .oxlintrc.json
+      - LICENSE
+      - README.md
+      - llms.txt
+      - package.json
+      - playwright.config.ts
+      - project.json
+      - src/adapters/gitStatus.ts
+      - src/adapters/httpServer.ts
+      - src/adapters/registryWatcher.ts
+      - src/adapters/serverSpawner.ts
+      - src/adapters/sessionHub.ts
+      - src/adapters/sessionSocketClient.ts
+      - src/adapters/subagentWatcher.ts
+      - src/bin/serve.ts
+      - src/exports/index.ts
+      - src/services/frameRing.ts
+      - src/services/registryStore.ts
+      - src/services/retryPolicy.ts
+      - src/services/serveOptions.ts
+      - src/services/sessionFraming.ts
+      - src/services/sessionPresence.ts
+      - src/services/staticAssets.ts
+      - src/services/subagentRuns.ts
+      - src/types/bridge.ts
+      - src/types/hub.ts
+      - src/types/registry.ts
+      - src/types/session.ts
+      - src/web/app/Providers.tsx
+      - src/web/app/sessionRuntime.ts
+      - src/web/components/Chip.tsx
+      - src/web/features/activity/ActivityDock.tsx
+      - src/web/features/connection/RefusedCard.tsx
+      - src/web/features/dialogs/DialogOverlay.tsx
+      - src/web/features/leader/CommandPalette.tsx
+      - src/web/features/selection/SelectionBar.tsx
+      - src/web/features/session/Composer.tsx
+      - src/web/features/session/Timeline.tsx
+      - src/web/features/session/ToolCard.tsx
+      - src/web/features/sessions/NewSessionDialog.tsx
+      - src/web/features/sessions/SessionRail.tsx
+      - src/web/features/status/TopBar.tsx
+      - src/web/features/subagents/SubagentsPanel.tsx
+      - src/web/index.html
+      - src/web/lib/commands.ts
+      - src/web/lib/composition.ts
+      - src/web/lib/hubApi.ts
+      - src/web/lib/sessionModel.ts
+      - src/web/lib/sessionSummary.ts
+      - src/web/lib/statusLine.ts
+      - src/web/lib/transport.ts
+      - src/web/lib/wsClient.ts
+      - src/web/main.tsx
+      - src/web/routes/CockpitPage.tsx
+      - src/web/routes/routeTree.tsx
+      - src/web/stores/menuStore.ts
+      - src/web/stores/paletteStore.ts
+      - src/web/stores/sessionStore.ts
+      - src/web/stores/sessionsStore.ts
+      - src/web/stores/subagentsStore.ts
+      - src/web/styles/app.css
+      - src/web/vite-env.d.ts
+      - tests/contract/packageShape.test.ts
+      - tests/e2e/activity.spec.ts
+      - tests/e2e/connection.spec.ts
+      - tests/e2e/dialogs.spec.ts
+      - tests/e2e/leader.spec.ts
+      - tests/e2e/multiSession.spec.ts
+      - tests/e2e/selection.spec.ts
+      - tests/e2e/session.spec.ts
+      - tests/e2e/states.spec.ts
+      - tests/e2e/status.spec.ts
+      - tests/e2e/subagents.spec.ts
+      - tests/integration/bridge.test.ts
+      - tests/integration/hub.test.ts
+      - tests/integration/spawner.test.ts
+      - tests/support/cockpit.ts
+      - tests/support/fakeSession.ts
+      - tests/support/subagentRuns.ts
+      - tests/unit/clientStores.test.ts
+      - tests/unit/composition.test.ts
+      - tests/unit/hubApi.test.ts
+      - tests/unit/hubServices.test.ts
+      - tests/unit/serverServices.test.ts
+      - tests/unit/sessionModel.test.ts
+      - tests/unit/sessionSummary.test.ts
+      - tests/unit/wsClient.test.ts
+      - tsconfig.json
+      - tsdown.config.ts
+      - vibe-lint.config.yaml
+      - vite.config.ts
+      - vitest.config.ts
+    instruction: |-
+      The generated package already runs. Verify it before changing anything:
+      - `pnpm install` at the repository root, then `pnpm build` in the package. The build order matters: tsdown cleans dist, so the server is built before Vite writes dist/web.
+      - `pnpm test` for the vitest suites, then `pnpm exec playwright install chromium` once and `pnpm test:e2e` for the browser suites.
+
+      Respect the two import graphs; the doom-web vibe-lint preset enforces them.
+      - Server: src/types then src/services then src/adapters then src/bin, with src/exports free to import any of them. Socket, HTTP, and process access belongs in src/adapters, never in src/services.
+      - Client, under src/web: types then lib then stores then components then features then routes then app. One feature must not import another; lift shared code into components, lib, or stores.
+      - src/types is the only module both sides may import. Nothing under src/web may reach the server layers.
+
+      The cockpit is multi-session. The hub in src/adapters/sessionHub.ts holds one socket attachment per registered session and every page-facing frame is enveloped by session id (src/types/hub.ts is that contract). On the client, session-scoped state lives in per-session stores keyed by session id (src/web/stores/sessionStore.ts is a registry, src/web/stores/sessionsStore.ts holds the rail), the active session is the route param, and store actions default to the focused session.
+
+      Render only what the session reports. Pi's RPC protocol is the single source of truth, so add a frame to the reducer in src/web/lib/sessionModel.ts before rendering it, and leave a surface out rather than inventing a value the agent never sent. The rail renders from hub summaries alone; if a fact is not in SessionSummary, derive it in src/services/sessionPresence.ts before showing it.
+
+feature:
+  - name: scaffold-doom-web-feature
+    description: |-
+      Add a feature slice to a DoomPi web package: a folder under src/web/features owning its components and any state it needs, plus a Playwright spec that drives it end to end.
+
+      Use it when a new browser surface reads or writes session state. Do not use it for a shared primitive; those belong in src/web/components.
+    variables_schema:
+      type: object
+      properties:
+        featureName:
+          type: string
+          description: Feature folder name in kebab-case
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: activity
+        componentName:
+          type: string
+          description: Root component name in PascalCase
+          pattern: "^[A-Z][A-Za-z0-9]*$"
+          minLength: 2
+          maxLength: 60
+          example: ActivityDock
+      required:
+        - featureName
+        - componentName
+      additionalProperties: false
+    includes:
+      - src/web/features/session/Timeline.tsx->src/web/features/{{ featureName }}/{{ componentName }}.tsx
+      - tests/e2e/session.spec.ts->tests/e2e/{{ featureName }}.spec.ts
+    instruction: |-
+      Replace the copied bodies; they are there to show the shape, not to be kept.
+
+      The component reads state with `useStore` from the stores layer and sends commands through the exported action functions. It must not import another feature, and it must not open its own socket: the composition root owns the transport.
+
+      The spec uses the `cockpit` fixture, which spawns the built executable against a scripted session socket. Emit the frames the real agent would emit, then assert on `data-testid` hooks; add a hook rather than matching on styling or copy.
+
+      Anything the slice renders must come from a frame the session actually sends. If Pi's RPC protocol has no source for it, say so instead of rendering a placeholder value.
+    patterns:
+      - src/web/features/**/*.tsx
+      - tests/e2e/**/*.spec.ts
