@@ -4,11 +4,10 @@ import {
   SESSION_REMOVED_TYPE,
   SESSION_UPSERT_TYPE,
   SESSIONS_SNAPSHOT_TYPE,
-  SUBAGENT_RUNS_TYPE,
   subscribeFrame,
   unsubscribeFrame,
-  WORKFLOW_RUNS_TYPE,
 } from '../../types/hub.ts';
+import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { applySessionFrame, dropSessionStore, refreshSessionFacts, resetSessionStore } from '../stores/sessionStore.ts';
@@ -20,8 +19,6 @@ import {
   markSocketClosed,
   sessionsStore,
 } from '../stores/sessionsStore.ts';
-import { applySubagentRuns, dropSubagentRuns } from '../stores/subagentsStore.ts';
-import { applyWorkflowRuns, dropWorkflowRuns } from '../stores/workflowsStore.ts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -67,17 +64,10 @@ export function startSessionRuntime(): () => void {
           if (typeof frame.sessionId !== 'string') return;
           applySessionRemoved(frame);
           dropSessionStore(frame.sessionId);
-          dropSubagentRuns(frame.sessionId);
-          dropWorkflowRuns(frame.sessionId);
+          dropPluginSessionData(frame.sessionId);
           if (subscribed === frame.sessionId) subscribed = null;
           return;
         }
-        case SUBAGENT_RUNS_TYPE:
-          applySubagentRuns(frame);
-          return;
-        case WORKFLOW_RUNS_TYPE:
-          applyWorkflowRuns(frame);
-          return;
         case SESSION_BACKLOG_TYPE: {
           if (typeof frame.sessionId !== 'string' || !Array.isArray(frame.frames)) return;
           const sessionId = frame.sessionId;
@@ -96,6 +86,9 @@ export function startSessionRuntime(): () => void {
           return;
         }
         default:
+          // Any other frame type may be a plugin channel; unclaimed types are
+          // dropped silently the way unknown frames always have been.
+          dispatchChannelFrame(frame);
           return;
       }
     },

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import type { ChannelFrame, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { createFrameRing, type FrameRing } from '../services/frameRing.ts';
 import {
   initialPresence,
@@ -6,27 +7,18 @@ import {
   reducePresence,
   type SessionPresence,
 } from '../services/sessionPresence.ts';
-import { presentWorkflowRuns, runBelongsToSession, type ParsedWorkflowRun } from '../services/workflowRuns.ts';
 import type { SessionAttachment } from '../types/bridge.ts';
 import {
   SESSION_BACKLOG_TYPE,
-  SUBAGENT_RUNS_TYPE,
-  WORKFLOW_RUNS_TYPE,
   type SessionBacklogFrame,
   type SessionGitStatus,
   type SessionSummary,
-  type SubagentRun,
-  type SubagentRunsFrame,
-  type WorkflowRunView,
-  type WorkflowRunsFrame,
 } from '../types/hub.ts';
 import type { SessionRecord } from '../types/registry.ts';
 import type { BridgeState, SessionFrame } from '../types/session.ts';
 import type { RecordSource } from './registryWatcher.ts';
 import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSpawner.ts';
 import { attachToSession } from './sessionSocketClient.ts';
-import { type SubagentRunsSource, watchSubagentRuns } from './subagentWatcher.ts';
-import { watchWorkflowRuns } from './workflowWatcher.ts';
 
 const GIT_REFRESH_MS = 10_000;
 
@@ -34,8 +26,7 @@ export type HubEvent =
   | { kind: 'upsert'; session: SessionSummary }
   | { kind: 'removed'; sessionId: string }
   | { kind: 'frame'; sessionId: string; frame: SessionFrame }
-  | { kind: 'runs'; sessionId: string; runs: SubagentRun[] }
-  | { kind: 'workflows'; sessionId: string; runs: WorkflowRunView[] };
+  | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown };
 
 export interface SessionHubOptions {
   source: RecordSource;
@@ -45,10 +36,8 @@ export interface SessionHubOptions {
   readGit?: (cwd: string) => Promise<SessionGitStatus | undefined>;
   /** Injectable for the fixed single-session mode, which already holds the token. */
   readToken?: (record: SessionRecord) => string;
-  /** Injectable for tests; defaults to watching doom-team's run directory. */
-  watchRuns?: typeof watchSubagentRuns;
-  /** Injectable for tests; defaults to watching workflow-mcp's registry. */
-  watchWorkflows?: typeof watchWorkflowRuns;
+  /** The hub's data channels (built-in and plugin-provided sources). */
+  channels?: readonly WebHubChannel[];
   ringLimit?: number;
   gitRefreshMs?: number;
   onNotice?: (message: string) => void;
@@ -60,10 +49,10 @@ export interface SessionHub {
   onEvent(listener: (event: HubEvent) => void): () => void;
   /** Recent history for one session, or undefined for an unknown id. */
   backlog(sessionId: string): SessionBacklogFrame | undefined;
-  /** The session's current subagent fleet, or undefined for an unknown id. */
-  runsFor(sessionId: string): SubagentRunsFrame | undefined;
-  /** The session's workflow runs, or undefined for an unknown id. */
-  workflowsFor(sessionId: string): WorkflowRunsFrame | undefined;
+  /** Frame types of the loaded data channels, for the hello frame. */
+  channelTypes(): string[];
+  /** Every channel's subscribe-time snapshot for one session; empty for an unknown id. */
+  channelFrames(sessionId: string): ChannelFrame[];
   command(sessionId: string, frame: SessionFrame): void;
   create(input: SpawnSessionInput): Promise<SpawnOutcome>;
   close(): void;
@@ -77,11 +66,12 @@ interface ManagedSession {
   attach: BridgeState;
   attachReason?: string;
   git?: SessionGitStatus;
-  runs: SubagentRun[];
-  runsSource?: SubagentRunsSource;
-  workflows: WorkflowRunView[];
-  lastWorkflowsJson?: string;
   lastSummaryJson?: string;
+}
+
+interface StartedChannel {
+  frameType: string;
+  source: HubChannelSource;
 }
 
 function readTokenFile(record: SessionRecord): string {
@@ -92,6 +82,10 @@ function attachRelevantChanged(previous: SessionRecord, next: SessionRecord): bo
   return previous.socketPath !== next.socketPath || previous.tokenFile !== next.tokenFile || previous.pid !== next.pid;
 }
 
+function scopeOf(record: SessionRecord): HubSessionScope {
+  return { sessionId: record.id, cwd: record.cwd };
+}
+
 /**
  * Holds the hub's live view of every registered session.
  *
@@ -99,7 +93,9 @@ function attachRelevantChanged(previous: SessionRecord, next: SessionRecord): bo
  * and every page multiplexes behind it. Presence is reduced from the frame
  * stream so the rail describes sessions nobody is viewing, and a bounded ring
  * per session gives late pages their history, since a permanently attached
- * socket never fills the server-side backlog.
+ * socket never fills the server-side backlog. Session data beyond the agent
+ * stream comes from channels: each one watches its own source and publishes
+ * per-session payloads the hub fans out by frame type.
  */
 export function createSessionHub(options: SessionHubOptions): SessionHub {
   const sessions = new Map<string, ManagedSession>();
@@ -107,28 +103,22 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const readGit = options.readGit;
   const readToken = options.readToken ?? readTokenFile;
   let closed = false;
-  let workflowRuns: ParsedWorkflowRun[] = [];
 
   const emit = (event: HubEvent): void => {
     for (const listener of listeners) listener(event);
   };
 
-  const sessionWorkflows = (managed: ManagedSession): WorkflowRunView[] =>
-    presentWorkflowRuns(
-      workflowRuns
-        .filter((run) => runBelongsToSession(run, { sessionId: managed.record.id, cwd: managed.record.cwd }))
-        .map((run) => run.view),
-      Date.now(),
-    );
-
-  const refreshWorkflows = (managed: ManagedSession, announce: boolean): void => {
-    const runs = sessionWorkflows(managed);
-    const json = JSON.stringify(runs);
-    if (json === managed.lastWorkflowsJson) return;
-    managed.lastWorkflowsJson = json;
-    managed.workflows = runs;
-    if (announce) emit({ kind: 'workflows', sessionId: managed.record.id, runs });
-  };
+  const startedChannels: StartedChannel[] = (options.channels ?? []).map((channel) => ({
+    frameType: channel.frameType,
+    source: channel.start({
+      sessions: () => [...sessions.values()].map((managed) => scopeOf(managed.record)),
+      publish: (sessionId, payload) => {
+        if (closed) return;
+        emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload });
+      },
+      onNotice: (message) => options.onNotice?.(message),
+    }),
+  }));
 
   const toSummary = (managed: ManagedSession): SessionSummary => ({
     id: managed.record.id,
@@ -211,21 +201,13 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       ring: createFrameRing(options.ringLimit),
       presence: initialPresence(new Date().toISOString()),
       attach: 'connecting',
-      runs: [],
-      workflows: [],
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
     startAttachment(managed);
     pushSummary(managed);
     refreshGit(managed);
-    // Quietly: no page can be subscribed before the upsert lands.
-    refreshWorkflows(managed, false);
-    managed.runsSource = (options.watchRuns ?? watchSubagentRuns)(record.id, (runs) => {
-      if (closed || sessions.get(record.id) !== managed) return;
-      managed.runs = runs;
-      emit({ kind: 'runs', sessionId: record.id, runs });
-    });
+    for (const channel of startedChannels) channel.source.sessionAdded?.(scopeOf(record));
   };
 
   const reconcile = (records: SessionRecord[]): void => {
@@ -251,19 +233,14 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     for (const [id, managed] of sessions) {
       if (seen.has(id)) continue;
       managed.attachment?.close();
-      managed.runsSource?.close();
       sessions.delete(id);
+      for (const channel of startedChannels) channel.source.sessionRemoved?.(id);
       options.onNotice?.(`session ${id} left`);
       emit({ kind: 'removed', sessionId: id });
     }
   };
 
   options.source.subscribe(reconcile);
-  const workflowSource = (options.watchWorkflows ?? watchWorkflowRuns)((runs) => {
-    if (closed) return;
-    workflowRuns = runs;
-    for (const managed of sessions.values()) refreshWorkflows(managed, true);
-  });
   const gitTimer = readGit
     ? setInterval(() => {
         for (const managed of sessions.values()) refreshGit(managed);
@@ -290,17 +267,19 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const { frames, dropped } = managed.ring.snapshot();
       return { type: SESSION_BACKLOG_TYPE, sessionId, frames, dropped };
     },
-    runsFor(sessionId) {
-      const managed = sessions.get(sessionId);
-      if (!managed) return undefined;
-      return { type: SUBAGENT_RUNS_TYPE, sessionId, runs: managed.runs };
+    channelTypes() {
+      return startedChannels.map((channel) => channel.frameType);
     },
-    workflowsFor(sessionId) {
+    channelFrames(sessionId) {
       const managed = sessions.get(sessionId);
-      if (!managed) return undefined;
-      // Recomputed rather than cached so retention keeps moving between
-      // registry changes; the cache only gates live announcements.
-      return { type: WORKFLOW_RUNS_TYPE, sessionId, runs: sessionWorkflows(managed) };
+      if (!managed) return [];
+      const scope = scopeOf(managed.record);
+      const frames: ChannelFrame[] = [];
+      for (const channel of startedChannels) {
+        const payload = channel.source.payloadFor(scope);
+        if (payload !== undefined) frames.push({ type: channel.frameType, sessionId, payload });
+      }
+      return frames;
     },
     command(sessionId, frame) {
       const managed = sessions.get(sessionId);
@@ -325,11 +304,10 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     close() {
       closed = true;
       options.source.close();
-      workflowSource.close();
+      for (const channel of startedChannels) channel.source.close();
       if (gitTimer) clearInterval(gitTimer);
       for (const managed of sessions.values()) {
         managed.attachment?.close();
-        managed.runsSource?.close();
       }
       sessions.clear();
       listeners.clear();

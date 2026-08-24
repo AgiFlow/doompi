@@ -1,10 +1,10 @@
+import type { TabContribution } from '@agimon-ai/doompi-web-contracts';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { abbreviateCwd, runningCount, type AttachPhase } from '../../lib/sessionSummary.ts';
+import { webTabs } from '../../lib/pluginRegistry.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
-import { subagentsStore } from '../../stores/subagentsStore.ts';
-import { workflowsStore } from '../../stores/workflowsStore.ts';
 
 function ActIcon() {
   return (
@@ -37,19 +37,46 @@ function pill(attach: AttachPhase, busy: boolean): { text: string; className: st
   return { text: attach, className: 'bg-[#332428] text-doom-red', dot: 'bg-doom-red' };
 }
 
-export function TopBar({ view = 'conversation' }: { view?: 'conversation' | 'subagents' | 'workflows' }) {
+/** One registry tab: the badge hook is stable per tab, so the call is unconditional. */
+function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId: string; active: boolean }) {
+  const useBadge = tab.useBadge ?? noBadge;
+  const count = useBadge(sessionId);
+  return (
+    <Link
+      to="/session/$sessionId/$tabId"
+      params={{ sessionId, tabId: tab.id }}
+      data-testid={`tab-${tab.id}`}
+      data-active={active}
+      className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] ${
+        active ? 'bg-[#21313F] font-bold text-doom-blue' : 'text-doom-dim hover:text-doom-hi'
+      }`}
+    >
+      {tab.label}
+      {count > 0 ? (
+        <span
+          data-testid={`tab-${tab.id}-count`}
+          className={`flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[8px] font-bold ${
+            active ? 'bg-doom-blue text-doom-rail' : 'bg-doom-panel text-doom-dim'
+          }`}
+        >
+          {count}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+function noBadge(): number {
+  return 0;
+}
+
+export function TopBar({ view = 'conversation' }: { view?: string }) {
   const meta = useActiveSessionMeta();
   const session = useActiveSession((state) => state);
   const running = useStore(sessionsStore, (state) =>
     runningCount(state.order.map((id) => state.byId[id].summary.phase)),
   );
   const activeId = useStore(sessionsStore, (state) => state.activeId);
-  const runCount = useStore(subagentsStore, (state) =>
-    activeId === null ? 0 : (state.bySession[activeId]?.length ?? 0),
-  );
-  const workflowCount = useStore(workflowsStore, (state) =>
-    activeId === null ? 0 : (state.bySession[activeId]?.filter((run) => run.stage === 'running').length ?? 0),
-  );
   const attach: AttachPhase = meta?.attach ?? 'offline';
   const busy = session.streaming || (meta !== null && meta.summary.phase !== 'idle');
   const state = pill(attach, busy);
@@ -84,48 +111,9 @@ export function TopBar({ view = 'conversation' }: { view?: 'conversation' | 'sub
             >
               conversation
             </Link>
-            <Link
-              to="/session/$sessionId/subagents"
-              params={{ sessionId: activeId }}
-              data-testid="tab-subagents"
-              data-active={view === 'subagents'}
-              className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] ${
-                view === 'subagents' ? 'bg-[#21313F] font-bold text-doom-blue' : 'text-doom-dim hover:text-doom-hi'
-              }`}
-            >
-              subagents
-              {runCount > 0 ? (
-                <span
-                  data-testid="tab-subagents-count"
-                  className={`flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[8px] font-bold ${
-                    view === 'subagents' ? 'bg-doom-blue text-doom-rail' : 'bg-doom-panel text-doom-dim'
-                  }`}
-                >
-                  {runCount}
-                </span>
-              ) : null}
-            </Link>
-            <Link
-              to="/session/$sessionId/workflows"
-              params={{ sessionId: activeId }}
-              data-testid="tab-workflows"
-              data-active={view === 'workflows'}
-              className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] ${
-                view === 'workflows' ? 'bg-[#21313F] font-bold text-doom-blue' : 'text-doom-dim hover:text-doom-hi'
-              }`}
-            >
-              workflows
-              {workflowCount > 0 ? (
-                <span
-                  data-testid="tab-workflows-count"
-                  className={`flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[8px] font-bold ${
-                    view === 'workflows' ? 'bg-doom-blue text-doom-rail' : 'bg-doom-panel text-doom-dim'
-                  }`}
-                >
-                  {workflowCount}
-                </span>
-              ) : null}
-            </Link>
+            {webTabs().map((tab) => (
+              <PluginTab key={tab.id} tab={tab} sessionId={activeId} active={view === tab.id} />
+            ))}
           </div>
         ) : null}
       </div>

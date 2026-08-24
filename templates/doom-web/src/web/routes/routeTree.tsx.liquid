@@ -17,29 +17,12 @@ const sessionRoute = createRoute({
   component: CockpitPage,
 });
 
-function SubagentsView() {
-  return <CockpitPage view="subagents" />;
-}
-
-const sessionSubagentsRoute = createRoute({
+// Every plugin tab lives under one parameterized segment, so the route tree
+// stays static while the tab set comes from the plugin registry.
+const sessionTabRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/session/$sessionId/subagents',
-  component: SubagentsView,
+  path: '/session/$sessionId/$tabId',
+  component: CockpitPage,
 });
 
-function WorkflowsView() {
-  return <CockpitPage view="workflows" />;
-}
-
-const sessionWorkflowsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/session/$sessionId/workflows',
-  component: WorkflowsView,
-});
-
-export const routeTree = rootRoute.addChildren([
-  indexRoute,
-  sessionRoute,
-  sessionSubagentsRoute,
-  sessionWorkflowsRoute,
-]);
+export const routeTree = rootRoute.addChildren([indexRoute, sessionRoute, sessionTabRoute]);

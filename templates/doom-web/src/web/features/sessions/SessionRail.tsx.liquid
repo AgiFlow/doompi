@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { abbreviateCwd, runningCount, sessionStatusLine } from '../../lib/sessionSummary.ts';
 import { paletteStore } from '../../stores/paletteStore.ts';
 import { sessionStoreFor } from '../../stores/sessionStore.ts';
@@ -175,6 +176,7 @@ export function SessionRail() {
         </button>
       </div>
 
+      <PluginSurface slot="rail" sessionId={activeId} />
       <div className="flex-1" />
       <div className="border-t border-doom-border px-4 py-3">
         <span className="text-[9px] text-doom-faint">ctrl+k commands · ctrl+t new session</span>

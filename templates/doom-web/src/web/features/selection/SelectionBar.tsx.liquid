@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { useStore } from '@tanstack/react-store';
+import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { minorModes, type MinorMode } from '../../lib/composition.ts';
 import { parseSelection } from '../../lib/statusLine.ts';
 import { setPendingMenu } from '../../stores/menuStore.ts';
 import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
+import { sessionsStore } from '../../stores/sessionsStore.ts';
 
 function Caret({ className }: { className: string }) {
   return (
@@ -93,6 +96,7 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
  * TUI uses; the agent's select dialog then opens as this bar's popover menu.
  */
 export function SelectionBar() {
+  const activeId = useStore(sessionsStore, (state) => state.activeId);
   const raw = useActiveSession((state) => state.statuses['doom-major-mode'] ?? '');
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
@@ -173,6 +177,8 @@ export function SelectionBar() {
         </span>
         <Caret className="text-doom-faint" />
       </button>
+
+      <PluginSurface slot="selectionBar" sessionId={activeId} />
 
       <div className="min-w-0 flex-1" />
 

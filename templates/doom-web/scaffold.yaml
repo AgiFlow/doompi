@@ -4,7 +4,7 @@ boilerplate:
     description: |-
       Create a publishable DoomPi web package: a Hono executable hosting a multi-session cockpit hub that discovers running doompi-server sessions through the registry directory, multiplexes their authenticated sockets behind one page WebSocket, and serves a React cockpit built by Vite.
 
-      The generated package boots against real sessions on the first run. It ships the session hub (registry watcher, one socket attachment per session, a bounded replay ring, presence derivation, a spawner for sessions created from the page), the frame reducer, a feature-sliced client (sessions rail, session timeline and composer, subagents fleet grid, workflows tab, status rail, extension-UI dialogs, command palette), and the test pyramid that covers them: vitest unit and integration suites plus Playwright end-to-end specs driving the built executable against scripted session sockets.
+      The generated package boots against real sessions on the first run. It ships the session hub (registry watcher, one socket attachment per session, a bounded replay ring, presence derivation, a spawner for sessions created from the page), the frame reducer, a feature-sliced client (sessions rail, session timeline and composer, subagents fleet grid, status rail, extension-UI dialogs, command palette) with a build-time web plugin system that assembles tabs and data channels from doompiWeb manifests across the workspace, and the test pyramid that covers them: vitest unit and integration suites plus Playwright end-to-end specs driving the built executable against scripted session sockets.
 
       Use it for any browser surface that attaches to supervised Pi sessions. It registers no Pi extension and is not part of a mode; it is a standalone executable, or the process doompi-server --web starts.
     variables_schema:
@@ -65,7 +65,9 @@ boilerplate:
       - src/adapters/sessionHub.ts
       - src/adapters/sessionSocketClient.ts
       - src/adapters/subagentWatcher.ts
-      - src/adapters/workflowWatcher.ts
+      - src/adapters/subagentsChannel.ts
+      - src/adapters/webHubPluginLoader.ts
+      - src/adapters/webHubPlugins.generated.ts
       - src/bin/serve.ts
       - src/exports/index.ts
       - src/services/frameRing.ts
@@ -76,14 +78,15 @@ boilerplate:
       - src/services/sessionPresence.ts
       - src/services/staticAssets.ts
       - src/services/subagentRuns.ts
-      - src/services/workflowRuns.ts
       - src/types/bridge.ts
       - src/types/hub.ts
       - src/types/registry.ts
       - src/types/session.ts
       - src/web/app/Providers.tsx
       - src/web/app/sessionRuntime.ts
+      - src/web/app/webPlugins.generated.ts
       - src/web/components/Chip.tsx
+      - src/web/components/PluginSurface.tsx
       - src/web/features/activity/ActivityDock.tsx
       - src/web/features/connection/RefusedCard.tsx
       - src/web/features/dialogs/DialogOverlay.tsx
@@ -96,11 +99,17 @@ boilerplate:
       - src/web/features/sessions/SessionRail.tsx
       - src/web/features/status/TopBar.tsx
       - src/web/features/subagents/SubagentsPanel.tsx
-      - src/web/features/workflows/WorkflowsPanel.tsx
+      - src/web/features/subagents/index.ts
+      - src/web/features/subagents/subagentsStore.ts
       - src/web/index.html
+      - scripts/webPlugins/generate.d.mts
+      - scripts/webPlugins/generate.mjs
+      - scripts/webPlugins/scan.d.mts
+      - scripts/webPlugins/scan.mjs
       - src/web/lib/commands.ts
       - src/web/lib/composition.ts
       - src/web/lib/hubApi.ts
+      - src/web/lib/pluginRegistry.ts
       - src/web/lib/sessionModel.ts
       - src/web/lib/sessionSummary.ts
       - src/web/lib/statusLine.ts
@@ -113,11 +122,11 @@ boilerplate:
       - src/web/stores/paletteStore.ts
       - src/web/stores/sessionStore.ts
       - src/web/stores/sessionsStore.ts
-      - src/web/stores/subagentsStore.ts
-      - src/web/stores/workflowsStore.ts
       - src/web/styles/app.css
+      - src/web/styles/webPluginSources.generated.css
       - src/web/vite-env.d.ts
       - tests/contract/packageShape.test.ts
+      - tests/contract/webPluginRegistry.test.ts
       - tests/e2e/activity.spec.ts
       - tests/e2e/connection.spec.ts
       - tests/e2e/dialogs.spec.ts
@@ -128,7 +137,6 @@ boilerplate:
       - tests/e2e/states.spec.ts
       - tests/e2e/status.spec.ts
       - tests/e2e/subagents.spec.ts
-      - tests/e2e/workflows.spec.ts
       - tests/integration/bridge.test.ts
       - tests/integration/hub.test.ts
       - tests/integration/spawner.test.ts
@@ -136,10 +144,10 @@ boilerplate:
       - tests/support/fakeSession.ts
       - tests/support/subagentRuns.ts
       - tests/support/vitestEnv.ts
-      - tests/support/workflowRuns.ts
       - tests/unit/clientStores.test.ts
       - tests/unit/composition.test.ts
       - tests/unit/hubApi.test.ts
+      - tests/unit/pluginRegistry.test.ts
       - tests/unit/hubServices.test.ts
       - tests/unit/serverServices.test.ts
       - tests/unit/sessionModel.test.ts
@@ -164,7 +172,7 @@ boilerplate:
 
       Render only what the session reports. Pi's RPC protocol is the single source of truth, so add a frame to the reducer in src/web/lib/sessionModel.ts before rendering it, and leave a surface out rather than inventing a value the agent never sent. The rail renders from hub summaries alone; if a fact is not in SessionSummary, derive it in src/services/sessionPresence.ts before showing it.
 
-      The subagents and workflows tabs render from disk mirrors: doom-team's per-run status files and workflow-mcp's registry (run.json plus the progress.ndjson job log). The hub only ever reads those files. The mirrored path derivations and parsers live in src/services/subagentRuns.ts and src/services/workflowRuns.ts and are pinned by unit tests against the writing packages; keep them in step when either writer changes its layout.
+      Tabs beyond the conversation are web plugins. A plugin declares a doompiWeb block in its package.json (client entry, optional hub entry, channels); scripts/webPlugins scans the workspace at config-load time of vite.config.ts and tsdown.config.ts and renders three committed generated modules (the client registry in src/web/app, the hub channel registry in src/adapters, and the Tailwind @source list in src/web/styles). CI runs the generator in check mode and tests/contract/webPluginRegistry.test.ts compares the committed files to a fresh render, so edit a manifest, run the build, and commit the regenerated files together. The subagents tab is the in-package reference plugin: its feature dir exports webPlugin from index.ts, its hub channel wraps the doom-team runs watcher (a disk mirror of doom-team's per-run status files, pinned by unit tests), and external packages ship the same two entries behind published subpaths that the hub imports lazily, so an absent plugin package is a notice and an empty tab, never a crash.
 
 feature:
   - name: scaffold-doom-web-feature
@@ -206,4 +214,47 @@ feature:
       Anything the slice renders must come from a frame the session actually sends. If Pi's RPC protocol has no source for it, say so instead of rendering a placeholder value.
     patterns:
       - src/web/features/**/*.tsx
+      - tests/e2e/**/*.spec.ts
+
+  - name: scaffold-doom-web-plugin
+    description: |-
+      Add a web plugin to a DoomPi web package: a self-contained feature directory exporting webPlugin (tab, panel, store, session data channel), a hub channel adapter feeding it, and the doompiWeb manifest wiring that the build-time scanner turns into registry entries.
+
+      Use it when a new tab needs its own session data channel. For a surface with no data source of its own, use scaffold-doom-web-feature instead.
+    variables_schema:
+      type: object
+      properties:
+        pluginName:
+          type: string
+          description: Plugin id, feature folder, and wire channel prefix in kebab-case
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: workflows
+        componentName:
+          type: string
+          description: Panel component name in PascalCase
+          pattern: "^[A-Z][A-Za-z0-9]*$"
+          minLength: 2
+          maxLength: 60
+          example: WorkflowsPanel
+      required:
+        - pluginName
+        - componentName
+      additionalProperties: false
+    includes:
+      - src/web/features/subagents/index.ts->src/web/features/{{ pluginName }}/index.ts
+      - src/web/features/subagents/subagentsStore.ts->src/web/features/{{ pluginName }}/{{ pluginName }}Store.ts
+      - src/web/features/subagents/SubagentsPanel.tsx->src/web/features/{{ pluginName }}/{{ componentName }}.tsx
+      - src/adapters/subagentsChannel.ts->src/adapters/{{ pluginName }}Channel.ts
+      - tests/e2e/subagents.spec.ts->tests/e2e/{{ pluginName }}.spec.ts
+    instruction: |-
+      The copied files are the subagents reference plugin; replace their bodies with your domain while keeping the shape: the feature index exports a named webPlugin built with defineWebPlugin, the store owns a session channel built with defineSessionChannel whose parse gate validates every payload, the panel takes {sessionId} props and reads only its own store, and the hub channel implements WebHubChannel over your data source.
+
+      Then declare the plugin: add a doompiWeb block entry to package.json (unique pluginId and registrationOrder, the channel frame types, the client entry, and the hub entry) and run pnpm build; the scanner regenerates the committed registry modules, which the contract test pins. Channel frame types are global across every plugin the scanner sees, so name them with your plugin prefix.
+
+      An external package ships the same two entries behind published subpaths and points its manifest at them with specifier fields; the host imports the hub side lazily and treats absence as a notice, so never let the client tab assume its hub channel is loaded.
+    patterns:
+      - src/web/features/**/*
+      - src/adapters/*Channel.ts
       - tests/e2e/**/*.spec.ts
