@@ -28,6 +28,18 @@ const PACKAGE_SOURCE = '@agimon-ai/doompi/mode-catalog';
 const HELP_CONTRIBUTION_SOURCE = '@agimon-ai/doompi';
 /** Registrations and state flips arrive in bursts; one entry covers a burst. */
 const PROJECTION_SETTLE_MS = 50;
+/**
+ * Pi's rpc mode subscribes to session events only after bindExtensions()
+ * returns, which is after session_start has run, so an entry journaled during
+ * startup never reaches a client. A publish deferred past that point does.
+ */
+const BOOT_PUBLISH_DELAY_MS = 500;
+
+interface CatalogBinding {
+  current: MinorModeCatalogService | undefined;
+  /** Journals the projection even if unchanged; set while a session is bound. */
+  republish?: () => void;
+}
 
 function transitionSource(requesterSource: string): TransitionSource {
   if (requesterSource.includes('voice')) return 'voice';
@@ -39,8 +51,11 @@ function transitionSource(requesterSource: string): TransitionSource {
 export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
   // The command outlives any one session: it is registered once and reads the
   // catalog binding the session-scoped inject below sets and clears.
-  const activeCatalog: { current: MinorModeCatalogService | undefined } = { current: undefined };
+  const activeCatalog: CatalogBinding = { current: undefined };
   registerMinorModeCommand(pi, () => activeCatalog.current);
+  pi.on('session_start', () => {
+    setTimeout(() => activeCatalog.republish?.(), BOOT_PUBLISH_DELAY_MS);
+  });
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fiber = connection.root.plugin((cordis: Context) => {
     modeCatalogPlugin(cordis, pi, activeCatalog);
@@ -69,7 +84,7 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
 function modeCatalogPlugin(
   cordis: Context,
   pi: Pick<ExtensionAPI, 'appendEntry'>,
-  activeCatalog: { current: MinorModeCatalogService | undefined },
+  activeCatalog: CatalogBinding,
 ): void {
   cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
     const contribution = requireDoomHelpService(helpContext).register({
@@ -144,10 +159,15 @@ function modeCatalogPlugin(
     const unsubscribe = catalog.subscribe(() => {
       settle ??= setTimeout(publish, PROJECTION_SETTLE_MS);
     });
+    activeCatalog.republish = () => {
+      published = undefined;
+      publish();
+    };
 
     return () => {
       if (settle) clearTimeout(settle);
       unsubscribe();
+      activeCatalog.republish = undefined;
       activeCatalog.current = undefined;
       catalog.dispose();
     };

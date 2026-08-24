@@ -102,6 +102,11 @@ describe('mode catalog extension', () => {
       }),
     );
 
+    // Startup entries never reach an rpc client, so the boot publish repeats
+    // the projection once the client can see it, even though it is unchanged.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(appendEntry.mock.calls.filter(([type]) => type === DOOM_MINOR_MODE_ENTRY_TYPE).length).toBe(2);
+
     // A state flip journals again; an unchanged snapshot does not.
     const before = appendEntry.mock.calls.length;
     owner.publish({
