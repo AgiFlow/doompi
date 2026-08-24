@@ -4,18 +4,18 @@ import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { activityGroups } from '../../lib/composition.ts';
 import { pluginActivityGroups, surfaceContributions } from '../../lib/pluginRegistry.ts';
 import { useOpenTab } from '../../stores/useOpenTab.ts';
-import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
+import { useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 
 /**
  * Asynchronous work that outlives the turn that started it.
  *
  * Agents, runners, and workflows deliberately live outside the transcript, so
- * they get a surface that does not scroll away. Each group renders what its
- * extension publishes to the footer: a summary while something is running,
- * nothing when it is idle. A plugin that knows more than the footer line
- * claims its group with an activity section of the same name, which then
- * renders in place of the summary.
+ * they get a surface that does not scroll away. The host owns only the frame:
+ * which groups exist, their key chips, and what they render come from the
+ * packages that declare them. A group whose plugin registers an activity
+ * section of the same name renders that section; otherwise the body is the
+ * one-line summary the session's footer publishes.
  */
 export function ActivityDock({ onClose }: { onClose: () => void }) {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
@@ -58,7 +58,7 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
 
       {groups.length === 0 ? (
         <p data-testid="activity-empty" className="px-4 py-5 text-[11px] leading-relaxed text-doom-faint">
-          this composition loads no agent, runner, or workflow packages, so there is nothing to supervise here.
+          nothing is supervised in this session yet. a package's group appears here once its extension reports in.
         </p>
       ) : (
         <div className="flex flex-col">
@@ -72,14 +72,24 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
               <div className="flex items-center gap-2 px-1">
                 <Dot tone={group.active ? 'yellow' : 'neutral'} />
                 <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
-                <button
-                  type="button"
-                  data-testid={`activity-open-${group.name}`}
-                  onClick={() => runCommand(group.name === 'runners' ? 'runners' : group.name)}
-                  className="rounded bg-doom-panel px-1.5 py-0.5 text-[8px] font-bold text-doom-violet hover:text-doom-magenta"
-                >
-                  {group.keys}
-                </button>
+                {group.tab === undefined ? (
+                  <span
+                    data-testid={`activity-keys-${group.name}`}
+                    className="rounded bg-doom-panel px-1.5 py-0.5 text-[8px] font-bold text-doom-faint"
+                  >
+                    {group.keys}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid={`activity-open-${group.name}`}
+                    title={`open the ${group.tab} tab`}
+                    onClick={() => openTab(group.tab ?? null)}
+                    className="rounded bg-doom-panel px-1.5 py-0.5 text-[8px] font-bold text-doom-violet hover:text-doom-magenta"
+                  >
+                    {group.keys}
+                  </button>
+                )}
               </div>
               {(() => {
                 const Section = sections.get(group.name)?.component;
@@ -103,7 +113,8 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
 
       <div className="mt-auto border-t border-doom-border px-4 py-3">
         <span className="text-[9px] leading-relaxed text-doom-faint">
-          a group shows the session's summary line unless its plugin publishes per-run detail
+          each group is rendered by the package that owns it; the session's summary line stands in until that package
+          publishes per-run detail
         </span>
       </div>
     </aside>

@@ -132,8 +132,8 @@ function voiceModeState(state: AutoCaptureActivationState, hasUi = false): Minor
     ...(active ? { detail: state, color: AUTO_MODE_COLOR } : {}),
     actions: !hasUi
       ? [
-          { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires a TUI session.' },
-          { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires a TUI session.' },
+          { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+          { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
         ]
       : transitioning
         ? [
@@ -819,7 +819,6 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       const enabled =
         state === 'active' &&
         activeContext?.hasUI === true &&
-        activeContext.mode === 'tui' &&
         voiceToolSession !== undefined &&
         contextSessionId === voiceToolSession.sessionId;
       voiceToolSession?.setActive(enabled);
@@ -854,7 +853,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       onActivationStateChange: (state) => {
         if (!active) return;
         reconcileVoiceTools(state);
-        mode?.publish(voiceModeState(state, activeContext?.hasUI === true && activeContext.mode === 'tui'));
+        mode?.publish(voiceModeState(state, activeContext?.hasUI === true));
         // Republished here rather than only at registration: the `e` row is the
         // one entry whose label depends on the controller, and the panel is read
         // between activations, not just at session start.
@@ -880,14 +879,14 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
               id: 'activate',
               label: 'Activate',
               description: 'Start autonomous capture with primary-agent narration.',
-              contexts: ['tui'],
+              contexts: ['tui', 'headless'],
               parameters: [],
             },
             {
               id: 'deactivate',
               label: 'Deactivate',
               description: 'Stop autonomous voice capture.',
-              contexts: ['tui'],
+              contexts: ['tui', 'headless'],
               parameters: [],
             },
           ],
@@ -979,7 +978,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       lastAutoUi = createAutoCaptureUi(ctx, footer);
       lastUi.setIndicator(undefined);
       lastUi.setStatus(STATUS_KEY, undefined);
-      mode?.publish(voiceModeState('disabled', ctx.hasUI && ctx.mode === 'tui'));
+      mode?.publish(voiceModeState('disabled', ctx.hasUI));
       if (reloadHandoff && lastAutoUi) await autoController.activate(lastAutoUi);
     });
     pi.on('before_agent_start', (_event, ctx) => {

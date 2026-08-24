@@ -96,6 +96,8 @@ export interface CockpitFixture {
   registryDir: string;
   /** The isolated workflow-mcp registry home the spawned hub watches. */
   workflowHome: string;
+  /** The isolated doom-runner store root the spawned hub watches. */
+  runnerStore: string;
   url: string;
 }
 
@@ -134,6 +136,10 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     // An isolated workflow home: the hub must never watch the developer's
     // real registry from a test, and workflow specs write runs into this one.
     const workflowHome = path.join(root, 'workflow-mcp');
+    // Likewise an isolated Pi agent directory: doom-runner keeps its store
+    // under it, and runner specs write records there.
+    const agentDir = path.join(root, 'pi-agent');
+    const runnerStore = path.join(agentDir, 'doom-runner');
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
     if (assets === 'synced' && !syncedDist) throw new Error('global setup did not publish the synced bundle');
     // Assets are always explicit: without this, the server would prefer the
@@ -142,7 +148,10 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const child: ChildProcess = spawn(
       process.execPath,
       [binary, '--registry-dir', registryDir, '--spawn-command', stub, '--port', String(port), '--assets', assetsDir],
-      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WORKFLOW_MCP_HOME: workflowHome } },
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, WORKFLOW_MCP_HOME: workflowHome, PI_CODING_AGENT_DIR: agentDir },
+      },
     );
 
     const logs: string[] = [];
@@ -158,7 +167,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       throw new Error(`${(error as Error).message}\n${logs.join('')}`);
     }
 
-    await use({ sessions, session: sessions[0], registryDir, workflowHome, url });
+    await use({ sessions, session: sessions[0], registryDir, workflowHome, runnerStore, url });
 
     child.kill('SIGTERM');
     for (const session of sessions) await session.close();

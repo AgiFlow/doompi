@@ -8,7 +8,8 @@ import type {
   WorkflowStepView,
 } from '../src/types/webWorkflows.ts';
 import { formatRunDuration } from './runDuration.ts';
-import { workflowsStore } from './workflowsStore.ts';
+import { workflowRunIdentity } from './workflowActivity.ts';
+import { focusRun, workflowsStore } from './workflowsStore.ts';
 
 const TICK_MS = 10_000;
 
@@ -51,10 +52,6 @@ function spanDuration(startedAt: string | undefined, endedAt: string | undefined
   const end = endedAt === undefined ? now : Date.parse(endedAt);
   if (!Number.isFinite(end)) return undefined;
   return formatRunDuration(Math.max(0, end - start));
-}
-
-function runIdentity(run: WorkflowRunView): string {
-  return `${run.workspace}/${run.runKey}`;
 }
 
 /** Needs-you facts for one run: an error to recover, or a pause waiting on someone. */
@@ -107,7 +104,7 @@ function AttentionStrip({ runs }: { runs: WorkflowRunView[] }) {
       <span className="text-[9px] font-bold tracking-[0.18em] text-doom-yellow">NEEDS YOU · {items.length}</span>
       {items.map(({ run, attention }) => (
         <div
-          key={runIdentity(run)}
+          key={workflowRunIdentity(run)}
           data-testid={`needs-card-${run.runKey}`}
           className={`flex flex-col gap-1 rounded-md border px-3 py-2.5 ${
             attention.kind === 'error' ? 'border-[#6B3A3A] bg-[#332428]/40' : 'border-[#574427] bg-[#312A1C]/40'
@@ -206,7 +203,11 @@ function StepRow({ step, now }: { step: WorkflowStepView; now: number }) {
  */
 export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
   const runs = useStore(workflowsStore, (state) => (sessionId === null ? [] : (state.bySession[sessionId] ?? [])));
-  const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  // The focused run lives in the store so the activity dock can point the tab
+  // at a run before opening it.
+  const selectedRun = useStore(workflowsStore, (state) =>
+    sessionId === null ? undefined : state.focusedRun[sessionId],
+  );
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -215,7 +216,7 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
     return () => clearInterval(timer);
   }, []);
 
-  const run = runs.find((candidate) => runIdentity(candidate) === selectedRun) ?? runs[0];
+  const run = runs.find((candidate) => workflowRunIdentity(candidate) === selectedRun) ?? runs[0];
   const jobs = run?.jobs ?? [];
   const fallbackJob =
     run?.position?.job ?? jobs.find((job) => ACTIVE_STATES.has(job.status))?.name ?? jobs.at(-1)?.name;
@@ -250,16 +251,16 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
             <div className="flex flex-wrap items-center gap-2 pb-3">
               {runs.map((candidate) => {
                 const tone = runTone(candidate);
-                const active = run !== undefined && runIdentity(candidate) === runIdentity(run);
+                const active = run !== undefined && workflowRunIdentity(candidate) === workflowRunIdentity(run);
                 return (
                   <button
-                    key={runIdentity(candidate)}
+                    key={workflowRunIdentity(candidate)}
                     type="button"
                     data-testid={`workflow-chip-${candidate.runKey}`}
                     data-run-stage={candidate.stage}
                     data-active={active}
                     onClick={() => {
-                      setSelectedRun(runIdentity(candidate));
+                      if (sessionId !== null) focusRun(sessionId, workflowRunIdentity(candidate));
                       setSelectedJob(null);
                     }}
                     className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-[10px] ${

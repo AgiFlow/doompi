@@ -14,7 +14,7 @@ export const webPlugin = defineWebPlugin({
   id: 'subagents',
   tabs: [{ id: 'subagents', label: 'subagents', panel: SubagentsPanel, useBadge: useSubagentsBadge }],
   channels: [subagentRunsChannel],
-  activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', order: 10 }],
+  activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
   // Same name as the group: the dock renders this inside it, in place of the
   // footer's one-line summary.
   activitySections: [{ id: 'agents', component: AgentsActivitySection }],

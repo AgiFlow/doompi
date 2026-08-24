@@ -139,6 +139,16 @@ function completedAt(value: unknown): number | undefined {
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
+/**
+ * The root every session's runner state lives under, before any log-directory
+ * override: `<agent dir>/doom-runner/<session id>/{runs,logs}`. A reader in
+ * another process, such as the cockpit hub, resolves the same root from its
+ * own environment.
+ */
+export function resolveRunnerStoreDirectory(env: NodeJS.ProcessEnv): string {
+  return path.join(resolveAgentDirectory(env), STORE_DIR_NAME);
+}
+
 /** Session-scoped runner storage under the Pi agent directory. */
 export class RunnerPaths implements IRunnerPaths {
   private adoptedSessionId: string | undefined;
@@ -304,7 +314,7 @@ export class RunnerPaths implements IRunnerPaths {
   private storeDirectory(): string {
     const override = process.env[LOG_DIR_ENV]?.trim();
     if (override) return path.dirname(path.resolve(override));
-    return path.join(resolveAgentDirectory(process.env), STORE_DIR_NAME);
+    return resolveRunnerStoreDirectory(process.env);
   }
 
   private sessionDirectory(sessionId?: string): string {

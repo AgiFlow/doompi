@@ -10,6 +10,7 @@ import {
 import type { SessionAttachment } from '../types/bridge.ts';
 import {
   DIALOG_ANSWERED_TYPE,
+  MINOR_MODE_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
   type SessionBacklogFrame,
   type SessionGitStatus,
@@ -22,6 +23,8 @@ import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSp
 import { attachToSession } from './sessionSocketClient.ts';
 
 const GIT_REFRESH_MS = 10_000;
+const GET_ENTRIES_COMMAND = 'get_entries';
+const ENTRY_APPENDED_TYPE = 'entry_appended';
 
 export type HubEvent =
   | { kind: 'upsert'; session: SessionSummary }
@@ -79,6 +82,26 @@ interface ManagedSession {
 interface StartedChannel {
   frameType: string;
   source: HubChannelSource;
+}
+
+/**
+ * The newest minor-mode catalog entry in a get_entries answer. The runtime
+ * journals its projection as a custom entry and streams the append live, so a
+ * hub that attaches after the publish (a restart, or a session older than the
+ * hub) has to read it back from the journal.
+ */
+function latestMinorModeEntry(frame: SessionFrame): Record<string, unknown> | undefined {
+  const data = frame.data;
+  if (typeof data !== 'object' || data === null) return undefined;
+  const entries = (data as { entries?: unknown }).entries;
+  if (!Array.isArray(entries)) return undefined;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry: unknown = entries[index];
+    if (typeof entry !== 'object' || entry === null) continue;
+    const candidate = entry as Record<string, unknown>;
+    if (candidate.type === 'custom' && candidate.customType === MINOR_MODE_ENTRY_TYPE) return candidate;
+  }
+  return undefined;
 }
 
 function readTokenFile(record: SessionRecord): string {
@@ -185,6 +208,18 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       token,
       handlers: {
         onFrame: (frame) => {
+          // The journal answer is the whole session and no page reads it; the
+          // one thing it carries for the cockpit is the catalog entry, which
+          // is re-emitted as the append it once was so it travels the same
+          // path as a live publish, to subscribers now and on replay later.
+          if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
+            const entry = latestMinorModeEntry(frame);
+            if (!entry) return;
+            const restored = { type: ENTRY_APPENDED_TYPE, entry };
+            managed.ring.record(restored);
+            emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
+            return;
+          }
           const wasPhase = managed.presence.phase;
           managed.ring.record(frame);
           const next = reducePresence(managed.presence, frame, new Date().toISOString());
@@ -199,8 +234,12 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           managed.attach = status.state;
           managed.attachReason = status.reason;
           // A fresh attach is the moment to ask for the facts events do not
-          // carry (name, pending count, streaming flags).
-          if (status.state === 'attached') managed.attachment?.send({ type: 'get_state' });
+          // carry (name, pending count, streaming flags) and for the journal,
+          // whose minor-mode entry this hub missed if the session predates it.
+          if (status.state === 'attached') {
+            managed.attachment?.send({ type: 'get_state' });
+            managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
+          }
           pushSummary(managed);
         },
       },

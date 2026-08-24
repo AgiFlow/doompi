@@ -434,6 +434,32 @@ describe('runnerExtension refresh', () => {
     expect(harness.registry.close).toHaveBeenCalledOnce();
   });
 
+  it('stops one runner headlessly through the stop verb', async () => {
+    const harness = await createHarness();
+    await startSession(harness);
+
+    await harness.command()('stop', harness.context);
+    expect(harness.notify).toHaveBeenCalledWith('Usage: /runners stop <runner-id> [reason]', 'error');
+    expect(harness.launcher.stop).not.toHaveBeenCalled();
+
+    await harness.command()('stop missing', harness.context);
+    expect(harness.notify).toHaveBeenCalledWith('No active runner missing in this session.', 'error');
+    expect(harness.launcher.stop).not.toHaveBeenCalled();
+
+    harness.context.hasUI = false;
+    await harness.command()('stop runner-a from the cockpit', harness.context);
+    expect(harness.launcher.stop).toHaveBeenCalledWith(runningRecord.pid);
+    expect(harness.registry.complete).toHaveBeenCalledWith(
+      runningRecord.id,
+      { reason: 'stopped', code: null, signal: null, stopReason: 'from the cockpit' },
+      runningRecord.sessionId,
+    );
+    expect(harness.notify).toHaveBeenCalledWith('Stopped runner runner-a.', 'info');
+    expect(extensionMocks.openRunnerSpace).not.toHaveBeenCalled();
+
+    await harness.handlers.get('session_shutdown')?.({}, harness.context);
+  });
+
   it('gates command, compaction, and process controls to the active generation', async () => {
     const harness = await createHarness();
     const compaction = harness.compactionDependencies();

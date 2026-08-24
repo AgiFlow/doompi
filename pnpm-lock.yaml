@@ -1196,12 +1196,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.2
         version: 0.84.2
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)

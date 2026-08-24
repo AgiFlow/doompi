@@ -195,6 +195,46 @@ describe('the session hub over a registry', () => {
     );
   });
 
+  it('restores the minor-mode catalog from the journal on attach', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir);
+    await session.waitForCommand('get_entries');
+
+    // The runtime journaled its catalog before this hub existed; only the
+    // newest entry describes the session as it is now.
+    const stale = {
+      type: 'custom',
+      id: 'e1',
+      customType: 'doom-minor-modes',
+      data: { version: 1, revision: 1, modes: [] },
+    };
+    const current = {
+      type: 'custom',
+      id: 'e3',
+      customType: 'doom-minor-modes',
+      data: { version: 1, revision: 2, modes: [{ id: 'voice' }] },
+    };
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: [stale, { type: 'message', id: 'e2' }, current], leafId: 'e3' },
+    });
+
+    await waitFor(
+      () => harness.framesFor('one').some((frame) => frame.type === 'entry_appended'),
+      'the restored entry',
+    );
+    expect(harness.framesFor('one').filter((frame) => frame.type === 'entry_appended')).toEqual([
+      { type: 'entry_appended', entry: current },
+    ]);
+    // The answer itself is the whole journal and no page reads it, so it
+    // reaches neither live subscribers nor the replay ring.
+    expect(harness.framesFor('one').some((frame) => frame.type === 'response')).toBe(false);
+    expect(harness.hub.backlog('one')?.frames).toEqual([{ type: 'entry_appended', entry: current }]);
+  });
+
   it('derives the rail phase from the frame stream', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });

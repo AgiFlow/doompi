@@ -10,6 +10,7 @@ import {
 } from '@agimon-ai/foundation-process-registry';
 import type { IProcessControl } from '../../types/processControl';
 import type { IRunnerPaths } from '../../services/RunnerPaths/types';
+import { isRunnerRecord } from '../../services/runs/runnerRecord.ts';
 import type {
   CompleteRunnerInput,
   IRunnerRegistry,
@@ -304,23 +305,5 @@ function readBackend(value: unknown): RunnerRecord['backend'] {
 function isPrimaryMetadataEntry(entry: string): boolean {
   return (
     entry.endsWith(JSON_EXTENSION) && !entry.endsWith(COMMAND_SIDECAR_SUFFIX) && !entry.endsWith(EXIT_SIDECAR_SUFFIX)
-  );
-}
-
-function isRunnerRecord(value: unknown): value is RunnerRecord {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Partial<RunnerRecord>;
-  return (
-    typeof record.id === 'string' &&
-    typeof record.name === 'string' &&
-    typeof record.pid === 'number' &&
-    typeof record.command === 'string' &&
-    typeof record.cwd === 'string' &&
-    typeof record.logPath === 'string' &&
-    typeof record.sessionId === 'string' &&
-    typeof record.startedAt === 'string' &&
-    (record.state === 'running' || record.state === 'completed') &&
-    typeof record.promoted === 'boolean' &&
-    (record.backend === 'rmux' || record.backend === 'tmux' || record.backend === 'native')
   );
 }

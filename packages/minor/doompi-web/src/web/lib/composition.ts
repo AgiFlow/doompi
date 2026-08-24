@@ -157,38 +157,28 @@ export interface ActivityGroup {
   /** What the publishing extension is reporting, empty when it reports nothing. */
   summary: string;
   active: boolean;
-}
-
-interface ActivityGroupSource {
-  name: string;
-  keys: string;
-  statusKey?: string;
-  widgetKeys?: string[];
+  /** The plugin tab the group's key chip opens, when its package declares one. */
+  tab?: string;
 }
 
 /**
- * The fallback activity table for the packaged bundle; a synced bundle
- * carries each group as its owning package's plugin declaration, and the
- * registry list wins whenever any plugin declares one.
+ * The declared groups the session actually signals. There is no host-side
+ * fallback table: agents, runners, and workflows are each declared by the
+ * package that owns them, so a composition without such a package shows no
+ * group, and a session that never published a group's signal shows none
+ * either.
  */
-const FALLBACK_ACTIVITY: readonly ActivityGroupSource[] = [
-  { name: 'agents', keys: 'a r', statusKey: 'doom-team-agents' },
-  { name: 'runners', keys: 'r l', statusKey: 'doom-runner-runners' },
-  { name: 'workflows', keys: 'w r', widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'] },
-];
-
 export function activityGroups(statuses: Record<string, string>, widgets: readonly string[]): ActivityGroup[] {
-  const declared = pluginActivityGroups();
-  const sources: readonly ActivityGroupSource[] = declared.length > 0 ? declared : FALLBACK_ACTIVITY;
   const groups: ActivityGroup[] = [];
-  for (const source of sources) {
+  for (const source of pluginActivityGroups()) {
+    const tab = source.tab === undefined ? {} : { tab: source.tab };
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
-      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0 });
+      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0, ...tab });
       continue;
     }
     if (source.widgetKeys !== undefined && source.widgetKeys.some((key) => widgets.includes(key))) {
-      groups.push({ name: source.name, keys: source.keys, summary: '', active: false });
+      groups.push({ name: source.name, keys: source.keys, summary: '', active: false, ...tab });
     }
   }
   return groups;

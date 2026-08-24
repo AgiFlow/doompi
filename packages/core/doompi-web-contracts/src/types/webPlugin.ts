@@ -87,9 +87,11 @@ export interface SelectionAxisContribution {
 }
 
 /**
- * An activity-dock group, declared as data: the host renders the group when
- * the session publishes its signal (the footer status key, or any of the
- * widget keys), with the status content as the live summary.
+ * An activity-dock group, declared as data: the host renders the group's
+ * frame when the session publishes its signal (the footer status key, or any
+ * of the widget keys). The body is the status content as a one-line summary
+ * unless the plugin claims the group with an activity section of the same
+ * name, in which case the plugin renders the body itself.
  */
 export interface ActivityGroupContribution {
   name: string;
@@ -99,6 +101,8 @@ export interface ActivityGroupContribution {
   statusKey?: string;
   /** Widget keys any of which shows the group without a summary. */
   widgetKeys?: string[];
+  /** The plugin tab the group's key chip opens; without one the chip is a plain label. */
+  tab?: string;
   /** Sort position in the dock; lower first, name breaks ties. */
   order?: number;
 }

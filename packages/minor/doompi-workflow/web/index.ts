@@ -1,5 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
+import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
 import { WorkflowsPanel } from './WorkflowsPanel.tsx';
 import { workflowRunsChannel, workflowsStore } from './workflowsStore.ts';
 
@@ -17,6 +18,15 @@ export const webPlugin = defineWebPlugin({
   channels: [workflowRunsChannel],
   minorModes: [{ name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress', order: 50 }],
   activityGroups: [
-    { name: 'workflows', keys: 'w r', widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'], order: 30 },
+    {
+      name: 'workflows',
+      keys: 'w r',
+      widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
+      tab: 'workflows',
+      order: 30,
+    },
   ],
+  // Same name as the group: the dock renders this inside it, in place of the
+  // widget's bare presence signal.
+  activitySections: [{ id: 'workflows', component: WorkflowsActivitySection }],
 });

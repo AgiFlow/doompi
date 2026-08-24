@@ -213,17 +213,58 @@ describe('selectionAxes', () => {
 });
 
 describe('activityGroups', () => {
-  it('lists only the groups this composition loaded', () => {
-    expect(activityGroups({}, [])).toEqual([]);
+  const installOwners = (): void =>
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'subagents',
+        activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
+      }),
+      defineWebPlugin({
+        id: 'runner',
+        activityGroups: [{ name: 'runners', keys: 'r l', statusKey: 'doom-runner-runners', order: 20 }],
+      }),
+      defineWebPlugin({
+        id: 'workflows',
+        activityGroups: [
+          {
+            name: 'workflows',
+            keys: 'w r',
+            widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
+            tab: 'workflows',
+            order: 30,
+          },
+        ],
+      }),
+    ]);
 
-    const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
-    expect(groups.map((group) => group.name)).toEqual(['agents', 'runners']);
-    expect(groups[0]).toMatchObject({ summary: '2 running', active: true });
-    expect(groups[1]).toMatchObject({ summary: '', active: false });
+  it('has no host-side table: a session signal with no owning package shows nothing', () => {
+    expect(
+      activityGroups({ 'doom-team-agents': '2 running', 'doom-runner-runners': '' }, ['workflow-mcp-follow']),
+    ).toEqual([]);
+  });
+
+  it('lists only the declared groups the session signals, with their tabs', () => {
+    installOwners();
+    try {
+      expect(activityGroups({}, [])).toEqual([]);
+
+      const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
+      expect(groups.map((group) => group.name)).toEqual(['agents', 'runners']);
+      expect(groups[0]).toEqual({ name: 'agents', keys: 'a r', summary: '2 running', active: true, tab: 'subagents' });
+      expect(groups[1]).toEqual({ name: 'runners', keys: 'r l', summary: '', active: false });
+    } finally {
+      resetWebPlugins();
+    }
   });
 
   it('adds workflows when the widget shows up', () => {
-    const groups = activityGroups({}, ['workflow-mcp-follow']);
-    expect(groups.map((group) => group.name)).toEqual(['workflows']);
+    installOwners();
+    try {
+      const groups = activityGroups({}, ['workflow-mcp-follow']);
+      expect(groups.map((group) => group.name)).toEqual(['workflows']);
+      expect(groups[0]?.tab).toBe('workflows');
+    } finally {
+      resetWebPlugins();
+    }
   });
 });
