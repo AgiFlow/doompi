@@ -161,13 +161,17 @@ describe('the session hub over a registry', () => {
       'the synthetic close',
     );
     expect(
-      harness.hub.backlog('one')?.frames.some((frame) => frame.type === 'extension_ui_answered' && frame.id === 'req-9'),
+      harness.hub
+        .backlog('one')
+        ?.frames.some((frame) => frame.type === 'extension_ui_answered' && frame.id === 'req-9'),
     ).toBe(true);
 
     // Other command types stay unannotated.
     harness.hub.command('one', { type: 'prompt', message: 'hello' });
     await session.waitForCommand('prompt');
-    expect(harness.hub.backlog('one')?.frames.filter((frame) => frame.type === 'extension_ui_answered')).toHaveLength(1);
+    expect(harness.hub.backlog('one')?.frames.filter((frame) => frame.type === 'extension_ui_answered')).toHaveLength(
+      1,
+    );
   });
 
   it('derives the rail phase from the frame stream', async () => {
