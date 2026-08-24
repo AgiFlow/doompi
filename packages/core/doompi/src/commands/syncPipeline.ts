@@ -3,6 +3,8 @@ import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { ensureLayerPackages, type LayerPackageResult } from '../adapters/layerPackageInstaller.ts';
 import { findRepositoryRoot } from '../adapters/repository/repository';
 import type { HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
+import { readLocatedSyncState } from '../adapters/syncState.ts';
+import { syncWebBundle } from '../adapters/webBundleSync.ts';
 import { BuildCommand } from './buildCommand.ts';
 import { SyncCommand, type SyncSettingsMode } from './syncCommand.ts';
 import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
@@ -12,6 +14,7 @@ const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const BUILD_COMMAND = 'build';
 const PACKAGES_LABEL = 'packages';
 const BUILD_LABEL = 'build';
+const WEB_LABEL = 'web';
 
 export interface SyncPipelineOptions {
   settingsMode?: SyncSettingsMode;
@@ -79,7 +82,43 @@ export class SyncPipeline {
     }
     done('mode extension compiled');
 
-    return new SyncCommand({ settingsMode: this.settingsMode }).execute(args, environment, currentDirectory, output);
+    const syncCode = await new SyncCommand({ settingsMode: this.settingsMode }).execute(
+      args,
+      environment,
+      currentDirectory,
+      output,
+    );
+    if (syncCode !== 0) return syncCode;
+
+    // The cockpit bundle rides the committed state: the resolved composition
+    // names every installed package whose doompiWeb manifest contributes a
+    // web plugin. A bundle failure never fails the sync; the cockpit keeps
+    // serving its previous or packaged bundle.
+    await this.refreshWebBundle(environment, currentDirectory, progress);
+    return 0;
+  }
+
+  /** Rebuilds the machine's cockpit bundle from the synced composition's plugin manifests. */
+  private async refreshWebBundle(
+    environment: NodeJS.ProcessEnv,
+    currentDirectory: string,
+    progress: SyncProgress,
+  ): Promise<void> {
+    const inheritedRoot = environment[HARNESS_ROOT_ENV];
+    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
+    const done = progress.start(WEB_LABEL, 'bundling the web cockpit plugins');
+    const state = readLocatedSyncState(repoRoot);
+    if (!state) {
+      done('skipped: no sync state to read the composition from');
+      return;
+    }
+    const result = await syncWebBundle({
+      repoRoot,
+      resolvedEntries: state.state.resolved,
+      environment,
+    });
+    if (result.status === 'bundled') done(`cockpit bundled with plugins: ${result.pluginIds.join(', ')}`);
+    else done(`${result.status}: ${result.reason}`);
   }
 
   /** Moves every package sync owns to its newest published version. */
