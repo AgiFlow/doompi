@@ -21,3 +21,14 @@ overrides:
       - src/services/voiceWorkerSupervisor.ts # Date
     rules:
       no-ambient-host-access: off
+
+# The web cockpit plugin lives in web/ (outside src/, which the doom-extension
+# folder vocabulary owns). Its declaration may reach its own files and the
+# shared src/types shapes.
+boundaries:
+  - name: web-plugin
+    pattern: web/**
+    allowedImports:
+      - web/**
+      - src/types
+      - src/types/**

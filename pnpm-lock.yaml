@@ -1237,6 +1237,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1268,6 +1271,9 @@ importers:
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-extension-contracts
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1302,6 +1308,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1339,6 +1348,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1407,6 +1419,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1

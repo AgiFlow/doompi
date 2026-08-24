@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "web",
     "llms.txt",
     "src/prompts",
     "README.md",
@@ -63,6 +64,7 @@
   "dependencies": {
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
@@ -88,6 +90,12 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "loop",
+    "registrationOrder": 50,
+    "channels": [],
+    "client": "./web/index.ts"
   },
   "pi": {
     "extensions": [

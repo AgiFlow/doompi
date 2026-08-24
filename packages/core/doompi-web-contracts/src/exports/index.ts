@@ -7,6 +7,7 @@ export type {
   WebHubChannel,
 } from '../types/webHub.ts';
 export type {
+  MinorModeContribution,
   PaletteCommandContext,
   PaletteCommandContribution,
   SessionChannelContribution,

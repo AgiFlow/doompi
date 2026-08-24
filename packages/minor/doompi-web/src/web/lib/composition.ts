@@ -1,3 +1,4 @@
+import { pluginMinorModes } from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
 
 export type MinorModeAvailability = 'unavailable' | 'off' | 'on';
@@ -19,12 +20,16 @@ interface MinorModeSource {
 }
 
 /**
- * The minor modes DoomPi ships, and the signal each one publishes.
+ * The fallback minor-mode table for the packaged bundle.
  *
- * Help is listed without a signal on purpose: it registers no footer entry, so
- * the cockpit reports it as unavailable rather than guessing it is off.
+ * A synced bundle carries each mode as its package's own web plugin
+ * contribution, and the registry list wins whenever any plugin declares one.
+ * This literal survives only so the built-in-only bundle keeps rendering the
+ * modes DoomPi ships; help is listed without a signal on purpose: it
+ * registers no footer entry, so the cockpit reports it as unavailable rather
+ * than guessing it is off.
  */
-const MINOR_MODES: readonly MinorModeSource[] = [
+const FALLBACK_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'help', keys: 'h e' },
   { name: 'plan', keys: 'p e', statusKey: 'plan-mode' },
   { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
@@ -34,7 +39,9 @@ const MINOR_MODES: readonly MinorModeSource[] = [
 ];
 
 export function minorModes(statuses: Record<string, string>, widgets: readonly string[]): MinorMode[] {
-  return MINOR_MODES.map((source) => {
+  const declared = pluginMinorModes();
+  const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : FALLBACK_MINOR_MODES;
+  return sources.map((source) => {
     if (source.statusKey !== undefined) {
       const raw = statuses[source.statusKey];
       if (raw === undefined)

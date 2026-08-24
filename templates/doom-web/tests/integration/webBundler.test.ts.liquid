@@ -7,6 +7,7 @@ import { bundleCockpitWeb } from '../../src/adapters/webBundler.ts';
 import { loadHubChannels } from '../../src/adapters/webHubPluginLoader.ts';
 
 const workflowRoot = fileURLToPath(new URL('../../../doompi-workflow', import.meta.url));
+const planRoot = fileURLToPath(new URL('../../../doompi-plan', import.meta.url));
 
 let cleanups: Array<() => void> = [];
 
@@ -23,11 +24,13 @@ describe('the sync-time cockpit bundler', () => {
     // The real thing: Vite compiles the host shell plus doompi-workflow's
     // shipped web source, discovered from its doompiWeb manifest alone.
     const result = await bundleCockpitWeb({
-      pluginRoots: [workflowRoot],
+      pluginRoots: [workflowRoot, planRoot],
       outDir,
       onNotice: (message) => notices.push(message),
     });
-    expect(result.pluginIds).toEqual(['subagents', 'workflows']);
+    // doompi-plan proves the metadata-only plugin shape: no tab, no channel,
+    // just a minor-mode declaration compiled into the bundle.
+    expect(result.pluginIds).toEqual(['subagents', 'workflows', 'plan']);
     expect(fs.existsSync(path.join(result.assetsDir, 'index.html'))).toBe(true);
     expect(fs.existsSync(path.join(result.assetsDir, 'webPlugins.server.json'))).toBe(true);
     const bundledJs = fs

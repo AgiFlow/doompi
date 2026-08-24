@@ -46,6 +46,24 @@ export interface PaletteCommandContribution {
 }
 
 /**
+ * A minor mode's presence in the cockpit, declared as data rather than a
+ * component: the host's selection bar renders the list, folding in what the
+ * session reports. A mode with neither signal key shows as unavailable until
+ * its package publishes one.
+ */
+export interface MinorModeContribution {
+  name: string;
+  /** Leader Space key path, as the TUI documents it. */
+  keys: string;
+  /** Footer status key whose presence and content report availability and detail. */
+  statusKey?: string;
+  /** Widget key whose presence reports the mode as installed but off. */
+  widgetKey?: string;
+  /** Sort position in the selection bar list; lower first, name breaks ties. */
+  order?: number;
+}
+
+/**
  * One session-scoped data channel: the hub pushes ChannelFrame payloads whose
  * frame type equals `channel`; parse is the validation gate at the boundary
  * (null rejects); drop clears the plugin's per-session state.
@@ -67,6 +85,7 @@ export interface WebPluginDefinition {
   id: string;
   tabs?: TabContribution[];
   channels?: SessionChannelContribution[];
+  minorModes?: MinorModeContribution[];
   overlays?: SurfaceContribution[];
   paletteCommands?: PaletteCommandContribution[];
   railSections?: SurfaceContribution[];

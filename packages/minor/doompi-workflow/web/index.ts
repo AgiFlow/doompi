@@ -15,4 +15,5 @@ export const webPlugin = defineWebPlugin({
   id: 'workflows',
   tabs: [{ id: 'workflows', label: 'workflows', panel: WorkflowsPanel, useBadge: useWorkflowsBadge }],
   channels: [workflowRunsChannel],
+  minorModes: [{ name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress', order: 50 }],
 });

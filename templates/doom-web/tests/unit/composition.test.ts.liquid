@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { activityGroups, minorModes } from '../../src/web/lib/composition.ts';
+import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
 
 // Captured from a live `doompi --mode rpc` session, so the parser is tested
@@ -84,6 +86,28 @@ describe('minorModes', () => {
 
   it('always reports every mode DoomPi ships', () => {
     expect(minorModes({}, []).map((mode) => mode.name)).toEqual(['help', 'plan', 'loop', 'goal', 'workflow', 'voice']);
+  });
+
+  it('prefers plugin-declared modes over the packaged fallback, in declared order', () => {
+    resetWebPlugins();
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'demo',
+        minorModes: [
+          { name: 'zeta', keys: 'z e', statusKey: 'zeta-mode', order: 20 },
+          { name: 'alpha', keys: 'a e', order: 10 },
+        ],
+      }),
+    ]);
+    try {
+      const modes = minorModes({ 'zeta-mode': 'running' }, []);
+      expect(modes.map((mode) => mode.name)).toEqual(['alpha', 'zeta']);
+      expect(modes[1]).toMatchObject({ availability: 'on', detail: 'running' });
+      // No signal declared means unavailable, same as the fallback semantics.
+      expect(modes[0]?.availability).toBe('unavailable');
+    } finally {
+      resetWebPlugins();
+    }
   });
 });
 

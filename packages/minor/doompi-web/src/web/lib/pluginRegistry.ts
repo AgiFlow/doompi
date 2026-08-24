@@ -1,4 +1,5 @@
 import type {
+  MinorModeContribution,
   PaletteCommandContribution,
   SessionChannelContribution,
   SurfaceContribution,
@@ -15,6 +16,7 @@ interface RegistryState {
   channels: Map<string, SessionChannelContribution>;
   surfaces: Record<SurfaceSlot, SurfaceContribution[]>;
   commands: PaletteCommandContribution[];
+  minorModes: MinorModeContribution[];
 }
 
 function emptyState(): RegistryState {
@@ -24,6 +26,7 @@ function emptyState(): RegistryState {
     channels: new Map(),
     surfaces: { overlay: [], rail: [], selectionBar: [], activity: [] },
     commands: [],
+    minorModes: [],
   };
 }
 
@@ -60,7 +63,11 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     for (const surface of plugin.selectionBarItems ?? []) state.surfaces.selectionBar.push(surface);
     for (const surface of plugin.activitySections ?? []) state.surfaces.activity.push(surface);
     state.commands.push(...(plugin.paletteCommands ?? []));
+    state.minorModes.push(...(plugin.minorModes ?? []));
   }
+  state.minorModes.sort(
+    (left, right) => (left.order ?? 1000) - (right.order ?? 1000) || left.name.localeCompare(right.name),
+  );
   installed = true;
 }
 
@@ -80,6 +87,11 @@ export function surfaceContributions(slot: SurfaceSlot): readonly SurfaceContrib
 
 export function paletteCommands(): readonly PaletteCommandContribution[] {
   return state.commands;
+}
+
+/** Minor-mode declarations from every installed plugin, in display order. */
+export function pluginMinorModes(): readonly MinorModeContribution[] {
+  return state.minorModes;
 }
 
 /**
