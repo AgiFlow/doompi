@@ -19,6 +19,7 @@ import {
   AsyncSubagentSpawner,
   type AsyncSubagentSpawnInput,
   runDirFor,
+  RUNNER_STDERR_FILE_NAME,
 } from '../../src/adapters/runs/background/asyncExecution';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
 import type { SpawnHandshakeContract, SpawnHandshakeOutcome } from '../../src/adapters/runs/background/spawnHandshake';
@@ -185,6 +186,13 @@ class TestAsyncSubagentSpawner extends AsyncSubagentSpawner {
         sessionEnabled: false,
       },
     };
+  }
+
+  /** What resolvePiAliasRegisterPath reports, decoupled from whether dist is built. */
+  piAliasRegisterPath: string | undefined;
+
+  protected override resolvePiAliasRegisterPath(): string | undefined {
+    return this.piAliasRegisterPath;
   }
 
   protected override spawnChild(command: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) {
@@ -388,6 +396,24 @@ describe('AsyncSubagentSpawner.spawn happy path', () => {
     expect(FakeSpawnHandshake.lastPath).toMatch(/handshake\.json$/);
   });
 
+  it('prefixes the SDK runner with the Pi module alias preamble when it is built', async () => {
+    spawner.piAliasRegisterPath = '/pkg/dist/runs/piModuleAlias.mjs';
+
+    await spawner.spawn(baseInput());
+
+    const args = spawner.spawnCalls[0]?.args ?? [];
+    expect(args.slice(0, 2)).toEqual(['--import', '/pkg/dist/runs/piModuleAlias.mjs']);
+    expect(args[2]).toMatch(/sdkRunnerEntry\.(?:ts|mjs)$/);
+  });
+
+  it('launches the SDK runner without a preamble when the alias register is not built', async () => {
+    await spawner.spawn(baseInput());
+
+    const args = spawner.spawnCalls[0]?.args ?? [];
+    expect(args).toHaveLength(1);
+    expect(args[0]).toMatch(/sdkRunnerEntry\.(?:ts|mjs)$/);
+  });
+
   it('launches the detached SDK runner with the parent profile environment inherited', async () => {
     const key = 'DOOM_TEAM_TEST_PROFILE_VALUE';
     const previous = process.env[key];
@@ -470,6 +496,22 @@ describe('AsyncSubagentSpawner failure handling', () => {
     FakeSpawnHandshake.nextOutcome = { status: 'timed-out' };
 
     await expect(spawner.spawn(baseInput())).rejects.toThrow(/Timed out waiting for 'worker'/);
+  });
+
+  it('carries the runner stderr tail in the timeout message', async () => {
+    FakeSpawnHandshake.nextOutcome = { status: 'timed-out' };
+    const runDir = runDirFor('run-1');
+    const stderrPath = path.join(runDir, RUNNER_STDERR_FILE_NAME);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(
+      stderrPath,
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@earendil-works/pi-coding-agent'\n    at link time\n",
+    );
+    try {
+      await expect(spawner.spawn(baseInput())).rejects.toThrow(/Runner stderr: .*ERR_MODULE_NOT_FOUND.*at link time/);
+    } finally {
+      fs.rmSync(stderrPath, { force: true });
+    }
   });
 
   it('untracks the pid on TerminalPersistenceService when the handshake does not signal', async () => {

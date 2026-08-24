@@ -5,6 +5,7 @@ export default defineConfig({
     '*': 'src/exports/**/*.ts',
     // Child-process entries: private artifacts the runtime spawns, not exports.
     'extensions/subagentPromptRuntimeEntry': 'src/adapters/pi/extensions/subagentPromptRuntimeEntry.cts',
+    'runs/piModuleAlias': 'src/adapters/process/piModuleAlias.ts',
     'runs/sdkRunnerEntry': 'src/adapters/process/sdkRunnerEntry.ts',
     'runs/background/cliRunnerEntry': 'src/adapters/runs/background/cliRunnerEntry.ts',
   },

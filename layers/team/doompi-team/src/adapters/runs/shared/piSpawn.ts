@@ -29,19 +29,66 @@ const PACKAGE_MANIFEST_NAME = 'package.json';
 const PI_BIN_FIELD_NAME = 'pi';
 const PI_PATH_COMMAND = 'pi';
 const NODE_SCRIPT_EXTENSIONS = /\.(?:mjs|cjs|js)$/i;
+const NODE_MODULES_DIR_NAME = 'node_modules';
 
-/** Walk up from an entry point to the package root that declares the Pi CLI. */
+/** The candidate directory itself, when its manifest names the Pi package. */
+function piPackageAt(candidate: string): string | undefined {
+  const packageJsonPath = path.join(candidate, PACKAGE_MANIFEST_NAME);
+  if (!fs.existsSync(packageJsonPath)) return undefined;
+  const manifest: unknown = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+  return readManifestName(manifest) === PI_CODING_AGENT_PACKAGE ? candidate : undefined;
+}
+
+/** Where a Pi installation would sit beside this ancestor. */
+function piInstallNeighbor(dir: string): string {
+  const modulesDir = path.basename(dir) === NODE_MODULES_DIR_NAME ? dir : path.join(dir, NODE_MODULES_DIR_NAME);
+  return path.join(modulesDir, PI_CODING_AGENT_PACKAGE);
+}
+
+/**
+ * Walk up from an entry point to the package root that declares the Pi CLI.
+ *
+ * Strict on purpose: only an entry INSIDE the Pi package proves anything, and
+ * `resolvePiCliScript` leans on that proof before trusting `process.argv[1]`.
+ * Finding a Pi installation NEAR an entry is a different question; that is
+ * `findPiInstallNearEntry`.
+ */
 export function findPiPackageRootFromEntry(entryPoint: string): string | undefined {
   let dir = path.dirname(entryPoint);
   while (dir !== path.dirname(dir)) {
-    const packageJsonPath = path.join(dir, PACKAGE_MANIFEST_NAME);
-    if (fs.existsSync(packageJsonPath)) {
-      const manifest: unknown = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-      if (readManifestName(manifest) === PI_CODING_AGENT_PACKAGE) return dir;
-    }
+    const found = piPackageAt(dir);
+    if (found) return found;
     dir = path.dirname(dir);
   }
   return undefined;
+}
+
+/**
+ * Walk up from an entry point to any Pi installation: the entry's own package,
+ * or one installed beside an ancestor. The sibling probe matters when the
+ * running host is not Pi itself but embeds it as a dependency (the DoomPi CLI
+ * does), because a detached child needs that root to resolve the Pi SDK at
+ * all. Never use this as proof that the entry IS the Pi CLI.
+ */
+export function findPiInstallNearEntry(entryPoint: string): string | undefined {
+  let dir = path.dirname(entryPoint);
+  while (dir !== path.dirname(dir)) {
+    const found = piPackageAt(dir) ?? piPackageAt(piInstallNeighbor(dir));
+    if (found) return found;
+    dir = path.dirname(dir);
+  }
+  return undefined;
+}
+
+/** The Pi installation adjacent to this process's own entry point, when there is one. */
+export function resolvePiPackageRootNearHost(): string | undefined {
+  try {
+    const entry = process.argv[1];
+    return entry ? findPiInstallNearEntry(fs.realpathSync(entry)) : undefined;
+  } catch {
+    // argv[1] probing is best-effort; callers fall through to other tiers.
+    return undefined;
+  }
 }
 
 function readManifestName(manifest: unknown): string | undefined {
