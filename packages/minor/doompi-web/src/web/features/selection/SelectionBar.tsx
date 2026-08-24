@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { minorModes, type MinorMode } from '../../lib/composition.ts';
+import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition.ts';
 import { parseSelection } from '../../lib/statusLine.ts';
 import { setPendingMenu } from '../../stores/menuStore.ts';
 import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
@@ -22,9 +22,11 @@ const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
 };
 
 /**
- * The mockup's minor-modes popup is entirely local: the list is derived from
- * the statuses the session already published, so no agent round-trip is
- * needed to show it.
+ * The minor-modes popup: state is derived from the statuses the session
+ * already published, and every row is a button that hands the mode to the
+ * runtime's /minor command. The runtime owns what happens next: a mode with
+ * one opt-in toggles outright, one with several opens its action picker as a
+ * dialog, and modes compose, so any number can be on at once.
  */
 function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () => void }) {
   const surface = useRef<HTMLDivElement>(null);
@@ -54,11 +56,17 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
       </div>
       <div className="flex flex-col gap-0.5 p-1.5">
         {modes.map((mode) => (
-          <div
+          <button
             key={mode.name}
+            type="button"
             data-testid={`minor-${mode.name}`}
             data-availability={mode.availability}
-            className={`flex items-center gap-2.5 rounded-[5px] px-2 py-1.5 ${mode.availability === 'on' ? 'bg-[#2E2136]' : ''}`}
+            title={`toggle ${mode.name}`}
+            onClick={() => {
+              runCommand(`/minor ${mode.name}`);
+              onClose();
+            }}
+            className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left hover:bg-doom-deep ${mode.availability === 'on' ? 'bg-[#2E2136] hover:bg-[#382842]' : ''}`}
           >
             <span
               className={`w-8 shrink-0 rounded px-1 py-0.5 text-center text-[8px] font-bold ${
@@ -80,11 +88,13 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${mode.availability === 'on' ? 'bg-doom-magenta' : 'bg-doom-faint/40'}`}
               />
             )}
-          </div>
+          </button>
         ))}
       </div>
       <div className="flex h-[30px] items-center border-t border-doom-border-soft bg-doom-deep px-3">
-        <span className="text-[9px] text-doom-faint">published by the session · esc closes</span>
+        <span className="text-[9px] text-doom-faint">
+          click to toggle · a mode with several opt-ins asks · esc closes
+        </span>
       </div>
     </div>
   );
@@ -105,12 +115,13 @@ export function SelectionBar() {
   const [minorOpen, setMinorOpen] = useState(false);
 
   const selection = parseSelection(raw);
+  const axes = selectionAxes(statuses);
   const modes = minorModes(statuses, widgets);
   const activeMinors = modes.filter((mode) => mode.availability === 'on');
 
-  const ask = (kind: 'mode' | 'profile' | 'domains'): void => {
-    setPendingMenu(kind);
-    runCommand(kind === 'mode' ? 'mode' : kind);
+  const ask = (menu: string, command: string): void => {
+    setPendingMenu(menu);
+    runCommand(command);
   };
 
   return (
@@ -122,7 +133,7 @@ export function SelectionBar() {
       <button
         type="button"
         data-testid="axis-mode"
-        onClick={() => ask('mode')}
+        onClick={() => ask('mode', 'mode')}
         className={`flex h-[21px] items-center gap-1.5 rounded-[3px] px-2 ${
           selection.pending ? 'bg-doom-yellow' : 'bg-doom-blue'
         } text-doom-rail`}
@@ -133,20 +144,23 @@ export function SelectionBar() {
         <Caret className="text-doom-rail" />
       </button>
 
-      <button
-        type="button"
-        data-testid="axis-profile"
-        onClick={() => ask('profile')}
-        className="flex h-[21px] items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
-      >
-        <span
-          data-testid="selection-profile"
-          className={`text-[10px] font-bold ${selection.profile ? 'text-doom-green' : 'text-doom-faint'}`}
+      {axes.map((axis) => (
+        <button
+          key={axis.name}
+          type="button"
+          data-testid={`axis-${axis.name}`}
+          onClick={() => ask(axis.name, axis.command)}
+          className="flex h-[21px] items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
         >
-          {selection.profile ? `*${selection.profile}*` : 'no profile'}
-        </span>
-        <Caret className="text-doom-faint" />
-      </button>
+          <span
+            data-testid={`selection-${axis.name}`}
+            className={`text-[10px] font-bold ${axis.value ? 'text-doom-green' : 'text-doom-faint'}`}
+          >
+            {axis.value ? `*${axis.value}*` : axis.emptyLabel}
+          </span>
+          <Caret className="text-doom-faint" />
+        </button>
+      ))}
 
       <button
         type="button"
@@ -166,7 +180,7 @@ export function SelectionBar() {
       <button
         type="button"
         data-testid="axis-domains"
-        onClick={() => ask('domains')}
+        onClick={() => ask('domains', 'domains')}
         className="flex h-[21px] min-w-0 items-center gap-1.5 rounded-[3px] border border-doom-border px-2"
       >
         <span

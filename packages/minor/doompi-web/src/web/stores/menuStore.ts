@@ -1,6 +1,7 @@
 import { Store } from '@tanstack/store';
 
-export type MenuKind = 'mode' | 'profile' | 'domains';
+/** A selection-bar axis name: the built-in 'mode'/'domains', or a plugin-declared axis such as 'profile'. */
+export type MenuKind = string;
 
 export interface MenuState {
   /** Selection-bar button whose command is in flight, if any. */

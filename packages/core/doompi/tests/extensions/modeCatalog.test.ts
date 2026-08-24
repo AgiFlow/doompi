@@ -25,9 +25,11 @@ async function setup() {
   const events = new TestBus();
   const lifecycle = new Map<string, Array<(event: unknown, context: ExtensionContext) => unknown>>();
   const registerTool = vi.fn();
+  const registerCommand = vi.fn();
   const pi = {
     events,
     registerTool,
+    registerCommand,
     on(name: string, handler: (event: unknown, context: ExtensionContext) => unknown) {
       lifecycle.set(name, [...(lifecycle.get(name) ?? []), handler]);
     },

@@ -26,14 +26,28 @@ test('renders the selection the session publishes on the bar', async ({ page, co
   await expect(page.getByTestId('selection-bar')).toHaveAttribute('data-pending', 'false');
 });
 
-test('shows the profile when the session has one', async ({ page, cockpit }) => {
+test('shows the profile the session publishes on its own axis', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
   cockpit.session.emit(status('doom-major-mode', WITH_PROFILE));
+  cockpit.session.emit(status('doom-profile', 'reviewer'));
 
   await expect(page.getByTestId('selection-profile')).toHaveText('*reviewer*');
   await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
+});
+
+test('offers the empty profile axis once the session reports profiles exist', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('doom-profile', ''));
+
+  await expect(page.getByTestId('selection-profile')).toHaveText('no profile');
+
+  await page.getByTestId('axis-profile').click();
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/profile');
 });
 
 test('turns the mode button amber while a switch is pending', async ({ page, cockpit }) => {
@@ -53,8 +67,10 @@ test('falls back to placeholders when the session publishes no selection', async
   await cockpit.session.waitForAttach();
 
   await expect(page.getByTestId('selection-mode')).toHaveText('MODE');
-  await expect(page.getByTestId('selection-profile')).toHaveText('no profile');
   await expect(page.getByTestId('selection-domains')).toHaveText('no domains');
+  // No doom-profile status means the session has no profiles to offer: the
+  // axis stays off the bar instead of dangling an empty menu.
+  await expect(page.getByTestId('axis-profile')).toHaveCount(0);
 });
 
 test('invokes the command that changes the domains', async ({ page, cockpit }) => {

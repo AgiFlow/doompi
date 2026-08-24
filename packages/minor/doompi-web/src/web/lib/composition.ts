@@ -1,5 +1,40 @@
-import { pluginActivityGroups, pluginMinorModes } from './pluginRegistry.ts';
+import type { SelectionAxisContribution } from '@agimon-ai/doompi-web-contracts';
+import { pluginActivityGroups, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
+
+export interface SelectionAxis {
+  name: string;
+  command: string;
+  /** The current selection, empty while the session reports none. */
+  value: string;
+  emptyLabel: string;
+}
+
+/**
+ * The fallback axis table for the packaged bundle; a synced bundle carries
+ * each axis as its owning package's plugin declaration, and the registry
+ * list wins whenever any plugin declares one.
+ */
+const FALLBACK_SELECTION_AXES: readonly SelectionAxisContribution[] = [
+  { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile' },
+];
+
+/**
+ * The declared axes the session actually offers: an axis whose status key
+ * the session never published stays off the bar entirely, which is how a
+ * package withholds its axis when there is nothing to select.
+ */
+export function selectionAxes(statuses: Record<string, string>): SelectionAxis[] {
+  const declared = pluginSelectionAxes();
+  const sources: readonly SelectionAxisContribution[] = declared.length > 0 ? declared : FALLBACK_SELECTION_AXES;
+  return sources.flatMap((source) => {
+    const raw = statuses[source.statusKey];
+    if (raw === undefined) return [];
+    return [
+      { name: source.name, command: source.command, value: stripAnsi(raw).trim(), emptyLabel: source.emptyLabel },
+    ];
+  });
+}
 
 export type MinorModeAvailability = 'unavailable' | 'off' | 'on';
 

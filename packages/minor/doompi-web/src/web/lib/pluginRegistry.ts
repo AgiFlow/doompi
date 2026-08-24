@@ -2,6 +2,7 @@ import type {
   ActivityGroupContribution,
   MinorModeContribution,
   PaletteCommandContribution,
+  SelectionAxisContribution,
   SessionChannelContribution,
   SurfaceContribution,
   TabContribution,
@@ -17,6 +18,7 @@ interface RegistryState {
   channels: Map<string, SessionChannelContribution>;
   surfaces: Record<SurfaceSlot, SurfaceContribution[]>;
   commands: PaletteCommandContribution[];
+  selectionAxes: SelectionAxisContribution[];
   minorModes: MinorModeContribution[];
   activityGroups: ActivityGroupContribution[];
 }
@@ -28,6 +30,7 @@ function emptyState(): RegistryState {
     channels: new Map(),
     surfaces: { overlay: [], rail: [], selectionBar: [], activity: [] },
     commands: [],
+    selectionAxes: [],
     minorModes: [],
     activityGroups: [],
   };
@@ -66,11 +69,13 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     for (const surface of plugin.selectionBarItems ?? []) state.surfaces.selectionBar.push(surface);
     for (const surface of plugin.activitySections ?? []) state.surfaces.activity.push(surface);
     state.commands.push(...(plugin.paletteCommands ?? []));
+    state.selectionAxes.push(...(plugin.selectionAxes ?? []));
     state.minorModes.push(...(plugin.minorModes ?? []));
     state.activityGroups.push(...(plugin.activityGroups ?? []));
   }
   const byDisplayOrder = (left: { order?: number; name: string }, right: { order?: number; name: string }): number =>
     (left.order ?? 1000) - (right.order ?? 1000) || left.name.localeCompare(right.name);
+  state.selectionAxes.sort(byDisplayOrder);
   state.minorModes.sort(byDisplayOrder);
   state.activityGroups.sort(byDisplayOrder);
   installed = true;
@@ -92,6 +97,11 @@ export function surfaceContributions(slot: SurfaceSlot): readonly SurfaceContrib
 
 export function paletteCommands(): readonly PaletteCommandContribution[] {
   return state.commands;
+}
+
+/** Selection-axis declarations from every installed plugin, in display order. */
+export function pluginSelectionAxes(): readonly SelectionAxisContribution[] {
+  return state.selectionAxes;
 }
 
 /** Minor-mode declarations from every installed plugin, in display order. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { activityGroups, minorModes } from '../../src/web/lib/composition.ts';
+import { activityGroups, minorModes, selectionAxes } from '../../src/web/lib/composition.ts';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
 
@@ -105,6 +105,41 @@ describe('minorModes', () => {
       expect(modes[1]).toMatchObject({ availability: 'on', detail: 'running' });
       // No signal declared means unavailable, same as the fallback semantics.
       expect(modes[0]?.availability).toBe('unavailable');
+    } finally {
+      resetWebPlugins();
+    }
+  });
+});
+
+describe('selectionAxes', () => {
+  it('keeps an unpublished axis off the bar and reads the published one', () => {
+    expect(selectionAxes({})).toEqual([]);
+    expect(selectionAxes({ 'doom-profile': '' })).toEqual([
+      { name: 'profile', command: 'profile', value: '', emptyLabel: 'no profile' },
+    ]);
+  });
+
+  it('strips colour out of the selection it shows', () => {
+    const axes = selectionAxes({ 'doom-profile': '\u001B[38;2;152;190;101mreviewer\u001B[39m' });
+    expect(axes[0]?.value).toBe('reviewer');
+  });
+
+  it('prefers plugin-declared axes over the packaged fallback, in declared order', () => {
+    resetWebPlugins();
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'demo',
+        selectionAxes: [
+          { name: 'zeta', command: 'zeta', statusKey: 'zeta-axis', emptyLabel: 'no zeta', order: 20 },
+          { name: 'alpha', command: 'alpha', statusKey: 'alpha-axis', emptyLabel: 'no alpha', order: 10 },
+        ],
+      }),
+    ]);
+    try {
+      expect(selectionAxes({ 'zeta-axis': 'z', 'alpha-axis': '', 'doom-profile': 'not declared any more' })).toEqual([
+        { name: 'alpha', command: 'alpha', value: '', emptyLabel: 'no alpha' },
+        { name: 'zeta', command: 'zeta', value: 'z', emptyLabel: 'no zeta' },
+      ]);
     } finally {
       resetWebPlugins();
     }

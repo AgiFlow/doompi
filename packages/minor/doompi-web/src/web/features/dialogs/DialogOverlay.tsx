@@ -2,13 +2,17 @@ import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState }
 import { clearPendingMenu, type MenuKind, pendingMenuFor } from '../../stores/menuStore.ts';
 import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore.ts';
 
-const MENU_TITLE: Readonly<Record<MenuKind, string>> = {
+// The known axes keep their mockup styling; a plugin-declared axis the host
+// has no entry for falls back to its uppercased name in the neutral accent.
+const MENU_TITLE: Readonly<Record<string, string>> = {
   mode: 'MAJOR MODE',
   profile: 'PROFILE',
   domains: 'DOMAINS',
 };
 
-const MENU_ACCENT: Readonly<Record<MenuKind, { border: string; title: string }>> = {
+const DEFAULT_ACCENT = { border: 'border-doom-border', title: 'text-doom-hi' };
+
+const MENU_ACCENT: Readonly<Record<string, { border: string; title: string }>> = {
   mode: { border: 'border-[#2F4A68]', title: 'text-doom-blue' },
   profile: { border: 'border-[#35452E]', title: 'text-doom-green' },
   domains: { border: 'border-[#3B3558]', title: 'text-doom-violet' },
@@ -77,7 +81,7 @@ export function DialogOverlay() {
   };
 
   if (menu !== null && dialog.method === 'select') {
-    const accent = MENU_ACCENT[menu];
+    const accent = MENU_ACCENT[menu] ?? DEFAULT_ACCENT;
     return (
       <div ref={surface} tabIndex={-1} onKeyDown={onKeyDown} className="absolute inset-0 z-20 outline-none">
         <div
@@ -88,7 +92,7 @@ export function DialogOverlay() {
         >
           <div className="flex h-[34px] items-center justify-between border-b border-doom-border-soft bg-doom-deep px-3">
             <span data-testid="dialog-title" className={`text-[10px] font-bold tracking-wide ${accent.title}`}>
-              {MENU_TITLE[menu]}
+              {MENU_TITLE[menu] ?? menu.toUpperCase()}
             </span>
             <span className="text-[9px] text-doom-faint">{dialog.title}</span>
           </div>

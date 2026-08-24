@@ -1,6 +1,7 @@
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeActionResponse,
+  type MinorModeCatalogService,
 } from '@agimon-ai/doompi-extension-contracts/mode';
 import {
   connectDoomCordisHost,
@@ -19,6 +20,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/transition';
 import type { Context } from '@deepseek-ai/cordis';
 import { createMinorModeCatalogHost } from '../../services/modeCatalog.ts';
+import { registerMinorModeCommand } from './minorModeCommand.ts';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi/mode-catalog';
 const HELP_CONTRIBUTION_SOURCE = '@agimon-ai/doompi';
@@ -31,8 +33,14 @@ function transitionSource(requesterSource: string): TransitionSource {
 }
 
 export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
+  // The command outlives any one session: it is registered once and reads the
+  // catalog binding the session-scoped inject below sets and clears.
+  const activeCatalog: { current: MinorModeCatalogService | undefined } = { current: undefined };
+  registerMinorModeCommand(pi, () => activeCatalog.current);
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
-  const fiber = connection.root.plugin(modeCatalogPlugin);
+  const fiber = connection.root.plugin((cordis: Context) => {
+    modeCatalogPlugin(cordis, activeCatalog);
+  });
   try {
     await fiber;
   } catch (error) {
@@ -54,7 +62,7 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
   );
 }
 
-function modeCatalogPlugin(cordis: Context): void {
+function modeCatalogPlugin(cordis: Context, activeCatalog: { current: MinorModeCatalogService | undefined }): void {
   cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
     const contribution = requireDoomHelpService(helpContext).register({
       source: HELP_CONTRIBUTION_SOURCE,
@@ -110,7 +118,11 @@ function modeCatalogPlugin(cordis: Context): void {
       },
     });
     sessionContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
-    return () => catalog.dispose();
+    activeCatalog.current = catalog;
+    return () => {
+      activeCatalog.current = undefined;
+      catalog.dispose();
+    };
   });
 }
 
