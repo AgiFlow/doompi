@@ -6,6 +6,7 @@ import doomWebPlugin, {
   noCrossFeatureImport,
   noRawThemeColor,
   patterns,
+  preferSharedPrimitive,
   recommended,
   rules,
   webFileNaming,
@@ -16,8 +17,23 @@ const EXPECTED_RULE_IDS = [
   'doom-web-layer-boundary',
   'no-cross-feature-import',
   'no-raw-theme-color',
+  'prefer-shared-primitive',
   'web-file-naming',
 ] as const;
+
+/**
+ * prefer-shared-primitive lands as a warning: the surfaces it names are being
+ * migrated, and an error would block the change that clears them. Promote it
+ * once the sweep is quiet.
+ */
+const RULE_SEVERITY: Readonly<Record<(typeof EXPECTED_RULE_IDS)[number], 'error' | 'warn'>> = {
+  'doom-components-layer-boundary': 'error',
+  'doom-web-layer-boundary': 'error',
+  'no-cross-feature-import': 'error',
+  'no-raw-theme-color': 'error',
+  'prefer-shared-primitive': 'warn',
+  'web-file-naming': 'error',
+};
 
 const EXPECTED_PATTERN_IDS = [
   'doom-components-components',
@@ -58,6 +74,7 @@ describe('Doom web plugin contract', () => {
       doomWebLayerBoundary,
       noCrossFeatureImport,
       noRawThemeColor,
+      preferSharedPrimitive,
       webFileNaming,
     ]);
     expect(
@@ -69,7 +86,9 @@ describe('Doom web plugin contract', () => {
   });
 
   it('turns every rule on in the recommended preset', () => {
-    expect(recommended.rules).toEqual(Object.fromEntries(EXPECTED_RULE_IDS.map((ruleId) => [ruleId, 'error'])));
+    expect(recommended.rules).toEqual(
+      Object.fromEntries(EXPECTED_RULE_IDS.map((ruleId) => [ruleId, RULE_SEVERITY[ruleId]])),
+    );
   });
 
   it('describes every folder of a web package', () => {

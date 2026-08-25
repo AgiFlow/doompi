@@ -7,6 +7,7 @@ export {
   isComponentLibrary,
   noCrossFeatureImport,
   noRawThemeColor,
+  preferSharedPrimitive,
   rules,
   webFileNaming,
 } from './rules/index.js';

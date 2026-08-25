@@ -12,6 +12,14 @@ ignore:
   - "**/*.md"
   - "**/*.mdx"
   - "**/*.txt"
+  # Nothing to review in a binary, a licence, or a vendored model blob. They
+  # are listed because a directory check walks everything git tracks, and an
+  # asset with no boundary would otherwise report as an uncovered file.
+  - "**/*.png"
+  - "**/*.svg"
+  - "**/*.ico"
+  - "**/*.onnx"
+  - "**/*LICENSE*"
   - "**/*.gen.ts"
   - "**/__generated__/**"
   - "**/vendor/**"
