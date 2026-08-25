@@ -25,6 +25,13 @@ export const buttonVariants = cva(
         lg: 'h-8 px-3.5 text-[12px]',
         icon: 'h-5 w-5 rounded p-0',
         'icon-md': 'h-7 w-7 p-0',
+        /**
+         * A whole card that is one click target: a session in the rail, a run
+         * in a panel. It keeps the button's focus ring and cursor and gives up
+         * the button's single-line box, which is what a card-shaped <button>
+         * would otherwise have to restate.
+         */
+        card: 'h-auto w-full flex-col items-stretch justify-start gap-1 px-[11px] py-2.5 text-left whitespace-normal',
       },
     },
     defaultVariants: { variant: 'outline', size: 'md' },

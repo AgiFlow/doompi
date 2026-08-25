@@ -16,6 +16,8 @@ export {
   type DialogContentProps,
   DialogDescription,
   DialogFooter,
+  type DialogFooterProps,
+  dialogFooterVariants,
   DialogHeader,
   type DialogHeaderProps,
   DialogTitle,
@@ -54,6 +56,7 @@ export {
   CommandHeader,
   CommandInput,
   CommandItem,
+  CommandItemLabel,
   CommandList,
 } from '../components/Command.tsx';
 export { EmptyState, type EmptyStateProps } from '../components/EmptyState.tsx';
@@ -84,6 +87,7 @@ export {
   messageLineVariants,
 } from '../components/MessageLines.tsx';
 export {
+  OptionLabel,
   OptionList,
   optionListVariants,
   type OptionListProps,
@@ -92,7 +96,7 @@ export {
   type OptionRowProps,
   optionRowVariants,
 } from '../components/OptionList.tsx';
-export { Panel, PanelBody, PanelHeader } from '../components/Panel.tsx';
+export { Panel, PanelBody, PanelHeader, type PanelProps } from '../components/Panel.tsx';
 export {
   Popover,
   PopoverAnchor,

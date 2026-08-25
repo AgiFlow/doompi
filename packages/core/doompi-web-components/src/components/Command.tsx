@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '../lib/cn.ts';
 import { Dialog, DialogContent, type DialogContentProps, DialogTitle } from './Dialog.tsx';
 import { Input, type InputProps } from './Input.tsx';
-import { OptionRow, type OptionRowProps } from './OptionList.tsx';
+import { OptionLabel, OptionRow, type OptionRowProps } from './OptionList.tsx';
 
 /**
  * The command palette's frame, its search strip, its rows, and its hint.
@@ -97,6 +97,11 @@ export function CommandGroupLabel({ className, ...props }: ComponentProps<'div'>
 /** One command. Compact by default, since a palette shows many at once. */
 export function CommandItem({ density = 'compact', ...props }: OptionRowProps) {
   return <OptionRow data-slot="command-item" density={density} {...props} />;
+}
+
+/** A command's name, taking the width the row has left. */
+export function CommandItemLabel(props: ComponentProps<'span'>) {
+  return <OptionLabel data-slot="command-item-label" density="compact" {...props} />;
 }
 
 /** What the palette says when nothing matches. */

@@ -1,3 +1,4 @@
+import { cva, type VariantProps } from 'class-variance-authority';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
 import { CloseIcon } from '../icons/icons.ts';
@@ -127,6 +128,24 @@ export function DialogBody({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
-  return <div data-slot="dialog-footer" className={cn('flex items-center justify-end gap-2', className)} {...props} />;
+export const dialogFooterVariants = cva('flex shrink-0 items-center gap-2', {
+  variants: {
+    variant: {
+      /** Buttons alone, sitting inside the body's padding. */
+      plain: 'justify-end',
+      /**
+       * The full-width strip: a hint on the left, the buttons on the right,
+       * recessed and ruled off from the body. The same shape PopoverFooter
+       * draws, because a dialog and a popover promise their keys the same way.
+       */
+      bar: 'min-h-[34px] justify-between border-t border-doom-border-soft bg-doom-deep px-4',
+    },
+  },
+  defaultVariants: { variant: 'plain' },
+});
+
+export interface DialogFooterProps extends ComponentProps<'div'>, VariantProps<typeof dialogFooterVariants> {}
+
+export function DialogFooter({ className, variant, ...props }: DialogFooterProps) {
+  return <div data-slot="dialog-footer" className={cn(dialogFooterVariants({ variant }), className)} {...props} />;
 }

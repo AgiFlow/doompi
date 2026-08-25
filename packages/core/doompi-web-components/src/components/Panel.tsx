@@ -1,10 +1,17 @@
+import { Slot } from 'radix-ui';
 import type { ComponentProps } from 'react';
 import { cn } from '../lib/cn.ts';
 
+export interface PanelProps extends ComponentProps<'div'> {
+  /** Render the child element instead of a <div>, so a list row can be a panel. */
+  asChild?: boolean;
+}
+
 /** The bordered card surface: a tool card, a run card, a provider row. */
-export function Panel({ className, ...props }: ComponentProps<'div'>) {
+export function Panel({ className, asChild = false, ...props }: PanelProps) {
+  const Component = asChild ? Slot.Root : 'div';
   return (
-    <div
+    <Component
       data-slot="panel"
       className={cn('overflow-hidden rounded-md border border-doom-border bg-doom-panel', className)}
       {...props}

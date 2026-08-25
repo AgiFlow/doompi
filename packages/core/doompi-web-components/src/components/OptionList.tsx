@@ -37,17 +37,17 @@ export const optionMarkerVariants = cva('flex shrink-0 items-center justify-cent
   defaultVariants: { density: 'comfortable' },
 });
 
-export interface OptionRowProps
-  extends Omit<ComponentProps<'button'>, 'children'>, VariantProps<typeof optionRowVariants> {
+export interface OptionRowProps extends ComponentProps<'button'>, VariantProps<typeof optionRowVariants> {
   /** The digit or bullet in the row's leading circle; omit it for a row with no shortcut. */
   marker?: ReactNode;
-  children?: ReactNode;
 }
 
 /**
  * One row of an option list, exported on its own so a surface with richer
  * rows than a plain string still wears the list's shape instead of restating
- * it. `role="option"` means a row belongs inside a `listbox`.
+ * it. Children render straight into the row, so a row is free to hold a name
+ * and a description side by side; OptionLabel is the single-string case.
+ * `role="option"` means a row belongs inside a `listbox`.
  */
 export function OptionRow({ className, density, active, marker, children, ...props }: OptionRowProps) {
   return (
@@ -61,12 +61,27 @@ export function OptionRow({ className, density, active, marker, children, ...pro
       {...props}
     >
       {marker === undefined ? null : <span className={optionMarkerVariants({ density })}>{marker}</span>}
-      <span
-        className={cn('min-w-0 flex-1', density === 'compact' ? 'truncate text-[12px] text-doom-text' : 'break-words')}
-      >
-        {children}
-      </span>
+      {children}
     </button>
+  );
+}
+
+/** A row's single-string label: it takes the remaining width and clips or wraps by density. */
+export function OptionLabel({
+  className,
+  density,
+  ...props
+}: ComponentProps<'span'> & VariantProps<typeof optionListVariants>) {
+  return (
+    <span
+      data-slot="option-label"
+      className={cn(
+        'min-w-0 flex-1',
+        density === 'compact' ? 'truncate text-[12px] text-doom-text' : 'break-words',
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -129,7 +144,7 @@ export function OptionList({
           onMouseEnter={() => onCursorChange(index)}
           onClick={() => onSelect(option)}
         >
-          {option}
+          <OptionLabel density={density}>{option}</OptionLabel>
         </OptionRow>
       ))}
     </div>
