@@ -1,4 +1,4 @@
-import { Badge, Button, Dot } from '@agimon-ai/doompi-web-components';
+import { Badge, Button, Dot, EmptyState, Input, Panel, Spinner } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useState } from 'react';
 import type { AuthMethodType, LoginFlowSnapshot, ProviderAuthSummary } from '../../../types/auth.ts';
 import { answerLogin, cancelLogin, listProviders, logoutProvider, readLogin, startLogin } from '../../lib/authApi.ts';
@@ -28,48 +28,46 @@ function ProviderRow({
 }) {
   const authenticated = provider.authenticated !== undefined;
   return (
-    <li
-      data-testid={`provider-${provider.id}`}
-      data-authenticated={authenticated}
-      className="flex items-center gap-3 rounded-md border border-doom-border bg-doom-panel px-3.5 py-2.5 transition-colors hover:border-doom-blue/30"
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
-        <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
-      </div>
-      <Badge tone={authenticated ? 'green' : 'neutral'} data-testid={`provider-status-${provider.id}`}>
-        <Dot tone={authenticated ? 'green' : 'neutral'} />
-        {statusText(provider)}
-      </Badge>
-      {provider.methods.map((method) => (
-        <Button
-          key={method.type}
-          variant="outline"
-          size="sm"
-          data-testid={`provider-login-${method.type}-${provider.id}`}
-          title={method.label}
-          disabled={busy}
-          onClick={() => onLogin(method.type)}
-        >
-          sign in · {METHOD_LABEL[method.type]}
-        </Button>
-      ))}
-      {provider.authenticated?.source === STORED_SOURCE ? (
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid={`provider-logout-${provider.id}`}
-          disabled={busy}
-          onClick={onLogout}
-          className="hover:border-doom-red/50 hover:text-doom-red"
-        >
-          sign out
-        </Button>
-      ) : null}
-      {provider.methods.length === 0 ? (
-        <span className="text-[10px] text-doom-faint">ambient credentials only</span>
-      ) : null}
-    </li>
+    <Panel asChild className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:border-doom-blue/30">
+      <li data-testid={`provider-${provider.id}`} data-authenticated={authenticated}>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
+          <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
+        </div>
+        <Badge tone={authenticated ? 'green' : 'neutral'} data-testid={`provider-status-${provider.id}`}>
+          <Dot tone={authenticated ? 'green' : 'neutral'} />
+          {statusText(provider)}
+        </Badge>
+        {provider.methods.map((method) => (
+          <Button
+            key={method.type}
+            variant="outline"
+            size="sm"
+            data-testid={`provider-login-${method.type}-${provider.id}`}
+            title={method.label}
+            disabled={busy}
+            onClick={() => onLogin(method.type)}
+          >
+            sign in · {METHOD_LABEL[method.type]}
+          </Button>
+        ))}
+        {provider.authenticated?.source === STORED_SOURCE ? (
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid={`provider-logout-${provider.id}`}
+            disabled={busy}
+            onClick={onLogout}
+            className="hover:border-doom-red/50 hover:text-doom-red"
+          >
+            sign out
+          </Button>
+        ) : null}
+        {provider.methods.length === 0 ? (
+          <span className="text-[10px] text-doom-faint">ambient credentials only</span>
+        ) : null}
+      </li>
+    </Panel>
   );
 }
 
@@ -183,17 +181,21 @@ export function ProviderSettings() {
           {error}
         </p>
       ) : null}
-      {providers === null && !error ? <p className="text-[11px] text-doom-faint">reading providers…</p> : null}
+      {providers === null && !error ? (
+        <p className="flex items-center gap-2 text-[11px] text-doom-faint">
+          <Spinner label="reading providers" />
+          reading providers…
+        </p>
+      ) : null}
       {providers ? (
         <>
           <div className="flex items-center gap-3">
-            <input
+            <Input
               data-testid="provider-filter"
               value={filter}
               placeholder="filter providers…"
-              spellCheck={false}
               onChange={(event) => setFilter(event.target.value)}
-              className="min-w-0 flex-1 rounded border border-doom-border bg-doom-deep px-2.5 py-1.5 text-[12px] text-doom-hi outline-none transition-colors placeholder:text-doom-faint focus:border-doom-blue/60"
+              className="flex-1"
             />
             <span className="shrink-0 text-[10px] text-doom-faint">
               {authenticatedCount} of {providers.length} signed in
@@ -210,9 +212,15 @@ export function ProviderSettings() {
               />
             ))}
             {shown.length === 0 ? (
-              <li data-testid="provider-no-match" className="px-1 py-3 text-[11px] text-doom-faint">
-                no provider matches “{filter.trim()}”
-              </li>
+              <EmptyState
+                asChild
+                data-testid="provider-no-match"
+                className="py-6"
+                title="no provider matches"
+                description={`nothing here answers to “${filter.trim()}”.`}
+              >
+                <li />
+              </EmptyState>
             ) : null}
           </ul>
         </>

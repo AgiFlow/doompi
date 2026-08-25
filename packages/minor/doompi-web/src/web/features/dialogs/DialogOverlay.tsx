@@ -1,15 +1,21 @@
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
+  handleOptionListKey,
   Kbd,
+  OptionList,
+  optionListHint,
+  Panel,
   ShieldIcon,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
-import { handleOptionListKey, OptionList, optionListHint } from '../../components/OptionList.tsx';
 import { focusPrompt } from '../../lib/promptFocus.ts';
 import { menuStore } from '../../stores/menuStore.ts';
 import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore.ts';
@@ -68,20 +74,17 @@ export function DialogOverlay() {
         }}
         className="rounded-[10px] border-doom-edge-magenta"
       >
-        <div className="flex h-[42px] shrink-0 items-center justify-between border-b border-doom-edge-magenta bg-doom-tint-magenta px-4">
-          <DialogTitle
-            data-testid="dialog-title"
-            className="flex items-center gap-2 text-[12px] font-bold tracking-wide text-doom-magenta"
-          >
+        <DialogHeader className="h-[42px] border-doom-edge-magenta bg-doom-tint-magenta py-0">
+          <DialogTitle data-testid="dialog-title" className="flex items-center gap-2 text-doom-magenta">
             <ShieldIcon className="h-[13px] w-[13px] shrink-0" />
             {dialog.title}
           </DialogTitle>
           <span className="text-[9px] text-doom-faint">extension · {dialog.method}</span>
-        </div>
+        </DialogHeader>
 
-        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-4">
+        <DialogBody>
           {dialog.message && dialog.method === 'select' ? (
-            <div data-testid="dialog-command" className="rounded-md border border-doom-border bg-doom-deep px-3 py-2.5">
+            <Panel data-testid="dialog-command" className="bg-doom-deep px-3 py-2.5">
               <div className="flex gap-2">
                 <span className="text-[12px] text-doom-green">$</span>
                 <pre
@@ -91,7 +94,7 @@ export function DialogOverlay() {
                   {dialog.message}
                 </pre>
               </div>
-            </div>
+            </Panel>
           ) : dialog.message ? (
             <p data-testid="dialog-message" className="text-[12px] leading-relaxed text-doom-text">
               {dialog.message}
@@ -124,9 +127,9 @@ export function DialogOverlay() {
               }}
             />
           ) : null}
-        </div>
+        </DialogBody>
 
-        <div className="flex h-[34px] shrink-0 items-center justify-between border-t border-doom-border-soft bg-doom-deep px-4">
+        <DialogFooter variant="bar" className="h-[34px]">
           <span data-testid="dialog-hints" className="flex items-center gap-1.5 text-[10px] text-doom-faint">
             {dialog.method === 'select' ? optionListHint(dialog.options.length) : 'enter confirm'} · <Kbd>esc</Kbd>{' '}
             cancels and tells the agent
@@ -166,7 +169,7 @@ export function DialogOverlay() {
               </Button>
             ) : null}
           </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

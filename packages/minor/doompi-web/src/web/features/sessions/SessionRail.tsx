@@ -1,6 +1,8 @@
 import {
   BranchIcon,
   Button,
+  buttonVariants,
+  cn,
   Dialog,
   DialogBody,
   DialogContent,
@@ -141,29 +143,29 @@ function SessionCard({
     if ('error' in result) setError(result.error);
   };
 
-  const cardClass = `flex w-full flex-col gap-1 rounded-md px-[11px] py-2.5 text-left transition-colors ${
-    active ? 'bg-doom-selected' : 'hover:bg-doom-panel'
-  }`;
+  const cardClass = active ? 'bg-doom-selected hover:bg-doom-selected' : 'hover:bg-doom-panel';
   const menuOpen = mode === 'menu';
   const details = (
     <>
       <span
         data-testid="session-status"
-        className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-white/85' : 'truncate text-doom-dim'}`}
+        className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
       >
         {status}
       </span>
       {summary.git ? (
         <span
           data-testid="session-branch"
-          className={`flex items-center gap-[7px] pt-0.5 text-[10px] ${active ? 'text-white/85' : 'text-doom-faint'}`}
+          className={`flex items-center gap-[7px] pt-0.5 text-[10px] ${active ? 'text-doom-on-selected/85' : 'text-doom-faint'}`}
         >
-          <BranchIcon className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-white/70' : 'text-doom-faint'}`} />
+          <BranchIcon
+            className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
+          />
           {summary.git.branch}
           {summary.git.dirty ? '*' : ''}
         </span>
       ) : null}
-      <span className={`truncate text-[10px] ${active ? 'text-white/70' : 'text-doom-faint'}`}>
+      <span className={`truncate text-[10px] ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
         {abbreviateCwd(summary.cwd)}
       </span>
       {error ? (
@@ -179,7 +181,7 @@ function SessionCard({
       {mode === 'rename' ? (
         // The name field cannot live inside the card button, so the card
         // briefly stops being one while it takes a name.
-        <div className={cardClass}>
+        <div className={cn(buttonVariants({ variant: 'ghost', size: 'card' }), cardClass, 'cursor-default')}>
           <Input
             data-testid={`session-name-input-${summary.id}`}
             value={draft}
@@ -195,21 +197,24 @@ function SessionCard({
           {details}
         </div>
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="card"
           data-testid={`session-open-${summary.id}`}
           onClick={() => void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } })}
           className={cardClass}
         >
           <div className="flex items-center gap-2">
-            <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${active ? 'text-white' : 'text-doom-hi'}`}>
+            <span
+              className={`min-w-0 flex-1 truncate text-[13px] font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
+            >
               {summary.name || 'untitled'}
             </span>
             {ordinal <= 9 ? (
               <span
                 title={`press ${String(ordinal)} to focus`}
                 className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
-                  active ? 'bg-white/20 text-white' : 'bg-doom-tint-magenta text-doom-magenta'
+                  active ? 'bg-doom-on-selected/20 text-doom-on-selected' : 'bg-doom-tint-magenta text-doom-magenta'
                 }`}
               >
                 {ordinal}
@@ -217,7 +222,7 @@ function SessionCard({
             ) : null}
           </div>
           {details}
-        </button>
+        </Button>
       )}
 
       {mode === 'view' || menuOpen ? (
@@ -238,7 +243,7 @@ function SessionCard({
                 title="session actions"
                 className={
                   active
-                    ? 'text-white/80 hover:bg-white/20 hover:text-white data-[state=open]:bg-white/20 data-[state=open]:text-white'
+                    ? 'text-doom-on-selected/80 hover:bg-doom-on-selected/20 hover:text-doom-on-selected data-[state=open]:bg-doom-on-selected/20 data-[state=open]:text-doom-on-selected'
                     : 'text-doom-faint hover:bg-doom-deep hover:text-doom-hi data-[state=open]:bg-doom-deep data-[state=open]:text-doom-hi'
                 }
               >

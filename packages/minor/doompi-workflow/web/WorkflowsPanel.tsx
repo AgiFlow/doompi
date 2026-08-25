@@ -1,4 +1,14 @@
-import { Dot, type DotTone, EmptyState, STATUS_EDGE, StatusBadge } from '@agimon-ai/doompi-web-components';
+import {
+  Badge,
+  cn,
+  Dot,
+  type DotTone,
+  EmptyState,
+  OptionLabel,
+  OptionRow,
+  STATUS_EDGE,
+  StatusBadge,
+} from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
@@ -69,7 +79,9 @@ function NowLine({ run }: { run: WorkflowRunView }) {
   if (run.stage !== 'running' || run.position === undefined) return null;
   return (
     <div data-testid="workflow-now" className="flex items-center gap-2 pb-3">
-      <span className="rounded-[3px] bg-doom-tint-blue px-1.5 py-0.5 text-[8px] font-bold text-doom-blue">NOW</span>
+      <StatusBadge tone="info" size="xs">
+        NOW
+      </StatusBadge>
       <span className="truncate text-[11px] text-doom-hi">
         {run.workflowName ?? run.displayName}
         <span className="text-doom-faint"> › </span>
@@ -143,19 +155,20 @@ function JobRow({
   const icon = STATE_ICON[job.status];
   const phaseTone = job.phase === 'job' ? 'text-doom-text' : 'text-doom-faint';
   return (
-    <button
-      type="button"
+    <OptionRow
+      density="compact"
+      active={selected}
       data-testid={`job-row-${job.name}`}
       data-job-status={job.status}
       onClick={onSelect}
-      className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-left ${
-        selected ? 'bg-doom-tint-blue' : 'hover:bg-doom-panel'
-      }`}
+      className={cn('gap-2 rounded px-2.5 py-1.5', !selected && 'hover:bg-doom-panel')}
     >
       <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
-      <span className={`min-w-0 flex-1 truncate text-[11px] ${selected ? 'text-doom-hi' : phaseTone}`}>{job.name}</span>
+      <OptionLabel density="compact" className={`text-[11px] ${selected ? 'text-doom-hi' : phaseTone}`}>
+        {job.name}
+      </OptionLabel>
       <span className="shrink-0 text-[9px] text-doom-faint">{spanDuration(job.startedAt, job.endedAt, now) ?? ''}</span>
-    </button>
+    </OptionRow>
   );
 }
 
@@ -244,25 +257,32 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
                 const tone = runTone(candidate);
                 const active = run !== undefined && workflowRunIdentity(candidate) === workflowRunIdentity(run);
                 return (
-                  <button
+                  <Badge
+                    asChild
                     key={workflowRunIdentity(candidate)}
-                    type="button"
-                    data-testid={`workflow-chip-${candidate.runKey}`}
-                    data-run-stage={candidate.stage}
-                    data-active={active}
-                    onClick={() => {
-                      if (sessionId !== null) focusRun(sessionId, workflowRunIdentity(candidate));
-                      setSelectedJob(null);
-                    }}
-                    className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-[10px] ${
+                    tone={active ? 'blue' : 'neutral'}
+                    size="md"
+                    className={cn(
+                      'px-2.5 py-1 text-[10px]',
                       active
                         ? 'border-doom-blue/60 bg-doom-tint-blue font-bold text-doom-hi'
-                        : 'border-doom-border bg-doom-panel text-doom-dim hover:text-doom-hi'
-                    }`}
+                        : 'bg-doom-panel hover:text-doom-hi',
+                    )}
                   >
-                    <Dot tone={tone.dot} pulse={candidate.stage === 'running'} />
-                    {candidate.displayName}
-                  </button>
+                    <button
+                      type="button"
+                      data-testid={`workflow-chip-${candidate.runKey}`}
+                      data-run-stage={candidate.stage}
+                      data-active={active}
+                      onClick={() => {
+                        if (sessionId !== null) focusRun(sessionId, workflowRunIdentity(candidate));
+                        setSelectedJob(null);
+                      }}
+                    >
+                      <Dot tone={tone.dot} pulse={candidate.stage === 'running'} />
+                      {candidate.displayName}
+                    </button>
+                  </Badge>
                 );
               })}
               <span className="min-w-0 flex-1" />
@@ -290,7 +310,7 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
                       </span>
                     </div>
                     {jobs.length === 0 ? (
-                      <span className="px-2.5 py-2 text-[10px] text-doom-faint">no progress recorded yet</span>
+                      <EmptyState className="py-4" title="no progress recorded yet" />
                     ) : (
                       jobs.map((candidate) => (
                         <JobRow
@@ -315,13 +335,9 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
                           <span data-testid="job-pane-name" className="truncate text-[12px] font-bold text-doom-hi">
                             {job.name}
                           </span>
-                          <span
-                            className={`rounded-[3px] px-[7px] py-[3px] text-[9px] font-bold ${
-                              STATE_ICON[job.status].className
-                            } bg-doom-deep`}
-                          >
+                          <StatusBadge className={cn('bg-doom-deep', STATE_ICON[job.status].className)}>
                             {job.status.replace('_', ' ')}
-                          </span>
+                          </StatusBadge>
                           <span className="min-w-0 flex-1" />
                           <span className="text-[9px] text-doom-faint">
                             {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
@@ -329,7 +345,7 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
                         </div>
                         <div className="flex flex-col py-1.5">
                           {job.steps.length === 0 ? (
-                            <span className="px-4 py-2 text-[10px] text-doom-faint">no steps recorded yet</span>
+                            <EmptyState className="py-4" title="no steps recorded yet" />
                           ) : (
                             job.steps.map((step) => <StepRow key={step.name} step={step} now={now} />)
                           )}

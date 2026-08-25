@@ -1,4 +1,4 @@
-import { Dot, type DotTone } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
@@ -50,9 +50,10 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
   return (
     <div data-testid="activity-workflow-runs" className="flex flex-col gap-0.5">
       {rows.map((row) => (
-        <button
+        <Button
           key={row.identity}
-          type="button"
+          variant="ghost"
+          size="card"
           data-testid={`activity-workflow-${row.runKey}`}
           data-run-tone={row.tone}
           title="open this run in the workflows tab"
@@ -61,7 +62,7 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
             focusRun(sessionId, row.identity);
             openTab(WORKFLOWS_TAB);
           }}
-          className="flex min-w-0 flex-col gap-0.5 rounded-[5px] px-1 py-1 text-left hover:bg-doom-panel"
+          className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
         >
           <span className="flex min-w-0 items-center gap-1.5">
             <Dot tone={TONE_DOT[row.tone]} pulse={row.tone === 'running'} />
@@ -75,7 +76,7 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
             <span className="shrink-0 text-[9px] text-doom-faint">{row.elapsed}</span>
           </span>
           <span className={`truncate pl-3 text-[9px] ${TONE_DETAIL[row.tone]}`}>{row.detail}</span>
-        </button>
+        </Button>
       ))}
     </div>
   );

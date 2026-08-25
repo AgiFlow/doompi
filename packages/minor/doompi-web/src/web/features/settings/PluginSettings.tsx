@@ -1,4 +1,4 @@
-import { SectionLabel } from '@agimon-ai/doompi-web-components';
+import { Panel, SectionLabel } from '@agimon-ai/doompi-web-components';
 import type { WebPluginDefinition } from '@agimon-ai/doompi-web-contracts';
 import { installedWebPlugins, webPluginDiagnostics } from '../../lib/pluginRegistry.ts';
 
@@ -45,16 +45,14 @@ export function PluginSettings() {
         ) : (
           <ul className="flex flex-col gap-1">
             {plugins.map((plugin) => (
-              <li
-                key={plugin.id}
-                data-testid={`settings-plugin-${plugin.id}`}
-                className="flex items-baseline gap-3 rounded-md border border-doom-border px-3 py-2"
-              >
-                <span className="text-[12px] font-bold text-doom-hi">{plugin.id}</span>
-                <span className="min-w-0 flex-1 truncate text-[10px] text-doom-faint">
-                  {contributions(plugin).join(' · ') || 'no contributions'}
-                </span>
-              </li>
+              <Panel asChild key={plugin.id} className="flex items-baseline gap-3 bg-transparent px-3 py-2">
+                <li data-testid={`settings-plugin-${plugin.id}`}>
+                  <span className="text-[12px] font-bold text-doom-hi">{plugin.id}</span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] text-doom-faint">
+                    {contributions(plugin).join(' · ') || 'no contributions'}
+                  </span>
+                </li>
+              </Panel>
             ))}
           </ul>
         )}
@@ -73,17 +71,18 @@ export function PluginSettings() {
         ) : (
           <ul className="flex flex-col gap-1">
             {diagnostics.map((diagnostic, index) => (
-              <li
+              <Panel
+                asChild
                 key={`${diagnostic.pluginId}:${diagnostic.kind}:${String(index)}`}
-                data-testid={`settings-plugin-diagnostic-${diagnostic.pluginId}`}
-                data-kind={diagnostic.kind}
-                className="flex flex-col gap-0.5 rounded-md border border-doom-border px-3 py-2"
+                className="flex flex-col gap-0.5 bg-transparent px-3 py-2"
               >
-                <span className="text-[10px] font-bold text-doom-yellow">
-                  {diagnostic.pluginId} · {diagnostic.kind}
-                </span>
-                <span className="text-[10px] leading-snug text-doom-dim">{diagnostic.message}</span>
-              </li>
+                <li data-testid={`settings-plugin-diagnostic-${diagnostic.pluginId}`} data-kind={diagnostic.kind}>
+                  <span className="text-[10px] font-bold text-doom-yellow">
+                    {diagnostic.pluginId} · {diagnostic.kind}
+                  </span>
+                  <span className="text-[10px] leading-snug text-doom-dim">{diagnostic.message}</span>
+                </li>
+              </Panel>
             ))}
           </ul>
         )}

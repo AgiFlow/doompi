@@ -1,40 +1,24 @@
 import {
+  Badge,
   Button,
+  cn,
   CloseIcon,
   EmptyState,
+  Panel,
   STATUS_EDGE,
   StatusBadge,
-  type StatusTone,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
 import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import {
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  useEffect,
-  useState,
-} from 'react';
-import type { SubagentRun, SubagentRunState } from '../src/types/webSubagents.ts';
-import { abbreviateCwd, formatRunDuration } from './format.ts';
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
+import type { SubagentRun } from '../src/types/webSubagents.ts';
+import { abbreviateCwd } from './format.ts';
 import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
-import { dismissRun, isTerminalRun, openRun, requestRunStop, subagents, visibleRuns } from './subagentsStore.ts';
+import { elapsedRun, RUN_BADGE, RunControl } from './RunControl.tsx';
+import { openRun, subagents, visibleRuns } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
-
-/** One run state, in the host's shared outcome vocabulary. */
-const BADGE: Readonly<Record<SubagentRunState, { label: string; tone: StatusTone }>> = {
-  queued: { label: 'QUEUED', tone: 'neutral' },
-  running: { label: 'RUNNING', tone: 'running' },
-  done: { label: 'DONE', tone: 'ok' },
-  failed: { label: 'FAILED', tone: 'error' },
-  stopped: { label: 'STOPPED', tone: 'neutral' },
-};
-
-function elapsed(run: SubagentRun, now: number): string {
-  const end = run.endedAt ?? (run.state === 'running' || run.state === 'queued' ? now : run.lastUpdate);
-  return formatRunDuration(Math.max(0, end - run.startedAt));
-}
 
 /** The card's work line: a task binding wins; otherwise the delegation prompt. */
 function WorkLine({ run }: { run: SubagentRun }) {
@@ -42,9 +26,9 @@ function WorkLine({ run }: { run: SubagentRun }) {
   if (run.taskRef) {
     return (
       <div className="flex items-center gap-2 px-3 pb-2.5">
-        <span className="shrink-0 rounded-[3px] border border-doom-violet/40 bg-doom-violet/10 px-1.5 py-0.5 text-[8px] font-bold text-doom-violet">
+        <Badge tone="violet" size="xs" className="shrink-0 rounded-[3px] bg-doom-violet/10">
           TASK {run.taskRef}
-        </span>
+        </Badge>
         <span data-testid="run-work" className="min-w-0 truncate text-[10px] text-doom-hi">
           {firstLine}
         </span>
@@ -81,54 +65,6 @@ function tailLines(run: SubagentRun): { text: string; className: string }[] {
   return lines;
 }
 
-/**
- * The one control a run offers: stop while it is active, clear once it is
- * not. Stop is a request the runtime acknowledges in its own time, so the
- * button reads "stopping" until the run's own status says otherwise.
- */
-function RunControl({
-  sessionId,
-  run,
-  stopping,
-  send,
-}: {
-  sessionId: string;
-  run: SubagentRun;
-  stopping: boolean;
-  send: SessionFrameSender;
-}) {
-  const act = (event: ReactMouseEvent, action: () => void): void => {
-    event.stopPropagation();
-    action();
-  };
-  if (isTerminalRun(run)) {
-    return (
-      <Button
-        variant="outline"
-        size="xs"
-        data-testid={`run-clear-${run.runId}`}
-        title="clear this run from the grid"
-        onClick={(event) => act(event, () => dismissRun(sessionId, run.runId))}
-      >
-        clear
-      </Button>
-    );
-  }
-  return (
-    <Button
-      variant={stopping ? 'outline' : 'danger-outline'}
-      size="xs"
-      data-testid={`run-stop-${run.runId}`}
-      data-stopping={stopping}
-      disabled={stopping}
-      title={stopping ? 'stop requested; the run reports its own final state' : 'ask the runtime to stop this run'}
-      onClick={(event) => act(event, () => requestRunStop(send, sessionId, run.runId))}
-    >
-      {stopping ? 'stopping…' : 'stop'}
-    </Button>
-  );
-}
-
 function RunCard({
   sessionId,
   run,
@@ -144,7 +80,7 @@ function RunCard({
   send: SessionFrameSender;
   onOpen: () => void;
 }) {
-  const badge = BADGE[run.state];
+  const badge = RUN_BADGE[run.state];
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
@@ -155,45 +91,52 @@ function RunCard({
   // A div rather than a button: the card carries buttons of its own, and a
   // button cannot contain another.
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      data-testid={`run-card-${run.runId}`}
-      data-run-state={run.state}
-      onClick={onOpen}
-      onKeyDown={onKeyDown}
-      className={`flex min-h-[210px] min-w-0 cursor-pointer flex-col overflow-hidden rounded-md border bg-doom-panel text-left transition-colors outline-none ${STATUS_EDGE[badge.tone]} hover:border-doom-blue/50 focus-visible:border-doom-blue`}
+    <Panel
+      asChild
+      className={cn(
+        'flex min-h-[210px] min-w-0 cursor-pointer flex-col text-left transition-colors outline-none hover:border-doom-blue/50 focus-visible:border-doom-blue',
+        STATUS_EDGE[badge.tone],
+      )}
     >
-      <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
-        <span data-testid="run-agent" className="truncate text-[12px] font-bold text-doom-hi">
-          {run.agent}
-        </span>
-        <span className="min-w-0 flex-1" />
-        <span className="shrink-0 text-[9px] text-doom-faint">{elapsed(run, now)}</span>
-        <StatusBadge tone={badge.tone} data-testid="run-state">
-          {badge.label}
-        </StatusBadge>
-      </div>
-      <WorkLine run={run} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden border-t border-doom-border-soft bg-doom-deep px-3 py-2.5">
-        {tailLines(run).map((line, index) => (
-          <span key={index} className={`truncate text-[10px] ${line.className}`}>
-            {line.text}
+      <div
+        role="button"
+        tabIndex={0}
+        data-testid={`run-card-${run.runId}`}
+        data-run-state={run.state}
+        onClick={onOpen}
+        onKeyDown={onKeyDown}
+      >
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+          <span data-testid="run-agent" className="truncate text-[12px] font-bold text-doom-hi">
+            {run.agent}
           </span>
-        ))}
-        {run.state === 'running' ? <StreamCursor className="mt-0.5 ml-0 h-[11px] w-1.5 translate-y-0" /> : null}
+          <span className="min-w-0 flex-1" />
+          <span className="shrink-0 text-[9px] text-doom-faint">{elapsedRun(run, now)}</span>
+          <StatusBadge tone={badge.tone} data-testid="run-state">
+            {badge.label}
+          </StatusBadge>
+        </div>
+        <WorkLine run={run} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden border-t border-doom-border-soft bg-doom-deep px-3 py-2.5">
+          {tailLines(run).map((line, index) => (
+            <span key={index} className={`truncate text-[10px] ${line.className}`}>
+              {line.text}
+            </span>
+          ))}
+          {run.state === 'running' ? <StreamCursor className="mt-0.5 ml-0 h-[11px] w-1.5 translate-y-0" /> : null}
+        </div>
+        <div className="flex items-center gap-3 px-3 py-2">
+          <span className="truncate text-[9px] text-doom-faint">
+            {run.toolCount !== undefined ? `${run.toolCount} tools` : '—'}
+            {run.tokens !== undefined ? ` · ${run.tokens.toLocaleString()} tk` : ''}
+            {run.model ? ` · ${run.model.split('/').pop() ?? run.model}` : ''}
+          </span>
+          <span className="min-w-0 flex-1" />
+          <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
+          <span className="text-[9px] font-bold text-doom-blue">detail</span>
+        </div>
       </div>
-      <div className="flex items-center gap-3 px-3 py-2">
-        <span className="truncate text-[9px] text-doom-faint">
-          {run.toolCount !== undefined ? `${run.toolCount} tools` : '—'}
-          {run.tokens !== undefined ? ` · ${run.tokens.toLocaleString()} tk` : ''}
-          {run.model ? ` · ${run.model.split('/').pop() ?? run.model}` : ''}
-        </span>
-        <span className="min-w-0 flex-1" />
-        <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
-        <span className="text-[9px] font-bold text-doom-blue">detail</span>
-      </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -223,7 +166,7 @@ function RunDrawer({
   renderSlot: WebPluginSlotProps['renderSlot'];
   onClose: () => void;
 }) {
-  const badge = BADGE[run.state];
+  const badge = RUN_BADGE[run.state];
   const output = run.summary ?? run.tail.join('\n');
   return (
     <aside
@@ -236,7 +179,7 @@ function RunDrawer({
         </span>
         <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
         <span className="min-w-0 flex-1" />
-        <span className="text-[10px] text-doom-faint">{elapsed(run, now)}</span>
+        <span className="text-[10px] text-doom-faint">{elapsedRun(run, now)}</span>
         {renderSlot(RUN_ACTIONS_SLOT.slot)}
         <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
         <Button variant="ghost" size="icon" data-testid="drawer-close" title="close the run detail" onClick={onClose}>

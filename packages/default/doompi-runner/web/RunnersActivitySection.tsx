@@ -87,20 +87,21 @@ export function RunnersActivitySection({ sessionId, sendSessionFrame }: WebPlugi
             className="flex min-w-0 flex-col gap-0.5 rounded-[5px] px-1 py-1"
           >
             <span className="flex min-w-0 items-center gap-1.5">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 data-testid={`activity-runner-open-${run.id}`}
                 aria-expanded={openId === run.id}
                 title={openId === run.id ? 'hide this runner' : 'show this runner in full'}
                 onClick={() => setOpenId((current) => (current === run.id ? null : run.id))}
-                className="flex h-3 w-3 shrink-0 items-center justify-center rounded text-doom-faint outline-none hover:text-doom-hi focus-visible:text-doom-hi"
+                className="h-3 w-3 text-doom-faint hover:text-doom-hi focus-visible:text-doom-hi"
               >
                 {openId === run.id ? (
                   <ChevronDownIcon className="h-2.5 w-2.5" />
                 ) : (
                   <ChevronRightIcon className="h-2.5 w-2.5" />
                 )}
-              </button>
+              </Button>
               <Dot tone={TONE_DOT[tone]} pulse={tone === 'running'} />
               <span
                 className={`min-w-0 flex-1 truncate text-[10px] font-bold ${

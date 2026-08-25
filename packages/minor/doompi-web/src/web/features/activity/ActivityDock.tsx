@@ -1,4 +1,4 @@
-import { Button, Dot, Kbd, SectionLabel, StatusBadge } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, EmptyState, Kbd, SectionLabel, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { activityGroups } from '../../lib/composition.ts';
@@ -47,9 +47,12 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {groups.length === 0 ? (
-          <p data-testid="activity-empty" className="px-4 py-5 text-[11px] leading-relaxed text-doom-faint">
-            nothing is supervised in this session yet. a package's group appears here once its extension reports in.
-          </p>
+          <EmptyState
+            data-testid="activity-empty"
+            className="px-4 py-5"
+            title="nothing supervised yet"
+            description="a package's group appears here once its extension reports in."
+          />
         ) : (
           <div className="flex flex-col">
             {groups.map((group) => (

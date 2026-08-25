@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  OptionRow,
 } from '@agimon-ai/doompi-web-components';
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
@@ -45,7 +46,9 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const typed = cwd.trim();
-    if (!typed.startsWith(PATH_SEPARATOR)) {
+    // Any typing is worth a lookup now: the hub completes a path being drilled
+    // into and searches for anything else, so a bare folder name finds itself.
+    if (typed === '') {
       setSuggestions([]);
       return;
     }
@@ -123,7 +126,7 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
         <DialogBody>
           <label className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">
-              working directory <span className="text-doom-faint/70">(last segment filters as a regex)</span>
+              working directory <span className="text-doom-faint/70">(type a folder name or paste a path)</span>
             </span>
             <Input
               ref={cwdInput}
@@ -132,31 +135,33 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
               autoFocus
               onChange={(event) => setCwd(event.target.value)}
               onKeyDown={onCwdKeyDown}
-              placeholder="/absolute/path/to/project"
+              placeholder="agirepo, or /absolute/path/to/project"
             />
           </label>
           {suggestions.length > 0 ? (
-            <ul
+            <div
+              role="listbox"
+              aria-label="matching directories"
               data-testid="new-session-suggestions"
-              className="max-h-40 overflow-y-auto rounded border border-doom-border bg-doom-deep"
+              className="max-h-40 overflow-y-auto rounded border border-doom-border bg-doom-deep p-1"
             >
               {suggestions.map((directory, index) => (
-                <li key={directory}>
-                  <button
-                    type="button"
-                    data-testid="new-session-suggestion"
-                    data-highlighted={index === highlight}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => pick(directory)}
-                    className={`block w-full truncate px-2.5 py-1 text-left font-mono text-[11px] ${
-                      index === highlight ? 'bg-doom-panel text-doom-hi' : 'text-doom-dim hover:text-doom-hi'
-                    }`}
-                  >
-                    {directory}
-                  </button>
-                </li>
+                <OptionRow
+                  key={directory}
+                  density="compact"
+                  active={index === highlight}
+                  data-testid="new-session-suggestion"
+                  data-highlighted={index === highlight}
+                  title={directory}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setHighlight(index)}
+                  onClick={() => pick(directory)}
+                  className="w-full px-2.5 py-1 text-[11px]"
+                >
+                  {directory}
+                </OptionRow>
               ))}
-            </ul>
+            </div>
           ) : null}
           {recentCwds.length > 0 ? (
             <div className="flex flex-wrap gap-1">

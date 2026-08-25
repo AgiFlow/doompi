@@ -1,4 +1,4 @@
-import { CheckIcon } from '@agimon-ai/doompi-web-components';
+import { CheckIcon, RadioGroup, RadioGroupCard } from '@agimon-ai/doompi-web-components';
 import type { ThemeConfig } from '@agimon-ai/doompi-web-components/theme';
 import { useStore } from '@tanstack/react-store';
 import { availableThemes, selectTheme, themeStore } from '../../stores/themeStore.ts';
@@ -51,23 +51,22 @@ export function AppearanceSettings() {
           including the plugins&apos; tabs, follows it.
         </p>
       </div>
-      <div role="radiogroup" aria-label="theme" data-testid="theme-list" className="grid grid-cols-3 gap-3">
+      <RadioGroup
+        aria-label="theme"
+        data-testid="theme-list"
+        className="grid grid-cols-3 gap-3"
+        value={current}
+        onValueChange={selectTheme}
+      >
         {availableThemes().map((theme) => {
           const selected = theme.name === current;
           return (
-            <button
+            <RadioGroupCard
               key={theme.name}
-              type="button"
-              role="radio"
-              aria-checked={selected}
+              value={theme.name}
               data-testid={`theme-${theme.name}`}
               data-selected={selected}
-              onClick={() => selectTheme(theme.name)}
-              className={`flex flex-col gap-2 rounded-md border p-2.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-doom-blue/50 ${
-                selected
-                  ? 'border-doom-blue bg-doom-tint-blue'
-                  : 'border-doom-border bg-doom-panel hover:border-doom-blue/50'
-              }`}
+              className="flex flex-col gap-2 p-2.5"
             >
               <ThemeSwatch theme={theme} />
               <span className="flex items-center gap-2">
@@ -77,10 +76,10 @@ export function AppearanceSettings() {
                 <span className="text-[9px] text-doom-faint">{theme.scheme}</span>
                 {selected ? <CheckIcon className="h-3 w-3 text-doom-blue" /> : null}
               </span>
-            </button>
+            </RadioGroupCard>
           );
         })}
-      </div>
+      </RadioGroup>
       <p className="text-[10px] leading-relaxed text-doom-faint">
         a theme is a JSON config of twenty palette tokens; see @agimon-ai/doompi-web-components for the contract.
       </p>

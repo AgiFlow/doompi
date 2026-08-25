@@ -1,10 +1,20 @@
-import { Button, ChevronDownIcon, EmptyState, StreamCursor } from '@agimon-ai/doompi-web-components';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  Badge,
+  Button,
+  ChevronDownIcon,
+  EmptyState,
+  ExternalLinkIcon,
+  RefreshIcon,
+  Separator,
+  StreamCursor,
+} from '@agimon-ai/doompi-web-components';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
+import type { Store } from '@tanstack/store';
 import { Markdown } from '../../components/Markdown.tsx';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
-import type { TimelineEntry } from '../../lib/sessionModel.ts';
-import { submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
+import type { SessionState, TimelineEntry } from '../../lib/sessionModel.ts';
+import { sessionStoreFor, submitMessage } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
 import { ToolCard } from './ToolCard.tsx';
@@ -71,11 +81,11 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
   if (entry.kind === 'settled') {
     return (
       <div data-testid="entry-settled" className="flex items-center gap-3 pl-14">
-        <span className="h-px flex-1 bg-doom-border-soft" />
+        <Separator className="flex-1" />
         <span className="text-[10px] text-doom-faint">
           agent settled{entry.tools > 0 ? ` · ${entry.tools} tool${entry.tools === 1 ? '' : 's'}` : ''}
         </span>
-        <span className="h-px flex-1 bg-doom-border-soft" />
+        <Separator className="flex-1" />
       </div>
     );
   }
@@ -83,10 +93,10 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
   if (entry.kind === 'queued') {
     return (
       <div data-testid="entry-queued" className="flex pl-[58px]">
-        <span className="inline-flex items-center gap-2 self-start rounded border border-doom-border bg-doom-panel px-2.5 py-1.5 text-[10px] text-doom-dim">
-          <span className="text-doom-cyan">&#8635;</span>
+        <Badge size="md" className="self-start bg-doom-panel text-[10px]">
+          <RefreshIcon className="h-3 w-3 shrink-0 text-doom-cyan" />
           queued follow-up: &quot;{entry.text}&quot;
-        </span>
+        </Badge>
       </div>
     );
   }
@@ -104,9 +114,23 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
   );
 }
 
-export function Timeline() {
-  const session = useActiveSession((state) => state);
-  const activeId = useStore(sessionsStore, (state) => state.activeId);
+/**
+ * One transcript, whichever fold it reads: the focused session's own, or a
+ * thread of it. Owns the scroll pinning; the caller owns the empty state and
+ * the session the entries' tool cards act on.
+ */
+export function Transcript({
+  store,
+  sessionId,
+  empty,
+  testId = 'timeline',
+}: {
+  store: Store<SessionState>;
+  sessionId: string | null;
+  empty: ReactNode;
+  testId?: string;
+}) {
+  const entries = useStore(store, (state) => state.entries);
   const scroller = useRef<HTMLDivElement>(null);
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
@@ -131,11 +155,11 @@ export function Timeline() {
     if (element && atBottom(element, element.scrollHeight)) setUnread(false);
   };
 
-  // A focus change starts at the bottom of the newly focused transcript.
+  // A different fold starts at the bottom of its transcript.
   useEffect(() => {
     lastHeight.current = 0;
     setUnread(false);
-  }, [activeId]);
+  }, [store]);
 
   useLayoutEffect(() => {
     const element = scroller.current;
@@ -149,44 +173,20 @@ export function Timeline() {
       return;
     }
     setUnread(true);
-  }, [session.entries]);
+  }, [entries]);
 
-  if (session.entries.length === 0) {
-    return (
-      <EmptyState
-        data-testid="timeline"
-        title="no messages yet"
-        description="this session is attached and waiting. anything you send goes straight to the supervised agent."
-      >
-        <div data-testid="timeline-empty" className="mt-2 flex w-full flex-col gap-1.5">
-          {SUGGESTIONS.map((suggestion, index) => (
-            <Button
-              key={suggestion}
-              variant="outline"
-              size="lg"
-              data-testid={`suggestion-${index}`}
-              onClick={() => submitMessage(suggestion)}
-              className="h-auto justify-between bg-doom-panel px-3 py-2 text-left font-normal text-doom-text"
-            >
-              <span className="flex-1 truncate">{suggestion}</span>
-              <span className="text-doom-faint">&#8599;</span>
-            </Button>
-          ))}
-        </div>
-      </EmptyState>
-    );
-  }
+  if (entries.length === 0) return <>{empty}</>;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scroller}
         onScroll={onScroll}
-        data-testid="timeline"
+        data-testid={testId}
         className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]"
       >
-        {session.entries.map((entry) => (
-          <Entry key={entry.id} entry={entry} sessionId={activeId} />
+        {entries.map((entry) => (
+          <Entry key={entry.id} entry={entry} sessionId={sessionId} />
         ))}
       </div>
       {unread ? (
@@ -202,5 +202,39 @@ export function Timeline() {
         </Button>
       ) : null}
     </div>
+  );
+}
+
+/** The focused session's conversation; an empty one offers a few openers. */
+export function Timeline() {
+  const activeId = useStore(sessionsStore, (state) => state.activeId);
+  return (
+    <Transcript
+      store={sessionStoreFor(activeId)}
+      sessionId={activeId}
+      empty={
+        <EmptyState
+          data-testid="timeline"
+          title="no messages yet"
+          description="this session is attached and waiting. anything you send goes straight to the supervised agent."
+        >
+          <div data-testid="timeline-empty" className="mt-2 flex w-full flex-col gap-1.5">
+            {SUGGESTIONS.map((suggestion, index) => (
+              <Button
+                key={suggestion}
+                variant="outline"
+                size="lg"
+                data-testid={`suggestion-${index}`}
+                onClick={() => submitMessage(suggestion)}
+                className="h-auto justify-between bg-doom-panel px-3 py-2 text-left font-normal text-doom-text"
+              >
+                <span className="flex-1 truncate">{suggestion}</span>
+                <ExternalLinkIcon className="h-3 w-3 shrink-0 text-doom-faint" />
+              </Button>
+            ))}
+          </div>
+        </EmptyState>
+      }
+    />
   );
 }

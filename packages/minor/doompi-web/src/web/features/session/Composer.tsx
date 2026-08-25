@@ -1,4 +1,16 @@
-import { Button, Kbd, StopIcon, Textarea } from '@agimon-ai/doompi-web-components';
+import {
+  Badge,
+  Button,
+  Kbd,
+  OptionLabel,
+  OptionRow,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverFooter,
+  StopIcon,
+  Textarea,
+} from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
 import { registerPromptInput } from '../../lib/promptFocus.ts';
@@ -184,147 +196,173 @@ export function Composer() {
 
   return (
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-5 pt-3 pb-2.5">
-      <div
-        ref={containerRef}
-        className={`relative rounded-lg border bg-doom-deep transition-colors focus-within:border-doom-blue/60 ${
-          streaming ? 'border-doom-edge-yellow' : 'border-doom-border'
-        }`}
+      <Popover
+        open={completion !== null}
+        onOpenChange={(next) => {
+          if (!next) dismissCompletion();
+        }}
       >
-        {completion ? (
+        <PopoverAnchor asChild>
           <div
-            data-testid="composer-completion"
-            className="absolute bottom-full left-3 z-30 mb-2 w-[420px] max-w-[85%] animate-doom-rise overflow-hidden rounded-md border border-doom-border bg-doom-panel shadow-xl"
+            ref={containerRef}
+            className={`relative rounded-lg border bg-doom-deep transition-colors focus-within:border-doom-blue/60 ${
+              streaming ? 'border-doom-edge-yellow' : 'border-doom-border'
+            }`}
           >
-            {completion.items.map((item, index) => (
-              <button
-                key={item.label}
-                type="button"
-                data-testid={`composer-completion-item-${String(index)}`}
-                onMouseEnter={() => setCompletion({ ...completion, selected: index })}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  accept(completion, index);
+            {completion ? (
+              <PopoverContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                data-testid="composer-completion"
+                // The keys belong to the textarea, so the menu never takes
+                // focus; a click in the composer is a caret move, not a
+                // dismissal, which is why the anchor is exempt from outside.
+                onOpenAutoFocus={(event) => event.preventDefault()}
+                onCloseAutoFocus={(event) => event.preventDefault()}
+                onInteractOutside={(event) => {
+                  if (containerRef.current?.contains(event.target as Node) === true) event.preventDefault();
                 }}
-                className={`flex w-full items-baseline gap-2.5 px-3 py-1.5 text-left ${
-                  index === completion.selected ? 'bg-doom-blue/15' : ''
-                }`}
+                className="w-[420px] max-w-[85vw] rounded-md p-0 shadow-xl"
               >
-                <span className="shrink-0 text-[12px] font-bold text-doom-blue">{item.label}</span>
-                {item.detail ? <span className="truncate text-[10px] text-doom-dim">{item.detail}</span> : null}
-              </button>
-            ))}
-            <p className="flex items-center gap-1.5 border-t border-doom-border-soft px-3 py-1 text-[9px] text-doom-faint">
-              <Kbd>tab</Kbd> or <Kbd>enter</Kbd> completes · <Kbd>esc</Kbd> closes
-            </p>
+                {completion.items.map((item, index) => (
+                  <OptionRow
+                    key={item.label}
+                    density="compact"
+                    active={index === completion.selected}
+                    data-testid={`composer-completion-item-${String(index)}`}
+                    onMouseEnter={() => setCompletion({ ...completion, selected: index })}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      accept(completion, index);
+                    }}
+                    className="w-full items-baseline gap-2.5 rounded-none px-3 py-1.5"
+                  >
+                    <span className="shrink-0 text-[12px] font-bold text-doom-blue">{item.label}</span>
+                    {item.detail ? (
+                      <OptionLabel density="compact" className="text-[10px] text-doom-dim">
+                        {item.detail}
+                      </OptionLabel>
+                    ) : null}
+                  </OptionRow>
+                ))}
+                <PopoverFooter className="py-1">
+                  <span className="flex items-center gap-1.5">
+                    <Kbd>tab</Kbd> or <Kbd>enter</Kbd> completes · <Kbd>esc</Kbd> closes
+                  </span>
+                </PopoverFooter>
+              </PopoverContent>
+            ) : null}
+            <div className="flex items-start gap-2.5 px-3.5 pt-3">
+              <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
+              <Textarea
+                variant="bare"
+                ref={inputRef}
+                data-testid="composer-input"
+                value={draft}
+                disabled={!attached}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setCaret(event.target.selectionStart);
+                  setDismissedToken(null);
+                }}
+                onClick={(event) => setCaret(event.currentTarget.selectionStart)}
+                onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
+                onKeyDown={(event) => {
+                  // The TUI's leader key: space with nothing typed opens Leader Space.
+                  if (event.key === ' ' && draft === '') {
+                    event.preventDefault();
+                    openPalette();
+                    return;
+                  }
+                  if (completion) {
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      const delta = event.key === 'ArrowDown' ? 1 : -1;
+                      const count = completion.items.length;
+                      setCompletion({ ...completion, selected: (completion.selected + delta + count) % count });
+                      return;
+                    }
+                    if (event.key === 'Tab') {
+                      event.preventDefault();
+                      accept(completion, completion.selected);
+                      return;
+                    }
+                    // Enter completes, unless the token is already the whole
+                    // thing: completing then would only add a space, so the
+                    // keystroke would read as doing nothing and the reader would
+                    // have to press enter twice to send what they had typed.
+                    if (event.key === 'Enter' && !isCompletionRedundant(completion)) {
+                      event.preventDefault();
+                      accept(completion, completion.selected);
+                      return;
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      dismissCompletion();
+                      return;
+                    }
+                  }
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    submit();
+                  }
+                  if (event.key === 'Escape' && streaming) {
+                    event.preventDefault();
+                    abortRun();
+                  }
+                }}
+                rows={1}
+                placeholder={placeholder}
+                className="min-h-[20px] flex-1 text-[13px] leading-relaxed"
+              />
+            </div>
+            <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
+              <span data-testid="composer-hint" className="text-[10px] text-doom-faint">
+                {streaming
+                  ? 'enter steers the run · esc aborts'
+                  : 'enter sends · shift+enter for a new line · space opens leader'}
+              </span>
+              {queued > 0 ? (
+                <Badge
+                  size="xs"
+                  data-testid="composer-queued"
+                  className="rounded-full border-transparent bg-doom-panel py-0.5 text-[9px] text-doom-dim"
+                >
+                  {queued} queued
+                </Badge>
+              ) : null}
+              <span className="min-w-0 flex-1" />
+              {streaming ? (
+                <Button variant="danger-outline" size="md" data-testid="composer-abort" onClick={() => abortRun()}>
+                  <StopIcon className="h-2 w-2 fill-current" />
+                  abort
+                </Button>
+              ) : null}
+              <Button
+                variant="outline"
+                size="md"
+                data-testid="composer-queue"
+                onClick={queue}
+                disabled={!attached || !draft.trim()}
+                title="deliver after the current run settles"
+              >
+                queue
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                data-testid="composer-send"
+                onClick={submit}
+                disabled={!attached || !draft.trim()}
+                className="px-3.5"
+              >
+                {streaming ? 'steer' : 'send'}
+              </Button>
+            </div>
           </div>
-        ) : null}
-        <div className="flex items-start gap-2.5 px-3.5 pt-3">
-          <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
-          <Textarea
-            variant="bare"
-            ref={inputRef}
-            data-testid="composer-input"
-            value={draft}
-            disabled={!attached}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              setCaret(event.target.selectionStart);
-              setDismissedToken(null);
-            }}
-            onClick={(event) => setCaret(event.currentTarget.selectionStart)}
-            onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
-            onKeyDown={(event) => {
-              // The TUI's leader key: space with nothing typed opens Leader Space.
-              if (event.key === ' ' && draft === '') {
-                event.preventDefault();
-                openPalette();
-                return;
-              }
-              if (completion) {
-                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  const delta = event.key === 'ArrowDown' ? 1 : -1;
-                  const count = completion.items.length;
-                  setCompletion({ ...completion, selected: (completion.selected + delta + count) % count });
-                  return;
-                }
-                if (event.key === 'Tab') {
-                  event.preventDefault();
-                  accept(completion, completion.selected);
-                  return;
-                }
-                // Enter completes, unless the token is already the whole
-                // thing: completing then would only add a space, so the
-                // keystroke would read as doing nothing and the reader would
-                // have to press enter twice to send what they had typed.
-                if (event.key === 'Enter' && !isCompletionRedundant(completion)) {
-                  event.preventDefault();
-                  accept(completion, completion.selected);
-                  return;
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  dismissCompletion();
-                  return;
-                }
-              }
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submit();
-              }
-              if (event.key === 'Escape' && streaming) {
-                event.preventDefault();
-                abortRun();
-              }
-            }}
-            rows={1}
-            placeholder={placeholder}
-            className="min-h-[20px] flex-1 text-[13px] leading-relaxed"
-          />
-        </div>
-        <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
-          <span data-testid="composer-hint" className="text-[10px] text-doom-faint">
-            {streaming
-              ? 'enter steers the run · esc aborts'
-              : 'enter sends · shift+enter for a new line · space opens leader'}
-          </span>
-          {queued > 0 ? (
-            <span
-              data-testid="composer-queued"
-              className="rounded-full bg-doom-panel px-2 py-0.5 text-[9px] font-bold text-doom-dim"
-            >
-              {queued} queued
-            </span>
-          ) : null}
-          <span className="min-w-0 flex-1" />
-          {streaming ? (
-            <Button variant="danger-outline" size="md" data-testid="composer-abort" onClick={() => abortRun()}>
-              <StopIcon className="h-2 w-2 fill-current" />
-              abort
-            </Button>
-          ) : null}
-          <Button
-            variant="outline"
-            size="md"
-            data-testid="composer-queue"
-            onClick={queue}
-            disabled={!attached || !draft.trim()}
-            title="deliver after the current run settles"
-          >
-            queue
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            data-testid="composer-send"
-            onClick={submit}
-            disabled={!attached || !draft.trim()}
-            className="px-3.5"
-          >
-            {streaming ? 'steer' : 'send'}
-          </Button>
-        </div>
-      </div>
+        </PopoverAnchor>
+      </Popover>
     </div>
   );
 }

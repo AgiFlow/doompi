@@ -1,13 +1,13 @@
-import { Dot, type DotTone } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import type { SubagentRun } from '../src/types/webSubagents.ts';
+import { agentThreadTab } from './AgentThreadPanel.tsx';
 import { formatRunDuration } from './format.ts';
-import { isTerminalRun, openRun, subagents, visibleRuns } from './subagentsStore.ts';
+import { isTerminalRun, subagents, visibleRuns } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
-const SUBAGENTS_TAB = 'subagents';
 
 const STATE_TONE: Readonly<Record<SubagentRun['state'], DotTone>> = {
   queued: 'muted',
@@ -31,10 +31,10 @@ function detail(run: SubagentRun): string {
 
 /**
  * The agents group's body in the activity dock: the session's runs, each a
- * row that opens the subagents tab on that run's drawer. This replaces the
- * runtime's footer one-liner, which only says whether anything is running.
+ * row that opens the run's own conversation in a temporary tab. This replaces
+ * the runtime's footer one-liner, which only says whether anything is running.
  */
-export function AgentsActivitySection({ sessionId, openTab }: WebPluginSlotProps) {
+export function AgentsActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
   const [now, setNow] = useState(() => Date.now());
 
@@ -54,18 +54,18 @@ export function AgentsActivitySection({ sessionId, openTab }: WebPluginSlotProps
   return (
     <div data-testid="activity-agent-runs" className="flex flex-col gap-0.5">
       {runs.map((run) => (
-        <button
+        <Button
           key={run.runId}
-          type="button"
+          variant="ghost"
+          size="card"
           data-testid={`activity-run-${run.runId}`}
           data-run-state={run.state}
-          title="open this run in the subagents tab"
+          title="open this run's conversation"
           onClick={() => {
             if (sessionId === null) return;
-            openRun(sessionId, run.runId);
-            openTab(SUBAGENTS_TAB);
+            openTransientTab(agentThreadTab(run));
           }}
-          className="flex min-w-0 flex-col gap-0.5 rounded-[5px] px-1 py-1 text-left hover:bg-doom-panel"
+          className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
         >
           <span className="flex min-w-0 items-center gap-1.5">
             <Dot tone={STATE_TONE[run.state]} pulse={run.state === 'running'} />
@@ -82,7 +82,7 @@ export function AgentsActivitySection({ sessionId, openTab }: WebPluginSlotProps
           <span className={`truncate pl-3 text-[9px] ${run.state === 'failed' ? 'text-doom-red' : 'text-doom-faint'}`}>
             {detail(run)}
           </span>
-        </button>
+        </Button>
       ))}
     </div>
   );

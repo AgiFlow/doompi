@@ -1,11 +1,22 @@
-import { ActivityIcon, Dot, type DotTone, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
-import type { TabContribution } from '@agimon-ai/doompi-web-contracts';
+import {
+  ActivityIcon,
+  Button,
+  CloseIcon,
+  Dot,
+  type DotTone,
+  NavTab,
+  NavTabBadge,
+  StatusBadge,
+  type StatusTone,
+} from '@agimon-ai/doompi-web-components';
+import type { TabContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { abbreviateCwd, runningCount, type AttachPhase } from '../../lib/sessionSummary.ts';
 import { webTabs } from '../../lib/pluginRegistry.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
+import { closeTransientTab, useTransientTabs } from '../../stores/transientTabsStore.ts';
 
 /**
  * The pill folds attach state and run state into one word, the way the mockup
@@ -21,39 +32,65 @@ function pill(attach: AttachPhase, busy: boolean): { text: string; tone: StatusT
   return { text: attach, tone: 'error', dot: 'red', pulse: false };
 }
 
-const TAB_CLASS = 'flex items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors';
-const TAB_ACTIVE = 'bg-doom-tint-blue font-bold text-doom-blue';
-const TAB_IDLE = 'text-doom-dim hover:bg-doom-panel hover:text-doom-hi';
-
 /** One registry tab: the badge hook is stable per tab, so the call is unconditional. */
 function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId: string; active: boolean }) {
   const useBadge = tab.useBadge ?? noBadge;
   const count = useBadge(sessionId);
   return (
-    <Link
-      to="/session/$sessionId/$tabId"
-      params={{ sessionId, tabId: tab.id }}
-      data-testid={`tab-${tab.id}`}
-      data-active={active}
-      className={`${TAB_CLASS} ${active ? TAB_ACTIVE : TAB_IDLE}`}
-    >
-      {tab.label}
-      {count > 0 ? (
-        <span
-          data-testid={`tab-${tab.id}-count`}
-          className={`flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[8px] font-bold ${
-            active ? 'bg-doom-blue text-doom-rail' : 'bg-doom-panel text-doom-dim'
-          }`}
-        >
-          {count}
-        </span>
-      ) : null}
-    </Link>
+    <NavTab asChild active={active}>
+      <Link
+        to="/session/$sessionId/$tabId"
+        params={{ sessionId, tabId: tab.id }}
+        data-testid={`tab-${tab.id}`}
+        className="shrink-0"
+      >
+        {tab.label}
+        {count > 0 ? (
+          <NavTabBadge active={active} data-testid={`tab-${tab.id}-count`}>
+            {count}
+          </NavTabBadge>
+        ) : null}
+      </Link>
+    </NavTab>
   );
 }
 
 function noBadge(): number {
   return 0;
+}
+
+/**
+ * A tab a plugin opened at runtime: its link with the close beside it, since
+ * a button cannot live inside a link. Closing the shown tab needs no
+ * navigation of its own; the page falls back to the conversation once the
+ * id is gone.
+ */
+function TransientTabChip({ tab, sessionId, active }: { tab: TransientTab; sessionId: string; active: boolean }) {
+  return (
+    <span data-testid={`tab-${tab.id}-chip`} className="flex shrink-0 items-center gap-0.5">
+      <NavTab asChild active={active}>
+        <Link
+          to="/session/$sessionId/$tabId"
+          params={{ sessionId, tabId: tab.id }}
+          data-testid={`tab-${tab.id}`}
+          title={tab.label}
+          className="block min-w-0 max-w-[160px] truncate"
+        >
+          {tab.label}
+        </Link>
+      </NavTab>
+      <Button
+        variant="ghost"
+        size="icon"
+        data-testid={`tab-${tab.id}-close`}
+        title="close this tab"
+        onClick={() => closeTransientTab(sessionId, tab.id)}
+        className="h-5 w-5 shrink-0"
+      >
+        <CloseIcon className="h-2.5 w-2.5" />
+      </Button>
+    </span>
+  );
 }
 
 export function TopBar({ view = 'conversation' }: { view?: string }) {
@@ -63,6 +100,7 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
     runningCount(state.order.map((id) => state.byId[id].summary.phase)),
   );
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const transientTabs = useTransientTabs(activeId);
   const attach: AttachPhase = meta?.attach ?? 'offline';
   const busy = session.streaming || (meta !== null && meta.summary.phase !== 'idle');
   const state = pill(attach, busy);
@@ -85,18 +123,24 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
           </>
         ) : null}
         {activeId !== null ? (
-          <div className="ml-1.5 flex shrink-0 items-center gap-1.5">
-            <Link
-              to="/session/$sessionId"
-              params={{ sessionId: activeId }}
-              data-testid="tab-conversation"
-              data-active={view === 'conversation'}
-              className={`${TAB_CLASS} ${view === 'conversation' ? TAB_ACTIVE : TAB_IDLE}`}
-            >
-              conversation
-            </Link>
+          // Tabs never shrink; past the width the badges leave them, the strip
+          // scrolls sideways (scrollbar hidden) instead of running under them.
+          <div className="ml-1.5 flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <NavTab asChild active={view === 'conversation'}>
+              <Link
+                to="/session/$sessionId"
+                params={{ sessionId: activeId }}
+                data-testid="tab-conversation"
+                className="shrink-0"
+              >
+                conversation
+              </Link>
+            </NavTab>
             {webTabs().map((tab) => (
               <PluginTab key={tab.id} tab={tab} sessionId={activeId} active={view === tab.id} />
+            ))}
+            {transientTabs.map((tab) => (
+              <TransientTabChip key={tab.id} tab={tab} sessionId={activeId} active={view === tab.id} />
             ))}
           </div>
         ) : null}

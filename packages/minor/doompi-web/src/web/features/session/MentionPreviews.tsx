@@ -1,3 +1,4 @@
+import { Badge, FileIcon } from '@agimon-ai/doompi-web-components';
 import type { FileMention } from '../../lib/fileMentions.ts';
 import { sessionFileUrl } from '../../../types/media.ts';
 
@@ -29,13 +30,12 @@ function Preview({ mention, url }: { mention: FileMention; url: string }) {
     );
   }
   return (
-    <a
-      href={url}
-      className="inline-flex items-center gap-1.5 self-start rounded border border-doom-border bg-doom-panel px-2.5 py-1 text-[11px] text-doom-text hover:border-doom-blue/50"
-    >
-      <span className="text-doom-faint">&#9776;</span>
-      {mention.path}
-    </a>
+    <Badge asChild size="md" className="self-start bg-doom-panel text-doom-text hover:border-doom-blue/50">
+      <a href={url}>
+        <FileIcon className="h-3 w-3 shrink-0 text-doom-faint" />
+        {mention.path}
+      </a>
+    </Badge>
   );
 }
 

@@ -1,4 +1,21 @@
-import { Dialog, DialogContent, DialogTitle, Kbd } from '@agimon-ai/doompi-web-components';
+import {
+  cn,
+  CommandEmpty,
+  CommandFooter,
+  CommandGroupLabel,
+  CommandHeader,
+  CommandInput,
+  CommandItem,
+  CommandItemLabel,
+  CommandList,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Kbd,
+  OptionLabel,
+  OptionRow,
+  StatusBadge,
+} from '@agimon-ai/doompi-web-components';
 import type { LeaderBindingContribution } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -209,113 +226,104 @@ export function CommandPalette() {
         className="top-[12vh] w-[720px] max-w-[92vw] translate-y-0"
       >
         <DialogTitle className="sr-only">Leader Space</DialogTitle>
-        <div className="flex items-center gap-3 border-b border-doom-border px-4 py-3">
-          <span className="rounded bg-doom-magenta/20 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-doom-magenta">
+        <CommandHeader className="gap-3 px-4 py-3">
+          <StatusBadge tone="accent" size="xs" className="tracking-widest">
             {LEADER_PREFIX}
-          </span>
+          </StatusBadge>
           <span data-testid="palette-path" className="text-[12px] font-bold text-doom-hi">
             {keys.length === 0 ? 'Leader Space' : `${keys.join(' ')} · ${group?.label ?? ''}`}
           </span>
-          <input
+          <CommandInput
             ref={searchInput}
             data-testid="palette-filter"
             value={search}
+            autoFocus={false}
             placeholder="/ search commands…"
-            spellCheck={false}
             onChange={(event) => {
               setSearch(event.target.value);
               setSelected(0);
             }}
             onKeyDown={onSearchKey}
-            className="flex-1 bg-transparent text-right text-[12px] text-doom-hi outline-none placeholder:text-doom-faint"
+            className="text-right"
           />
           <span data-testid="palette-count" className="text-[10px] text-doom-faint">
             {rowCount}
           </span>
-        </div>
+        </CommandHeader>
 
         <div className="flex min-h-[260px]">
-          <div
-            data-testid="palette-keys"
-            className="w-[280px] shrink-0 overflow-y-auto border-r border-doom-border py-1"
-          >
+          <CommandList data-testid="palette-keys" className="w-[280px] shrink-0 gap-0 border-r border-doom-border p-1">
             {searching ? (
               matches.length === 0 ? (
-                <p data-testid="palette-no-match" className="px-4 py-6 text-center text-[11px] text-doom-faint">
-                  no command matches
-                </p>
+                <CommandEmpty data-testid="palette-no-match">no command matches</CommandEmpty>
               ) : (
                 matches.map((command, index) => (
-                  <button
+                  <CommandItem
                     key={command.name}
-                    type="button"
                     data-testid={`palette-sub-${command.name}`}
+                    active={index === cursor}
                     onMouseEnter={() => setSelected(index)}
                     onClick={() => invoke(command.name)}
-                    className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left ${
-                      index === cursor ? 'bg-doom-magenta/10' : ''
-                    }`}
+                    className={cn('w-full gap-2.5 px-3 py-1.5', index === cursor && 'bg-doom-magenta/10')}
                   >
                     <span className="text-[11px] font-bold text-doom-blue">/{command.name}</span>
-                    <span className="min-w-0 flex-1 truncate text-[10px] text-doom-faint">{command.description}</span>
-                  </button>
+                    <CommandItemLabel className="text-[10px] text-doom-faint">{command.description}</CommandItemLabel>
+                  </CommandItem>
                 ))
               )
             ) : options.length === 0 ? (
-              <p data-testid="palette-empty" className="px-4 py-6 text-center text-[11px] text-doom-faint">
+              <CommandEmpty data-testid="palette-empty">
                 {keys.length === 0
                   ? 'no package in this bundle registered leader keys · / searches the session’s commands'
                   : 'nothing bound under this key'}
-              </p>
+              </CommandEmpty>
             ) : (
               options.map((option, index) => (
-                <button
+                <CommandItem
                   key={option.key}
-                  type="button"
                   data-testid={`palette-item-${index}`}
                   data-key={option.key}
+                  active={index === cursor}
                   onMouseEnter={() => setSelected(index)}
                   onClick={() => descend(option)}
-                  className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left ${
-                    index === cursor ? 'bg-doom-magenta/10' : ''
-                  }`}
+                  className={cn('w-full gap-2.5 px-3 py-1.5', index === cursor && 'bg-doom-magenta/10')}
                 >
-                  <span
-                    className={`w-5 rounded text-center text-[10px] font-bold ${
-                      index === cursor ? 'bg-doom-magenta/25 text-doom-magenta' : 'bg-doom-deep text-doom-dim'
-                    }`}
+                  <Kbd
+                    className={cn(
+                      'w-5 text-center',
+                      index === cursor ? 'bg-doom-magenta/25 text-doom-magenta' : 'bg-doom-deep text-doom-dim',
+                    )}
                   >
                     {option.key}
-                  </span>
-                  <span className="flex-1 truncate text-[11px] text-doom-text">{option.label}</span>
+                  </Kbd>
+                  <CommandItemLabel className="text-[11px] text-doom-text">{option.label}</CommandItemLabel>
                   {option.binding ? null : (
                     <span className="text-[9px] text-doom-faint">
                       {option.children.length} {option.children.length === 1 ? 'key' : 'keys'}
                     </span>
                   )}
-                </button>
+                </CommandItem>
               ))
             )}
             {pluginEntries.length > 0 ? (
               <>
-                <p className="px-3 pt-2 pb-1 text-[8px] font-bold tracking-[0.14em] text-doom-faint">PLUGINS</p>
+                <CommandGroupLabel>plugins</CommandGroupLabel>
                 {pluginEntries.map((command) => (
-                  <button
+                  <CommandItem
                     key={command.id}
-                    type="button"
                     data-testid={`palette-plugin-${command.id}`}
                     onClick={() => runPluginCommand(command.id)}
-                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-doom-magenta/10"
+                    className="w-full gap-2.5 px-3 py-1.5 hover:bg-doom-magenta/10"
                   >
-                    <span className="flex-1 truncate text-[11px] text-doom-text">{command.title}</span>
+                    <CommandItemLabel className="text-[11px] text-doom-text">{command.title}</CommandItemLabel>
                     {command.description ? (
                       <span className="truncate text-[9px] text-doom-faint">{command.description}</span>
                     ) : null}
-                  </button>
+                  </CommandItem>
                 ))}
               </>
             ) : null}
-          </div>
+          </CommandList>
 
           <div data-testid="palette-detail" className="flex min-w-0 flex-1 flex-col gap-2 px-4 py-3">
             {currentMatch ? (
@@ -338,17 +346,16 @@ export function CommandPalette() {
                 ) : (
                   <div className="flex flex-col gap-1">
                     {current.children.map((child) => (
-                      <button
+                      <OptionRow
                         key={child.key}
-                        type="button"
                         data-testid={`palette-child-${child.key}`}
                         onClick={() => descend(child, [...keys, current.key])}
-                        className="flex items-center gap-3 rounded border border-doom-border-soft bg-doom-deep px-3 py-1.5 text-left transition-colors hover:border-doom-blue/50"
+                        className="min-h-0 gap-3 border-doom-border-soft bg-doom-deep px-3 py-1.5 hover:border-doom-blue/50"
                       >
                         <span className="w-5 text-center text-[10px] font-bold text-doom-magenta">{child.key}</span>
                         <span className="text-[11px] font-bold text-doom-hi">{child.label}</span>
-                        <span className="min-w-0 flex-1 truncate text-[10px] text-doom-faint">{child.detail}</span>
-                      </button>
+                        <OptionLabel className="truncate text-[10px] text-doom-faint">{child.detail}</OptionLabel>
+                      </OptionRow>
                     ))}
                   </div>
                 )}
@@ -357,7 +364,7 @@ export function CommandPalette() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-doom-border-soft bg-doom-deep px-4 py-2.5">
+        <CommandFooter className="px-4 py-2.5">
           <span className="flex items-center gap-1.5 text-[10px] text-doom-faint">
             {searching ? (
               <>
@@ -372,7 +379,7 @@ export function CommandPalette() {
           <span className="text-[10px] text-doom-dim">
             {bindings.length} keys · {commands.length} commands
           </span>
-        </div>
+        </CommandFooter>
       </DialogContent>
     </Dialog>
   );

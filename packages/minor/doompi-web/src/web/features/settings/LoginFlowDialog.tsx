@@ -14,16 +14,19 @@ import type { AuthMethodType, LoginEvent, LoginFlowSnapshot, LoginPromptView } f
 
 export const METHOD_LABEL: Readonly<Record<AuthMethodType, string>> = { api_key: 'api key', oauth: 'oauth' };
 
-const linkClass = 'break-all text-doom-blue underline decoration-doom-blue/40 hover:decoration-doom-blue';
+/** Button's link variant plus the wrapping a full auth URL needs. */
+const linkClass = 'inline break-all decoration-doom-blue/40 hover:decoration-doom-blue';
 
 function FlowEvent({ event }: { event: LoginEvent }) {
   if (event.type === 'auth_url') {
     return (
       <div className="flex flex-col gap-1 text-[11px] text-doom-text">
         <span>open this link to authorize:</span>
-        <a data-testid="login-flow-auth-url" href={event.url} target="_blank" rel="noreferrer" className={linkClass}>
-          {event.url}
-        </a>
+        <Button asChild variant="link" size="xs" className={linkClass}>
+          <a data-testid="login-flow-auth-url" href={event.url} target="_blank" rel="noreferrer">
+            {event.url}
+          </a>
+        </Button>
         {event.instructions ? <span className="text-doom-dim">{event.instructions}</span> : null}
       </div>
     );
@@ -78,16 +81,16 @@ function PromptField({
         <span className="text-[11px] text-doom-text">{prompt.message}</span>
         <div className="flex flex-col gap-1">
           {(prompt.options ?? []).map((option) => (
-            <button
+            <Button
               key={option.id}
-              type="button"
+              variant="outline"
               data-testid={`login-prompt-option-${option.id}`}
               onClick={() => onSelect(option.id)}
-              className="flex flex-col items-start gap-0.5 rounded border border-doom-border px-2.5 py-1.5 text-left transition-colors outline-none hover:border-doom-blue/50 focus-visible:border-doom-blue/50"
+              className="h-auto flex-col items-start gap-0.5 px-2.5 py-1.5 text-left whitespace-normal focus-visible:border-doom-blue/50 focus-visible:ring-0"
             >
               <span className="text-[11px] text-doom-hi">{option.label}</span>
               {option.description ? <span className="text-[10px] text-doom-faint">{option.description}</span> : null}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
