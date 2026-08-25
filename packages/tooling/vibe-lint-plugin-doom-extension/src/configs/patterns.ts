@@ -69,7 +69,7 @@ export const patterns: Record<string, PatternDefinition> = {
   },
   'doom-web-plugin-components': {
     description:
-      'Panels, activity sections, overlays, tool cards. Read with `useStore(x.store, (state) => x.select(state, sessionId))`, send with `props.sendSessionFrame`, navigate with `props.openTab`, render own slots with `props.renderSlot`; tool cards receive `statuses`. Tailwind classes as complete literals; imports limited to react, the two TanStack packages, the web contract, the shared components, own web/** and src/types/**; plugins never import each other.',
+      'Panels, activity sections, overlays, and tool messages. A tool message is a `message` renderer, one component per claimed tool receiving ToolMessageRenderProps, composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines from @agimon-ai/doompi-web-components: the shell owns the frame, the outcome tone, the status badge, and the expand toggle (`expandable` when the card hides lines), the card supplies the header summary and the body. Every Pi tool the package registers is listed in a toolRenderers entry (web-plugin-tool-renderers). Read with `useStore(x.store, (state) => x.select(state, sessionId))`, act with `props.sendSessionFrame`, navigate with `props.openTab`, render own slots with `props.renderSlot`. Tailwind classes as complete literals; imports limited to react, the two TanStack packages, the web contract, the shared components, own web/** and src/types/**; plugins never import each other.',
     includes: ['web/**/*.tsx'],
   },
   'doom-web-plugin-lib': {

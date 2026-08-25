@@ -135,7 +135,19 @@ export function registerMinorModeCommand(
 
       const actions = actionsFor(record, kind);
       if (actions.length === 0) {
-        ctx.ui.notify(`${record.descriptor.label} has no actions available in this session.`, 'warning');
+        // The mode already said why each action is unavailable. Repeating that
+        // is the difference between a dead end and an explanation: "requires
+        // an interactive session" tells a cockpit user to reach for the TUI,
+        // where the bare sentence leaves them guessing.
+        const reasons = [
+          ...new Set(
+            record.state.actions
+              .map((entry) => entry.disabledReason)
+              .filter((reason): reason is string => reason !== undefined && reason.length > 0),
+          ),
+        ];
+        const because = reasons.length > 0 ? ` ${reasons.join(' ')}` : '';
+        ctx.ui.notify(`${record.descriptor.label} has no actions available in this session.${because}`, 'warning');
         return;
       }
 

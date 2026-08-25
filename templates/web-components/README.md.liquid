@@ -13,7 +13,7 @@ Because every colour is a token, a theme config recolours the whole cockpit at r
 
 | Export                          | Components                                                                                                    |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `.`                             | `Button`, `Badge`, `StatusBadge`, `Dot`, `Input`, `Textarea`, `Dialog*`, `Popover*`, `DropdownMenu*`, `Tooltip*`, `Kbd`, `SectionLabel`, `EmptyState`, `Panel*`, `Spinner`, `Separator`, `StreamCursor`, the curated icon set, and `cn` |
+| `.`               | `Button`, `Badge`, `StatusBadge`, `Dot`, `Input`, `Textarea`, `Dialog*`, `Popover*`, `DropdownMenu*`, `Tooltip*`, `Kbd`, `SectionLabel`, `EmptyState`, `Panel*`, `MessageItem*`, `MessageLines`, `Spinner`, `Separator`, `StreamCursor`, the curated icon set, `cn`, and `collapseLines` |
 | `./theme`                       | `ThemeConfig`, the token lists, `BUILTIN_THEMES`, `applyTheme`, `parseThemeConfig`, `themeFromPiTheme`, the stored-preference helpers |
 | `./styles.css`                  | The token stylesheet: `:root` defaults, the Tailwind `@theme inline` mapping, shadcn semantic aliases, base styles, and the `@source` for this package's classes |
 | `./themes/*.json`               | The shipped theme configs: `doom-one-dark` (default), `doom-one-light`, `doom-nord-dark`                     |
@@ -32,6 +32,17 @@ import { applyTheme, builtinTheme, readThemePreference } from '@agimon-ai/{{ pac
 
 applyTheme(builtinTheme(readThemePreference(localStorage) ?? 'doom-one-dark')!, document.documentElement);
 ```
+
+## Tool messages
+
+A tool call's timeline item is a `message` renderer in the plugin that registers the tool, composed
+from `MessageItem` (the frame, its outcome tone, and the expand state), `MessageItemHeader` (the
+tool name, the summary, the status badge, and the toggle when the item is expandable),
+`MessageItemBody`, `MessageItemStatus` (the `◐ running` / `✗ failed` / `✓ done` line, or the "N
+more line(s)" hint that expands), and `MessageLines` (toned lines a pure view helper computed) with
+`collapseLines` for the clip. The cockpit's own fallback item is built from the same parts, which
+is what keeps host and plugin items alike, and the shell carries the `tool-status` and
+`tool-expand` test ids every card inherits.
 
 ## Using it from a plugin's `web/` client
 

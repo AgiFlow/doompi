@@ -17,7 +17,13 @@ interface RegisteredTool {
   renderShell?: 'default' | 'self';
   renderCall?: unknown;
   renderResult?: unknown;
-  execute: (toolCallId: string, params: unknown) => Promise<{ content: Array<{ text?: string }>; details?: unknown }>;
+  execute: (
+    toolCallId: string,
+    params: unknown,
+  ) => Promise<{
+    content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+    details?: unknown;
+  }>;
 }
 
 function fakePi(activeTools: string[] = []) {
@@ -142,7 +148,7 @@ describe('registerMcpTool', () => {
       expect(result?.content[0]?.text).toBe('No output.');
     });
 
-    it('drops blocks Pi cannot render and keeps the text', async () => {
+    it('keeps the text first and carries images as Pi image content', async () => {
       callTool.mockResolvedValue({
         content: [
           { type: 'image', data: 'AAAA', mimeType: 'image/png' },
@@ -154,7 +160,43 @@ describe('registerMcpTool', () => {
 
       const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
 
-      expect(result?.content[0]?.text).toBe('captured');
+      expect(result?.content).toEqual([
+        { type: 'text', text: 'captured' },
+        { type: 'image', data: 'AAAA', mimeType: 'image/png' },
+      ]);
+      // An image rides Pi's content, so it is not repeated in the details.
+      expect(result?.details).toEqual({ server: 'pencil', tool: 'get_screenshot' });
+    });
+
+    it('carries every block beyond text and images in the details for the cockpit', async () => {
+      callTool.mockResolvedValue({
+        content: [
+          { type: 'text', text: 'see the links' },
+          { type: 'audio', data: 'QUJD', mimeType: 'audio/wav' },
+          { type: 'resource_link', uri: 'file:///a.md', name: 'a.md', title: 'A', mimeType: 'text/markdown' },
+          { type: 'resource', resource: { uri: 'file:///b.txt', mimeType: 'text/plain', text: 'hello' } },
+          { type: 'resource', resource: { uri: 'file:///c.bin', blob: 'AAAA' } },
+          { type: 'mystery', data: 'x' },
+        ],
+        structuredContent: { count: 2 },
+      });
+      const { pi, registered } = fakePi();
+      registerMcpTool(pi, () => clientManager, screenshotTool);
+
+      const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
+
+      expect(result?.content).toEqual([{ type: 'text', text: 'see the links' }]);
+      expect(result?.details).toEqual({
+        server: 'pencil',
+        tool: 'get_screenshot',
+        blocks: [
+          { type: 'audio', data: 'QUJD', mimeType: 'audio/wav' },
+          { type: 'resource_link', uri: 'file:///a.md', name: 'a.md', title: 'A', mimeType: 'text/markdown' },
+          { type: 'resource', uri: 'file:///b.txt', mimeType: 'text/plain', text: 'hello' },
+          { type: 'resource', uri: 'file:///c.bin', blob: 'AAAA' },
+          { type: 'structured', value: { count: 2 } },
+        ],
+      });
     });
 
     it('names the server and tool the result came from', async () => {

@@ -115,6 +115,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-contracts
@@ -201,6 +204,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-contracts
@@ -808,6 +814,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../doompi-web-contracts
@@ -970,6 +979,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1071,6 +1083,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1206,6 +1221,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1276,6 +1294,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1436,6 +1457,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1559,6 +1583,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1642,6 +1669,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts

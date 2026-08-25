@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { McpCall, McpResult } from './McpToolCard.tsx';
+import { McpToolMessage } from './McpToolMessage.tsx';
 import { matchMcpTool } from './mcpToolMatch.ts';
 
 /**
@@ -15,8 +15,7 @@ export const webPlugin = defineWebPlugin({
     {
       tools: [],
       matches: (toolName, statuses) => matchMcpTool(toolName, statuses) !== null,
-      call: McpCall,
-      result: McpResult,
+      message: McpToolMessage,
     },
   ],
 });

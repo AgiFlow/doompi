@@ -18,6 +18,11 @@ export function PopoverAnchor(props: ComponentProps<typeof PopoverPrimitive.Anch
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />;
 }
 
+/** Dismisses the popover from inside it: the row that acts and closes in one click. */
+export function PopoverClose(props: ComponentProps<typeof PopoverPrimitive.Close>) {
+  return <PopoverPrimitive.Close data-slot="popover-close" {...props} />;
+}
+
 export function PopoverContent({
   className,
   align = 'start',

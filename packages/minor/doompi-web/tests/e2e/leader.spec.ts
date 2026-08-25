@@ -91,9 +91,11 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     cockpit.session.emit(COMMANDS);
 
     await page.keyboard.press('Control+k');
-    // Root: the groups the installed plugins declared, sorted by key.
+    // Root: the groups the installed plugins declared, sorted by key. The
+    // bundle's plugin set decides how many sit between them, so only the
+    // first and the workflows group are pinned.
     await expect(page.getByTestId('palette-item-0')).toHaveAttribute('data-key', 'a');
-    await expect(page.getByTestId('palette-item-1')).toHaveAttribute('data-key', 'w');
+    await expect(page.locator('[data-testid^="palette-item-"][data-key="w"]')).toHaveCount(1);
 
     await page.keyboard.press('w');
     await expect(page.getByTestId('palette')).toHaveAttribute('data-path', 'w');

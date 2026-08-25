@@ -116,7 +116,21 @@ const AUTO_LEADER_DETAIL = 'autonomous capture with agent narration';
 const AUTO_MODE_LABEL = 'Voice';
 const AUTO_MODE_COLOR = 'accent' as const;
 
-function voiceModeState(state: AutoCaptureActivationState, hasUi = false): MinorModeState {
+/**
+ * Whether this session can run autonomous capture.
+ *
+ * Capture is not a property of the terminal. ffmpeg reads a system audio
+ * device on the machine the agent process runs on, and that machine is the
+ * same one whether the session is driven from a TUI or spawned by the cockpit
+ * hub. What the mode actually needs from a session is somewhere to put its
+ * indicator, its status line and its notices, which is what a UI-bearing
+ * session provides and a truly headless one does not.
+ */
+export function canRunVoice(context: { hasUI?: boolean } | undefined): boolean {
+  return context?.hasUI === true;
+}
+
+export function voiceModeState(state: AutoCaptureActivationState, canRun = false): MinorModeState {
   const active = state !== 'disabled';
   const transitioning = state === 'starting' || state === 'draining' || state === 'shuttingDown';
   return {
@@ -130,10 +144,18 @@ function voiceModeState(state: AutoCaptureActivationState, hasUi = false): Minor
             : 'inactive',
     condition: transitioning ? 'queued' : 'ready',
     ...(active ? { detail: state, color: AUTO_MODE_COLOR } : {}),
-    actions: !hasUi
+    actions: !canRun
       ? [
-          { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
-          { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+          {
+            id: 'activate',
+            enabled: false,
+            disabledReason: 'Autonomous voice needs a session that can show its indicator.',
+          },
+          {
+            id: 'deactivate',
+            enabled: false,
+            disabledReason: 'Autonomous voice needs a session that can show its indicator.',
+          },
         ]
       : transitioning
         ? [
@@ -853,7 +875,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       onActivationStateChange: (state) => {
         if (!active) return;
         reconcileVoiceTools(state);
-        mode?.publish(voiceModeState(state, activeContext?.hasUI === true));
+        mode?.publish(voiceModeState(state, canRunVoice(activeContext)));
         // Republished here rather than only at registration: the `e` row is the
         // one entry whose label depends on the controller, and the panel is read
         // between activations, not just at session start.
@@ -973,12 +995,17 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         }
       }
       reconcileVoiceTools('disabled');
+      // Published before the UI bail below, and for every session rather than
+      // only the ones that carry a UI. Registration cannot know the session, so
+      // its default stands until this runs, and that default says the mode
+      // cannot run: without this a cockpit session, which can run it perfectly
+      // well, would keep reporting otherwise for the life of the session.
+      mode?.publish(voiceModeState('disabled', canRunVoice(ctx)));
       if (!ctx.hasUI) return;
       lastUi = createVoiceUi(ctx, footer);
       lastAutoUi = createAutoCaptureUi(ctx, footer);
       lastUi.setIndicator(undefined);
       lastUi.setStatus(STATUS_KEY, undefined);
-      mode?.publish(voiceModeState('disabled', ctx.hasUI));
       if (reloadHandoff && lastAutoUi) await autoController.activate(lastAutoUi);
     });
     pi.on('before_agent_start', (_event, ctx) => {

@@ -1,3 +1,4 @@
+import type { MessageLine, MessageLineTone } from '@agimon-ai/doompi-web-components';
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 
 /**
@@ -9,14 +10,9 @@ import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 
 export const GOAL_TOOL_NAMES = ['goal_complete', 'goal_blocked'] as const;
 
-export type LineTone = 'hi' | 'text' | 'dim' | 'muted' | 'success' | 'error' | 'warning' | 'accent';
-
-export interface ToolLine {
-  text: string;
-  tone: LineTone;
-  bold?: boolean;
-  indent?: boolean;
-}
+/** The toned lines the shared MessageLines draws; the vocabulary is the components package's. */
+export type LineTone = MessageLineTone;
+export type ToolLine = MessageLine;
 
 export interface GoalCallSummary {
   action: string;

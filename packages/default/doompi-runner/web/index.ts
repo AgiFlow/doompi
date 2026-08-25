@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { BashCall, BashResult } from './BashToolCard.tsx';
+import { BashToolMessage } from './BashToolMessage.tsx';
 import { RunnersActivitySection } from './RunnersActivitySection.tsx';
 import { runnerRunsChannel } from './runnersStore.ts';
 
@@ -17,5 +17,5 @@ export const webPlugin = defineWebPlugin({
   // footer's one-line count.
   activitySections: [{ id: 'runners', component: RunnersActivitySection }],
   // The bash tool's timeline card, the web half of src/tui/bashRender.ts.
-  toolRenderers: [{ tools: ['bash'], call: BashCall, result: BashResult }],
+  toolRenderers: [{ tools: ['bash'], message: BashToolMessage }],
 });

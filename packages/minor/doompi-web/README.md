@@ -150,6 +150,14 @@ plugin package logs a notice and its tab shows an empty state. The subagents tab
 `@agimon-ai/doompi-team` is the reference plugin; the workflows tab ships with
 `@agimon-ai/doompi-workflow`. Contracts come from `@agimon-ai/doompi-web-contracts`.
 
+A tool call's timeline item belongs to the plugin that registers the tool: its `toolRenderers`
+entry names the tool (or claims it with `matches` when the name is only known at runtime) and
+supplies one `message` component that owns the whole item, composed from the components package's
+`MessageItem` so it looks like every other item; the host only marks the row, catches a renderer
+that throws (the item falls back to the host's own and the rest of the timeline survives), and
+stands in for a tool nobody claims. Tool messages receive the same actions as every other plugin
+component (`sendSessionFrame`, `openTab`, `renderSlot`), so a card can act, MCP-app style.
+
 Plugins are independent. A manifest names no other plugin and `registrationOrder` is only an
 optional tiebreak (default 1000, then plugin id): every relation between two plugins resolves by
 name once all of them are installed. A plugin opens slots named `<pluginId>.<name>` and renders

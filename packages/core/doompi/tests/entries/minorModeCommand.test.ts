@@ -153,6 +153,45 @@ describe('the /minor command', () => {
     expect(invoke.mock.calls[0]?.[0]).toMatchObject({ actionId: 'start', arguments: { launcherId: 'typed' } });
   });
 
+  it('says why a mode has nothing to run, in the mode own words', async () => {
+    const voice = record({
+      id: 'voice-auto',
+      label: 'Voice',
+      actions: [
+        { id: 'activate', label: 'Activate', description: 'On.', contexts: ['tui', 'headless'], parameters: [] },
+        { id: 'deactivate', label: 'Deactivate', description: 'Off.', contexts: ['tui', 'headless'], parameters: [] },
+      ],
+      availability: [
+        { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+        { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+      ],
+    });
+    const { command, ctx, notify, invoke } = harness([voice]);
+
+    await command.handler('voice-auto', ctx);
+
+    // A bare "no actions available" leaves a cockpit user guessing; the reason
+    // the mode published is what tells them to reach for the TUI instead.
+    expect(notify).toHaveBeenCalledWith(
+      'Voice has no actions available in this session. Autonomous voice requires an interactive session.',
+      'warning',
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('still names the mode when it published no reason', async () => {
+    const quiet = record({
+      id: 'quiet',
+      label: 'Quiet',
+      actions: [{ id: 'go', label: 'Go', description: 'On.', contexts: ['tui'], parameters: [] }],
+    });
+    const { command, ctx, notify } = harness([quiet]);
+
+    await command.handler('quiet', ctx);
+
+    expect(notify).toHaveBeenCalledWith('Quiet has no actions available in this session.', 'warning');
+  });
+
   it('reports an unknown mode with what exists', async () => {
     const { command, ctx, invoke, notify } = harness([record({ id: 'plan', label: 'Plan' })]);
     await command.handler('warp', ctx);

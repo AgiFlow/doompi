@@ -1,3 +1,5 @@
+import type { McpResultBlock } from '../src/types/webMcp.ts';
+
 /**
  * Pure view logic for MCP tool cards, the browser counterpart of
  * src/tui/mcpToolRender.ts. MCP tools are registered under `<server>_<tool>`,
@@ -97,4 +99,79 @@ export function mcpResultView(input: {
   }
   if (lines.length === 0) return { lines, status: { glyph: '✓', tone: 'ok', text: 'done' } };
   return { lines, status: null };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** One block of the result's details, kept only when its required fields are the strings the adapter wrote. */
+function mcpResultBlock(entry: unknown): McpResultBlock | null {
+  if (!isRecord(entry)) return null;
+  const text = (key: string): string | undefined => (typeof entry[key] === 'string' ? entry[key] : undefined);
+  switch (entry.type) {
+    case 'audio': {
+      const data = text('data');
+      const mimeType = text('mimeType');
+      return data !== undefined && mimeType !== undefined ? { type: 'audio', data, mimeType } : null;
+    }
+    case 'resource_link': {
+      const uri = text('uri');
+      const name = text('name');
+      if (uri === undefined || name === undefined) return null;
+      const title = text('title');
+      const description = text('description');
+      const mimeType = text('mimeType');
+      return {
+        type: 'resource_link',
+        uri,
+        name,
+        ...(title === undefined ? {} : { title }),
+        ...(description === undefined ? {} : { description }),
+        ...(mimeType === undefined ? {} : { mimeType }),
+      };
+    }
+    case 'resource': {
+      const uri = text('uri');
+      if (uri === undefined) return null;
+      const mimeType = text('mimeType');
+      const content = text('text');
+      const blob = text('blob');
+      return {
+        type: 'resource',
+        uri,
+        ...(mimeType === undefined ? {} : { mimeType }),
+        ...(content === undefined ? {} : { text: content }),
+        ...(blob === undefined ? {} : { blob }),
+      };
+    }
+    case 'structured':
+      return isRecord(entry.value) ? { type: 'structured', value: entry.value } : null;
+    default:
+      return null;
+  }
+}
+
+/** The blocks beyond text the adapter attached to the result's details; malformed entries are dropped. */
+export function mcpResultBlocks(details: unknown): McpResultBlock[] {
+  if (!isRecord(details) || !Array.isArray(details.blocks)) return [];
+  return details.blocks.flatMap((entry) => {
+    const block = mcpResultBlock(entry);
+    return block === null ? [] : [block];
+  });
+}
+
+export interface McpImageBlock {
+  data: string;
+  mimeType: string;
+}
+
+/** The image blocks of a result's content, which Pi carries beside the text. */
+export function mcpImageBlocks(content: readonly unknown[]): McpImageBlock[] {
+  return content.flatMap((block) => {
+    if (!isRecord(block) || block.type !== 'image') return [];
+    return typeof block.data === 'string' && typeof block.mimeType === 'string'
+      ? [{ data: block.data, mimeType: block.mimeType }]
+      : [];
+  });
 }

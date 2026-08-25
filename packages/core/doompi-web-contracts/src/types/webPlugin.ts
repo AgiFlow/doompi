@@ -233,34 +233,34 @@ export interface ToolResultView {
   content: unknown[];
   details: unknown;
 }
-/** The call half of a tool card, the cockpit's analog of the TUI's renderCall arguments. */
-export interface ToolCallRenderProps {
-  sessionId: string | null;
+/**
+ * Everything a tool's timeline item receives: the actions every plugin
+ * component gets, plus the call and its newest result. The component owns
+ * the whole item, its frame, header, body, and expand state included; the
+ * host only wraps it in the timeline row and catches a throw. Compose it
+ * from the shared components package's MessageItem so it looks like every
+ * other item, the host's own fallback included.
+ */
+export interface ToolMessageRenderProps extends WebPluginSlotProps {
   toolCallId: string;
+  /** The wire name, as registered with Pi (registerTool's `name`). */
   toolName: string;
   args: Record<string, unknown>;
   /** The session's footer statuses at render time, the same picture `matches` saw. */
   statuses: Readonly<Record<string, string>>;
-}
-/** The result half, the analog of the TUI's renderResult arguments and options. */
-export interface ToolResultRenderProps extends ToolCallRenderProps {
   /** The newest result: partial while the tool runs, final once it ends; null before any output. */
   result: ToolResultView | null;
-  /** The result's text blocks joined, which is what the host's default body shows. */
+  /** The result's text blocks joined, which is what the host's fallback item shows. */
   output: string;
-  /** True while the tool is still running, so `result` is a partial one. */
-  isPartial: boolean;
+  /** True while the tool still runs, so `result` is a partial one. */
+  running: boolean;
   isError: boolean;
-  /** The card's expand toggle; a renderer decides what it hides while collapsed. */
-  expanded: boolean;
 }
 /**
- * Custom timeline rendering for the tools a package registers, the web half
- * of the TUI's renderCall/renderResult. The host keeps the card frame (the
- * outcome tint, the status badge, the expand toggle) and hands the plugin the
- * header summary and the body: `call` replaces the argument summary beside
- * the tool name, `result` replaces the preformatted output. A half left out
- * keeps the host default. One tool name belongs to one renderer.
+ * The timeline item for the tools a package registers, the web half of the
+ * TUI's renderCall/renderResult with Pi's renderShell 'self': one `message`
+ * component per claimed tool owns the whole item. One tool name belongs to
+ * one renderer.
  */
 export interface ToolRendererContribution {
   /** Tool names as registered with Pi (registerTool's `name`). */
@@ -272,8 +272,7 @@ export interface ToolRendererContribution {
    * names; the first renderer to match, in install order, wins.
    */
   matches?(toolName: string, statuses: Readonly<Record<string, string>>): boolean;
-  call?: ComponentType<ToolCallRenderProps>;
-  result?: ComponentType<ToolResultRenderProps>;
+  message: ComponentType<ToolMessageRenderProps>;
 }
 /** What a plugin's optional runtime may do; both send on the page's hub socket. */
 export interface WebPluginRuntime {
@@ -306,5 +305,3 @@ export interface WebPluginDefinition {
   /** Started after the host runtime, for page-lifetime needs such as hub frames; the return value disposes. */
   start?(runtime: WebPluginRuntime): (() => void) | void;
 }
-
-//# sourceMappingURL=webPlugin.d.mts.map

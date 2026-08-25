@@ -193,7 +193,10 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
             type="button"
             data-testid={`minor-${mode.name}`}
             data-availability={mode.availability}
-            title={`drive ${mode.name}`}
+            // A mode that cannot run here says so on hover instead of taking a
+            // click and answering with a notice after the round trip.
+            disabled={mode.availability === 'unavailable'}
+            title={mode.availability === 'unavailable' ? mode.unavailableReason : `drive ${mode.name}`}
             onClick={() => {
               // The runtime may answer with an opt-in picker; claiming the menu
               // keeps that question on this chip, where it was asked, instead
@@ -202,7 +205,7 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
               runCommand(`/minor ${mode.id}`);
               onClose();
             }}
-            className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left outline-none transition-colors hover:bg-doom-deep focus-visible:bg-doom-deep ${
+            className={`flex w-full items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left outline-none transition-colors disabled:cursor-not-allowed hover:bg-doom-deep focus-visible:bg-doom-deep ${
               mode.availability === 'on' ? 'bg-doom-tint-magenta hover:brightness-125' : ''
             }`}
           >
@@ -219,8 +222,16 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
                 {mode.detail}
               </span>
             ) : null}
+            {mode.availability === 'unavailable' && mode.unavailableReason ? (
+              <span
+                data-testid={`minor-reason-${mode.name}`}
+                className="min-w-0 flex-1 truncate text-right text-[9px] text-doom-faint/70"
+              >
+                {mode.unavailableReason}
+              </span>
+            ) : null}
             {mode.availability === 'unavailable' ? (
-              <span className="text-[8px] text-doom-faint/60">n/a</span>
+              <span className="shrink-0 text-[8px] text-doom-faint/60">n/a</span>
             ) : (
               <span
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -232,7 +243,7 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
         ))}
       </div>
       <PopoverFooter>
-        <span>click to toggle · a mode with several opt-ins asks · esc closes</span>
+        <span>click drives a mode · one with several opt-ins asks · esc closes</span>
       </PopoverFooter>
     </PopoverContent>
   );

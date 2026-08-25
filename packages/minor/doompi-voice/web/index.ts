@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { VoiceCall, VoiceResult } from './VoiceToolCard.tsx';
+import { VoiceToolMessage } from './VoiceToolMessage.tsx';
 import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
 
 /**
@@ -10,7 +10,7 @@ export const webPlugin = defineWebPlugin({
   id: 'voice',
   minorModes: [{ name: 'voice', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
   // The voice tools' timeline cards, the web half of src/adapters/pi/voiceToolRender.ts.
-  toolRenderers: [{ tools: [...VOICE_TOOL_NAMES], call: VoiceCall, result: VoiceResult }],
+  toolRenderers: [{ tools: [...VOICE_TOOL_NAMES], message: VoiceToolMessage }],
   // The TUI's SPC v e through /minor; one-shot dictation (v v) needs the TUI's microphone.
   leaderBindings: [
     {

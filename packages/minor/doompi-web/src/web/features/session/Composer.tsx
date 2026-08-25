@@ -221,7 +221,7 @@ export function Composer() {
         <div className="flex items-start gap-2.5 px-3.5 pt-3">
           <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
           <Textarea
-            bare
+            variant="bare"
             ref={inputRef}
             data-testid="composer-input"
             value={draft}

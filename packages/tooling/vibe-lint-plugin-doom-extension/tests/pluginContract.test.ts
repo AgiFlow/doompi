@@ -41,6 +41,7 @@ const EXPECTED_RULE_IDS = [
   'web-plugin-import-allowlist',
   'web-plugin-manifest',
   'web-plugin-no-module-state',
+  'web-plugin-tool-renderers',
 ] as const;
 
 describe('Doom extension plugin contract', () => {

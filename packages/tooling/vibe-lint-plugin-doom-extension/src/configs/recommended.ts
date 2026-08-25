@@ -38,6 +38,7 @@ const rules: Record<string, Severity> = {
   'web-plugin-import-allowlist': 'error',
   'web-plugin-manifest': 'error',
   'web-plugin-no-module-state': 'error',
+  'web-plugin-tool-renderers': 'error',
 };
 
 /**

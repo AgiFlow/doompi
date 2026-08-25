@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   cn,
+  collapseLines,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -13,6 +14,11 @@ import {
   EmptyState,
   Input,
   Kbd,
+  MessageItem,
+  MessageItemBody,
+  MessageItemHeader,
+  MessageItemStatus,
+  MessageLines,
   Panel,
   PanelBody,
   PanelHeader,
@@ -25,6 +31,7 @@ import {
   StatusBadge,
   StreamCursor,
   Textarea,
+  toolTone,
   Tooltip,
   TooltipProvider,
   TooltipTrigger,
@@ -67,10 +74,10 @@ describe('primitives', () => {
 
   it('fields, labels and layout pieces render', () => {
     expect(html(<Input placeholder="p" />)).toContain('placeholder="p"');
-    expect(html(<Textarea bare />)).toContain('bg-transparent');
+    expect(html(<Textarea variant="bare" />)).toContain('bg-transparent');
     expect(html(<Kbd>SPC</Kbd>)).toContain('<kbd');
     expect(html(<SectionLabel>sessions</SectionLabel>)).toContain('tracking-[0.18em]');
-    expect(html(<Separator vertical />)).toContain('aria-orientation="vertical"');
+    expect(html(<Separator orientation="vertical" />)).toContain('data-orientation="vertical"');
     expect(html(<Spinner />)).toContain('animate-spin');
     expect(html(<StreamCursor />)).toContain('animate-doom-blink');
     expect(
@@ -88,6 +95,70 @@ describe('primitives', () => {
         </EmptyState>,
       ),
     ).toContain('nothing');
+  });
+
+  it('message items carry their tone, offer the toggle only when expandable, and share expanded with their parts', () => {
+    const collapsed = html(
+      <MessageItem tone="error" expandable data-testid="x">
+        {({ expanded }) => (
+          <>
+            <MessageItemHeader title="bash">{expanded ? 'open' : 'closed'}</MessageItemHeader>
+            <MessageItemBody>b</MessageItemBody>
+          </>
+        )}
+      </MessageItem>,
+    );
+    expect(collapsed).toContain('border-doom-edge-red');
+    expect(collapsed).toContain('data-testid="x"');
+    expect(collapsed).toContain('data-testid="tool-status"');
+    expect(collapsed).toContain('ERROR');
+    expect(collapsed).toContain('data-testid="tool-expand"');
+    expect(collapsed).toContain('closed');
+    expect(collapsed).toContain('bg-doom-deep');
+    expect(collapsed).not.toMatch(/#[0-9a-f]{6}/i);
+
+    const open = html(
+      <MessageItem tone="ok" expandable defaultExpanded>
+        {({ expanded }) => <MessageItemHeader title="read">{expanded ? 'open' : 'closed'}</MessageItemHeader>}
+      </MessageItem>,
+    );
+    expect(open).toContain('open');
+    expect(open).toContain('data-expanded="true"');
+
+    const plain = html(
+      <MessageItem tone="neutral">
+        <MessageItemHeader title="x" badge={null}>
+          summary
+        </MessageItemHeader>
+      </MessageItem>,
+    );
+    expect(plain).not.toContain('tool-expand');
+    expect(plain).not.toContain('tool-status');
+    expect(plain).toContain('summary');
+
+    expect(html(<MessageItemStatus tone="running">running</MessageItemStatus>)).toContain('◐');
+    expect(html(<MessageItemStatus tone="running">running</MessageItemStatus>)).toContain('text-doom-yellow');
+    expect(html(<MessageItemStatus expands>3 more line(s)</MessageItemStatus>)).toContain('data-testid="tool-more"');
+    expect(
+      html(
+        <MessageItemStatus glyph="●" tone="info">
+          bg
+        </MessageItemStatus>,
+      ),
+    ).toContain('text-doom-blue');
+  });
+
+  it('message lines and collapse follow the view logic', () => {
+    const out = html(<MessageLines lines={[{ text: 'a', tone: 'success', bold: true, indent: true }]} />);
+    expect(out).toContain('text-doom-green');
+    expect(out).toContain('font-bold');
+    expect(out).toContain('pl-4');
+    expect(collapseLines(['a', 'b', 'c'], 2, false)).toEqual({ shown: ['a', 'b'], hidden: 1 });
+    expect(collapseLines(['a', 'b', 'c'], 2, true)).toEqual({ shown: ['a', 'b', 'c'], hidden: 0 });
+    expect(collapseLines(['a'], 2, false)).toEqual({ shown: ['a'], hidden: 0 });
+    expect(toolTone({ running: true, isError: true })).toBe('running');
+    expect(toolTone({ running: false, isError: true })).toBe('error');
+    expect(toolTone({ running: false, isError: false })).toBe('ok');
   });
 
   it('overlays render their triggers while closed', () => {

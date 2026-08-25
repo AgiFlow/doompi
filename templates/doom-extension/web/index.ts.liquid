@@ -24,6 +24,9 @@ export const webPlugin = defineWebPlugin({
     },
   ],
   channels: [{{ topic | camelCase }}Channel],
+  // Every Pi tool this package registers gets its timeline item here, one
+  // scaffold-doom-web-tool-card per tool (web-plugin-tool-renderers checks):
+  //   toolRenderers: [{ tools: [xToolName], message: XToolCard }],
   // Open a slot for independent plugins, or fill one they or the host declare:
   //   slots: [defineSlot({ slot: '{{ pluginId }}.actions' })],
   //   fills: [{ slot: 'activity', id: '{{ pluginId }}', component: {{ topic | pascalCase }}Section }],

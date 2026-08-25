@@ -33,6 +33,29 @@ export {
 export { EmptyState, type EmptyStateProps } from '../components/EmptyState.tsx';
 export { Input } from '../components/Input.tsx';
 export { Kbd } from '../components/Kbd.tsx';
+export {
+  MessageItem,
+  MessageItemBody,
+  MessageItemHeader,
+  type MessageItemHeaderProps,
+  type MessageItemProps,
+  type MessageItemState,
+  MessageItemStatus,
+  type MessageItemStatusProps,
+  messageItemStatusVariants,
+  messageItemVariants,
+  STATUS_GLYPH,
+  STATUS_LABEL,
+  toolTone,
+  useMessageItem,
+} from '../components/MessageItem.tsx';
+export {
+  type MessageLine,
+  type MessageLineTone,
+  MessageLines,
+  type MessageLinesProps,
+  messageLineVariants,
+} from '../components/MessageLines.tsx';
 export { Panel, PanelBody, PanelHeader } from '../components/Panel.tsx';
 export {
   Popover,
@@ -56,4 +79,5 @@ export { StreamCursor } from '../components/StreamCursor.tsx';
 export { Textarea } from '../components/Textarea.tsx';
 export * from '../icons/icons.ts';
 export { cn } from '../lib/cn.ts';
+export { type CollapsedLines, collapseLines } from '../lib/collapse.ts';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/Tooltip.tsx';

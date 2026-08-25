@@ -26,11 +26,15 @@ export const statusBadgeVariants = cva(
 
 export type StatusTone = NonNullable<VariantProps<typeof statusBadgeVariants>['tone']>;
 
-/** The border a card wears for a status, the same tint family as the badge. */
+/**
+ * The border a card wears for a status, the same tint family as the badge.
+ * MessageItem builds its frame variants from this table, so a tone's edge is
+ * named once and a card and its badge can never disagree about it.
+ */
 export const STATUS_EDGE: Readonly<Record<StatusTone, string>> = {
   neutral: 'border-doom-border',
   running: 'border-doom-edge-yellow',
-  ok: 'border-doom-border',
+  ok: 'border-doom-edge-green',
   error: 'border-doom-edge-red',
   info: 'border-doom-edge-blue',
   accent: 'border-doom-edge-magenta',

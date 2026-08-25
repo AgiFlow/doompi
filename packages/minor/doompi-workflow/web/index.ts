@@ -2,7 +2,7 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
 import { WorkflowsPanel } from './WorkflowsPanel.tsx';
-import { WorkflowCall, WorkflowResult } from './WorkflowToolCard.tsx';
+import { WorkflowToolMessage } from './WorkflowToolMessage.tsx';
 import { workflowRunsChannel, workflows } from './workflowsStore.ts';
 
 /** The tab badge: only runs still in the running stage. */
@@ -34,9 +34,7 @@ export const webPlugin = defineWebPlugin({
   // widget's bare presence signal.
   activitySections: [{ id: 'workflows', component: WorkflowsActivitySection }],
   // The workflow tools' timeline cards, the web half of src/tui/workflow/workflowToolRender.ts.
-  toolRenderers: [
-    { tools: ['list_workflows', 'launch_workflow', 'workflow_run'], call: WorkflowCall, result: WorkflowResult },
-  ],
+  toolRenderers: [{ tools: ['list_workflows', 'launch_workflow', 'workflow_run'], message: WorkflowToolMessage }],
   // The TUI's SPC w r and SPC w e; the catalog (w l) and recovery (w c) are
   // TUI-only overlays, so they have no cockpit key yet.
   leaderBindings: [

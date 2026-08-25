@@ -967,6 +967,7 @@ export function installSubagentPromptRuntime(
       }) => void
     ).bind(pi);
     registerTool({
+      // web-plugin-tool-renderers: ignore structured_output (registered only inside a subagent child process; its transcript never reaches this session's timeline)
       name: 'structured_output',
       label: 'Structured Output',
       description: 'Submit the required final structured output for this subagent step. This terminates the step.',

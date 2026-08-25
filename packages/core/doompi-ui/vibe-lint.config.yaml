@@ -16,6 +16,7 @@ rules:
         "@agimon-ai/doompi-hashline": contracts
         "@agimon-ai/doompi-telemetry": contracts
         "@agimon-ai/doompi-web-contracts": contracts
+        "@agimon-ai/doompi-web-components": contracts
         "@agimon-ai/doompi-config": platform
         "@agimon-ai/doompi-ui": platform
         "@agimon-ai/doompi-mcp": integration

@@ -55,6 +55,13 @@ export interface MinorMode {
   availability: MinorModeAvailability;
   /** What the mode itself is reporting while on. */
   detail: string;
+  /**
+   * Why the mode cannot be driven from here, in the words of the mode itself.
+   * Empty when it can be. A mode may be installed and still refuse a cockpit:
+   * autonomous voice captures from the terminal's own microphone, which a
+   * browser talking to a headless agent does not have.
+   */
+  unavailableReason: string;
 }
 
 export interface MinorModeSource {
@@ -99,18 +106,31 @@ function catalogMinorModes(sources: readonly MinorModeSource[], projection: Mino
   const rows: MinorMode[] = projection.modes.map((mode) => {
     const source = sourceFor(sources, mode);
     const on = mode.activation === 'active' || mode.activation === 'deactivating';
+    // The catalog says per action whether it can run here and why not. A mode
+    // with nothing runnable is offered as a row that cannot be clicked rather
+    // than one that answers "no actions available" after the fact.
+    const blocked = mode.actions.length > 0 && mode.actions.every((action) => !action.enabled);
+    const reason = blocked ? (mode.actions.find((action) => action.disabledReason)?.disabledReason ?? '') : '';
     return {
       name: source?.name ?? mode.label.toLowerCase(),
       id: mode.id,
       keys: source?.keys ?? '',
-      availability: on ? 'on' : 'off',
+      availability: blocked && !on ? 'unavailable' : on ? 'on' : 'off',
       detail: mode.detail ?? (mode.activation === 'activating' ? 'activating' : ''),
+      unavailableReason: reason,
     };
   });
   const seen = new Set(rows.map((row) => row.name));
   for (const source of sources) {
     if (!seen.has(source.name)) {
-      rows.push({ name: source.name, id: source.name, keys: source.keys, availability: 'unavailable', detail: '' });
+      rows.push({
+        name: source.name,
+        id: source.name,
+        keys: source.keys,
+        availability: 'unavailable',
+        detail: '',
+        unavailableReason: 'No package in this session registers this mode.',
+      });
     }
   }
   return rows;
@@ -134,6 +154,7 @@ export function minorModes(
           keys: source.keys,
           availability: 'unavailable' as const,
           detail: '',
+          unavailableReason: 'This session has not reported the mode.',
         };
       }
       const detail = stripAnsi(raw).trim();
@@ -143,12 +164,27 @@ export function minorModes(
         keys: source.keys,
         availability: detail ? ('on' as const) : ('off' as const),
         detail,
+        unavailableReason: '',
       };
     }
     if (source.widgetKey !== undefined && widgets.includes(source.widgetKey)) {
-      return { name: source.name, id: source.name, keys: source.keys, availability: 'off' as const, detail: '' };
+      return {
+        name: source.name,
+        id: source.name,
+        keys: source.keys,
+        availability: 'off' as const,
+        detail: '',
+        unavailableReason: '',
+      };
     }
-    return { name: source.name, id: source.name, keys: source.keys, availability: 'unavailable' as const, detail: '' };
+    return {
+      name: source.name,
+      id: source.name,
+      keys: source.keys,
+      availability: 'unavailable' as const,
+      detail: '',
+      unavailableReason: 'This session has not reported the mode.',
+    };
   });
 }
 

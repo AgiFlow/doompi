@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { GrepToolCall, GrepToolResult } from './GrepToolCard.tsx';
+import { GrepToolMessage } from './GrepToolMessage.tsx';
 
 /**
  * This package's cockpit presence: the grep tool's timeline card, the web
@@ -7,5 +7,5 @@ import { GrepToolCall, GrepToolResult } from './GrepToolCard.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'grep',
-  toolRenderers: [{ tools: ['grep'], call: GrepToolCall, result: GrepToolResult }],
+  toolRenderers: [{ tools: ['grep'], message: GrepToolMessage }],
 });

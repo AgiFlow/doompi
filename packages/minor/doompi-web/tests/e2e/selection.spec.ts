@@ -302,3 +302,52 @@ test('escaping a minor opt-in question tells the agent and leaves the bar alone'
   await expect(page.getByTestId('dialog')).toBeHidden();
   await expect(page.getByTestId('minor-popup')).toBeHidden();
 });
+
+test('a mode that cannot run here is offered as unavailable, with the reason', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  // The runtime journals its catalog, which says per action whether it can run
+  // here. Autonomous voice captures from the terminal's own microphone, so it
+  // refuses a cockpit and says so.
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      id: 'cat-1',
+      customType: 'doom-minor-modes',
+      data: {
+        version: 1,
+        revision: 1,
+        modes: [
+          {
+            id: 'voice-auto',
+            label: 'Voice',
+            description: 'autonomous capture',
+            order: 30,
+            activation: 'inactive',
+            condition: 'ready',
+            actions: [
+              {
+                id: 'activate',
+                label: 'Activate',
+                description: '',
+                needsInput: false,
+                enabled: false,
+                disabledReason: 'Autonomous voice requires an interactive session.',
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  await page.getByTestId('axis-minor').click();
+  const row = page.getByTestId('minor-voice');
+  await expect(row).toHaveAttribute('data-availability', 'unavailable');
+  await expect(page.getByTestId('minor-reason-voice')).toHaveText('Autonomous voice requires an interactive session.');
+
+  // The row cannot be clicked into a dead end that answers only after a round trip.
+  await expect(row).toBeDisabled();
+});

@@ -15,7 +15,7 @@ import { projectPath } from './manifestEntries.js';
  */
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const WEB_ROOT = 'web';
+export const WEB_ROOT = 'web';
 const WEB_TSCONFIG = 'tsconfig.json';
 const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
@@ -34,14 +34,14 @@ const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
 const SESSION_STORE_HELPER = 'defineSessionStore';
 
-interface WebPluginBlock {
+export interface WebPluginBlock {
   pluginId?: unknown;
   registrationOrder?: unknown;
   client?: unknown;
   hub?: unknown;
 }
 
-interface WebPackageManifest {
+export interface WebPackageManifest {
   files?: unknown;
   dependencies?: Record<string, string>;
   doompiWeb?: unknown;
@@ -51,7 +51,7 @@ function readText(filePath: string): string | null {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null;
 }
 
-function readManifest(configRoot: string): WebPackageManifest | null {
+export function readManifest(configRoot: string): WebPackageManifest | null {
   const text = readText(path.join(configRoot, PACKAGE_MANIFEST_NAME));
   if (!text) return null;
   try {
@@ -61,7 +61,7 @@ function readManifest(configRoot: string): WebPackageManifest | null {
   }
 }
 
-function readSource(filePath: string): ts.SourceFile | null {
+export function readSource(filePath: string): ts.SourceFile | null {
   const text = readText(filePath);
   return text !== null && SOURCE_EXTENSIONS.has(path.extname(filePath))
     ? ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true)
@@ -105,7 +105,7 @@ function bareSpecifierPackage(specifier: string): string {
   return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : (segments[0] ?? specifier);
 }
 
-function normalizeEntry(value: unknown): string | null {
+export function normalizeEntry(value: unknown): string | null {
   const entry = typeof value === 'string' ? value : ((value as { entry?: unknown } | null)?.entry ?? null);
   return typeof entry === 'string' ? entry : null;
 }
@@ -114,7 +114,7 @@ function stripDot(relativePath: string): string {
   return relativePath.replace(/^\.\//, '');
 }
 
-function pluginBlocks(manifest: WebPackageManifest): WebPluginBlock[] {
+export function pluginBlocks(manifest: WebPackageManifest): WebPluginBlock[] {
   if (manifest.doompiWeb === undefined) return [];
   const blocks = Array.isArray(manifest.doompiWeb) ? manifest.doompiWeb : [manifest.doompiWeb];
   return blocks.filter((block): block is WebPluginBlock => typeof block === 'object' && block !== null);
@@ -128,7 +128,7 @@ function isPublished(files: readonly string[], relativePath: string): boolean {
   });
 }
 
-function walkSources(directory: string): string[] {
+export function walkSources(directory: string): string[] {
   if (!fs.existsSync(directory)) return [];
   const found: string[] = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {

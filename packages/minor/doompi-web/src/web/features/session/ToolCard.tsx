@@ -1,116 +1,79 @@
 import {
-  Button,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  STATUS_EDGE,
-  StatusBadge,
+  collapseLines,
+  MessageItem,
+  MessageItemBody,
+  MessageItemHeader,
+  MessageItemStatus,
   type StatusTone,
 } from '@agimon-ai/doompi-web-components';
-import { useState } from 'react';
-import type { ToolEntry } from '../../lib/sessionModel.ts';
+import { ToolRendererBoundary } from '../../components/ToolRendererBoundary.tsx';
 import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
+import type { ToolEntry } from '../../lib/sessionModel.ts';
+import { toolMessageProps } from '../../lib/toolMessageProps.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
 
 const MAX_PREVIEW_LINES = 12;
 
-/** The host's own body: the result's text, clipped until expanded. */
-function DefaultOutput({ output, expanded, onExpand }: { output: string; expanded: boolean; onExpand: () => void }) {
-  const lines = output.length > 0 ? output.split('\n') : [];
-  if (lines.length === 0) return null;
-  const clipped = !expanded && lines.length > MAX_PREVIEW_LINES;
-  const shown = clipped ? lines.slice(0, MAX_PREVIEW_LINES) : lines;
+function toneOf(entry: ToolEntry): StatusTone {
+  return entry.running ? 'running' : entry.isError ? 'error' : 'ok';
+}
+
+/**
+ * The host's own item for a tool no plugin claims: the argument summary in
+ * the header and the result's text clipped until expanded, on the same shell
+ * every plugin message is built from.
+ */
+function HostToolMessage({ entry }: { entry: ToolEntry }) {
+  const lines = entry.output.length > 0 ? entry.output.split('\n') : [];
   return (
-    <div className="border-t border-doom-border-soft bg-doom-deep px-3 py-2">
-      <pre data-testid="tool-output" className="whitespace-pre-wrap break-words text-[11px] text-doom-dim">
-        {shown.join('\n')}
-      </pre>
-      {clipped ? (
-        <Button variant="link" size="xs" data-testid="tool-expand" onClick={onExpand} className="mt-1 px-0">
-          show {lines.length - MAX_PREVIEW_LINES} more line(s)
-        </Button>
-      ) : null}
-    </div>
+    <MessageItem tone={toneOf(entry)} expandable={lines.length > MAX_PREVIEW_LINES}>
+      {({ expanded }) => {
+        const { shown, hidden } = collapseLines(lines, MAX_PREVIEW_LINES, expanded);
+        return (
+          <>
+            <MessageItemHeader title={entry.name}>
+              <span className="min-w-0 flex-1 truncate">{entry.argSummary}</span>
+            </MessageItemHeader>
+            {shown.length > 0 ? (
+              <MessageItemBody className="flex flex-col gap-1">
+                <pre data-testid="tool-output" className="whitespace-pre-wrap break-words">
+                  {shown.join('\n')}
+                </pre>
+                {hidden > 0 ? <MessageItemStatus expands>show {hidden} more line(s)</MessageItemStatus> : null}
+              </MessageItemBody>
+            ) : null}
+          </>
+        );
+      }}
+    </MessageItem>
   );
 }
 
 /**
- * One tool call in the timeline. The frame (outcome tint, status badge,
- * expand state) is the host's; the header summary and the body come from the
- * plugin that registered the tool when it ships renderers, mirroring the
- * TUI's renderCall and renderResult, and fall back to the argument summary
- * and preformatted output otherwise.
+ * One tool call in the timeline. The plugin that registered the tool owns
+ * the whole item through its `message` renderer, the web half of the TUI's
+ * renderShell 'self'; the host only marks the row, catches a renderer that
+ * throws, and stands in for a tool nobody claims.
  */
 export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: string | null }) {
-  const [expanded, setExpanded] = useState(false);
   const statuses = useActiveSession((state) => state.statuses);
+  const slotProps = usePluginSlotProps(sessionId);
   const renderer = pluginToolRenderer(entry.name, statuses);
-  const Call = renderer?.call;
-  const Result = renderer?.result;
-
-  const state = entry.running ? 'running' : entry.isError ? 'error' : 'ok';
-  const tone: StatusTone = state;
-  const label = entry.running ? 'RUNNING' : entry.isError ? 'ERROR' : 'OK';
-  const callProps = { sessionId, toolCallId: entry.toolCallId, toolName: entry.name, args: entry.args, statuses };
-  const resultProps = {
-    ...callProps,
-    result: entry.result,
-    output: entry.output,
-    isPartial: entry.running,
-    isError: entry.isError,
-    expanded,
-  };
-  // A toggle that would reveal nothing reads as a broken control, so the card
-  // only offers one when something is actually hidden. The plugin contract has
-  // no expandability probe, so this is decided from what the host can see: a
-  // result the preview clips, or structured details a renderer can unfold
-  // (the runner's log path and byte count, a diff's full hunks). A tool that
-  // threw carries neither, and its card correctly offers nothing.
-  const clipped = entry.output.split('\n').length > MAX_PREVIEW_LINES;
-  const expandable = Result !== undefined && (clipped || entry.result?.details !== undefined);
-
+  const state = toneOf(entry);
+  const props = toolMessageProps(slotProps, entry, statuses);
   return (
-    <div
-      data-testid="entry-tool"
-      data-tool-name={entry.name}
-      data-tool-state={state}
-      data-tool-renderer={renderer ? 'plugin' : 'host'}
-      className={`overflow-hidden rounded-md border bg-doom-panel transition-colors ${STATUS_EDGE[tone]}`}
-    >
-      <div className="flex min-h-8 items-center gap-2 px-[11px]">
-        <span className="text-[11px] font-bold text-doom-hi">{entry.name}</span>
-        {Call ? (
-          <div data-testid="tool-call" className="flex min-w-0 flex-1 items-center gap-2 text-[11px] text-doom-dim">
-            <Call {...callProps} />
-          </div>
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-[11px] text-doom-dim">{entry.argSummary}</span>
-        )}
-        <StatusBadge tone={tone} data-testid="tool-status">
-          {label}
-        </StatusBadge>
-        {expandable ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            data-testid="tool-expand"
-            onClick={() => setExpanded((value) => !value)}
-            className="text-doom-faint hover:text-doom-blue"
-            aria-label={expanded ? 'collapse tool result' : 'expand tool result'}
-          >
-            {expanded ? <ChevronUpIcon className="h-3 w-3" /> : <ChevronDownIcon className="h-3 w-3" />}
-          </Button>
-        ) : null}
-      </div>
-      {Result ? (
+    <ToolRendererBoundary key={entry.toolCallId} toolName={entry.name}>
+      {(failed) => (
         <div
-          data-testid="tool-result"
-          className="border-t border-doom-border-soft bg-doom-deep px-3 py-2 text-[11px] text-doom-dim"
+          data-testid="entry-tool"
+          data-tool-name={entry.name}
+          data-tool-state={state}
+          data-tool-renderer={failed ? 'failed' : renderer ? 'plugin' : 'host'}
         >
-          <Result {...resultProps} />
+          {renderer && !failed ? <renderer.message {...props} /> : <HostToolMessage entry={entry} />}
         </div>
-      ) : (
-        <DefaultOutput output={entry.output} expanded={expanded} onExpand={() => setExpanded(true)} />
       )}
-    </div>
+    </ToolRendererBoundary>
   );
 }

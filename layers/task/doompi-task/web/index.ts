@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { TaskCall, TaskResult } from './TaskToolCard.tsx';
+import { TaskToolMessage } from './TaskToolMessage.tsx';
 
 /**
  * This package's cockpit presence: the task tool's timeline card, the web
@@ -7,5 +7,5 @@ import { TaskCall, TaskResult } from './TaskToolCard.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'task',
-  toolRenderers: [{ tools: ['task'], call: TaskCall, result: TaskResult }],
+  toolRenderers: [{ tools: ['task'], message: TaskToolMessage }],
 });

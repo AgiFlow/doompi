@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { FindToolCall, FindToolResult } from './FindToolCard.tsx';
-import { LsToolCall, LsToolResult } from './LsToolCard.tsx';
-import { WriteToolCall, WriteToolResult } from './WriteToolCard.tsx';
+import { FindToolMessage } from './FindToolMessage.tsx';
+import { LsToolMessage } from './LsToolMessage.tsx';
+import { WriteToolMessage } from './WriteToolMessage.tsx';
 
 /**
  * This package's cockpit presence: timeline cards for the Pi builtins whose
@@ -12,8 +12,8 @@ import { WriteToolCall, WriteToolResult } from './WriteToolCard.tsx';
 export const webPlugin = defineWebPlugin({
   id: 'builtin-tools',
   toolRenderers: [
-    { tools: ['write'], call: WriteToolCall, result: WriteToolResult },
-    { tools: ['find'], call: FindToolCall, result: FindToolResult },
-    { tools: ['ls'], call: LsToolCall, result: LsToolResult },
+    { tools: ['write'], message: WriteToolMessage },
+    { tools: ['find'], message: FindToolMessage },
+    { tools: ['ls'], message: LsToolMessage },
   ],
 });

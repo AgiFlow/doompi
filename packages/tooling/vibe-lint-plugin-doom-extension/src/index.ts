@@ -30,4 +30,5 @@ export {
   webPluginImportAllowlist,
   webPluginManifest,
   webPluginNoModuleState,
+  webPluginToolRenderers,
 } from './rules/index.js';

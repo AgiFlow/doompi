@@ -5,6 +5,8 @@ import {
   matchMcpTool,
   mcpArgumentSummary,
   mcpIdentityFromDetails,
+  mcpImageBlocks,
+  mcpResultBlocks,
   mcpResultView,
   mcpServers,
 } from '../web/mcpToolMatch.ts';
@@ -69,5 +71,42 @@ describe('the mcp web tool matcher', () => {
     expect(collapsed.lines).toHaveLength(12);
     expect(collapsed.status).toEqual({ glyph: '…', tone: 'hint', text: '3 more line(s)' });
     expect(mcpResultView({ output: many, expanded: true, isPartial: false, isError: false }).lines).toHaveLength(15);
+  });
+
+  it('reads the blocks the adapter attached and drops malformed ones', () => {
+    expect(mcpResultBlocks(null)).toEqual([]);
+    expect(mcpResultBlocks('junk')).toEqual([]);
+    expect(mcpResultBlocks({ server: 'pencil', tool: 'execute' })).toEqual([]);
+    const blocks = [
+      { type: 'audio', data: 'QUJD', mimeType: 'audio/wav' },
+      { type: 'resource_link', uri: 'file:///a.md', name: 'a.md', title: 'A' },
+      { type: 'resource', uri: 'file:///b.txt', text: 'hello' },
+      { type: 'resource', uri: 'file:///c.bin', mimeType: 'application/octet-stream', blob: 'AAAA' },
+      { type: 'structured', value: { count: 2 } },
+    ];
+    expect(mcpResultBlocks({ server: 'pencil', tool: 'execute', blocks })).toEqual(blocks);
+    expect(
+      mcpResultBlocks({
+        blocks: [
+          { type: 'audio', data: 'QUJD' },
+          { type: 'resource_link', uri: 'file:///a.md' },
+          { type: 'resource', text: 'no uri' },
+          { type: 'structured', value: 'not an object' },
+          { type: 'image', data: 'x', mimeType: 'image/png' },
+          'junk',
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it('picks the image blocks out of the result content', () => {
+    expect(
+      mcpImageBlocks([
+        { type: 'text', text: 'x' },
+        { type: 'image', data: 'AAAA', mimeType: 'image/png' },
+        { type: 'image', data: 'no mime' },
+        'junk',
+      ]),
+    ).toEqual([{ data: 'AAAA', mimeType: 'image/png' }]);
   });
 });

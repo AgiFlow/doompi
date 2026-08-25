@@ -55,7 +55,7 @@ afterEach(() => resetWebPlugins());
 
 describe('the web plugin registry', () => {
   it('serves a tool renderer by tool name and keeps the first claim, recording the second', () => {
-    const renderer = { tools: ['bash', 'read'], call: Panel };
+    const renderer = { tools: ['bash', 'read'], message: Panel };
     installWebPlugins([defineWebPlugin({ id: 'tools', toolRenderers: [renderer] })]);
     expect(pluginToolRenderer('bash')).toBe(renderer);
     expect(pluginToolRenderer('read')).toBe(renderer);
@@ -66,21 +66,21 @@ describe('the web plugin registry', () => {
       tools: [],
       matches: (name: string, statuses: Readonly<Record<string, string>>) =>
         (statuses['doom-mcp'] ?? '').split(',').some((server) => name.startsWith(`${server}_`)),
-      call: Panel,
+      message: Panel,
     };
     installWebPlugins([
-      defineWebPlugin({ id: 'exact', toolRenderers: [{ tools: ['github_issues'], result: Panel }] }),
+      defineWebPlugin({ id: 'exact', toolRenderers: [{ tools: ['github_issues'], message: Panel }] }),
       defineWebPlugin({ id: 'family', toolRenderers: [family] }),
     ]);
     // The exact claim wins over the matcher; the matcher covers the rest of the family.
-    expect(pluginToolRenderer('github_issues', { 'doom-mcp': 'github' })?.result).toBe(Panel);
+    expect(pluginToolRenderer('github_issues', { 'doom-mcp': 'github' })?.message).toBe(Panel);
     expect(pluginToolRenderer('github_search', { 'doom-mcp': 'github' })).toBe(family);
     expect(pluginToolRenderer('github_search', {})).toBeUndefined();
     expect(pluginToolRenderer('github_search')).toBeUndefined();
 
     resetWebPlugins();
-    const first = { tools: ['bash'], call: Panel };
-    const second = { tools: ['bash', 'edit'], result: Other };
+    const first = { tools: ['bash'], message: Panel };
+    const second = { tools: ['bash', 'edit'], message: Other };
     installWebPlugins([
       defineWebPlugin({ id: 'one', toolRenderers: [first] }),
       defineWebPlugin({ id: 'two', toolRenderers: [second] }),
@@ -219,7 +219,9 @@ describe('the web plugin registry', () => {
     ).toThrow(/'twice' declares tab 't' twice/);
     resetWebPlugins();
     expect(() =>
-      installWebPlugins([defineWebPlugin({ id: 'twice', toolRenderers: [{ tools: ['bash', 'bash'], call: Panel }] })]),
+      installWebPlugins([
+        defineWebPlugin({ id: 'twice', toolRenderers: [{ tools: ['bash', 'bash'], message: Panel }] }),
+      ]),
     ).toThrow(/'twice' declares tool 'bash' twice/);
   });
 

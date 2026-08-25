@@ -35,6 +35,7 @@ import {
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
 import { doomPromptShape } from './prompts.js';
 import { webPluginEntry, webPluginImportAllowlist, webPluginManifest, webPluginNoModuleState } from './webPlugin.js';
+import { webPluginToolRenderers } from './webPluginTools.js';
 
 export const rules: Record<string, RuleDefinition> = {
   'clean-import-path': cleanImportPath,
@@ -72,4 +73,5 @@ export const rules: Record<string, RuleDefinition> = {
   'web-plugin-import-allowlist': webPluginImportAllowlist,
   'web-plugin-manifest': webPluginManifest,
   'web-plugin-no-module-state': webPluginNoModuleState,
+  'web-plugin-tool-renderers': webPluginToolRenderers,
 };

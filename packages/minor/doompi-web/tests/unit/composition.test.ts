@@ -268,3 +268,63 @@ describe('activityGroups', () => {
     }
   });
 });
+
+describe('a catalog mode that cannot run here', () => {
+  const catalog = (actions: { id: string; enabled: boolean; disabledReason?: string }[]) => ({
+    version: 1 as const,
+    revision: 1,
+    modes: [
+      {
+        id: 'voice-auto',
+        label: 'Voice',
+        description: 'autonomous capture',
+        order: 30,
+        activation: 'inactive' as const,
+        condition: 'ready',
+        actions: actions.map((action) => ({
+          label: action.id,
+          description: '',
+          needsInput: false,
+          ...action,
+        })),
+      },
+    ],
+  });
+
+  it('is unavailable, and carries the mode own words for why', () => {
+    const [voice] = minorModes(
+      {},
+      [],
+      catalog([
+        { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+        { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+      ]),
+    );
+
+    expect(voice.availability).toBe('unavailable');
+    expect(voice.unavailableReason).toBe('Autonomous voice requires an interactive session.');
+  });
+
+  it('is off, not unavailable, while one action can still run', () => {
+    const [voice] = minorModes(
+      {},
+      [],
+      catalog([
+        { id: 'activate', enabled: true },
+        { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice is disabled.' },
+      ]),
+    );
+
+    expect(voice.availability).toBe('off');
+    expect(voice.unavailableReason).toBe('');
+  });
+
+  it('stays on while it is running, whatever its actions report', () => {
+    const projection = catalog([{ id: 'activate', enabled: false, disabledReason: 'already enabled' }]);
+    const running = { ...projection, modes: [{ ...projection.modes[0], activation: 'active' as const }] };
+
+    // An active mode with every action disabled is still active, and saying
+    // otherwise would hide a mode that is doing something right now.
+    expect(minorModes({}, [], running)[0].availability).toBe('on');
+  });
+});

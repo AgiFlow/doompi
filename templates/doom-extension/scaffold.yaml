@@ -100,7 +100,7 @@ boilerplate:
 
       Pi packages use version 0.84.2 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
 
-      A cockpit (web) presence is not generated here; add it with the scaffold-doom-web-plugin feature. It lives in web/, outside the src vocabulary, and is governed by the web-plugin-* rules.
+      A cockpit (web) presence is not generated here; add it with the scaffold-doom-web-plugin feature, then one scaffold-doom-web-tool-card per Pi tool the package registers. It lives in web/, outside the src vocabulary, and is governed by the web-plugin-* rules.
 features:
   - name: scaffold-doom-prompt
     description: Add one package-owned DoomPi Help prompt under src/prompts for either extension authoring or user guidance.
@@ -333,9 +333,10 @@ features:
       Complete the package integration after generation:
       - Add the doompiWeb block to package.json: pluginId "{{ pluginId }}", channels ["{{ channelName }}"], client "./web/index.ts", hub { entry "./src/exports/webHub.ts", dist "./dist/webHub.mjs" }, and registrationOrder only if this plugin must install before or after another for a tool matcher or start hook (it is an optional tiebreak, default 1000).
       - Add "web" and "src/types/web{{ topic | pascalCase }}.ts" to the files allowlist, and a "./web-hub" export pointing at dist/webHub.d.mts, dist/webHub.mjs, dist/webHub.cjs (tsdown builds it from src/exports).
-      - Add @agimon-ai/doompi-web-contracts (workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, and @types/react 19.2.7 to devDependencies; add @agimon-ai/doompi-web-components (workspace:*) to dependencies only if the panel uses it.
+      - Add @agimon-ai/doompi-web-contracts and @agimon-ai/doompi-web-components (both workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, and @types/react 19.2.7 to devDependencies.
       - Change the typecheck script to "tsc --noEmit && tsc --noEmit -p web/tsconfig.json".
       - Replace the placeholder item view and the hub watcher stub with the package's real records and source; the channel name constant in src/types must equal the doompiWeb channels entry.
+      - Every Pi tool this package registers needs a timeline item: scaffold one per tool with scaffold-doom-web-tool-card and list it under toolRenderers (web-plugin-tool-renderers checks package.json against src/** and web/**). The shell owns the frame, tone, badge, and expand toggle; a card supplies the header summary and the body.
       - Run pnpm install, pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on web/, src/types, src/adapters/web*, and package.json.
       - To iterate with hot reload, run the cockpit's dev loop: the hub on 7433, then pnpm dev in packages/minor/doompi-web with DOOMPI_WEB_PLUGIN_ROOTS naming this package (or after a doompi sync), and open port 7434.
     patterns:
@@ -343,3 +344,40 @@ features:
       - src/types/web*.ts
       - src/adapters/web*Channel.ts
       - src/exports/webHub.ts
+  - name: scaffold-doom-web-tool-card
+    description: Add the cockpit timeline item for one Pi tool this package registers, a message renderer on the shared MessageItem shell, with its pure view module and a unit test.
+    variables_schema:
+      type: object
+      properties:
+        toolName:
+          type: string
+          description: The tool name exactly as registerTool's name gives it, snake_case
+          pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          maxLength: 48
+          example: write_report
+        toolSummary:
+          type: string
+          description: What the tool does, in one line, for the card's doc comment
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Write the session report
+      required:
+        - toolName
+        - toolSummary
+      additionalProperties: false
+    includes:
+      - web/ToolCard.tsx->web/{{ toolName | pascalCase }}ToolCard.tsx
+      - web/toolRender.ts->web/{{ toolName | camelCase }}ToolRender.ts
+      - tests/unit/webToolRender.test.ts->tests/unit/web{{ toolName | pascalCase }}ToolRender.test.ts
+    instruction: |-
+      Generate the timeline item for the {{ toolName }} tool: web/{{ toolName | pascalCase }}ToolCard.tsx, a message renderer receiving ToolMessageRenderProps and composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines; web/{{ toolName | camelCase }}ToolRender.ts, the pure view logic (the tool name constant, the call summary, the result lines) a unit test pins without a DOM.
+
+      The shell owns the frame, the outcome tone, the status badge, and the expand toggle; the card supplies the header summary and the body lines and sets `expandable` only when it hides something. The card may act through props.sendSessionFrame and props.openTab, and it may open its own slots with props.renderSlot.
+
+      Complete the package integration after generation:
+      - Register it in web/index.ts: toolRenderers: [{ tools: [{{ toolName | camelCase }}ToolName], message: {{ toolName | pascalCase }}ToolCard }] (one entry may list several names). The constant must equal registerTool's name in src/, or web-plugin-tool-renderers fails on package.json.
+      - Replace the placeholder call summary and result lines with what the tool's args and details really carry.
+      - Run pnpm fixcode, then lint, typecheck (both tsconfigs), test, and pnpm vibe-lint check --preflight-only on web/ and package.json.
+    patterns:
+      - web/**

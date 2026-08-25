@@ -65,6 +65,8 @@ boilerplate:
       - src/components/EmptyState.tsx
       - src/components/Input.tsx
       - src/components/Kbd.tsx
+      - src/components/MessageItem.tsx
+      - src/components/MessageLines.tsx
       - src/components/Panel.tsx
       - src/components/Popover.tsx
       - src/components/SectionLabel.tsx
@@ -78,6 +80,7 @@ boilerplate:
       - src/exports/theme.ts
       - src/icons/icons.ts
       - src/lib/cn.ts
+      - src/lib/collapse.ts
       - src/theme/apply.ts
       - src/theme/builtinThemes.ts
       - src/theme/derive.ts
@@ -136,4 +139,4 @@ feature:
 
       A primitive is a function component taking `ComponentProps<'element'>` plus its variants, spreading the rest onto the element, merging `className` last through `cn` so a caller can always override, and carrying a `data-slot` attribute so a consumer can target it without a class. Variants go in a `cva` table exported beside the component, because a surface sometimes needs the classes without the element.
 
-      Colours are tokens. Reach for `bg-doom-panel`, `text-doom-hi`, `border-doom-edge-red`, `bg-doom-tint-yellow`; never a hex. Re-export the component and its variant table from `src/exports/index.ts`, and add a render assertion to `tests/components/render.test.tsx`, which renders through `react-dom/server` and needs no DOM.
+      Colours are tokens. Reach for `bg-doom-panel`, `text-doom-hi`, `border-doom-edge-red`, `bg-doom-tint-yellow`; never a hex. A tool card is not a primitive here: a plugin composes `MessageItem`, `MessageItemHeader`, `MessageItemBody`, `MessageItemStatus`, and `MessageLines` in its own web/ (scaffold-doom-web-tool-card in the doom-extension template). Re-export the component and its variant table from `src/exports/index.ts`, and add a render assertion to `tests/components/render.test.tsx`, which renders through `react-dom/server` and needs no DOM.

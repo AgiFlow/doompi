@@ -28,6 +28,7 @@
   "files": [
     "dist",
     "web",
+    "src/types/webMcp.ts",
     "llms.txt",
     "src/prompts",
     "README.md",
@@ -70,6 +71,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/mcp-proxy": "0.31.16",
     "@deepseek-ai/cordis": "4.0.1",

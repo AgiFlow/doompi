@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { AskUserQuestionCall, AskUserQuestionResult } from './AskUserQuestionToolCard.tsx';
+import { AskUserQuestionToolMessage } from './AskUserQuestionToolMessage.tsx';
 
 /**
  * This package's cockpit presence: the timeline card for ask_user_question,
@@ -9,5 +9,5 @@ import { AskUserQuestionCall, AskUserQuestionResult } from './AskUserQuestionToo
  */
 export const webPlugin = defineWebPlugin({
   id: 'ask-user',
-  toolRenderers: [{ tools: ['ask_user_question'], call: AskUserQuestionCall, result: AskUserQuestionResult }],
+  toolRenderers: [{ tools: ['ask_user_question'], message: AskUserQuestionToolMessage }],
 });

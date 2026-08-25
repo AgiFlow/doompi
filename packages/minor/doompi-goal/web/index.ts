@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { GoalCall, GoalResult } from './GoalToolCard.tsx';
+import { GoalToolMessage } from './GoalToolMessage.tsx';
 import { GOAL_TOOL_NAMES } from './goalToolRender.ts';
 
 const GOAL_GROUP = { key: 'g', label: 'goal', detail: 'session objective' };
@@ -14,7 +14,7 @@ export const webPlugin = defineWebPlugin({
   id: 'goal',
   minorModes: [{ name: 'goal', keys: 'g e', statusKey: 'goal', order: 40 }],
   // The goal tools' timeline cards; the TUI leaves these on Pi's default shell.
-  toolRenderers: [{ tools: [...GOAL_TOOL_NAMES], call: GoalCall, result: GoalResult }],
+  toolRenderers: [{ tools: [...GOAL_TOOL_NAMES], message: GoalToolMessage }],
   leaderBindings: [
     {
       id: 'goal.toggle',

@@ -1,5 +1,6 @@
 export { defineSessionChannel, defineSlot, defineWebPlugin } from '../services/define.ts';
 export { defineSessionStore } from '../services/sessionStore.ts';
+export { toolResultText, toolResultTextLines } from '../services/toolResult.ts';
 export type {
   ChannelFrame,
   HubChannelHost,
@@ -25,9 +26,8 @@ export type {
   SlotFillContribution,
   SurfaceContribution,
   TabContribution,
-  ToolCallRenderProps,
+  ToolMessageRenderProps,
   ToolRendererContribution,
-  ToolResultRenderProps,
   ToolResultView,
   WebPluginDefinition,
   WebPluginRuntime,
