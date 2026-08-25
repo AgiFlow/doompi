@@ -38,6 +38,7 @@
     "@agimon-ai/doompi-team": "workspace:*",
     "@agimon-ai/doompi-user-feedback": "workspace:*",
     "@agimon-ai/doompi-voice": "workspace:*",
+    "@agimon-ai/doompi-web": "workspace:*",
     "@agimon-ai/vibe-lint": "0.0.1-alpha.29",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@agimon-ai/workflow-mcp": "0.23.19",

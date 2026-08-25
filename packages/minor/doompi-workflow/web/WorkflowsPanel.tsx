@@ -1,53 +1,45 @@
 import {
-  Badge,
   Button,
+  ChevronDownIcon,
   cn,
   Dot,
   type DotTone,
   EmptyState,
+  Input,
   Kbd,
   OptionLabel,
   OptionRow,
-  STATUS_EDGE,
+  Popover,
+  PopoverContent,
+  PopoverFooter,
+  PopoverHeader,
+  PopoverTrigger,
+  SearchIcon,
   StatusBadge,
+  StreamCursor,
 } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   WorkflowJobView,
   WorkflowProgressState,
   WorkflowRunView,
   WorkflowStepView,
 } from '../src/types/webWorkflows.ts';
+import type { WorkflowTerminalCapabilitiesView } from '../src/types/webWorkflowTerminal.ts';
 import { ArtifactsPane, artifactTab } from './ArtifactsPane.tsx';
+import { ansiSpans } from './ansiSpans.ts';
 import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from './catalogStore.ts';
 import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
 import { formatRunDuration } from './runDuration.ts';
 import { stepTerminalTab } from './StepTerminalPanel.tsx';
+import { followScreen } from './terminalApi.ts';
 import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer.tsx';
 import { workflowRunIdentity } from './workflowActivity.ts';
 import { focusRun, workflows } from './workflowsStore.ts';
 
 const TICK_MS = 10_000;
-
-/** One run's colour on the chip strip. */
-interface RunTone {
-  dot: DotTone;
-}
-
-/** One word per run, the way the mockup's chips read: state first, outcome when finished. */
-function runTone(run: WorkflowRunView): RunTone {
-  if (run.stage === 'running' && (run.executionState === 'paused' || run.executionState === 'pause_requested')) {
-    return { dot: 'yellow' };
-  }
-  if (run.stage === 'running') return { dot: 'yellow' };
-  if (run.stage === 'error') return { dot: 'red' };
-  if (run.outcome !== undefined && run.outcome !== 'success') {
-    return { dot: 'neutral' };
-  }
-  return { dot: 'green' };
-}
 
 const STATE_ICON: Readonly<Record<WorkflowProgressState, { glyph: string; className: string }>> = {
   running: { glyph: '●', className: 'text-doom-blue' },
@@ -70,7 +62,6 @@ function spanDuration(startedAt: string | undefined, endedAt: string | undefined
   return formatRunDuration(Math.max(0, end - start));
 }
 
-/** Needs-you facts for one run: an error to recover, or a pause waiting on someone. */
 function attentionFor(run: WorkflowRunView): { kind: 'error' | 'paused'; text: string } | undefined {
   if (run.stage === 'error') {
     const cause = run.errorMessage ?? 'the run ended in the error stage';
@@ -82,68 +73,172 @@ function attentionFor(run: WorkflowRunView): { kind: 'error' | 'paused'; text: s
   return undefined;
 }
 
-function NowLine({ run }: { run: WorkflowRunView }) {
-  if (run.stage !== 'running' || run.position === undefined) return null;
+function runDot(run: WorkflowRunView): DotTone {
+  if (run.stage === 'error') return 'red';
+  if (run.executionState === 'paused' || run.executionState === 'pause_requested') return 'yellow';
+  if (run.stage === 'running') return 'blue';
+  if (run.outcome === 'success') return 'green';
+  return 'neutral';
+}
+
+function runState(run: WorkflowRunView): string {
+  if (run.stage === 'error') return 'failed';
+  if (run.executionState === 'paused' || run.executionState === 'pause_requested') return 'paused';
+  if (run.stage === 'running') return 'running';
+  return run.outcome ?? run.stage;
+}
+
+function runPriority(run: WorkflowRunView): number {
+  if (attentionFor(run) !== undefined) return 0;
+  if (run.stage === 'running') return 1;
+  return 2;
+}
+
+function runSearchText(run: WorkflowRunView): string {
+  return [
+    run.displayName,
+    run.workflowName,
+    run.stage,
+    run.outcome,
+    run.executionState,
+    run.position?.job,
+    run.position?.step,
+  ]
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ')
+    .toLowerCase();
+}
+
+function WorkflowPicker({
+  runs,
+  selected,
+  onSelect,
+}: {
+  runs: WorkflowRunView[];
+  selected: WorkflowRunView;
+  onSelect: (run: WorkflowRunView) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ordered = useMemo(() => [...runs].sort((left, right) => runPriority(left) - runPriority(right)), [runs]);
+  const matching = ordered.filter((run) => runSearchText(run).includes(query.trim().toLowerCase()));
+  const sections = [
+    { label: 'needs you', runs: matching.filter((run) => attentionFor(run) !== undefined) },
+    { label: 'active', runs: matching.filter((run) => attentionFor(run) === undefined && run.stage === 'running') },
+    { label: 'recent', runs: matching.filter((run) => run.stage !== 'running' && attentionFor(run) === undefined) },
+  ].filter((section) => section.runs.length > 0);
+
   return (
-    <div data-testid="workflow-now" className="flex items-center gap-2 pb-3">
-      <StatusBadge tone="info" size="xs">
-        NOW
-      </StatusBadge>
-      <span className="truncate text-[11px] text-doom-hi">
-        {run.workflowName ?? run.displayName}
-        <span className="text-doom-faint"> › </span>
-        {run.position.job}
-        {run.position.step === undefined ? null : (
-          <>
-            <span className="text-doom-faint"> · </span>
-            <span className="text-doom-text">{run.position.step}</span>
-          </>
-        )}
-      </span>
-      {run.position.index !== undefined && run.position.total !== undefined ? (
-        <span className="shrink-0 text-[9px] text-doom-faint">
-          job {run.position.index + 1}/{run.position.total}
-        </span>
-      ) : null}
-    </div>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery('');
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="workflow-picker"
+          className="h-8 w-[360px] justify-start border-doom-border bg-doom-deep px-2.5"
+        >
+          <SearchIcon className="h-3 w-3 shrink-0 text-doom-faint" />
+          <span className="min-w-0 flex-1 truncate text-left font-bold text-doom-hi">{selected.displayName}</span>
+          <span className="shrink-0 text-[9px] font-normal text-doom-faint">{runs.length} workflows</span>
+          <ChevronDownIcon className="h-3 w-3 shrink-0 text-doom-dim" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" data-testid="workflow-picker-popover" className="w-[600px]">
+        <PopoverHeader>
+          <span className="relative flex w-full items-center">
+            <SearchIcon className="pointer-events-none absolute left-2.5 h-3 w-3 text-doom-blue" />
+            <Input
+              autoFocus
+              size="sm"
+              data-testid="workflow-picker-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${String(runs.length)} workflows by name, job, or status`}
+              className="w-full pl-8"
+            />
+          </span>
+        </PopoverHeader>
+        <div className="grid max-h-[360px] grid-cols-2 gap-2 overflow-y-auto p-2">
+          {sections.length === 0 ? (
+            <span className="col-span-2 px-2 py-5 text-center text-[10px] text-doom-faint">no matching workflows</span>
+          ) : (
+            sections.map((section) => (
+              <div key={section.label} className="flex min-w-0 flex-col gap-0.5">
+                <span className="px-2 py-1 text-[8px] font-bold uppercase tracking-[0.14em] text-doom-faint">
+                  {section.label} · {section.runs.length}
+                </span>
+                {section.runs.map((run) => {
+                  const active = workflowRunIdentity(run) === workflowRunIdentity(selected);
+                  return (
+                    <button
+                      key={workflowRunIdentity(run)}
+                      type="button"
+                      data-testid={`workflow-option-${run.runKey}`}
+                      data-run-stage={run.stage}
+                      data-active={active}
+                      onClick={() => {
+                        onSelect(run);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        'flex min-w-0 flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-doom-deep',
+                        active && 'bg-doom-tint-blue ring-1 ring-inset ring-doom-blue/50',
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Dot tone={runDot(run)} pulse={run.stage === 'running'} />
+                        <span className={cn('min-w-0 flex-1 truncate text-[10px]', active && 'font-bold text-doom-hi')}>
+                          {run.displayName}
+                        </span>
+                        <span className="shrink-0 text-[8px] text-doom-faint">{runState(run)}</span>
+                      </span>
+                      <span className="truncate pl-3.5 text-[8px] text-doom-dim">
+                        {[run.position?.job, run.position?.step].filter(Boolean).join(' · ') || 'settled'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+        <PopoverFooter>
+          <span>needs you and active stay first</span>
+          <span>esc closes</span>
+        </PopoverFooter>
+      </PopoverContent>
+    </Popover>
   );
 }
 
-function AttentionStrip({ runs }: { runs: WorkflowRunView[] }) {
-  const items = runs
-    .map((run) => ({ run, attention: attentionFor(run) }))
-    .filter(
-      (entry): entry is { run: WorkflowRunView; attention: NonNullable<ReturnType<typeof attentionFor>> } =>
-        entry.attention !== undefined,
-    );
-  if (items.length === 0) return null;
+function SelectedAttention({ run }: { run: WorkflowRunView }) {
+  const attention = attentionFor(run);
+  if (attention === undefined) return null;
   return (
-    <div data-testid="workflow-needs-you" className="flex flex-col gap-2 pb-3">
-      <span className="text-[9px] font-bold tracking-[0.18em] text-doom-yellow">NEEDS YOU · {items.length}</span>
-      {items.map(({ run, attention }) => (
-        <div
-          key={workflowRunIdentity(run)}
-          data-testid={`needs-card-${run.runKey}`}
-          className={`flex flex-col gap-1 rounded-md border px-3 py-2.5 ${
-            attention.kind === 'error'
-              ? `${STATUS_EDGE.error} bg-doom-tint-red/40`
-              : `${STATUS_EDGE.running} bg-doom-tint-yellow/40`
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <StatusBadge size="xs" tone={attention.kind === 'error' ? 'error' : 'running'}>
-              {attention.kind === 'error' ? 'ERROR' : 'PAUSED'}
-            </StatusBadge>
-            <span className="truncate text-[11px] font-bold text-doom-hi">{run.displayName}</span>
-          </div>
-          <span className="text-[10px] leading-relaxed text-doom-text">{attention.text}</span>
-          <span className="text-[9px] text-doom-faint">
-            {attention.kind === 'error'
-              ? 'recover it from the owning session: ask the agent to recover this run, or use its workflow recovery surface'
-              : 'resume it from the owning session'}
-          </span>
-        </div>
-      ))}
+    <div
+      data-testid="workflow-needs-you"
+      className={cn(
+        'flex items-center gap-2 rounded border px-3 py-2',
+        attention.kind === 'error'
+          ? 'border-doom-edge-red bg-doom-tint-red/40'
+          : 'border-doom-edge-yellow bg-doom-tint-yellow/40',
+      )}
+    >
+      <StatusBadge size="xs" tone={attention.kind === 'error' ? 'error' : 'running'}>
+        {attention.kind === 'error' ? 'ERROR' : 'PAUSED'}
+      </StatusBadge>
+      <span data-testid={`needs-card-${run.runKey}`} className="min-w-0 flex-1 truncate text-[10px] text-doom-text">
+        {run.displayName}: {attention.text}
+      </span>
+      <span className="shrink-0 text-[9px] text-doom-faint">
+        {attention.kind === 'error' ? 'recover from the owning session' : 'resume from the owning session'}
+      </span>
     </div>
   );
 }
@@ -160,7 +255,6 @@ function JobRow({
   onSelect: () => void;
 }) {
   const icon = STATE_ICON[job.status];
-  const phaseTone = job.phase === 'job' ? 'text-doom-text' : 'text-doom-faint';
   return (
     <OptionRow
       density="compact"
@@ -168,67 +262,172 @@ function JobRow({
       data-testid={`job-row-${job.name}`}
       data-job-status={job.status}
       onClick={onSelect}
-      className={cn('gap-2 rounded px-2.5 py-1.5', !selected && 'hover:bg-doom-panel')}
+      className={cn('gap-2 rounded px-2 py-1.5', !selected && 'hover:bg-doom-deep')}
     >
       <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
-      <OptionLabel density="compact" className={`text-[11px] ${selected ? 'text-doom-hi' : phaseTone}`}>
+      <OptionLabel density="compact" className={cn('text-[10px]', selected ? 'text-doom-hi' : 'text-doom-text')}>
         {job.name}
       </OptionLabel>
-      <span className="shrink-0 text-[9px] text-doom-faint">{spanDuration(job.startedAt, job.endedAt, now) ?? ''}</span>
+      <span className="shrink-0 text-[8px] text-doom-faint">{spanDuration(job.startedAt, job.endedAt, now) ?? ''}</span>
     </OptionRow>
   );
 }
 
-function StepRow({ step, now, onOpen }: { step: WorkflowStepView; now: number; onOpen: () => void }) {
+function StepRow({
+  step,
+  now,
+  selected,
+  onSelect,
+}: {
+  step: WorkflowStepView;
+  now: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const icon = STATE_ICON[step.status];
   return (
     <button
       type="button"
       data-testid={`step-row-${step.name}`}
       data-step-status={step.status}
-      title="open the run's terminal at this step"
-      onClick={onOpen}
-      className="flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-doom-panel"
+      data-active={selected}
+      onClick={onSelect}
+      className={cn(
+        'flex w-full cursor-pointer flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-doom-deep',
+        selected && 'bg-doom-tint-blue ring-1 ring-inset ring-doom-blue/40',
+      )}
     >
-      <div className="flex items-center gap-2">
+      <span className="flex items-center gap-2">
         <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
         <span
-          className={`min-w-0 flex-1 truncate text-[11px] ${step.status === 'failed' ? 'text-doom-red' : 'text-doom-text'}`}
+          className={cn(
+            'min-w-0 flex-1 truncate text-[9px]',
+            step.status === 'failed' ? 'text-doom-red' : 'text-doom-text',
+          )}
         >
           {step.name}
         </span>
-        <span className="shrink-0 text-[9px] text-doom-faint">
+        <span className="shrink-0 text-[8px] text-doom-faint">
           {spanDuration(step.startedAt, step.endedAt, now) ?? ''}
         </span>
-      </div>
+      </span>
       {step.reason === undefined ? null : (
-        <span className={`pl-5 text-[9px] ${step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint'}`}>
+        <span
+          className={cn('truncate pl-5 text-[8px]', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}
+        >
           {step.reason}
         </span>
       )}
-      {ACTIVE_STATES.has(step.status) && step.status !== 'paused' ? (
-        <span className="ml-5 mt-0.5 inline-block h-[10px] w-1.5 bg-doom-blue" />
-      ) : null}
     </button>
   );
 }
 
-/**
- * The workflows tab: GitHub-Actions-shaped runs for the focused session.
- *
- * What the registry records is what renders: the run chips and needs-you strip
- * come from run.json, the jobs pane and step rows from the folded progress
- * log. The view is read-only; recovery and resume stay with the session that
- * owns the run.
- */
+function ScreenLine({ line }: { line: string }) {
+  const spans = ansiSpans(line);
+  if (spans.length === 0) return <span className="block h-[15px]" />;
+  return (
+    <span className="block whitespace-pre">
+      {spans.map((span, index) => (
+        <span
+          key={index}
+          className={`${span.className ?? ''} ${span.bold ? 'font-bold' : ''} ${span.faint ? 'opacity-60' : ''} ${
+            span.italic ? 'italic' : ''
+          } ${span.underline ? 'underline' : ''} ${span.inverse ? 'bg-doom-text text-doom-deep' : ''}`}
+          style={span.color === undefined ? undefined : { color: span.color }}
+        >
+          {span.text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function InlineStepOutput({
+  run,
+  job,
+  step,
+  onOpenTerminal,
+}: {
+  run: WorkflowRunView;
+  job: WorkflowJobView;
+  step: WorkflowStepView | undefined;
+  onOpenTerminal: () => void;
+}) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [capabilities, setCapabilities] = useState<WorkflowTerminalCapabilitiesView>();
+  const [ended, setEnded] = useState(false);
+  const screenRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLines([]);
+    setCapabilities(undefined);
+    setEnded(false);
+    return followScreen(run.workspace, run.runKey, (event) => {
+      setLines(event.lines);
+      setCapabilities(event.capabilities);
+      if (event.ended === true) setEnded(true);
+    });
+  }, [run.workspace, run.runKey]);
+
+  useEffect(() => {
+    screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });
+  }, [lines]);
+
+  return (
+    <div data-testid="workflow-inline-output" className="flex min-h-0 flex-1 flex-col bg-doom-deep">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft px-3">
+        <Dot tone={ended ? 'neutral' : 'blue'} pulse={!ended && run.stage === 'running'} />
+        <span className={cn('text-[9px] font-bold', ended ? 'text-doom-faint' : 'text-doom-blue')}>
+          {ended ? 'FINAL OUTPUT' : 'LIVE OUTPUT'}
+        </span>
+        <span className="min-w-0 truncate text-[10px] font-bold text-doom-hi">{step?.name ?? job.name}</span>
+        <span className="min-w-0 flex-1" />
+        <span className="text-[8px] text-doom-faint">{ended ? 'settled' : 'following · 500ms'}</span>
+        <Button variant="outline" size="xs" data-testid="workflow-open-terminal" onClick={onOpenTerminal}>
+          open terminal
+        </Button>
+      </div>
+      <div
+        ref={screenRef}
+        data-testid="workflow-inline-screen"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-3 font-mono text-[11px] leading-[15px] text-doom-text"
+      >
+        {lines.length === 0 ? (
+          <span className="text-[10px] text-doom-faint">
+            {capabilities?.readable === false
+              ? (capabilities.reason ?? 'This run has no terminal to read.')
+              : 'waiting for the run to paint…'}
+          </span>
+        ) : (
+          lines.map((line, index) => <ScreenLine key={index} line={line} />)
+        )}
+        {!ended && run.stage === 'running' ? <StreamCursor className="mt-0.5 h-[12px] w-1.5" /> : null}
+      </div>
+      <div className="flex h-7 shrink-0 items-center gap-2 border-t border-doom-border-soft px-3 text-[8px] text-doom-faint">
+        <span>output follows automatically · select another step to inspect its current screen</span>
+        <span className="min-w-0 flex-1" />
+        <span>last 48 lines</span>
+      </div>
+    </div>
+  );
+}
+
+function DetailPane({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-doom-border">
+      {children}
+    </div>
+  );
+}
+
+/** The canonical workflow surface: a scalable picker, compact step navigation, and one dominant detail pane. */
 export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }: WebPluginSlotProps) {
   const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
-  // The focused run lives in the store so the activity dock can point the tab
-  // at a run before opening it.
   const selectedRun = useStore(workflows.store, (state) => workflows.select(state, sessionId).focusedRun);
   const catalogState = useStore(catalog.store, (state) => catalog.select(state, sessionId));
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
-  const [pane, setPane] = useState<'steps' | 'artifacts'>('steps');
+  const [selectedStep, setSelectedStep] = useState<string | null>(null);
+  const [pane, setPane] = useState<'output' | 'artifacts'>('output');
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -239,180 +438,177 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
   const run = runs.find((candidate) => workflowRunIdentity(candidate) === selectedRun) ?? runs[0];
   const jobs = run?.jobs ?? [];
   const fallbackJob =
-    run?.position?.job ?? jobs.find((job) => ACTIVE_STATES.has(job.status))?.name ?? jobs.at(-1)?.name;
+    run?.position?.job ?? jobs.find((candidate) => ACTIVE_STATES.has(candidate.status))?.name ?? jobs.at(-1)?.name;
   const job =
     jobs.find((candidate) => candidate.name === selectedJob) ??
     jobs.find((candidate) => candidate.name === fallbackJob);
-  const runningTally = runs.filter((candidate) => candidate.stage === 'running').length;
-  const attentionTally = runs.filter((candidate) => attentionFor(candidate) !== undefined).length;
+  const fallbackStep =
+    run?.position?.job === job?.name
+      ? run?.position?.step
+      : (job?.steps.find((candidate) => ACTIVE_STATES.has(candidate.status))?.name ?? job?.steps.at(-1)?.name);
+  const step =
+    job?.steps.find((candidate) => candidate.name === selectedStep) ??
+    job?.steps.find((candidate) => candidate.name === fallbackStep);
   const launching = catalogState.workflows.find((workflow) => workflow.path === catalogState.launch);
+
+  const selectRun = (candidate: WorkflowRunView): void => {
+    if (sessionId !== null) focusRun(sessionId, workflowRunIdentity(candidate));
+    setSelectedJob(null);
+    setSelectedStep(null);
+    setPane('output');
+  };
 
   return (
     <div data-testid="workflows-panel" className="flex min-h-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-[26px] py-[18px]">
-        <div className="flex items-center pb-3">
-          <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">WORKFLOWS · this session</span>
-          <Button
-            variant="link"
-            size="xs"
-            data-testid="workflows-open-catalog"
-            className="px-0 pl-3"
-            onClick={() => {
-              if (sessionId !== null) openCatalog(sessionId);
-            }}
-          >
-            launch workflow <Kbd>SPC w l</Kbd>
-          </Button>
-          <span className="min-w-0 flex-1" />
-          <span data-testid="workflows-tally" className="text-[9px] text-doom-faint">
-            {runs.length === 0 ? 'no runs yet' : `${runningTally} running · ${runs.length} total`}
-          </span>
-        </div>
-        {runs.length === 0 ? (
+      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden px-[18px] py-[14px]">
+        {run === undefined ? (
           <EmptyState
             data-testid="workflows-empty"
             title="no workflow runs yet"
-            description="pick one from the catalog, or launch it from the session with SPC w l, and the run shows up here live, jobs and steps included."
-          />
+            description="pick one from the catalog, or launch it from the session with SPC w l, and the run shows up here live."
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="workflows-open-catalog"
+              onClick={() => {
+                if (sessionId !== null) openCatalog(sessionId);
+              }}
+            >
+              launch workflow <Kbd>SPC w l</Kbd>
+            </Button>
+          </EmptyState>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-2 pb-3">
-              {runs.map((candidate) => {
-                const tone = runTone(candidate);
-                const active = run !== undefined && workflowRunIdentity(candidate) === workflowRunIdentity(run);
-                return (
-                  <Badge
-                    asChild
-                    key={workflowRunIdentity(candidate)}
-                    tone={active ? 'blue' : 'neutral'}
-                    size="md"
-                    className={cn(
-                      'px-2.5 py-1 text-[10px]',
-                      active
-                        ? 'border-doom-blue/60 bg-doom-tint-blue font-bold text-doom-hi'
-                        : 'bg-doom-panel hover:text-doom-hi',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      data-testid={`workflow-chip-${candidate.runKey}`}
-                      data-run-stage={candidate.stage}
-                      data-active={active}
-                      onClick={() => {
-                        if (sessionId !== null) focusRun(sessionId, workflowRunIdentity(candidate));
-                        setSelectedJob(null);
-                      }}
-                    >
-                      <Dot tone={tone.dot} pulse={candidate.stage === 'running'} />
-                      {candidate.displayName}
-                    </button>
-                  </Badge>
-                );
-              })}
-              <span className="min-w-0 flex-1" />
-              <span
-                data-testid="workflow-attention-tally"
-                className={`text-[10px] ${attentionTally > 0 ? 'font-bold text-doom-yellow' : 'text-doom-green'}`}
-              >
-                {attentionTally > 0 ? `${attentionTally} need you` : 'nothing needs you'}
+            <div className="flex h-[46px] shrink-0 items-center gap-2 rounded-md border border-doom-border bg-doom-panel px-2.5">
+              <WorkflowPicker runs={runs} selected={run} onSelect={selectRun} />
+              <StatusBadge tone={run.stage === 'error' ? 'error' : run.stage === 'running' ? 'info' : 'ok'}>
+                {runState(run)}
+              </StatusBadge>
+              <span className="truncate text-[9px] text-doom-dim">
+                {[run.position?.job, run.position?.step].filter(Boolean).join(' · ') ||
+                  run.workflowName ||
+                  run.displayName}
               </span>
+              <span className="min-w-0 flex-1" />
+              <span data-testid="workflows-tally" className="text-[9px] text-doom-faint">
+                {runs.filter((candidate) => candidate.stage === 'running').length} running · {runs.length} total
+              </span>
+              <Button
+                variant="outline"
+                size="xs"
+                data-testid="workflows-open-catalog"
+                onClick={() => {
+                  if (sessionId !== null) openCatalog(sessionId);
+                }}
+              >
+                launch
+              </Button>
             </div>
-            {run === undefined ? null : (
-              <>
-                <NowLine run={run} />
-                <AttentionStrip runs={runs} />
-                <div className="flex min-h-0 flex-1 gap-4">
-                  <div
-                    data-testid="jobs-pane"
-                    className="flex w-[300px] shrink-0 flex-col gap-0.5 overflow-y-auto rounded-md border border-doom-border bg-doom-panel p-2"
-                  >
-                    <div className="flex items-center px-2.5 pb-1.5 pt-1">
-                      <span className="text-[9px] font-bold tracking-[0.14em] text-doom-faint">JOBS</span>
-                      <span className="min-w-0 flex-1" />
-                      <span className="text-[9px] text-doom-faint">
-                        {jobs.filter((candidate) => candidate.status === 'completed').length}/{jobs.length} done
+            <SelectedAttention run={run} />
+            <div className="flex min-h-0 flex-1 gap-3">
+              <div
+                data-testid="jobs-pane"
+                className="flex w-[214px] shrink-0 flex-col overflow-y-auto rounded-md border border-doom-border bg-doom-panel p-1.5"
+              >
+                <div className="flex items-center px-2 pb-1 pt-1">
+                  <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint">JOBS</span>
+                  <span className="min-w-0 flex-1" />
+                  <span className="text-[8px] text-doom-faint">
+                    {jobs.filter((candidate) => candidate.status === 'completed').length}/{jobs.length}
+                  </span>
+                </div>
+                {jobs.length === 0 ? (
+                  <EmptyState className="py-4" title="no progress recorded yet" />
+                ) : (
+                  jobs.map((candidate) => (
+                    <JobRow
+                      key={candidate.name}
+                      job={candidate}
+                      now={now}
+                      selected={job !== undefined && candidate.name === job.name}
+                      onSelect={() => {
+                        setSelectedJob(candidate.name);
+                        setSelectedStep(null);
+                        setPane('output');
+                      }}
+                    />
+                  ))
+                )}
+                {job === undefined ? null : (
+                  <>
+                    <div className="mx-1 my-1.5 border-t border-doom-border-soft" />
+                    <div className="flex items-center px-2 pb-1">
+                      <span
+                        data-testid="job-pane-name"
+                        className="min-w-0 flex-1 truncate text-[9px] font-bold text-doom-hi"
+                      >
+                        {job.name}
+                      </span>
+                      <span className="text-[8px] text-doom-faint">
+                        {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
                       </span>
                     </div>
-                    {jobs.length === 0 ? (
-                      <EmptyState className="py-4" title="no progress recorded yet" />
-                    ) : (
-                      jobs.map((candidate) => (
-                        <JobRow
+                    <div className="flex flex-col gap-0.5">
+                      {job.steps.map((candidate) => (
+                        <StepRow
                           key={candidate.name}
-                          job={candidate}
+                          step={candidate}
                           now={now}
-                          selected={job !== undefined && candidate.name === job.name}
-                          onSelect={() => setSelectedJob(candidate.name)}
+                          selected={step !== undefined && candidate.name === step.name}
+                          onSelect={() => {
+                            setSelectedStep(candidate.name);
+                            setPane('output');
+                          }}
                         />
-                      ))
-                    )}
-                  </div>
-                  <div
-                    data-testid="job-pane"
-                    className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-doom-border bg-doom-panel"
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <DetailPane>
+                <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft bg-doom-panel px-3">
+                  <span className="min-w-0 truncate text-[10px] font-bold text-doom-hi">
+                    {job?.name ?? run.displayName}
+                  </span>
+                  {job === undefined ? null : (
+                    <StatusBadge className={cn('bg-doom-deep', STATE_ICON[job.status].className)}>
+                      {job.status.replace('_', ' ')}
+                    </StatusBadge>
+                  )}
+                  <Button
+                    variant={pane === 'output' ? 'primary' : 'outline'}
+                    size="xs"
+                    data-testid="pane-tab-output"
+                    data-active={pane === 'output'}
+                    onClick={() => setPane('output')}
                   >
-                    {job === undefined ? (
-                      <span className="px-4 py-3 text-[10px] text-doom-faint">select a job to see its steps</span>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2.5 border-b border-doom-border-soft px-4 py-2.5">
-                          <span data-testid="job-pane-name" className="truncate text-[12px] font-bold text-doom-hi">
-                            {job.name}
-                          </span>
-                          <StatusBadge className={cn('bg-doom-deep', STATE_ICON[job.status].className)}>
-                            {job.status.replace('_', ' ')}
-                          </StatusBadge>
-                          <Button
-                            variant={pane === 'steps' ? 'primary' : 'outline'}
-                            size="xs"
-                            data-testid="pane-tab-steps"
-                            data-active={pane === 'steps'}
-                            onClick={() => setPane('steps')}
-                          >
-                            steps
-                          </Button>
-                          <Button
-                            variant={pane === 'artifacts' ? 'primary' : 'outline'}
-                            size="xs"
-                            data-testid="pane-tab-artifacts"
-                            data-active={pane === 'artifacts'}
-                            onClick={() => setPane('artifacts')}
-                          >
-                            artifacts
-                          </Button>
-                          <span className="min-w-0 flex-1" />
-                          <span className="text-[9px] text-doom-faint">
-                            {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
-                          </span>
-                        </div>
-                        {pane === 'artifacts' ? (
-                          <ArtifactsPane run={run} onOpen={(path) => openTransientTab(artifactTab(run, path))} />
-                        ) : (
-                          <div className="flex flex-col py-1.5">
-                            {job.steps.length === 0 ? (
-                              <EmptyState className="py-4" title="no steps recorded yet" />
-                            ) : (
-                              job.steps.map((step) => (
-                                <StepRow
-                                  key={step.name}
-                                  step={step}
-                                  now={now}
-                                  onOpen={() => openTransientTab(stepTerminalTab(run, job.name, step.name))}
-                                />
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+                    output
+                  </Button>
+                  <Button
+                    variant={pane === 'artifacts' ? 'primary' : 'outline'}
+                    size="xs"
+                    data-testid="pane-tab-artifacts"
+                    data-active={pane === 'artifacts'}
+                    onClick={() => setPane('artifacts')}
+                  >
+                    artifacts
+                  </Button>
                 </div>
-                <span className="pt-3 text-[9px] text-doom-faint">
-                  read from the workflow registry live · every run of this session is kept, grouped by outcome · errored
-                  runs stay a day for recovery
-                </span>
-              </>
-            )}
+                {pane === 'artifacts' ? (
+                  <ArtifactsPane run={run} onOpen={(path) => openTransientTab(artifactTab(run, path))} />
+                ) : job === undefined ? (
+                  <EmptyState className="py-6" title="select a job to see its output" />
+                ) : (
+                  <InlineStepOutput
+                    run={run}
+                    job={job}
+                    step={step}
+                    onOpenTerminal={() => openTransientTab(stepTerminalTab(run, job.name, step?.name))}
+                  />
+                )}
+              </DetailPane>
+            </div>
           </>
         )}
       </div>

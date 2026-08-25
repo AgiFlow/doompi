@@ -33,11 +33,10 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
 
   await page.getByTestId('tab-workflows').click();
   await expect(page).toHaveURL(/\/session\/s1\/workflows$/);
-  await expect(page.getByTestId('workflow-chip-release-hardening')).toHaveAttribute('data-run-stage', 'running');
-  await expect(page.getByTestId('workflow-now')).toContainText('Release Hardening');
-  await expect(page.getByTestId('workflow-now')).toContainText('build');
-  await expect(page.getByTestId('workflow-now')).toContainText('edit src/routes/token.ts');
-  await expect(page.getByTestId('workflow-attention-tally')).toHaveText('nothing needs you');
+  await expect(page.getByTestId('workflow-picker')).toContainText('Release Hardening');
+  await page.getByTestId('workflow-picker').click();
+  await expect(page.getByTestId('workflow-option-release-hardening')).toHaveAttribute('data-run-stage', 'running');
+  await page.keyboard.press('Escape');
 
   // The active job is preselected; its steps render with their states.
   await expect(page.getByTestId('job-row-research')).toHaveAttribute('data-job-status', 'completed');
@@ -45,11 +44,18 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   await expect(page.getByTestId('job-pane-name')).toHaveText('build');
   await expect(page.getByTestId('step-row-resolve inputs')).toHaveAttribute('data-step-status', 'completed');
   await expect(page.getByTestId('step-row-edit src/routes/token.ts')).toHaveAttribute('data-step-status', 'running');
+  await expect(page.getByTestId('step-row-edit src/routes/token.ts')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('workflow-inline-output')).toBeVisible();
 
   // Selecting another job swaps the step pane.
   await page.getByTestId('job-row-research').click();
   await expect(page.getByTestId('job-pane-name')).toHaveText('research');
   await expect(page.getByTestId('step-row-map the risk surface')).toHaveAttribute('data-step-status', 'completed');
+
+  // Artifacts replace the dominant detail without moving the compact navigator.
+  await page.getByTestId('pane-tab-artifacts').click();
+  await expect(page.getByTestId('artifacts-pane')).toBeVisible();
+  await expect(page.getByTestId('jobs-pane')).toBeVisible();
 });
 
 test('a failure moves into the needs-you strip live', async ({ page, cockpit }) => {
@@ -68,7 +74,7 @@ test('a failure moves into the needs-you strip live', async ({ page, cockpit }) 
       { type: 'step', status: 'running', job: 'fix', step: 'implement the fix', at },
     ],
   });
-  await expect(page.getByTestId('workflow-chip-dev-fix')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('workflow-picker')).toContainText('Development Fix', { timeout: 5000 });
 
   moveWorkflowRun(cockpit.workflowHome, { workspace: 'default', runKey: 'dev-fix' }, 'running', 'error', {
     outcome: 'failed',
@@ -80,8 +86,8 @@ test('a failure moves into the needs-you strip live', async ({ page, cockpit }) 
   await expect(page.getByTestId('workflow-needs-you')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('needs-card-dev-fix')).toContainText("job 'fix' failed");
   await expect(page.getByTestId('needs-card-dev-fix')).toContainText('nx test failed: 3 of 41 checks');
-  await expect(page.getByTestId('workflow-attention-tally')).toHaveText('1 need you');
-  await expect(page.getByTestId('workflow-chip-dev-fix')).toHaveAttribute('data-run-stage', 'error');
+  await page.getByTestId('workflow-picker').click();
+  await expect(page.getByTestId('workflow-option-dev-fix')).toHaveAttribute('data-run-stage', 'error');
 });
 
 test('a workflow owned by another session stays off this tab', async ({ page, cockpit }) => {
@@ -100,6 +106,36 @@ test('a workflow owned by another session stays off this tab', async ({ page, co
 
   await page.goto(cockpit.url);
   await page.getByTestId('tab-workflows').click();
-  await expect(page.getByTestId('workflow-chip-mine')).toBeVisible({ timeout: 5000 });
-  await expect(page.getByTestId('workflow-chip-foreign')).toHaveCount(0);
+  await expect(page.getByTestId('workflow-picker')).toBeVisible({ timeout: 5000 });
+  await page.getByTestId('workflow-picker').click();
+  await expect(page.getByTestId('workflow-option-mine')).toBeVisible();
+  await expect(page.getByTestId('workflow-option-foreign')).toHaveCount(0);
+});
+
+test('searches thirty runs without turning them into a chip strip', async ({ page, cockpit }) => {
+  const finishedAt = new Date().toISOString();
+  for (let index = 0; index < 30; index += 1) {
+    const running = index >= 20;
+    writeWorkflowRun(cockpit.workflowHome, {
+      workspace: 'default',
+      stage: running ? 'running' : 'completed',
+      runKey: `workflow-${String(index)}`,
+      record: {
+        ...OWNED,
+        displayName: `Workflow ${String(index)}`,
+        ...(running ? {} : { outcome: 'success', finishedAt }),
+      },
+    });
+  }
+
+  await page.goto(cockpit.url);
+  await page.getByTestId('tab-workflows').click();
+  await expect(page.getByTestId('workflow-picker')).toContainText('30 workflows', { timeout: 5000 });
+
+  await page.getByTestId('workflow-picker').click();
+  await page.getByTestId('workflow-picker-search').fill('Workflow 29');
+  await expect(page.getByTestId('workflow-option-workflow-29')).toBeVisible();
+  await expect(page.getByTestId('workflow-option-workflow-0')).toHaveCount(0);
+  await page.getByTestId('workflow-option-workflow-29').click();
+  await expect(page.getByTestId('workflow-picker')).toContainText('Workflow 29');
 });

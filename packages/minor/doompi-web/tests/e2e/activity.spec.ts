@@ -45,10 +45,10 @@ test('lists the groups whose packages report in, each rendered by its own plugin
   // The marker and the name are separate elements with a flex gap, so the
   // concatenated text has no space between them.
   await expect(page.getByTestId('activity-runners')).toContainText('#runners');
-  // Each plugin's section renders its own idle line in place of the host summary.
+  // Each plugin's section renders its own empty state in place of the host summary.
   await expect(page.getByTestId('activity-summary-agents')).toHaveText('idle');
   await expect(page.getByTestId('activity-summary-runners')).toHaveText('idle');
-  await expect(page.getByTestId('activity-summary-workflows')).toHaveText('idle');
+  await expect(page.getByTestId('activity-summary-workflows')).toContainText('no runs yet');
 });
 
 test('counts the groups whose session summary is busy', async ({ page, cockpit }) => {
@@ -197,7 +197,7 @@ test('the workflows group lists the session runs and opens one in the workflows 
 
   await row.click();
   await expect(page).toHaveURL(/\/session\/s1\/workflows$/);
-  await expect(page.getByTestId('workflow-chip-release-hardening')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('workflow-picker')).toContainText('Release Hardening');
 });
 
 test('the dock can be hidden and brought back', async ({ page, cockpit }) => {

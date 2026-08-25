@@ -55,6 +55,9 @@ importers:
       '@agimon-ai/doompi-voice':
         specifier: workspace:*
         version: link:packages/minor/doompi-voice
+      '@agimon-ai/doompi-web':
+        specifier: workspace:*
+        version: link:packages/minor/doompi-web
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.29
         version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.3(zod@4.4.3))
