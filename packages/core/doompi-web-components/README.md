@@ -11,12 +11,12 @@ Because every colour is a token, a theme config recolours the whole cockpit at r
 
 ## What it ships
 
-| Export            | Components                                                                                                                                                                                                                                                                               |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`               | `Button`, `Badge`, `StatusBadge`, `Dot`, `Input`, `Textarea`, `Dialog*`, `Popover*`, `DropdownMenu*`, `Tooltip*`, `Kbd`, `SectionLabel`, `EmptyState`, `Panel*`, `MessageItem*`, `MessageLines`, `Spinner`, `Separator`, `StreamCursor`, the curated icon set, `cn`, and `collapseLines` |
-| `./theme`         | `ThemeConfig`, the token lists, `BUILTIN_THEMES`, `applyTheme`, `parseThemeConfig`, `themeFromPiTheme`, the stored-preference helpers                                                                                                                                                    |
-| `./styles.css`    | The token stylesheet: `:root` defaults, the Tailwind `@theme inline` mapping, shadcn semantic aliases, base styles, and the `@source` for this package's classes                                                                                                                         |
-| `./themes/*.json` | The shipped theme configs: `doom-one-dark` (default), `doom-one-light`, `doom-nord-dark`                                                                                                                                                                                                 |
+| Export            | Components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.`               | Actions and chips: `Button`, `Badge`, `StatusBadge`, `Dot`, `Kbd`, `NavTab*`, `Tabs*`. Fields: `Input`, `Textarea`, `Label`, `Checkbox`, `Switch`, `RadioGroup*`, `Select*`. Overlays: `Dialog*`, `Popover*`, `DropdownMenu*`, `Tooltip*`, `Toast*`, `Command*`. Layout and content: `Panel*`, `SectionLabel`, `Separator`, `EmptyState`, `ScrollArea`, `Collapsible*`, `Accordion*`, `OptionList`, `OptionRow`, `MessageItem*`, `MessageLines`. Feedback: `Spinner`, `Progress`, `Skeleton`, `Avatar*`, `StreamCursor`. Plus the curated icon set, `cn`, `collapseLines`, the option-list key helpers, and the tone vocabularies with the maps between them |
+| `./theme`         | `ThemeConfig`, the token lists, `BUILTIN_THEMES`, `applyTheme`, `parseThemeConfig`, `themeFromPiTheme`, the stored-preference helpers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `./styles.css`    | The token stylesheet: `:root` defaults, the Tailwind `@theme inline` mapping, shadcn semantic aliases, base styles, and the `@source` for this package's classes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `./themes/*.json` | The shipped theme configs: `doom-one-dark` (default), `doom-one-light`, `doom-nord-dark`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Using it from the cockpit host
 
@@ -32,6 +32,19 @@ import { applyTheme, builtinTheme, readThemePreference } from '@agimon-ai/doompi
 
 applyTheme(builtinTheme(readThemePreference(localStorage) ?? 'doom-one-dark')!, document.documentElement);
 ```
+
+## Tones
+
+Three vocabularies, because they answer different questions. A **chip tone** names a colour
+(`blue`, `violet`, `teal`), a **status tone** names an outcome (`running`, `ok`, `error`, `info`,
+`accent`, `neutral`), and a **line tone** names a role inside a body of text (`success`, `warning`,
+`muted`). They live in `src/types/tone.ts`, and `STATUS_TO_CHIP`, `STATUS_TO_DOT`, `CHIP_TO_STATUS`,
+and `LINE_TONE_TO_STATUS` translate between them.
+
+Reach for a map rather than writing another `Record<Tone, string>`: a surface that spells its own
+state-to-colour table is how the same status ends up yellow in one panel and orange in the next.
+Every tone table in this package is checked against these unions at compile time, so a tone added to
+one and not the others fails the build.
 
 ## Tool messages
 

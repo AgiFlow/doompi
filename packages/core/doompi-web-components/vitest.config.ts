@@ -24,9 +24,12 @@ export const vitestConfig = defineConfig({
         // they forward props and name token classes. Their behaviour is the
         // primitive's, and the cockpit's Playwright suite drives every one of
         // them in a real browser.
+        'src/components/Command.tsx',
         'src/components/Dialog.tsx',
         'src/components/DropdownMenu.tsx',
         'src/components/Popover.tsx',
+        'src/components/Select.tsx',
+        'src/components/Toast.tsx',
         'src/components/Tooltip.tsx',
       ],
       reportOnFailure: false,

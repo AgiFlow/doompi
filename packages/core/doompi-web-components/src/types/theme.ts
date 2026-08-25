@@ -28,7 +28,7 @@ export const PALETTE_TOKENS = [
   'selected',
 ] as const;
 
-export const ACCENT_TOKENS = ['blue', 'green', 'yellow', 'red', 'magenta', 'violet', 'cyan'] as const;
+export const ACCENT_TOKENS = ['blue', 'green', 'yellow', 'red', 'magenta', 'violet', 'cyan', 'orange', 'teal'] as const;
 
 export const DERIVED_TOKENS = [
   'tint-blue',
@@ -38,6 +38,8 @@ export const DERIVED_TOKENS = [
   'tint-magenta',
   'tint-violet',
   'tint-cyan',
+  'tint-orange',
+  'tint-teal',
   'edge-blue',
   'edge-green',
   'edge-yellow',
@@ -45,6 +47,15 @@ export const DERIVED_TOKENS = [
   'edge-magenta',
   'edge-violet',
   'edge-cyan',
+  'edge-orange',
+  'edge-teal',
+  /**
+   * The readable foreground on the `selected` surface. Derived so an existing
+   * theme stays valid, but a theme whose `selected` is pale must pin it: CSS
+   * cannot pick a contrasting colour on its own, and the fallback assumes a
+   * saturated selection, which is what both shipped themes use.
+   */
+  'on-selected',
   'font-mono',
 ] as const;
 

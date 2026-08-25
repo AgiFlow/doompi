@@ -178,7 +178,7 @@ export const messageItemStatusVariants = cva('shrink-0', {
       error: 'text-doom-red',
       info: 'text-doom-blue',
       accent: 'text-doom-magenta',
-    },
+    } satisfies Record<StatusTone, string>,
   },
   defaultVariants: { tone: 'neutral' },
 });

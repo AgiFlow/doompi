@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 import { cn } from '../lib/cn.ts';
+import type { DotTone as Tone } from '../types/tone.ts';
 
 export const dotVariants = cva('inline-block shrink-0 rounded-full', {
   variants: {
@@ -14,10 +15,14 @@ export const dotVariants = cva('inline-block shrink-0 rounded-full', {
       magenta: 'bg-doom-magenta',
       violet: 'bg-doom-violet',
       cyan: 'bg-doom-cyan',
-    },
+      orange: 'bg-doom-orange',
+      teal: 'bg-doom-teal',
+    } satisfies Record<Tone, string>,
     size: {
+      xs: 'h-1 w-1',
       sm: 'h-1.5 w-1.5',
       md: 'h-2 w-2',
+      lg: 'h-2.5 w-2.5',
     },
     pulse: {
       true: 'animate-pulse',
@@ -27,7 +32,7 @@ export const dotVariants = cva('inline-block shrink-0 rounded-full', {
   defaultVariants: { tone: 'neutral', size: 'sm', pulse: false },
 });
 
-export type DotTone = NonNullable<VariantProps<typeof dotVariants>['tone']>;
+export type DotTone = Tone;
 
 export interface DotProps extends ComponentProps<'span'>, VariantProps<typeof dotVariants> {}
 

@@ -1,9 +1,19 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Avatar,
+  AvatarFallback,
   Badge,
   Button,
+  Checkbox,
   cn,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   collapseLines,
   Dialog,
   DialogContent,
@@ -14,22 +24,42 @@ import {
   EmptyState,
   Input,
   Kbd,
+  Label,
   MessageItem,
   MessageItemBody,
   MessageItemHeader,
   MessageItemStatus,
   MessageLines,
+  NavTab,
+  NavTabBadge,
+  optionListHint,
+  OptionList,
+  optionMarker,
+  OptionRow,
   Panel,
   PanelBody,
   PanelHeader,
   Popover,
   PopoverTrigger,
+  Progress,
+  RadioGroup,
+  RadioGroupCard,
+  RadioGroupItem,
+  ScrollArea,
   SectionLabel,
+  Select,
+  SelectTrigger,
+  SelectValue,
   Separator,
+  Skeleton,
   Spinner,
   STATUS_EDGE,
   StatusBadge,
   StreamCursor,
+  Switch,
+  Tabs,
+  TabsList,
+  TabsTrigger,
   Textarea,
   toolTone,
   Tooltip,
@@ -159,6 +189,131 @@ describe('primitives', () => {
     expect(toolTone({ running: true, isError: true })).toBe('running');
     expect(toolTone({ running: false, isError: true })).toBe('error');
     expect(toolTone({ running: false, isError: false })).toBe('ok');
+  });
+
+  it('lends its styling to another element wherever asChild is offered', () => {
+    expect(
+      html(
+        <Badge asChild tone="violet">
+          <a href="/x">chip</a>
+        </Badge>,
+      ),
+    ).toContain('<a');
+    expect(
+      html(
+        <StatusBadge asChild tone="ok">
+          <a href="/x">pill</a>
+        </StatusBadge>,
+      ),
+    ).toContain('<a');
+    expect(
+      html(
+        <NavTab asChild active>
+          <a href="/x">tab</a>
+        </NavTab>,
+      ),
+    ).toContain('data-active="true"');
+  });
+
+  it('shows a spinner and refuses clicks while a button is loading', () => {
+    const busy = html(
+      <Button loading loadingLabel="saving">
+        save
+      </Button>,
+    );
+    expect(busy).toContain('animate-spin');
+    expect(busy).toContain('aria-busy="true"');
+    expect(busy).toContain('disabled');
+    expect(busy).toContain('saving');
+    // A labelled spinner is a live status; an unlabelled one stays decorative.
+    expect(html(<Spinner />)).toContain('aria-hidden');
+    expect(html(<Spinner label="loading" />)).toContain('role="status"');
+  });
+
+  it('offers the form controls a settings page needs', () => {
+    expect(html(<Checkbox defaultChecked />)).toContain('data-state="checked"');
+    expect(html(<Switch defaultChecked />)).toContain('data-state="checked"');
+    expect(
+      html(
+        <RadioGroup defaultValue="a">
+          <RadioGroupItem value="a" />
+          <RadioGroupCard value="b">card</RadioGroupCard>
+        </RadioGroup>,
+      ),
+    ).toContain('role="radiogroup"');
+    expect(html(<Label htmlFor="x">name</Label>)).toContain('for="x"');
+    expect(
+      html(
+        <Select>
+          <SelectTrigger>
+            <SelectValue placeholder="pick" />
+          </SelectTrigger>
+        </Select>,
+      ),
+    ).toContain('pick');
+    expect(html(<Progress value={40} />)).toContain('role="progressbar"');
+    expect(html(<Skeleton className="h-4" />)).toContain('animate-pulse');
+    expect(
+      html(
+        <Avatar>
+          <AvatarFallback>vn</AvatarFallback>
+        </Avatar>,
+      ),
+    ).toContain('vn');
+  });
+
+  it("draws an option list whose rows are options and whose cursor is the surface's", () => {
+    const out = html(
+      <OptionList
+        options={['first', 'second']}
+        cursor={1}
+        onCursorChange={() => undefined}
+        onSelect={() => undefined}
+        testIdPrefix="option"
+      />,
+    );
+    expect(out).toContain('role="listbox"');
+    expect(out).toContain('data-testid="options"');
+    expect(out).toContain('data-testid="option-1"');
+    expect(out).toContain('aria-selected="true"');
+    expect(out).toContain('bg-doom-tint-blue');
+    expect(html(<OptionRow density="compact">row</OptionRow>)).toContain('role="option"');
+    expect(optionMarker(0)).toBe('1');
+    expect(optionMarker(9)).toBe('·');
+    expect(optionListHint(3)).toContain('1-9 select');
+    expect(optionListHint(30)).toContain('jump');
+  });
+
+  it('stacks tabs, sections and scroll surfaces', () => {
+    expect(
+      html(
+        <Tabs defaultValue="a">
+          <TabsList>
+            <TabsTrigger value="a">one</TabsTrigger>
+          </TabsList>
+        </Tabs>,
+      ),
+    ).toContain('role="tab"');
+    expect(html(<NavTabBadge active>3</NavTabBadge>)).toContain('bg-doom-blue');
+    expect(
+      html(
+        <Accordion type="single" collapsible defaultValue="a">
+          <AccordionItem value="a">
+            <AccordionTrigger>head</AccordionTrigger>
+            <AccordionContent>body</AccordionContent>
+          </AccordionItem>
+        </Accordion>,
+      ),
+    ).toContain('head');
+    expect(html(<ScrollArea className="h-10">scrolled</ScrollArea>)).toContain('scrolled');
+    expect(
+      html(
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger>toggle</CollapsibleTrigger>
+          <CollapsibleContent>folded</CollapsibleContent>
+        </Collapsible>,
+      ),
+    ).toContain('folded');
   });
 
   it('overlays render their triggers while closed', () => {
