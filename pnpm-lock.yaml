@@ -57,7 +57,7 @@ importers:
         version: link:packages/minor/doompi-voice
       '@agimon-ai/doompi-web':
         specifier: workspace:*
-        version: link:packages/minor/doompi-web
+        version: link:packages/clients/doompi-web
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.29
         version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.3(zod@4.4.3))
@@ -317,6 +317,131 @@ importers:
       react:
         specifier: 19.2.8
         version: 19.2.8
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/clients/doompi-server:
+    dependencies:
+      '@agimon-ai/doompi-extension-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-extension-contracts
+      '@deepseek-ai/cordis':
+        specifier: 4.0.1
+        version: 4.0.1
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.3)
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.84.3
+        version: 0.84.3(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/clients/doompi-web:
+    dependencies:
+      '@agimon-ai/doompi':
+        specifier: workspace:*
+        version: link:../../core/doompi
+      '@agimon-ai/doompi-extension-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-extension-contracts
+      '@agimon-ai/doompi-server':
+        specifier: workspace:*
+        version: link:../doompi-server
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.84.3
+        version: 0.84.3(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.3)
+      '@hono/node-ws':
+        specifier: 1.3.1
+        version: 1.3.1(@hono/node-server@2.1.1(hono@4.13.3))(hono@4.13.3)
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+      '@tanstack/react-router':
+        specifier: 1.170.32
+        version: 1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
+      '@vitejs/plugin-react':
+        specifier: 6.1.0
+        version: 6.1.0(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+      hono:
+        specifier: 4.13.3
+        version: 4.13.3
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      react-markdown:
+        specifier: 10.1.0
+        version: 10.1.0(@types/react@19.2.7)(react@19.2.8)
+      remark-gfm:
+        specifier: 4.0.1
+        version: 4.0.1
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0)
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-web':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-web
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 19.2.4
+        version: 19.2.4(@types/react@19.2.7)
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1633,43 +1758,6 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/minor/doompi-server:
-    dependencies:
-      '@agimon-ai/doompi-extension-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
-      '@deepseek-ai/cordis':
-        specifier: 4.0.1
-        version: 4.0.1
-      '@hono/node-server':
-        specifier: 2.1.1
-        version: 2.1.1(hono@4.13.3)
-    devDependencies:
-      '@agimon-ai/doompi-web':
-        specifier: workspace:*
-        version: link:../doompi-web
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.84.3
-        version: 0.84.3(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
-      '@types/node':
-        specifier: 26.2.0
-        version: 26.2.0
-      '@vitest/coverage-v8':
-        specifier: 4.1.11
-        version: 4.1.11(vitest@4.1.11)
-      tsdown:
-        specifier: 0.22.14
-        version: 0.22.14(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
-
   packages/minor/doompi-voice:
     dependencies:
       '@agimon-ai/doompi-config':
@@ -1721,91 +1809,6 @@ importers:
       react:
         specifier: 19.2.8
         version: 19.2.8
-      tsdown:
-        specifier: 0.22.14
-        version: 0.22.14(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/minor/doompi-web:
-    dependencies:
-      '@agimon-ai/doompi-extension-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
-      '@agimon-ai/doompi-web-components':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.84.3
-        version: 0.84.3(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
-      '@hono/node-server':
-        specifier: 2.1.1
-        version: 2.1.1(hono@4.13.3)
-      '@hono/node-ws':
-        specifier: 1.3.1
-        version: 1.3.1(@hono/node-server@2.1.1(hono@4.13.3))(hono@4.13.3)
-      '@tailwindcss/vite':
-        specifier: 4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
-      '@tanstack/react-router':
-        specifier: 1.170.32
-        version: 1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@tanstack/react-store':
-        specifier: 0.11.1
-        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@tanstack/store':
-        specifier: 0.11.1
-        version: 0.11.1
-      '@vitejs/plugin-react':
-        specifier: 6.1.0
-        version: 6.1.0(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
-      hono:
-        specifier: 4.13.3
-        version: 4.13.3
-      react:
-        specifier: 19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: 19.2.8
-        version: 19.2.8(react@19.2.8)
-      react-markdown:
-        specifier: 10.1.0
-        version: 10.1.0(@types/react@19.2.7)(react@19.2.8)
-      remark-gfm:
-        specifier: 4.0.1
-        version: 4.0.1
-      tailwindcss:
-        specifier: 4.3.3
-        version: 4.3.3
-      vite:
-        specifier: 8.2.2
-        version: 8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0)
-    devDependencies:
-      '@agimon-ai/vibe-lint-plugin-doom-web':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-web
-      '@playwright/test':
-        specifier: 1.62.1
-        version: 1.62.1
-      '@types/node':
-        specifier: 26.2.0
-        version: 26.2.0
-      '@types/react':
-        specifier: 19.2.7
-        version: 19.2.7
-      '@types/react-dom':
-        specifier: 19.2.4
-        version: 19.2.4(@types/react@19.2.7)
-      '@vitest/coverage-v8':
-        specifier: 4.1.11
-        version: 4.1.11(vitest@4.1.11)
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)

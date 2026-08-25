@@ -17,6 +17,7 @@ Choose the package tier from the capability, not convenience:
 - `packages/core/*` for runtime foundations that must always be present.
 - `packages/default/*` for normal distribution features selected by default configuration.
 - `packages/minor/*` for optional modes.
+- `packages/clients/*` for standalone client-facing processes.
 - `layers/<layer>/*` for selectable layer extensions.
 
 ## Workflow

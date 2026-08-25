@@ -1,6 +1,6 @@
 boilerplate:
   - name: scaffold-doom-web
-    targetFolder: packages/minor
+    targetFolder: packages/clients
     description: |-
       Create a publishable DoomPi web package: a Hono executable hosting a multi-session cockpit hub that discovers running doompi-server sessions through the registry directory, multiplexes their authenticated sockets behind one page WebSocket, and serves a React cockpit built by Vite.
 

@@ -6,7 +6,7 @@
   "scripts": {
     "audit:workspace": "node scripts/audit-workspace.mjs",
     "build": "nx run-many -t build",
-    "cockpit": "DOOMPI_AGENT_COMMAND=\"$PWD/packages/core/doompi/dist/bin/cli.mjs\" node packages/minor/doompi-web/dist/bin/serve.mjs --spawn-command \"$PWD/packages/minor/doompi-server/dist/bin/serve.mjs\"",
+    "cockpit": "DOOMPI_AGENT_COMMAND=\"$PWD/packages/core/doompi/dist/bin/cli.mjs\" node packages/clients/doompi-web/dist/bin/serve.mjs --spawn-command \"$PWD/packages/clients/doompi-server/dist/bin/serve.mjs\"",
     "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web",
     "examples:check": "node scripts/check-examples.mjs",
     "hooks:check": "node scripts/emit-hooks.mjs --check",

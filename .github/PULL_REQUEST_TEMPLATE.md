@@ -17,7 +17,7 @@ Run these locally before asking for review. CI runs the same set.
 
 ## Scope
 
-- [ ] Package boundaries are respected (`packages/core`, `packages/default`, `packages/minor`, `layers/`, `packages/tooling`)
+- [ ] Package boundaries are respected (`packages/core`, `packages/default`, `packages/minor`, `packages/clients`, `layers/`, `packages/tooling`)
 - [ ] Doom-to-Doom dependencies stay `workspace:*`
 - [ ] Package exports, Pi entries, resources, runtime ordering, and RMUX LFS payloads are preserved
 - [ ] No unrelated changes bundled in

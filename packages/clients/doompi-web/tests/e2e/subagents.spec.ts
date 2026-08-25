@@ -1,5 +1,12 @@
 import { expect, test } from '../support/cockpit.ts';
-import { removeRunsScope, writeRunStatus } from '../support/subagentRuns.ts';
+import {
+  appendRunJournal,
+  journalEntry,
+  removeRunsScope,
+  writeAgentDefinition,
+  writeRunJournal,
+  writeRunStatus,
+} from '../support/subagentRuns.ts';
 
 // The fixture's first session is always 's1'; its doom-team scope is global
 // per session id, so every test starts and ends with it clean. That same
@@ -165,8 +172,18 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
   await expect(page.getByTestId('tab-subagents-count')).toBeHidden();
 });
 
-test('the activity dock lists the runs and opens one in the subagents tab', async ({ page, cockpit }) => {
+test('the activity dock lists the runs and opens one in a temporary agent tab', async ({ page, cockpit }) => {
   const now = Date.now();
+  const journal = writeRunJournal('s1', 'run-dock', [
+    journalEntry('j1', { role: 'user', content: [{ type: 'text', text: 'Review the diff.' }] }),
+    journalEntry('j2', {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'Reading the hub adapter first.' },
+        { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'src/adapters/sessionHub.ts' } },
+      ],
+    }),
+  ]);
   writeRunStatus('s1', {
     version: 1,
     runId: 'run-dock',
@@ -178,6 +195,7 @@ test('the activity dock lists the runs and opens one in the subagents tab', asyn
     cwd: '/workspace/doompi',
     currentTool: 'working: reading the hub adapter',
     toolCount: 4,
+    sessionFile: journal,
   });
 
   await page.goto(cockpit.url);
@@ -199,8 +217,82 @@ test('the activity dock lists the runs and opens one in the subagents tab', asyn
   await expect(row).toContainText('working: reading the hub adapter');
   await expect(page.getByTestId('activity-summary-agents')).toBeHidden();
 
+  // The row opens the run's own conversation as a tab of its own, rendered
+  // on the same transcript as the session: gutters, markdown, tool cards.
   await row.click();
-  await expect(page).toHaveURL(/\/session\/s1\/subagents$/);
-  await expect(page.getByTestId('run-drawer')).toBeVisible();
-  await expect(page.getByTestId('drawer-agent')).toHaveText('doompi-reviewer');
+  await expect(page).toHaveURL(/\/session\/s1\/subagents-run-run-dock$/);
+  const chip = page.getByTestId('tab-subagents-run-run-dock');
+  await expect(chip).toHaveText('doompi-reviewer');
+  await expect(page.getByTestId('agent-thread-agent')).toHaveText('doompi-reviewer');
+  await expect(page.getByTestId('agent-thread-state')).toHaveText('RUNNING');
+  const thread = page.getByTestId('thread-timeline');
+  await expect(thread.getByTestId('entry-user')).toContainText('Review the diff.');
+  await expect(thread.getByTestId('entry-assistant')).toContainText('Reading the hub adapter first.');
+  const tool = thread.getByTestId('entry-tool');
+  await expect(tool).toHaveAttribute('data-tool-name', 'read');
+  await expect(tool).toHaveAttribute('data-tool-state', 'running');
+
+  // The journal grows while the tab is open; the result settles the card.
+  appendRunJournal(journal, [
+    journalEntry('j3', {
+      role: 'toolResult',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      content: [{ type: 'text', text: 'export function createSessionHub' }],
+      isError: false,
+    }),
+  ]);
+  await expect(tool).toHaveAttribute('data-tool-state', 'ok');
+  await expect(tool).toContainText('export function createSessionHub');
+
+  // The same run again focuses the open tab rather than opening a second one.
+  await page.getByTestId('activity-run-run-dock').click();
+  await expect(page.getByTestId('tab-subagents-run-run-dock-chip')).toHaveCount(1);
+  await page.getByTestId('tab-subagents-run-run-dock-close').click();
+  await expect(page).toHaveURL(/\/session\/s1$/);
+  await expect(chip).toHaveCount(0);
+});
+
+test('the catalog lists the agents the session can launch and launches one through /run', async ({ page, cockpit }) => {
+  writeAgentDefinition(cockpit.agentDir, 'reviewer-e2e', 'Reviews a diff for the e2e suite.');
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await page.getByTestId('tab-subagents').click();
+  await page.getByTestId('subagents-launch').click();
+  const drawer = page.getByTestId('catalog-drawer');
+  await expect(drawer).toBeVisible();
+  const row = page.getByTestId('catalog-agent-reviewer-e2e');
+  await expect(row).toContainText('Reviews a diff for the e2e suite.');
+  await page.getByTestId('catalog-filter').fill('reviewer-e2e');
+  await expect(drawer.locator('[role="option"]')).toHaveCount(1);
+  await row.click();
+  await page.getByTestId('catalog-launch-reviewer-e2e').click();
+
+  await expect(page.getByTestId('launch-dialog')).toBeVisible();
+  await expect(page.getByTestId('launch-agent')).toHaveText('reviewer-e2e');
+  await page.getByTestId('launch-task').fill('Review the diff.');
+  await page.getByTestId('launch-fork').click();
+  await expect(page.getByTestId('launch-command')).toHaveText('/run reviewer-e2e Review the diff. --fork');
+  await page.getByTestId('launch-submit').click();
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/run reviewer-e2e Review the diff. --fork');
+  await expect(page.getByTestId('launch-dialog')).toBeHidden();
+  await expect(drawer).toBeHidden();
+
+  // The run the launch produced opens its own tab as soon as the fleet reports it.
+  const now = Date.now();
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-launched',
+    agent: 'reviewer-e2e',
+    state: 'running',
+    startedAt: now,
+    lastUpdate: now,
+    task: 'Review the diff.',
+    cwd: '/workspace/doompi',
+  });
+  await expect(page).toHaveURL(/\/session\/s1\/subagents-run-run-launched$/);
+  await expect(page.getByTestId('tab-subagents-run-run-launched')).toHaveText('reviewer-e2e');
+  await expect(page.getByTestId('agent-thread-agent')).toHaveText('reviewer-e2e');
 });

@@ -2,6 +2,7 @@ packages:
   - packages/core/*
   - packages/default/*
   - packages/minor/*
+  - packages/clients/*
   - packages/tooling/*
   - layers/*/*
   - "!**/dist/**"

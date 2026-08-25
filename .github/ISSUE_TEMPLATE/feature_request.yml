@@ -30,6 +30,7 @@ body:
         - "Runtime foundations (packages/core)"
         - "Default distribution features (packages/default)"
         - "Optional modes (packages/minor)"
+        - "Standalone clients (packages/clients)"
         - "Selectable extensions (layers)"
         - "Development tooling (packages/tooling)"
         - "Docs"

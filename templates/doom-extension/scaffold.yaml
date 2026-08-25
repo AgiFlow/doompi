@@ -380,7 +380,7 @@ features:
       - Replace the placeholder item view and the hub watcher stub with the package's real records and source; the channel name constant in src/types must equal the doompiWeb channels entry.
       - Every Pi tool this package registers needs a timeline item: scaffold one per tool with scaffold-doom-web-tool-card and list it under toolRenderers (web-plugin-tool-renderers checks package.json against src/** and web/**). The shell owns the frame, tone, badge, and expand toggle; a card supplies the header summary and the body.
       - Run pnpm install, pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on web/, src/types, src/adapters/web*, and package.json.
-      - To iterate with hot reload, run the cockpit's dev loop: the hub on 7433, then pnpm dev in packages/minor/doompi-web with DOOMPI_WEB_PLUGIN_ROOTS naming this package (or after a doompi sync), and open port 7434.
+      - To iterate with hot reload, run the cockpit's dev loop: the hub on 7433, then pnpm dev in packages/clients/doompi-web with DOOMPI_WEB_PLUGIN_ROOTS naming this package (or after a doompi sync), and open port 7434.
     patterns:
       - web/**
       - src/types/web*.ts

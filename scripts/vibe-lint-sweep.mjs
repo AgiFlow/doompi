@@ -5,7 +5,14 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const packageRoots = ['packages/core', 'packages/default', 'packages/minor', 'packages/tooling', 'layers'];
+const packageRoots = [
+  'packages/core',
+  'packages/default',
+  'packages/minor',
+  'packages/clients',
+  'packages/tooling',
+  'layers',
+];
 const packagePatterns = ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts', '**/package.json'];
 const pathspecs = packageRoots.flatMap((packageRoot) => packagePatterns.map((pattern) => `${packageRoot}/${pattern}`));
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', ...pathspecs], {
