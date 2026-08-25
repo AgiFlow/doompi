@@ -92,7 +92,11 @@ describe('the sync-time cockpit bundler', () => {
 
     // The hub loads the plugin's built channel from the registry the bundle carries.
     const channels = await loadHubChannels(result.assetsDir, (message) => notices.push(message));
-    expect(channels.map((channel) => channel.frameType)).toEqual(['subagent_runs', 'workflow_runs']);
+    expect(channels.map((channel) => channel.frameType)).toEqual([
+      'subagent_runs',
+      'subagent_catalog',
+      'workflow_runs',
+    ]);
   });
 
   it('serves zero channels for assets without a registry, since nothing is built in', async () => {

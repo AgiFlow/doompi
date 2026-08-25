@@ -39,3 +39,36 @@ export interface SubagentRun {
 }
 
 export const SUBAGENT_RUNS_TYPE = 'subagent_runs';
+
+/** Where an agent definition came from; the catalog groups by it, nearest first. */
+export type SubagentCatalogSource = 'project' | 'user' | 'plugin';
+
+/** One launchable agent, as the catalog lists it. */
+export interface SubagentCatalogAgent {
+  name: string;
+  source: SubagentCatalogSource;
+  /** The package that staged a plugin agent. */
+  packageName?: string;
+  description: string;
+  /** The model the definition pins; absent means the runtime's default. */
+  model?: string;
+  fallbackModels: string[];
+  /** Empty means the definition does not narrow the tool set. */
+  tools: string[];
+  skills: string[];
+  extensions: string[];
+  defaultContext: 'fresh' | 'fork';
+  filePath: string;
+}
+
+/** The 'subagent_catalog' channel payload: the agents a session's directory can launch. */
+export interface SubagentCatalogPayload {
+  cwd: string;
+  agents: SubagentCatalogAgent[];
+  /** Model specs the active team package offers, for the launch dialog's picker. */
+  models: string[];
+  /** Why the list may be incomplete, when discovery failed. */
+  warning?: string;
+}
+
+export const SUBAGENT_CATALOG_TYPE = 'subagent_catalog';

@@ -70,4 +70,34 @@ describe('the subagents hub channel', () => {
     source.sessionRemoved?.(SESSION);
     expect(source.payloadFor({ sessionId: SESSION, cwd: '/workspace' })).toBeUndefined();
   });
+
+  it('names a run journal for the thread the cockpit follows', () => {
+    const source = createSubagentsChannel().start(fakeHost());
+    cleanups.push(() => source.close());
+    const scope = { sessionId: SESSION, cwd: '/workspace' };
+    const journal = '/home/me/.doompi/agent/sessions/x/run.jsonl';
+    writeRunStatus(SESSION, {
+      version: 1,
+      runId: 'run-j',
+      agent: 'reviewer',
+      state: 'running',
+      startedAt: 1,
+      lastUpdate: 1,
+      sessionFile: journal,
+    });
+    // The child's session file lands in the status only once its session starts.
+    writeRunStatus(SESSION, {
+      version: 1,
+      runId: 'run-early',
+      agent: 'reviewer',
+      state: 'queued',
+      startedAt: 1,
+      lastUpdate: 1,
+    });
+
+    expect(source.threadJournal?.(scope, 'run-j')).toBe(journal);
+    expect(source.threadJournal?.(scope, 'run-early')).toBeUndefined();
+    expect(source.threadJournal?.(scope, 'missing')).toBeUndefined();
+    expect(source.threadJournal?.(scope, '../run-j')).toBeUndefined();
+  });
 });

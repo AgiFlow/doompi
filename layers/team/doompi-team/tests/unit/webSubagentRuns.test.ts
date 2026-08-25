@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { teamRunsDirFor } from '../../src/adapters/webSubagentWatcher.ts';
-import { parseSubagentRun, presentRuns } from '../../src/services/webSubagentRuns.ts';
+import { journalPathOf, parseSubagentRun, presentRuns, RUN_ID_PATTERN } from '../../src/services/webSubagentRuns.ts';
 import type { SubagentRun } from '../../src/types/webSubagents.ts';
 
 describe('subagentRuns', () => {
@@ -97,5 +97,18 @@ describe('subagentRuns', () => {
       now,
     );
     expect(presented.map((entry) => entry.runId)).toEqual(['young-run', 'older-run', 'fresh-done']);
+  });
+
+  it('names the run journal only when the status carries an absolute .jsonl path', () => {
+    expect(journalPathOf({ sessionFile: '/home/me/agent/sessions/a/b.jsonl' })).toBe(
+      '/home/me/agent/sessions/a/b.jsonl',
+    );
+    expect(journalPathOf({ sessionFile: 'relative/b.jsonl' })).toBeUndefined();
+    expect(journalPathOf({ sessionFile: '/home/me/notes.md' })).toBeUndefined();
+    expect(journalPathOf({ sessionFile: 42 })).toBeUndefined();
+    expect(journalPathOf({})).toBeUndefined();
+    // A run id is looked up as a path segment, so only plain names pass.
+    expect(RUN_ID_PATTERN.test('run-1.b_c')).toBe(true);
+    expect(RUN_ID_PATTERN.test('../run')).toBe(false);
   });
 });

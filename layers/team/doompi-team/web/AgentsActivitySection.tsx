@@ -4,10 +4,12 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import type { SubagentRun } from '../src/types/webSubagents.ts';
 import { agentThreadTab } from './AgentThreadPanel.tsx';
+import { openCatalog } from './catalogStore.ts';
 import { formatRunDuration } from './format.ts';
 import { isTerminalRun, subagents, visibleRuns } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
+const SUBAGENTS_TAB = 'subagents';
 
 const STATE_TONE: Readonly<Record<SubagentRun['state'], DotTone>> = {
   queued: 'muted',
@@ -34,7 +36,7 @@ function detail(run: SubagentRun): string {
  * row that opens the run's own conversation in a temporary tab. This replaces
  * the runtime's footer one-liner, which only says whether anything is running.
  */
-export function AgentsActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
+export function AgentsActivitySection({ sessionId, openTab, openTransientTab }: WebPluginSlotProps) {
   const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
   const [now, setNow] = useState(() => Date.now());
 
@@ -45,9 +47,24 @@ export function AgentsActivitySection({ sessionId, openTransientTab }: WebPlugin
 
   if (runs.length === 0) {
     return (
-      <p data-testid="activity-summary-agents" className="px-1 text-[10px] text-doom-faint">
-        idle
-      </p>
+      <div className="flex items-center gap-2 px-1">
+        <p data-testid="activity-summary-agents" className="text-[10px] text-doom-faint">
+          idle
+        </p>
+        <Button
+          variant="link"
+          size="xs"
+          data-testid="activity-agents-launch"
+          className="px-0"
+          onClick={() => {
+            if (sessionId === null) return;
+            openCatalog(sessionId);
+            openTab(SUBAGENTS_TAB);
+          }}
+        >
+          launch an agent
+        </Button>
+      </div>
     );
   }
 

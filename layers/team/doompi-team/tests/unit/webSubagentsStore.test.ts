@@ -68,4 +68,29 @@ describe('subagents plugin channel', () => {
     expect(session('s1').stopRequested).toEqual([]);
     subagents.reset();
   });
+
+  it('remembers a launch until a new run of that agent arrives, then flags it to open once', async () => {
+    const { clearAutoOpen, requestLaunch, subagentRunsChannel, subagents } =
+      await import('../../web/subagentsStore.ts');
+    const session = (sessionId: string) => subagents.select(subagents.store.state, sessionId);
+    const fleet = (...runs: Array<[string, string]>) =>
+      subagentRunsChannel.parse({ runs: runs.map(([runId, agent]) => ({ runId, agent, state: 'running' })) })!;
+    subagents.reset();
+    subagentRunsChannel.apply('s1', fleet(['r1', 'reviewer']));
+
+    const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
+    requestLaunch((sessionId, frame) => sent.push({ sessionId, frame }), 's1', '/run reviewer do it', 'reviewer');
+    expect(sent).toEqual([{ sessionId: 's1', frame: { type: 'prompt', message: '/run reviewer do it' } }]);
+    expect(session('s1').pendingLaunch).toEqual({ agent: 'reviewer', knownRunIds: ['r1'] });
+
+    // Another agent's run, and the run already known, leave the launch pending.
+    subagentRunsChannel.apply('s1', fleet(['r1', 'reviewer'], ['r2', 'scout']));
+    expect(session('s1')).toMatchObject({ pendingLaunch: { agent: 'reviewer' }, autoOpenRunId: undefined });
+
+    subagentRunsChannel.apply('s1', fleet(['r1', 'reviewer'], ['r2', 'scout'], ['r3', 'reviewer']));
+    expect(session('s1')).toMatchObject({ pendingLaunch: undefined, autoOpenRunId: 'r3' });
+    clearAutoOpen('s1');
+    expect(session('s1').autoOpenRunId).toBeUndefined();
+    subagents.reset();
+  });
 });

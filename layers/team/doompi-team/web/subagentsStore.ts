@@ -20,6 +20,10 @@ export interface SubagentsSession {
   stopRequested: string[];
   /** The run whose drawer the subagents tab shows. */
   openRunId: string | undefined;
+  /** A launch this page asked for, until a run of that agent it had not seen shows up. */
+  pendingLaunch: { agent: string; knownRunIds: string[] } | undefined;
+  /** The run a launch produced, for the tab to open once and forget. */
+  autoOpenRunId: string | undefined;
 }
 
 export const subagents = defineSessionStore<SubagentsSession>({
@@ -27,6 +31,8 @@ export const subagents = defineSessionStore<SubagentsSession>({
   dismissed: [],
   stopRequested: [],
   openRunId: undefined,
+  pendingLaunch: undefined,
+  autoOpenRunId: undefined,
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,6 +74,23 @@ export function dismissRun(sessionId: string, runId: string): void {
   }));
 }
 
+/**
+ * Launches an agent through the session's own /run verb, sent as a prompt the
+ * way the stop request is. The runtime answers with a new run in the feed;
+ * remembering the fleet as it was is what tells that run apart later.
+ */
+export function requestLaunch(send: SessionFrameSender, sessionId: string, command: string, agent: string): void {
+  send(sessionId, { type: 'prompt', message: command });
+  subagents.update(sessionId, (current) => ({
+    ...current,
+    pendingLaunch: { agent, knownRunIds: current.runs.map((run) => run.runId) },
+  }));
+}
+
+export function clearAutoOpen(sessionId: string): void {
+  subagents.update(sessionId, (current) => ({ ...current, autoOpenRunId: undefined }));
+}
+
 export function openRun(sessionId: string, runId: string | undefined): void {
   subagents.update(sessionId, (current) => ({ ...current, openRunId: runId }));
 }
@@ -92,6 +115,21 @@ export const subagentRunsChannel = subagents.channel<SubagentRunsPayload>({
       return run !== undefined && !isTerminalRun(run);
     });
     const dismissed = current.dismissed.filter((runId) => present.has(runId));
-    return { ...current, runs, stopRequested, dismissed };
+    // The run a launch asked for is the first of that agent the page had not seen.
+    const arrived =
+      current.pendingLaunch === undefined
+        ? undefined
+        : runs.find(
+            (run) =>
+              run.agent === current.pendingLaunch?.agent && !current.pendingLaunch.knownRunIds.includes(run.runId),
+          );
+    return {
+      ...current,
+      runs,
+      stopRequested,
+      dismissed,
+      pendingLaunch: arrived === undefined ? current.pendingLaunch : undefined,
+      autoOpenRunId: arrived === undefined ? current.autoOpenRunId : arrived.runId,
+    };
   },
 });

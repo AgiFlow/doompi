@@ -4,6 +4,7 @@ import {
   cn,
   CloseIcon,
   EmptyState,
+  Kbd,
   Panel,
   STATUS_EDGE,
   StatusBadge,
@@ -13,10 +14,14 @@ import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-w
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
 import type { SubagentRun } from '../src/types/webSubagents.ts';
+import { AgentCatalogDrawer } from './AgentCatalogDrawer.tsx';
+import { agentThreadTab } from './AgentThreadPanel.tsx';
+import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from './catalogStore.ts';
 import { abbreviateCwd } from './format.ts';
+import { LaunchAgentDialog } from './LaunchAgentDialog.tsx';
 import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
 import { elapsedRun, RUN_BADGE, RunControl } from './RunControl.tsx';
-import { openRun, subagents, visibleRuns } from './subagentsStore.ts';
+import { clearAutoOpen, openRun, subagents, visibleRuns } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
 
@@ -229,12 +234,16 @@ function RunDrawer({
  *
  * Columns come from the available width (auto-fill over a 420px minimum), and
  * every card keeps a 210px minimum height with the tail absorbing the slack,
- * so short runs read as calmly as busy ones. Clicking a card opens the detail
- * drawer, which narrows the grid and lets it recompute.
+ * so short runs read as calmly as busy ones. The drawer on the right shows one
+ * thing at a time: a card's run detail, or the agent catalog to launch from.
+ * A launch that produced a run opens that run's own tab once it appears.
  */
-export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot }: WebPluginSlotProps) {
+export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTransientTab }: WebPluginSlotProps) {
   const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
-  const { openRunId, stopRequested } = useStore(subagents.store, (state) => subagents.select(state, sessionId));
+  const { openRunId, stopRequested, autoOpenRunId } = useStore(subagents.store, (state) =>
+    subagents.select(state, sessionId),
+  );
+  const shelf = useStore(catalog.store, (state) => catalog.select(state, sessionId));
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -242,27 +251,51 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot }: WebP
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (autoOpenRunId === undefined || sessionId === null) return;
+    const run = runs.find((candidate) => candidate.runId === autoOpenRunId);
+    if (run) openTransientTab(agentThreadTab(run));
+    clearAutoOpen(sessionId);
+  }, [autoOpenRunId, runs, sessionId, openTransientTab]);
+
   const shownRun = openRunId === undefined ? undefined : runs.find((run) => run.runId === openRunId);
+  const launching =
+    shelf.launch === undefined ? undefined : shelf.agents.find((agent) => agent.name === shelf.launch?.agent);
   const stopping = (run: SubagentRun): boolean => stopRequested.includes(run.runId);
   const runningTally = runs.filter((run) => run.state === 'running' || run.state === 'queued').length;
   const doneTally = runs.filter((run) => run.state === 'done').length;
   const failedTally = runs.filter((run) => run.state === 'failed' || run.state === 'stopped').length;
 
+  const showCatalog = (): void => {
+    if (sessionId === null) return;
+    openRun(sessionId, undefined);
+    openCatalog(sessionId);
+  };
+
   return (
     <div data-testid="subagents-panel" className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-[26px] py-[18px]">
-        <div className="flex items-center pb-3">
+        <div className="flex items-center gap-3 pb-3">
           <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">SUBAGENTS · this session</span>
           <span className="min-w-0 flex-1" />
           <span data-testid="subagents-tally" className="text-[9px] text-doom-faint">
             {runs.length === 0 ? 'no runs yet' : `${runningTally} running · ${doneTally} done · ${failedTally} failed`}
           </span>
+          <Button
+            variant="outline"
+            size="xs"
+            data-testid="subagents-launch"
+            title="pick an agent from the catalog and launch it"
+            onClick={showCatalog}
+          >
+            launch agent <Kbd>a l</Kbd>
+          </Button>
         </div>
         {runs.length === 0 ? (
           <EmptyState
             data-testid="subagents-empty"
             title="no subagent runs yet"
-            description="the main agent starts them with its subagent tool; every run will show up here live."
+            description="pick an agent from the catalog to launch one yourself, or let the main agent delegate with its subagent tool."
           />
         ) : (
           <>
@@ -277,7 +310,10 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot }: WebP
                       now={now}
                       stopping={stopping(run)}
                       send={sendSessionFrame}
-                      onOpen={() => openRun(sessionId, run.runId)}
+                      onOpen={() => {
+                        closeCatalog(sessionId);
+                        openRun(sessionId, run.runId);
+                      }}
                     />
                   ))}
             </div>
@@ -288,7 +324,13 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot }: WebP
           </>
         )}
       </div>
-      {shownRun && sessionId !== null ? (
+      {sessionId !== null && shelf.open ? (
+        <AgentCatalogDrawer
+          sessionId={sessionId}
+          onClose={() => closeCatalog(sessionId)}
+          onLaunch={(agent, fork) => openLaunch(sessionId, agent.name, fork)}
+        />
+      ) : shownRun && sessionId !== null ? (
         <RunDrawer
           sessionId={sessionId}
           run={shownRun}
@@ -297,6 +339,19 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot }: WebP
           send={sendSessionFrame}
           renderSlot={renderSlot}
           onClose={() => openRun(sessionId, undefined)}
+        />
+      ) : null}
+      {sessionId !== null && launching !== undefined && shelf.launch !== undefined ? (
+        <LaunchAgentDialog
+          key={launching.name}
+          sessionId={sessionId}
+          agent={launching}
+          cwd={shelf.cwd}
+          models={shelf.models}
+          fork={shelf.launch.fork}
+          send={sendSessionFrame}
+          onClose={() => closeLaunch(sessionId)}
+          onLaunched={() => closeCatalog(sessionId)}
         />
       ) : null}
     </div>

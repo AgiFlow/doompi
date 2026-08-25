@@ -2,6 +2,7 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { AgentsActivitySection } from './AgentsActivitySection.tsx';
 import { SubagentsPanel } from './SubagentsPanel.tsx';
+import { openCatalog, subagentCatalogChannel } from './catalogStore.ts';
 import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
 import { subagentRunsChannel, subagents, visibleRuns } from './subagentsStore.ts';
 import { teamToolRenderers } from './toolRenderers.ts';
@@ -17,14 +18,22 @@ const AGENTS_GROUP = { key: 'a', label: 'agents', detail: 'subagent resources an
 export const webPlugin = defineWebPlugin({
   id: 'subagents',
   tabs: [{ id: 'subagents', label: 'subagents', panel: SubagentsPanel, useBadge: useSubagentsBadge }],
-  channels: [subagentRunsChannel],
+  channels: [subagentRunsChannel, subagentCatalogChannel],
   activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
-  // The TUI's SPC a r; SPC a l opens a TUI-only catalog overlay, so it has no cockpit key yet.
+  // The TUI's SPC a r and SPC a l: the runs, and the catalog to launch from.
   leaderBindings: [
     {
       id: 'subagents.fleet',
       path: [AGENTS_GROUP, { key: 'r', label: 'runs', detail: 'runs in this session' }],
       run: (context) => context.openTab('subagents'),
+    },
+    {
+      id: 'subagents.catalog',
+      path: [AGENTS_GROUP, { key: 'l', label: 'launch', detail: 'pick an agent and launch it' }],
+      run: (context) => {
+        if (context.sessionId !== null) openCatalog(context.sessionId);
+        context.openTab('subagents');
+      },
     },
   ],
   // Same name as the group: the dock renders this inside it, in place of the

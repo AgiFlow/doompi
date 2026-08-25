@@ -111,7 +111,8 @@
   "doompiWeb": {
     "pluginId": "subagents",
     "channels": [
-      "subagent_runs"
+      "subagent_runs",
+      "subagent_catalog"
     ],
     "client": "./web/index.ts",
     "hub": {

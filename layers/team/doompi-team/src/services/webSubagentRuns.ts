@@ -15,6 +15,21 @@ const TAIL_ENTRY_LIMIT = 200;
 /** Terminal runs older than this leave the fleet the page sees. */
 export const RUN_RETENTION_MS = 10 * 60 * 1000;
 
+/** A run id is a path segment under the runs dir, so only plain names may be looked up. */
+export const RUN_ID_PATTERN = /^[\w.-]+$/;
+const JOURNAL_EXTENSION = '.jsonl';
+
+/**
+ * The Pi session journal a run's status names, once the child's session has
+ * started; undefined before then or when the status names something else.
+ * Runs are uid-scoped, so an absolute path is a POSIX one.
+ */
+export function journalPathOf(status: { sessionFile?: unknown }): string | undefined {
+  const candidate = status.sessionFile;
+  if (typeof candidate !== 'string' || !candidate.startsWith('/')) return undefined;
+  return candidate.endsWith(JOURNAL_EXTENSION) ? candidate : undefined;
+}
+
 const STATE_MAP: Readonly<Record<string, SubagentRunState>> = {
   queued: 'queued',
   running: 'running',
