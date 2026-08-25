@@ -34,8 +34,8 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function fixture() {
-  const boundContext = context('session-1');
+function fixture(mode: ExtensionContext['mode'] = 'tui') {
+  const boundContext = context('session-1', true, mode);
   const voiceTools = createDoomVoiceToolsService<ExtensionContext>(`narration-test:${crypto.randomUUID()}`);
   const session = voiceTools.bindSession('session-1', boundContext);
   session.setActive(true);
@@ -141,7 +141,19 @@ describe('narrate Pi tool', () => {
     h.voiceTools.dispose();
   });
 
-  it('rejects inactive, non-TUI, stale, and mismatched sessions without playback', async () => {
+  it('narrates from a cockpit session, which speaks over the same local audio device', async () => {
+    const h = fixture('rpc');
+
+    await expect(
+      h.tool.execute('cockpit', { text: 'Spoken from the web.' }, undefined, undefined, h.boundContext),
+    ).resolves.toMatchObject({ details: { outcome: 'completed' } });
+    expect(h.narrateAgent).toHaveBeenCalledWith('Spoken from the web.', undefined);
+
+    h.session.dispose();
+    h.voiceTools.dispose();
+  });
+
+  it('rejects inactive, headless, stale, and mismatched sessions without playback', async () => {
     for (const state of ['disabled', 'starting', 'draining', 'shuttingDown'] as const) {
       const inactive = fixture();
       inactive.controller.state = state as never;
@@ -160,15 +172,6 @@ describe('narrate Pi tool', () => {
     });
     headless.session.dispose();
     headless.voiceTools.dispose();
-
-    const rpc = fixture();
-    await expect(
-      rpc.tool.execute('rpc', { text: 'Ignored.' }, undefined, undefined, context('session-1', true, 'rpc')),
-    ).resolves.toMatchObject({
-      details: { outcome: 'failed', error: { code: 'VOICE_TOOL_HOST_UNAVAILABLE' } },
-    });
-    rpc.session.dispose();
-    rpc.voiceTools.dispose();
 
     const stale = fixture();
     stale.session.setActive(false);

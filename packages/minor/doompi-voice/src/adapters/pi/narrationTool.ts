@@ -69,7 +69,7 @@ export function isNarrationRuntimeActive(
   runtime: NarrationToolRuntime | undefined,
   context: ExtensionContext,
 ): runtime is NarrationToolRuntime {
-  if (context.hasUI !== true || context.mode !== 'tui' || !runtime) return false;
+  if (context.hasUI !== true || !runtime) return false;
   const executionSessionId = contextSessionId(context);
   const boundSessionId = contextSessionId(runtime.context);
   return (
@@ -78,7 +78,6 @@ export function isNarrationRuntimeActive(
     boundSessionId === runtime.session.sessionId &&
     runtime.context.sessionManager === context.sessionManager &&
     runtime.context.hasUI === true &&
-    runtime.context.mode === 'tui' &&
     runtime.session.active &&
     runtime.controller.state === 'active'
   );
@@ -88,8 +87,8 @@ function runtimeError(
   runtime: NarrationToolRuntime | undefined,
   context: ExtensionContext,
 ): AgentToolResult<NarrationToolDetails> | undefined {
-  if (context.hasUI !== true || context.mode !== 'tui') {
-    return failure('VOICE_TOOL_HOST_UNAVAILABLE', 'Narration requires an active TUI session.');
+  if (context.hasUI !== true) {
+    return failure('VOICE_TOOL_HOST_UNAVAILABLE', 'Narration needs a session that can show its Voice indicator.');
   }
   if (!runtime) {
     return failure('VOICE_TOOL_HOST_UNAVAILABLE', 'Narration is not bound to an autonomous Voice session.');
@@ -101,8 +100,7 @@ function runtimeError(
     executionSessionId !== runtime.session.sessionId ||
     boundSessionId !== runtime.session.sessionId ||
     runtime.context.sessionManager !== context.sessionManager ||
-    runtime.context.hasUI !== true ||
-    runtime.context.mode !== 'tui'
+    runtime.context.hasUI !== true
   ) {
     return failure('VOICE_TOOL_STALE_SESSION', 'The narration request belongs to a stale Voice session.');
   }
