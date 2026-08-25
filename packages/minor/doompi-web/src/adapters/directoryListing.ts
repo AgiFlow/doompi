@@ -1,5 +1,8 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { rankDirectories, searchTermFor } from '../services/directoryMatch.ts';
+import { searchDirectoryTree } from './directorySearch.ts';
 
 const PATH_SEPARATOR = '/';
 const HIDDEN_PREFIX = '.';
@@ -73,4 +76,52 @@ export async function listDirectories(typed: string, limit = DEFAULT_LIMIT): Pro
   }
   names.sort((left, right) => left.localeCompare(right));
   return names.slice(0, limit).map((name) => path.join(query.parent, name));
+}
+
+/**
+ * Where a fuzzy search starts when the typed value names no place that exists.
+ * Home is where projects live; a path outside it is still reachable by typing
+ * it out, which is what the completion above is for.
+ */
+function searchRoots(homeDirectory: string): string[] {
+  return [homeDirectory];
+}
+
+export interface SuggestDirectoriesOptions {
+  limit?: number;
+  /** Injectable so a test does not search the machine it runs on. */
+  homeDirectory?: string;
+  /** Injectable seam over the tree search. */
+  search?: (root: string, query: string) => Promise<string[]>;
+}
+
+/**
+ * The directories to offer for a typed value, however it was typed.
+ *
+ * Completion comes first: an absolute path whose parent exists is someone
+ * drilling in, and listing that parent's children is exactly right. Anything
+ * else is a name, not a location. A bare "agirepo", or a path remembered from
+ * another machine where the folder sat somewhere else, both mean the same
+ * thing, and answering "No such directory" to either is a dead end when the
+ * folder is sitting in the reader's home directory under a different parent.
+ */
+export async function suggestDirectories(typed: string, options: SuggestDirectoriesOptions = {}): Promise<string[]> {
+  const limit = options.limit ?? DEFAULT_LIMIT;
+  const completions = await listDirectories(typed, limit);
+  if (completions.length > 0) return completions;
+
+  const query = searchTermFor(typed);
+  if (query === '') return [];
+  const home = options.homeDirectory ?? os.homedir();
+  const search = options.search ?? searchDirectoryTree;
+
+  const found: string[] = [];
+  for (const root of searchRoots(home)) {
+    try {
+      found.push(...(await search(root, query)));
+    } catch {
+      // A root that cannot be searched simply contributes nothing.
+    }
+  }
+  return rankDirectories(found, query, limit);
 }

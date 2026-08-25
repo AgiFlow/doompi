@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { listDirectories, splitDirectoryQuery } from '../../src/adapters/directoryListing.ts';
+import { listDirectories, splitDirectoryQuery, suggestDirectories } from '../../src/adapters/directoryListing.ts';
 
 let workDir: string;
 
@@ -69,5 +69,52 @@ describe('listDirectories', () => {
   it('yields nothing for relative paths and unreadable parents', async () => {
     expect(await listDirectories('relative/path')).toEqual([]);
     expect(await listDirectories(`${workDir}/missing/child`)).toEqual([]);
+  });
+});
+
+describe('suggestDirectories', () => {
+  it('completes a path that is being drilled into, without searching', async () => {
+    let searched = false;
+    const suggestions = await suggestDirectories(path.join(workDir, 'al'), {
+      homeDirectory: workDir,
+      search: async () => {
+        searched = true;
+        return [];
+      },
+    });
+
+    expect(suggestions).toEqual([path.join(workDir, 'alpha')]);
+    expect(searched).toBe(false);
+  });
+
+  it('searches for the folder a path from another machine names', async () => {
+    // The parent does not exist here, so the trailing segment is the query.
+    const suggestions = await suggestDirectories('/home/someone-else/projects/alpha', {
+      homeDirectory: workDir,
+      search: (_root, query) => Promise.resolve(query === 'alpha' ? [path.join(workDir, 'alpha')] : []),
+    });
+
+    expect(suggestions).toEqual([path.join(workDir, 'alpha')]);
+  });
+
+  it('searches for a bare folder name, ranked and capped', async () => {
+    const suggestions = await suggestDirectories('alpha', {
+      limit: 1,
+      homeDirectory: workDir,
+      search: () => Promise.resolve([path.join(workDir, 'deep', 'nested', 'alpha'), path.join(workDir, 'alpha')]),
+    });
+
+    // The shallow one is what anyone meant.
+    expect(suggestions).toEqual([path.join(workDir, 'alpha')]);
+  });
+
+  it('offers nothing for an empty value, and survives a search that throws', async () => {
+    expect(await suggestDirectories('   ', { homeDirectory: workDir, search: () => Promise.resolve([]) })).toEqual([]);
+    expect(
+      await suggestDirectories('nowhere-at-all', {
+        homeDirectory: workDir,
+        search: () => Promise.reject(new Error('no such root')),
+      }),
+    ).toEqual([]);
   });
 });
