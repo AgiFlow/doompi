@@ -25,6 +25,7 @@ import {
   Input,
   Kbd,
   Label,
+  Markdown,
   MessageItem,
   MessageItemBody,
   MessageItemHeader,
@@ -127,6 +128,46 @@ describe('primitives', () => {
     ).toContain('nothing');
   });
 
+  it('renders GitHub-flavored Markdown through the shared safe presentation', () => {
+    const out = html(
+      <Markdown
+        text={[
+          '# One',
+          '## Two',
+          '### Three',
+          '#### Four',
+          '',
+          'Paragraph **bold** *italic* ~~gone~~ [link](https://example.com) `inline`.',
+          '',
+          '> quote',
+          '',
+          '- item',
+          '',
+          '1. first',
+          '',
+          '---',
+          '',
+          '| A | B |',
+          '| - | - |',
+          '| 1 | 2 |',
+          '',
+          '![alt](https://example.com/a.png)',
+          '',
+          '```ts',
+          'const value = 1;',
+          '```',
+        ].join('\n')}
+      />,
+    );
+    expect(out).toContain('<h1');
+    expect(out).toContain('<h4');
+    expect(out).toContain('<table');
+    expect(out).toContain('<blockquote');
+    expect(out).toContain('<del');
+    expect(out).toContain('target="_blank"');
+    expect(out).toContain('<img');
+    expect(out).toContain('const value = 1;');
+  });
   it('message items carry their tone, offer the toggle only when expandable, and share expanded with their parts', () => {
     const collapsed = html(
       <MessageItem tone="error" expandable data-testid="x">

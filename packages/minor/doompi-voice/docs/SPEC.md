@@ -103,7 +103,15 @@ With a healthy recorder and local model:
 
 Latency measurements MUST separate endpoint waiting, recorder drain, WAV creation, ASR, transcript policy, delivery, and next-capture startup.
 
-### AV-USER-007 — Direct primary-agent narration
+### AV-USER-007 - Explicit composition
+
+While autonomous voice is active, a normalized leading `doom prompt` phrase MUST open a session-scoped composition draft. The remainder of that segment and later finalized content segments MUST be buffered without prompt delivery. A normalized command-only `doom send` MUST submit the combined draft once, and a normalized command-only `doom cancel` MUST discard it without submitting.
+
+Composition control phrases MUST be decided before optional command correction. `doom send` and `doom cancel` MUST remain ordinary transcript content outside composition. A busy composed submission MUST use Pi follow-up delivery rather than steering the current turn. Empty send and draft-limit rejection MUST retain composition and produce visible feedback. Synchronous delivery failure MUST retain the draft for a later retry.
+
+Draft text MUST remain outside XState context, be limited to 32,768 Unicode characters, and be cleared on cancellation, successful synchronous submission, deactivation, reload, shutdown, or session cleanup. Worker restart and idle capture rotation within the same autonomous session MUST preserve it. The UI MUST distinguish collecting and submitting from ordinary listening.
+
+### AV-USER-008 - Direct primary-agent narration
 
 Each `narrate` call MUST contain one complete utterance of at most 4,096 characters after the shared narration boundary. Voice MUST speak the normalized primary-agent wording verbatim, without chunking, rewriting, or another model pass. The call MUST await physical TTS settlement and return exactly one of `completed`, `interrupted`, `superseded`, or `failed`.
 
@@ -179,6 +187,7 @@ The machine context MUST contain only bounded control data:
 - whether stop was requested;
 - current playback generation and phase;
 - pending transcript/delivery metadata;
+- bounded composition control state, never composition text;
 - bounded failure information;
 - timestamps required for latency telemetry.
 
@@ -205,6 +214,11 @@ The machine MUST define and exhaustively handle typed events equivalent to:
 - `TRANSCRIPTION_TIMED_OUT`
 - `TRANSCRIPT_ACCEPTED`
 - `TRANSCRIPT_DISCARDED`
+- `TRANSCRIPT_COMPOSITION_BUFFERED`
+- `TRANSCRIPT_COMPOSITION_REJECTED`
+- `TRANSCRIPT_COMPOSITION_CANCELLED`
+- `TRANSCRIPT_COMPOSITION_EMPTY_SEND`
+- `TRANSCRIPT_COMPOSITION_SEND_REQUESTED`
 - `DELIVERY_SUCCEEDED`
 - `DELIVERY_FAILED`
 - `CANDIDATE_ACKNOWLEDGED`
@@ -243,8 +257,11 @@ At all times:
 4. A turn has at most one final ASR invocation.
 5. A final revision is acknowledged exactly once as committed or discarded.
 6. `startingNextTurn` cannot run after a stop request.
-7. `off` owns no recorder, ASR process, worker, TTS playback, timer, or pending delivery.
+7. `off` owns no recorder, ASR process, worker, TTS playback, timer, pending delivery, or composition draft.
 8. Every state has defined behavior for toggle-off, hard stop, worker exhaustion, and stale events.
+9. Buffered composition segments are acknowledged before the next capture begins.
+10. Only a command-only send or cancel can leave collecting state.
+11. Stale correction or delivery completion cannot mutate or clear the current draft.
 
 ## 4. Voice aspects and module boundaries
 
@@ -381,15 +398,16 @@ Interim full-spool ASR followed by final full-spool ASR is noncompliant.
 Responsibilities:
 
 - normalize whitespace and documented control phrases;
+- detect exact composition start, send, and cancel phrases using bounded machine state;
 - detect an exact command-only stop phrase after playback/echo separation;
 - reject known narration-only echo if overlap evidence exists;
 - require and strip intentional address from XState-authorized narration-overlap turns;
 - remove at most four ASR-misaligned narration-tail tokens before that address;
-- return `deliver`, `discard`, `stop`, or `confirm` without rewriting clean-lane prompts.
+- return deterministic delivery, composition, discard, or stop outcomes without rewriting clean-lane prompts.
 
 Impact on result: determines what exact text reaches Pi and whether control speech is treated as a command.
 
-Start phrases remain optional leading control phrases during ordinary active listening. During narration and its protected overlap handoff, however, one configured start phrase is the mandatory intentional-address gate for free-form interruption; if none is configured, only an exact stop command may interrupt. Stop phrases MUST match a normalized command-only utterance, not a fuzzy substring anywhere in arbitrary dictation.
+Start phrases remain optional leading control phrases during ordinary active listening. During narration and its protected overlap handoff, however, one configured start phrase is the mandatory intentional-address gate for free-form interruption; if none is configured, only an exact stop command may interrupt. Stop phrases MUST match a normalized command-only utterance, not a fuzzy substring anywhere in arbitrary dictation. Reserved composition phrases MUST be evaluated before ordinary leading start-phrase removal so a configured `doom` address cannot turn `doom send` into ordinary `send` content. Optional model correction MUST run only on accepted content segments, never on control commands.
 
 ### 4.9 Command-correction aspect
 
@@ -416,10 +434,13 @@ Impact on result: improves spelling of contextual names and technical terms with
 Responsibilities:
 
 - submit a prompt exactly once;
-- return a typed delivery result;
+- carry immediate or queued-follow-up delivery intent without changing ordinary busy steering;
+- return a typed delivery result for synchronous request acceptance or failure;
 - acknowledge the final revision only after the delivery/discard decision is known;
 - ensure acknowledgement and next-turn transition are coordinated by the lifecycle machine;
 - retain a bounded explicit pending delivery if Pi is temporarily blocked.
+
+Pi `sendUserMessage` exposes no downstream receipt. Voice MUST NOT claim confirmed host delivery, retry automatically, or clear a composed draft after a synchronous failure.
 
 Impact on result: prevents lost prompts, duplicate prompts, and orphan spools.
 
@@ -455,7 +476,8 @@ Responsibilities:
 
 - map XState snapshots to modeline indicator/status values;
 - never infer lifecycle from raw worker activity;
-- show `starting`, `listening`, `speech`, `processing`, `stopping`, `narrating`, `error`, or no indicator;
+- show `starting`, `listening`, `speech`, `processing`, `composing`, `sending`, `stopping`, `narrating`, `error`, or no indicator;
+- preserve failure, stopping, playback, modal, and confirmation precedence over composition;
 - ensure `off` clears all voice UI.
 
 Impact on result: makes operational state truthful and debuggable.

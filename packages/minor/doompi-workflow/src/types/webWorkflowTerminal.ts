@@ -44,6 +44,11 @@ export interface WorkflowControlResponse {
   reason?: string;
 }
 
+/** Answer after a settled run and its directory have been permanently removed. */
+export interface WorkflowDeleteResponse {
+  deleted: true;
+}
+
 /** How a declared run-directory entry compares with what is on disk. */
 export type WorkflowArtifactState = 'written' | 'empty' | 'pending' | 'unreadable';
 
@@ -73,13 +78,15 @@ export interface WorkflowArtifactsResponse {
   artifacts: WorkflowArtifactView[];
 }
 
-/** One artifact's content, as the viewer tab reads it. */
+/** One artifact's metadata and optional text, as the viewer tab reads it. */
 export interface WorkflowArtifactContentResponse {
   path: string;
   size: number;
   modifiedAt: string;
-  /** The file's text, truncated to the reader's line budget. */
-  text: string;
-  /** True when the file was longer than the budget and the head is what came back. */
+  /** Media type inferred from the file extension by the trusted hub. Absent on older hubs. */
+  mimeType?: string;
+  /** Present for text formats; binary files are streamed from the raw route instead. */
+  text?: string;
+  /** True when textual content was longer than the reader's byte budget. */
   truncated: boolean;
 }

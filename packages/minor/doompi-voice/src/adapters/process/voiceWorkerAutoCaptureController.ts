@@ -13,6 +13,7 @@ import type { IVoiceCommandCorrector, VoiceCommandContext } from '../../services
 import type { IVoiceTurnFallbackNarrator } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
 import { VoiceNarrationPlayback, type VoiceNarrationPlaybackLogger } from '../../services/narrationPlayback.ts';
+import type { VoiceDeliveryIntent } from '../../services/voiceDelivery.ts';
 import type { AutoCaptureActivationState, AutoCaptureUi, IClock, ITtsAdapter } from '../../types/index.ts';
 import { VoiceWorkerClient, type VoiceWorkerClientOptions } from './voiceWorkerClient.ts';
 import type { VoiceWorkerSessionClientFactory } from './voiceWorkerSessionController.ts';
@@ -35,7 +36,7 @@ export interface VoiceWorkerAutoCaptureDependencies {
   resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator>;
   tts: ITtsAdapter;
   clock: IClock;
-  deliver(text: string): void;
+  deliver(text: string, intent?: VoiceDeliveryIntent): void;
   manualState(): 'idle' | 'recording' | 'transcribing';
   commandContext?(): VoiceCommandContext | undefined;
   onActivationStateChange?(state: AutoCaptureActivationState): void;
@@ -234,7 +235,7 @@ export class VoiceWorkerAutoCaptureController {
         client,
         clock: this.dependencies.clock,
         ui,
-        deliver: (text) => this.dependencies.deliver(text),
+        deliver: (text, intent) => (intent ? this.dependencies.deliver(text, intent) : this.dependencies.deliver(text)),
         narrationReferences: () => this.narration.references(),
         abortPlayback: () => this.narration.abortPlayback(),
         ...(corrector

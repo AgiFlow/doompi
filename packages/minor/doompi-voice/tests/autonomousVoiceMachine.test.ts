@@ -355,4 +355,71 @@ describe('autonomous voice XState lifecycle', () => {
     h.actor.send({ type: 'STOP_COMPLETED' });
     expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('off');
   });
+
+  it('buffers composition turns and retains the draft state after delivery failure', () => {
+    const h = harness();
+    enable(h);
+    const transcribe = (identity: AutonomousTurnIdentity, revision: number, transcript: string): void => {
+      h.actor.send({ type: 'SPEECH_CONFIRMED', ...identity });
+      h.actor.send({ type: 'ENDPOINT_REACHED', ...identity });
+      h.actor.send({ type: 'CAPTURE_PROCESSING', ...identity });
+      h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...identity, revision, transcript });
+    };
+
+    transcribe(firstTurn, 1, 'doom prompt first segment');
+    h.actor.send({ type: 'TRANSCRIPT_COMPOSITION_BUFFERED', ...firstTurn, revision: 1, operation: 'open' });
+    expect(h.actor.getSnapshot().context.compositionState).toBe('collecting');
+    expect(h.effects).toContainEqual({
+      type: 'effect.acknowledge',
+      ...firstTurn,
+      revision: 1,
+      outcome: 'committed',
+    });
+
+    h.actor.send({
+      type: 'TRANSCRIPT_COMPOSITION_BUFFERED',
+      ...firstTurn,
+      captureId: 'stale-capture',
+      revision: 1,
+      operation: 'append',
+    });
+    expect(h.effects.filter((effect) => effect.type === 'effect.acknowledge')).toHaveLength(1);
+
+    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1 });
+    const secondTurn = { sessionId: firstTurn.sessionId, captureId: 'capture-2', turnId: 'turn-2' };
+    h.actor.send({ type: 'NEXT_TURN_READY', ...secondTurn });
+    h.actor.send({ type: 'CAPTURE_READY', ...secondTurn });
+    transcribe(secondTurn, 2, 'second segment');
+    h.actor.send({ type: 'TRANSCRIPT_COMPOSITION_BUFFERED', ...secondTurn, revision: 2, operation: 'append' });
+    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...secondTurn, revision: 2 });
+
+    const sendTurn = { sessionId: firstTurn.sessionId, captureId: 'capture-3', turnId: 'turn-3' };
+    h.actor.send({ type: 'NEXT_TURN_READY', ...sendTurn });
+    h.actor.send({ type: 'CAPTURE_READY', ...sendTurn });
+    transcribe(sendTurn, 3, 'doom send');
+    h.actor.send({
+      type: 'TRANSCRIPT_COMPOSITION_SEND_REQUESTED',
+      ...sendTurn,
+      revision: 3,
+      text: 'first segment second segment',
+    });
+
+    expect(h.actor.getSnapshot().context.compositionState).toBe('submitting');
+    expect(h.effects).toContainEqual({
+      type: 'effect.deliver',
+      ...sendTurn,
+      revision: 3,
+      text: 'first segment second segment',
+      intent: 'queuedFollowUp',
+    });
+
+    h.actor.send({ type: 'DELIVERY_FAILED', ...sendTurn, revision: 3, code: 'busy race' });
+    expect(h.actor.getSnapshot().context.compositionState).toBe('collecting');
+    expect(h.effects).toContainEqual({
+      type: 'effect.acknowledge',
+      ...sendTurn,
+      revision: 3,
+      outcome: 'discarded',
+    });
+  });
 });

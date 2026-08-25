@@ -68,9 +68,14 @@ defaults to 3,000.
 
 - `SPC v v` records and transcribes once; it does not enable autonomous Voice tools.
 - `SPC v e` enters autonomous capture and exits it again.
+- While autonomous capture is active, say `doom prompt` at the beginning of a segment to open a composed prompt. Later finalized segments are buffered until standalone `doom send` submits the combined text or standalone `doom cancel` discards it.
 - `describe_voice_tools` returns the active session's spoken capability catalog.
 - `use_voice_tools` executes a bounded ordered batch against that catalog.
 - `narrate` speaks one primary-agent-authored utterance and waits for physical playback.
+
+Composition commands ignore case and punctuation. `doom send` and `doom cancel` are commands only while a draft is active and only when they are the entire segment. Ordinary autonomous turns keep their current automatic submission behavior. A composed prompt is queued as a Pi follow-up while Pi is busy.
+
+Drafts are held in memory for the active autonomous session and are limited to 32,768 characters. Worker restarts and five-minute idle capture rotation preserve the draft, but deactivation, extension reload, and process restart discard it. Wait until the status returns to `composing, listening` before speaking the next segment because capture pauses during transcription.
 
 Before a final response, narration contains the complete answer, including every user-relevant
 conclusion, question, warning, result, and next action in the written response. It does not use

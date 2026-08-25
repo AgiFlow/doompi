@@ -4,6 +4,7 @@ import {
   type WorkflowArtifactContentResponse,
   type WorkflowArtifactsResponse,
   type WorkflowControlResponse,
+  type WorkflowDeleteResponse,
   type WorkflowScreenEvent,
 } from '../src/types/webWorkflowTerminal.ts';
 
@@ -100,6 +101,21 @@ export async function resizeRun(
   await post(`${workflowRunPath(workspace, runKey)}/resize`, { token, columns, rows });
 }
 
+export type DeleteWorkflowResult = { result: WorkflowDeleteResponse } | { error: string };
+
+/** Permanently removes one settled run and its run directory. */
+export async function deleteWorkflowRun(workspace: string, runKey: string): Promise<DeleteWorkflowResult> {
+  try {
+    const response = await fetch(workflowRunPath(workspace, runKey), { method: 'DELETE' });
+    const body = (await response.json()) as unknown;
+    if (!response.ok) return { error: errorOf(body, 'The workflow could not be deleted.') };
+    if (isRecord(body) && body.deleted === true) return { result: { deleted: true } };
+    return { error: 'The workflow hub returned an invalid deletion response.' };
+  } catch {
+    return { error: UNREACHABLE };
+  }
+}
+
 export type ArtifactsResult = { artifacts: WorkflowArtifactsResponse } | { error: string };
 
 export async function fetchArtifacts(workspace: string, runKey: string): Promise<ArtifactsResult> {
@@ -114,6 +130,12 @@ export async function fetchArtifacts(workspace: string, runKey: string): Promise
 }
 
 export type ArtifactResult = { artifact: WorkflowArtifactContentResponse } | { error: string };
+
+/** Trusted same-origin URL for browser-native media previews and downloads. */
+export function artifactContentUrl(workspace: string, runKey: string, path: string, download = false): string {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  return `${workflowRunPath(workspace, runKey)}/artifacts/${encodedPath}?raw=1${download ? '&download=1' : ''}`;
+}
 
 export async function fetchArtifact(workspace: string, runKey: string, path: string): Promise<ArtifactResult> {
   try {

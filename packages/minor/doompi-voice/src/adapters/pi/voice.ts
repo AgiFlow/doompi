@@ -50,6 +50,7 @@ import {
   VoiceTurnFallbackNarrator,
 } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
+import type { VoiceDeliveryIntent } from '../../services/voiceDelivery.ts';
 import {
   type AutoCaptureActivationState,
   type AutoCaptureIndicatorState,
@@ -315,7 +316,7 @@ function createAutoCaptureUi(context: ExtensionContext, footer: VoiceFooterContr
   };
 }
 
-export type AutoCaptureDeliveryIntent = 'immediate' | 'queuedFollowUp';
+export type AutoCaptureDeliveryIntent = VoiceDeliveryIntent;
 
 export function deliverAutoCaptureInput(
   pi: Pick<ExtensionAPI, 'sendUserMessage'>,
@@ -323,11 +324,15 @@ export function deliverAutoCaptureInput(
   text: string,
   intent: AutoCaptureDeliveryIntent = 'immediate',
 ): void {
+  if (intent === 'queuedFollowUp') {
+    pi.sendUserMessage(text, { deliverAs: 'followUp' });
+    return;
+  }
   if (context.isIdle()) {
     pi.sendUserMessage(text);
     return;
   }
-  pi.sendUserMessage(text, { deliverAs: intent === 'queuedFollowUp' ? 'followUp' : 'steer' });
+  pi.sendUserMessage(text, { deliverAs: 'steer' });
 }
 
 export interface AutoCapturePiEventController {
@@ -863,9 +868,9 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       },
       tts: container.tts,
       clock: container.clock,
-      deliver: (text) => {
+      deliver: (text, intent) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');
-        deliverAutoCaptureInput(pi, activeContext, text);
+        deliverAutoCaptureInput(pi, activeContext, text, intent);
       },
       manualState: () => controller.state,
       commandContext: () =>

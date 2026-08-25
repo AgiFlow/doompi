@@ -52,6 +52,18 @@ export function writeWorkflowRun(homeDir: string, fixture: WorkflowRunFixture): 
   }
 }
 
+/** Writes an artifact beside run.json, matching the engine's per-run directory contract. */
+export function writeWorkflowArtifact(
+  homeDir: string,
+  fixture: Pick<WorkflowRunFixture, 'workspace' | 'stage' | 'runKey'>,
+  artifactPath: string,
+  content: string | Uint8Array,
+): void {
+  const target = path.join(workflowRunDir(homeDir, fixture), artifactPath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, content);
+}
+
 /** Moves a run between stage buckets and rewrites its recorded stage, the way the registry does. */
 export function moveWorkflowRun(
   homeDir: string,

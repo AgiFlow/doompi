@@ -353,6 +353,140 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.client.beginCapture).toHaveBeenCalledTimes(21);
   });
 
+  it('buffers multiple finalized segments until standalone Doom send', async () => {
+    const h = harness();
+    await enable(h);
+
+    const opened = await finishTurn(h, 'doom prompt Refactor voice.', 1);
+    expect(opened.outcome).toBe('committed');
+    expect(h.deliver).not.toHaveBeenCalled();
+    expect(h.ui.notify).toHaveBeenCalledWith(
+      'Voice composition started. Say Doom send to submit or Doom cancel to discard.',
+      'info',
+    );
+    h.candidate(opened.identity, 'doom prompt Refactor voice.', 1);
+    await flush();
+    expect(h.client.acknowledgeCandidate).toHaveBeenCalledTimes(1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+
+    h.durationLimit();
+    await flush();
+    h.ready();
+
+    const appended = await finishTurn(h, 'Keep manual dictation unchanged.', 2);
+    expect(appended.outcome).toBe('committed');
+    expect(h.deliver).not.toHaveBeenCalled();
+    h.acknowledge(appended.identity, 2, appended.outcome);
+    await flush();
+    h.ready();
+
+    const sent = await finishTurn(h, 'Doom, send.', 3);
+    expect(sent.outcome).toBe('committed');
+    expect(h.deliver).toHaveBeenCalledOnce();
+    expect(h.deliver).toHaveBeenCalledWith('Refactor voice. Keep manual dictation unchanged.', 'queuedFollowUp');
+  });
+
+  it('retains a composed draft after synchronous send failure and allows retry', async () => {
+    const h = harness();
+    h.deliver.mockImplementationOnce(() => {
+      throw new Error('busy race');
+    });
+    await enable(h);
+
+    const opened = await finishTurn(h, 'doom prompt Retain this draft.', 1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+
+    const failed = await finishTurn(h, 'doom send', 2);
+    expect(failed.outcome).toBe('discarded');
+    expect(h.ui.notify).toHaveBeenCalledWith('Voice composition was not accepted; the draft was retained.', 'warning');
+    h.acknowledge(failed.identity, 2, failed.outcome);
+    await flush();
+    h.ready();
+
+    const retried = await finishTurn(h, 'doom send', 3);
+    expect(retried.outcome).toBe('committed');
+    expect(h.deliver).toHaveBeenCalledTimes(2);
+    expect(h.deliver).toHaveBeenLastCalledWith('Retain this draft.', 'queuedFollowUp');
+  });
+
+  it('keeps an empty composition active until content or explicit cancel', async () => {
+    const h = harness();
+    await enable(h);
+
+    const opened = await finishTurn(h, 'doom prompt', 1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+
+    const emptySend = await finishTurn(h, 'doom send', 2);
+    expect(emptySend.outcome).toBe('discarded');
+    expect(h.deliver).not.toHaveBeenCalled();
+    expect(h.ui.notify).toHaveBeenCalledWith('Voice composition is empty. Add content or say Doom cancel.', 'warning');
+    h.acknowledge(emptySend.identity, 2, emptySend.outcome);
+    await flush();
+    h.ready();
+
+    const cancelled = await finishTurn(h, 'doom cancel', 3);
+    expect(cancelled.outcome).toBe('discarded');
+    expect(h.ui.notify).toHaveBeenCalledWith('Voice composition draft discarded.', 'info');
+  });
+
+  it('corrects composition content without sending control phrases to the model', async () => {
+    const correct = vi.fn(async (input: { transcript: string }) => input.transcript.replace('doom pie', 'DoomPi'));
+    const h = harness({ corrector: { correct } });
+    await enable(h);
+
+    const opened = await finishTurn(h, 'doom prompt update doom pie voice', 1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+    await finishTurn(h, 'doom send', 2);
+
+    expect(correct).toHaveBeenCalledOnce();
+    expect(correct).toHaveBeenCalledWith(
+      { transcript: 'update doom pie voice', context: undefined },
+      expect.any(AbortSignal),
+    );
+    expect(h.deliver).toHaveBeenCalledWith('update DoomPi voice', 'queuedFollowUp');
+  });
+
+  it('rejects a segment that would exceed the bounded composition draft', async () => {
+    const h = harness();
+    await enable(h);
+
+    const result = await finishTurn(h, `doom prompt ${'x'.repeat(32_769)}`, 1);
+
+    expect(result.outcome).toBe('discarded');
+    expect(h.deliver).not.toHaveBeenCalled();
+    expect(h.ui.notify).toHaveBeenCalledWith(
+      'Voice composition is limited to 32768 characters; the latest segment was not added.',
+      'warning',
+    );
+  });
+
+  it('discards a session-scoped draft when autonomous voice is disabled', async () => {
+    const h = harness();
+    await enable(h);
+    const opened = await finishTurn(h, 'doom prompt unsent content', 1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+
+    await h.controller.toggle(h.ui);
+    await flush();
+
+    expect(h.deliver).not.toHaveBeenCalled();
+    expect(h.ui.notify).toHaveBeenCalledWith(
+      'Voice composition draft discarded while stopping autonomous voice.',
+      'warning',
+    );
+    expect(h.controller.state).toBe('disabled');
+  });
+
   it('corrects a context-grounded term after deterministic control-phrase policy', async () => {
     const correct = vi.fn(async (input: { transcript: string; context?: VoiceCommandContext }) =>
       input.transcript.replace('doom pie', 'DoomPi'),

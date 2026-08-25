@@ -34,6 +34,23 @@ export function focusRun(sessionId: string, identity: string | undefined): void 
   workflows.update(sessionId, (current) => ({ ...current, focusedRun: identity }));
 }
 
+/** Removes a deleted run immediately while the registry channel catches up. */
+export function removeRun(sessionId: string, identity: string): void {
+  workflows.update(sessionId, (current) => {
+    const runs = current.runs.filter((run) => workflowRunIdentity(run) !== identity);
+    return {
+      ...current,
+      runs,
+      focusedRun:
+        current.focusedRun === identity
+          ? runs[0] === undefined
+            ? undefined
+            : workflowRunIdentity(runs[0])
+          : current.focusedRun,
+    };
+  });
+}
+
 /**
  * Sends a launch line to the session and remembers what was already running.
  *

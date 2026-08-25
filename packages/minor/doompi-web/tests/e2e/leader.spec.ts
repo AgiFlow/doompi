@@ -101,7 +101,8 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     await expect(page.getByTestId('palette')).toHaveAttribute('data-path', 'w');
     await expect(page.getByTestId('palette-path')).toContainText('workflows');
     await expect(page.getByTestId('palette-item-0')).toHaveAttribute('data-key', 'e');
-    await expect(page.getByTestId('palette-item-1')).toHaveAttribute('data-key', 'r');
+    await expect(page.getByTestId('palette-item-1')).toHaveAttribute('data-key', 'l');
+    await expect(page.getByTestId('palette-item-2')).toHaveAttribute('data-key', 'r');
 
     // Backspace climbs, then the same key descends again.
     await page.keyboard.press('Backspace');

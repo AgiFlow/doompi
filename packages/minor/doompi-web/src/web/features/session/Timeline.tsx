@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   EmptyState,
   ExternalLinkIcon,
+  Markdown,
   RefreshIcon,
   Separator,
   StreamCursor,
@@ -11,7 +12,6 @@ import {
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
-import { Markdown } from '../../components/Markdown.tsx';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import type { SessionState, TimelineEntry } from '../../lib/sessionModel.ts';
 import { requestOlderHistory, sessionStoreFor, submitMessage, useHasOlderHistory } from '../../stores/sessionStore.ts';

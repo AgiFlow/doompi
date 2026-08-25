@@ -19,6 +19,8 @@ export type VoicePhase =
   | 'listening'
   | 'hearing'
   | 'processing'
+  | 'composing'
+  | 'sending'
   | 'narrating'
   | 'confirming'
   | 'waiting'
@@ -54,6 +56,20 @@ const IDLE: VoiceActivityView = {
 };
 
 const AUTO_PHASES: { match: string; phase: VoicePhase; label: string; detail: string; tone: VoiceTone }[] = [
+  {
+    match: 'sending composed prompt',
+    phase: 'sending',
+    label: 'sending draft',
+    detail: 'handing the complete composed prompt to Pi.',
+    tone: 'live',
+  },
+  {
+    match: 'composing',
+    phase: 'composing',
+    label: 'composing prompt',
+    detail: 'speech segments are buffered until you say Doom send or Doom cancel.',
+    tone: 'attention',
+  },
   {
     match: 'hearing speech',
     phase: 'hearing',

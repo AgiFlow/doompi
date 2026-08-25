@@ -34,6 +34,16 @@ describe('reading the voice status line', () => {
       tone: 'attention',
     });
     expect(voiceActivityView('voice auto: draining')).toMatchObject({ phase: 'draining', tone: 'attention' });
+    expect(voiceActivityView('voice auto: composing, listening')).toMatchObject({
+      phase: 'composing',
+      label: 'composing prompt',
+      tone: 'attention',
+    });
+    expect(voiceActivityView('voice auto: sending composed prompt')).toMatchObject({
+      phase: 'sending',
+      label: 'sending draft',
+      tone: 'live',
+    });
   });
 
   it('reads a manual recording through its spinner, and keeps the elapsed time', () => {

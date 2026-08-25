@@ -4,8 +4,6 @@ import remarkGfm from 'remark-gfm';
 
 const REMARK_PLUGINS = [remarkGfm];
 
-// Fenced code arrives as <pre><code>; inline code has no pre parent. The
-// class each gets is decided here so both stay literal for Tailwind's scanner.
 function Code({ className, children, ...rest }: ComponentProps<'code'>) {
   return (
     <code
@@ -54,15 +52,11 @@ const COMPONENTS: Components = {
   ),
   td: ({ children }) => <td className="border border-doom-border px-2 py-1 align-top">{children}</td>,
   img: ({ src, alt }) => (
-    <img src={src} alt={alt ?? ''} className="max-h-[360px] max-w-full rounded border border-doom-border" />
+    <img src={src} alt={alt ?? ''} className="max-h-[480px] max-w-full rounded border border-doom-border" />
   ),
 };
 
-/**
- * Message text as the agent means it: GitHub-flavoured markdown in the
- * cockpit's type scale. Soft line breaks stay visible, since a prompt typed
- * over several lines should read back the way it was written.
- */
+/** GitHub-flavored Markdown using the cockpit's safe, shared presentation. */
 export function Markdown({ text }: { text: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-2">

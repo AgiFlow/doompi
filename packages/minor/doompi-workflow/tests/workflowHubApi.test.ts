@@ -141,6 +141,36 @@ describe('workflow hub api: control and keys', () => {
   });
 });
 
+describe('workflow hub api: deletion', () => {
+  it.each(['completed', 'error'] as const)('permanently deletes a %s run directory', async (stage) => {
+    const runDir = runDirectory({ 'artifact.md': 'finished work', 'run.log': 'output' });
+    const { app } = api(record({ stage }), runDir);
+
+    const response = await app.request(BASE, { method: 'DELETE' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: true });
+    expect(fs.existsSync(runDir)).toBe(false);
+  });
+
+  it('refuses to delete a running workflow and preserves its files', async () => {
+    const runDir = runDirectory({ 'run.log': 'still working' });
+    const { app } = api(record(), runDir);
+
+    const response = await app.request(BASE, { method: 'DELETE' });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'A running workflow must be stopped before it can be deleted.' });
+    expect(fs.existsSync(runDir)).toBe(true);
+  });
+
+  it('answers 404 when the run does not exist', async () => {
+    const { app } = api(record({ stage: 'completed' }));
+    const response = await app.request('http://hub/runs/repo/no-such-run', { method: 'DELETE' });
+    expect(response.status).toBe(404);
+  });
+});
+
 describe('workflow hub api: artifacts', () => {
   it('lists the declared entries first, with what is on disk beside them', async () => {
     const runDir = runDirectory({ 'research.md': 'facts', 'context.md': 'the prompt' });
@@ -166,13 +196,57 @@ describe('workflow hub api: artifacts', () => {
     expect(listed.artifacts[0]?.size).toBe(5);
   });
 
-  it('reads one artifact', async () => {
+  it('reads one text artifact with the media type used by its renderer', async () => {
     const { app } = api(record(), runDirectory({ 'post.md': '# title' }));
     const response = await app.request(`${BASE}/artifacts/post.md`);
     expect(response.status).toBe(200);
-    expect(((await response.json()) as WorkflowArtifactContentResponse).text).toBe('# title');
+    const artifact = (await response.json()) as WorkflowArtifactContentResponse;
+    expect(artifact).toMatchObject({ text: '# title', mimeType: 'text/markdown', truncated: false });
   });
 
+  it('streams binary media with range and download headers', async () => {
+    const { app } = api(record(), runDirectory({ 'clip.mp4': 'abcdef' }));
+    const response = await app.request(`${BASE}/artifacts/clip.mp4?raw=1`, { headers: { range: 'bytes=1-3' } });
+    expect(response.status).toBe(206);
+    expect(response.headers.get('content-type')).toBe('video/mp4');
+    expect(response.headers.get('content-range')).toBe('bytes 1-3/6');
+    expect(await response.text()).toBe('bcd');
+  });
+
+  it('keeps HTML preview text sandboxable and forces raw navigation to download', async () => {
+    const { app } = api(record(), runDirectory({ 'report.html': '<h1>Report</h1>' }));
+    const metadata = (await (
+      await app.request(`${BASE}/artifacts/report.html`)
+    ).json()) as WorkflowArtifactContentResponse;
+    expect(metadata).toMatchObject({ mimeType: 'text/html', text: '<h1>Report</h1>' });
+    const raw = await app.request(`${BASE}/artifacts/report.html?raw=1`);
+    expect(raw.headers.get('content-disposition')).toContain('attachment');
+    expect(raw.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
+  it('returns metadata without corrupting binary content as text', async () => {
+    const { app } = api(record(), runDirectory({ 'brief.pdf': '%PDF-binary' }));
+    const artifact = (await (
+      await app.request(`${BASE}/artifacts/brief.pdf`)
+    ).json()) as WorkflowArtifactContentResponse;
+    expect(artifact.mimeType).toBe('application/pdf');
+    expect(artifact.text).toBeUndefined();
+  });
+
+  it.each([
+    ['image.png', 'image/png'],
+    ['slides.pdf', 'application/pdf'],
+    ['recording.mp3', 'audio/mpeg'],
+    ['demo.webm', 'video/webm'],
+    ['metrics.csv', 'text/csv'],
+    ['data.json', 'application/json'],
+  ])('classifies %s for its browser preview', async (filename, mimeType) => {
+    const { app } = api(record(), runDirectory({ [filename]: 'content' }));
+    const artifact = (await (
+      await app.request(`${BASE}/artifacts/${filename}`)
+    ).json()) as WorkflowArtifactContentResponse;
+    expect(artifact.mimeType).toBe(mimeType);
+  });
   it('answers 404 for a declared artifact no job has written yet', async () => {
     const { app } = api(record(), runDirectory());
     expect((await app.request(`${BASE}/artifacts/post.md`)).status).toBe(404);

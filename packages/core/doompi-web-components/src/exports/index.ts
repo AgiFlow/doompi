@@ -63,6 +63,7 @@ export { EmptyState, type EmptyStateProps } from '../components/EmptyState.tsx';
 export { type FieldSize, type FieldVariant, fieldVariants, Input, type InputProps } from '../components/Input.tsx';
 export { Kbd } from '../components/Kbd.tsx';
 export { Label } from '../components/Label.tsx';
+export { Markdown } from '../components/Markdown.tsx';
 export {
   MessageItem,
   MessageItemBody,

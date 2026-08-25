@@ -2,6 +2,12 @@ import {
   Button,
   ChevronDownIcon,
   cn,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Dot,
   type DotTone,
   EmptyState,
@@ -34,10 +40,10 @@ import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from './c
 import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
 import { formatRunDuration } from './runDuration.ts';
 import { stepTerminalTab } from './StepTerminalPanel.tsx';
-import { followScreen } from './terminalApi.ts';
+import { deleteWorkflowRun, followScreen } from './terminalApi.ts';
 import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer.tsx';
 import { workflowRunIdentity } from './workflowActivity.ts';
-import { focusRun, workflows } from './workflowsStore.ts';
+import { focusRun, removeRun, workflows } from './workflowsStore.ts';
 
 const TICK_MS = 10_000;
 
@@ -412,6 +418,79 @@ function InlineStepOutput({
   );
 }
 
+function DeleteWorkflowDialog({
+  run,
+  onClose,
+  onDeleted,
+}: {
+  run: WorkflowRunView;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const confirm = (): void => {
+    setDeleting(true);
+    setError(undefined);
+    void deleteWorkflowRun(run.workspace, run.runKey).then((result) => {
+      if ('error' in result) {
+        setDeleting(false);
+        setError(result.error);
+        return;
+      }
+      onDeleted();
+    });
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !deleting) onClose();
+      }}
+    >
+      <DialogContent width="md" data-testid="delete-workflow-dialog" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>Delete {run.displayName}?</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-[11px] leading-relaxed text-doom-dim">
+            This permanently removes the workflow run, including its logs and artifacts. This action cannot be undone.
+          </p>
+          {error === undefined ? null : (
+            <p data-testid="delete-workflow-error" className="text-[10px] text-doom-red">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <span className="min-w-0 flex-1" />
+            <Button
+              variant="outline"
+              size="xs"
+              data-testid="delete-workflow-cancel"
+              disabled={deleting}
+              onClick={onClose}
+            >
+              cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="xs"
+              data-testid="delete-workflow-confirm"
+              loading={deleting}
+              loadingLabel="deleting workflow"
+              onClick={confirm}
+            >
+              delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DetailPane({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-doom-border">
@@ -428,6 +507,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [selectedStep, setSelectedStep] = useState<string | null>(null);
   const [pane, setPane] = useState<'output' | 'artifacts'>('output');
+  const [deletingRun, setDeletingRun] = useState<WorkflowRunView>();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -494,6 +574,16 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
               <span data-testid="workflows-tally" className="text-[9px] text-doom-faint">
                 {runs.filter((candidate) => candidate.stage === 'running').length} running · {runs.length} total
               </span>
+              {run.stage === 'running' ? null : (
+                <Button
+                  variant="danger-outline"
+                  size="xs"
+                  data-testid="delete-workflow"
+                  onClick={() => setDeletingRun(run)}
+                >
+                  delete
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="xs"
@@ -629,6 +719,16 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
           onLaunched={() => {
             closeLaunch(sessionId);
             closeCatalog(sessionId);
+          }}
+        />
+      ) : null}
+      {sessionId !== null && deletingRun !== undefined ? (
+        <DeleteWorkflowDialog
+          run={deletingRun}
+          onClose={() => setDeletingRun(undefined)}
+          onDeleted={() => {
+            removeRun(sessionId, workflowRunIdentity(deletingRun));
+            setDeletingRun(undefined);
           }}
         />
       ) : null}

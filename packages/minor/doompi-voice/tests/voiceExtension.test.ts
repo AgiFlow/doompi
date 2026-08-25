@@ -13,6 +13,25 @@ import {
   registerVoiceTurnFallback,
   type VoiceTurnFallbackRuntime,
 } from '../src/exports';
+import { deliverAutoCaptureInput } from '../src/adapters/pi/voice.ts';
+describe('autonomous prompt delivery', () => {
+  it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {
+    const sendUserMessage = vi.fn();
+    const pi = { sendUserMessage } as unknown as Pick<ExtensionAPI, 'sendUserMessage'>;
+    const idle = { isIdle: () => true } as Pick<ExtensionContext, 'isIdle'>;
+    const busy = { isIdle: () => false } as Pick<ExtensionContext, 'isIdle'>;
+
+    deliverAutoCaptureInput(pi, idle, 'idle prompt');
+    deliverAutoCaptureInput(pi, busy, 'busy prompt');
+    deliverAutoCaptureInput(pi, idle, 'idle composition', 'queuedFollowUp');
+    deliverAutoCaptureInput(pi, busy, 'busy composition', 'queuedFollowUp');
+
+    expect(sendUserMessage).toHaveBeenNthCalledWith(1, 'idle prompt');
+    expect(sendUserMessage).toHaveBeenNthCalledWith(2, 'busy prompt', { deliverAs: 'steer' });
+    expect(sendUserMessage).toHaveBeenNthCalledWith(3, 'idle composition', { deliverAs: 'followUp' });
+    expect(sendUserMessage).toHaveBeenNthCalledWith(4, 'busy composition', { deliverAs: 'followUp' });
+  });
+});
 
 describe('Voice-owned tool reconciliation', () => {
   function fixture(registered = [...VOICE_MODE_TOOL_NAMES]) {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import {
   WorkflowRegistryService,
   WorkflowTerminalService as WorkflowTerminalFacade,
@@ -18,6 +19,7 @@ import {
   type WorkflowArtifactsResponse,
   type WorkflowArtifactView,
   type WorkflowControlResponse,
+  type WorkflowDeleteResponse,
   type WorkflowScreenEvent,
 } from '../types/webWorkflowTerminal.ts';
 
@@ -29,10 +31,49 @@ const SCREEN_LINES = 48;
 const STREAM_TICK_MS = 500;
 /** How often a settled run is re-checked before the stream closes itself. */
 const SETTLED_POLL_TICKS = 4;
-/** Bytes of one artifact a viewer receives; a run directory holds prose, not archives. */
+/** Bytes of one textual artifact returned as JSON; binary previews use a stream. */
 const MAX_ARTIFACT_BYTES = 512 * 1024;
 /** Path segments a client supplies are names, never paths. */
 const SAFE_SEGMENT = /^[\w.@-]+$/;
+const ARTIFACT_MIME_TYPES: Readonly<Record<string, string>> = {
+  '.aac': 'audio/aac',
+  '.bmp': 'image/bmp',
+  '.css': 'text/css',
+  '.csv': 'text/csv',
+  '.gif': 'image/gif',
+  '.htm': 'text/html',
+  '.html': 'text/html',
+  '.ico': 'image/x-icon',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.js': 'text/javascript',
+  '.json': 'application/json',
+  '.jsx': 'text/jsx',
+  '.m4a': 'audio/mp4',
+  '.markdown': 'text/markdown',
+  '.md': 'text/markdown',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.oga': 'audio/ogg',
+  '.ogg': 'audio/ogg',
+  '.ogv': 'video/ogg',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.sh': 'text/x-shellscript',
+  '.svg': 'image/svg+xml',
+  '.toml': 'text/toml',
+  '.ts': 'text/typescript',
+  '.tsv': 'text/tab-separated-values',
+  '.tsx': 'text/tsx',
+  '.txt': 'text/plain',
+  '.wav': 'audio/wav',
+  '.webm': 'video/webm',
+  '.webp': 'image/webp',
+  '.xml': 'application/xml',
+  '.yaml': 'text/yaml',
+  '.yml': 'text/yaml',
+};
 
 /**
  * One request's JSON body as a plain record.
@@ -194,6 +235,23 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     }
   });
 
+  app.delete('/runs/:workspace/:runKey', async (context) => {
+    const workspace = context.req.param('workspace');
+    const runKey = context.req.param('runKey');
+    const record = await runOf(workspace, runKey);
+    if (record === undefined) return context.json(missing(workspace, runKey), 404);
+    if (record.stage === 'running') {
+      return context.json({ error: 'A running workflow must be stopped before it can be deleted.' }, 409);
+    }
+    try {
+      fs.rmSync(registry.runDirectoryFor(record), { recursive: true, force: true });
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+    const response: WorkflowDeleteResponse = { deleted: true };
+    return context.json(response);
+  });
+
   app.get('/runs/:workspace/:runKey/artifacts', async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
@@ -217,6 +275,15 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const requested = context.req.param('name');
     const resolved = resolveInside(runDir, requested);
     if (resolved === undefined) return context.json({ error: `'${requested}' is not inside this run.` }, 400);
+    if (context.req.query('raw') === '1') {
+      const response = streamArtifact(
+        resolved,
+        requested,
+        context.req.header('range'),
+        context.req.query('download') === '1',
+      );
+      return response ?? context.json({ error: `'${requested}' has not been written.` }, 404);
+    }
     const body = readArtifact(resolved, requested);
     if (body === undefined) return context.json({ error: `'${requested}' has not been written.` }, 404);
     return context.json(body);
@@ -307,30 +374,86 @@ function readArtifacts(runDir: string, record: WorkflowRunRecord): WorkflowArtif
   return [...declared, ...found];
 }
 
-/** One artifact's text, bounded, or undefined when it is not a readable file. */
+/** Browser content type inferred from a filename without trusting client input. */
+function artifactMimeType(requested: string): string {
+  return ARTIFACT_MIME_TYPES[path.extname(requested).toLowerCase()] ?? 'application/octet-stream';
+}
+
+function isTextArtifact(mimeType: string): boolean {
+  return mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/xml';
+}
+
+/** One artifact's metadata and bounded text, or undefined when it is not readable. */
 function readArtifact(resolved: string, requested: string): WorkflowArtifactContentResponse | undefined {
   const stats = statOf(resolved);
   if (stats === undefined || stats.isDirectory()) return undefined;
-  let text: string;
-  try {
-    const handle = fs.openSync(resolved, 'r');
+  const mimeType = artifactMimeType(requested);
+  let text: string | undefined;
+  if (isTextArtifact(mimeType)) {
     try {
-      const buffer = Buffer.alloc(Math.min(stats.size, MAX_ARTIFACT_BYTES));
-      fs.readSync(handle, buffer, 0, buffer.length, 0);
-      text = buffer.toString('utf8');
-    } finally {
-      fs.closeSync(handle);
+      const handle = fs.openSync(resolved, 'r');
+      try {
+        const buffer = Buffer.alloc(Math.min(stats.size, MAX_ARTIFACT_BYTES));
+        fs.readSync(handle, buffer, 0, buffer.length, 0);
+        text = buffer.toString('utf8');
+      } finally {
+        fs.closeSync(handle);
+      }
+    } catch {
+      return undefined;
     }
-  } catch {
-    return undefined; // Unreadable right now; the list already says it exists.
   }
   return {
     path: requested,
     size: stats.size,
     modifiedAt: stats.mtime.toISOString(),
-    text,
-    truncated: stats.size > MAX_ARTIFACT_BYTES,
+    mimeType,
+    ...(text === undefined ? {} : { text }),
+    truncated: text !== undefined && stats.size > MAX_ARTIFACT_BYTES,
   };
+}
+
+/** Streams media with byte-range support so browser audio, video, and PDF controls can seek. */
+function streamArtifact(
+  resolved: string,
+  requested: string,
+  rangeHeader: string | undefined,
+  download: boolean,
+): Response | undefined {
+  const stats = statOf(resolved);
+  if (stats === undefined || stats.isDirectory()) return undefined;
+  const mimeType = artifactMimeType(requested);
+  let start = 0;
+  let end = Math.max(0, stats.size - 1);
+  let partial = false;
+  const match = rangeHeader?.match(/^bytes=(\d*)-(\d*)$/);
+  if (match !== null && match !== undefined && stats.size > 0) {
+    const requestedStart = match[1] === '' ? undefined : Number(match[1]);
+    const requestedEnd = match[2] === '' ? undefined : Number(match[2]);
+    if (requestedStart === undefined && requestedEnd !== undefined) {
+      start = Math.max(0, stats.size - requestedEnd);
+    } else if (requestedStart !== undefined) {
+      start = requestedStart;
+      end = requestedEnd === undefined ? end : Math.min(requestedEnd, end);
+    }
+    if (start >= stats.size || start > end) {
+      return new Response(null, { status: 416, headers: { 'content-range': `bytes */${String(stats.size)}` } });
+    }
+    partial = true;
+  }
+  const filename = path.basename(requested).replace(/["\\\r\n]/g, '_');
+  const forceDownload = download || mimeType === 'text/html';
+  const headers = new Headers({
+    'accept-ranges': 'bytes',
+    'content-disposition': `${forceDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
+    'content-length': String(stats.size === 0 ? 0 : end - start + 1),
+    'content-type': mimeType,
+    'x-content-type-options': 'nosniff',
+  });
+  if (partial) headers.set('content-range', `bytes ${String(start)}-${String(end)}/${String(stats.size)}`);
+  if (stats.size === 0) return new Response(null, { status: 200, headers });
+  const body = Readable.toWeb(fs.createReadStream(resolved, { start, end }));
+  return new Response(body, { status: partial ? 206 : 200, headers });
 }
 
 /** The named export a host imports from this package's built hub entry. */

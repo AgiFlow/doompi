@@ -1,5 +1,6 @@
+import fs from 'node:fs';
 import { expect, test } from '../support/cockpit.ts';
-import { moveWorkflowRun, writeWorkflowRun } from '../support/workflowRuns.ts';
+import { moveWorkflowRun, workflowRunDir, writeWorkflowArtifact, writeWorkflowRun } from '../support/workflowRuns.ts';
 
 // The workflows tab is not in the package's own bundle: it arrives through
 // the doompi sync path, so this suite serves the synced-style bundle the
@@ -46,7 +47,7 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   await expect(page.getByTestId('step-row-edit src/routes/token.ts')).toHaveAttribute('data-step-status', 'running');
   await expect(page.getByTestId('step-row-edit src/routes/token.ts')).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('workflow-inline-output')).toBeVisible();
-
+  await expect(page.getByTestId('delete-workflow')).toHaveCount(0);
   // Selecting another job swaps the step pane.
   await page.getByTestId('job-row-research').click();
   await expect(page.getByTestId('job-pane-name')).toHaveText('research');
@@ -56,6 +57,85 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   await page.getByTestId('pane-tab-artifacts').click();
   await expect(page.getByTestId('artifacts-pane')).toBeVisible();
   await expect(page.getByTestId('jobs-pane')).toBeVisible();
+});
+
+test('renders Markdown artifacts and explains when an artifact is empty', async ({ page, cockpit }) => {
+  const fixture = { workspace: 'default', stage: 'completed' as const, runKey: 'publication' };
+  writeWorkflowRun(cockpit.workflowHome, {
+    ...fixture,
+    record: {
+      ...OWNED,
+      displayName: 'Publication',
+      outcome: 'success',
+      finishedAt: new Date().toISOString(),
+      runDirectory: {
+        description: 'Publication files.',
+        entries: [
+          {
+            path: 'publication-checklist.md',
+            kind: 'file',
+            description: 'Review checklist.',
+            'produced-by': ['review'],
+          },
+          {
+            path: 'copy-review.md',
+            kind: 'file',
+            description: 'Copy review.',
+            'produced-by': ['review'],
+          },
+        ],
+      },
+    },
+  });
+  writeWorkflowArtifact(
+    cockpit.workflowHome,
+    fixture,
+    'publication-checklist.md',
+    '# Publication Checklist\n\n- [x] **Ready for review**',
+  );
+  writeWorkflowArtifact(cockpit.workflowHome, fixture, 'copy-review.md', '');
+  await page.goto(cockpit.url);
+  await page.getByTestId('tab-workflows').click();
+  await expect(page.getByTestId('workflow-picker')).toContainText('Publication');
+  await page.getByTestId('pane-tab-artifacts').click();
+  await page.getByTestId('artifact-row-publication-checklist.md').click();
+  await expect(page.getByTestId('artifact-markdown')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Publication Checklist' })).toBeVisible();
+  await page.getByTestId('artifact-raw-toggle').click();
+  await expect(page.getByTestId('artifact-raw')).toContainText('# Publication Checklist');
+  await page.getByTestId('artifact-rendered-toggle').click();
+  await expect(page.getByTestId('artifact-markdown')).toBeVisible();
+
+  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('pane-tab-artifacts').click();
+  await page.getByTestId('artifact-row-copy-review.md').click();
+  await expect(page.getByTestId('artifact-empty')).toContainText('this artifact is empty');
+  await expect(page.getByTestId('artifact-empty')).toContainText('did not write any content');
+});
+
+test('confirms before permanently deleting a settled workflow', async ({ page, cockpit }) => {
+  const fixture = { workspace: 'default', stage: 'completed' as const, runKey: 'finished-run' };
+  writeWorkflowRun(cockpit.workflowHome, {
+    ...fixture,
+    record: { ...OWNED, displayName: 'Finished Run', outcome: 'success', finishedAt: new Date().toISOString() },
+  });
+  writeWorkflowArtifact(cockpit.workflowHome, fixture, 'result.md', 'valuable output');
+  const runDir = workflowRunDir(cockpit.workflowHome, fixture);
+
+  await page.goto(cockpit.url);
+  await page.getByTestId('tab-workflows').click();
+  await expect(page.getByTestId('workflow-picker')).toContainText('Finished Run');
+  await page.getByTestId('delete-workflow').click();
+  await expect(page.getByTestId('delete-workflow-dialog')).toContainText('Delete Finished Run?');
+  await expect(page.getByTestId('delete-workflow-dialog')).toContainText('logs and artifacts');
+  await page.getByTestId('delete-workflow-cancel').click();
+  await expect(page.getByTestId('delete-workflow-dialog')).toHaveCount(0);
+  expect(fs.existsSync(runDir)).toBe(true);
+
+  await page.getByTestId('delete-workflow').click();
+  await page.getByTestId('delete-workflow-confirm').click();
+  await expect(page.getByTestId('workflows-empty')).toBeVisible();
+  expect(fs.existsSync(runDir)).toBe(false);
 });
 
 test('a failure moves into the needs-you strip live', async ({ page, cockpit }) => {

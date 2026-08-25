@@ -63,6 +63,36 @@ describe('transcript policy', () => {
       }),
     ).toEqual({ action: 'deliver', text: 'run all tests' });
   });
+
+  it('opens composition before a matching configured start phrase is stripped', () => {
+    expect(
+      applyTranscriptPolicy({
+        ...phrases,
+        startPhrases: ['doom'],
+        transcript: 'Doom, prompt: preserve My Punctuation.',
+        compositionState: 'inactive',
+      }),
+    ).toEqual({ action: 'compose-open', text: 'preserve My Punctuation.' });
+  });
+
+  it('requires standalone send and cancel commands while collecting', () => {
+    const collecting = { ...phrases, startPhrases: ['doom'], compositionState: 'collecting' as const };
+    expect(applyTranscriptPolicy({ ...collecting, transcript: 'Doom, send.' })).toEqual({ action: 'compose-send' });
+    expect(applyTranscriptPolicy({ ...collecting, transcript: 'doom cancel' })).toEqual({ action: 'compose-cancel' });
+    expect(applyTranscriptPolicy({ ...collecting, transcript: 'doom send this exact phrase' })).toEqual({
+      action: 'compose-append',
+      text: 'send this exact phrase',
+    });
+  });
+
+  it('keeps send and cancel as ordinary text outside composition', () => {
+    expect(
+      applyTranscriptPolicy({ ...phrases, startPhrases: [], transcript: 'doom send', compositionState: 'inactive' }),
+    ).toEqual({ action: 'deliver', text: 'doom send' });
+    expect(
+      applyTranscriptPolicy({ ...phrases, startPhrases: [], transcript: 'doom cancel', compositionState: 'inactive' }),
+    ).toEqual({ action: 'deliver', text: 'doom cancel' });
+  });
 });
 
 describe('VoiceDelivery', () => {
@@ -83,6 +113,15 @@ describe('VoiceDelivery', () => {
     expect(results).toEqual([
       { kind: 'delivered', sessionId: 'session-1', captureId: 'capture-1', turnId: 'turn-1', revision: 1 },
     ]);
+  });
+
+  it('retains queued follow-up intent through a blocked delivery', () => {
+    const deliver = vi.fn();
+    const delivery = new VoiceDelivery({ deliver, onResult: vi.fn() });
+    delivery.setBlocked(true);
+    delivery.submit({ ...request, intent: 'queuedFollowUp' });
+    delivery.setBlocked(false);
+    expect(deliver).toHaveBeenCalledWith(request.text, 'queuedFollowUp');
   });
 
   it('reports failure without claiming delivery', () => {
