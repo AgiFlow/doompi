@@ -19,7 +19,10 @@ export const tsdownConfig = defineConfig({
     codegen: { removeWhitespace: true },
   },
   platform: 'browser',
-  outExtensions: ({ format }) => ({ js: format === 'es' ? '.mjs' : '.cjs', dts: format === 'es' ? '.d.mts' : '.d.cts' }),
+  outExtensions: ({ format }) => ({
+    js: format === 'es' ? '.mjs' : '.cjs',
+    dts: format === 'es' ? '.d.mts' : '.d.cts',
+  }),
   sourcemap: true,
   unbundle: true,
 });

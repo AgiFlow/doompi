@@ -1,9 +1,10 @@
 import { cva } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 import { cn } from '../lib/cn.ts';
+import type { MessageLineTone as Tone } from '../types/tone.ts';
 
 /** One line of a message body, with the tone the card's pure view logic chose for it. */
-export type MessageLineTone = 'hi' | 'text' | 'dim' | 'muted' | 'success' | 'error' | 'warning' | 'accent';
+export type MessageLineTone = Tone;
 
 export interface MessageLine {
   text: string;
@@ -23,7 +24,7 @@ export const messageLineVariants = cva('whitespace-pre-wrap break-words', {
       error: 'text-doom-red',
       warning: 'text-doom-yellow',
       accent: 'text-doom-blue',
-    },
+    } satisfies Record<Tone, string>,
     bold: { true: 'font-bold', false: '' },
     indent: { true: 'pl-4', false: '' },
   },

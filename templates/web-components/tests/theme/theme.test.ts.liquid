@@ -29,7 +29,8 @@ describe('shipped themes', () => {
     const names = BUILTIN_THEMES.map((theme) => theme.name);
     expect(new Set(names).size).toBe(names.length);
     for (const theme of BUILTIN_THEMES) {
-      for (const token of PALETTE_TOKENS) expect(theme.tokens[token], `${theme.name}.${token}`).toMatch(/^#[0-9a-f]{6}$/);
+      for (const token of PALETTE_TOKENS)
+        expect(theme.tokens[token], `${theme.name}.${token}`).toMatch(/^#[0-9a-f]{6}$/);
     }
   });
 });
@@ -52,7 +53,9 @@ describe('parseThemeConfig', () => {
   });
 
   it('accepts colour functions and rejects an empty derived token', () => {
-    expect(parseThemeConfig({ ...valid, tokens: { ...valid.tokens, deep: 'color-mix(in srgb, #000 50%, #fff)' } })).not.toBeNull();
+    expect(
+      parseThemeConfig({ ...valid, tokens: { ...valid.tokens, deep: 'color-mix(in srgb, #000 50%, #fff)' } }),
+    ).not.toBeNull();
     expect(parseThemeConfig({ ...valid, tokens: { ...valid.tokens, 'tint-blue': '' } })).toBeNull();
   });
 });

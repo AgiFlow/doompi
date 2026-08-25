@@ -1,6 +1,8 @@
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+import { CloseIcon } from '../icons/icons.ts';
 import { cn } from '../lib/cn.ts';
+import { Button } from './Button.tsx';
 
 /**
  * shadcn's Dialog on Radix: focus trap, Escape, outside click, scroll lock,
@@ -58,13 +60,40 @@ export function DialogContent({ className, children, width = 'md', ...props }: D
   );
 }
 
-export function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
+export interface DialogHeaderProps extends ComponentProps<'div'> {
+  /**
+   * Show the close control at the right of the strip. Off by default: most
+   * headers already put something there (a spinner, a method label) and every
+   * dialog closes on Escape, so an X that fights the existing content is worse
+   * than none. Turn it on for a dialog whose only way out is the mouse.
+   */
+  dismissible?: boolean;
+  /** What the close control announces. */
+  closeLabel?: string;
+}
+
+export function DialogHeader({
+  className,
+  dismissible = false,
+  closeLabel = 'close',
+  children,
+  ...props
+}: DialogHeaderProps) {
   return (
     <div
       data-slot="dialog-header"
       className={cn('flex items-center justify-between gap-3 border-b border-doom-border px-4 py-3', className)}
       {...props}
-    />
+    >
+      {children}
+      {dismissible ? (
+        <DialogPrimitive.Close asChild>
+          <Button variant="ghost" size="icon" aria-label={closeLabel} className="text-doom-faint hover:text-doom-hi">
+            <CloseIcon className="h-3 w-3" />
+          </Button>
+        </DialogPrimitive.Close>
+      ) : null}
+    </div>
   );
 }
 
@@ -90,12 +119,14 @@ export function DialogDescription({ className, ...props }: ComponentProps<typeof
 
 export function DialogBody({ className, ...props }: ComponentProps<'div'>) {
   return (
-    <div data-slot="dialog-body" className={cn('flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-4', className)} {...props} />
+    <div
+      data-slot="dialog-body"
+      className={cn('flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-4', className)}
+      {...props}
+    />
   );
 }
 
 export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
-  return (
-    <div data-slot="dialog-footer" className={cn('flex items-center justify-end gap-2', className)} {...props} />
-  );
+  return <div data-slot="dialog-footer" className={cn('flex items-center justify-end gap-2', className)} {...props} />;
 }

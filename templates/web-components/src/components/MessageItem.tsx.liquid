@@ -3,7 +3,7 @@ import { type ComponentProps, createContext, type ReactNode, useContext, useStat
 import { ChevronDownIcon, ChevronUpIcon } from '../icons/icons.ts';
 import { cn } from '../lib/cn.ts';
 import { Button } from './Button.tsx';
-import { StatusBadge, type StatusTone } from './StatusBadge.tsx';
+import { STATUS_EDGE, StatusBadge, type StatusTone } from './StatusBadge.tsx';
 
 /**
  * The message item: the timeline card a tool call, a run, or a notice sits
@@ -34,18 +34,9 @@ export function useMessageItem(): MessageItemState {
   return useContext(MessageItemContext);
 }
 
-/** The frame: the same edge family STATUS_EDGE names, spelled out so the class scanner sees it. */
+/** The frame, wearing the edge STATUS_EDGE names for the tone, so the two never drift apart. */
 export const messageItemVariants = cva('overflow-hidden rounded-md border bg-doom-panel transition-colors', {
-  variants: {
-    tone: {
-      neutral: 'border-doom-border',
-      running: 'border-doom-edge-yellow',
-      ok: 'border-doom-border',
-      error: 'border-doom-edge-red',
-      info: 'border-doom-edge-blue',
-      accent: 'border-doom-edge-magenta',
-    },
-  },
+  variants: { tone: STATUS_EDGE },
   defaultVariants: { tone: 'neutral' },
 });
 
@@ -187,7 +178,7 @@ export const messageItemStatusVariants = cva('shrink-0', {
       error: 'text-doom-red',
       info: 'text-doom-blue',
       accent: 'text-doom-magenta',
-    },
+    } satisfies Record<StatusTone, string>,
   },
   defaultVariants: { tone: 'neutral' },
 });

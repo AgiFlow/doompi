@@ -14,7 +14,9 @@ export function Panel({ className, ...props }: ComponentProps<'div'>) {
 
 /** A panel's title row. */
 export function PanelHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div data-slot="panel-header" className={cn('flex min-h-8 items-center gap-2 px-[11px]', className)} {...props} />;
+  return (
+    <div data-slot="panel-header" className={cn('flex min-h-8 items-center gap-2 px-[11px]', className)} {...props} />
+  );
 }
 
 /** A panel's recessed body: the deep well the header sits above. */
