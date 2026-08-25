@@ -4,7 +4,7 @@ boilerplate:
     description: |-
       Create a publishable DoomPi web component library: the React primitives every browser surface is built from, on the shared Doom palette, with a runtime theme system.
 
-      The generated package builds and tests on the first run. It ships the theme contract (the palette a theme must fill, the tints and accented borders derived from it, the validator that refuses a malformed config, and the call that writes the tokens onto the document), three theme configs, the token stylesheet a host imports after Tailwind, and shadcn-style primitives on Radix restyled so every colour is a token: buttons, badges, status pills, dots, fields, dialogs, popovers, dropdown menus, tooltips, panels, empty states, and the small typographic pieces a cockpit repeats.
+      The generated package builds and tests on the first run. It ships the theme contract (the palette a theme must fill, the tints and accented borders derived from it, the validator that refuses a malformed config, and the call that writes the tokens onto the document), three theme configs, the token stylesheet a host imports after Tailwind, and shadcn-style primitives on Radix restyled so every colour is a token: buttons, badges, status pills, dots, tabs, fields and their labels, checkboxes, switches, radio groups, selects, dialogs, popovers, dropdown menus, tooltips, toasts, a command palette, panels, option lists, timeline message items, empty states, scroll areas, collapsibles, accordions, and the small typographic pieces a cockpit repeats.
 
       Use it for the shared browser vocabulary of a DoomPi surface. It registers no Pi extension, serves nothing, and belongs to no mode; it is a library the web host and every web plugin import.
     variables_schema:
@@ -57,39 +57,61 @@ boilerplate:
       - llms.txt
       - package.json
       - project.json
+      - src/components/Accordion.tsx
+      - src/components/Avatar.tsx
       - src/components/Badge.tsx
       - src/components/Button.tsx
+      - src/components/Checkbox.tsx
+      - src/components/Collapsible.tsx
+      - src/components/Command.tsx
       - src/components/Dialog.tsx
       - src/components/Dot.tsx
       - src/components/DropdownMenu.tsx
       - src/components/EmptyState.tsx
       - src/components/Input.tsx
       - src/components/Kbd.tsx
+      - src/components/Label.tsx
       - src/components/MessageItem.tsx
       - src/components/MessageLines.tsx
+      - src/components/OptionList.tsx
       - src/components/Panel.tsx
       - src/components/Popover.tsx
+      - src/components/Progress.tsx
+      - src/components/RadioGroup.tsx
+      - src/components/ScrollArea.tsx
       - src/components/SectionLabel.tsx
+      - src/components/Select.tsx
       - src/components/Separator.tsx
+      - src/components/Skeleton.tsx
       - src/components/Spinner.tsx
       - src/components/StatusBadge.tsx
       - src/components/StreamCursor.tsx
+      - src/components/Switch.tsx
+      - src/components/Tabs.tsx
       - src/components/Textarea.tsx
+      - src/components/Toast.tsx
       - src/components/Tooltip.tsx
       - src/exports/index.ts
       - src/exports/theme.ts
       - src/icons/icons.ts
       - src/lib/cn.ts
       - src/lib/collapse.ts
+      - src/lib/optionList.ts
+      - src/lib/tone.ts
       - src/theme/apply.ts
       - src/theme/builtinThemes.ts
       - src/theme/derive.ts
       - src/theme/parse.ts
+      - src/theme/piTheme.ts
       - src/theme/preference.ts
       - src/types/theme.ts
+      - src/types/tone.ts
       - styles/tokens.css
       - tests/components/render.test.tsx
+      - tests/components/variants.test.tsx
+      - tests/lib/optionList.test.ts
       - tests/packageContract.test.ts
+      - tests/theme/piTheme.test.ts
       - tests/theme/theme.test.ts
       - themes/doom-nord-dark.json
       - themes/doom-one-dark.json
@@ -107,6 +129,8 @@ boilerplate:
       - `src/types` is the theme contract and imports nothing. `src/lib` holds pure helpers, `src/icons` the curated icon set, `src/theme` the runtime that validates and applies a config.
       - `src/components` may reach components, icons, lib, and types. It may not reach `src/theme`: a component takes its colours from CSS custom properties, never from a theme value it read, which is what lets a theme swap recolour a rendered tree without re-rendering it.
       - `src/exports` is the only public surface, one file per package.json exports subpath, pure re-exports.
+
+      One tone vocabulary. `src/types/tone.ts` holds the unions a surface picks from: a chip tone names a colour, a status tone names an outcome, a line tone names a role inside a body of text, and `src/lib/tone.ts` translates between them. Every tone table in the package is written `satisfies Record<Tone, string>`, so a tone added to the union and not to a table fails the build. A consumer that needs a state-to-colour mapping reaches for a map here rather than writing a tenth `Record<Tone, string>` of its own, which is how the same status ends up yellow in one panel and orange in the next.
 
       Every colour is a token. `no-raw-theme-color` refuses a hex, `rgb()`, or `hsl()` literal anywhere in browser code, including the `bg-[#312A1C]` Tailwind shape. The palette a theme must supply is the twenty tokens in `src/types/theme.ts`; the tints and accented borders are derived with `color-mix()` unless a theme pins them. If a surface needs a colour the palette has no name for, add the token to the contract, the stylesheet, and every shipped theme rather than spelling it at the call site.
 

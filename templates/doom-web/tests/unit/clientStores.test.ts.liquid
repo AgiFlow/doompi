@@ -6,10 +6,14 @@ import {
   dialogConfirmed,
   dialogValue,
   followUpCommand,
+  getAvailableModelsCommand,
+  getAvailableThinkingLevelsCommand,
   getCommandsCommand,
   getSessionStatsCommand,
   getStateCommand,
   promptCommand,
+  setModelCommand,
+  setThinkingLevelCommand,
   steerCommand,
 } from '../../src/web/lib/commands.ts';
 import { bindTransport, releaseTransport, sendFrame, sendHubFrame } from '../../src/web/lib/transport.ts';
@@ -27,11 +31,15 @@ import {
   applySessionFrame,
   cancelDialog,
   dropSessionStore,
+  loadModelChoices,
   queueFollowUp,
   refreshSessionFacts,
+  renameSession,
   resetSessionStore,
   resetSessionStores,
   runCommand,
+  selectModel,
+  selectThinkingLevel,
   sessionStoreFor,
   submitMessage,
 } from '../../src/web/stores/sessionStore.ts';
@@ -85,6 +93,10 @@ describe('command builders', () => {
     expect(getStateCommand()).toEqual({ type: 'get_state' });
     expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
     expect(getCommandsCommand()).toEqual({ type: 'get_commands' });
+    expect(getAvailableModelsCommand()).toEqual({ type: 'get_available_models' });
+    expect(getAvailableThinkingLevelsCommand()).toEqual({ type: 'get_available_thinking_levels' });
+    expect(setModelCommand('openai', 'gpt-5.6')).toEqual({ type: 'set_model', provider: 'openai', modelId: 'gpt-5.6' });
+    expect(setThinkingLevelCommand('high')).toEqual({ type: 'set_thinking_level', level: 'high' });
     expect(dialogValue('1', 'v')).toEqual({ type: 'extension_ui_response', id: '1', value: 'v' });
     expect(dialogConfirmed('2', false)).toEqual({ type: 'extension_ui_response', id: '2', confirmed: false });
     expect(dialogCancelled('3')).toEqual({ type: 'extension_ui_response', id: '3', cancelled: true });
@@ -191,6 +203,53 @@ describe('menuStore', () => {
     clearPendingMenu();
     expect(pendingMenuFor(Date.now())).toBeNull();
   });
+
+  it('spends the anchor on the dialog that answers it, and releases the claim', async () => {
+    const { claimDialogMenu, menuStore, releaseDialogMenu, resetMenuStore, setPendingMenu } =
+      await import('../../src/web/stores/menuStore.ts');
+    resetMenuStore();
+
+    setPendingMenu('domains');
+    expect(claimDialogMenu('d1')).toEqual({ dialogId: 'd1', menu: 'domains' });
+    expect(menuStore.state.claimed).toEqual({ dialogId: 'd1', menu: 'domains' });
+    // The anchor is spent: a second dialog is nobody's menu.
+    expect(claimDialogMenu('d2')).toBeNull();
+    expect(menuStore.state.pending).toBeNull();
+
+    setPendingMenu('mode');
+    claimDialogMenu('d3');
+    releaseDialogMenu('other');
+    expect(menuStore.state.claimed).toEqual({ dialogId: 'd3', menu: 'mode' });
+    releaseDialogMenu('d3');
+    expect(menuStore.state.claimed).toBeNull();
+    resetMenuStore();
+  });
+});
+
+describe('promptFocus', () => {
+  it('hands the keyboard back to the registered input, and never to a disabled one', async () => {
+    const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus.ts');
+
+    let focused = 0;
+    const input = { disabled: false, focus: () => (focused += 1) } as unknown as HTMLTextAreaElement;
+    const release = registerPromptInput(input);
+    focusPrompt();
+    expect(focused).toBe(1);
+
+    // A composer with no session behind it cannot take the caret.
+    (input as unknown as { disabled: boolean }).disabled = true;
+    focusPrompt();
+    expect(focused).toBe(1);
+
+    (input as unknown as { disabled: boolean }).disabled = false;
+    release();
+    focusPrompt();
+    expect(focused).toBe(1);
+
+    // Registering null is how a composer that never mounted stays harmless.
+    registerPromptInput(null);
+    expect(() => focusPrompt()).not.toThrow();
+  });
 });
 
 describe('paletteStore', () => {
@@ -243,7 +302,18 @@ describe('session actions', () => {
     submitMessage('lost');
     abortRun();
     queueFollowUp('also lost');
+    renameSession('nobody');
     expect(sent).toHaveLength(0);
+  });
+
+  it('rename through the agent and read the state back', () => {
+    setActiveSession('s1');
+    renameSession('  gate-review ');
+    renameSession('   ');
+    expect(sent).toEqual([
+      { type: 'session_command', sessionId: 's1', frame: { type: 'set_session_name', name: 'gate-review' } },
+      { type: 'session_command', sessionId: 's1', frame: { type: 'get_state' } },
+    ]);
   });
 
   it('prompt when idle and steer when the addressed agent is running', () => {
@@ -280,6 +350,23 @@ describe('session actions', () => {
       'get_state',
       'get_session_stats',
       'get_commands',
+    ]);
+    expect(sent.every((frame) => frame.sessionId === 's1')).toBe(true);
+  });
+
+  it('ask for the picker lists, and re-read what a pick changes', () => {
+    setActiveSession('s1');
+    loadModelChoices();
+    selectModel('openai', 'gpt-5.6');
+    selectThinkingLevel('high');
+    expect(sent.map((frame) => frame.frame)).toEqual([
+      { type: 'get_available_models' },
+      { type: 'get_available_thinking_levels' },
+      { type: 'set_model', provider: 'openai', modelId: 'gpt-5.6' },
+      { type: 'get_state' },
+      { type: 'get_available_thinking_levels' },
+      { type: 'set_thinking_level', level: 'high' },
+      { type: 'get_state' },
     ]);
     expect(sent.every((frame) => frame.sessionId === 's1')).toBe(true);
   });

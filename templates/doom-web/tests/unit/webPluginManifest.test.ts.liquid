@@ -27,6 +27,9 @@ function block(overrides: Record<string, unknown> = {}): Record<string, unknown>
   return { pluginId: 'demo', registrationOrder: 1, client: './web/index.ts', ...overrides };
 }
 
+const declare = (overrides: Record<string, unknown>, dir = '/a'): ReturnType<typeof declaredPluginsOf> =>
+  declaredPluginsOf(dir, { doompiWeb: block(overrides) }, false);
+
 describe('the doompiWeb manifest vocabulary', () => {
   it('normalizes one block or an array of blocks', () => {
     expect(pluginBlocksOf({})).toEqual([]);
@@ -43,7 +46,6 @@ describe('the doompiWeb manifest vocabulary', () => {
     expect(at(block({ pluginId: 'Bad Case' }))).toThrow(/kebab-case/);
     expect(at(block({ registrationOrder: -1 }))).toThrow(/non-negative integer/);
     expect(at(block({ registrationOrder: 1.5 }))).toThrow(/non-negative integer/);
-    expect(at(block({ dependencies: [42] }))).toThrow(/pluginId strings/);
     expect(at(block({ channels: [''] }))).toThrow(/non-empty strings/);
     expect(at(block({ client: 'web/index.ts' }))).toThrow(/package-relative/);
     expect(at(block({ client: './../escape.ts' }))).toThrow(/package-relative/);
@@ -59,41 +61,48 @@ describe('the doompiWeb manifest vocabulary', () => {
     expect(hostOnly[0]?.hub).toEqual({ entry: './src/hub.ts' });
   });
 
-  it('rejects duplicate ids, orders, channels, unknown deps, and cycles across packages', () => {
-    const declare = (overrides: Record<string, unknown>, dir = '/a'): ReturnType<typeof declaredPluginsOf> =>
-      declaredPluginsOf(dir, { doompiWeb: block(overrides) }, false);
-    expect(() => orderDeclaredPlugins([...declare({}), ...declare({}, '/b')])).toThrow(/duplicate pluginId/);
-    expect(() =>
-      orderDeclaredPlugins([...declare({}), ...declare({ pluginId: 'two', registrationOrder: 1 }, '/b')]),
-    ).toThrow(/registrationOrder 1 is already used/);
-    expect(() =>
-      orderDeclaredPlugins([
-        ...declare({ channels: ['shared'] }),
-        ...declare({ pluginId: 'two', registrationOrder: 2, channels: ['shared'] }, '/b'),
-      ]),
-    ).toThrow(/already claimed/);
-    expect(() => orderDeclaredPlugins(declare({ dependencies: ['ghost'] }))).toThrow(/unknown plugin 'ghost'/);
-    expect(() =>
-      orderDeclaredPlugins([
-        ...declare({ dependencies: ['two'] }),
-        ...declare({ pluginId: 'two', registrationOrder: 2, dependencies: ['demo'] }, '/b'),
-      ]),
-    ).toThrow(/dependency cycle/);
-  });
-
-  it('orders dependencies first with registrationOrder as the tiebreak', () => {
-    const late = declaredPluginsOf(
-      '/a',
-      { doompiWeb: block({ pluginId: 'late', registrationOrder: 5, dependencies: ['early'] }) },
+  it('defaults registrationOrder to 1000 and ignores keys it does not know', () => {
+    const [plugin] = declaredPluginsOf(
+      '/pkg',
+      { doompiWeb: { pluginId: 'demo', client: './web/index.ts', dependencies: ['ghost'], extra: true } },
       false,
     );
-    const early = declaredPluginsOf('/b', { doompiWeb: block({ pluginId: 'early', registrationOrder: 9 }) }, false);
-    const first = declaredPluginsOf('/c', { doompiWeb: block({ pluginId: 'first', registrationOrder: 1 }) }, false);
-    expect(orderDeclaredPlugins([...late, ...early, ...first]).map((p) => p.pluginId)).toEqual([
-      'first',
-      'early',
-      'late',
+    expect(plugin?.registrationOrder).toBe(1000);
+    expect(plugin).not.toHaveProperty('dependencies');
+  });
+
+  it('orders by registrationOrder then pluginId and allows ties', () => {
+    const ordered = orderDeclaredPlugins([
+      ...declare({ pluginId: 'zeta', registrationOrder: 5 }, '/z'),
+      ...declare({ pluginId: 'alpha', registrationOrder: 5 }, '/a'),
+      ...declare({ pluginId: 'late' }, '/l'),
+      ...declare({ pluginId: 'first', registrationOrder: 1 }, '/f'),
+      ...declaredPluginsOf('/d', { doompiWeb: { pluginId: 'defaulted', client: './web/index.ts' } }, false),
     ]);
+    expect(ordered.map((plugin) => plugin.pluginId)).toEqual(['first', 'late', 'alpha', 'zeta', 'defaulted']);
+  });
+
+  it('keeps the first of a duplicate pluginId and notices the loser', () => {
+    const notices: string[] = [];
+    const ordered = orderDeclaredPlugins(
+      [...declare({ registrationOrder: 2 }, '/second'), ...declare({ registrationOrder: 1 }, '/first')],
+      (message) => notices.push(message),
+    );
+    expect(ordered.map((plugin) => plugin.packageDir)).toEqual(['/first']);
+    expect(notices).toEqual(["web plugin 'demo' from /second is skipped: /first already declares it."]);
+  });
+
+  it('notices a channel two packages both declare and keeps both plugins', () => {
+    const notices: string[] = [];
+    const ordered = orderDeclaredPlugins(
+      [
+        ...declare({ channels: ['shared'] }),
+        ...declare({ pluginId: 'two', registrationOrder: 2, channels: ['shared', 'own'] }, '/b'),
+      ],
+      (message) => notices.push(message),
+    );
+    expect(ordered.map((plugin) => plugin.pluginId)).toEqual(['demo', 'two']);
+    expect(notices).toEqual(["web plugin 'two' channel 'shared' is already claimed by 'demo'; the first keeps it."]);
   });
 });
 
@@ -106,20 +115,35 @@ describe('the manifest scanner', () => {
     expect(plugins[0]?.isHost).toBe(false);
   });
 
-  it('rejects a missing client entry, hub entry, or unreadable manifest', () => {
+  it('skips a plugin root with a missing entry, a malformed block, or an unreadable manifest, with a notice', () => {
     const host = pluginPackage({ name: 'host' });
+    const fine = pluginPackage({ name: 'fine', doompiWeb: block({ pluginId: 'fine' }) });
     const missingClient = pluginPackage({ name: 'p', doompiWeb: block() }, []);
-    expect(() => scanWebPlugins(host, [missingClient])).toThrow(/client\.entry '\.\/web\/index\.ts' does not exist/);
-
     const missingHub = pluginPackage({
       name: 'p',
-      doompiWeb: block({ hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
+      doompiWeb: block({ pluginId: 'hubless', hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
     });
-    expect(() => scanWebPlugins(host, [missingHub])).toThrow(/hub\.entry '\.\/src\/hub\.ts' does not exist/);
-
+    const malformed = pluginPackage({ name: 'p', doompiWeb: block({ pluginId: 'Bad Case' }) });
     const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-broken-'));
     cleanups.push(() => fs.rmSync(broken, { recursive: true, force: true }));
     fs.writeFileSync(path.join(broken, 'package.json'), 'not json');
-    expect(() => scanWebPlugins(host, [broken])).toThrow(/package\.json is unreadable/);
+
+    const notices: string[] = [];
+    const plugins = scanWebPlugins(host, [missingClient, fine, missingHub, malformed, broken], (message) =>
+      notices.push(message),
+    );
+    expect(plugins.map((p) => p.pluginId)).toEqual(['fine']);
+    expect(notices).toHaveLength(4);
+    expect(notices[0]).toMatch(/skipped: .*client\.entry '\.\/web\/index\.ts' does not exist/);
+    expect(notices[1]).toMatch(/skipped: .*hub\.entry '\.\/src\/hub\.ts' does not exist/);
+    expect(notices[2]).toMatch(/skipped: .*kebab-case/);
+    expect(notices[3]).toMatch(/skipped: .*package\.json is unreadable/);
+  });
+
+  it("still throws on the host package's own manifest", () => {
+    const host = pluginPackage({ name: 'host', doompiWeb: block({ pluginId: 'Bad Case' }) });
+    expect(() => scanWebPlugins(host, [])).toThrow(/kebab-case/);
+    const hostMissingEntry = pluginPackage({ name: 'host', doompiWeb: block() }, []);
+    expect(() => scanWebPlugins(hostMissingEntry, [])).toThrow(/client\.entry/);
   });
 });

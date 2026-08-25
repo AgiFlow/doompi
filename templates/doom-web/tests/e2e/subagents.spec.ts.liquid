@@ -82,3 +82,125 @@ test('a run started while watching appears live', async ({ page, cockpit }) => {
   await expect(page.getByTestId('run-card-run-live')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('run-card-run-live')).toHaveAttribute('data-run-state', 'queued');
 });
+
+const LONG_TASK =
+  'Review the current working tree diff in /Users/vuongngo/workspace/doompi, with special attention to packages/minor/doompi-web. Inspect all modified and untracked files using git diff, git status, and source context. Look for concrete defects, regressions, contract violations, missing edge cases, and test issues.';
+
+test('a long prompt truncates inside the card instead of widening the grid', async ({ page, cockpit }) => {
+  const now = Date.now();
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-wide',
+    agent: 'doompi-reviewer',
+    state: 'running',
+    startedAt: now - 60_000,
+    lastUpdate: now,
+    task: LONG_TASK,
+    cwd: '/workspace/doompi',
+    currentTool: `working: ${LONG_TASK}`,
+  });
+
+  await page.goto(cockpit.url);
+  await page.getByTestId('tab-subagents').click();
+  const card = page.getByTestId('run-card-run-wide');
+  await expect(card).toBeVisible();
+
+  // The grid template only exists if Tailwind scanned the plugin sources;
+  // without it the single auto column grows to the longest line and the
+  // panel scrolls sideways.
+  const grid = page.getByTestId('subagents-grid');
+  await expect(grid).toHaveCSS('grid-template-columns', /px/);
+  const [cardBox, gridBox] = await Promise.all([card.boundingBox(), grid.boundingBox()]);
+  expect(cardBox).not.toBeNull();
+  expect(gridBox).not.toBeNull();
+  expect(cardBox!.width).toBeLessThanOrEqual(gridBox!.width + 1);
+  const overflows = await page
+    .getByTestId('subagents-panel')
+    .evaluate((panel) => panel.scrollWidth > panel.clientWidth + 1);
+  expect(overflows).toBe(false);
+});
+
+test('stop asks the runtime and clear hides a finished run', async ({ page, cockpit }) => {
+  const now = Date.now();
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-stop',
+    agent: 'reviewer',
+    state: 'running',
+    startedAt: now - 60_000,
+    lastUpdate: now,
+    task: 'Review the diff.',
+    cwd: '/workspace/doompi',
+  });
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await page.getByTestId('tab-subagents').click();
+
+  await page.getByTestId('run-stop-run-stop').click();
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/subagents-stop run-stop');
+  // The click is a request; the card waits for the run's own word.
+  await expect(page.getByTestId('run-stop-run-stop')).toHaveText('stopping…');
+  await expect(page.getByTestId('run-stop-run-stop')).toBeDisabled();
+  // Clicking the control must not open the drawer.
+  await expect(page.getByTestId('run-drawer')).toBeHidden();
+
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-stop',
+    agent: 'reviewer',
+    state: 'stopped',
+    startedAt: now - 60_000,
+    endedAt: now,
+    lastUpdate: now,
+    task: 'Review the diff.',
+    cwd: '/workspace/doompi',
+  });
+  await expect(page.getByTestId('run-card-run-stop')).toHaveAttribute('data-run-state', 'stopped', { timeout: 5000 });
+
+  await page.getByTestId('run-clear-run-stop').click();
+  await expect(page.getByTestId('run-card-run-stop')).toBeHidden();
+  await expect(page.getByTestId('subagents-empty')).toBeVisible();
+  await expect(page.getByTestId('tab-subagents-count')).toBeHidden();
+});
+
+test('the activity dock lists the runs and opens one in the subagents tab', async ({ page, cockpit }) => {
+  const now = Date.now();
+  writeRunStatus('s1', {
+    version: 1,
+    runId: 'run-dock',
+    agent: 'doompi-reviewer',
+    state: 'running',
+    startedAt: now - 60_000,
+    lastUpdate: now,
+    task: 'Review the diff.',
+    cwd: '/workspace/doompi',
+    currentTool: 'working: reading the hub adapter',
+    toolCount: 4,
+  });
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  // The runtime's footer status is what makes the group exist; the plugin
+  // section then replaces its one-line summary.
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'st-agents',
+    method: 'setStatus',
+    statusKey: 'doom-team-agents',
+    statusText: 'Agents ◑',
+  });
+
+  const row = page.getByTestId('activity-run-run-dock');
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('doompi-reviewer');
+  await expect(row).toContainText('4 tools');
+  await expect(row).toContainText('working: reading the hub adapter');
+  await expect(page.getByTestId('activity-summary-agents')).toBeHidden();
+
+  await row.click();
+  await expect(page).toHaveURL(/\/session\/s1\/subagents$/);
+  await expect(page.getByTestId('run-drawer')).toBeVisible();
+  await expect(page.getByTestId('drawer-agent')).toHaveText('doompi-reviewer');
+});

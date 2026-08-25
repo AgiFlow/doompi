@@ -45,7 +45,7 @@ test('explains a refused attach instead of sitting blank', async ({ page, cockpi
   await expect(page.getByTestId('refused-title')).toHaveText('session already attached');
   await expect(page.getByTestId('refused-card')).toContainText('one client at a time');
   // The rail card carries the same story.
-  await expect(page.getByTestId('session-card-status')).toHaveText('another cockpit holds this session');
+  await expect(page.getByTestId('session-status')).toHaveText('another cockpit holds this session');
 
   intruder();
   // Recovery rides the hub's backoff, whose ceiling is 4s.
@@ -87,4 +87,48 @@ test('a status frame never opens a modal', async ({ page, cockpit }) => {
 
   await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
   await expect(page.getByTestId('dialog')).toBeHidden();
+});
+
+test('an informational notice reads as an aside, an error shouts', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'note-1',
+    method: 'notify',
+    message: 'Plan mode deactivated.',
+  });
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'note-2',
+    method: 'notify',
+    notifyType: 'error',
+    message: 'Voice has no actions available in this session.',
+  });
+
+  const notices = page.getByTestId('entry-notice');
+  await expect(notices).toHaveCount(2);
+  // A mode switch is not a failure, so it must not wear the failure colour.
+  await expect(notices.nth(0)).toHaveAttribute('data-tone', 'info');
+  await expect(notices.nth(1)).toHaveAttribute('data-tone', 'error');
+});
+
+test('the activity dock stays hidden across a route change and a reload', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  await expect(page.getByTestId('activity-dock')).toBeVisible();
+  await page.getByTestId('activity-close').click();
+  await expect(page.getByTestId('activity-show')).toBeVisible();
+
+  await page.getByTestId('settings-open').click();
+  await page.getByTestId('settings-close').click();
+  await expect(page.getByTestId('activity-show')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('activity-show')).toBeVisible();
+
+  await page.getByTestId('activity-show').click();
+  await expect(page.getByTestId('activity-dock')).toBeVisible();
 });

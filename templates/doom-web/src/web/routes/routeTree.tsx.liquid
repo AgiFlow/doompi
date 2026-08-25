@@ -1,5 +1,6 @@
 import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
 import { CockpitPage } from './CockpitPage.tsx';
+import { SettingsPage } from './SettingsPage.tsx';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -25,4 +26,24 @@ const sessionTabRoute = createRoute({
   component: CockpitPage,
 });
 
-export const routeTree = rootRoute.addChildren([indexRoute, sessionRoute, sessionTabRoute]);
+// Settings keep the same shape: one static segment, one parameter for the
+// section, so adding a page never touches the route tree.
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: SettingsPage,
+});
+
+const settingsSectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/$section',
+  component: SettingsPage,
+});
+
+export const routeTree = rootRoute.addChildren([
+  indexRoute,
+  sessionRoute,
+  sessionTabRoute,
+  settingsRoute,
+  settingsSectionRoute,
+]);

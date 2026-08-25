@@ -58,6 +58,8 @@ export interface FakeSessionOptions {
   cwd?: string;
   /** When given, the fake registers itself like a real doompi-server would. */
   registryDir?: string;
+  /** The pid the record claims; defaults to this process, which keeps the record alive for the watcher. */
+  pid?: number;
 }
 
 /**
@@ -151,7 +153,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
         cwd: options.cwd ?? dir,
         socketPath,
         tokenFile,
-        pid: process.pid,
+        pid: options.pid ?? process.pid,
         createdAt: new Date().toISOString(),
       }),
       { mode: 0o600 },

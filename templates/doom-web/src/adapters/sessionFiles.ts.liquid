@@ -63,3 +63,37 @@ export async function listSessionFiles(cwd: string, query: string, limit: number
   const files = (await gitFiles(cwd)) ?? walkFiles(cwd);
   return rankFileMatches(files, query, limit);
 }
+
+export type SessionFileResult =
+  | { status: 'ok'; body: Buffer }
+  | { status: 'not-found' }
+  | { status: 'forbidden' }
+  | { status: 'too-large' };
+
+function isInside(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}${path.sep}`);
+}
+
+/**
+ * One file under a session's working directory, for the timeline's mention
+ * previews. Containment is checked on the real path as well as the lexical
+ * one, so a symlink inside the tree cannot hand out something beyond it.
+ */
+export async function readSessionFile(cwd: string, relativePath: string, maxBytes: number): Promise<SessionFileResult> {
+  if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath)) return { status: 'forbidden' };
+  const root = path.resolve(cwd);
+  const candidate = path.resolve(root, relativePath);
+  if (!isInside(root, candidate)) return { status: 'forbidden' };
+  let real: string;
+  let stats: fs.Stats;
+  try {
+    real = await fs.promises.realpath(candidate);
+    stats = await fs.promises.stat(real);
+  } catch {
+    return { status: 'not-found' };
+  }
+  if (!isInside(await fs.promises.realpath(root), real)) return { status: 'forbidden' };
+  if (!stats.isFile()) return { status: 'not-found' };
+  if (stats.size > maxBytes) return { status: 'too-large' };
+  return { status: 'ok', body: await fs.promises.readFile(real) };
+}

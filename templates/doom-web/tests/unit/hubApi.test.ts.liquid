@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSession } from '../../src/web/lib/hubApi.ts';
+import { createSession, searchDirectories } from '../../src/web/lib/hubApi.ts';
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -35,5 +35,22 @@ describe('createSession', () => {
   it('reports an unreachable hub instead of throwing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
     await expect(createSession({ cwd: '/x' })).resolves.toEqual({ error: 'The cockpit hub is unreachable.' });
+  });
+});
+
+describe('searchDirectories', () => {
+  it('asks the hub for the typed path and keeps only string entries', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respond(200, { directories: ['/work/app', 7, '/work/lib'] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(searchDirectories('/work/^')).resolves.toEqual(['/work/app', '/work/lib']);
+    expect(fetchMock).toHaveBeenCalledWith('/api/directories?q=%2Fwork%2F%5E');
+  });
+
+  it('shows nothing when the hub declines or is unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 500 })));
+    await expect(searchDirectories('/x')).resolves.toEqual([]);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
+    await expect(searchDirectories('/x')).resolves.toEqual([]);
   });
 });

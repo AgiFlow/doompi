@@ -28,6 +28,26 @@ export function getCommandsCommand(): Frame {
   return { type: 'get_commands' };
 }
 
+export function getAvailableModelsCommand(): Frame {
+  return { type: 'get_available_models' };
+}
+
+export function getAvailableThinkingLevelsCommand(): Frame {
+  return { type: 'get_available_thinking_levels' };
+}
+
+export function setModelCommand(provider: string, modelId: string): Frame {
+  return { type: 'set_model', provider, modelId };
+}
+
+export function setThinkingLevelCommand(level: string): Frame {
+  return { type: 'set_thinking_level', level };
+}
+
+export function setSessionNameCommand(name: string): Frame {
+  return { type: 'set_session_name', name };
+}
+
 export function dialogValue(id: string, value: string): Frame {
   return { type: 'extension_ui_response', id, value };
 }

@@ -6,10 +6,15 @@ import {
   dialogConfirmed,
   dialogValue,
   followUpCommand,
+  getAvailableModelsCommand,
+  getAvailableThinkingLevelsCommand,
   getCommandsCommand,
   getSessionStatsCommand,
   getStateCommand,
   promptCommand,
+  setModelCommand,
+  setSessionNameCommand,
+  setThinkingLevelCommand,
   steerCommand,
 } from '../lib/commands.ts';
 import {
@@ -74,6 +79,32 @@ export function refreshSessionFacts(sessionId: string): void {
   sendFrame(sessionId, getCommandsCommand());
 }
 
+/** Asks what the model picker lists; Pi's answer depends on the current model. */
+export function loadModelChoices(sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  sendFrame(sessionId, getAvailableModelsCommand());
+  sendFrame(sessionId, getAvailableThinkingLevelsCommand());
+}
+
+/**
+ * Switches the model, then re-reads the facts Pi adjusts alongside it: the
+ * thinking level gets clamped to what the new model accepts, and the level
+ * list changes with it.
+ */
+export function selectModel(provider: string, modelId: string, sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  sendFrame(sessionId, setModelCommand(provider, modelId));
+  sendFrame(sessionId, getStateCommand());
+  sendFrame(sessionId, getAvailableThinkingLevelsCommand());
+}
+
+/** The set reply carries nothing back, so get_state is what updates the chip. */
+export function selectThinkingLevel(level: string, sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  sendFrame(sessionId, setThinkingLevelCommand(level));
+  sendFrame(sessionId, getStateCommand());
+}
+
 /**
  * Sends a prompt, or steers the run when one is already in flight.
  *
@@ -96,6 +127,18 @@ export function queueFollowUp(text: string, sessionId: string | null = activeSes
   if (!trimmed || sessionId === null) return;
   sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed));
   sendFrame(sessionId, followUpCommand(trimmed));
+}
+
+/**
+ * Renames the session where the name actually lives: in the agent. Pi keeps
+ * it in the session file and reports it back through get_state, which is
+ * what the hub folds into every page's rail card.
+ */
+export function renameSession(name: string, sessionId: string | null = activeSessionId()): void {
+  const trimmed = name.trim();
+  if (!trimmed || sessionId === null) return;
+  sendFrame(sessionId, setSessionNameCommand(trimmed));
+  sendFrame(sessionId, getStateCommand());
 }
 
 export function abortRun(sessionId: string | null = activeSessionId()): void {

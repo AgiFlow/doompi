@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { activityGroups, minorModes } from '../../src/web/lib/composition.ts';
+import { activityGroups, minorModes, selectionAxes } from '../../src/web/lib/composition.ts';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
 
@@ -63,6 +63,52 @@ describe('parseSelection', () => {
 });
 
 describe('minorModes', () => {
+  it('prefers the journaled catalog over status inference when the runtime reports one', () => {
+    const modes = minorModes({ 'plan-mode': '' }, [], {
+      version: 1,
+      revision: 3,
+      modes: [
+        {
+          id: 'help',
+          label: 'Help',
+          description: '',
+          order: 10,
+          activation: 'active',
+          condition: 'ready',
+          actions: [],
+        },
+        {
+          id: 'loop.active',
+          label: 'Loop',
+          description: '',
+          order: 30,
+          activation: 'activating',
+          condition: 'ready',
+          actions: [],
+        },
+        {
+          id: 'plan',
+          label: 'Plan',
+          description: '',
+          order: 20,
+          activation: 'inactive',
+          condition: 'ready',
+          actions: [],
+        },
+      ],
+    });
+    const byName = Object.fromEntries(modes.map((mode) => [mode.name, mode]));
+
+    // Help publishes no status yet reads on, straight from the catalog.
+    expect(byName.help).toMatchObject({ id: 'help', availability: 'on', keys: 'h e' });
+    expect(byName.plan).toMatchObject({ id: 'plan', availability: 'off' });
+    // The id stem links the catalog record to the declared row and its keys.
+    expect(byName.loop).toMatchObject({ id: 'loop.active', availability: 'off', detail: 'activating', keys: 'l l' });
+    // Declared modes the catalog lacks stay listed as unavailable.
+    expect(byName.goal.availability).toBe('unavailable');
+    expect(byName.workflow.availability).toBe('unavailable');
+  });
+
   it('separates a mode that is absent from one that is merely off', () => {
     const modes = minorModes({ 'plan-mode': '', goal: 'ship the gate' }, []);
     const byName = Object.fromEntries(modes.map((mode) => [mode.name, mode]));
@@ -111,18 +157,174 @@ describe('minorModes', () => {
   });
 });
 
-describe('activityGroups', () => {
-  it('lists only the groups this composition loaded', () => {
-    expect(activityGroups({}, [])).toEqual([]);
+describe('selectionAxes', () => {
+  it('keeps an unpublished axis off the bar and reads the published one', () => {
+    expect(selectionAxes({})).toEqual([]);
+    expect(selectionAxes({ 'doom-profile': '' })).toEqual([
+      { name: 'profile', command: 'profile', values: [], emptyLabel: 'no profile', multi: false },
+    ]);
+  });
 
-    const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
-    expect(groups.map((group) => group.name)).toEqual(['agents', 'runners']);
-    expect(groups[0]).toMatchObject({ summary: '2 running', active: true });
-    expect(groups[1]).toMatchObject({ summary: '', active: false });
+  it('strips colour out of the selection it shows', () => {
+    const axes = selectionAxes({ 'doom-profile': '\u001B[38;2;152;190;101mreviewer\u001B[39m' });
+    expect(axes[0]?.values).toEqual(['reviewer']);
+  });
+
+  it('splits a multi axis on commas, since several domains compose at once', () => {
+    expect(selectionAxes({ 'doom-domain': 'development, testing,' })).toEqual([
+      {
+        name: 'domains',
+        command: 'domains',
+        values: ['development', 'testing'],
+        emptyLabel: 'no domains',
+        multi: true,
+      },
+    ]);
+    expect(selectionAxes({ 'doom-domain': '' })[0]?.values).toEqual([]);
+  });
+
+  it('lists the axes in their declared order', () => {
+    expect(selectionAxes({ 'doom-domain': 'default', 'doom-profile': 'reviewer' }).map((axis) => axis.name)).toEqual([
+      'profile',
+      'domains',
+    ]);
+  });
+
+  it('prefers plugin-declared axes over the packaged fallback, in declared order', () => {
+    resetWebPlugins();
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'demo',
+        selectionAxes: [
+          { name: 'zeta', command: 'zeta', statusKey: 'zeta-axis', emptyLabel: 'no zeta', order: 20 },
+          { name: 'alpha', command: 'alpha', statusKey: 'alpha-axis', emptyLabel: 'no alpha', order: 10 },
+        ],
+      }),
+    ]);
+    try {
+      expect(selectionAxes({ 'zeta-axis': 'z', 'alpha-axis': '', 'doom-profile': 'not declared any more' })).toEqual([
+        { name: 'alpha', command: 'alpha', values: [], emptyLabel: 'no alpha', multi: false },
+        { name: 'zeta', command: 'zeta', values: ['z'], emptyLabel: 'no zeta', multi: false },
+      ]);
+    } finally {
+      resetWebPlugins();
+    }
+  });
+});
+
+describe('activityGroups', () => {
+  const installOwners = (): void =>
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'subagents',
+        activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
+      }),
+      defineWebPlugin({
+        id: 'runner',
+        activityGroups: [{ name: 'runners', keys: 'r l', statusKey: 'doom-runner-runners', order: 20 }],
+      }),
+      defineWebPlugin({
+        id: 'workflows',
+        activityGroups: [
+          {
+            name: 'workflows',
+            keys: 'w r',
+            widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
+            tab: 'workflows',
+            order: 30,
+          },
+        ],
+      }),
+    ]);
+
+  it('has no host-side table: a session signal with no owning package shows nothing', () => {
+    expect(
+      activityGroups({ 'doom-team-agents': '2 running', 'doom-runner-runners': '' }, ['workflow-mcp-follow']),
+    ).toEqual([]);
+  });
+
+  it('lists only the declared groups the session signals, with their tabs', () => {
+    installOwners();
+    try {
+      expect(activityGroups({}, [])).toEqual([]);
+
+      const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
+      expect(groups.map((group) => group.name)).toEqual(['agents', 'runners']);
+      expect(groups[0]).toEqual({ name: 'agents', keys: 'a r', summary: '2 running', active: true, tab: 'subagents' });
+      expect(groups[1]).toEqual({ name: 'runners', keys: 'r l', summary: '', active: false });
+    } finally {
+      resetWebPlugins();
+    }
   });
 
   it('adds workflows when the widget shows up', () => {
-    const groups = activityGroups({}, ['workflow-mcp-follow']);
-    expect(groups.map((group) => group.name)).toEqual(['workflows']);
+    installOwners();
+    try {
+      const groups = activityGroups({}, ['workflow-mcp-follow']);
+      expect(groups.map((group) => group.name)).toEqual(['workflows']);
+      expect(groups[0]?.tab).toBe('workflows');
+    } finally {
+      resetWebPlugins();
+    }
+  });
+});
+
+describe('a catalog mode that cannot run here', () => {
+  const catalog = (actions: { id: string; enabled: boolean; disabledReason?: string }[]) => ({
+    version: 1 as const,
+    revision: 1,
+    modes: [
+      {
+        id: 'voice-auto',
+        label: 'Voice',
+        description: 'autonomous capture',
+        order: 30,
+        activation: 'inactive' as const,
+        condition: 'ready',
+        actions: actions.map((action) => ({
+          label: action.id,
+          description: '',
+          needsInput: false,
+          ...action,
+        })),
+      },
+    ],
+  });
+
+  it('is unavailable, and carries the mode own words for why', () => {
+    const [voice] = minorModes(
+      {},
+      [],
+      catalog([
+        { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+        { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires an interactive session.' },
+      ]),
+    );
+
+    expect(voice.availability).toBe('unavailable');
+    expect(voice.unavailableReason).toBe('Autonomous voice requires an interactive session.');
+  });
+
+  it('is off, not unavailable, while one action can still run', () => {
+    const [voice] = minorModes(
+      {},
+      [],
+      catalog([
+        { id: 'activate', enabled: true },
+        { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice is disabled.' },
+      ]),
+    );
+
+    expect(voice.availability).toBe('off');
+    expect(voice.unavailableReason).toBe('');
+  });
+
+  it('stays on while it is running, whatever its actions report', () => {
+    const projection = catalog([{ id: 'activate', enabled: false, disabledReason: 'already enabled' }]);
+    const running = { ...projection, modes: [{ ...projection.modes[0], activation: 'active' as const }] };
+
+    // An active mode with every action disabled is still active, and saying
+    // otherwise would hide a mode that is doing something right now.
+    expect(minorModes({}, [], running)[0].availability).toBe('on');
   });
 });

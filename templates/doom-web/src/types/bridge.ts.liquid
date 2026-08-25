@@ -1,3 +1,4 @@
+import type { AuthRuntime } from './auth.ts';
 import type { BridgeStatusFrame, SessionFrame } from './session.ts';
 
 /** One live attachment to a doompi-server socket. */
@@ -33,6 +34,8 @@ export interface WebServerOptions {
   token?: string;
   /** Hub mode: command launching created sessions; overridable so tests can stand in a fake. */
   spawnCommand?: string;
+  /** Provider auth runtime; overridable so tests can stand in a fake for Pi's ModelRuntime. */
+  authRuntime?: () => Promise<AuthRuntime>;
 }
 
 export interface WebServer {

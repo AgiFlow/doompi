@@ -1,60 +1,79 @@
-import { useState } from 'react';
+import {
+  collapseLines,
+  MessageItem,
+  MessageItemBody,
+  MessageItemHeader,
+  MessageItemStatus,
+  type StatusTone,
+} from '@agimon-ai/doompi-web-components';
+import { ToolRendererBoundary } from '../../components/ToolRendererBoundary.tsx';
+import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
 import type { ToolEntry } from '../../lib/sessionModel.ts';
+import { toolMessageProps } from '../../lib/toolMessageProps.ts';
+import { useActiveSession } from '../../stores/sessionStore.ts';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
 
 const MAX_PREVIEW_LINES = 12;
 
-// The mockup tints the whole card by outcome: amber while running, red on
-// failure, and the resting border once it exited cleanly.
-const CARD_BORDER = { running: 'border-[#574427]', error: 'border-[#6B3A3A]', ok: 'border-doom-border' };
-const BADGE = {
-  running: 'bg-[#312A1C] text-doom-yellow',
-  error: 'bg-[#332428] text-doom-red',
-  ok: 'bg-[#262E1E] text-doom-green',
-};
+function toneOf(entry: ToolEntry): StatusTone {
+  return entry.running ? 'running' : entry.isError ? 'error' : 'ok';
+}
 
-export function ToolCard({ entry }: { entry: ToolEntry }) {
-  const [expanded, setExpanded] = useState(false);
+/**
+ * The host's own item for a tool no plugin claims: the argument summary in
+ * the header and the result's text clipped until expanded, on the same shell
+ * every plugin message is built from.
+ */
+function HostToolMessage({ entry }: { entry: ToolEntry }) {
   const lines = entry.output.length > 0 ? entry.output.split('\n') : [];
-  const clipped = !expanded && lines.length > MAX_PREVIEW_LINES;
-  const shown = clipped ? lines.slice(0, MAX_PREVIEW_LINES) : lines;
-
-  const state = entry.running ? 'running' : entry.isError ? 'error' : 'ok';
-  const label = entry.running ? 'RUNNING' : entry.isError ? 'ERROR' : 'OK';
-
   return (
-    <div
-      data-testid="entry-tool"
-      data-tool-name={entry.name}
-      data-tool-state={state}
-      className={`overflow-hidden rounded-md border bg-doom-panel ${CARD_BORDER[state]}`}
-    >
-      <div className="flex h-8 items-center gap-2 px-[11px]">
-        <span className="text-[11px] font-bold text-doom-hi">{entry.name}</span>
-        <span className="min-w-0 flex-1 truncate text-[11px] text-doom-dim">{entry.argSummary}</span>
-        <span
-          data-testid="tool-status"
-          className={`rounded-[3px] px-[7px] py-[3px] text-[9px] font-bold ${BADGE[state]}`}
+    <MessageItem tone={toneOf(entry)} expandable={lines.length > MAX_PREVIEW_LINES}>
+      {({ expanded }) => {
+        const { shown, hidden } = collapseLines(lines, MAX_PREVIEW_LINES, expanded);
+        return (
+          <>
+            <MessageItemHeader title={entry.name}>
+              <span className="min-w-0 flex-1 truncate">{entry.argSummary}</span>
+            </MessageItemHeader>
+            {shown.length > 0 ? (
+              <MessageItemBody className="flex flex-col gap-1">
+                <pre data-testid="tool-output" className="whitespace-pre-wrap break-words">
+                  {shown.join('\n')}
+                </pre>
+                {hidden > 0 ? <MessageItemStatus expands>show {hidden} more line(s)</MessageItemStatus> : null}
+              </MessageItemBody>
+            ) : null}
+          </>
+        );
+      }}
+    </MessageItem>
+  );
+}
+
+/**
+ * One tool call in the timeline. The plugin that registered the tool owns
+ * the whole item through its `message` renderer, the web half of the TUI's
+ * renderShell 'self'; the host only marks the row, catches a renderer that
+ * throws, and stands in for a tool nobody claims.
+ */
+export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: string | null }) {
+  const statuses = useActiveSession((state) => state.statuses);
+  const slotProps = usePluginSlotProps(sessionId);
+  const renderer = pluginToolRenderer(entry.name, statuses);
+  const state = toneOf(entry);
+  const props = toolMessageProps(slotProps, entry, statuses);
+  return (
+    <ToolRendererBoundary key={entry.toolCallId} toolName={entry.name}>
+      {(failed) => (
+        <div
+          data-testid="entry-tool"
+          data-tool-name={entry.name}
+          data-tool-state={state}
+          data-tool-renderer={failed ? 'failed' : renderer ? 'plugin' : 'host'}
         >
-          {label}
-        </span>
-      </div>
-      {lines.length > 0 ? (
-        <div className="border-t border-doom-border-soft bg-doom-deep px-3 py-2">
-          <pre data-testid="tool-output" className="whitespace-pre-wrap break-words text-[11px] text-doom-dim">
-            {shown.join('\n')}
-          </pre>
-          {clipped ? (
-            <button
-              type="button"
-              data-testid="tool-expand"
-              onClick={() => setExpanded(true)}
-              className="mt-1 text-[10px] text-doom-blue hover:underline"
-            >
-              show {lines.length - MAX_PREVIEW_LINES} more line(s)
-            </button>
-          ) : null}
+          {renderer && !failed ? <renderer.message {...props} /> : <HostToolMessage entry={entry} />}
         </div>
-      ) : null}
-    </div>
+      )}
+    </ToolRendererBoundary>
   );
 }

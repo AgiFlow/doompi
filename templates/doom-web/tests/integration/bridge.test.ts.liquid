@@ -130,6 +130,34 @@ describe('the hub bridge', () => {
     expect(miss.status).toBe(404);
   });
 
+  it('serves a mentioned file from the session directory and refuses to leave it', async () => {
+    const { server } = await bridge();
+    const hit = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=package.json`);
+    expect(hit.status).toBe(200);
+    expect(hit.headers.get('content-type')).toBe('application/octet-stream');
+    expect(hit.headers.get('content-disposition')).toBe('attachment; filename="package.json"');
+    expect(((await hit.json()) as { name: string }).name).toBe('@agimon-ai/doompi-web');
+
+    const escape = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=../../../package.json`);
+    expect(escape.status).toBe(403);
+    const absolute = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=${encodeURIComponent('/etc/hosts')}`);
+    expect(absolute.status).toBe(403);
+    const directory = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=src`);
+    expect(directory.status).toBe(404);
+    const missing = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=no/such/file.png`);
+    expect(missing.status).toBe(404);
+    const unknown = await fetch(`${server.url}/api/sessions/unknown/file?path=package.json`);
+    expect(unknown.status).toBe(404);
+  });
+
+  it('refuses to stop the session hosting the cockpit and knows no other', async () => {
+    const { server } = await bridge();
+    const self = await fetch(`${server.url}/api/sessions/${LOCAL}`, { method: 'DELETE' });
+    expect(self.status).toBe(409);
+    const unknown = await fetch(`${server.url}/api/sessions/unknown`, { method: 'DELETE' });
+    expect(unknown.status).toBe(404);
+  });
+
   it('explains itself when the bundle is missing instead of serving a blank page', async () => {
     const { server } = await bridge();
     const response = await fetch(server.url);

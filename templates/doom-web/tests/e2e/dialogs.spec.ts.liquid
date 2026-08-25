@@ -109,3 +109,49 @@ test('cancelling tells the agent instead of stranding it', async ({ page, cockpi
   expect(answer.cancelled).toBe(true);
   await expect(page.getByTestId('dialog')).toBeHidden();
 });
+
+test('a long option list is reachable from the keyboard past the ninth', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const options = Array.from({ length: 21 }, (_, index) => `profile-${String(index + 1).padStart(2, '0')}`);
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'many',
+    method: 'select',
+    title: 'Profile',
+    options,
+  });
+
+  await expect(page.getByTestId('dialog')).toBeVisible();
+  // Only nine options can carry a digit, so the hint stops promising more.
+  await expect(page.getByTestId('dialog-hints')).toContainText('up/down move');
+  await expect(page.getByTestId('dialog-option-0')).toHaveAttribute('data-cursor', 'true');
+
+  // Eleven presses walk past the digit shortcuts to the twelfth option.
+  for (let step = 0; step < 11; step += 1) await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('dialog-option-11')).toHaveAttribute('data-cursor', 'true');
+
+  await page.keyboard.press('Enter');
+  const answer = await cockpit.session.waitForCommand('extension_ui_response');
+  expect(answer.value).toBe('profile-12');
+});
+
+test('the digit shortcuts still answer a short list', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'few',
+    method: 'select',
+    title: 'Flavor',
+    options: ['Normal', 'Debug', 'Fable'],
+  });
+
+  await expect(page.getByTestId('dialog-hints')).toContainText('1-9 select');
+  await page.keyboard.press('3');
+
+  const answer = await cockpit.session.waitForCommand('extension_ui_response');
+  expect(answer.value).toBe('Fable');
+});
