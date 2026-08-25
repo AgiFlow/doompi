@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendQueued,
   appendUserPrompt,
   clearDialog,
   initialSessionState,
@@ -562,5 +563,50 @@ describe('restoring a journalled transcript', () => {
     });
     expect(state.entries).toHaveLength(0);
     expect(state.restoredIds).toEqual([]);
+  });
+});
+
+describe('a message the page did not send', () => {
+  const journalUser = (id: string, text: string) => ({
+    type: 'entry_appended',
+    entry: { type: 'message', id, message: { role: 'user', content: [{ type: 'text', text }] } },
+  });
+  const texts = (state: SessionState) => state.entries.map((entry) => [entry.kind, 'text' in entry ? entry.text : '']);
+
+  it('shows a prompt an extension sent on your behalf, which reaches the page only as a journal entry', () => {
+    // Autonomous voice dictates what it heard straight to the agent, so no
+    // frame carries the text; without the journal the turn looks like it
+    // answered nothing.
+    const state = reduceSession(initialSessionState, journalUser('e1', 'what is failing'));
+    expect(texts(state)).toEqual([['user', 'what is failing']]);
+  });
+
+  it('folds the journal copy of a prompt this page sent into the entry already on screen', () => {
+    let state = appendUserPrompt(initialSessionState, 'run the tests');
+    expect(texts(state)).toEqual([['user', 'run the tests']]);
+    // The hub re-reads the journal at every run boundary, so this arrives for
+    // a message the page put up itself.
+    state = reduceSession(state, journalUser('e1', 'run the tests'));
+    expect(texts(state)).toEqual([['user', 'run the tests']]);
+    expect(state.pendingUserEntries).toEqual([]);
+  });
+
+  it('settles a queued follow-up into a sent message when the run picks it up', () => {
+    let state = appendQueued(initialSessionState, 'and then commit');
+    expect(texts(state)).toEqual([['queued', 'and then commit']]);
+    state = reduceSession(state, journalUser('e1', 'and then commit'));
+    expect(texts(state)).toEqual([['user', 'and then commit']]);
+  });
+
+  it('reconciles one prompt per copy, so the same text sent twice shows twice', () => {
+    let state = appendUserPrompt(initialSessionState, 'again');
+    state = appendUserPrompt(state, 'again');
+    state = reduceSession(state, journalUser('e1', 'again'));
+    state = reduceSession(state, journalUser('e2', 'again'));
+    expect(texts(state)).toEqual([
+      ['user', 'again'],
+      ['user', 'again'],
+    ]);
+    expect(state.pendingUserEntries).toEqual([]);
   });
 });

@@ -127,6 +127,14 @@ export interface SessionState {
    * has; folding by id is what keeps a restored transcript from doubling.
    */
   restoredIds: string[];
+  /**
+   * Prompts this page put on screen before the journal recorded them, newest
+   * last. The cockpit shows your message the moment you send it, but the
+   * journal is what carries every message, including the ones an extension
+   * sends on your behalf. Matching a journal message against this list is what
+   * lets both appear exactly once.
+   */
+  pendingUserEntries: { id: string; text: string }[];
   nextId: number;
 }
 
@@ -145,6 +153,7 @@ export const initialSessionState: SessionState = {
   minorModes: null,
   toolsThisRun: 0,
   restoredIds: [],
+  pendingUserEntries: [],
   nextId: 1,
 };
 
@@ -397,6 +406,31 @@ function thinkingFromContent(content: readonly Frame[]): string {
     .join('');
 }
 
+/** Remembers a prompt this page rendered, so the journal's copy of it folds into the same entry. */
+function withPendingUser(state: SessionState, id: string, text: string): SessionState {
+  return { ...state, pendingUserEntries: [...state.pendingUserEntries, { id, text }] };
+}
+
+/**
+ * Folds a journalled user message into the entry this page already rendered
+ * for it, or returns undefined when no such entry exists.
+ *
+ * A message the cockpit sent is on screen before it reaches the journal, and a
+ * queued one is on screen as queued until the run picks it up. Both are the
+ * same message the journal later reports, so it settles the entry that stands
+ * rather than adding a second copy of the text.
+ */
+function reconcilePendingUser(state: SessionState, text: string): SessionState | undefined {
+  const index = state.pendingUserEntries.findIndex((pending) => pending.text === text);
+  if (index === -1) return undefined;
+  const { id } = state.pendingUserEntries[index] as { id: string };
+  const pendingUserEntries = state.pendingUserEntries.filter((_, at) => at !== index);
+  const entries = state.entries.map((entry) =>
+    entry.id === id && entry.kind === 'queued' ? { kind: 'user' as const, id: entry.id, text: entry.text } : entry,
+  );
+  return { ...state, entries, pendingUserEntries };
+}
+
 /**
  * Folds one journalled message into the timeline.
  *
@@ -412,7 +446,8 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
 
   if (role === 'user') {
     const text = textFromContent(content);
-    return text ? withEntry(state, { kind: 'user', id: `u${state.nextId}`, text }) : state;
+    if (!text) return state;
+    return reconcilePendingUser(state, text) ?? withEntry(state, { kind: 'user', id: `u${state.nextId}`, text });
   }
 
   if (role === 'assistant') {
@@ -566,12 +601,14 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
 
 /** Records the prompt locally, because Pi does not echo it back as an event. */
 export function appendUserPrompt(state: SessionState, text: string): SessionState {
-  return withEntry(state, { kind: 'user', id: `u${state.nextId}`, text });
+  const id = `u${state.nextId}`;
+  return withPendingUser(withEntry(state, { kind: 'user', id, text }), id, text);
 }
 
 /** A follow-up waits for the current run, so it is marked rather than shown as sent. */
 export function appendQueued(state: SessionState, text: string): SessionState {
-  return withEntry(state, { kind: 'queued', id: `q${state.nextId}`, text });
+  const id = `q${state.nextId}`;
+  return withPendingUser(withEntry(state, { kind: 'queued', id, text }), id, text);
 }
 
 export function clearDialog(state: SessionState): SessionState {
