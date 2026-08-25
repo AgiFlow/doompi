@@ -4,6 +4,7 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect } from 'react';
 import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx';
+import { PluginSettings } from '../features/settings/PluginSettings.tsx';
 import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
 import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
 import { DEFAULT_SETTINGS_SECTION, settingsSection } from '../lib/settingsSections.ts';
@@ -50,6 +51,7 @@ export function SettingsPage() {
           <section data-testid="settings-content" className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
             {current?.id === 'providers' ? <ProviderSettings /> : null}
             {current?.id === 'appearance' ? <AppearanceSettings /> : null}
+            {current?.id === 'plugins' ? <PluginSettings /> : null}
           </section>
         </div>
       </main>

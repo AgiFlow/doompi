@@ -201,7 +201,6 @@
   },
   "doompiWeb": {
     "pluginId": "task",
-    "registrationOrder": 90,
     "channels": [],
     "client": "./web/index.ts"
   },

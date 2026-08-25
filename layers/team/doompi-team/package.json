@@ -40,7 +40,6 @@
     "./api/team-snapshot": "./dist/api/teamSnapshot.mjs",
     "./env": "./dist/env.mjs",
     "./extensions/pi": "./dist/extensions/pi.mjs",
-    "./web": "./web/index.ts",
     "./web-hub": {
       "types": "./dist/webHub.d.mts",
       "import": "./dist/webHub.mjs",
@@ -111,7 +110,6 @@
   },
   "doompiWeb": {
     "pluginId": "subagents",
-    "registrationOrder": 10,
     "channels": [
       "subagent_runs"
     ],

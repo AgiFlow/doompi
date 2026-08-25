@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="packages/core/doompi/assets/logo.png">
+    <source media="(prefers-color-scheme: light)" srcset="packages/core/doompi/assets/logo-light.png">
+    <img alt="DoomPi" src="packages/core/doompi/assets/logo-light.png" width="440">
+  </picture>
+</p>
+
 # DoomPi
 
 **A coding agent that loads only the skills and tools you name.**

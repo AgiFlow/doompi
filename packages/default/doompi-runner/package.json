@@ -369,7 +369,6 @@
   },
   "doompiWeb": {
     "pluginId": "runner",
-    "registrationOrder": 80,
     "channels": [
       "runner_runs"
     ],

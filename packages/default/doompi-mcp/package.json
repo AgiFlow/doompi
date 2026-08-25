@@ -109,7 +109,6 @@
   },
   "doompiWeb": {
     "pluginId": "mcp",
-    "registrationOrder": 88,
     "channels": [],
     "client": "./web/index.ts"
   },

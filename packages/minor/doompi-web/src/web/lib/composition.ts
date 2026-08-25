@@ -17,9 +17,10 @@ const AXIS_LIST_SEPARATOR = ',';
 /**
  * The fallback axis table for the packaged bundle; a synced bundle carries
  * each axis as its owning package's plugin declaration, and the registry
- * list wins whenever any plugin declares one.
+ * list wins whenever any plugin declares one. Exported only so the workspace
+ * composition test can hold it equal to what the packages declare.
  */
-const FALLBACK_SELECTION_AXES: readonly SelectionAxisContribution[] = [
+export const PACKAGED_SELECTION_AXES: readonly SelectionAxisContribution[] = [
   { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile', order: 10 },
   { name: 'domains', command: 'domains', statusKey: 'doom-domain', emptyLabel: 'no domains', multi: true, order: 20 },
 ];
@@ -31,7 +32,7 @@ const FALLBACK_SELECTION_AXES: readonly SelectionAxisContribution[] = [
  */
 export function selectionAxes(statuses: Record<string, string>): SelectionAxis[] {
   const declared = pluginSelectionAxes();
-  const sources: readonly SelectionAxisContribution[] = declared.length > 0 ? declared : FALLBACK_SELECTION_AXES;
+  const sources: readonly SelectionAxisContribution[] = declared.length > 0 ? declared : PACKAGED_SELECTION_AXES;
   return sources.flatMap((source) => {
     const raw = statuses[source.statusKey];
     if (raw === undefined) return [];
@@ -56,7 +57,7 @@ export interface MinorMode {
   detail: string;
 }
 
-interface MinorModeSource {
+export interface MinorModeSource {
   name: string;
   keys: string;
   statusKey?: string;
@@ -71,9 +72,9 @@ interface MinorModeSource {
  * This literal survives only so the built-in-only bundle keeps rendering the
  * modes DoomPi ships; help is listed without a signal on purpose: it
  * registers no footer entry, so the cockpit reports it as unavailable rather
- * than guessing it is off.
+ * than guessing it is off. Exported only for the workspace composition test.
  */
-const FALLBACK_MINOR_MODES: readonly MinorModeSource[] = [
+export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'help', keys: 'h e' },
   { name: 'plan', keys: 'p e', statusKey: 'plan-mode' },
   { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
@@ -121,7 +122,7 @@ export function minorModes(
   projection: MinorModeProjection | null = null,
 ): MinorMode[] {
   const declared = pluginMinorModes();
-  const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : FALLBACK_MINOR_MODES;
+  const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : PACKAGED_MINOR_MODES;
   if (projection) return catalogMinorModes(sources, projection);
   return sources.map((source) => {
     if (source.statusKey !== undefined) {

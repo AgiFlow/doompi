@@ -75,7 +75,6 @@ describe('doompi-web package contract', () => {
       '@hono/node-server',
       '@hono/node-ws',
       '@tailwindcss/vite',
-      '@tanstack/react-query',
       '@tanstack/react-router',
       '@tanstack/react-store',
       '@tanstack/store',

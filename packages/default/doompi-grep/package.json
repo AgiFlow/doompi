@@ -93,7 +93,6 @@
   },
   "doompiWeb": {
     "pluginId": "grep",
-    "registrationOrder": 86,
     "channels": [],
     "client": "./web/index.ts"
   },

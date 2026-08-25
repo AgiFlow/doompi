@@ -27,6 +27,16 @@ interface CompletionState {
   selected: number;
 }
 
+/**
+ * Whether accepting the highlighted item would leave the draft as it is. The
+ * popup still shows what a longer name would complete to, but the keystroke
+ * that would change nothing is handed back to the composer to send.
+ */
+function isCompletionRedundant(state: CompletionState): boolean {
+  const item = state.items[state.selected];
+  return item !== undefined && item.insert.trimEnd() === `${state.kind === 'command' ? '/' : '@'}${state.query}`;
+}
+
 /** The /command or @file token the caret sits in, or null when there is none. */
 function triggerTokenAt(
   draft: string,
@@ -238,7 +248,16 @@ export function Composer() {
                   setCompletion({ ...completion, selected: (completion.selected + delta + count) % count });
                   return;
                 }
-                if (event.key === 'Tab' || event.key === 'Enter') {
+                if (event.key === 'Tab') {
+                  event.preventDefault();
+                  accept(completion, completion.selected);
+                  return;
+                }
+                // Enter completes, unless the token is already the whole
+                // thing: completing then would only add a space, so the
+                // keystroke would read as doing nothing and the reader would
+                // have to press enter twice to send what they had typed.
+                if (event.key === 'Enter' && !isCompletionRedundant(completion)) {
                   event.preventDefault();
                   accept(completion, completion.selected);
                   return;

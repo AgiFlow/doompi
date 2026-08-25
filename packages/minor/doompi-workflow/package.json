@@ -49,7 +49,6 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
-    "./web": "./web/index.ts",
     "./web-hub": {
       "types": "./dist/webHub.d.mts",
       "import": "./dist/webHub.mjs",
@@ -109,7 +108,6 @@
   },
   "doompiWeb": {
     "pluginId": "workflows",
-    "registrationOrder": 20,
     "channels": [
       "workflow_runs"
     ],

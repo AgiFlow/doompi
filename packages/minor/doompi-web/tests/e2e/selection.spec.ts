@@ -93,6 +93,9 @@ test('says the axis is asking until the agent answers', async ({ page, cockpit }
   await cockpit.session.waitForAttach();
 
   cockpit.session.emit(status('doom-major-mode', LIVE));
+  // The chip reading the published mode is what proves the route has focused
+  // the session; a click before that would go to no session at all.
+  await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
   const button = page.getByTestId('axis-mode');
   await expect(button).toHaveAttribute('data-pending', 'false');
 
@@ -120,6 +123,7 @@ test('stops asking when the run settles without a menu', async ({ page, cockpit 
   await cockpit.session.waitForAttach();
 
   cockpit.session.emit(status('doom-major-mode', LIVE));
+  await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
   await page.getByTestId('axis-mode').click();
   await cockpit.session.waitForCommand('prompt');
   await expect(page.getByTestId('axis-mode')).toHaveAttribute('data-pending', 'true');
@@ -242,7 +246,9 @@ test('a minor mode opt-in question opens on the minor chip, not in the middle', 
   await cockpit.session.waitForAttach();
 
   cockpit.session.emit(status('plan-mode'));
+  await expect(page.getByTestId('minor-plan')).toHaveCount(0);
   await page.getByTestId('axis-minor').click();
+  await expect(page.getByTestId('minor-plan')).toHaveAttribute('data-availability', 'off');
   await page.getByTestId('minor-plan').click();
 
   const prompt = await cockpit.session.waitForCommand('prompt');
@@ -275,6 +281,7 @@ test('escaping a minor opt-in question tells the agent and leaves the bar alone'
 
   cockpit.session.emit(status('plan-mode'));
   await page.getByTestId('axis-minor').click();
+  await expect(page.getByTestId('minor-plan')).toHaveAttribute('data-availability', 'off');
   await page.getByTestId('minor-plan').click();
   await cockpit.session.waitForCommand('prompt');
 

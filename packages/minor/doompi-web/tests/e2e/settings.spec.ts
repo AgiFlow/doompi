@@ -85,3 +85,23 @@ test('cancels a login flow and stays signed out', async ({ page, cockpit }) => {
   await expect(page.getByTestId('provider-anthropic')).toHaveAttribute('data-authenticated', 'false');
   expect(fs.existsSync(authPath(cockpit.agentDir)) ? readAuth(cockpit.agentDir).anthropic : undefined).toBeUndefined();
 });
+
+test('lists no plugins for the packaged bundle and nothing to resolve', async ({ page, cockpit }) => {
+  await page.goto(`${cockpit.url}/settings/plugins`);
+  await expect(page.getByTestId('settings-section-plugins')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('settings-plugins-empty')).toBeVisible();
+  await expect(page.getByTestId('settings-plugin-diagnostics-empty')).toBeVisible();
+});
+
+test.describe('with the synced bundle', () => {
+  test.use({ assets: 'synced' });
+
+  test('lists every bundled plugin with its contributions and no diagnostics', async ({ page, cockpit }) => {
+    await page.goto(`${cockpit.url}/settings/plugins`);
+    await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 tabs');
+    await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 slots');
+    await expect(page.getByTestId('settings-plugin-runner')).toContainText('1 activity groups');
+    await expect(page.getByTestId('settings-plugin-workflows')).toBeVisible();
+    await expect(page.getByTestId('settings-plugin-diagnostics-empty')).toBeVisible();
+  });
+});

@@ -464,3 +464,103 @@ describe('agent notifications', () => {
     expect(state.dialog).toBeNull();
   });
 });
+
+describe('restoring a journalled transcript', () => {
+  const journal = (id: string, message: Record<string, unknown>) => ({
+    type: 'entry_appended',
+    entry: { type: 'message', id, message },
+  });
+
+  it('folds journalled messages into the timeline the live stream would have built', () => {
+    let state = initialSessionState;
+    state = reduceSession(
+      state,
+      journal('e1', { role: 'user', content: [{ type: 'text', text: 'summarise the diff' }] }),
+    );
+    state = reduceSession(
+      state,
+      journal('e2', {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'checking the tree' },
+          { type: 'text', text: 'running git status' },
+          { type: 'toolCall', id: 'call-1', name: 'bash', arguments: { command: 'git status' } },
+        ],
+      }),
+    );
+    state = reduceSession(
+      state,
+      journal('e3', {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        content: [{ type: 'text', text: 'M src/index.ts' }],
+        details: { exitCode: 0 },
+        isError: false,
+      }),
+    );
+
+    expect(state.entries.map((entry) => entry.kind)).toEqual(['user', 'assistant', 'tool']);
+    const [user, assistant, tool] = state.entries;
+    expect(user).toMatchObject({ kind: 'user', text: 'summarise the diff' });
+    // A restored reply is finished, so it must not wear the streaming cursor.
+    expect(assistant).toMatchObject({
+      kind: 'assistant',
+      text: 'running git status',
+      thinking: 'checking the tree',
+      streaming: false,
+    });
+    expect(tool).toMatchObject({
+      kind: 'tool',
+      toolCallId: 'call-1',
+      name: 'bash',
+      argSummary: 'git status',
+      output: 'M src/index.ts',
+      isError: false,
+      running: false,
+    });
+  });
+
+  it('marks a call whose result never came as still running, and a failed one as an error', () => {
+    let state = reduceSession(
+      initialSessionState,
+      journal('e1', {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'call-1', name: 'bash', arguments: { command: 'sleep 100' } }],
+      }),
+    );
+    expect(state.entries[0]).toMatchObject({ kind: 'tool', running: true });
+
+    state = reduceSession(
+      state,
+      journal('e2', {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: [{ type: 'text', text: 'boom' }],
+        isError: true,
+      }),
+    );
+    expect(state.entries[0]).toMatchObject({ kind: 'tool', running: false, isError: true, output: 'boom' });
+  });
+
+  it('folds each journal entry once, so a re-attach does not double the transcript', () => {
+    const entry = journal('e1', { role: 'user', content: [{ type: 'text', text: 'hello' }] });
+    let state = reduceSession(initialSessionState, entry);
+    state = reduceSession(state, entry);
+    state = reduceSession(state, entry);
+
+    expect(state.entries).toHaveLength(1);
+    expect(state.restoredIds).toEqual(['e1']);
+  });
+
+  it('leaves the runtime bookkeeping entries alone', () => {
+    // A custom entry that is not the minor-mode catalog belongs to some
+    // extension and has no place in the transcript.
+    const state = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', id: 'e1', customType: 'someone-elses-state', data: {} },
+    });
+    expect(state.entries).toHaveLength(0);
+    expect(state.restoredIds).toEqual([]);
+  });
+});

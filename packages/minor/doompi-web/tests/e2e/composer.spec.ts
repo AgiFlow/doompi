@@ -96,3 +96,55 @@ test('clicking outside the popup closes it', async ({ page, cockpit }) => {
   await expect(page.getByTestId('composer-completion')).toBeHidden();
   await expect(input).toHaveValue('/mo');
 });
+
+test('enter sends a command that is already complete instead of completing it again', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await cockpit.session.waitForCommand('get_commands');
+  cockpit.session.emit({
+    type: 'response',
+    command: 'get_commands',
+    success: true,
+    data: {
+      commands: [
+        { name: 'profile', description: 'select a profile' },
+        { name: 'profiles', description: 'list every profile' },
+      ],
+    },
+  });
+
+  const input = page.getByTestId('composer-input');
+  await input.click();
+  await input.pressSequentially('/profile');
+  await expect(page.getByTestId('composer-completion')).toBeVisible();
+
+  // '/profile' is already the highlighted command, so completing would only
+  // add a space; the keystroke sends instead of looking like it did nothing.
+  await input.press('Enter');
+
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/profile');
+  await expect(input).toHaveValue('');
+});
+
+test('enter still completes a command the draft has only started', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await cockpit.session.waitForCommand('get_commands');
+  cockpit.session.emit({
+    type: 'response',
+    command: 'get_commands',
+    success: true,
+    data: { commands: [{ name: 'profile', description: 'select a profile' }] },
+  });
+
+  const input = page.getByTestId('composer-input');
+  await input.click();
+  await input.pressSequentially('/pro');
+  await expect(page.getByTestId('composer-completion')).toBeVisible();
+
+  await input.press('Enter');
+
+  await expect(input).toHaveValue('/profile ');
+  await expect(page.getByTestId('composer-completion')).toBeHidden();
+});

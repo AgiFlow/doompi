@@ -118,7 +118,6 @@
   },
   "doompiWeb": {
     "pluginId": "plan",
-    "registrationOrder": 40,
     "channels": [],
     "client": "./web/index.ts"
   },

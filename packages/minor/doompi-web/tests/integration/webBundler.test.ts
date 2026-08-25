@@ -65,8 +65,9 @@ describe('the sync-time cockpit bundler', () => {
       onNotice: (message) => notices.push(message),
     });
     // doompi-plan proves the metadata-only plugin shape: no tab, no channel,
-    // just a minor-mode declaration compiled into the bundle.
-    expect(result.pluginIds).toEqual(['subagents', 'workflows', 'plan']);
+    // just a minor-mode declaration compiled into the bundle. No manifest
+    // names a registrationOrder, so the install order is the plugin ids.
+    expect(result.pluginIds).toEqual(['plan', 'subagents', 'workflows']);
     expect(notices.filter((message) => message.includes('skipped'))).toEqual([
       expect.stringMatching(/malformed.*skipped: .*kebab-case/),
       expect.stringMatching(/entryless.*skipped: .*client\.entry/),

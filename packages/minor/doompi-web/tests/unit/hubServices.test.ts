@@ -6,7 +6,12 @@ import {
   resolveRegistryDir,
   sessionRecordPath,
 } from '../../src/services/registryStore.ts';
-import { initialPresence, presenceAfterCommand, reducePresence } from '../../src/services/sessionPresence.ts';
+import {
+  initialPresence,
+  presenceAfterCommand,
+  presenceAfterRestoredEntry,
+  reducePresence,
+} from '../../src/services/sessionPresence.ts';
 
 const T0 = '2026-08-24T10:00:00.000Z';
 const T1 = '2026-08-24T10:01:00.000Z';
@@ -132,5 +137,35 @@ describe('sessionPresence', () => {
       T1,
     );
     expect(compacting.phase).toBe('compaction');
+  });
+});
+
+describe('presence restored from the journal', () => {
+  const now = '2026-08-25T10:00:00.000Z';
+  const userEntry = { type: 'message', id: 'e1', message: { role: 'user', content: [] } };
+
+  it('treats a journalled user message as proof the session was prompted before', () => {
+    const fresh = initialPresence(now);
+    expect(fresh.everPrompted).toBe(false);
+
+    const restored = presenceAfterRestoredEntry(fresh, userEntry, now);
+    expect(restored.everPrompted).toBe(true);
+    expect(restored.updatedAt).toBe(now);
+  });
+
+  it('ignores entries that prove nothing, and never churns a settled flag', () => {
+    const fresh = initialPresence(now);
+    for (const entry of [
+      { type: 'message', id: 'e1', message: { role: 'assistant', content: [] } },
+      { type: 'message', id: 'e2', message: { role: 'toolResult', content: [] } },
+      { type: 'custom', id: 'e3', customType: 'doom-minor-modes' },
+      { type: 'message', id: 'e4' },
+    ]) {
+      expect(presenceAfterRestoredEntry(fresh, entry, now)).toBe(fresh);
+    }
+
+    const prompted = presenceAfterRestoredEntry(fresh, userEntry, now);
+    // Already true: the same object comes back rather than a new summary push.
+    expect(presenceAfterRestoredEntry(prompted, userEntry, '2026-08-25T11:00:00.000Z')).toBe(prompted);
   });
 });

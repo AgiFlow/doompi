@@ -93,7 +93,6 @@
   },
   "doompiWeb": {
     "pluginId": "voice",
-    "registrationOrder": 70,
     "channels": [],
     "client": "./web/index.ts"
   },

@@ -16,9 +16,9 @@ const PACKAGE_README = 'README.md';
 const RECOVERY_SKILL = 'skills/workflow-recovery/SKILL.md';
 const PROMPTS_ROOT = 'src/prompts';
 const SKILL_EXPORT = `./${RECOVERY_SKILL}`;
-// './web' is deliberately a SOURCE entry: the cockpit's bundler compiles the
-// web plugin from source; './web-hub' is the built hub channel entry.
-const EXPORT_SUBPATHS = ['.', './extensions/pi', './package.json', './web', './web-hub', SKILL_EXPORT];
+// The web plugin is not an export: the cockpit's bundler compiles it from the
+// source the doompiWeb manifest names; './web-hub' is the built hub channel entry.
+const EXPORT_SUBPATHS = ['.', './extensions/pi', './package.json', './web-hub', SKILL_EXPORT];
 const STANDARD_ENTRY = './dist/extensions/pi.mjs';
 
 function objectValue(value: unknown): JsonRecord {

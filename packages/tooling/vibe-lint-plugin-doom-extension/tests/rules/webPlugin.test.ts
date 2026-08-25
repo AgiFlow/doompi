@@ -127,6 +127,7 @@ describe('Doom web plugin rules', () => {
       expect(result).toContain("pluginId 'Bad Case' must be kebab-case");
       expect(result).toContain('registrationOrder must be a non-negative integer');
       expect(result).toContain("client './web/index.ts' is not in the files allowlist");
+      expect(result).toContain('has no web/tsconfig.json');
       expect(result).toContain("hub.entry './src/exports/webHub.ts' does not exist");
       expect(result).toContain('hub.dist must be');
       expect(result).toContain("web/ imports 'src/types/webDemo.ts', which is not in the files allowlist");
@@ -147,6 +148,7 @@ describe('Doom web plugin rules', () => {
     it('accepts a complete manifest, with an array of blocks', () => {
       write('web/index.ts', `import type { D } from '../src/types/webDemo.ts';\n${entry}`);
       write('web/other.ts', entry);
+      write('web/tsconfig.json', '{}');
       write('src/types/webDemo.ts', 'export type D = 1;');
       write('src/exports/webHub.ts', 'export const webHubChannels = [];');
       const manifest = writeManifest({

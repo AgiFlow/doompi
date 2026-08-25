@@ -16,6 +16,7 @@ import { projectPath } from './manifestEntries.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
 const WEB_ROOT = 'web';
+const WEB_TSCONFIG = 'tsconfig.json';
 const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const CONTRACTS_PACKAGE = '@agimon-ai/doompi-web-contracts';
@@ -204,7 +205,7 @@ export const webPluginNoModuleState: RuleDefinition = {
 
 export const webPluginManifest: RuleDefinition = {
   preflight: true,
-  rule: 'A doompiWeb manifest block names a kebab-case plugin with an existing client entry, publishes what its web/ code ships, and depends on the web contract',
+  rule: 'A doompiWeb manifest block names a kebab-case plugin with an existing, typechecked client entry, publishes what its web/ code ships, and depends on the web contract',
   rationale:
     'doompi sync discovers a plugin from this block and Vite compiles the shipped web/ source from the installed package, so a wrong entry path, an unpublished src/types file, or a missing contract dependency only fails on a user machine after publishing. Checking the block against the files it names catches that before the package leaves the repository.',
   check(filePath, configRoot) {
@@ -232,6 +233,12 @@ export const webPluginManifest: RuleDefinition = {
         if (!fs.existsSync(path.join(configRoot, client))) problems.push(`'${id}' client '${client}' does not exist`);
         if (!isPublished(files, stripDot(client)))
           problems.push(`'${id}' client '${client}' is not in the files allowlist`);
+        if (
+          stripDot(client).startsWith(`${WEB_ROOT}/`) &&
+          !fs.existsSync(path.join(configRoot, WEB_ROOT, WEB_TSCONFIG))
+        ) {
+          problems.push(`'${id}' has no ${WEB_ROOT}/${WEB_TSCONFIG}, so its web entry is never typechecked`);
+        }
       }
       if (block.hub !== undefined) {
         const hub = block.hub as { entry?: unknown; dist?: unknown } | string;

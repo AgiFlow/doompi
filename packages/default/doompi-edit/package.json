@@ -92,7 +92,6 @@
   },
   "doompiWeb": {
     "pluginId": "edit",
-    "registrationOrder": 84,
     "channels": [],
     "client": "./web/index.ts"
   },

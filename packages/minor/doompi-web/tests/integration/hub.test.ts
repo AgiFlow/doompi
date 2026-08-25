@@ -4,7 +4,12 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { watchRegistry } from '../../src/adapters/registryWatcher.ts';
 import type { HubChannelHost, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
-import { createSessionHub, type HubEvent, type SessionHub } from '../../src/adapters/sessionHub.ts';
+import {
+  createSessionHub,
+  type HubEvent,
+  type SessionHub,
+  type SessionHubOptions,
+} from '../../src/adapters/sessionHub.ts';
 import type { SpawnOutcome } from '../../src/adapters/serverSpawner.ts';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession, writeStaleRecord } from '../support/fakeSession.ts';
@@ -34,6 +39,7 @@ function startHub(
   spawn?: (input: { cwd: string; name?: string }) => Promise<SpawnOutcome>,
   extraChannels: WebHubChannel[] = [],
   signal?: (pid: number) => void,
+  overrides: Partial<SessionHubOptions> = {},
 ): HubHarness {
   const events: HubEvent[] = [];
   const hub = createSessionHub({
@@ -43,6 +49,7 @@ function startHub(
     // ones since every data source is a plugin now.
     channels: extraChannels,
     ...(signal === undefined ? {} : { signal }),
+    ...overrides,
   });
   cleanups.push(() => hub.close());
   hub.onEvent((event) => events.push(event));
@@ -195,7 +202,7 @@ describe('the session hub over a registry', () => {
     );
   });
 
-  it('restores the minor-mode catalog from the journal on attach', async () => {
+  it('restores the transcript and the newest catalog entry from the journal on attach', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });
     const harness = startHub(registryDir);
@@ -211,28 +218,71 @@ describe('the session hub over a registry', () => {
     };
     const current = {
       type: 'custom',
-      id: 'e3',
+      id: 'e4',
       customType: 'doom-minor-modes',
       data: { version: 1, revision: 2, modes: [{ id: 'voice' }] },
+    };
+    const asked = { type: 'message', id: 'e2', message: { role: 'user', content: [{ type: 'text', text: 'hi' }] } };
+    const answered = {
+      type: 'message',
+      id: 'e3',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
     };
     session.emit({
       type: 'response',
       command: 'get_entries',
       success: true,
-      data: { entries: [stale, { type: 'message', id: 'e2' }, current], leafId: 'e3' },
+      data: { entries: [stale, asked, answered, current], leafId: 'e4' },
     });
 
     await waitFor(
-      () => harness.framesFor('one').some((frame) => frame.type === 'entry_appended'),
-      'the restored entry',
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 3,
+      'the restored journal',
     );
+    // A session outlives the hubs that watch it, so the transcript it already
+    // holds is replayed in the order it happened.
     expect(harness.framesFor('one').filter((frame) => frame.type === 'entry_appended')).toEqual([
+      { type: 'entry_appended', entry: asked },
+      { type: 'entry_appended', entry: answered },
       { type: 'entry_appended', entry: current },
     ]);
     // The answer itself is the whole journal and no page reads it, so it
     // reaches neither live subscribers nor the replay ring.
     expect(harness.framesFor('one').some((frame) => frame.type === 'response')).toBe(false);
-    expect(harness.hub.backlog('one')?.frames).toEqual([{ type: 'entry_appended', entry: current }]);
+    expect(harness.hub.backlog('one')?.frames).toEqual([
+      { type: 'entry_appended', entry: asked },
+      { type: 'entry_appended', entry: answered },
+      { type: 'entry_appended', entry: current },
+    ]);
+  });
+
+  it('restores only the tail of a transcript longer than the limit', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir, undefined, [], undefined, { restoreLimit: 2 });
+    await session.waitForCommand('get_entries');
+
+    const message = (id: string) => ({
+      type: 'message',
+      id,
+      message: { role: 'user', content: [{ type: 'text', text: id }] },
+    });
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: [message('e1'), message('e2'), message('e3')], leafId: 'e3' },
+    });
+
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 2,
+      'the restored tail',
+    );
+    // The ring has to hold live frames too, so the oldest history is what goes.
+    expect(harness.framesFor('one').filter((frame) => frame.type === 'entry_appended')).toEqual([
+      { type: 'entry_appended', entry: message('e2') },
+      { type: 'entry_appended', entry: message('e3') },
+    ]);
   });
 
   it('derives the rail phase from the frame stream', async () => {

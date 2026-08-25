@@ -5,7 +5,14 @@ import type { WebPluginDefinition } from '@agimon-ai/doompi-web-contracts';
 import { afterAll, describe, expect, it } from 'vitest';
 import { scanWebPlugins } from '../../src/adapters/webPluginScan.ts';
 import { pluginBlocksOf } from '../../src/services/webPluginManifest.ts';
-import { installWebPlugins, resetWebPlugins, webPluginDiagnostics } from '../../src/web/lib/pluginRegistry.ts';
+import { PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition.ts';
+import {
+  installWebPlugins,
+  pluginMinorModes,
+  pluginSelectionAxes,
+  resetWebPlugins,
+  webPluginDiagnostics,
+} from '../../src/web/lib/pluginRegistry.ts';
 
 const hostRoot = fileURLToPath(new URL('../..', import.meta.url));
 const repoRoot = path.resolve(hostRoot, '..', '..', '..');
@@ -70,5 +77,41 @@ describe('the workspace web plugin composition', () => {
         expect(slot.slot.startsWith(`${definition.id}.`), `${definition.id} declares ${slot.slot}`).toBe(true);
       }
     }
+  });
+
+  it('keeps the packaged fallback tables equal to what the packages declare', async () => {
+    // The packaged bundle carries no plugins, so composition.ts keeps a copy
+    // of the axes and minor modes DoomPi ships. This is the only place that
+    // copy is checked, so it cannot drift from the packages silently.
+    const packages = pluginPackageRoots();
+    const declared = scanWebPlugins(
+      hostRoot,
+      packages.map((entry) => entry.root),
+    );
+    const definitions: WebPluginDefinition[] = [];
+    for (const plugin of declared) {
+      const entry = path.join(plugin.packageDir, plugin.client.entry);
+      const module = (await import(pathToFileURL(entry).href)) as { webPlugin?: WebPluginDefinition };
+      if (module.webPlugin) definitions.push(module.webPlugin);
+    }
+    resetWebPlugins();
+    installWebPlugins(definitions);
+
+    const axis = (source: (typeof PACKAGED_SELECTION_AXES)[number]) => ({
+      name: source.name,
+      command: source.command,
+      statusKey: source.statusKey,
+      emptyLabel: source.emptyLabel,
+      multi: source.multi === true,
+    });
+    expect(pluginSelectionAxes().map(axis)).toEqual(PACKAGED_SELECTION_AXES.map(axis));
+
+    const mode = (source: (typeof PACKAGED_MINOR_MODES)[number]) => ({
+      name: source.name,
+      keys: source.keys,
+      statusKey: source.statusKey,
+      widgetKey: source.widgetKey,
+    });
+    expect(pluginMinorModes().map(mode)).toEqual(PACKAGED_MINOR_MODES.map(mode));
   });
 });

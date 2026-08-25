@@ -4,6 +4,7 @@ import { createFrameRing, type FrameRing } from '../services/frameRing.ts';
 import {
   initialPresence,
   presenceAfterCommand,
+  presenceAfterRestoredEntry,
   reducePresence,
   type SessionPresence,
 } from '../services/sessionPresence.ts';
@@ -24,6 +25,12 @@ import { attachToSession } from './sessionSocketClient.ts';
 
 const GIT_REFRESH_MS = 10_000;
 const GET_ENTRIES_COMMAND = 'get_entries';
+/**
+ * How much of a long transcript a fresh attach restores. The ring holds 512
+ * frames and live ones have to fit beside the history, so a session with
+ * thousands of messages gives up its oldest rather than its newest.
+ */
+const DEFAULT_RESTORE_LIMIT = 300;
 const ENTRY_APPENDED_TYPE = 'entry_appended';
 
 export type HubEvent =
@@ -45,6 +52,8 @@ export interface SessionHubOptions {
   /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
   signal?: (pid: number) => void;
   ringLimit?: number;
+  /** Journalled messages restored per session on attach; the rest of a long transcript stays on disk. */
+  restoreLimit?: number;
   gitRefreshMs?: number;
   onNotice?: (message: string) => void;
 }
@@ -85,23 +94,38 @@ interface StartedChannel {
 }
 
 /**
- * The newest minor-mode catalog entry in a get_entries answer. The runtime
- * journals its projection as a custom entry and streams the append live, so a
- * hub that attaches after the publish (a restart, or a session older than the
- * hub) has to read it back from the journal.
+ * The journal entries a cockpit can render, oldest first.
+ *
+ * A session outlives every hub that watches it: it may have been driven from
+ * the TUI for an hour before a cockpit existed, and a hub restart forgets the
+ * live ring entirely. Without this the timeline of a long-running session
+ * opens empty, which reads as "the agent has done nothing" rather than "this
+ * page arrived late". The journal is the session's own record, so replaying it
+ * is the only honest way to show what came before.
+ *
+ * Two kinds survive the filter: the messages that are the transcript, and the
+ * newest minor-mode catalog entry, which the runtime journals as a custom
+ * entry and which a late hub would otherwise never see.
  */
-function latestMinorModeEntry(frame: SessionFrame): Record<string, unknown> | undefined {
+function renderableJournalEntries(frame: SessionFrame, limit: number): Record<string, unknown>[] {
   const data = frame.data;
-  if (typeof data !== 'object' || data === null) return undefined;
+  if (typeof data !== 'object' || data === null) return [];
   const entries = (data as { entries?: unknown }).entries;
-  if (!Array.isArray(entries)) return undefined;
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry: unknown = entries[index];
+  if (!Array.isArray(entries)) return [];
+
+  const messages: Record<string, unknown>[] = [];
+  let minorModes: Record<string, unknown> | undefined;
+  for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
     const candidate = entry as Record<string, unknown>;
-    if (candidate.type === 'custom' && candidate.customType === MINOR_MODE_ENTRY_TYPE) return candidate;
+    if (candidate.type === 'message') messages.push(candidate);
+    else if (candidate.type === 'custom' && candidate.customType === MINOR_MODE_ENTRY_TYPE) minorModes = candidate;
   }
-  return undefined;
+
+  // The ring is bounded and live frames must still fit, so only the tail of a
+  // long transcript is restored; the ring's own drop counter reports the rest.
+  const kept = messages.length > limit ? messages.slice(-limit) : messages;
+  return minorModes === undefined ? kept : [...kept, minorModes];
 }
 
 function readTokenFile(record: SessionRecord): string {
@@ -132,6 +156,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const listeners = new Set<(event: HubEvent) => void>();
   const readGit = options.readGit;
   const readToken = options.readToken ?? readTokenFile;
+  const restoreLimit = options.restoreLimit ?? DEFAULT_RESTORE_LIMIT;
   const signal =
     options.signal ??
     ((pid: number): void => {
@@ -208,16 +233,24 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       token,
       handlers: {
         onFrame: (frame) => {
-          // The journal answer is the whole session and no page reads it; the
-          // one thing it carries for the cockpit is the catalog entry, which
-          // is re-emitted as the append it once was so it travels the same
-          // path as a live publish, to subscribers now and on replay later.
+          // The journal answer is the session's whole history. Each entry it
+          // carries is re-emitted as the append it once was, so it travels the
+          // same path as a live publish: into the ring for pages that
+          // subscribe later, and straight out to the ones already watching.
           if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
-            const entry = latestMinorModeEntry(frame);
-            if (!entry) return;
-            const restored = { type: ENTRY_APPENDED_TYPE, entry };
-            managed.ring.record(restored);
-            emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
+            const restoredAt = new Date().toISOString();
+            let presenceChanged = false;
+            for (const entry of renderableJournalEntries(frame, restoreLimit)) {
+              const restored = { type: ENTRY_APPENDED_TYPE, entry };
+              managed.ring.record(restored);
+              emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
+              const next = presenceAfterRestoredEntry(managed.presence, entry, restoredAt);
+              presenceChanged ||= next !== managed.presence;
+              managed.presence = next;
+            }
+            // The rail introduces a session by what it has done, so a restored
+            // transcript has to reach the summary as well as the timeline.
+            if (presenceChanged) pushSummary(managed);
             return;
           }
           const wasPhase = managed.presence.phase;

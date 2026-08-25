@@ -24,6 +24,7 @@ import {
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
+import { MascotMark } from '../../components/MascotMark.tsx';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { stopSession } from '../../lib/hubApi.ts';
@@ -326,7 +327,12 @@ export function SessionRail() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-[9px] border-b border-doom-border px-4 pt-4 pb-3.5">
-        <span className="text-[15px] font-bold tracking-[0.16em] text-doom-hi">DOOMPI</span>
+        <span className="flex items-center gap-[3px]" aria-label="DoomPi">
+          <span aria-hidden="true" className="text-[15px] font-bold tracking-[0.16em] text-doom-hi">
+            DOOM
+          </span>
+          <MascotMark size={22} />
+        </span>
         <span className="rounded-[3px] bg-doom-tint-magenta px-1.5 py-[3px] text-[8px] font-bold tracking-[0.12em] text-doom-magenta">
           WEB
         </span>

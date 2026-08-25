@@ -92,6 +92,27 @@ export function reducePresence(presence: SessionPresence, frame: SessionFrame, n
 }
 
 /**
+ * Folds one entry restored from the session's journal.
+ *
+ * A session outlives every hub that watches it, so "has this ever been
+ * prompted" cannot be answered from what this process happened to see: a hub
+ * that restarts, or meets a session first driven from the TUI, saw nothing. A
+ * journalled user message is the proof, and without it a session carrying an
+ * hour of work introduces itself in the rail as fresh.
+ */
+export function presenceAfterRestoredEntry(
+  presence: SessionPresence,
+  entry: Record<string, unknown>,
+  now: string,
+): SessionPresence {
+  if (presence.everPrompted || entry.type !== 'message') return presence;
+  const message = entry.message;
+  if (typeof message !== 'object' || message === null) return presence;
+  if ((message as { role?: unknown }).role !== 'user') return presence;
+  return { ...presence, everPrompted: true, updatedAt: now };
+}
+
+/**
  * Folds one page command heading to the agent.
  *
  * The prompt direction carries facts the event stream does not repeat: that

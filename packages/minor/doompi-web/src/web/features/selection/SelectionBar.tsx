@@ -14,6 +14,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+import { handleOptionListKey, OptionList, optionListHint } from '../../components/OptionList.tsx';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition.ts';
@@ -69,6 +70,7 @@ const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
  */
 function AxisMenu({ menu, dialog }: { menu: string; dialog: DialogRequest }) {
   const accent = MENU_ACCENT[menu] ?? DEFAULT_ACCENT;
+  const [cursor, setCursor] = useState(0);
   return (
     <PopoverContent
       side="top"
@@ -80,14 +82,14 @@ function AxisMenu({ menu, dialog }: { menu: string; dialog: DialogRequest }) {
         event.preventDefault();
         focusPrompt();
       }}
-      onKeyDown={(event) => {
-        const index = Number.parseInt(event.key, 10) - 1;
-        const option = Number.isInteger(index) ? dialog.options[index] : undefined;
-        if (option === undefined) return;
-        event.preventDefault();
-        event.stopPropagation();
-        answerDialogValue(dialog.id, option);
-      }}
+      onKeyDown={(event) =>
+        handleOptionListKey(event, {
+          options: dialog.options,
+          cursor,
+          onCursorChange: setCursor,
+          onSelect: (option) => answerDialogValue(dialog.id, option),
+        })
+      }
       className={`w-[420px] ${accent.border}`}
     >
       <PopoverHeader>
@@ -96,26 +98,19 @@ function AxisMenu({ menu, dialog }: { menu: string; dialog: DialogRequest }) {
         </span>
         <span className="truncate text-[9px] text-doom-faint">{dialog.title}</span>
       </PopoverHeader>
-      <div className="flex max-h-[320px] flex-col gap-0.5 overflow-y-auto p-1.5">
-        {dialog.options.map((option, index) => (
-          <button
-            key={option}
-            type="button"
-            data-testid={`dialog-option-${index}`}
-            title={option}
-            onClick={() => answerDialogValue(dialog.id, option)}
-            className="flex items-center gap-2.5 rounded-[5px] px-2 py-[7px] text-left outline-none hover:bg-doom-tint-blue focus-visible:bg-doom-tint-blue"
-          >
-            <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border border-doom-border text-[8px] font-bold text-doom-faint">
-              {index + 1}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[12px] text-doom-text">{option}</span>
-          </button>
-        ))}
+      <div className="flex max-h-[320px] min-h-0 flex-col">
+        <OptionList
+          options={dialog.options}
+          cursor={cursor}
+          onCursorChange={setCursor}
+          density="compact"
+          testIdPrefix="dialog-option"
+          onSelect={(option) => answerDialogValue(dialog.id, option)}
+        />
       </div>
       <PopoverFooter>
         <span data-testid="dialog-hints" className="flex items-center gap-1.5">
-          <Kbd>1-9</Kbd> select · <Kbd>esc</Kbd> closes
+          {optionListHint(dialog.options.length)} · <Kbd>esc</Kbd> closes
         </span>
         <Button variant="ghost" size="xs" data-testid="dialog-cancel" onClick={() => cancelDialog(dialog.id)}>
           cancel

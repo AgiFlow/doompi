@@ -13,15 +13,15 @@
     "test:system": "pnpm build && node scripts/run-clean-tests.mjs nx run-many -t test-system --parallel=1",
     "typecheck": "nx run-many -t typecheck",
     "lint": "nx run-many -t lint",
-    "lint:vibe": "nx run @agimon-ai/vibe-lint-plugin-doom-extension:build && node scripts/vibe-lint-sweep.mjs",
-    "vibe-lint": "nx run @agimon-ai/vibe-lint-plugin-doom-extension:build && node node_modules/@agimon-ai/vibe-lint/dist/cli.mjs",
+    "lint:vibe": "nx run-many -t build -p @agimon-ai/vibe-lint-plugin-doom-extension @agimon-ai/vibe-lint-plugin-doom-web && node scripts/vibe-lint-sweep.mjs",
+    "vibe-lint": "nx run-many -t build -p @agimon-ai/vibe-lint-plugin-doom-extension @agimon-ai/vibe-lint-plugin-doom-web && node node_modules/@agimon-ai/vibe-lint/dist/cli.mjs",
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt . --check",
     "runner:fetch": "node scripts/fetch-runner-binaries.mjs",
     "runner:check": "node scripts/fetch-runner-binaries.mjs --check",
     "release": "nx release",
     "release:dry-run": "nx release prerelease --preid alpha --groups alpha --dry-run --skip-publish",
-    "prepare": "node scripts/fetch-runner-binaries.mjs && nx run @agimon-ai/vibe-lint-plugin-doom-extension:build && husky"
+    "prepare": "node scripts/fetch-runner-binaries.mjs && nx run-many -t build -p @agimon-ai/vibe-lint-plugin-doom-extension @agimon-ai/vibe-lint-plugin-doom-web && husky"
   },
   "devDependencies": {
     "@agiflowai/scaffold-mcp": "1.3.0",

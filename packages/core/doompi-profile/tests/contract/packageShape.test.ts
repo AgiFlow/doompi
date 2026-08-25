@@ -75,7 +75,6 @@ describe('doompi-profile package contract', () => {
 
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'profile',
-      registrationOrder: 5,
       channels: [],
       client: './web/index.ts',
     });

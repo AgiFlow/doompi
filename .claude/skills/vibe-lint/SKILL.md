@@ -73,8 +73,11 @@ Reference implementation: `packages/default/doompi-mcp/` and
 
 Rules are TypeScript, never YAML:
 
-- repository-wide → `packages/mcp/vibe-lint/src/builtins/core/rules/`
-- DoomPi-specific → `packages/tooling/vibe-lint-plugin-doom-extension/src/rules/`
+- repository-wide → the published `@agimon-ai/vibe-lint` package (its `core` rules ship compiled in
+  `node_modules`; they are not in this repository)
+- DoomPi extension packages → `packages/tooling/vibe-lint-plugin-doom-extension/src/rules/`, including
+  the `web-plugin-*` rules that govern a package's `web/` cockpit plugin
+- the cockpit host and the shared components package → `packages/tooling/vibe-lint-plugin-doom-web/src/rules/`
 
 The shared layer graph, design patterns, and Pi-entry overrides live once in
 `packages/tooling/vibe-lint-plugin-doom-extension/src/configs/`. A package's

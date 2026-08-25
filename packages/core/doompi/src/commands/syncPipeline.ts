@@ -116,6 +116,10 @@ export class SyncPipeline {
       repoRoot,
       resolvedEntries: state.state.resolved,
       environment,
+      // A plugin package the bundler skips, or two packages wanting one
+      // plugin id, is a notice: the bundle still builds, and this is where
+      // the person running sync learns which package needs a look.
+      onNotice: (message) => progress.line(WEB_LABEL, message),
     });
     if (result.status === 'bundled') done(`cockpit bundled with plugins: ${result.pluginIds.join(', ')}`);
     else done(`${result.status}: ${result.reason}`);

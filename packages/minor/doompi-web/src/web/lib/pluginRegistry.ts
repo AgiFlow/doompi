@@ -403,6 +403,11 @@ export function webPluginDiagnostics(): readonly InstallDiagnostic[] {
   return state.diagnostics;
 }
 
+/** Every installed plugin definition, in install order; the settings page lists them. */
+export function installedWebPlugins(): readonly WebPluginDefinition[] {
+  return state.plugins;
+}
+
 export function webTabs(): readonly TabContribution[] {
   return state.tabs;
 }

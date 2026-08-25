@@ -198,3 +198,85 @@ test('follows the newest reply, and stops following once the reader scrolls back
   await expect(timeline).toContainText('and after that');
   await expect.poll(atBottom).toBe(true);
 });
+
+test('opens a session that ran before this page with its transcript intact', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  // The hub asks for the journal the moment it attaches; a session driven from
+  // the TUI, or one this hub is meeting after a restart, answers with the work
+  // it has already done.
+  await cockpit.session.waitForCommand('get_entries');
+  cockpit.session.emit({
+    type: 'response',
+    command: 'get_entries',
+    success: true,
+    data: {
+      leafId: 'e3',
+      entries: [
+        { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'widen the gate' }] } },
+        {
+          type: 'message',
+          id: 'e2',
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'checking the tree' },
+              { type: 'toolCall', id: 'call-1', name: 'bash', arguments: { command: 'git status' } },
+            ],
+          },
+        },
+        {
+          type: 'message',
+          id: 'e3',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: 'bash',
+            content: [{ type: 'text', text: 'M src/index.ts' }],
+            isError: false,
+          },
+        },
+      ],
+    },
+  });
+
+  await expect(page.getByTestId('entry-user')).toHaveText(/widen the gate/);
+  await expect(page.getByTestId('entry-assistant')).toContainText('checking the tree');
+  // Restored history is finished history: no streaming cursor, and the tool
+  // card shows its outcome rather than sitting at RUNNING forever.
+  await expect(page.getByTestId('entry-assistant')).toHaveAttribute('data-streaming', 'false');
+  await expect(page.getByTestId('entry-tool')).toHaveAttribute('data-tool-state', 'ok');
+  await expect(page.getByTestId('entry-tool')).toContainText('bash');
+
+  // A live turn continues the same transcript rather than replacing it.
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'and now' } });
+  await expect(page.getByTestId('entry-assistant').nth(1)).toContainText('and now');
+  await expect(page.getByTestId('entry-user')).toHaveCount(1);
+});
+
+test('a reload does not double a restored transcript', async ({ page, cockpit }) => {
+  const journal = {
+    type: 'response',
+    command: 'get_entries',
+    success: true,
+    data: {
+      leafId: 'e1',
+      entries: [
+        { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'only once' }] } },
+      ],
+    },
+  };
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await cockpit.session.waitForCommand('get_entries');
+  cockpit.session.emit(journal);
+  await expect(page.getByTestId('entry-user')).toHaveCount(1);
+
+  // The reload replays the hub's ring, which already holds the restored entry.
+  await page.reload();
+  await expect(page.getByTestId('entry-user')).toHaveCount(1);
+  await expect(page.getByTestId('entry-user')).toHaveText(/only once/);
+});

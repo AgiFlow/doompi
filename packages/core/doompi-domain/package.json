@@ -79,7 +79,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -121,7 +121,6 @@
   },
   "doompiWeb": {
     "pluginId": "domain",
-    "registrationOrder": 6,
     "channels": [],
     "client": "./web/index.ts"
   },

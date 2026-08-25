@@ -96,7 +96,6 @@
   },
   "doompiWeb": {
     "pluginId": "ask-user",
-    "registrationOrder": 92,
     "channels": [],
     "client": "./web/index.ts"
   },

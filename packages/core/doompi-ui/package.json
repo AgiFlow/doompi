@@ -203,7 +203,6 @@
   },
   "doompiWeb": {
     "pluginId": "builtin-tools",
-    "registrationOrder": 8,
     "channels": [],
     "client": "./web/index.ts"
   },

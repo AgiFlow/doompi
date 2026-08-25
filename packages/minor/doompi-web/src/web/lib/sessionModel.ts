@@ -121,6 +121,12 @@ export interface SessionState {
   minorModes: MinorModeProjection | null;
   /** Tool calls seen since the current run began, reported when it settles. */
   toolsThisRun: number;
+  /**
+   * Journal entry ids already folded into the timeline. The hub re-reads the
+   * journal on every attach, so a reconnect replays entries this page already
+   * has; folding by id is what keeps a restored transcript from doubling.
+   */
+  restoredIds: string[];
   nextId: number;
 }
 
@@ -138,6 +144,7 @@ export const initialSessionState: SessionState = {
   dialog: null,
   minorModes: null,
   toolsThisRun: 0,
+  restoredIds: [],
   nextId: 1,
 };
 
@@ -382,6 +389,84 @@ function applyDialog(state: SessionState, frame: Frame): SessionState {
   };
 }
 
+/** The thinking blocks of a journalled assistant message, joined as one passage. */
+function thinkingFromContent(content: readonly Frame[]): string {
+  return content
+    .map((block) => (block.type === 'thinking' ? asString(block.thinking) : ''))
+    .filter(Boolean)
+    .join('');
+}
+
+/**
+ * Folds one journalled message into the timeline.
+ *
+ * The journal is the session's own record, so its shape is not the live frame
+ * shape: a tool call is a block inside an assistant message (`id`,
+ * `arguments`) rather than a tool_execution_start frame, and its result is a
+ * message of its own. Mapping them here is what lets a transcript written
+ * before this page existed read exactly like one it watched arrive.
+ */
+function applyJournalMessage(state: SessionState, message: Frame): SessionState {
+  const role = asString(message.role);
+  const content = Array.isArray(message.content) ? message.content.filter(isRecord) : [];
+
+  if (role === 'user') {
+    const text = textFromContent(content);
+    return text ? withEntry(state, { kind: 'user', id: `u${state.nextId}`, text }) : state;
+  }
+
+  if (role === 'assistant') {
+    const text = textFromContent(content);
+    const thinking = thinkingFromContent(content);
+    let next =
+      text || thinking
+        ? withEntry(state, { kind: 'assistant', id: `a${state.nextId}`, text, thinking, streaming: false })
+        : state;
+    for (const block of content) {
+      if (block.type !== 'toolCall') continue;
+      // The result is a later entry, so the card starts as running and the
+      // result that follows settles it, exactly as a live run does.
+      next = withEntry(next, {
+        kind: 'tool',
+        id: `t${next.nextId}`,
+        toolCallId: asString(block.id),
+        name: asString(block.name, 'tool'),
+        args: isRecord(block.arguments) ? block.arguments : {},
+        argSummary: summariseArgs(block.arguments),
+        result: null,
+        output: '',
+        isError: false,
+        running: true,
+      });
+    }
+    return next;
+  }
+
+  if (role === 'toolResult') {
+    return updateTool(state, asString(message.toolCallId), {
+      result: { content, details: message.details },
+      output: textFromContent(content),
+      isError: message.isError === true,
+      running: false,
+    });
+  }
+
+  return state;
+}
+
+/**
+ * Folds one journal entry, once. Entries without an id are the runtime's own
+ * bookkeeping and are left alone; a message already folded is skipped, which
+ * is what makes a re-attach idempotent.
+ */
+function applyJournalEntry(state: SessionState, entry: Frame): SessionState {
+  if (entry.type !== 'message' || !isRecord(entry.message)) return state;
+  const id = asString(entry.id);
+  if (id === '' || state.restoredIds.includes(id)) return state;
+  const next = applyJournalMessage(state, entry.message);
+  return { ...next, restoredIds: [...next.restoredIds, id] };
+}
+
 /**
  * Folds one agent frame into the view model.
  *
@@ -453,10 +538,13 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
     // other custom entry belongs to some extension's own bookkeeping.
     case 'entry_appended': {
       const entry = isRecord(frame.entry) ? frame.entry : undefined;
-      if (!entry || entry.type !== 'custom' || entry.customType !== MINOR_MODE_ENTRY_TYPE) return state;
-      const data = isRecord(entry.data) ? entry.data : undefined;
-      if (!data || !Array.isArray(data.modes)) return state;
-      return { ...state, minorModes: data as unknown as MinorModeProjection };
+      if (!entry) return state;
+      if (entry.type === 'custom' && entry.customType === MINOR_MODE_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        if (!data || !Array.isArray(data.modes)) return state;
+        return { ...state, minorModes: data as unknown as MinorModeProjection };
+      }
+      return applyJournalEntry(state, entry);
     }
 
     case 'response':
