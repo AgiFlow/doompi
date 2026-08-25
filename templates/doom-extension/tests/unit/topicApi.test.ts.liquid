@@ -1,0 +1,36 @@
+import { describe, expect, it } from 'vitest';
+import { create{{ topic | pascalCase }}Api } from '../../src/adapters/{{ topic | camelCase }}Api.ts';
+import { API_BASE_PATH, itemPath, itemUrl, SESSION_QUERY_PARAM } from '../../src/types/{{ topic | camelCase }}Api.ts';
+
+/**
+ * The client builds absolute URLs and the host mounts the app under a prefix it
+ * strips, so the two agree only as long as the URL, minus the mount and the
+ * routing parameter, is a route the app declares.
+ */
+describe('the {{ pluginId }} API', () => {
+  it('answers on the path the client asks for, once the mount is stripped', async () => {
+    const app = create{{ topic | pascalCase }}Api({ sessionId: 's1' });
+
+    const response = await app.fetch(new Request(`http://host${itemPath('item-1')}`));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: 'item-1', sessionId: 's1' });
+  });
+
+  it('reports no session when the host is the hub', async () => {
+    const response = await create{{ topic | pascalCase }}Api().fetch(new Request(`http://host${itemPath('item-1')}`));
+
+    expect(await response.json()).toMatchObject({ sessionId: null });
+  });
+
+  it('builds one query carrying the session the hub should proxy to', () => {
+    const url = itemUrl('s1', 'item-1');
+
+    expect(url).toBe(`/api/plugin/${API_BASE_PATH}${itemPath('item-1')}?${SESSION_QUERY_PARAM}=s1`);
+    expect(url.match(/\?/gu)).toHaveLength(1);
+  });
+
+  it('escapes an id so an odd name cannot reshape the path', () => {
+    expect(itemPath('a/b')).toBe('/items/a%2Fb');
+  });
+});

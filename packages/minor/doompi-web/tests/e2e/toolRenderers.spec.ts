@@ -173,6 +173,42 @@ test('a promoted bash item offers stop and sends the runner stop command', async
   await expect(stop).toHaveAttribute('data-stopping', 'true');
 });
 
+test("a bash item opens the run's full log from its header, expanded or not", async ({ page, cockpit }) => {
+  writeRunnerRecord(cockpit.runnerStore, 's1', {
+    id: 'runner-web',
+    name: 'web',
+    command: 'pnpm dev',
+    logText: 'listening on 7433\nbuilt in 812ms\n',
+  });
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'call-7',
+    toolName: 'bash',
+    args: { command: 'pnpm dev' },
+  });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'call-7',
+    result: {
+      content: [{ type: 'text', text: 'ok' }],
+      details: { id: 'runner-web', runner: 'web', promoted: true, logPath: '/tmp/web.log' },
+    },
+    isError: false,
+  });
+
+  // The control sits in the header, so the card never has to be expanded first.
+  const open = page.getByTestId('tool-result-bash-open-log');
+  await expect(open).toBeVisible();
+  await open.click();
+
+  await expect(page.getByTestId('runner-log-panel')).toBeVisible();
+  await expect(page.getByTestId('runner-log-name')).toHaveText('web');
+  await expect(page.getByTestId('runner-log-body')).toContainText('built in 812ms');
+});
+
 test('a throwing renderer falls back to the host item and the rest of the timeline survives', async ({
   page,
   cockpit,

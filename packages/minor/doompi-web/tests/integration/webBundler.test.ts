@@ -96,6 +96,7 @@ describe('the sync-time cockpit bundler', () => {
       'subagent_runs',
       'subagent_catalog',
       'workflow_runs',
+      'workflow_catalog',
     ]);
   });
 

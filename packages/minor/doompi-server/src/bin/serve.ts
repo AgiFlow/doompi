@@ -4,8 +4,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { superviseAgentRelaunches } from '../adapters/agentSupervisor.ts';
+import { serveSessionApis } from '../adapters/packageApiServer.ts';
 import { removeSessionRecord, writeSessionRecord } from '../adapters/sessionRegistry.ts';
 import { removeStaleSocket, serveSessionSocket } from '../adapters/socketServer.ts';
 import { startWebCockpit } from '../adapters/webCockpit.ts';
@@ -74,6 +76,21 @@ async function main(): Promise<number> {
   });
   process.stderr.write(`[doompi-server] listening on ${options.socketPath}\n`);
 
+  // This session's package APIs, from the module doompi sync generated. They
+  // are served on their own socket beside the session's, so a package can
+  // answer a question the framed protocol has no shape for.
+  const apiNotice = (message: string): void => void process.stderr.write(`[doompi-server] ${message}\n`);
+  const apis = await serveSessionApis({
+    socketDir: path.dirname(path.resolve(options.socketPath)),
+    sessionId: identity.sessionId,
+    cwd: process.cwd(),
+    apis: await loadPackageApis('session', { onNotice: apiNotice }),
+    onNotice: apiNotice,
+  });
+  if (apis.socketPath !== undefined) {
+    process.stderr.write(`[doompi-server] package APIs on ${apis.socketPath}\n`);
+  }
+
   writeSessionRecord(registryDir, {
     version: SESSION_RECORD_VERSION,
     id: identity.sessionId,
@@ -81,6 +98,7 @@ async function main(): Promise<number> {
     cwd: process.cwd(),
     socketPath: path.resolve(options.socketPath),
     tokenFile: path.resolve(options.tokenFile),
+    ...(apis.socketPath === undefined ? {} : { apiSocketPath: apis.socketPath }),
     pid: process.pid,
     createdAt: new Date().toISOString(),
   });
@@ -101,6 +119,7 @@ async function main(): Promise<number> {
 
   const exitCode = await agent.exited;
   await cockpit?.close();
+  await apis.close();
   await socket.close();
   removeSessionRecord(registryDir, identity.sessionId);
   return exitCode;

@@ -63,6 +63,7 @@ boilerplate:
       - src/adapters/directorySearch.ts
       - src/adapters/gitStatus.ts
       - src/adapters/httpServer.ts
+      - src/adapters/packageApiProxy.ts
       - src/adapters/providerAuth.ts
       - src/adapters/registryWatcher.ts
       - src/adapters/serverSpawner.ts
@@ -182,6 +183,7 @@ boilerplate:
       - tests/fixtures/crash-plugin/web/index.tsx
       - tests/integration/bridge.test.ts
       - tests/integration/hub.test.ts
+      - tests/integration/packageApi.test.ts
       - tests/integration/spawner.test.ts
       - tests/integration/webBundler.test.ts
       - tests/support/bundleSetup.ts

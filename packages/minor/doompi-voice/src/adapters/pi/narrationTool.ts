@@ -22,15 +22,16 @@ import type { VoiceToolReadinessWaiter } from './voiceTools.ts';
 
 const NARRATE_LABEL = 'Narrate';
 const NARRATE_DESCRIPTION =
-  'Required while autonomous Voice is active: narrate when you start work, find something interesting or meaningful, need user feedback or a decision, and before ending the task with a user-facing final response; speak one complete primary-agent-authored update verbatim and wait for physical playback.';
+  'Speak one complete primary-agent-authored update through the active autonomous Voice session and wait until physical playback settles. Use it when work starts, after a meaningful finding, before asking for feedback or a decision, and before every user-facing final response. Final narration must contain the complete answer, including all user-relevant conclusions, questions, warnings, results, and next actions, rather than a shorter summary that leaves essential information only in text.';
 const NARRATE_PROMPT_SNIPPET =
-  'When available, you MUST call narrate when starting work, after interesting or meaningful findings, before requesting user feedback or a decision, and before ending the task with a user-facing final response.';
+  'When available, you MUST call narrate when starting work, after interesting or meaningful findings, before requesting user feedback or a decision, and before ending the task with a user-facing final response; final narration must include the complete user-facing answer.';
 const NARRATE_PROMPT_GUIDELINES = [
-  'When narrate is available, you MUST call it before ending a task with a user-facing final response. For a short conversational, clarification, refusal, or error turn, one concise call that speaks the answer is enough.',
+  'When narrate is available, you MUST call it before ending a task with a user-facing final response. Speak the complete answer, including every user-relevant conclusion, question, warning, result, and next action that will appear in the written response. Do not narrate a shorter summary and leave essential information only in text.',
+  'For a short conversational, clarification, refusal, or error turn, one call that speaks the complete answer is enough.',
   'For non-trivial work, you MUST also call narrate when starting work, after interesting or meaningful findings, and before requesting user feedback or a decision. Do not narrate repetitive low-level progress.',
   'Only a narrate call produces speech; ordinary response text and visible status or progress prose are not narration.',
   'Use narrate with one complete utterance per call, ready to speak verbatim. Never split one utterance across calls or request another summarization pass.',
-  'Keep narrate text in concise plain language. Avoid Markdown, code, secrets, and raw paths.',
+  'Keep the complete answer within the 4,096-character narration limit while autonomous Voice is active. Use concise plain language. Avoid Markdown, code, secrets, and raw paths.',
   'Wait for each narrate result. Treat interrupted, superseded, or failed playback as terminal for that utterance; do not automatically repeat it.',
 ] as const;
 

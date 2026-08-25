@@ -285,6 +285,47 @@ describe('the session hub over a registry', () => {
     ]);
   });
 
+  it('pages back through the transcript the attach path was too small to publish', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir, undefined, [], undefined, { restoreLimit: 2 });
+    await session.waitForCommand('get_entries');
+
+    const message = (id: string) => ({
+      type: 'message',
+      id,
+      message: { role: 'user', content: [{ type: 'text', text: id }] },
+    });
+    const entries = ['e1', 'e2', 'e3', 'e4', 'e5'].map(message);
+    session.emit({ type: 'response', command: 'get_entries', success: true, data: { entries, leafId: 'e5' } });
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 2,
+      'the restored tail',
+    );
+
+    // The page holds e4 and e5; asking for what came before walks backwards
+    // through what the hub kept rather than what it published.
+    const first = harness.hub.history('one', { before: 'e4', limit: 2 });
+    expect(first?.frames).toEqual([
+      { type: 'entry_appended', entry: message('e2') },
+      { type: 'entry_appended', entry: message('e3') },
+    ]);
+    expect(first?.cursor).toBe('e2');
+    expect(first?.hasMore).toBe(true);
+    expect(first?.before).toBe('e4');
+
+    const second = harness.hub.history('one', { before: 'e2', limit: 2 });
+    expect(second?.frames).toEqual([{ type: 'entry_appended', entry: message('e1') }]);
+    expect(second?.hasMore).toBe(false);
+  });
+
+  it('answers a history request for an unknown session with nothing', async () => {
+    const registryDir = freshRegistryDir();
+    const harness = startHub(registryDir);
+
+    expect(harness.hub.history('nobody', {})).toBeUndefined();
+  });
+
   it('re-reads the journal at a run boundary and adds only the message no frame reported', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });

@@ -11,6 +11,9 @@ import {
 import type { SessionAttachment } from '../types/bridge.ts';
 import {
   DIALOG_ANSWERED_TYPE,
+  HISTORY_PAGE_SIZE,
+  HISTORY_PAGE_TYPE,
+  type HistoryPageFrame,
   MINOR_MODE_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
   type SessionBacklogFrame,
@@ -31,6 +34,12 @@ const GET_ENTRIES_COMMAND = 'get_entries';
  * thousands of messages gives up its oldest rather than its newest.
  */
 const DEFAULT_RESTORE_LIMIT = 300;
+/**
+ * Journalled messages retained per session for paging back through. Well past
+ * any transcript a reader scrolls by hand, and still bounded: a hub watching a
+ * dozen long sessions holds a list, not a session's whole life.
+ */
+const DEFAULT_JOURNAL_LIMIT = 5000;
 const ENTRY_APPENDED_TYPE = 'entry_appended';
 
 export type HubEvent =
@@ -52,8 +61,10 @@ export interface SessionHubOptions {
   /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
   signal?: (pid: number) => void;
   ringLimit?: number;
-  /** Journalled messages restored per session on attach; the rest of a long transcript stays on disk. */
+  /** Journalled messages restored per session on attach; the rest is kept for paging back through. */
   restoreLimit?: number;
+  /** Journalled messages retained per session for paging; the oldest are forgotten first. */
+  journalLimit?: number;
   gitRefreshMs?: number;
   onNotice?: (message: string) => void;
 }
@@ -68,6 +79,8 @@ export interface SessionHub {
   onEvent(listener: (event: HubEvent) => void): () => void;
   /** Recent history for one session, or undefined for an unknown id. */
   backlog(sessionId: string): SessionBacklogFrame | undefined;
+  /** One older window of a session's transcript, for a page scrolling back. */
+  history(sessionId: string, request: { before?: string; limit?: number }): HistoryPageFrame | undefined;
   /** Frame types of the loaded data channels, for the hello frame. */
   channelTypes(): string[];
   /** Every channel's subscribe-time snapshot for one session; empty for an unknown id. */
@@ -97,6 +110,16 @@ interface ManagedSession {
   emittedEntryIds: Set<string>;
   /** Whether the first journal read has been published; later reads are refreshes. */
   restoredJournal: boolean;
+  /**
+   * Every journalled message the session has reported, oldest first.
+   *
+   * The attach path publishes only the newest slice, so without this the rest
+   * of a long transcript would exist only on disk and a reader scrolling up
+   * would find nothing. Bounded, because a hub watching many long sessions
+   * should not grow without limit; the oldest go first, which is also the
+   * order a reader runs out of interest in them.
+   */
+  journal: Record<string, unknown>[];
 }
 
 interface StartedChannel {
@@ -134,9 +157,32 @@ function renderableJournalEntries(frame: SessionFrame, limit: number): Record<st
   }
 
   // The ring is bounded and live frames must still fit, so only the tail of a
-  // long transcript is restored; the ring's own drop counter reports the rest.
+  // long transcript is published on attach; the rest is retained for the page
+  // to page back through rather than dropped on the floor.
   const kept = messages.length > limit ? messages.slice(-limit) : messages;
   return minorModes === undefined ? kept : [...kept, minorModes];
+}
+
+/**
+ * Every message a journal read carries, oldest first, with no tail limit.
+ *
+ * This is what the page pages back through. The attach path publishes only the
+ * newest slice, because the ring is bounded and the live stream has to fit
+ * beside it, but a reader scrolling up wants what came before, and the session
+ * already told the hub all of it.
+ */
+function journalMessages(frame: SessionFrame): Record<string, unknown>[] {
+  const data = frame.data;
+  if (typeof data !== 'object' || data === null) return [];
+  const entries = (data as { entries?: unknown }).entries;
+  if (!Array.isArray(entries)) return [];
+  const messages: Record<string, unknown>[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const candidate = entry as Record<string, unknown>;
+    if (candidate.type === 'message') messages.push(candidate);
+  }
+  return messages;
 }
 
 /**
@@ -153,6 +199,11 @@ function isUnreportedEntry(entry: Record<string, unknown>): boolean {
   const message = entry.message;
   if (typeof message !== 'object' || message === null) return false;
   return (message as { role?: unknown }).role === 'user';
+}
+
+/** Where an entry sits in the retained journal, or -1 when this hub never held it. */
+function indexOfEntry(journal: readonly Record<string, unknown>[], id: string): number {
+  return journal.findIndex((entry) => entry.id === id);
 }
 
 function readTokenFile(record: SessionRecord): string {
@@ -184,6 +235,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const readGit = options.readGit;
   const readToken = options.readToken ?? readTokenFile;
   const restoreLimit = options.restoreLimit ?? DEFAULT_RESTORE_LIMIT;
+  const journalLimit = options.journalLimit ?? DEFAULT_JOURNAL_LIMIT;
   const signal =
     options.signal ??
     ((pid: number): void => {
@@ -222,6 +274,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     awaitingInput: managed.presence.awaitingInput,
     ...(managed.presence.lastSettledAt === undefined ? {} : { lastSettledAt: managed.presence.lastSettledAt }),
     socketPath: managed.record.socketPath,
+    ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
     ...(managed.git === undefined ? {} : { git: managed.git }),
   });
 
@@ -257,6 +310,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     }
     managed.attachment = attachToSession({
       socketPath: managed.record.socketPath,
+      ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
       token,
       handlers: {
         onFrame: (frame) => {
@@ -265,6 +319,11 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           // same path as a live publish: into the ring for pages that
           // subscribe later, and straight out to the ones already watching.
           if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
+            // Keep the whole transcript before publishing any of it: the page
+            // pages back through this, and a read that arrives after the first
+            // one is the newest picture of the same history.
+            const whole = journalMessages(frame);
+            managed.journal = whole.length > journalLimit ? whole.slice(-journalLimit) : whole;
             const restoredAt = new Date().toISOString();
             const refreshing = managed.restoredJournal;
             managed.restoredJournal = true;
@@ -328,6 +387,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     const managed: ManagedSession = {
       record,
       ring: createFrameRing(options.ringLimit),
+      journal: [],
       presence: initialPresence(new Date().toISOString()),
       attach: 'connecting',
       emittedEntryIds: new Set<string>(),
@@ -414,6 +474,28 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       if (!managed) return undefined;
       const { frames, dropped } = managed.ring.snapshot();
       return { type: SESSION_BACKLOG_TYPE, sessionId, frames, dropped };
+    },
+    history(sessionId, request) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return undefined;
+      const limit = Math.max(1, Math.min(request.limit ?? HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE));
+      // The page names the oldest entry it holds, so the window ends where the
+      // page begins. An unknown cursor means the page holds something this hub
+      // never sent, which a re-read can cause; answering from the end is the
+      // honest fallback and the page reconciles by id.
+      const end = request.before === undefined ? managed.journal.length : indexOfEntry(managed.journal, request.before);
+      const stop = end < 0 ? managed.journal.length : end;
+      const start = Math.max(0, stop - limit);
+      const window = managed.journal.slice(start, stop);
+      const oldest = window[0];
+      return {
+        type: HISTORY_PAGE_TYPE,
+        sessionId,
+        frames: window.map((entry) => ({ type: ENTRY_APPENDED_TYPE, entry })),
+        cursor: typeof oldest?.id === 'string' ? oldest.id : null,
+        hasMore: start > 0,
+        ...(request.before === undefined ? {} : { before: request.before }),
+      };
     },
     channelTypes() {
       return startedChannels.map((channel) => channel.frameType);

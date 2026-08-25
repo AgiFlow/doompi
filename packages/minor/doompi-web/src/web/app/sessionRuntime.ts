@@ -1,4 +1,5 @@
 import {
+  HISTORY_PAGE_TYPE,
   SESSION_BACKLOG_TYPE,
   SESSION_FRAME_TYPE,
   SESSION_REMOVED_TYPE,
@@ -13,7 +14,14 @@ import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegist
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
-import { applySessionFrame, dropSessionStore, refreshSessionFacts, resetSessionStore } from '../stores/sessionStore.ts';
+import {
+  applyHistoryPage,
+  applySessionFrame,
+  dropSessionStore,
+  refreshSessionFacts,
+  resetSessionStore,
+  seedHistoryCursor,
+} from '../stores/sessionStore.ts';
 import { dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore.ts';
 import { dropTransientTabs } from '../stores/transientTabsStore.ts';
 import {
@@ -38,6 +46,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * every replay and again once a run settles, because Pi reports model, stats
  * and commands on request rather than pushing them as events.
  */
+/** The journal id of the oldest restored entry, which is where paging back resumes. */
+function oldestEntryId(frames: readonly Record<string, unknown>[]): string | null {
+  for (const frame of frames) {
+    if (frame.type !== 'entry_appended') continue;
+    const entry = frame.entry;
+    if (isRecord(entry) && typeof entry.id === 'string') return entry.id;
+  }
+  return null;
+}
+
 export function startSessionRuntime(): () => void {
   // The hub-side subscription this page currently holds; it dies with the
   // socket, which is why the snapshot handler re-subscribes.
@@ -84,7 +102,18 @@ export function startSessionRuntime(): () => void {
           applySessionBacklog(sessionId, frames.length, dropped);
           resetSessionStore(sessionId);
           for (const replayed of frames) applySessionFrame(sessionId, replayed);
+          // Where the backlog starts is where paging back has to continue
+          // from, so the oldest journal id it carried becomes the cursor.
+          seedHistoryCursor(sessionId, oldestEntryId(frames));
           refreshSessionFacts(sessionId);
+          return;
+        }
+        case HISTORY_PAGE_TYPE: {
+          if (typeof frame.sessionId !== 'string' || !Array.isArray(frame.frames)) return;
+          applyHistoryPage(frame.sessionId, frame.frames.filter(isRecord), {
+            cursor: typeof frame.cursor === 'string' ? frame.cursor : null,
+            hasMore: frame.hasMore === true,
+          });
           return;
         }
         case SESSION_FRAME_TYPE: {

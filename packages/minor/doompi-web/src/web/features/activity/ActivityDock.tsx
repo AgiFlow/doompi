@@ -1,4 +1,4 @@
-import { Button, Dot, EmptyState, Kbd, SectionLabel, StatusBadge } from '@agimon-ai/doompi-web-components';
+import { Button, EmptyState, Kbd, SectionLabel, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { activityGroups } from '../../lib/composition.ts';
@@ -63,7 +63,21 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
                 className="flex flex-col gap-2 border-b border-doom-border-soft px-3 py-3"
               >
                 <div className="flex items-center gap-2 px-1">
-                  <Dot tone={group.active ? 'yellow' : 'neutral'} pulse={group.active} />
+                  {/* One marker per head. The glyph says "section", so a group
+                      never reads as one more row among the items beneath it,
+                      and it carries the busy colour the status dot used to:
+                      two marks for one fact is one mark too many. A glyph
+                      rather than an icon because every group is declared by a
+                      plugin the host knows nothing about. */}
+                  <span
+                    aria-hidden
+                    data-active={group.active}
+                    className={`text-[11px] font-bold ${
+                      group.active ? 'animate-pulse text-doom-yellow' : 'text-doom-faint'
+                    }`}
+                  >
+                    #
+                  </span>
                   <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
                   {group.tab === undefined ? (
                     <Kbd data-testid={`activity-keys-${group.name}`} className="bg-doom-panel">

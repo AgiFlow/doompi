@@ -73,11 +73,15 @@ describe('narrate Pi tool', () => {
       renderCall: expect.any(Function),
       renderResult: expect.any(Function),
     });
-    expect(h.tool.description).toContain('Required while autonomous Voice is active');
-    expect(h.tool.description).toContain('start work');
-    expect(h.tool.description).toContain('interesting or meaningful');
-    expect(h.tool.description).toContain('user feedback or a decision');
-    expect(h.tool.description).toContain('before ending the task');
+    expect(h.tool.description).toContain('active autonomous Voice session');
+    expect(h.tool.description).toContain('physical playback settles');
+    expect(h.tool.description).toContain('when work starts');
+    expect(h.tool.description).toContain('meaningful finding');
+    expect(h.tool.description).toContain('feedback or a decision');
+    expect(h.tool.description).toContain('before every user-facing final response');
+    expect(h.tool.description).toContain('complete answer');
+    expect(h.tool.description).toContain('conclusions, questions, warnings, results, and next actions');
+    expect(h.tool.description).toContain('rather than a shorter summary');
     expect(h.tool.promptSnippet).toContain('MUST call narrate');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('you MUST call it');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('starting work');
@@ -88,6 +92,8 @@ describe('narrate Pi tool', () => {
     );
     expect(h.tool.promptGuidelines?.join('\n')).toContain('Only a narrate call produces speech');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('one complete utterance');
+    expect(h.tool.promptGuidelines?.join('\n')).toContain('Do not narrate a shorter summary');
+    expect(h.tool.promptGuidelines?.join('\n')).toContain('4,096-character narration limit');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('Avoid Markdown, code, secrets, and raw paths');
 
     h.session.dispose();

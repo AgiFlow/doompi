@@ -1,0 +1,47 @@
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { Hono } from 'hono';
+import { API_BASE_PATH, type {{ topic | pascalCase }}ItemView } from '../types/{{ topic | camelCase }}Api.ts';
+
+/**
+ * This package's HTTP surface.
+ *
+ * Routes are relative to the mount its host gives it, so nothing here repeats
+ * where it was mounted. A session-scoped host is one session's own server and
+ * names that session in the context; a hub-scoped host serves the machine and
+ * names none, which is the whole difference between the two.
+ */
+export interface {{ topic | pascalCase }}ApiOptions {
+  /** The session these routes answer for; absent when the host is the hub. */
+  sessionId?: string;
+}
+
+export function create{{ topic | pascalCase }}Api(options: {{ topic | pascalCase }}ApiOptions = {}): Hono {
+  const app = new Hono();
+
+  app.get('/items/:id', (context) => {
+    // Replace with this package's own read. Take every dependency that touches
+    // the filesystem, the clock, or a process as an option above rather than
+    // reaching for one here, the way every other adapter in this package does.
+    const view: {{ topic | pascalCase }}ItemView = {
+      id: context.req.param('id'),
+      sessionId: options.sessionId ?? null,
+    };
+    return context.json(view);
+  });
+
+  return app;
+}
+
+/** The named export a host imports from this package's built entry. */
+export const api: DoomApi = {
+  basePath: API_BASE_PATH,
+  start(context: DoomApiContext): DoomApiHandler {
+    const app = create{{ topic | pascalCase }}Api(context.sessionId === undefined ? {} : { sessionId: context.sessionId });
+    return {
+      fetch: (request) => app.fetch(request),
+      // Nothing outlives a request here; an API that starts a watch or a timer
+      // tears it down in this callback.
+      close: () => undefined,
+    };
+  },
+};

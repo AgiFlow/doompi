@@ -55,36 +55,3 @@ export interface WebHubChannel {
   frameType: string;
   start(host: HubChannelHost): HubChannelSource;
 }
-
-/** What the hub hands a plugin's HTTP surface when it starts. */
-export interface WebHubApiContext {
-  /** Every session the hub currently manages. */
-  sessions(): readonly HubSessionScope[];
-  /** One managed session, or undefined when the hub does not have it; a route refuses rather than guesses. */
-  session(sessionId: string): HubSessionScope | undefined;
-  onNotice(message: string): void;
-}
-
-/**
- * One running HTTP surface. `fetch` is the whole handler, so any framework
- * that speaks Request/Response satisfies it and no package is forced onto the
- * one the hub happens to use. The hub strips the mount prefix before calling,
- * so routes are declared relative to it ('/sessions/:sessionId/...') and the
- * plugin never repeats where it was mounted.
- */
-export interface WebHubApiHandler {
-  fetch(request: Request): Response | Promise<Response>;
-  close(): void;
-}
-
-/**
- * A plugin's HTTP API, the server-side sibling of its data channels: the hub
- * mounts it under /api/plugin/<basePath>/ and forwards every request beneath
- * that prefix. A page reaches it with a plain fetch, which is the one thing a
- * data channel cannot do, because a channel only ever pushes.
- */
-export interface WebHubApi {
-  /** Segment under /api/plugin/; by convention the pluginId, and globally unique across loaded plugins. */
-  basePath: string;
-  start(context: WebHubApiContext): WebHubApiHandler;
-}

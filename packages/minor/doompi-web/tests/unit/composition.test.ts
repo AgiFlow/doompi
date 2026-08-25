@@ -109,6 +109,23 @@ describe('minorModes', () => {
     expect(byName.workflow.availability).toBe('unavailable');
   });
 
+  it('drives the mode its key drives, which is not always the one it is named after', () => {
+    // SPC v e toggles autonomous capture, which the runtime registers as
+    // 'voice-auto'; 'voice' is the one-shot dictation command on v v. A row
+    // that sent its own label would reach the wrong mode.
+    const modes = minorModes({ 'doom-voice': 'listening' }, []);
+    const voice = modes.find((mode) => mode.name === 'voice');
+
+    expect(voice?.id).toBe('voice-auto');
+    expect(voice?.availability).toBe('on');
+  });
+
+  it('sends a mode whose id matches its name unchanged', () => {
+    const modes = minorModes({ goal: 'ship the gate' }, []);
+
+    expect(modes.find((mode) => mode.name === 'goal')?.id).toBe('goal');
+  });
+
   it('separates a mode that is absent from one that is merely off', () => {
     const modes = minorModes({ 'plan-mode': '', goal: 'ship the gate' }, []);
     const byName = Object.fromEntries(modes.map((mode) => [mode.name, mode]));

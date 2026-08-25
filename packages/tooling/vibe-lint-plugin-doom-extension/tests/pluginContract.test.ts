@@ -27,6 +27,8 @@ const EXPECTED_RULE_IDS = [
   'no-protocol-channel-literals',
   'no-raw-pi-events',
   'no-same-runner-protocol',
+  'package-api-entry',
+  'package-api-manifest',
   'package-layer-order',
   'pi-extension-default-factory',
   'pi-peer-version',

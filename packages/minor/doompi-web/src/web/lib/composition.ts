@@ -66,6 +66,8 @@ export interface MinorMode {
 
 export interface MinorModeSource {
   name: string;
+  /** The catalog mode this row drives, when the runtime registers it under another id. */
+  modeId?: string;
   keys: string;
   statusKey?: string;
   widgetKey?: string;
@@ -87,7 +89,8 @@ export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
   { name: 'goal', keys: 'g e', statusKey: 'goal' },
   { name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress' },
-  { name: 'voice', keys: 'v e', statusKey: 'doom-voice' },
+  // `v e` drives autonomous capture, which the runtime registers as 'voice-auto'.
+  { name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice' },
 ];
 
 /** The declared source a catalog mode corresponds to, by id, id stem, or label. */
@@ -125,7 +128,7 @@ function catalogMinorModes(sources: readonly MinorModeSource[], projection: Mino
     if (!seen.has(source.name)) {
       rows.push({
         name: source.name,
-        id: source.name,
+        id: source.modeId ?? source.name,
         keys: source.keys,
         availability: 'unavailable',
         detail: '',
@@ -150,7 +153,7 @@ export function minorModes(
       if (raw === undefined) {
         return {
           name: source.name,
-          id: source.name,
+          id: source.modeId ?? source.name,
           keys: source.keys,
           availability: 'unavailable' as const,
           detail: '',
@@ -160,7 +163,7 @@ export function minorModes(
       const detail = stripAnsi(raw).trim();
       return {
         name: source.name,
-        id: source.name,
+        id: source.modeId ?? source.name,
         keys: source.keys,
         availability: detail ? ('on' as const) : ('off' as const),
         detail,
@@ -170,7 +173,7 @@ export function minorModes(
     if (source.widgetKey !== undefined && widgets.includes(source.widgetKey)) {
       return {
         name: source.name,
-        id: source.name,
+        id: source.modeId ?? source.name,
         keys: source.keys,
         availability: 'off' as const,
         detail: '',

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { isFollowingLive, logViewLines } from '../web/format.ts';
 import { requestRunnerStop, runnerRunsChannel, runners } from '../web/runnersStore.ts';
 
 const run = (id: string, state: 'running' | 'completed') => ({ id, name: id, command: 'sleep 60', state });
@@ -36,5 +37,48 @@ describe('the runners web store channel', () => {
     runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'completed')] })!);
     expect(session('s1').stopRequested).toEqual([]);
     runners.reset();
+  });
+});
+
+describe('the lines a log view shows', () => {
+  it('does not count the newline a log file ends with as a line', () => {
+    // LogReader hands back the file's trailing newline, so a naive split would
+    // report one blank line more than the file has and the count under the
+    // search bar would disagree with the server's own totalLines.
+    expect(logViewLines('one\ntwo\nthree\n', [], 100)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('keeps a blank line that is genuinely inside the log', () => {
+    expect(logViewLines('one\n\nthree\n', [], 100)).toEqual(['one', '', 'three']);
+  });
+
+  it('shows nothing for an empty log rather than one blank line', () => {
+    expect(logViewLines('', [], 100)).toEqual([]);
+  });
+
+  it('appends what the follow stream delivered, after the slice', () => {
+    expect(logViewLines('one\ntwo\n', ['three'], 100)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('keeps only the newest lines, so a long follow cannot grow without bound', () => {
+    expect(logViewLines('one\ntwo\nthree\n', ['four'], 2)).toEqual(['three', 'four']);
+  });
+});
+
+describe('whether a log view is following', () => {
+  it('follows a running log the reader asked to follow', () => {
+    expect(isFollowingLive(true, false, true)).toBe(true);
+  });
+
+  it('stops following once the runner exits, so a finished run never claims to tail', () => {
+    expect(isFollowingLive(true, false, false)).toBe(false);
+  });
+
+  it('pauses while a query is set, because a filtered view is a snapshot', () => {
+    expect(isFollowingLive(true, true, true)).toBe(false);
+  });
+
+  it('does not follow when the reader turned it off', () => {
+    expect(isFollowingLive(false, false, true)).toBe(false);
   });
 });

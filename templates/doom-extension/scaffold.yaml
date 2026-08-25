@@ -98,7 +98,7 @@ boilerplate:
 
       Run pnpm fixcode in the generated package before the first lint. Rendered names change line widths, so a template signature that wraps in the source can render as a single line the formatter wants joined.
 
-      Pi packages use version 0.84.2 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
+      Pi packages use version 0.84.3 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
 
       A cockpit (web) presence is not generated here; add it with the scaffold-doom-web-plugin feature, then one scaffold-doom-web-tool-card per Pi tool the package registers. It lives in web/, outside the src vocabulary, and is governed by the web-plugin-* rules.
 features:
@@ -288,6 +288,48 @@ features:
     patterns:
       - src/adapters/**/*.ts
       - src/types/**/*.ts
+  - name: scaffold-doom-package-api
+    description: Add this package's HTTP API, served by the session's own doompi-server, by the cockpit hub, or by both, with its shared route vocabulary and a unit test.
+    variables_schema:
+      type: object
+      properties:
+        pluginId:
+          type: string
+          description: The kebab-case base path the API is mounted under, /api/plugin/<pluginId>; unique across every installed package
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          maxLength: 48
+          example: runner
+        topic:
+          type: string
+          description: camelCase stem for the adapter, the route vocabulary module, and the view types
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: runner
+      required:
+        - pluginId
+        - topic
+      additionalProperties: false
+    includes:
+      - src/types/topicApi.ts->src/types/{{ topic | camelCase }}Api.ts
+      - src/adapters/topicApi.ts->src/adapters/{{ topic | camelCase }}Api.ts
+      - src/exports/sessionApi.ts
+      - tests/unit/topicApi.test.ts->tests/unit/{{ topic | camelCase }}Api.test.ts
+    instruction: |-
+      Generate the package's HTTP API: src/types/{{ topic | camelCase }}Api.ts with the base path, the route paths, and the view types both halves share; src/adapters/{{ topic | camelCase }}Api.ts with the Hono app and the `api` export; src/exports/sessionApi.ts as the built entry a host imports.
+
+      The rules: a host mounts the API under /api/plugin/{{ pluginId }} and strips that prefix, so routes are declared relative and nothing repeats the mount. The scope decides the host: a session-scoped API is served by that session's own doompi-server and its context names the session; a hub-scoped one is served by the cockpit hub and names none. Keep the adapter free of ambient filesystem, clock, and process access the way every other adapter here is: take those as options. Route paths and query building live in src/types so the browser half can import them; a page never appends its own query to a URL this module built.
+
+      Complete the package integration after generation:
+      - Add the doompiApi block to package.json: basePath "{{ pluginId }}", and the scopes this package serves. Use session { entry "./src/exports/sessionApi.ts", dist "./dist/sessionApi.mjs" } for per-session data, hub { entry "./src/exports/hubApi.ts", dist "./dist/hubApi.mjs" } for machine-wide data, or both. Only declare a scope the package actually serves.
+      - Add a "./session-api" export pointing at dist/sessionApi.d.mts, dist/sessionApi.mjs, dist/sessionApi.cjs (tsdown builds it from src/exports), and the matching subpath for any hub entry.
+      - Add hono and @agimon-ai/doompi-extension-contracts (workspace:*) to dependencies.
+      - `doompi sync` generates the route modules a host imports, so a package that changed its API needs a build and a sync before a host sees it; a running host imports the built entry, never the source.
+      - Run pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/types, src/adapters, src/exports, and package.json.
+    patterns:
+      - src/types/*Api.ts
+      - src/adapters/*Api.ts
+      - src/exports/sessionApi.ts
+      - src/exports/hubApi.ts
   - name: scaffold-doom-web-plugin
     description: Add this package's cockpit (web) plugin under web/ with its per-session store, hub data channel, shared view types, and store test.
     variables_schema:

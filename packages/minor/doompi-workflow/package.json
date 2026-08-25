@@ -32,7 +32,8 @@
     "src/prompts",
     "skills/workflow-recovery/SKILL.md",
     "web",
-    "src/types/webWorkflows.ts"
+    "src/types/webWorkflows.ts",
+    "src/types/webWorkflowTerminal.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -73,14 +74,15 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
-    "@agimon-ai/workflow-mcp": "0.23.16",
+    "@agimon-ai/workflow-mcp": "0.23.19",
     "@deepseek-ai/cordis": "4.0.1",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "hono": "4.13.3",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
-    "@earendil-works/pi-tui": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
@@ -92,8 +94,8 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
-    "@earendil-works/pi-tui": "0.84.2"
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -106,10 +108,18 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiApi": {
+    "basePath": "workflow",
+    "hub": {
+      "entry": "./src/exports/hubApi.ts",
+      "dist": "./dist/hubApi.mjs"
+    }
+  },
   "doompiWeb": {
     "pluginId": "workflows",
     "channels": [
-      "workflow_runs"
+      "workflow_runs",
+      "workflow_catalog"
     ],
     "client": "./web/index.ts",
     "hub": {

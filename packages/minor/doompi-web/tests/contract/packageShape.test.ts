@@ -65,10 +65,13 @@ describe('doompi-web package contract', () => {
     // Tailwind, the TanStack runtimes, the plugin contracts, and the shared
     // component library ship as dependencies alongside the hono trio. Pi's
     // coding agent ships too: the hub signs in to model providers through its
-    // ModelRuntime. The two foundation packages are the only DoomPi names
-    // here: a plugin package never is, because plugins are discovered from
-    // manifests, never depended on.
+    // ModelRuntime. The extension contracts ship because the hub mounts
+    // hub-scoped package APIs and proxies session-scoped ones, and that
+    // contract belongs to no single host. The three foundation packages are
+    // the only DoomPi names here: a plugin package never is, because plugins
+    // are discovered from manifests, never depended on.
     expect(runtime).toEqual([
+      '@agimon-ai/doompi-extension-contracts',
       '@agimon-ai/doompi-web-components',
       '@agimon-ai/doompi-web-contracts',
       '@earendil-works/pi-coding-agent',
@@ -87,7 +90,11 @@ describe('doompi-web package contract', () => {
       'tailwindcss',
       'vite',
     ]);
-    const foundations = new Set(['@agimon-ai/doompi-web-components', '@agimon-ai/doompi-web-contracts']);
+    const foundations = new Set([
+      '@agimon-ai/doompi-extension-contracts',
+      '@agimon-ai/doompi-web-components',
+      '@agimon-ai/doompi-web-contracts',
+    ]);
     expect(runtime.some((name) => name.includes('doompi-') && !foundations.has(name))).toBe(false);
     // The bundler compiles src/web from the installed package, so the source
     // has to ship with it.

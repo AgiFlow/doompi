@@ -30,9 +30,11 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('doom workflow extension', () => {
-  // No slash command any more: the mode is reached through the leader menu, the
-  // way plan mode is, so the palette carries nothing for this extension.
-  it('registers lifecycle handlers and claims no slash command', async () => {
+  // The mode itself is reached through the leader menu, the way plan mode is,
+  // so the palette carries exactly one entry for this extension: the launch
+  // verb, which exists because a browser can only send a session a prompt
+  // frame and has no other way to start a workflow.
+  it('registers lifecycle handlers and claims only the launch command', async () => {
     const registerCommand = vi.fn();
     const on = vi.fn();
     const eventListeners = new Map<string, Set<(data: unknown) => void>>();
@@ -67,7 +69,7 @@ describe('doom workflow extension', () => {
     });
     await providers;
 
-    expect(registerCommand).not.toHaveBeenCalled();
+    expect(registerCommand.mock.calls.map(([name]) => name)).toEqual(['workflow-launch']);
     expect(on).toHaveBeenCalledWith('session_start', expect.any(Function));
     expect(on).toHaveBeenCalledWith('session_shutdown', expect.any(Function));
     expect(help.listContributions()).toEqual([

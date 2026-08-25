@@ -60,6 +60,8 @@ export interface FakeSessionOptions {
   registryDir?: string;
   /** The pid the record claims; defaults to this process, which keeps the record alive for the watcher. */
   pid?: number;
+  /** Where this session serves its package APIs, as a real server would record it. */
+  apiSocketPath?: string;
 }
 
 /**
@@ -153,6 +155,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
         cwd: options.cwd ?? dir,
         socketPath,
         tokenFile,
+        ...(options.apiSocketPath === undefined ? {} : { apiSocketPath: options.apiSocketPath }),
         pid: options.pid ?? process.pid,
         createdAt: new Date().toISOString(),
       }),

@@ -1,6 +1,7 @@
 import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { type ParsedWorkflowRun, presentWorkflowRuns, runBelongsToSession } from '../services/workflowRuns.ts';
 import { WORKFLOW_RUNS_TYPE, type WorkflowRunView } from '../types/webWorkflows.ts';
+import { createWorkflowCatalogChannel } from './workflowCatalogChannel.ts';
 import { watchWorkflowRuns } from './workflowWatcher.ts';
 
 export interface WorkflowsChannelOptions {
@@ -55,4 +56,4 @@ export function createWorkflowsChannel(options: WorkflowsChannelOptions = {}): W
 }
 
 /** The named export the generated hub registry imports. */
-export const webHubChannels: readonly WebHubChannel[] = [createWorkflowsChannel()];
+export const webHubChannels: readonly WebHubChannel[] = [createWorkflowsChannel(), createWorkflowCatalogChannel()];

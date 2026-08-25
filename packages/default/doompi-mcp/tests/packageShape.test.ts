@@ -62,14 +62,14 @@ describe('doom-mcp package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.peerDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.84.2',
-        '@earendil-works/pi-tui': '0.84.2',
+        '@earendil-works/pi-coding-agent': '0.84.3',
+        '@earendil-works/pi-tui': '0.84.3',
       }),
     );
     expect(manifest.devDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.84.2',
-        '@earendil-works/pi-tui': '0.84.2',
+        '@earendil-works/pi-coding-agent': '0.84.3',
+        '@earendil-works/pi-tui': '0.84.3',
       }),
     );
   });

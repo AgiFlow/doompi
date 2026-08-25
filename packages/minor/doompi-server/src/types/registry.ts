@@ -22,6 +22,12 @@ export interface SessionRecord {
   socketPath: string;
   /** Absolute path of the file holding the attach token. */
   tokenFile: string;
+  /**
+   * Absolute path of the socket this session serves its package APIs on, when
+   * any package declared one. Absent means no API is mounted, which a reader
+   * answers rather than waits on.
+   */
+  apiSocketPath?: string;
   /** Server pid; a reader treats a dead pid as a stale record. */
   pid: number;
   /** ISO 8601 timestamp of registration. */

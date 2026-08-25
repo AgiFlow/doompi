@@ -176,6 +176,18 @@ test('follows the newest reply, and stops following once the reader scrolls back
   await expect.poll(atBottom).toBe(true);
   await expect(page.getByTestId('timeline-jump')).toBeHidden();
 
+  // A small gap below is still following. New output closes it instead of making
+  // the reader click through when they were already near the live tail.
+  await timeline.evaluate((element) => {
+    element.scrollTop = element.scrollHeight - element.clientHeight - 150;
+  });
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'arrived near the bottom\n' },
+  });
+  await expect(timeline).toContainText('arrived near the bottom');
+  await expect.poll(atBottom).toBe(true);
+
   // Reading back through the transcript unpins it: more output must not yank
   // the reader to the bottom mid-sentence.
   await timeline.evaluate((element) => element.scrollTo({ top: 0 }));

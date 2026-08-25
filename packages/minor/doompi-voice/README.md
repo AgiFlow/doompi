@@ -13,7 +13,7 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2
+- Pi 0.84.3
 - macOS recording and `say` playback support
 - FFmpeg for audio capture
 - One supported local transcription engine: `whisper-cli`, `whisper`, or `mlx_whisper` (Apple
@@ -70,11 +70,14 @@ defaults to 3,000.
 - `SPC v e` enters autonomous capture and exits it again.
 - `describe_voice_tools` returns the active session's spoken capability catalog.
 - `use_voice_tools` executes a bounded ordered batch against that catalog.
-- `narrate` speaks one primary-agent-authored utterance.
+- `narrate` speaks one primary-agent-authored utterance and waits for physical playback.
 
-Each narration is limited to 4,096 characters, waits for playback, and returns `completed`,
-`interrupted`, `superseded`, or `failed`. Narration fails closed while Voice is starting or
-draining, during shutdown, reload, or deactivation, and when the request belongs to a stale session.
+Before a final response, narration contains the complete answer, including every user-relevant
+conclusion, question, warning, result, and next action in the written response. It does not use
+a shorter spoken summary that leaves essential information only in text. Each narration is
+limited to 4,096 characters and returns `completed`, `interrupted`, `superseded`, or `failed`.
+Narration fails closed while Voice is starting or draining, during shutdown, reload, or
+deactivation, and when the request belongs to a stale session.
 Only the currently active TUI session receives Voice-owned tools.
 
 If no `narrate` attempt is made before a final response, the active Voice session can produce one

@@ -6,9 +6,6 @@ export type {
   HubChannelHost,
   HubChannelSource,
   HubSessionScope,
-  WebHubApi,
-  WebHubApiContext,
-  WebHubApiHandler,
   WebHubChannel,
 } from '../types/webHub.ts';
 export type {

@@ -67,6 +67,11 @@ export function parseSessionRecord(raw: string): SessionRecord | undefined {
     cwd: record.cwd as string,
     socketPath: record.socketPath as string,
     tokenFile: record.tokenFile as string,
+    // Optional: a server that mounted no package API omits it, and so does an
+    // older one that predates the field.
+    ...(typeof record.apiSocketPath === 'string' && record.apiSocketPath !== ''
+      ? { apiSocketPath: record.apiSocketPath }
+      : {}),
     pid: record.pid,
     createdAt: record.createdAt as string,
   };

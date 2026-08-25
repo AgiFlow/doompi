@@ -23,6 +23,12 @@ export const SESSIONS_API_ROUTE = '/api/sessions';
  */
 export const DIRECTORIES_API_ROUTE = '/api/directories';
 
+/**
+ * Query parameter that routes a package API request to one session's server.
+ * Without it the request is answered by a hub-scoped API in this process.
+ */
+export const API_SESSION_QUERY_PARAM = 'session';
+
 /** What the agent is doing right now, derived from its frame stream. */
 export type SessionPhase = 'idle' | 'turn' | 'compaction' | 'retry';
 
@@ -59,6 +65,8 @@ export interface SessionSummary {
   lastSettledAt?: string;
   /** Shown in the refused overlay so the user can find the competing client. */
   socketPath: string;
+  /** Where this session serves its package APIs, when it serves any; the hub proxies there. */
+  apiSocketPath?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
 }
@@ -119,6 +127,39 @@ export const SUBSCRIBE_THREAD_TYPE = 'subscribe_thread';
 export const UNSUBSCRIBE_THREAD_TYPE = 'unsubscribe_thread';
 export const THREAD_BACKLOG_TYPE = 'thread_backlog';
 export const THREAD_FRAME_TYPE = 'thread_frame';
+
+/** A page asks for the transcript before what it already holds. */
+export const HISTORY_REQUEST_TYPE = 'history_request';
+/** One older window, oldest first, answering a history_request. */
+export const HISTORY_PAGE_TYPE = 'history_page';
+
+/**
+ * How many journalled messages one page carries. Small enough that prepending
+ * a window never blocks the reader's scroll, large enough that a flick through
+ * a long transcript does not turn into a hundred round trips.
+ */
+export const HISTORY_PAGE_SIZE = 100;
+
+export interface HistoryRequestFrame {
+  type: typeof HISTORY_REQUEST_TYPE;
+  sessionId: string;
+  /** Journal id of the oldest entry the page holds; absent asks for the newest window. */
+  before?: string;
+  limit?: number;
+}
+
+export interface HistoryPageFrame {
+  type: typeof HISTORY_PAGE_TYPE;
+  sessionId: string;
+  /** Entry frames, oldest first, to prepend above what the page holds. */
+  frames: Record<string, unknown>[];
+  /** The cursor for the next older window; null when the transcript starts here. */
+  cursor: string | null;
+  /** Whether anything older than this window exists. */
+  hasMore: boolean;
+  /** Echoed so a page can drop an answer to a question it has since abandoned. */
+  before?: string;
+}
 
 /** First frame on every page socket, before the snapshot. */
 export interface HubHelloFrame {

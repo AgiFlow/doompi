@@ -1,9 +1,11 @@
 import {
   Badge,
+  Button,
   cn,
   Dot,
   type DotTone,
   EmptyState,
+  Kbd,
   OptionLabel,
   OptionRow,
   STATUS_EDGE,
@@ -18,7 +20,12 @@ import type {
   WorkflowRunView,
   WorkflowStepView,
 } from '../src/types/webWorkflows.ts';
+import { ArtifactsPane, artifactTab } from './ArtifactsPane.tsx';
+import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from './catalogStore.ts';
+import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
 import { formatRunDuration } from './runDuration.ts';
+import { stepTerminalTab } from './StepTerminalPanel.tsx';
+import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer.tsx';
 import { workflowRunIdentity } from './workflowActivity.ts';
 import { focusRun, workflows } from './workflowsStore.ts';
 
@@ -172,13 +179,16 @@ function JobRow({
   );
 }
 
-function StepRow({ step, now }: { step: WorkflowStepView; now: number }) {
+function StepRow({ step, now, onOpen }: { step: WorkflowStepView; now: number; onOpen: () => void }) {
   const icon = STATE_ICON[step.status];
   return (
-    <div
+    <button
+      type="button"
       data-testid={`step-row-${step.name}`}
       data-step-status={step.status}
-      className="flex flex-col gap-0.5 px-3 py-1.5"
+      title="open the run's terminal at this step"
+      onClick={onOpen}
+      className="flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-doom-panel"
     >
       <div className="flex items-center gap-2">
         <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
@@ -199,7 +209,7 @@ function StepRow({ step, now }: { step: WorkflowStepView; now: number }) {
       {ACTIVE_STATES.has(step.status) && step.status !== 'paused' ? (
         <span className="ml-5 mt-0.5 inline-block h-[10px] w-1.5 bg-doom-blue" />
       ) : null}
-    </div>
+    </button>
   );
 }
 
@@ -211,12 +221,14 @@ function StepRow({ step, now }: { step: WorkflowStepView; now: number }) {
  * log. The view is read-only; recovery and resume stay with the session that
  * owns the run.
  */
-export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
+export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }: WebPluginSlotProps) {
   const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   // The focused run lives in the store so the activity dock can point the tab
   // at a run before opening it.
   const selectedRun = useStore(workflows.store, (state) => workflows.select(state, sessionId).focusedRun);
+  const catalogState = useStore(catalog.store, (state) => catalog.select(state, sessionId));
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [pane, setPane] = useState<'steps' | 'artifacts'>('steps');
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -233,12 +245,24 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
     jobs.find((candidate) => candidate.name === fallbackJob);
   const runningTally = runs.filter((candidate) => candidate.stage === 'running').length;
   const attentionTally = runs.filter((candidate) => attentionFor(candidate) !== undefined).length;
+  const launching = catalogState.workflows.find((workflow) => workflow.path === catalogState.launch);
 
   return (
     <div data-testid="workflows-panel" className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-[26px] py-[18px]">
         <div className="flex items-center pb-3">
           <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">WORKFLOWS · this session</span>
+          <Button
+            variant="link"
+            size="xs"
+            data-testid="workflows-open-catalog"
+            className="px-0 pl-3"
+            onClick={() => {
+              if (sessionId !== null) openCatalog(sessionId);
+            }}
+          >
+            launch workflow <Kbd>SPC w l</Kbd>
+          </Button>
           <span className="min-w-0 flex-1" />
           <span data-testid="workflows-tally" className="text-[9px] text-doom-faint">
             {runs.length === 0 ? 'no runs yet' : `${runningTally} running · ${runs.length} total`}
@@ -248,7 +272,7 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
           <EmptyState
             data-testid="workflows-empty"
             title="no workflow runs yet"
-            description="launch one from the session (its workflow tools or SPC w l) and the run will show up here live, jobs and steps included."
+            description="pick one from the catalog, or launch it from the session with SPC w l, and the run shows up here live, jobs and steps included."
           />
         ) : (
           <>
@@ -338,31 +362,80 @@ export function WorkflowsPanel({ sessionId }: WebPluginSlotProps) {
                           <StatusBadge className={cn('bg-doom-deep', STATE_ICON[job.status].className)}>
                             {job.status.replace('_', ' ')}
                           </StatusBadge>
+                          <Button
+                            variant={pane === 'steps' ? 'primary' : 'outline'}
+                            size="xs"
+                            data-testid="pane-tab-steps"
+                            data-active={pane === 'steps'}
+                            onClick={() => setPane('steps')}
+                          >
+                            steps
+                          </Button>
+                          <Button
+                            variant={pane === 'artifacts' ? 'primary' : 'outline'}
+                            size="xs"
+                            data-testid="pane-tab-artifacts"
+                            data-active={pane === 'artifacts'}
+                            onClick={() => setPane('artifacts')}
+                          >
+                            artifacts
+                          </Button>
                           <span className="min-w-0 flex-1" />
                           <span className="text-[9px] text-doom-faint">
                             {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
                           </span>
                         </div>
-                        <div className="flex flex-col py-1.5">
-                          {job.steps.length === 0 ? (
-                            <EmptyState className="py-4" title="no steps recorded yet" />
-                          ) : (
-                            job.steps.map((step) => <StepRow key={step.name} step={step} now={now} />)
-                          )}
-                        </div>
+                        {pane === 'artifacts' ? (
+                          <ArtifactsPane run={run} onOpen={(path) => openTransientTab(artifactTab(run, path))} />
+                        ) : (
+                          <div className="flex flex-col py-1.5">
+                            {job.steps.length === 0 ? (
+                              <EmptyState className="py-4" title="no steps recorded yet" />
+                            ) : (
+                              job.steps.map((step) => (
+                                <StepRow
+                                  key={step.name}
+                                  step={step}
+                                  now={now}
+                                  onOpen={() => openTransientTab(stepTerminalTab(run, job.name, step.name))}
+                                />
+                              ))
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
                 </div>
                 <span className="pt-3 text-[9px] text-doom-faint">
-                  read from the workflow registry live · errored runs stay a day for recovery · finished runs leave
-                  after 10m
+                  read from the workflow registry live · every run of this session is kept, grouped by outcome · errored
+                  runs stay a day for recovery
                 </span>
               </>
             )}
           </>
         )}
       </div>
+      {sessionId !== null && catalogState.open ? (
+        <WorkflowCatalogDrawer
+          sessionId={sessionId}
+          onClose={() => closeCatalog(sessionId)}
+          onLaunch={(workflow) => openLaunch(sessionId, workflow.path)}
+        />
+      ) : null}
+      {sessionId !== null && launching !== undefined ? (
+        <LaunchWorkflowDialog
+          sessionId={sessionId}
+          workflow={launching}
+          cwd={catalogState.cwd}
+          send={sendSessionFrame}
+          onClose={() => closeLaunch(sessionId)}
+          onLaunched={() => {
+            closeLaunch(sessionId);
+            closeCatalog(sessionId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

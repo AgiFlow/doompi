@@ -30,10 +30,12 @@ test('recovers the frames the hub missed while its socket was down', async ({ pa
   // The hub reattaches on its own and streams the replay through.
   await expect(page.getByTestId('entry-assistant')).toContainText('recovered after the drop');
 
-  // A reloaded page replays that history from the hub's ring and says so.
+  // A reloaded page replays that history from the hub's ring. The replay is
+  // not announced: it is how the page is supposed to work, not news, and the
+  // count told a reader nothing they could act on. A dropped frame still is.
   await page.reload();
   await expect(page.getByTestId('entry-assistant')).toContainText('recovered after the drop');
-  await expect(page.getByTestId('replayed-count')).toContainText('replayed');
+  await expect(page.getByTestId('replayed-count')).toHaveCount(0);
 });
 
 test('shows an empty timeline before anything happens', async ({ page, cockpit }) => {

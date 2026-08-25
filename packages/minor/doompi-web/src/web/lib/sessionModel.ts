@@ -503,6 +503,35 @@ function applyJournalEntry(state: SessionState, entry: Frame): SessionState {
 }
 
 /**
+ * Folds an older window of transcript above what the page already holds.
+ *
+ * The reducer is append-only by design: it builds the timeline as the session
+ * produces it. Paging backwards is the one case that runs the other way, so
+ * the window is reduced on its own and the result is prepended, rather than
+ * teaching every case in the reducer about a second direction.
+ *
+ * Entry ids are positional, so a window reduced from scratch would collide
+ * with the live entries. Prefixing by page keeps every key unique and stable
+ * across re-renders, which is what a virtualised list needs to keep its
+ * measurements.
+ */
+export function prependHistory(state: SessionState, frames: readonly Frame[], page: number): SessionState {
+  const older = frames.reduce(reduceSession, initialSessionState);
+  const known = new Set(state.restoredIds);
+  const restored = older.restoredIds.filter((id) => !known.has(id));
+  if (restored.length === 0) return state;
+  const prefix = `h${page}-`;
+  const entries = older.entries
+    .filter((entry) => entry.kind !== 'notice')
+    .map((entry) => ({ ...entry, id: `${prefix}${entry.id}` }) as TimelineEntry);
+  return {
+    ...state,
+    entries: [...entries, ...state.entries],
+    restoredIds: [...restored, ...state.restoredIds],
+  };
+}
+
+/**
  * Folds one agent frame into the view model.
  *
  * Pure and total: an unrecognised frame returns the state unchanged, so a Pi

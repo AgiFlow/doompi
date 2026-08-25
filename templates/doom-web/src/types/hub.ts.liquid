@@ -23,6 +23,12 @@ export const SESSIONS_API_ROUTE = '/api/sessions';
  */
 export const DIRECTORIES_API_ROUTE = '/api/directories';
 
+/**
+ * Query parameter that routes a package API request to one session's server.
+ * Without it the request is answered by a hub-scoped API in this process.
+ */
+export const API_SESSION_QUERY_PARAM = 'session';
+
 /** What the agent is doing right now, derived from its frame stream. */
 export type SessionPhase = 'idle' | 'turn' | 'compaction' | 'retry';
 
@@ -59,6 +65,8 @@ export interface SessionSummary {
   lastSettledAt?: string;
   /** Shown in the refused overlay so the user can find the competing client. */
   socketPath: string;
+  /** Where this session serves its package APIs, when it serves any; the hub proxies there. */
+  apiSocketPath?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
 }

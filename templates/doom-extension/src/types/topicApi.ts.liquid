@@ -1,0 +1,34 @@
+/**
+ * The wire vocabulary this package's API shares with whatever calls it.
+ *
+ * It lives under src/types because that is the one server root a browser
+ * bundle may read: the cockpit plugin builds its URLs from these and the
+ * routes answer them, so neither half can drift from the other.
+ */
+
+/** Where a host mounts this package's API; the segment after /api/plugin/. */
+export const API_BASE_PATH = '{{ pluginId }}';
+
+/** Query parameter the cockpit hub reads to pick which session server to proxy to. */
+export const SESSION_QUERY_PARAM = 'session';
+
+/** One item, relative to the API's own mount. */
+export function itemPath(id: string): string {
+  return `/items/${encodeURIComponent(id)}`;
+}
+
+/**
+ * The absolute URL a page fetches, through the hub. The whole query is built
+ * here, session parameter included, so a caller never appends a second '?'.
+ */
+export function itemUrl(sessionId: string, id: string): string {
+  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
+  return `/api/plugin/${API_BASE_PATH}${itemPath(id)}?${search.toString()}`;
+}
+
+/** What the item route answers with. */
+export interface {{ topic | pascalCase }}ItemView {
+  id: string;
+  /** The session the answer came from, or null from a hub-scoped host. */
+  sessionId: string | null;
+}

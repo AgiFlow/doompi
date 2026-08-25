@@ -61,9 +61,19 @@ export function CockpitPage() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar view={tab?.id ?? 'conversation'} />
-        {tab ? <tab.panel {...slotProps} /> : <Timeline />}
-        <Composer />
-        <SelectionBar />
+        {/* The composer and the selection bar address the session's agent, so
+            they belong to the conversation alone. A plugin panel is a view of
+            something else, and a prompt box under it would send somewhere the
+            reader is not looking. */}
+        {tab ? (
+          <tab.panel {...slotProps} />
+        ) : (
+          <>
+            <Timeline />
+            <Composer />
+            <SelectionBar />
+          </>
+        )}
       </main>
       {dockOpen ? (
         <ActivityDock onClose={() => setDockOpen(false)} />

@@ -65,3 +65,38 @@ export function workflowActivityRows(runs: readonly WorkflowRunView[], now: numb
     };
   });
 }
+
+/** The three answers a reader wants from the dock: what is live, what broke, what is done. */
+export type WorkflowActivityGroupName = 'running' | 'failed' | 'successful';
+
+export interface WorkflowActivityGroup {
+  name: WorkflowActivityGroupName;
+  rows: WorkflowActivityRow[];
+  /**
+   * Whether the group is open when the dock first draws it.
+   *
+   * Failures open because they are the only ones that need an answer, and a
+   * folded failure is one nobody sees. Everything else stays folded so a
+   * session's whole history does not push the other groups off the dock.
+   */
+  openByDefault: boolean;
+}
+
+const GROUP_OF: Readonly<Record<WorkflowActivityTone, WorkflowActivityGroupName>> = {
+  running: 'running',
+  paused: 'running',
+  failed: 'failed',
+  done: 'successful',
+  skipped: 'successful',
+};
+
+const GROUP_ORDER: readonly WorkflowActivityGroupName[] = ['running', 'failed', 'successful'];
+
+/** Rows split by outcome, in the order the dock shows them; empty groups are dropped. */
+export function workflowActivityGroups(rows: readonly WorkflowActivityRow[]): WorkflowActivityGroup[] {
+  return GROUP_ORDER.map((name) => ({
+    name,
+    rows: rows.filter((row) => GROUP_OF[row.tone] === name),
+    openByDefault: name !== 'successful',
+  })).filter((group) => group.rows.length > 0);
+}

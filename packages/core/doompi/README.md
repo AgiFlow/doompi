@@ -50,7 +50,7 @@ releases.
 
 - Node.js 22.19.0 or newer
 - macOS or Linux on arm64 or x64 for the bundled Runner backend
-- Pi 0.84.2 and Pi TUI 0.84.2 for packages that declare them as peer requirements
+- Pi 0.84.3 and Pi TUI 0.84.3 for packages that declare them as peer requirements
 
 ## Try DoomPi without replacing your Pi setup
 
@@ -466,7 +466,9 @@ dictation and never enables Voice tools. `SPC v e` enters autonomous capture and
 TUI session receives the two Voice façades plus the standalone `narrate` tool.
 
 While `narrate` is available, the primary agent calls it before every user-facing final
-response. One concise spoken answer is enough for a short conversation or clarification;
+response. Final narration contains the complete answer, including every user-relevant
+conclusion, question, warning, result, and next action in the written response, rather than
+leaving essential information only in text. Short turns need one complete spoken answer;
 longer work also gets an opening and meaningful milestone calls. Each ready-to-speak
 utterance is limited to 4,096 characters, waits for physical playback, and returns
 `completed`, `interrupted`, `superseded`, or `failed`.

@@ -6,6 +6,12 @@ import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { Hono } from 'hono';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import {
+  DOOM_API_ROUTE_PREFIX,
+  type DoomApi,
+  type DoomApiHandler,
+} from '@agimon-ai/doompi-extension-contracts/package-api';
+import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
@@ -18,7 +24,9 @@ import {
   SESSION_REMOVED_TYPE,
   SESSION_UPSERT_TYPE,
   sessionFrameEnvelope,
+  API_SESSION_QUERY_PARAM,
   DIRECTORIES_API_ROUTE,
+  HISTORY_REQUEST_TYPE,
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
   SUBSCRIBE_THREAD_TYPE,
@@ -38,6 +46,7 @@ import { registerAuthRoutes } from './authRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
 import { suggestDirectories } from './directoryListing.ts';
 import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
+import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
@@ -101,6 +110,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** One page's hold on one thread; a session id never contains a newline, so the pair cannot collide. */
 function threadKey(sessionId: string, threadId: string): string {
   return `${sessionId}\n${threadId}`;
@@ -151,6 +164,77 @@ function buildHub(
 }
 
 /**
+ * Mounts the hub-scoped package APIs under /api/plugin/<basePath>/.
+ *
+ * The prefix is stripped before the API sees the request, so a package
+ * declares its routes relative to its own mount and never repeats where a host
+ * put it. An API that throws answers 500 for its own routes alone; one bad
+ * package never takes the cockpit down with it.
+ */
+function mountHubApis(app: Hono, apis: readonly DoomApi[], notice: (message: string) => void): DoomApiHandler[] {
+  const handlers: DoomApiHandler[] = [];
+  for (const api of apis) {
+    const mount = `${DOOM_API_ROUTE_PREFIX}/${api.basePath}`;
+    let handler: DoomApiHandler;
+    try {
+      handler = api.start({ scope: 'hub', onNotice: notice });
+    } catch (error) {
+      notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
+      continue;
+    }
+    handlers.push(handler);
+    app.all(`${mount}/*`, async (context) => {
+      if (context.req.query(API_SESSION_QUERY_PARAM) !== undefined) return context.notFound();
+      const url = new URL(context.req.url);
+      url.pathname = url.pathname.slice(mount.length) || '/';
+      try {
+        return await handler.fetch(new Request(url, context.req.raw));
+      } catch (error) {
+        notice(`hub API '${api.basePath}' failed on ${url.pathname} (${describeError(error)})`);
+        return context.json({ error: `The '${api.basePath}' API failed.` }, 500);
+      }
+    });
+  }
+  return handlers;
+}
+
+/**
+ * Forwards a package API request carrying ?session= to that session's own
+ * server, over the API socket its registry record names.
+ *
+ * The session servers are where session-scoped data lives, but the browser must
+ * not talk to them: their attach tokens stay in this process and the page only
+ * ever reaches loopback. So the hub is the one door, and this is the hop behind
+ * it. A session that never mounted an API answers 404 with the reason rather
+ * than leaving the page waiting.
+ */
+function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: string) => void): void {
+  app.all(`${DOOM_API_ROUTE_PREFIX}/*`, async (context) => {
+    const sessionId = context.req.query(API_SESSION_QUERY_PARAM);
+    if (sessionId === undefined) return context.notFound();
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (summary === undefined) return context.json({ error: `No session ${sessionId}.` }, 404);
+    if (summary.apiSocketPath === undefined) {
+      return context.json({ error: `Session ${sessionId} serves no package API.` }, 404);
+    }
+    const url = new URL(context.req.url);
+    url.searchParams.delete(API_SESSION_QUERY_PARAM);
+    try {
+      return await proxyToSocket({
+        socketPath: summary.apiSocketPath,
+        path: `${url.pathname}${url.search}`,
+        method: context.req.method,
+        headers: context.req.raw.headers,
+        body: context.req.raw.body,
+      });
+    } catch (error) {
+      notice(`session ${sessionId} API is unreachable (${describeError(error)})`);
+      return context.json({ error: `Session ${sessionId} is not answering.` }, 502);
+    }
+  });
+}
+
+/**
  * Serves the cockpit and multiplexes every session behind it.
  *
  * Attach tokens stay in this process. The browser authenticates by reaching a
@@ -175,6 +259,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
   registerAuthRoutes(app, providerAuth);
+  // Package APIs, mounted before the SPA fallback so their routes are reachable
+  // and everything else still falls through to the bundle. Hub-scoped ones run
+  // here; session-scoped ones live in each session's own server and are proxied.
+  const pluginApis = mountHubApis(app, await loadPackageApis('hub', { onNotice: notice }), notice);
+  mountSessionApiProxy(app, hub, notice);
 
   app.get('/api/health', (context) =>
     context.json({
@@ -321,6 +410,22 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             subscriptions.delete(sessionId);
             return;
           }
+          if (parsed.type === HISTORY_REQUEST_TYPE) {
+            // Older transcript, on demand. The hub kept what the attach path
+            // was too small to publish, so scrolling back reads from memory
+            // rather than asking the session to re-read its journal.
+            const page = hub.history(sessionId, {
+              ...(typeof parsed.before === 'string' ? { before: parsed.before } : {}),
+              ...(typeof parsed.limit === 'number' ? { limit: parsed.limit } : {}),
+            });
+            if (!page) return;
+            try {
+              ws.send(JSON.stringify(page));
+            } catch {
+              // The browser went away mid-write; onClose tears the socket down.
+            }
+            return;
+          }
           if (parsed.type === SUBSCRIBE_THREAD_TYPE || parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
             if (typeof parsed.threadId !== 'string') return;
             const threadId = parsed.threadId;
@@ -382,6 +487,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             threads.close();
             hub.close();
             providerAuth.close();
+            for (const handler of pluginApis) handler.close();
             // An upgraded socket leaves the HTTP server's connection tracking,
             // so only the WebSocket server can let go of it. Without this the
             // close callback waits on a browser that has no reason to leave.
@@ -396,6 +502,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       threads.close();
       hub.close();
       providerAuth.close();
+      for (const handler of pluginApis) handler.close();
       reject(error);
     });
   });

@@ -35,6 +35,18 @@ Then open `http://127.0.0.1:7433`. Bare `doompi-web` is the hub: it watches the 
 can start new ones from the page. Pass `--socket` instead to pin the cockpit to exactly one
 session, the pre-hub behavior.
 
+Working on this repository, run the hub through the workspace script instead:
+
+```bash
+pnpm cockpit:build   # doompi, doompi-server, doompi-web
+pnpm cockpit
+```
+
+It points `--spawn-command` and `DOOMPI_AGENT_COMMAND` at this checkout's builds. Without them a
+session created from the page runs whichever `doompi` is on PATH, which is a different composition:
+its extensions, commands, and minor modes are not the ones being edited here, so a change looks
+like it did nothing.
+
 | Flag                | Default         | Meaning                                          |
 | ------------------- | --------------- | ------------------------------------------------ |
 | `--registry-dir`    | `~/.doompi/run` | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |

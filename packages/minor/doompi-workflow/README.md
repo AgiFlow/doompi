@@ -13,7 +13,7 @@ host-executed steps, while DoomPi provides session-scoped tools and TUI surfaces
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2 and Pi TUI 0.84.2
+- Pi 0.84.3 and Pi TUI 0.84.3
 
 ## Install
 

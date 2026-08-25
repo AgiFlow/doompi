@@ -10,6 +10,21 @@ interface RegistryEntry {
   hubEntry?: unknown;
 }
 
+const UNKNOWN_PLUGIN_ID = 'unknown';
+
+/** The synced bundle's server registry, or an empty list when there is none to read. */
+function registryEntries(assetsDir: string, onNotice: (message: string) => void): RegistryEntry[] {
+  const registryPath = path.join(assetsDir, SERVER_REGISTRY_FILE);
+  if (!fs.existsSync(registryPath)) return [];
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+    return Array.isArray(parsed) ? (parsed as RegistryEntry[]) : [];
+  } catch (error) {
+    onNotice(`web plugin registry ${registryPath} is unreadable (${String(error)}); plugin channels skipped`);
+    return [];
+  }
+}
+
 /**
  * Assembles the hub's data channels for the assets being served.
  *
@@ -24,18 +39,8 @@ export async function loadHubChannels(
   onNotice: (message: string) => void,
 ): Promise<WebHubChannel[]> {
   const channels: WebHubChannel[] = [...BUILTIN_HUB_CHANNELS];
-  const registryPath = path.join(assetsDir, SERVER_REGISTRY_FILE);
-  let entries: RegistryEntry[] = [];
-  if (fs.existsSync(registryPath)) {
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-      if (Array.isArray(parsed)) entries = parsed as RegistryEntry[];
-    } catch (error) {
-      onNotice(`web plugin registry ${registryPath} is unreadable (${String(error)}); plugin channels skipped`);
-    }
-  }
-  for (const entry of entries) {
-    const pluginId = typeof entry.pluginId === 'string' ? entry.pluginId : 'unknown';
+  for (const entry of registryEntries(assetsDir, onNotice)) {
+    const pluginId = typeof entry.pluginId === 'string' ? entry.pluginId : UNKNOWN_PLUGIN_ID;
     if (typeof entry.hubEntry !== 'string') continue;
     try {
       const module = (await import(pathToFileURL(entry.hubEntry).href)) as { webHubChannels?: unknown };

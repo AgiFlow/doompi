@@ -36,6 +36,8 @@ const rules: Record<string, Severity> = {
   'provider-owned-policy': 'error',
   'web-plugin-entry': 'error',
   'web-plugin-import-allowlist': 'error',
+  'package-api-entry': 'error',
+  'package-api-manifest': 'error',
   'web-plugin-manifest': 'error',
   'web-plugin-no-module-state': 'error',
   'web-plugin-tool-renderers': 'error',

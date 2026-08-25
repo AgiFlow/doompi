@@ -342,18 +342,21 @@
       "./mcp-tool-resolver": "tir",
       "./mode": "tir",
       "./narration": "tir",
-      "./package.json": "esm",
+      "./package-api": "tir",
+      "./package-api-loader": "tir",
       "./protocol": "tir",
       "./readiness": "tir",
+      "./relaunch-handoff": "tir",
       "./sandbox-harness": "tir",
       "./skills": "tir",
       "./subagent-policy": "tir",
       "./subagent-tool": "tir",
-      "./tool-overrides": "tir",
       "./transition": "tir",
+      "./tool-overrides": "tir",
       "./ui-hub": "tir",
+      "./voice-tools": "tir",
       "./voice-reload-handoff": "tir",
-      "./voice-tools": "tir"
+      "./package.json": "esm"
     },
     "exportTargets": {
       ".": {
@@ -451,7 +454,16 @@
         "import": "./dist/narration.mjs",
         "require": "./dist/narration.cjs"
       },
-      "./package.json": "./package.json",
+      "./package-api": {
+        "types": "./dist/packageApi.d.mts",
+        "import": "./dist/packageApi.mjs",
+        "require": "./dist/packageApi.cjs"
+      },
+      "./package-api-loader": {
+        "types": "./dist/packageApiLoader.d.mts",
+        "import": "./dist/packageApiLoader.mjs",
+        "require": "./dist/packageApiLoader.cjs"
+      },
       "./protocol": {
         "types": "./dist/protocol.d.mts",
         "import": "./dist/protocol.mjs",
@@ -462,10 +474,15 @@
         "import": "./dist/readiness.mjs",
         "require": "./dist/readiness.cjs"
       },
+      "./relaunch-handoff": {
+        "types": "./dist/relaunchHandoff.d.mts",
+        "import": "./dist/relaunchHandoff.mjs",
+        "require": "./dist/relaunchHandoff.cjs"
+      },
       "./sandbox-harness": {
+        "types": "./dist/sandboxHarness.d.mts",
         "import": "./dist/sandboxHarness.mjs",
-        "require": "./dist/sandboxHarness.cjs",
-        "types": "./dist/sandboxHarness.d.mts"
+        "require": "./dist/sandboxHarness.cjs"
       },
       "./skills": {
         "types": "./dist/skills.d.mts",
@@ -482,31 +499,32 @@
         "import": "./dist/subagentTool.mjs",
         "require": "./dist/subagentTool.cjs"
       },
-      "./tool-overrides": {
-        "types": "./dist/toolOverrides.d.mts",
-        "import": "./dist/toolOverrides.mjs",
-        "require": "./dist/toolOverrides.cjs"
-      },
       "./transition": {
         "types": "./dist/transition.d.mts",
         "import": "./dist/transition.mjs",
         "require": "./dist/transition.cjs"
+      },
+      "./tool-overrides": {
+        "types": "./dist/toolOverrides.d.mts",
+        "import": "./dist/toolOverrides.mjs",
+        "require": "./dist/toolOverrides.cjs"
       },
       "./ui-hub": {
         "types": "./dist/uiHub.d.mts",
         "import": "./dist/uiHub.mjs",
         "require": "./dist/uiHub.cjs"
       },
+      "./voice-tools": {
+        "types": "./dist/voiceTools.d.mts",
+        "import": "./dist/voiceTools.mjs",
+        "require": "./dist/voiceTools.cjs"
+      },
       "./voice-reload-handoff": {
         "types": "./dist/voiceReloadHandoff.d.mts",
         "import": "./dist/voiceReloadHandoff.mjs",
         "require": "./dist/voiceReloadHandoff.cjs"
       },
-      "./voice-tools": {
-        "types": "./dist/voiceTools.d.mts",
-        "import": "./dist/voiceTools.mjs",
-        "require": "./dist/voiceTools.cjs"
-      }
+      "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
@@ -1207,6 +1225,7 @@
       "./services/RunnerRegistry/RunnerRegistry": "tir",
       "./services/Spawner": "tir",
       "./services/Spawner/NodeSpawner": "tir",
+      "./session-api": "tir",
       "./session": "tir",
       "./tool/bashTool": "tir",
       "./tool/responseEnvelope": "tir",
@@ -1215,6 +1234,7 @@
       "./tui/format": "tir",
       "./tui/runnerSpace": "tir",
       "./types": "tir",
+      "./web-hub": "tir",
       "./package.json": "esm"
     },
     "exportTargets": {
@@ -1433,6 +1453,11 @@
         "import": "./dist/services/Spawner/NodeSpawner.mjs",
         "require": "./dist/services/Spawner/NodeSpawner.cjs"
       },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
       "./session": {
         "types": "./dist/session.d.mts",
         "import": "./dist/session.mjs",
@@ -1473,6 +1498,11 @@
         "import": "./dist/types.mjs",
         "require": "./dist/types.cjs"
       },
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      },
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
@@ -1490,7 +1520,18 @@
       "./skills/doom-runner/SKILL.md",
       "./src/prompts/doompi-use-runner/SKILL.md"
     ],
-    "files": ["dist", "skills", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "skills",
+      "llms.txt",
+      "src/prompts",
+      "src/types/webRunners.ts",
+      "src/types/webRunnerLog.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },

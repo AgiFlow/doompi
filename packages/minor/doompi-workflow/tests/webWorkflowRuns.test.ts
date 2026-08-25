@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowProgressEvent, WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import {
   foldWorkflowProgress,
+  MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP,
   parseWorkflowProgress,
   parseWorkflowRunRecord,
   presentWorkflowRuns,
@@ -160,7 +161,7 @@ describe('workflowRuns', () => {
     expect(runBelongsToSession(parsed, { sessionId: 'other', cwd: '/repo-sibling' })).toBe(false);
   });
 
-  it('presents running first, keeps errors a day, retires completed after ten minutes', () => {
+  it('presents running first, keeps errors a day, and keeps finished runs for the session', () => {
     const run = (overrides: Partial<WorkflowRunView>): WorkflowRunView => ({
       runKey: 'r',
       workspace: 'w',
@@ -183,6 +184,58 @@ describe('workflowRuns', () => {
       ],
       now,
     );
-    expect(presented.map((entry) => entry.runKey)).toEqual(['live', 'old-error', 'fresh-done']);
+    // An hour-old success is exactly what a reader asks about later in the day,
+    // so it stays; only the errored run has a retention of its own.
+    expect(presented.map((entry) => entry.runKey)).toEqual(['live', 'old-error', 'fresh-done', 'old-done']);
+  });
+
+  it('retires an errored run once its day is up', () => {
+    const dayOld = '2026-08-20T08:00:00.000Z';
+    const presented = presentWorkflowRuns(
+      [
+        {
+          runKey: 'stale-error',
+          workspace: 'w',
+          displayName: 'r',
+          workflowPath: '/repo/wf.yml',
+          stage: 'error',
+          startedAt: dayOld,
+          finishedAt: dayOld,
+          jobs: [],
+        },
+      ],
+      Date.parse('2026-08-21T10:00:00.000Z'),
+    );
+    expect(presented).toEqual([]);
+  });
+
+  // One cap across every run let a stream of green runs push a failure out of
+  // the list, which is the one thing that must never fall off the end.
+  it('caps each outcome group on its own so a failure cannot be crowded out', () => {
+    const many = Array.from({ length: MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP + 6 }, (_, index) => ({
+      runKey: `done-${index}`,
+      workspace: 'w',
+      displayName: 'r',
+      workflowPath: '/repo/wf.yml',
+      stage: 'completed' as const,
+      outcome: 'success' as const,
+      startedAt: new Date(Date.parse('2026-08-21T09:00:00.000Z') + index).toISOString(),
+      jobs: [],
+    }));
+    const failure: WorkflowRunView = {
+      runKey: 'failed-one',
+      workspace: 'w',
+      displayName: 'r',
+      workflowPath: '/repo/wf.yml',
+      stage: 'error',
+      startedAt: '2026-08-21T09:30:00.000Z',
+      finishedAt: '2026-08-21T09:31:00.000Z',
+      jobs: [],
+    };
+    const presented = presentWorkflowRuns([...many, failure], Date.parse('2026-08-21T10:00:00.000Z'));
+    expect(presented[0]?.runKey).toBe('failed-one');
+    expect(presented.filter((entry) => entry.stage === 'completed')).toHaveLength(
+      MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP,
+    );
   });
 });

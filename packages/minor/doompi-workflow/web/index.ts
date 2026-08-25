@@ -1,5 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
+import { openCatalog, workflowCatalogChannel } from './catalogStore.ts';
 import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
 import { WorkflowsPanel } from './WorkflowsPanel.tsx';
 import { WorkflowToolMessage } from './WorkflowToolMessage.tsx';
@@ -19,7 +20,7 @@ const WORKFLOWS_GROUP = { key: 'w', label: 'workflows', detail: 'multi-step agen
 export const webPlugin = defineWebPlugin({
   id: 'workflows',
   tabs: [{ id: 'workflows', label: 'workflows', panel: WorkflowsPanel, useBadge: useWorkflowsBadge }],
-  channels: [workflowRunsChannel],
+  channels: [workflowRunsChannel, workflowCatalogChannel],
   minorModes: [{ name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress', order: 50 }],
   activityGroups: [
     {
@@ -35,13 +36,21 @@ export const webPlugin = defineWebPlugin({
   activitySections: [{ id: 'workflows', component: WorkflowsActivitySection }],
   // The workflow tools' timeline cards, the web half of src/tui/workflow/workflowToolRender.ts.
   toolRenderers: [{ tools: ['list_workflows', 'launch_workflow', 'workflow_run'], message: WorkflowToolMessage }],
-  // The TUI's SPC w r and SPC w e; the catalog (w l) and recovery (w c) are
-  // TUI-only overlays, so they have no cockpit key yet.
+  // The TUI's SPC w r, w l and w e; recovery (w c) is a TUI-only overlay, so
+  // it has no cockpit key yet.
   leaderBindings: [
     {
       id: 'doom-workflow.manage',
       path: [WORKFLOWS_GROUP, { key: 'r', label: 'runs', detail: 'runs in this session' }],
       run: (context) => context.openTab('workflows'),
+    },
+    {
+      id: 'doom-workflow.catalog',
+      path: [WORKFLOWS_GROUP, { key: 'l', label: 'launch', detail: 'pick a workflow and launch it' }],
+      run: (context) => {
+        if (context.sessionId !== null) openCatalog(context.sessionId);
+        context.openTab('workflows');
+      },
     },
     {
       id: 'doom-workflow.toggle',

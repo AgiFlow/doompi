@@ -18,6 +18,11 @@ export interface SessionRecord {
   cwd: string;
   /** Absolute path of the session's unix socket. */
   socketPath: string;
+  /**
+   * Absolute path of the socket this session serves its package APIs on, when
+   * any package declared one. Absent means no API is mounted.
+   */
+  apiSocketPath?: string;
   /** Absolute path of the file holding the attach token. */
   tokenFile: string;
   /** Server pid; a reader treats a dead pid as a stale record. */

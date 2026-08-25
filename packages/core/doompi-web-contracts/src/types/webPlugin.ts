@@ -162,6 +162,13 @@ export type LeaderBindingContribution =
  */
 export interface MinorModeContribution {
   name: string;
+  /**
+   * The catalog mode this row drives, when the runtime registers it under a
+   * different id than the row shows. A package whose leader key drives one of
+   * several modes it owns needs this: the row must reach the same mode the
+   * key does, not the one that happens to share the row's label.
+   */
+  modeId?: string;
   /** Leader Space key path, as the TUI documents it. */
   keys: string;
   /** Footer status key whose presence and content report availability and detail. */

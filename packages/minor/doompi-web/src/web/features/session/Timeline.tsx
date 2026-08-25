@@ -14,7 +14,7 @@ import type { Store } from '@tanstack/store';
 import { Markdown } from '../../components/Markdown.tsx';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import type { SessionState, TimelineEntry } from '../../lib/sessionModel.ts';
-import { sessionStoreFor, submitMessage } from '../../stores/sessionStore.ts';
+import { requestOlderHistory, sessionStoreFor, submitMessage, useHasOlderHistory } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
 import { ToolCard } from './ToolCard.tsx';
@@ -26,21 +26,50 @@ const SUGGESTIONS = [
 ];
 
 /** Closer than this to the end counts as reading the latest, so new frames keep the view pinned. */
-const PINNED_THRESHOLD_PX = 48;
+const PINNED_THRESHOLD_PX = 200;
+/** Closer than this to the top asks for the window above, before the reader hits the edge. */
+const PAGE_BACK_THRESHOLD_PX = 400;
+/**
+ * Entries at the end that are never skipped.
+ *
+ * Containment makes a skipped entry report its placeholder height, so a
+ * transcript whose tail is contained has a scroll height that is only an
+ * estimate, and following the newest line lands short of it. The tail is also
+ * the part a reader is nearly always looking at, so there is nothing to skip
+ * there; everything above it is what makes a long session slow.
+ */
+const LIVE_TAIL_ENTRIES = 40;
 
-function Gutter({ label, tone }: { label: string; tone: string }) {
-  return <span className={`w-11 shrink-0 pt-0.5 text-right text-[10px] font-bold ${tone}`}>{label}</span>;
+/**
+ * The speaker's label.
+ *
+ * Leading, it holds a fixed column so every entry's text starts at the same
+ * left edge and the labels line up down the page. Trailing, that column would
+ * only push the label away from the block it names, so it sizes to its own
+ * text and sits beside it.
+ */
+function Gutter({ label, tone, trailing = false }: { label: string; tone: string; trailing?: boolean }) {
+  return (
+    <span className={`shrink-0 text-[10px] font-bold ${trailing ? 'text-left' : 'w-11 pt-0.5 text-right'} ${tone}`}>
+      {label}
+    </span>
+  );
 }
 
 function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
   if (entry.kind === 'user') {
     return (
-      <div data-testid="entry-user" className="flex gap-3">
-        <Gutter label="you" tone="text-doom-cyan" />
-        <div className="flex min-w-0 flex-1 flex-col gap-2 text-[13px] text-doom-hi">
+      // What the reader said sits inboard of what the session said, on its own
+      // surface: the transcript is a conversation, and two lanes tell the two
+      // voices apart faster than a gutter label alone.
+      <div data-testid="entry-user" className="flex items-center gap-3 pl-10">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
           <Markdown text={entry.text} />
           {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
         </div>
+        {/* The label trails what the reader said and the session's leads what
+            it answered, so the two voices read as two lanes at a glance. */}
+        <Gutter label="you" tone="text-doom-cyan" trailing />
       </div>
     );
   }
@@ -138,6 +167,17 @@ export function Transcript({
   // before the browser has reported the reader's scroll.
   const lastHeight = useRef(0);
   const [unread, setUnread] = useState(false);
+  const hasOlder = useHasOlderHistory(sessionId);
+  // Where the bottom of the transcript sat before a window was prepended.
+  // Restoring against this is what keeps the reader's place: prepending grows
+  // the scroll height above them, and the browser would otherwise leave the
+  // viewport where it was and the content would appear to jump.
+  const anchor = useRef<{ height: number; top: number } | null>(null);
+  // The first entry's key. A window prepended above the reader changes it, and
+  // nothing else does: an entry arriving at the bottom, or the streaming one
+  // growing, leaves the top of the transcript alone. That is the difference
+  // between holding the reader's place and refusing to follow a live run.
+  const firstId = useRef<string | null>(null);
 
   const atBottom = (element: HTMLDivElement, height: number): boolean =>
     element.scrollTop + element.clientHeight >= height - PINNED_THRESHOLD_PX;
@@ -152,18 +192,39 @@ export function Transcript({
   /** Reaching the bottom by hand is the same as never having left it. */
   const onScroll = (): void => {
     const element = scroller.current;
-    if (element && atBottom(element, element.scrollHeight)) setUnread(false);
+    if (!element) return;
+    if (atBottom(element, element.scrollHeight)) setUnread(false);
+    if (element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
+      anchor.current = { height: element.scrollHeight, top: element.scrollTop };
+      requestOlderHistory(sessionId);
+    }
   };
 
   // A different fold starts at the bottom of its transcript.
   useEffect(() => {
     lastHeight.current = 0;
+    firstId.current = null;
+    anchor.current = null;
     setUnread(false);
   }, [store]);
 
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element) return;
+    // A prepended window grew the transcript upwards; hold the reader where
+    // they were by moving down by exactly what appeared above them.
+    const held = anchor.current;
+    const prepended = entries.length > 0 && firstId.current !== null && entries[0]?.id !== firstId.current;
+    firstId.current = entries[0]?.id ?? null;
+    if (held !== null && prepended) {
+      anchor.current = null;
+      const grew = element.scrollHeight - held.height;
+      if (grew > 0) {
+        element.scrollTop = held.top + grew;
+        lastHeight.current = element.scrollHeight;
+        return;
+      }
+    }
     // Was the reader at the end before this entry made the transcript longer?
     const following = atBottom(element, lastHeight.current);
     lastHeight.current = element.scrollHeight;
@@ -185,8 +246,24 @@ export function Transcript({
         data-testid={testId}
         className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]"
       >
-        {entries.map((entry) => (
-          <Entry key={entry.id} entry={entry} sessionId={sessionId} />
+        {entries.map((entry, index) => (
+          // Entries above the live tail are skipped for layout and paint until
+          // they are scrolled near. A long transcript is thousands of markdown
+          // blocks, diffs and tool cards, and laying all of them out on every
+          // scroll is what makes an old session crawl. The browser does this
+          // rather than a measured list in JS, because entry heights vary by an
+          // order of magnitude and a list that guesses them wrong moves the
+          // reader's place under them.
+          <div
+            key={entry.id}
+            className={
+              index < entries.length - LIVE_TAIL_ENTRIES
+                ? '[contain-intrinsic-size:auto_64px] [content-visibility:auto]'
+                : undefined
+            }
+          >
+            <Entry entry={entry} sessionId={sessionId} />
+          </div>
         ))}
       </div>
       {unread ? (

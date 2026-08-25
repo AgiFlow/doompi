@@ -4,6 +4,7 @@ import {
   appendUserPrompt,
   clearDialog,
   initialSessionState,
+  prependHistory,
   reduceSession,
   type AssistantEntry,
   type SessionState,
@@ -608,5 +609,47 @@ describe('a message the page did not send', () => {
       ['user', 'again'],
     ]);
     expect(state.pendingUserEntries).toEqual([]);
+  });
+});
+
+describe('paging back through the transcript', () => {
+  const journalled = (id: string, text: string) => ({
+    type: 'entry_appended',
+    entry: { type: 'message', id, message: { role: 'user', content: [{ type: 'text', text }] } },
+  });
+
+  it('puts an older window above what the page already holds', () => {
+    const live = fold([journalled('e3', 'newest')]);
+
+    const next = prependHistory(live, [journalled('e1', 'oldest'), journalled('e2', 'middle')], 1);
+
+    expect(next.entries.map((entry) => (entry.kind === 'user' ? entry.text : entry.kind))).toEqual([
+      'oldest',
+      'middle',
+      'newest',
+    ]);
+  });
+
+  it('keys prepended entries apart from the live ones, so a list can measure them', () => {
+    const live = fold([journalled('e2', 'newest')]);
+
+    const next = prependHistory(live, [journalled('e1', 'oldest')], 1);
+
+    expect(new Set(next.entries.map((entry) => entry.id)).size).toBe(next.entries.length);
+    expect(next.entries[0]?.id.startsWith('h1-')).toBe(true);
+  });
+
+  it('ignores a window the page already holds, so a repeated answer cannot double it', () => {
+    const live = fold([journalled('e1', 'oldest'), journalled('e2', 'newest')]);
+
+    const next = prependHistory(live, [journalled('e1', 'oldest')], 1);
+
+    expect(next).toBe(live);
+  });
+
+  it('remembers what it restored, so the next window knows where it stopped', () => {
+    const next = prependHistory(initialSessionState, [journalled('e1', 'oldest')], 1);
+
+    expect(next.restoredIds).toContain('e1');
   });
 });

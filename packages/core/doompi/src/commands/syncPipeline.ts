@@ -4,6 +4,8 @@ import { ensureLayerPackages, type LayerPackageResult } from '../adapters/layerP
 import { findRepositoryRoot } from '../adapters/repository/repository';
 import type { HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
 import { readLocatedSyncState } from '../adapters/syncState.ts';
+import { DOOM_API_SCOPES } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { syncApiRoutes } from '../adapters/apiRoutesSync.ts';
 import { syncWebBundle } from '../adapters/webBundleSync.ts';
 import { BuildCommand } from './buildCommand.ts';
 import { SyncCommand, type SyncSettingsMode } from './syncCommand.ts';
@@ -15,6 +17,7 @@ const BUILD_COMMAND = 'build';
 const PACKAGES_LABEL = 'packages';
 const BUILD_LABEL = 'build';
 const WEB_LABEL = 'web';
+const API_LABEL = 'api';
 
 export interface SyncPipelineOptions {
   settingsMode?: SyncSettingsMode;
@@ -95,7 +98,35 @@ export class SyncPipeline {
     // web plugin. A bundle failure never fails the sync; the cockpit keeps
     // serving its previous or packaged bundle.
     await this.refreshWebBundle(environment, currentDirectory, progress);
+    // The route modules a session server and the hub import. Cheap next to the
+    // bundle, and independent of it: a composition with no cockpit installed
+    // still serves its packages' session APIs.
+    this.refreshApiRoutes(environment, currentDirectory, progress);
     return 0;
+  }
+
+  /** Writes the generated per-scope route modules the API hosts import. */
+  private refreshApiRoutes(environment: NodeJS.ProcessEnv, currentDirectory: string, progress: SyncProgress): void {
+    const inheritedRoot = environment[HARNESS_ROOT_ENV];
+    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
+    const done = progress.start(API_LABEL, 'generating the package API routes');
+    const state = readLocatedSyncState(repoRoot);
+    if (!state) {
+      done('skipped: no sync state to read the composition from');
+      return;
+    }
+    try {
+      const result = syncApiRoutes({
+        resolvedEntries: state.state.resolved,
+        onNotice: (message) => progress.line(API_LABEL, message),
+      });
+      const summary = DOOM_API_SCOPES.map((scope) => `${scope}: ${result.mounted[scope].join(', ') || 'none'}`);
+      done(`routes written to ${result.directory} (${summary.join('; ')})`);
+    } catch (error) {
+      // A composition still works without them; only the extra HTTP surface is
+      // missing, and the next sync tries again.
+      done(`failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** Rebuilds the machine's cockpit bundle from the synced composition's plugin manifests. */

@@ -110,7 +110,7 @@ export function normalizeEntry(value: unknown): string | null {
   return typeof entry === 'string' ? entry : null;
 }
 
-function stripDot(relativePath: string): string {
+export function stripDot(relativePath: string): string {
   return relativePath.replace(/^\.\//, '');
 }
 
@@ -121,7 +121,7 @@ export function pluginBlocks(manifest: WebPackageManifest): WebPluginBlock[] {
 }
 
 /** Whether a `files` allowlist entry covers a repo-relative path: the entry itself or a directory above it. */
-function isPublished(files: readonly string[], relativePath: string): boolean {
+export function isPublished(files: readonly string[], relativePath: string): boolean {
   return files.some((entry) => {
     const normalized = stripDot(entry).replace(/\/$/, '');
     return relativePath === normalized || relativePath.startsWith(`${normalized}/`);

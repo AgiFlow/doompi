@@ -69,10 +69,10 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.version).toMatch(SEMVER_PATTERN);
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.2');
-    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.84.2');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.2');
-    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.84.2');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.3');
+    expect(manifest.devDependencies?.['@earendil-works/pi-tui']).toBe('0.84.3');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.3');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.84.3');
   });
 
   it('uses package-local project configuration without private rig packages or Doom Config runtime coupling', async () => {

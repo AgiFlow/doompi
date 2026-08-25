@@ -27,12 +27,23 @@ export const RUN_RECORD_FILE_NAME = 'run.json';
 export const PROGRESS_FILE_NAME = 'progress.ndjson';
 export const WORKFLOW_STAGES: readonly WorkflowStage[] = ['running', 'completed', 'error'];
 
-/** Successfully completed runs older than this leave the view. */
-export const WORKFLOW_COMPLETED_RETENTION_MS = 10 * 60 * 1000;
-/** Errored runs stay much longer: they are what recovery acts on. */
+/**
+ * Errored runs stay a day, which is how long recovery has to act on them.
+ *
+ * Finished runs have no retention of their own: a session keeps every run it
+ * started, grouped by outcome, for as long as the session lives. A run leaves
+ * the view when the engine prunes its registry directory, not on a timer here,
+ * because "what did this session run today" is a question asked long after the
+ * run settled.
+ */
 export const WORKFLOW_ERROR_RETENTION_MS = 24 * 60 * 60 * 1000;
-/** Upper bound on runs shipped to a page, applied after retention. */
-export const MAX_PRESENTED_WORKFLOW_RUNS = 16;
+/**
+ * Upper bound per outcome group rather than over the whole list.
+ *
+ * One cap across every run let a long stream of green runs push a failure out
+ * of the list, which is the one thing that must never fall off the end.
+ */
+export const MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP = 24;
 
 /** The env key doompi-workflow stamps on runs it launches; ties a run to a Pi session. */
 export const PI_SESSION_ENV = 'PI_SESSION_ID';
@@ -329,20 +340,45 @@ function parseTime(value: string | undefined): number {
 const STAGE_ORDER: Readonly<Record<WorkflowStage, number>> = { running: 0, error: 1, completed: 2 };
 
 /**
- * Running runs first, then errored (kept a day: recovery acts on them), then
- * recently completed; newest first within a group, capped.
+ * Whether a run still belongs in the view.
+ *
+ * Only errored runs age out here, and slowly: everything else a session
+ * started stays until the engine forgets the run itself.
+ */
+function withinRetention(run: WorkflowRunView, now: number): boolean {
+  if (run.stage !== 'error') return true;
+  const settledAt = parseTime(run.finishedAt) || parseTime(run.startedAt);
+  return now - settledAt < WORKFLOW_ERROR_RETENTION_MS;
+}
+
+/**
+ * When a run last moved, which is what orders it within its group.
+ *
+ * A running run has only its start; a settled one is ordered by when it
+ * settled, because a list kept for the whole session is read as a history and
+ * two runs started together can finish an hour apart.
+ */
+function lastMovedAt(run: WorkflowRunView): number {
+  return run.stage === 'running' ? parseTime(run.startedAt) : parseTime(run.finishedAt) || parseTime(run.startedAt);
+}
+
+/**
+ * Running runs first, then errored (recovery acts on them), then finished;
+ * newest first within a group, and each group capped on its own.
  */
 export function presentWorkflowRuns(runs: readonly WorkflowRunView[], now: number): WorkflowRunView[] {
-  return runs
-    .filter((run) => {
-      if (run.stage === 'running') return true;
-      const settledAt = parseTime(run.finishedAt) || parseTime(run.startedAt);
-      const retention = run.stage === 'error' ? WORKFLOW_ERROR_RETENTION_MS : WORKFLOW_COMPLETED_RETENTION_MS;
-      return now - settledAt < retention;
-    })
-    .sort((left, right) => {
-      if (left.stage !== right.stage) return STAGE_ORDER[left.stage] - STAGE_ORDER[right.stage];
-      return parseTime(right.startedAt) - parseTime(left.startedAt);
-    })
-    .slice(0, MAX_PRESENTED_WORKFLOW_RUNS);
+  const groups = new Map<WorkflowStage, WorkflowRunView[]>();
+  for (const run of runs) {
+    if (!withinRetention(run, now)) continue;
+    const group = groups.get(run.stage);
+    if (group) group.push(run);
+    else groups.set(run.stage, [run]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => STAGE_ORDER[left] - STAGE_ORDER[right])
+    .flatMap(([, group]) =>
+      group
+        .sort((left, right) => lastMovedAt(right) - lastMovedAt(left))
+        .slice(0, MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP),
+    );
 }

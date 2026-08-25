@@ -1,5 +1,6 @@
 import {
   Button,
+  FileIcon,
   MessageItem,
   MessageItemBody,
   MessageItemHeader,
@@ -16,6 +17,7 @@ import {
   formatBashCommand,
   formatBashFlags,
 } from './bashToolFormat.ts';
+import { runnerLogTab } from './RunnerLogPanel.tsx';
 import { requestRunnerStop, runners } from './runnersStore.ts';
 
 const STATUS_TONE: Record<BashStatusTone, StatusTone> = {
@@ -41,11 +43,16 @@ export function BashToolMessage({
   running,
   isError,
   sendSessionFrame,
+  openTransientTab,
 }: ToolMessageRenderProps) {
   const details = bashResultDetails(result?.details);
   const runnerId = details.promoted === true ? details.id : undefined;
+  // Every bash call is a runner and writes a log, promoted or not, so the log
+  // control looks the run up by its own id; only stopping needs a promoted one.
   const run = useStore(runners.store, (state) =>
-    runnerId === undefined ? undefined : runners.select(state, sessionId).runs.find((entry) => entry.id === runnerId),
+    details.id === undefined
+      ? undefined
+      : runners.select(state, sessionId).runs.find((entry) => entry.id === details.id),
   );
   const stopping = useStore(
     runners.store,
@@ -72,6 +79,25 @@ export function BashToolMessage({
                 <span className="min-w-0 flex-1 truncate font-mono text-doom-text">{command}</span>
                 {flags.length > 0 ? <span className="shrink-0 text-doom-faint">· {flags.join(' · ')}</span> : null}
               </span>
+              {/* The card only ever shows a bounded tail, and expanding it
+                  shows a longer bounded tail. The whole log is a click away
+                  whether or not the card is open. */}
+              {run !== undefined && sessionId !== null ? (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  data-testid="tool-result-bash-open-log"
+                  title="open this runner's full log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openTransientTab(runnerLogTab(run));
+                  }}
+                  className="shrink-0 gap-1 px-1.5 text-[9px] font-bold"
+                >
+                  <FileIcon className="h-2.5 w-2.5" />
+                  log
+                </Button>
+              ) : null}
             </MessageItemHeader>
             {view.lines.length > 0 || view.status !== null || stoppable ? (
               <MessageItemBody data-testid="tool-result-bash" className="flex flex-col gap-1">

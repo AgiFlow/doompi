@@ -4,6 +4,7 @@ import {
   CloseIcon,
   Dot,
   type DotTone,
+  Input,
   NavTab,
   NavTabBadge,
   StatusBadge,
@@ -12,9 +13,10 @@ import {
 import type { TabContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
+import { useState } from 'react';
 import { abbreviateCwd, runningCount, type AttachPhase } from '../../lib/sessionSummary.ts';
 import { webTabs } from '../../lib/pluginRegistry.ts';
-import { useActiveSession } from '../../stores/sessionStore.ts';
+import { renameSession, useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { closeTransientTab, useTransientTabs } from '../../stores/transientTabsStore.ts';
 
@@ -104,6 +106,16 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
   const attach: AttachPhase = meta?.attach ?? 'offline';
   const busy = session.streaming || (meta !== null && meta.summary.phase !== 'idle');
   const state = pill(attach, busy);
+  const title = meta?.summary.name || session.agent?.sessionName || 'untitled';
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  // The name lives in the agent, so the rail's rename and this one are the
+  // same act through the same door; the new name arrives back on the socket.
+  const commitRename = (): void => {
+    const next = draft.trim();
+    if (next && next !== title) renameSession(next, activeId);
+    setRenaming(false);
+  };
 
   return (
     <header
@@ -111,9 +123,35 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
       className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-doom-border px-5"
     >
       <div data-testid="session-switcher" className="flex min-w-0 items-center gap-2.5">
-        <span data-testid="session-title" className="shrink-0 text-[13px] font-bold text-doom-hi">
-          {meta?.summary.name || session.agent?.sessionName || 'untitled'}
-        </span>
+        {renaming && activeId !== null ? (
+          <Input
+            data-testid="session-title-input"
+            value={draft}
+            autoFocus
+            aria-label="session name"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitRename();
+              if (event.key === 'Escape') setRenaming(false);
+            }}
+            onBlur={commitRename}
+            className="h-6 w-44 shrink-0 border-doom-blue/60 px-1.5 text-[13px] font-bold"
+          />
+        ) : (
+          <Button
+            variant="ghost"
+            data-testid="session-title"
+            title={activeId === null ? undefined : 'rename this session'}
+            disabled={activeId === null}
+            onClick={() => {
+              setDraft(title);
+              setRenaming(true);
+            }}
+            className="h-6 shrink-0 px-1 text-[13px] font-bold text-doom-hi"
+          >
+            {title}
+          </Button>
+        )}
         {meta ? (
           <>
             <span className="text-[12px] text-doom-faint">·</span>
@@ -147,15 +185,6 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {meta && meta.replayed > 0 ? (
-          <span
-            data-testid="replayed-count"
-            title="frames replayed into this page"
-            className="text-[10px] text-doom-faint"
-          >
-            replayed {meta.replayed}
-          </span>
-        ) : null}
         {meta && meta.dropped > 0 ? (
           <span
             data-testid="dropped-count"

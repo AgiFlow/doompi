@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base } from '@playwright/test';
 import { type FakeSession, startFakeSession } from './fakeSession.ts';
+import { startRunnerApiSocket } from './runnerRuns.ts';
 
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
 const binary = path.join(packageRoot, 'dist', 'bin', 'serve.mjs');
@@ -129,20 +130,29 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const stub = path.join(root, 'fake-doompi-server');
     fs.writeFileSync(stub, spawnStub === 'ok' ? REGISTERING_SERVER : FAILING_SERVER, { mode: 0o755 });
 
+    // An isolated Pi agent directory: doom-runner keeps its store under it, and
+    // runner specs write records there.
+    const agentDir = path.join(root, 'pi-agent');
+    const runnerStore = path.join(agentDir, 'doom-runner');
+    fs.mkdirSync(agentDir, { recursive: true });
+
+    // Each fake session serves a package API on its own socket, the way a real
+    // doompi-server does, so the hub has something to proxy to.
+    const apiSockets = path.join(root, 'api-sockets');
+    fs.mkdirSync(apiSockets, { recursive: true });
     const sessions: FakeSession[] = [];
+    const sessionApiStops: Array<() => Promise<void>> = [];
     for (let index = 0; index < sessionCount; index += 1) {
-      sessions.push(await startFakeSession({ id: `s${index + 1}`, name: `session-${index + 1}`, registryDir }));
+      const id = `s${index + 1}`;
+      const apiSocketPath = path.join(apiSockets, `${id}.sock`);
+      sessions.push(await startFakeSession({ id, name: `session-${index + 1}`, registryDir, apiSocketPath }));
+      sessionApiStops.push(startRunnerApiSocket(runnerStore, id, apiSocketPath));
     }
 
     const port = await freePort();
     // An isolated workflow home: the hub must never watch the developer's
     // real registry from a test, and workflow specs write runs into this one.
     const workflowHome = path.join(root, 'workflow-mcp');
-    // Likewise an isolated Pi agent directory: doom-runner keeps its store
-    // under it, and runner specs write records there.
-    const agentDir = path.join(root, 'pi-agent');
-    const runnerStore = path.join(agentDir, 'doom-runner');
-    fs.mkdirSync(agentDir, { recursive: true });
     // The hub also resolves provider auth from the environment; the developer's
     // own keys must not make a throwaway hub look signed in.
     const env: NodeJS.ProcessEnv = { ...process.env, WORKFLOW_MCP_HOME: workflowHome, PI_CODING_AGENT_DIR: agentDir };
@@ -177,6 +187,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     await use({ sessions, session: sessions[0], registryDir, workflowHome, runnerStore, agentDir, url });
 
     child.kill('SIGTERM');
+    for (const stop of sessionApiStops) await stop();
     for (const session of sessions) await session.close();
     killRegistered(registryDir);
     fs.rmSync(root, { recursive: true, force: true });

@@ -29,10 +29,10 @@ const NEWLINE = '\n';
 const PNPM_WORKSPACE_FILE = 'pnpm-workspace.yaml';
 const INSTALL_BUILD_DEPENDENCIES = ['better-sqlite3', 'protobufjs'] as const;
 const PUBLIC_HOST_DEPENDENCIES: Readonly<Record<string, string>> = {
-  '@earendil-works/pi-agent-core': '0.84.2',
-  '@earendil-works/pi-ai': '0.84.2',
-  '@earendil-works/pi-coding-agent': '0.84.2',
-  '@earendil-works/pi-tui': '0.84.2',
+  '@earendil-works/pi-agent-core': '0.84.3',
+  '@earendil-works/pi-ai': '0.84.3',
+  '@earendil-works/pi-coding-agent': '0.84.3',
+  '@earendil-works/pi-tui': '0.84.3',
   '@agimon-ai/vibe-lint': '0.0.1-alpha.26',
 };
 const RUNTIME_SHUTDOWN_TIMEOUT_MS = 10_000;

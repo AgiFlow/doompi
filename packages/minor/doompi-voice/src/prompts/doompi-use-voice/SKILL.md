@@ -15,7 +15,7 @@ Use Voice on macOS when the user wants spoken input, spoken output, or an autono
 - Call `describe_voice_tools` again with `names` to read a capability's `input_schema` before running it. The bare call returns names and descriptions only.
 - Call `use_voice_tools` with that exact `catalog_token` and a bounded, ordered batch. Every call is preflighted together, so one invalid input rejects all of them.
 - Treat a `VOICE_TOOL_STALE_CATALOG` rejection as a moved catalog. Use the fresh token returned with the rejection, or describe again. Do not resend the rejected token.
-- Use `narrate` for one primary-agent-authored utterance. Keep it concise and relevant to the current turn.
+- Use `narrate` for one primary-agent-authored utterance. Before a final response, speak the complete answer, including every user-relevant conclusion, question, warning, result, and next action. Never leave essential information only in the written response.
 
 ## Configure and verify
 

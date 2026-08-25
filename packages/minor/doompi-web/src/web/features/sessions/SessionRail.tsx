@@ -338,15 +338,28 @@ export function SessionRail() {
           </span>
           <MascotMark size={22} />
         </span>
-        <span className="rounded-[3px] bg-doom-tint-magenta px-1.5 py-[3px] text-[8px] font-bold tracking-[0.12em] text-doom-magenta">
-          WEB
-        </span>
       </div>
 
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
         <SectionLabel>sessions</SectionLabel>
-        <span data-testid="sessions-running-rail" className="text-[9px] text-doom-faint">
-          {running} running
+        <span className="flex items-center gap-2.5">
+          <span data-testid="sessions-running-rail" className="text-[9px] text-doom-faint">
+            {running} running
+          </span>
+          {/* The rail's own action lives in its heading, where a heading's
+              action belongs, instead of a full-width button competing with the
+              cards for the eye. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            data-testid="new-session-open"
+            title="new session"
+            aria-label="new session"
+            onClick={() => setCreating(true)}
+            className="text-doom-faint hover:text-doom-hi"
+          >
+            <PlusIcon className="h-3 w-3" />
+          </Button>
         </span>
       </div>
       <div className="flex flex-col gap-1 px-2.5">
@@ -354,18 +367,22 @@ export function SessionRail() {
           <SessionCard key={id} meta={byId[id]} ordinal={index + 1} active={id === activeId} now={now} />
         ))}
       </div>
-      <div className="px-2.5 pt-2">
-        <Button
-          variant="outline"
-          size="lg"
-          data-testid="new-session-open"
-          onClick={() => setCreating(true)}
-          className="w-full justify-start px-[11px] text-[11px]"
-        >
-          <PlusIcon className="h-3 w-3" />
-          new session
-        </Button>
-      </div>
+      {/* With no sessions the rail has nothing to show and the plus alone is a
+          thin invitation, so the empty state spells the action out. */}
+      {order.length === 0 ? (
+        <div className="px-2.5 pt-2">
+          <Button
+            variant="outline"
+            size="lg"
+            data-testid="new-session-empty"
+            onClick={() => setCreating(true)}
+            className="w-full justify-start px-[11px] text-[11px]"
+          >
+            <PlusIcon className="h-3 w-3" />
+            new session
+          </Button>
+        </div>
+      ) : null}
 
       <PluginSurface slot={HOST_SLOTS.rail} sessionId={activeId} />
       <div className="flex-1" />

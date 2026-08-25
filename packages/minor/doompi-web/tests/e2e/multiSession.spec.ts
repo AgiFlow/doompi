@@ -22,6 +22,35 @@ test('renames a session through the agent and shows the name it reports back', a
   await expect(card).toContainText('gate-review');
 });
 
+test('renames the focused session by clicking its title in the top bar', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  // The title is the affordance: no menu, no second place to look.
+  await page.getByTestId('session-title').click();
+  await page.getByTestId('session-title-input').fill('gate-review');
+  await page.keyboard.press('Enter');
+
+  const sent = await cockpit.session.waitForCommand('set_session_name');
+  expect(sent.name).toBe('gate-review');
+  // The same door the rail's rename uses: the agent owns the name and reports
+  // it back, so the title only changes once the session says so.
+  cockpit.session.emit({ type: 'response', command: 'get_state', success: true, data: { sessionName: 'gate-review' } });
+  await expect(page.getByTestId('session-title')).toContainText('gate-review');
+});
+
+test('leaves the name alone when a title edit is abandoned', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  const before = await page.getByTestId('session-title').innerText();
+
+  await page.getByTestId('session-title').click();
+  await page.getByTestId('session-title-input').fill('not-this');
+  await page.keyboard.press('Escape');
+
+  await expect(page.getByTestId('session-title')).toHaveText(before);
+});
+
 test('stops a session from its card once the stop is confirmed', async ({ page, cockpit }) => {
   // A throwaway process stands in for the session's server: the hub signals
   // its pid, and the watcher withdraws the dead record on its next poll.

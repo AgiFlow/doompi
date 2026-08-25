@@ -195,6 +195,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     awaitingInput: managed.presence.awaitingInput,
     ...(managed.presence.lastSettledAt === undefined ? {} : { lastSettledAt: managed.presence.lastSettledAt }),
     socketPath: managed.record.socketPath,
+    ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
     ...(managed.git === undefined ? {} : { git: managed.git }),
   });
 
@@ -230,6 +231,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     }
     managed.attachment = attachToSession({
       socketPath: managed.record.socketPath,
+    ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
       token,
       handlers: {
         onFrame: (frame) => {

@@ -9,7 +9,10 @@ import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'voice',
-  minorModes: [{ name: 'voice', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
+  // `v e` drives autonomous capture, which the runtime registers as
+  // 'voice-auto'; 'voice' is the one-shot dictation command on `v v`. The row
+  // shows the package's name and reaches the mode the key reaches.
+  minorModes: [{ name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
   // A microphone you cannot see is one you cannot trust, so voice earns a
   // group in the dock rather than a word inside a chip.
   activityGroups: [{ name: 'voice', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
@@ -18,7 +21,10 @@ export const webPlugin = defineWebPlugin({
   activitySections: [{ id: 'voice', component: VoiceActivitySection }],
   // The voice tools' timeline cards, the web half of src/adapters/pi/voiceToolRender.ts.
   toolRenderers: [{ tools: [...VOICE_TOOL_NAMES], message: VoiceToolMessage }],
-  // The TUI's SPC v e through /minor; one-shot dictation (v v) needs the TUI's microphone.
+  // The TUI's SPC v e through /minor; one-shot dictation (v v) needs the TUI's
+  // microphone. The TUI binds this key to the voice-auto command directly, but
+  // that handler is TUI-only, so the cockpit reaches the same mode through the
+  // catalog, which offers the actions a headless session can actually run.
   leaderBindings: [
     {
       id: 'voice.toggle',
@@ -26,7 +32,7 @@ export const webPlugin = defineWebPlugin({
         { key: 'v', label: 'voice', detail: 'autonomous voice capture' },
         { key: 'e', label: 'toggle', detail: 'start or stop autonomous capture' },
       ],
-      command: 'minor voice',
+      command: 'minor voice-auto',
     },
   ],
 });

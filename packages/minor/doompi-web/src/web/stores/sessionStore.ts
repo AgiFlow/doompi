@@ -22,10 +22,12 @@ import {
   appendUserPrompt,
   clearDialog,
   initialSessionState,
+  prependHistory,
   reduceSession,
   type SessionState,
 } from '../lib/sessionModel.ts';
-import { sendFrame } from '../lib/transport.ts';
+import { HISTORY_REQUEST_TYPE } from '../../types/hub.ts';
+import { sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { activeSessionId, sessionsStore } from './sessionsStore.ts';
 
 /**
@@ -58,9 +60,82 @@ export function applySessionFrame(sessionId: string, frame: Record<string, unkno
   sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame));
 }
 
+/**
+ * One session's paging state: how far back the page has read, and whether a
+ * request is already in flight. Kept beside the timeline rather than inside it
+ * because it describes the reading, not the session.
+ */
+interface HistoryState {
+  cursor: string | null;
+  hasMore: boolean;
+  loading: boolean;
+  /** Pages taken so far; also what keeps prepended entry ids unique. */
+  pages: number;
+}
+
+const history = new Map<string, HistoryState>();
+const historyStore = new Store<Record<string, HistoryState>>({});
+const NO_HISTORY: HistoryState = { cursor: null, hasMore: true, loading: false, pages: 0 };
+
+function historyFor(sessionId: string): HistoryState {
+  return history.get(sessionId) ?? NO_HISTORY;
+}
+
+function setHistory(sessionId: string, next: HistoryState): void {
+  history.set(sessionId, next);
+  historyStore.setState((state) => ({ ...state, [sessionId]: next }));
+}
+
+/** Whether more transcript exists above what this session's page holds. */
+export function useHasOlderHistory(sessionId: string | null): boolean {
+  return useStore(historyStore, (state) => (sessionId === null ? false : (state[sessionId] ?? NO_HISTORY).hasMore));
+}
+
+/**
+ * Asks the hub for the window above what this page holds.
+ *
+ * One request at a time: a reader flicking upwards would otherwise ask for the
+ * same window repeatedly before the first answer lands, and every copy would
+ * be prepended.
+ */
+export function requestOlderHistory(sessionId: string | null): void {
+  if (sessionId === null) return;
+  const current = historyFor(sessionId);
+  if (current.loading || !current.hasMore) return;
+  setHistory(sessionId, { ...current, loading: true });
+  sendHubFrame({
+    type: HISTORY_REQUEST_TYPE,
+    sessionId,
+    ...(current.cursor === null ? {} : { before: current.cursor }),
+  });
+}
+
+/** Folds one answered window above the timeline and records how far back it reached. */
+export function applyHistoryPage(sessionId: string, frames: Record<string, unknown>[], next: HistoryPage): void {
+  const current = historyFor(sessionId);
+  const pages = current.pages + 1;
+  sessionStoreFor(sessionId).setState((state) => prependHistory(state, frames, pages));
+  setHistory(sessionId, { cursor: next.cursor, hasMore: next.hasMore, loading: false, pages });
+}
+
+export interface HistoryPage {
+  cursor: string | null;
+  hasMore: boolean;
+}
+
+/** The oldest entry the page holds, which is where the next window ends. */
+export function seedHistoryCursor(sessionId: string, cursor: string | null): void {
+  setHistory(sessionId, { ...NO_HISTORY, cursor });
+}
+
 /** A subscribe replays history from scratch; the fold must start clean too. */
 export function resetSessionStore(sessionId: string): void {
   sessionStoreFor(sessionId).setState(() => initialSessionState);
+  history.delete(sessionId);
+  historyStore.setState((state) => {
+    const { [sessionId]: _dropped, ...rest } = state;
+    return rest;
+  });
 }
 
 export function dropSessionStore(sessionId: string): void {

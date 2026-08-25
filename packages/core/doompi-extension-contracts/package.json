@@ -129,6 +129,16 @@
       "import": "./dist/narration.mjs",
       "require": "./dist/narration.cjs"
     },
+    "./package-api": {
+      "types": "./dist/packageApi.d.mts",
+      "import": "./dist/packageApi.mjs",
+      "require": "./dist/packageApi.cjs"
+    },
+    "./package-api-loader": {
+      "types": "./dist/packageApiLoader.d.mts",
+      "import": "./dist/packageApiLoader.mjs",
+      "require": "./dist/packageApiLoader.cjs"
+    },
     "./protocol": {
       "types": "./dist/protocol.d.mts",
       "import": "./dist/protocol.mjs",
@@ -206,7 +216,7 @@
     "typebox": "1.3.16"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.3",
     "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
@@ -214,7 +224,7 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2"
+    "@earendil-works/pi-coding-agent": "0.84.3"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

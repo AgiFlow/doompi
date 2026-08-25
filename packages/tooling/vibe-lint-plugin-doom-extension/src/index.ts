@@ -18,6 +18,8 @@ export {
   noProtocolChannelLiterals,
   noRawPiEvents,
   noSameRunnerProtocol,
+  packageApiEntry,
+  packageApiManifest,
   piExtensionDefaultFactory,
   piPeerVersion,
   providerOwnedPolicy,
