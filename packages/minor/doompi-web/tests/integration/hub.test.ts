@@ -285,6 +285,51 @@ describe('the session hub over a registry', () => {
     ]);
   });
 
+  it('re-reads the journal at a run boundary and adds only the message no frame reported', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir);
+    await session.waitForCommand('get_entries');
+
+    const message = (id: string, role: string, text: string) => ({
+      type: 'message',
+      id,
+      message: { role, content: [{ type: 'text', text }] },
+    });
+    const asked = message('e1', 'user', 'what is failing');
+    session.emit({ type: 'response', command: 'get_entries', success: true, data: { entries: [asked], leafId: 'e1' } });
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 1,
+      'the attach restore',
+    );
+
+    // An extension that prompts the agent itself (autonomous voice dictating
+    // what it heard) writes the message straight to the journal, so the run
+    // starting is the only sign the page gets that it exists.
+    session.emit({ type: 'agent_start' });
+    await session.waitForCommand('get_entries');
+    const spoken = message('e2', 'user', 'run the voice suite');
+    const answered = message('e3', 'assistant', 'running it now');
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: [asked, spoken, answered], leafId: 'e3' },
+    });
+
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 2,
+      'the message the re-read found',
+    );
+    // The answer already reached the page as it streamed, and the journal copy
+    // carries no id that copy can be matched by, so republishing it would show
+    // the same reply twice. Only the message no frame reports is added.
+    expect(harness.framesFor('one').filter((frame) => frame.type === 'entry_appended')).toEqual([
+      { type: 'entry_appended', entry: asked },
+      { type: 'entry_appended', entry: spoken },
+    ]);
+  });
+
   it('derives the rail phase from the frame stream', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });
@@ -335,6 +380,7 @@ describe('the session hub over a registry', () => {
         host = channelHost;
         return {
           payloadFor: (scope) => ({ marker: `snapshot:${scope.sessionId}` }),
+          threadJournal: (scope, threadId) => (threadId === 'known' ? `/journals/${scope.sessionId}.jsonl` : undefined),
           sessionAdded: (scope) => lifecycle.push(`added:${scope.sessionId}`),
           sessionRemoved: (sessionId) => lifecycle.push(`removed:${sessionId}`),
           close: () => lifecycle.push('closed'),
@@ -355,6 +401,10 @@ describe('the session hub over a registry', () => {
     expect(harness.hub.channelTypes()).toEqual(['fake_data']);
     const frame = harness.hub.channelFrames('chan').find((candidate) => candidate.type === 'fake_data');
     expect(frame?.payload).toEqual({ marker: 'snapshot:chan' });
+    // A thread's journal comes from the first channel that names it, for a session the hub knows.
+    expect(harness.hub.threadJournal('chan', 'known')).toBe('/journals/chan.jsonl');
+    expect(harness.hub.threadJournal('chan', 'other')).toBeUndefined();
+    expect(harness.hub.threadJournal('nobody', 'known')).toBeUndefined();
 
     await session.close();
     await waitFor(() => lifecycle.includes('removed:chan'), 'the removal reaching the channel');

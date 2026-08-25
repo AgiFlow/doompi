@@ -18,6 +18,24 @@ import {
 } from '../../src/web/lib/commands.ts';
 import { bindTransport, releaseTransport, sendFrame, sendHubFrame } from '../../src/web/lib/transport.ts';
 import {
+  dropThreads,
+  heldThreads,
+  resetThreads,
+  resubscribeThreads,
+  subscribeThread,
+  threadStoreKey,
+  unsubscribeThread,
+} from '../../src/web/stores/threadStore.ts';
+import {
+  closeTransientTab,
+  dropTransientTabs,
+  findTransientTab,
+  openTransientTab,
+  resetTransientTabs,
+  transientTabsOf,
+  transientTabsStore,
+} from '../../src/web/stores/transientTabsStore.ts';
+import {
   closePalette,
   openPalette,
   paletteStore,
@@ -398,5 +416,64 @@ describe('session actions', () => {
     const last = sent.at(-1) as Frame;
     expect((last.frame as Frame).cancelled).toBe(true);
     expect(sessionStoreFor('s1').state.dialog).toBeNull();
+  });
+});
+
+describe('transient tabs', () => {
+  beforeEach(() => resetTransientTabs());
+
+  it('opens once per id, closes, and leaves with its session', () => {
+    const Panel = (): null => null;
+    const tab = { id: 'owner-x-1', label: 'x', panel: Panel };
+    openTransientTab('s1', tab);
+    openTransientTab('s1', { ...tab, label: 'replaced' });
+    openTransientTab('s2', { id: 'owner-y-1', label: 'y', panel: Panel });
+    expect(transientTabsOf(transientTabsStore.state, 's1')).toEqual([tab]);
+    expect(findTransientTab(transientTabsStore.state, 's1', 'owner-x-1')).toBe(tab);
+    expect(findTransientTab(transientTabsStore.state, 's1', 'owner-y-1')).toBeUndefined();
+    expect(findTransientTab(transientTabsStore.state, undefined, 'owner-x-1')).toBeUndefined();
+
+    const before = transientTabsStore.state;
+    closeTransientTab('s1', 'nope');
+    expect(transientTabsStore.state).toBe(before);
+    closeTransientTab('s1', 'owner-x-1');
+    expect(transientTabsOf(transientTabsStore.state, 's1')).toEqual([]);
+
+    dropTransientTabs('s2');
+    expect(transientTabsOf(transientTabsStore.state, 's2')).toEqual([]);
+    // Nothing focused and nothing opened read as the one stable empty list.
+    expect(transientTabsOf(transientTabsStore.state, null)).toBe(transientTabsOf(transientTabsStore.state, 'never'));
+  });
+});
+
+describe('thread holds', () => {
+  beforeEach(() => resetThreads());
+
+  it('subscribes once per thread, replays holds on a fresh socket, and drops with the session', () => {
+    const sent: object[] = [];
+    bindTransport((frame) => sent.push(frame));
+    subscribeThread('s1', 'run-1');
+    subscribeThread('s1', 'run-1');
+    subscribeThread('s2', 'run-9');
+    expect(sent).toEqual([
+      { type: 'subscribe_thread', sessionId: 's1', threadId: 'run-1' },
+      { type: 'subscribe_thread', sessionId: 's2', threadId: 'run-9' },
+    ]);
+    unsubscribeThread('s1', 'run-1');
+    expect(sent).toHaveLength(2);
+
+    sent.length = 0;
+    resubscribeThreads();
+    expect(sent.map((frame) => (frame as { threadId: string }).threadId)).toEqual(['run-1', 'run-9']);
+
+    sent.length = 0;
+    dropThreads('s2');
+    expect(heldThreads()).toEqual([{ sessionId: 's1', threadId: 'run-1', refs: 1 }]);
+    unsubscribeThread('s1', 'run-1');
+    expect(sent).toEqual([{ type: 'unsubscribe_thread', sessionId: 's1', threadId: 'run-1' }]);
+    unsubscribeThread('s1', 'run-1');
+    expect(sent).toHaveLength(1);
+    expect(threadStoreKey('s1', 'run-1')).toBe('thread:s1:run-1');
+    releaseTransport();
   });
 });

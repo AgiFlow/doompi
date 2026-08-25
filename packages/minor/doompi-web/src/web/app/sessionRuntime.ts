@@ -5,6 +5,8 @@ import {
   SESSION_UPSERT_TYPE,
   SESSIONS_SNAPSHOT_TYPE,
   subscribeFrame,
+  THREAD_BACKLOG_TYPE,
+  THREAD_FRAME_TYPE,
   unsubscribeFrame,
 } from '../../types/hub.ts';
 import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
@@ -12,6 +14,8 @@ import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applySessionFrame, dropSessionStore, refreshSessionFacts, resetSessionStore } from '../stores/sessionStore.ts';
+import { dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore.ts';
+import { dropTransientTabs } from '../stores/transientTabsStore.ts';
 import {
   applySessionBacklog,
   applySessionRemoved,
@@ -56,6 +60,7 @@ export function startSessionRuntime(): () => void {
           // A snapshot means a fresh socket; any prior subscription died with
           // the old one.
           syncSubscription(true);
+          resubscribeThreads();
           return;
         case SESSION_UPSERT_TYPE:
           applySessionUpsert(frame);
@@ -66,6 +71,8 @@ export function startSessionRuntime(): () => void {
           applySessionRemoved(frame);
           dropSessionStore(frame.sessionId);
           dropPluginSessionData(frame.sessionId);
+          dropThreads(frame.sessionId);
+          dropTransientTabs(frame.sessionId);
           if (subscribed === frame.sessionId) subscribed = null;
           return;
         }
@@ -92,6 +99,22 @@ export function startSessionRuntime(): () => void {
             clearPendingMenu();
             refreshSessionFacts(frame.sessionId);
           }
+          return;
+        }
+        // A thread folds like a session of its own, under a key of its own;
+        // the backlog replaces what the page had, the same as a session's.
+        case THREAD_BACKLOG_TYPE: {
+          if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
+          if (!Array.isArray(frame.frames)) return;
+          const key = threadStoreKey(frame.sessionId, frame.threadId);
+          resetSessionStore(key);
+          for (const replayed of frame.frames.filter(isRecord)) applySessionFrame(key, replayed);
+          return;
+        }
+        case THREAD_FRAME_TYPE: {
+          if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
+          if (!isRecord(frame.frame)) return;
+          applySessionFrame(threadStoreKey(frame.sessionId, frame.threadId), frame.frame);
           return;
         }
         default:

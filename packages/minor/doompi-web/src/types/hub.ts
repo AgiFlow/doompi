@@ -114,6 +114,11 @@ export interface MinorModeProjection {
 export const SUBSCRIBE_TYPE = 'subscribe';
 export const UNSUBSCRIBE_TYPE = 'unsubscribe';
 export const SESSION_COMMAND_TYPE = 'session_command';
+/** A page follows one thread of a session: a journal a plugin's hub source names, such as a subagent run. */
+export const SUBSCRIBE_THREAD_TYPE = 'subscribe_thread';
+export const UNSUBSCRIBE_THREAD_TYPE = 'unsubscribe_thread';
+export const THREAD_BACKLOG_TYPE = 'thread_backlog';
+export const THREAD_FRAME_TYPE = 'thread_frame';
 
 /** First frame on every page socket, before the snapshot. */
 export interface HubHelloFrame {
@@ -189,4 +194,48 @@ export function subscribeFrame(sessionId: string): SubscribeFrame {
 
 export function unsubscribeFrame(sessionId: string): UnsubscribeFrame {
   return { type: UNSUBSCRIBE_TYPE, sessionId };
+}
+
+export interface SubscribeThreadFrame {
+  type: typeof SUBSCRIBE_THREAD_TYPE;
+  sessionId: string;
+  threadId: string;
+}
+
+export interface UnsubscribeThreadFrame {
+  type: typeof UNSUBSCRIBE_THREAD_TYPE;
+  sessionId: string;
+  threadId: string;
+}
+
+/** Reply to subscribe_thread: the journal's newest entries as entry_appended frames, then live ones follow. */
+export interface ThreadBacklogFrame {
+  type: typeof THREAD_BACKLOG_TYPE;
+  sessionId: string;
+  threadId: string;
+  frames: SessionFrame[];
+}
+
+/** One journal entry a followed thread gained, addressed to the pages following it. */
+export interface ThreadFrameEnvelope {
+  type: typeof THREAD_FRAME_TYPE;
+  sessionId: string;
+  threadId: string;
+  frame: SessionFrame;
+}
+
+export function subscribeThreadFrame(sessionId: string, threadId: string): SubscribeThreadFrame {
+  return { type: SUBSCRIBE_THREAD_TYPE, sessionId, threadId };
+}
+
+export function unsubscribeThreadFrame(sessionId: string, threadId: string): UnsubscribeThreadFrame {
+  return { type: UNSUBSCRIBE_THREAD_TYPE, sessionId, threadId };
+}
+
+export function threadBacklog(sessionId: string, threadId: string, frames: SessionFrame[]): ThreadBacklogFrame {
+  return { type: THREAD_BACKLOG_TYPE, sessionId, threadId, frames };
+}
+
+export function threadFrameEnvelope(sessionId: string, threadId: string, frame: SessionFrame): ThreadFrameEnvelope {
+  return { type: THREAD_FRAME_TYPE, sessionId, threadId, frame };
 }

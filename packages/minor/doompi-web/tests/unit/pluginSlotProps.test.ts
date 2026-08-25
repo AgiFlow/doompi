@@ -1,8 +1,14 @@
-import { defineSlot, defineWebPlugin, type WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import { isValidElement, type ReactElement } from 'react';
+import {
+  defineSlot,
+  defineWebPlugin,
+  type TransientTab,
+  type WebPluginSlotProps,
+} from '@agimon-ai/doompi-web-contracts';
+import { createElement, isValidElement, type ReactElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps.ts';
+import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer.ts';
 
 function Panel(): null {
   return null;
@@ -12,7 +18,12 @@ function Nested(): null {
   return null;
 }
 
-afterEach(() => resetWebPlugins());
+const noTabs = { open: (): void => undefined, close: (): void => undefined };
+
+afterEach(() => {
+  resetWebPlugins();
+  releaseThreadRenderer();
+});
 
 describe('pluginSlotProps', () => {
   it("renders a slot's component fills with the same props and reads a data slot through its handle", () => {
@@ -36,7 +47,7 @@ describe('pluginSlotProps', () => {
       }),
     ]);
     const opened: Array<string | null> = [];
-    const props = pluginSlotProps('s1', (tabId) => opened.push(tabId));
+    const props = pluginSlotProps('s1', (tabId) => opened.push(tabId), {}, noTabs);
 
     const rendered = props.renderSlot('owner.items') as ReactElement<WebPluginSlotProps>[];
     expect(rendered.map((element) => [isValidElement(element), element.type, element.key])).toEqual([
@@ -58,5 +69,55 @@ describe('pluginSlotProps', () => {
     expect(props.slotData(defineSlot({ slot: 'owner.items' }))).toEqual([]);
     expect(props.renderSlot('owner.badges')).toEqual([]);
     expect(props.renderSlot('nobody.home')).toEqual([]);
+  });
+});
+
+describe('the statuses a plugin component receives', () => {
+  it('hands every fill the session footer statuses, and the same object to a nested slot', () => {
+    const seen: Array<Readonly<Record<string, string>>> = [];
+    const Leaf = (props: WebPluginSlotProps): null => {
+      seen.push(props.statuses);
+      return null;
+    };
+    installWebPlugins([
+      defineWebPlugin({ id: 'owner', slots: [defineSlot({ slot: 'owner.items' })] }),
+      defineWebPlugin({ id: 'filler', fills: [{ slot: 'owner.items', id: 'one', component: Leaf }] }),
+    ]);
+
+    const statuses = { 'doom-voice': 'voice auto: listening' };
+    const props = pluginSlotProps('s1', () => undefined, statuses, noTabs);
+    expect(props.statuses).toBe(statuses);
+
+    const rendered = props.renderSlot('owner.items') as ReactElement<WebPluginSlotProps>[];
+    expect(rendered[0]?.props.statuses).toBe(statuses);
+  });
+});
+
+describe('the runtime tabs and threads a plugin component may open', () => {
+  it('hands transient tab actions to the host and renders a thread through the bound view', () => {
+    const opened: TransientTab[] = [];
+    const closed: string[] = [];
+    const props = pluginSlotProps(
+      's1',
+      () => undefined,
+      {},
+      {
+        open: (tab) => opened.push(tab),
+        close: (tabId) => closed.push(tabId),
+      },
+    );
+    const tab: TransientTab = { id: 'owner-thing-1', label: 'thing', panel: Panel };
+    props.openTransientTab(tab);
+    props.closeTransientTab('owner-thing-1');
+    expect(opened).toEqual([tab]);
+    expect(closed).toEqual(['owner-thing-1']);
+
+    // Nothing is bound before the app mounts, and a thread needs a focused session.
+    expect(props.renderThread('run-1')).toBeNull();
+    bindThreadRenderer((sessionId, threadId) => createElement(Panel, { key: `${sessionId}/${threadId}` }));
+    const rendered = props.renderThread('run-1') as ReactElement;
+    expect(isValidElement(rendered)).toBe(true);
+    expect(rendered.key).toBe('s1/run-1');
+    expect(pluginSlotProps(null, () => undefined, {}, noTabs).renderThread('run-1')).toBeNull();
   });
 });

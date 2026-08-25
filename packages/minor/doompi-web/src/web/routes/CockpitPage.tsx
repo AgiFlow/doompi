@@ -15,6 +15,7 @@ import { Timeline } from '../features/session/Timeline.tsx';
 import { TopBar } from '../features/status/TopBar.tsx';
 import { HOST_SLOTS, webTabs } from '../lib/pluginRegistry.ts';
 import { sessionsStore, setActiveSession } from '../stores/sessionsStore.ts';
+import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore.ts';
 import { setDockOpen, uiStore } from '../stores/uiStore.ts';
 
 export function CockpitPage() {
@@ -24,7 +25,9 @@ export function CockpitPage() {
   const slotProps = usePluginSlotProps(sessionId ?? null);
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
-  const tab = tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId);
+  // A declared tab first, then one a plugin opened at runtime for this session.
+  const transientTab = useStore(transientTabsStore, (state) => findTransientTab(state, sessionId, tabId));
+  const tab = (tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId)) ?? transientTab;
 
   // The route is the source of focus; the store follows it.
   useEffect(() => {

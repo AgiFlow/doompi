@@ -21,7 +21,11 @@ import {
   DIRECTORIES_API_ROUTE,
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
+  SUBSCRIBE_THREAD_TYPE,
   SUBSCRIBE_TYPE,
+  threadBacklog,
+  threadFrameEnvelope,
+  UNSUBSCRIBE_THREAD_TYPE,
   UNSUBSCRIBE_TYPE,
 } from '../types/hub.ts';
 import type { SessionRecord } from '../types/registry.ts';
@@ -32,8 +36,9 @@ import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
-import { listDirectories } from './directoryListing.ts';
+import { suggestDirectories } from './directoryListing.ts';
 import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
+import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
 const SESSION_ROUTE = '/api/session';
@@ -96,6 +101,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** One page's hold on one thread; a session id never contains a newline, so the pair cannot collide. */
+function threadKey(sessionId: string, threadId: string): string {
+  return `${sessionId}\n${threadId}`;
+}
+
 function buildHub(
   options: WebServerOptions,
   notice: (message: string) => void,
@@ -153,6 +163,12 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const notice = options.onNotice ?? ((): void => {});
   const assetsDir = resolveAssetsDir(options.assetsDir, notice);
   const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice));
+  // Threads are journals the data channels can name (a subagent run's own
+  // session file); the hub tails one only while a page follows it.
+  const threads = createThreadJournals({
+    resolve: (sessionId, threadId) => hub.threadJournal(sessionId, threadId),
+    onNotice: notice,
+  });
   const app = new Hono();
   const nodeWs = createNodeWebSocket({ app });
   // Provider credentials belong to the machine, not to a session: the hub
@@ -207,10 +223,14 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ files });
   });
 
-  // Directory completion for the new-session picker: the children of the
-  // typed parent directory, filtered by the trailing segment as a regex.
+  // Directory suggestions for the new-session picker: the children of the
+  // typed parent while a path is being drilled into, and a ranked search of
+  // the home directory for anything else, so a name or a path remembered from
+  // another machine still finds the folder.
   app.get(DIRECTORIES_API_ROUTE, async (context) => {
-    const directories = await listDirectories(context.req.query('q') ?? '', DIRECTORY_SUGGESTION_LIMIT);
+    const directories = await suggestDirectories(context.req.query('q') ?? '', {
+      limit: DIRECTORY_SUGGESTION_LIMIT,
+    });
     return context.json({ directories });
   });
 
@@ -231,7 +251,18 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     SESSION_ROUTE,
     nodeWs.upgradeWebSocket(() => {
       const subscriptions = new Set<string>();
+      /** The threads this page follows; one socket may follow several of one session. */
+      const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
       let disconnect: (() => void) | undefined;
+      let disconnectThreads: (() => void) | undefined;
+      /** Lets go of every followed thread, or only a departed session's. */
+      const releaseThreads = (sessionId?: string): void => {
+        for (const [key, held] of threadSubscriptions) {
+          if (sessionId !== undefined && held.sessionId !== sessionId) continue;
+          threadSubscriptions.delete(key);
+          threads.unsubscribe(held.sessionId, held.threadId);
+        }
+      };
       return {
         onOpen(_event, ws) {
           const post = (frame: SessionFrame | object): void => {
@@ -247,6 +278,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             if (event.kind === 'upsert') post({ type: SESSION_UPSERT_TYPE, session: event.session });
             else if (event.kind === 'removed') {
               subscriptions.delete(event.sessionId);
+              releaseThreads(event.sessionId);
               post({ type: SESSION_REMOVED_TYPE, sessionId: event.sessionId });
             } else if (event.kind === 'channel') {
               if (subscriptions.has(event.sessionId)) {
@@ -254,6 +286,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               }
             } else if (subscriptions.has(event.sessionId)) {
               post(sessionFrameEnvelope(event.sessionId, event.frame));
+            }
+          });
+          disconnectThreads = threads.onFrame((event) => {
+            if (threadSubscriptions.has(threadKey(event.sessionId, event.threadId))) {
+              post(threadFrameEnvelope(event.sessionId, event.threadId, event.frame));
             }
           });
           notice('browser attached');
@@ -284,6 +321,23 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             subscriptions.delete(sessionId);
             return;
           }
+          if (parsed.type === SUBSCRIBE_THREAD_TYPE || parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
+            if (typeof parsed.threadId !== 'string') return;
+            const threadId = parsed.threadId;
+            const key = threadKey(sessionId, threadId);
+            if (parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
+              if (threadSubscriptions.delete(key)) threads.unsubscribe(sessionId, threadId);
+              return;
+            }
+            if (threadSubscriptions.has(key) || hub.backlog(sessionId) === undefined) return;
+            threadSubscriptions.set(key, { sessionId, threadId });
+            try {
+              ws.send(JSON.stringify(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId))));
+            } catch {
+              // The browser went away mid-write; onClose tears the socket down.
+            }
+            return;
+          }
           if (parsed.type === SESSION_COMMAND_TYPE && isRecord(parsed.frame)) {
             // The hub owns the handshake; a page must not be able to replay it.
             if (parsed.frame.type === ATTACH_TYPE) return;
@@ -293,7 +347,10 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         onClose() {
           disconnect?.();
           disconnect = undefined;
+          disconnectThreads?.();
+          disconnectThreads = undefined;
           subscriptions.clear();
+          releaseThreads();
           notice('browser detached');
         },
       };
@@ -322,6 +379,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         port: info.port,
         close: () =>
           new Promise<void>((done) => {
+            threads.close();
             hub.close();
             providerAuth.close();
             // An upgraded socket leaves the HTTP server's connection tracking,
@@ -335,6 +393,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       });
     });
     server.once('error', (error) => {
+      threads.close();
       hub.close();
       providerAuth.close();
       reject(error);

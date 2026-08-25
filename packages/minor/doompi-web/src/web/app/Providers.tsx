@@ -1,7 +1,9 @@
 import { TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { ThreadView } from '../features/session/ThreadView.tsx';
 import { installWebPlugins, startWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
+import { bindThreadRenderer } from '../lib/threadRenderer.ts';
 import { sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { routeTree } from '../routes/routeTree.tsx';
 import { startSessionRuntime } from './sessionRuntime.ts';
@@ -14,6 +16,9 @@ installWebPlugins(webPlugins);
 for (const diagnostic of webPluginDiagnostics()) {
   console.warn(`web plugin '${diagnostic.pluginId}' ${diagnostic.kind}: ${diagnostic.message}`);
 }
+// The thread view a plugin panel renders through its props; bound here, where
+// the feature and the props builder can both be seen.
+bindThreadRenderer((sessionId, threadId) => <ThreadView sessionId={sessionId} threadId={threadId} />);
 
 const router = createRouter({ routeTree });
 

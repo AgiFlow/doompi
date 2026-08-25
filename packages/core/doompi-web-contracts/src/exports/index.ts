@@ -6,6 +6,9 @@ export type {
   HubChannelHost,
   HubChannelSource,
   HubSessionScope,
+  WebHubApi,
+  WebHubApiContext,
+  WebHubApiHandler,
   WebHubChannel,
 } from '../types/webHub.ts';
 export type {
@@ -29,6 +32,7 @@ export type {
   ToolMessageRenderProps,
   ToolRendererContribution,
   ToolResultView,
+  TransientTab,
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,

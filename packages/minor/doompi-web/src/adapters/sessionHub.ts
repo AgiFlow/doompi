@@ -72,6 +72,8 @@ export interface SessionHub {
   channelTypes(): string[];
   /** Every channel's subscribe-time snapshot for one session; empty for an unknown id. */
   channelFrames(sessionId: string): ChannelFrame[];
+  /** The journal behind one thread of a session, from the first data channel that names it; undefined until one does. */
+  threadJournal(sessionId: string, threadId: string): string | undefined;
   command(sessionId: string, frame: SessionFrame): void;
   create(input: SpawnSessionInput): Promise<SpawnOutcome>;
   close(): void;
@@ -86,6 +88,15 @@ interface ManagedSession {
   attachReason?: string;
   git?: SessionGitStatus;
   lastSummaryJson?: string;
+  /**
+   * Journal entry ids this hub has already published. Pi reports a message
+   * entry only when the journal is read, never as it is written, so the hub
+   * re-reads on each run boundary; remembering what it sent is what keeps that
+   * re-read from replaying the whole transcript every time.
+   */
+  emittedEntryIds: Set<string>;
+  /** Whether the first journal read has been published; later reads are refreshes. */
+  restoredJournal: boolean;
 }
 
 interface StartedChannel {
@@ -126,6 +137,22 @@ function renderableJournalEntries(frame: SessionFrame, limit: number): Record<st
   // long transcript is restored; the ring's own drop counter reports the rest.
   const kept = messages.length > limit ? messages.slice(-limit) : messages;
   return minorModes === undefined ? kept : [...kept, minorModes];
+}
+
+/**
+ * Whether a journal entry is one no live frame reports.
+ *
+ * Pi publishes a frame for everything the agent does, but a user message only
+ * ever reaches the journal: the agent did not produce it. That is invisible
+ * when something other than a cockpit sends it, which is how autonomous voice
+ * prompts the agent with what it heard. The catalog entry is here because
+ * re-reading it only replaces a projection, so a refresh cannot double it.
+ */
+function isUnreportedEntry(entry: Record<string, unknown>): boolean {
+  if (entry.type === 'custom') return entry.customType === MINOR_MODE_ENTRY_TYPE;
+  const message = entry.message;
+  if (typeof message !== 'object' || message === null) return false;
+  return (message as { role?: unknown }).role === 'user';
 }
 
 function readTokenFile(record: SessionRecord): string {
@@ -239,8 +266,20 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           // subscribe later, and straight out to the ones already watching.
           if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
             const restoredAt = new Date().toISOString();
+            const refreshing = managed.restoredJournal;
+            managed.restoredJournal = true;
             let presenceChanged = false;
             for (const entry of renderableJournalEntries(frame, restoreLimit)) {
+              // Once the transcript is on the page the live stream carries
+              // everything the agent does, and it carries it with no journal id
+              // to match on. Publishing an answer twice is the cost of getting
+              // that wrong, so a refresh only adds what no frame can carry.
+              if (refreshing && !isUnreportedEntry(entry)) continue;
+              const entryId = typeof entry.id === 'string' ? entry.id : undefined;
+              if (entryId !== undefined) {
+                if (managed.emittedEntryIds.has(entryId)) continue;
+                managed.emittedEntryIds.add(entryId);
+              }
               const restored = { type: ENTRY_APPENDED_TYPE, entry };
               managed.ring.record(restored);
               emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
@@ -262,6 +301,12 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           if (changed) pushSummary(managed);
           // A finished run is when the tree most plausibly changed.
           if (wasPhase !== 'idle' && next.phase === 'idle') refreshGit(managed);
+          // A run boundary is the one moment a message can have been journalled
+          // without any frame carrying it: an extension that prompts the agent
+          // (autonomous voice dictating what it heard) sends the message
+          // itself, so the only report of it is the journal. Re-reading here is
+          // what puts it on the page; entries already published are skipped.
+          if (wasPhase !== next.phase) managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
         },
         onStatus: (status) => {
           managed.attach = status.state;
@@ -285,6 +330,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       ring: createFrameRing(options.ringLimit),
       presence: initialPresence(new Date().toISOString()),
       attach: 'connecting',
+      emittedEntryIds: new Set<string>(),
+      restoredJournal: false,
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
@@ -381,6 +428,16 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         if (payload !== undefined) frames.push({ type: channel.frameType, sessionId, payload });
       }
       return frames;
+    },
+    threadJournal(sessionId, threadId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return undefined;
+      const scope = scopeOf(managed.record);
+      for (const channel of startedChannels) {
+        const journal = channel.source.threadJournal?.(scope, threadId);
+        if (journal !== undefined) return journal;
+      }
+      return undefined;
     },
     command(sessionId, frame) {
       const managed = sessions.get(sessionId);

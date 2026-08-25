@@ -44,17 +44,45 @@ export interface SlotDataFill<Data = unknown> {
   order: number;
   data: Data;
 }
+/**
+ * A tab a plugin opens at runtime for one session, beside the declared ones:
+ * the reader closes it, and it goes with the session or the page. The host
+ * keeps the panel it was opened with, so opening the same id again only
+ * focuses the tab.
+ */
+export interface TransientTab {
+  /** Unique across plugins and URL-safe: '<pluginId>-<name>-<key>'. */
+  id: string;
+  label: string;
+  panel: ComponentType<WebPluginSlotProps>;
+}
 /** Every slot component receives the focused session; null while nothing is focused. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
   /** Host navigation for the focused session; null returns to the conversation tab. */
   openTab: (tabId: string | null) => void;
+  /** Opens the tab for the focused session, or focuses it when one with the same id is already open. */
+  openTransientTab: (tab: TransientTab) => void;
+  closeTransientTab: (tabId: string) => void;
+  /**
+   * The host's live conversation view of one thread of the focused session,
+   * rendered like the session's own timeline and subscribed while mounted. A
+   * plugin's hub source names the thread's journal (HubChannelSource.threadJournal).
+   */
+  renderThread: (threadId: string) => ReactNode;
   /** The same sender palette commands and `start` receive; components act through it. */
   sendSessionFrame: SessionFrameSender;
   /** The component fills of one slot, in slot order; the host resolves them, so this contract holds no state. */
   renderSlot: (slot: string) => ReactNode;
   /** The data fills of one slot, typed by the declaration handle only its owner holds. */
   slotData: <Data>(slot: SlotDeclaration<Data>) => readonly SlotDataFill<Data>[];
+  /**
+   * The footer statuses the focused session has published, raw, keyed as the
+   * publishing extension named them. A package reads its own key: the status
+   * line is the only thing some modes report, and a plugin that renders its
+   * own surface needs the same facts the host folds into the selection bar.
+   */
+  statuses: Readonly<Record<string, string>>;
 }
 /**
  * One contribution into a slot, keyed by (pluginId, id): independent plugins
