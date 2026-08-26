@@ -113,6 +113,15 @@ const EXPORT_CONDITION_CODES: Readonly<Record<string, string>> = {
   default: 'd',
 };
 
+function packedExportTargetExists(root: string, files: readonly string[], target: string): boolean {
+  const wildcard = target.indexOf('*');
+  if (wildcard < 0) return fs.existsSync(path.join(root, target));
+  const prefix = target.slice(2, wildcard);
+  const suffix = target.slice(wildcard + 1);
+  return files.some(
+    (file) => file.length > prefix.length + suffix.length && file.startsWith(prefix) && file.endsWith(suffix),
+  );
+}
 interface PackedCordisContract {
   readonly subpath: string;
   readonly values?: Readonly<Record<string, string | number>>;
@@ -1149,7 +1158,9 @@ describe('packed package identity and closure', () => {
     expect(files.some((file) => /(?:bootstrap\.native|nativeGraph|native\.manifest)/u.test(file))).toBe(false);
     expect(result.packedManifest.exports).not.toHaveProperty('./extensions/doom');
     for (const target of exportTargets) {
-      expect(fs.existsSync(path.join(result.unpackedRoot, target)), `${entry.name} is missing ${target}`).toBe(true);
+      expect(packedExportTargetExists(result.unpackedRoot, files, target), `${entry.name} is missing ${target}`).toBe(
+        true,
+      );
     }
     expect(unsafePackedContent(result)).toEqual([]);
     expect(packageManifestText(result)).not.toMatch(/(?:workspace:|link:|packages[\\/]cli|packages[\\/]rigs)/);
@@ -1596,10 +1607,13 @@ describe('consumer ownership boundaries', () => {
   );
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
-    expect(PACKAGE_MATRIX).toHaveLength(39);
+    const names = PACKAGE_MATRIX.map((entry) => entry.name);
+    expect(PACKAGE_MATRIX).toHaveLength(41);
     expect(standardPackageSet.size).toBe(27);
     expect(standardPackageSet).toContain('@agimon-ai/doompi-help');
-    expect(PACKAGE_MATRIX.map((entry) => entry.name)).toContain('@agimon-ai/doompi');
+    expect(names).toContain('@agimon-ai/doompi');
+    expect(names).toContain('@agimon-ai/doompi-web-components');
+    expect(names).toContain('@agimon-ai/doompi-web-contracts');
   });
 });
 
@@ -1653,7 +1667,7 @@ describe('DPI installed experiment runtime', () => {
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
-      expect(version.stdout.trim()).toBe('0.84.2');
+      expect(version.stdout.trim()).toBe('0.84.3');
 
       const runtime = startRuntime(
         executable,

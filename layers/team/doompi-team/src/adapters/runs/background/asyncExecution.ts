@@ -181,6 +181,9 @@ export const FABLE_PROFILE_RESULT_FILE_NAME = 'fable-profile-result.json';
 export const SYSTEM_PROMPT_FILE_NAME = 'system-prompt.md';
 const SYSTEM_PROMPT_FILE_MODE = 0o600;
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000;
+const NODE_IMPORT_FLAG = '--import';
+/** How much of a dead runner's stderr the startup-timeout message carries. */
+const STDERR_TAIL_LIMIT = 400;
 
 /**
  * `state`/`steps`/`parallelGroups`/`chainStepCount`/`workflowGraph`/
@@ -365,12 +368,54 @@ function resolveSdkRunnerEntry(): string {
   return resolveRunnerEntry('runs/sdkRunnerEntry', 'adapters/process/sdkRunnerEntry', 'sdkRunnerEntry');
 }
 
+/**
+ * The built `--import` preamble that lets a detached child resolve the Pi SDK
+ * in a managed install (see `piModuleAlias.ts`). Only the built artifact
+ * counts: plain `node --import` cannot load the TypeScript source, and a
+ * source-tree run resolves the SDK normally anyway.
+ */
+function resolvePiModuleAliasRegister(): string | undefined {
+  let directory = path.dirname(fileURLToPath(import.meta.url));
+  while (true) {
+    const packageManifest = path.join(directory, 'package.json');
+    if (fs.existsSync(packageManifest)) {
+      const builtCandidate = path.join(directory, 'dist', 'runs', 'piModuleAlias.mjs');
+      return fs.existsSync(builtCandidate) ? builtCandidate : undefined;
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}
+
 function resolveCliRunnerEntry(): string {
   return resolveRunnerEntry(
     'runs/background/cliRunnerEntry',
     'adapters/runs/background/cliRunnerEntry',
     'cliRunnerEntry',
   );
+}
+
+/** The tail of a run's captured stderr, single-line, or undefined when there is none to read. */
+function runnerStderrTail(runId: string): string | undefined {
+  try {
+    const raw = fs.readFileSync(path.join(runDirFor(runId), RUNNER_STDERR_FILE_NAME), 'utf8').trim();
+    if (!raw) return undefined;
+    return raw.slice(-STDERR_TAIL_LIMIT).replace(/\s+/gu, ' ').trim();
+  } catch {
+    // No stderr capture on disk: the child may never have spawned at all.
+    return undefined;
+  }
+}
+
+/**
+ * A startup timeout usually means the child died before its handshake, and its
+ * stderr says why; nothing else ever surfaces that file, so carry it here.
+ */
+function startupTimeoutMessage(agent: string, runId: string): string {
+  const base = `Timed out waiting for '${agent}' (run '${runId}') to start.`;
+  const tail = runnerStderrTail(runId);
+  return tail === undefined ? base : `${base} Runner stderr: ${tail}`;
 }
 
 export class AsyncSubagentSpawner implements AsyncSubagentSpawnerContract {
@@ -449,6 +494,11 @@ export class AsyncSubagentSpawner implements AsyncSubagentSpawnerContract {
    */
   protected buildLaunchArgs(input: BuildPiArgsInput): BuildPiArgsResult {
     return buildPiArgs(input);
+  }
+
+  /** Overridable so a unit test need not depend on whether dist is built. */
+  protected resolvePiAliasRegisterPath(): string | undefined {
+    return resolvePiModuleAliasRegister();
   }
 
   /**
@@ -701,9 +751,12 @@ export class AsyncSubagentSpawner implements AsyncSubagentSpawnerContract {
       }
     }
 
+    const aliasRegister = usePi ? this.resolvePiAliasRegisterPath() : undefined;
     const { pid, onError, onExit } = this.spawnChild(
       process.execPath,
-      [usePi ? resolveSdkRunnerEntry() : resolveCliRunnerEntry()],
+      usePi
+        ? [...(aliasRegister === undefined ? [] : [NODE_IMPORT_FLAG, aliasRegister]), resolveSdkRunnerEntry()]
+        : [resolveCliRunnerEntry()],
       { cwd, env: env as NodeJS.ProcessEnv },
     );
     if (pid === undefined) {
@@ -747,9 +800,7 @@ export class AsyncSubagentSpawner implements AsyncSubagentSpawnerContract {
     if (outcome.status !== 'signalled') {
       this.terminalPersistence.untrackChild(pid);
       const message =
-        outcome.status === 'failed'
-          ? outcome.error
-          : (spawnError?.message ?? `Timed out waiting for '${agent}' (run '${runId}') to start.`);
+        outcome.status === 'failed' ? outcome.error : (spawnError?.message ?? startupTimeoutMessage(agent, runId));
       return fail(message);
     }
 

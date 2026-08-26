@@ -89,7 +89,8 @@
           "@agimon-ai/doompi-user-feedback",
           "@agimon-ai/doompi-voice",
           "@agimon-ai/doompi-workflow",
-          "@agimon-ai/vibe-lint-plugin-doom-extension"
+          "@agimon-ai/vibe-lint-plugin-doom-extension",
+          "@agimon-ai/vibe-lint-plugin-doom-web"
         ],
         "version": {
           "updateDependents": "never"

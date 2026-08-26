@@ -12,7 +12,7 @@ Help keeps extension documentation out of the default model context. Packages co
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2
+- Pi 0.84.3
 
 ## Install
 

@@ -1,0 +1,99 @@
+{
+  "name": "@agimon-ai/{{ packageName }}",
+  "version": "0.0.0",
+  "description": "{{ packageDescription }}",
+  "keywords": [
+    "cockpit",
+    "coding-agent",
+    "doompi",
+    "pi-coding-agent",
+    "web",
+    "{{ packageKeyword }}"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "{{ author }}",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/clients/{{ packageName }}"
+  },
+  "bin": {
+    "{{ packageName }}": "./dist/bin/serve.mjs"
+  },
+  "files": [
+    "dist",
+    "src",
+    "llms.txt",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./bundler": {
+      "types": "./dist/bundler.d.mts",
+      "import": "./dist/bundler.mjs",
+      "require": "./dist/bundler.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && vite build",
+    "dev": "vite",
+    "test": "vitest --run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@hono/node-server": "2.1.1",
+    "@hono/node-ws": "1.3.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/react-router": "1.170.32",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
+    "@vitejs/plugin-react": "6.1.0",
+    "hono": "4.13.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "tailwindcss": "4.3.3",
+    "vite": "8.2.2"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.4",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "doompiWeb": []
+}

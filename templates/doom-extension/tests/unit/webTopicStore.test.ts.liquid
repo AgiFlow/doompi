@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest';
+import { {{ topic | camelCase }}, {{ topic | camelCase }}Channel } from '../../web/{{ topic | camelCase }}Store.ts';
+
+const item = (id: string, state: 'running' | 'done') => ({ id, name: id, state });
+const session = (sessionId: string | null) => {{ topic | camelCase }}.select({{ topic | camelCase }}.store.state, sessionId);
+
+describe('the {{ pluginId }} web store channel', () => {
+  it('keeps each session separately and drops one with its session', () => {
+    {{ topic | camelCase }}.reset();
+    {{ topic | camelCase }}Channel.apply('s1', {{ topic | camelCase }}Channel.parse({ items: [item('a', 'running')] })!);
+    {{ topic | camelCase }}Channel.apply('s2', {{ topic | camelCase }}Channel.parse({ items: [] })!);
+    expect(session('s1').items).toHaveLength(1);
+    expect(session('s2').items).toEqual([]);
+    expect(session(null).items).toEqual([]);
+
+    {{ topic | camelCase }}Channel.drop('s1');
+    expect({{ topic | camelCase }}.store.state.s1).toBeUndefined();
+    // Malformed payloads are rejected at the parse gate.
+    expect({{ topic | camelCase }}Channel.parse('junk')).toBeNull();
+    expect({{ topic | camelCase }}Channel.parse({ items: 'no' })).toBeNull();
+    {{ topic | camelCase }}.reset();
+  });
+});

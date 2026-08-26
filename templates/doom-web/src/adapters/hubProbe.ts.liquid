@@ -1,0 +1,27 @@
+const HEALTH_ROUTE = '/api/health';
+const HUB_ROLE = 'hub';
+const PROBE_TIMEOUT_MS = 1000;
+
+/**
+ * True when a cockpit hub already answers on the address.
+ *
+ * The cockpit is a multi-session hub, so a second one is never what someone
+ * wants: running the executable again should hand back the running cockpit
+ * rather than fail on a port clash. Anything else answering the port is not a
+ * hub and must not be mistaken for one, which is why the role is checked and
+ * not just the status code.
+ */
+export async function hubAnswers(host: string, port: number): Promise<boolean> {
+  try {
+    const response = await fetch(`http://${host}:${String(port)}${HEALTH_ROUTE}`, {
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+    if (!response.ok) return false;
+    const body = (await response.json()) as { ok?: boolean; role?: string };
+    return body.ok === true && body.role === HUB_ROLE;
+  } catch {
+    // Nothing listening, a timeout, or a body that is not the hub's: all mean
+    // "no hub here", which is the caller's cue to start one.
+    return false;
+  }
+}

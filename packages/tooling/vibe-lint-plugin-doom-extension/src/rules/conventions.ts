@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntries.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const PI_VERSION = '0.84.2';
+const PI_VERSION = '0.84.3';
 const PI_PACKAGES = [
   '@earendil-works/pi-agent-core',
   '@earendil-works/pi-ai',

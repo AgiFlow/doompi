@@ -37,6 +37,30 @@ export {
   type HarnessContext,
   resolveHarnessProfile,
 } from '../../adapters/harnessContext';
+// The launch plan and the layer installer are published so a session server can
+// run the same preparation the launcher does without spawning the CLI to do it.
+export { ensureLayerPackages, type EnsureLayerPackagesOptions } from '../../adapters/layerPackageInstaller';
+// Drift detection, so a host can tell whether a session it is about to start
+// would run against artifacts sync has not produced yet.
+export {
+  describeSyncDrift,
+  readSyncDrift,
+  type ReadSyncDriftOptions,
+  type SyncDrift,
+  type SyncDriftReason,
+} from '../../adapters/syncDrift';
+export {
+  ensureElicitationSessionId,
+  overridePiThemes,
+  type PiLaunchPlan,
+  resolveLaunchPlan,
+} from '../../adapters/launchPlan';
+export {
+  buildRuntimeBundle,
+  createRuntimeExtensionPlan,
+  type RuntimeBundleBuild,
+  type RuntimeExtensionPlan,
+} from '../../adapters/runtimeBundle';
 // applyMajorMode, applyPersona and applyProfile are published by
 // @agimon-ai/doompi-config/selectionSwitch, while domain staging is published
 // by @agimon-ai/doompi-domain. These re-exports preserve the host's public API.

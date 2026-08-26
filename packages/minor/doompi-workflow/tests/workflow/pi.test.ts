@@ -836,10 +836,12 @@ describe('workflow-mcp Pi extension', () => {
     });
   });
 
-  // The whole point of the redesign: one palette entry, not eight. If this fails,
-  // a command crept back in and the namespace cost regressed.
-  it('registers no slash command at all', () => {
-    expect([...createHarness().commands.keys()]).toEqual([]);
+  // The whole point of the redesign: one palette entry, not eight. The launch
+  // verb is that one, and it earns its place by being the only way a cockpit
+  // can start a workflow: a browser can send a session a prompt frame and
+  // nothing else. If this list grows again, the namespace cost has regressed.
+  it('registers the launch command and nothing else', () => {
+    expect([...createHarness().commands.keys()]).toEqual(['workflow-launch']);
   });
 
   it('registers every gated tool name it claims to gate', () => {

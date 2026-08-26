@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { PI_SUBAGENT_PI_BINARY_ENV } from '../../src/exports/env';
 import {
+  findPiInstallNearEntry,
   findPiPackageRootFromEntry,
   getPiSpawnCommand,
   PI_CODING_AGENT_PACKAGE,
@@ -73,12 +74,71 @@ describe('findPiPackageRootFromEntry', () => {
     expect(findPiPackageRootFromEntry(entry)).toBeUndefined();
   });
 
+  it('never treats a Pi install beside the entry as the entry own package', () => {
+    // <root>/lib/node_modules/{@earendil-works/pi-coding-agent, some-host}:
+    // Pi is only the host's global-install sibling, which must not count as
+    // proof that the entry IS the Pi CLI.
+    const root = makeTempDir();
+    const piRoot = path.join(root, 'lib', 'node_modules', '@earendil-works', 'pi-coding-agent');
+    writeManifest(piRoot, { name: PI_CODING_AGENT_PACKAGE });
+    const host = path.join(root, 'lib', 'node_modules', 'some-host');
+    writeManifest(host, { name: 'some-host' });
+    const entry = writeFile(host, 'dist/bin/cli.mjs', '');
+
+    expect(findPiPackageRootFromEntry(entry)).toBeUndefined();
+  });
+
   it('skips a manifest with a non-string or missing name instead of crashing', () => {
     const dir = makeTempDir();
     writeManifest(dir, { name: 42 });
     const entry = writeFile(dir, 'bin/cli.mjs', '');
 
     expect(findPiPackageRootFromEntry(entry)).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// findPiInstallNearEntry
+// ============================================================================
+
+describe('findPiInstallNearEntry', () => {
+  it('finds Pi installed beside the host package, the embedding-CLI layout', () => {
+    const root = makeTempDir();
+    const piRoot = path.join(root, 'lib', 'node_modules', '@earendil-works', 'pi-coding-agent');
+    writeManifest(piRoot, { name: PI_CODING_AGENT_PACKAGE });
+    const host = path.join(root, 'lib', 'node_modules', 'some-host');
+    writeManifest(host, { name: 'some-host' });
+    const entry = writeFile(host, 'dist/bin/cli.mjs', '');
+
+    expect(findPiInstallNearEntry(entry)).toBe(piRoot);
+  });
+
+  it('finds Pi nested in the host package own node_modules', () => {
+    const host = makeTempDir();
+    writeManifest(host, { name: 'some-host' });
+    const piRoot = path.join(host, 'node_modules', '@earendil-works', 'pi-coding-agent');
+    writeManifest(piRoot, { name: PI_CODING_AGENT_PACKAGE });
+    const entry = writeFile(host, 'dist/bin/cli.mjs', '');
+
+    expect(findPiInstallNearEntry(entry)).toBe(piRoot);
+  });
+
+  it('still finds the package root when the entry is inside Pi itself', () => {
+    const dir = makeTempDir();
+    writeManifest(dir, { name: PI_CODING_AGENT_PACKAGE });
+    const entry = writeFile(dir, 'dist/bin/cli.mjs', '');
+
+    expect(findPiInstallNearEntry(entry)).toBe(dir);
+  });
+
+  it('ignores a node_modules neighbor whose manifest is not the Pi package', () => {
+    const host = makeTempDir();
+    writeManifest(host, { name: 'some-host' });
+    const impostor = path.join(host, 'node_modules', '@earendil-works', 'pi-coding-agent');
+    writeManifest(impostor, { name: 'not-the-pi-package' });
+    const entry = writeFile(host, 'dist/bin/cli.mjs', '');
+
+    expect(findPiInstallNearEntry(entry)).toBeUndefined();
   });
 });
 

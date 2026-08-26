@@ -1,0 +1,10 @@
+{
+  "name": "@agimon-ai/doompi-e2e-crash-plugin",
+  "private": true,
+  "description": "An e2e fixture: a web plugin whose tool renderer throws on demand, so the timeline's fallback can be proved.",
+  "type": "module",
+  "doompiWeb": {
+    "pluginId": "crash",
+    "client": "./web/index.tsx"
+  }
+}

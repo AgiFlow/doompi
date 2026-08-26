@@ -3,6 +3,12 @@
     "scaffold-mcp": {
       "command": "npx",
       "args": ["-y", "@agiflowai/scaffold-mcp@1.3.0", "mcp-serve", "--admin-enable"]
+    },
+    "pencil": {
+      "type": "stdio",
+      "command": "/Applications/Pen.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
+      "args": ["--app", "desktop"],
+      "env": {}
     }
   }
 }

@@ -57,6 +57,26 @@ export const patterns: Record<string, PatternDefinition> = {
     description: 'Executable entrypoints declared in package.json bin.',
     includes: ['src/bin/**/*.ts'],
   },
+  'doom-web-plugin-entry': {
+    description:
+      "The cockpit plugin's client entry: `export const webPlugin = defineWebPlugin({...})`, the one module the host's generated registry imports. It declares tabs, channels, tool renderers, activity groups and sections, leader bindings, and the slots this plugin opens (`slots`, named '<pluginId>.<name>') or fills (`fills`) from sibling web/ modules. `start` is for page-lifetime needs such as hub frames only; components act through their props.",
+    includes: ['web/index.ts'],
+  },
+  'doom-web-plugin-store': {
+    description:
+      "Per-session plugin state: one `defineSessionStore<T>(empty)` per topic, where T is the whole record for a session (the hub's last payload plus this page's own ephemeral state such as dismissed ids or the open run). The channel is `store.channel({ channel, parse, reduce })`: parse gates the wire, reduce folds one payload and reconciles the ephemeral fields; drop and reset belong to the helper. Actions are plain functions calling `store.update`, and one that sends takes a `SessionFrameSender` first. No top-level let.",
+    includes: ['web/*Store.ts'],
+  },
+  'doom-web-plugin-components': {
+    description:
+      'Panels, activity sections, overlays, and tool messages. A tool message is a `message` renderer, one component per claimed tool receiving ToolMessageRenderProps, composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines from @agimon-ai/doompi-web-components: the shell owns the frame, the outcome tone, the status badge, and the expand toggle (`expandable` when the card hides lines), the card supplies the header summary and the body. Every Pi tool the package registers is listed in a toolRenderers entry (web-plugin-tool-renderers). Read with `useStore(x.store, (state) => x.select(state, sessionId))`, act with `props.sendSessionFrame`, navigate with `props.openTab`, render own slots with `props.renderSlot`. Tailwind classes as complete literals; imports limited to react, the two TanStack packages, the web contract, the shared components, own web/** and src/types/**; plugins never import each other.',
+    includes: ['web/**/*.tsx'],
+  },
+  'doom-web-plugin-lib': {
+    description:
+      'Pure view logic the components share: formatting, matching, folding. Host-neutral, no React state, no module-level mutable state, tested from tests/ directly.',
+    includes: ['web/**/*.ts'],
+  },
   'doom-tests': {
     description: 'Unit, integration, and package-contract verification.',
     includes: ['tests/**/*.ts'],

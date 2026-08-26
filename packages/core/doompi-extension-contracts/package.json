@@ -129,6 +129,16 @@
       "import": "./dist/narration.mjs",
       "require": "./dist/narration.cjs"
     },
+    "./package-api": {
+      "types": "./dist/packageApi.d.mts",
+      "import": "./dist/packageApi.mjs",
+      "require": "./dist/packageApi.cjs"
+    },
+    "./package-api-loader": {
+      "types": "./dist/packageApiLoader.d.mts",
+      "import": "./dist/packageApiLoader.mjs",
+      "require": "./dist/packageApiLoader.cjs"
+    },
     "./protocol": {
       "types": "./dist/protocol.d.mts",
       "import": "./dist/protocol.mjs",
@@ -138,6 +148,11 @@
       "types": "./dist/readiness.d.mts",
       "import": "./dist/readiness.mjs",
       "require": "./dist/readiness.cjs"
+    },
+    "./relaunch-handoff": {
+      "types": "./dist/relaunchHandoff.d.mts",
+      "import": "./dist/relaunchHandoff.mjs",
+      "require": "./dist/relaunchHandoff.cjs"
     },
     "./sandbox-harness": {
       "types": "./dist/sandboxHarness.d.mts",
@@ -158,6 +173,11 @@
       "types": "./dist/subagentTool.d.mts",
       "import": "./dist/subagentTool.mjs",
       "require": "./dist/subagentTool.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs",
+      "require": "./dist/testing.cjs"
     },
     "./transition": {
       "types": "./dist/transition.d.mts",
@@ -201,7 +221,7 @@
     "typebox": "1.3.16"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.3",
     "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
@@ -209,7 +229,7 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2"
+    "@earendil-works/pi-coding-agent": "0.84.3"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

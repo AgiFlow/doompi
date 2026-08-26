@@ -15,6 +15,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiWeb?: { pluginId?: string; registrationOrder?: number; channels?: string[]; client?: string };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -37,7 +38,7 @@ describe('doompi-domain package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.files).toEqual(
-      expect.arrayContaining(['dist', 'llms.txt', 'src/prompts', 'README.md', 'package.json']),
+      expect.arrayContaining(['dist', 'web', 'llms.txt', 'src/prompts', 'README.md', 'package.json']),
     );
     expect(manifest.keywords).toEqual([
       'ai',
@@ -74,6 +75,20 @@ describe('doompi-domain package contract', () => {
       expect(conditions(exportsMap[subpath]), subpath).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+  });
+
+  it('declares the cockpit domains axis as its web plugin', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.doompiWeb).toEqual({
+      pluginId: 'domain',
+      channels: [],
+      client: './web/index.ts',
+    });
+    const entry = await readFile(path.join(packageDirectory, 'web/index.ts'), 'utf8');
+    expect(entry).toContain('defineWebPlugin');
+    expect(entry).toContain("statusKey: 'doom-domain'");
+    expect(entry).toContain('multi: true');
   });
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
@@ -121,8 +136,8 @@ describe('doompi-domain package contract', () => {
     const manifest = await readManifest();
 
     for (const pi of ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui']) {
-      expect(manifest.peerDependencies?.[pi]).toBe('0.84.2');
-      expect(manifest.devDependencies?.[pi]).toBe('0.84.2');
+      expect(manifest.peerDependencies?.[pi]).toBe('0.84.3');
+      expect(manifest.devDependencies?.[pi]).toBe('0.84.3');
     }
   });
 });

@@ -45,6 +45,7 @@ The launcher may flatten the activation into one aggregate bundle before startin
 | `packages/core/*`    | Runtime foundations and shared contracts. Only a defined subset is part of the fixed host. |
 | `packages/default/*` | Default distribution features selected through configuration.                              |
 | `packages/minor/*`   | Optional modes selected through configuration.                                             |
+| `packages/clients/*` | Standalone client-facing processes, including the session server and browser cockpit.      |
 | `layers/<layer>/*`   | Selectable higher-level extensions.                                                        |
 | `packages/tooling/*` | Repository-owned development tools that are not part of the runtime package graph.         |
 

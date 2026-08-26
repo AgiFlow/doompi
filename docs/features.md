@@ -183,7 +183,9 @@ dictation and never enables Voice tools. `SPC v e` enters autonomous capture and
 TUI session receives the two Voice façades plus the standalone `narrate` tool.
 
 While `narrate` is available, the primary agent calls it before every user-facing final
-response. One concise spoken answer is enough for a short conversation or clarification;
+response. Final narration contains the complete answer, including every user-relevant
+conclusion, question, warning, result, and next action in the written response, rather than
+leaving essential information only in text. Short turns need one complete spoken answer;
 longer work also gets an opening and meaningful milestone calls. Each ready-to-speak
 utterance is limited to 4,096 characters, waits for physical playback, and returns
 `completed`, `interrupted`, `superseded`, or `failed`.

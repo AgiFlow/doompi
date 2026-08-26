@@ -67,11 +67,44 @@ export interface LoadedHarnessState {
   state: HarnessState;
 }
 
-let loaded: LoadedHarnessState | undefined;
+interface CachedHarnessState extends LoadedHarnessState {
+  /** The file's mtime when it was read, so a rewrite by another copy is noticed. */
+  mtimeMs?: number;
+}
+
+let loaded: CachedHarnessState | undefined;
 
 /** Drops the cached state. For tests, and for a process changing identity. */
 export function resetHarnessStore(): void {
   loaded = undefined;
+}
+
+function fileMtime(filePath: string): number | undefined {
+  try {
+    return fs.statSync(filePath).mtimeMs;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the cache still describes what the process points at.
+ *
+ * A session can load more than one copy of this package (a layer package
+ * installed under .pi/npm brings its own), and each copy caches on its own.
+ * The pointer and the file are shared, so a switch persisted through one copy
+ * moves the pointer or rewrites the file, and every other copy must notice
+ * rather than answer from memory.
+ */
+function cacheCurrent(cache: CachedHarnessState, environment: NodeJS.ProcessEnv): boolean {
+  const pointer = environment[HARNESS_STATE_POINTER];
+  if (cache.filePath !== pointer) return false;
+  if (!cache.filePath) return true;
+  try {
+    return fs.statSync(cache.filePath).mtimeMs === cache.mtimeMs;
+  } catch {
+    return false;
+  }
 }
 
 function parseStateFile(source: string, filePath: string): HarnessStateFile {
@@ -108,15 +141,15 @@ export function loadHarnessState(
   // question about another process, so it reads through rather than answering
   // from what this one happens to hold.
   const cacheable = environment === process.env;
-  if (cacheable && loaded) return loaded;
+  if (cacheable && loaded && cacheCurrent(loaded, environment)) return loaded;
 
   const filePath = environment[HARNESS_STATE_POINTER];
-  let result: LoadedHarnessState | undefined;
+  let result: CachedHarnessState | undefined;
   if (filePath && fs.existsSync(filePath)) {
     try {
       const file = parseStateFile(fs.readFileSync(filePath, 'utf8'), filePath);
       const owned = file.owner.pid === process.pid || file.owner.pid === UNCLAIMED_OWNER;
-      result = { filePath, owned, state: file.state };
+      result = { filePath, owned, state: file.state, mtimeMs: fileMtime(filePath) };
     } catch (error) {
       report?.(HARNESS_STATE_POINTER, error);
     }
@@ -167,7 +200,12 @@ export function restoreHarnessStateSnapshot(
   }
   if (environment === process.env) {
     loaded = snapshot.filePath
-      ? { filePath: snapshot.filePath, owned: snapshot.owned, state: snapshot.state }
+      ? {
+          filePath: snapshot.filePath,
+          owned: snapshot.owned,
+          state: snapshot.state,
+          mtimeMs: fileMtime(snapshot.filePath),
+        }
       : undefined;
   }
 }
@@ -221,7 +259,8 @@ export function createHarnessSession(
   options.environment[HARNESS_STATE_POINTER] = filePath;
   projectHarnessEnvironment(state, options.environment);
   // Only prime the cache when this process is the one being described.
-  if (!options.unclaimed && options.environment === process.env) loaded = { filePath, owned: true, state };
+  if (!options.unclaimed && options.environment === process.env)
+    loaded = { filePath, owned: true, state, mtimeMs: fileMtime(filePath) };
   return filePath;
 }
 
@@ -240,7 +279,7 @@ export function updateHarnessState(
   const filePath = current.owned && current.filePath ? current.filePath : adoptedStateFilePath();
   persist(filePath, state);
   environment[HARNESS_STATE_POINTER] = filePath;
-  if (environment === process.env) loaded = { filePath, owned: true, state };
+  if (environment === process.env) loaded = { filePath, owned: true, state, mtimeMs: fileMtime(filePath) };
   projectHarnessEnvironment(patch, environment);
   return state;
 }

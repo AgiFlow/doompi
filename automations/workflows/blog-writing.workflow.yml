@@ -75,7 +75,6 @@ on:
 jobs:
   research:
     description: Establish the audience, angle, factual foundation, and source ledger.
-    runs-on: macos-latest
     system-prompt: |
       Act as the `blog-researcher` agent and apply the `blog-research` skill.
       Research the brief using primary and authoritative sources when tools are available.
@@ -99,7 +98,6 @@ jobs:
 
   outline:
     description: Build a focused article structure grounded in the research.
-    runs-on: macos-latest
     needs: research
     system-prompt: |
       Apply the `blog-outline` skill. Read $WORKFLOW_RUN_DIR/research.md and
@@ -120,7 +118,6 @@ jobs:
 
   draft:
     description: Write a complete article draft from the approved research and outline.
-    runs-on: macos-latest
     needs: outline
     system-prompt: |
       Act as the `blog-writer` agent and apply the `blog-draft` skill.
@@ -143,7 +140,6 @@ jobs:
 
   copy-review:
     description: Review the draft for clarity, structure, tone, and reader value.
-    runs-on: macos-latest
     needs: draft
     system-prompt: |
       Act as the `blog-editor` agent and apply the `blog-review` skill.
@@ -165,7 +161,6 @@ jobs:
 
   fact-check:
     description: Validate material claims and citation coverage independently.
-    runs-on: macos-latest
     needs: draft
     system-prompt: |
       Act as the `blog-editor` agent and apply the `blog-review` and `blog-research` skills.
@@ -189,7 +184,6 @@ jobs:
 
   finalize:
     description: Apply approved review feedback and package review-ready artifacts.
-    runs-on: macos-latest
     needs: [copy-review, fact-check]
     system-prompt: |
       Act as the `blog-editor` agent and apply the `blog-review` skill.

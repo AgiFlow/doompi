@@ -198,7 +198,14 @@ function phoneticGroup(character: string): string {
   return character;
 }
 
-function phoneticKey(value: string): string {
+/**
+ * A Soundex-shaped key, exported so control-phrase matching can share it.
+ *
+ * The two problems are the same one: deciding whether two short words are the same word
+ * heard differently. A second implementation next door would drift from this one and
+ * make `send`/`sent` behave differently depending on which path reached it.
+ */
+export function phoneticKey(value: string): string {
   const letters = value
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
@@ -221,7 +228,8 @@ function phoneticKey(value: string): string {
   return key;
 }
 
-function editDistance(left: string, right: string): number {
+/** Levenshtein distance, exported alongside {@link phoneticKey} for the same reason. */
+export function editDistance(left: string, right: string): number {
   const leftCharacters = Array.from(left);
   const rightCharacters = Array.from(right);
   const previous = Array.from({ length: rightCharacters.length + 1 }, (_value, index) => index);

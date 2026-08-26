@@ -50,6 +50,7 @@ import {
   VoiceTurnFallbackNarrator,
 } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
+import type { VoiceDeliveryIntent } from '../../services/voiceDelivery.ts';
 import {
   type AutoCaptureActivationState,
   type AutoCaptureIndicatorState,
@@ -116,7 +117,21 @@ const AUTO_LEADER_DETAIL = 'autonomous capture with agent narration';
 const AUTO_MODE_LABEL = 'Voice';
 const AUTO_MODE_COLOR = 'accent' as const;
 
-function voiceModeState(state: AutoCaptureActivationState, hasUi = false): MinorModeState {
+/**
+ * Whether this session can run autonomous capture.
+ *
+ * Capture is not a property of the terminal. ffmpeg reads a system audio
+ * device on the machine the agent process runs on, and that machine is the
+ * same one whether the session is driven from a TUI or spawned by the cockpit
+ * hub. What the mode actually needs from a session is somewhere to put its
+ * indicator, its status line and its notices, which is what a UI-bearing
+ * session provides and a truly headless one does not.
+ */
+export function canRunVoice(context: { hasUI?: boolean } | undefined): boolean {
+  return context?.hasUI === true;
+}
+
+export function voiceModeState(state: AutoCaptureActivationState, canRun = false): MinorModeState {
   const active = state !== 'disabled';
   const transitioning = state === 'starting' || state === 'draining' || state === 'shuttingDown';
   return {
@@ -130,10 +145,18 @@ function voiceModeState(state: AutoCaptureActivationState, hasUi = false): Minor
             : 'inactive',
     condition: transitioning ? 'queued' : 'ready',
     ...(active ? { detail: state, color: AUTO_MODE_COLOR } : {}),
-    actions: !hasUi
+    actions: !canRun
       ? [
-          { id: 'activate', enabled: false, disabledReason: 'Autonomous voice requires a TUI session.' },
-          { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice requires a TUI session.' },
+          {
+            id: 'activate',
+            enabled: false,
+            disabledReason: 'Autonomous voice needs a session that can show its indicator.',
+          },
+          {
+            id: 'deactivate',
+            enabled: false,
+            disabledReason: 'Autonomous voice needs a session that can show its indicator.',
+          },
         ]
       : transitioning
         ? [
@@ -293,7 +316,7 @@ function createAutoCaptureUi(context: ExtensionContext, footer: VoiceFooterContr
   };
 }
 
-export type AutoCaptureDeliveryIntent = 'immediate' | 'queuedFollowUp';
+export type AutoCaptureDeliveryIntent = VoiceDeliveryIntent;
 
 export function deliverAutoCaptureInput(
   pi: Pick<ExtensionAPI, 'sendUserMessage'>,
@@ -301,11 +324,15 @@ export function deliverAutoCaptureInput(
   text: string,
   intent: AutoCaptureDeliveryIntent = 'immediate',
 ): void {
+  if (intent === 'queuedFollowUp') {
+    pi.sendUserMessage(text, { deliverAs: 'followUp' });
+    return;
+  }
   if (context.isIdle()) {
     pi.sendUserMessage(text);
     return;
   }
-  pi.sendUserMessage(text, { deliverAs: intent === 'queuedFollowUp' ? 'followUp' : 'steer' });
+  pi.sendUserMessage(text, { deliverAs: 'steer' });
 }
 
 export interface AutoCapturePiEventController {
@@ -789,6 +816,10 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
     cordis.provide(DOOM_VOICE_TOOLS_SERVICE, voiceTools);
     yield () => voiceTools.dispose();
     let voiceToolSession: VoiceToolSessionHandle<ExtensionContext> | undefined;
+    // Contributors register through cordis injection, so they all land after the façade
+    // is registered. Without this the description would be built once, from an empty
+    // catalog, and never name a capability.
+    let voiceToolCatalogSubscription: (() => void) | undefined;
     let narrationToolRuntime: NarrationToolRuntime | undefined;
     let active = true;
     let sessionGeneration = 0;
@@ -819,11 +850,11 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       const enabled =
         state === 'active' &&
         activeContext?.hasUI === true &&
-        activeContext.mode === 'tui' &&
         voiceToolSession !== undefined &&
         contextSessionId === voiceToolSession.sessionId;
       voiceToolSession?.setActive(enabled);
       reconcileVoiceModeTools(pi, enabled);
+      voiceToolFacades?.refresh();
     };
     const autoController = new VoiceWorkerAutoCaptureController({
       loadConfig: () => {
@@ -842,9 +873,9 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       },
       tts: container.tts,
       clock: container.clock,
-      deliver: (text) => {
+      deliver: (text, intent) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');
-        deliverAutoCaptureInput(pi, activeContext, text);
+        deliverAutoCaptureInput(pi, activeContext, text, intent);
       },
       manualState: () => controller.state,
       commandContext: () =>
@@ -854,7 +885,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       onActivationStateChange: (state) => {
         if (!active) return;
         reconcileVoiceTools(state);
-        mode?.publish(voiceModeState(state, activeContext?.hasUI === true && activeContext.mode === 'tui'));
+        mode?.publish(voiceModeState(state, canRunVoice(activeContext)));
         // Republished here rather than only at registration: the `e` row is the
         // one entry whose label depends on the controller, and the panel is read
         // between activations, not just at session start.
@@ -880,14 +911,14 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
               id: 'activate',
               label: 'Activate',
               description: 'Start autonomous capture with primary-agent narration.',
-              contexts: ['tui'],
+              contexts: ['tui', 'headless'],
               parameters: [],
             },
             {
               id: 'deactivate',
               label: 'Deactivate',
               description: 'Stop autonomous voice capture.',
-              contexts: ['tui'],
+              contexts: ['tui', 'headless'],
               parameters: [],
             },
           ],
@@ -956,6 +987,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       lastUi = undefined;
       lastAutoUi = undefined;
       narrationToolRuntime = undefined;
+      voiceToolCatalogSubscription?.();
+      voiceToolCatalogSubscription = undefined;
       voiceToolSession?.setActive(false);
       voiceToolSession?.dispose();
       voiceToolSession = undefined;
@@ -966,6 +999,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         try {
           const session = voiceTools.bindSession(sessionId, ctx);
           voiceToolSession = session;
+          voiceToolCatalogSubscription = session.subscribe(() => voiceToolFacades?.refresh());
           narrationToolRuntime = { context: ctx, session, controller: autoController };
           reloadHandoff = reason === 'reload' && reloadHandoffs.consume(sessionId) !== undefined;
         } catch (error) {
@@ -974,12 +1008,17 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         }
       }
       reconcileVoiceTools('disabled');
+      // Published before the UI bail below, and for every session rather than
+      // only the ones that carry a UI. Registration cannot know the session, so
+      // its default stands until this runs, and that default says the mode
+      // cannot run: without this a cockpit session, which can run it perfectly
+      // well, would keep reporting otherwise for the life of the session.
+      mode?.publish(voiceModeState('disabled', canRunVoice(ctx)));
       if (!ctx.hasUI) return;
       lastUi = createVoiceUi(ctx, footer);
       lastAutoUi = createAutoCaptureUi(ctx, footer);
       lastUi.setIndicator(undefined);
       lastUi.setStatus(STATUS_KEY, undefined);
-      mode?.publish(voiceModeState('disabled', ctx.hasUI && ctx.mode === 'tui'));
       if (reloadHandoff && lastAutoUi) await autoController.activate(lastAutoUi);
     });
     pi.on('before_agent_start', (_event, ctx) => {
@@ -1005,6 +1044,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       sessionGeneration += 1;
       reconcileVoiceTools('disabled');
       narrationToolRuntime = undefined;
+      voiceToolCatalogSubscription?.();
+      voiceToolCatalogSubscription = undefined;
       voiceToolSession?.setActive(false);
       voiceToolSession?.dispose();
       voiceToolSession = undefined;

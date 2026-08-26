@@ -34,8 +34,8 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function fixture() {
-  const boundContext = context('session-1');
+function fixture(mode: ExtensionContext['mode'] = 'tui') {
+  const boundContext = context('session-1', true, mode);
   const voiceTools = createDoomVoiceToolsService<ExtensionContext>(`narration-test:${crypto.randomUUID()}`);
   const session = voiceTools.bindSession('session-1', boundContext);
   session.setActive(true);
@@ -73,11 +73,15 @@ describe('narrate Pi tool', () => {
       renderCall: expect.any(Function),
       renderResult: expect.any(Function),
     });
-    expect(h.tool.description).toContain('Required while autonomous Voice is active');
-    expect(h.tool.description).toContain('start work');
-    expect(h.tool.description).toContain('interesting or meaningful');
-    expect(h.tool.description).toContain('user feedback or a decision');
-    expect(h.tool.description).toContain('before ending the task');
+    expect(h.tool.description).toContain('active autonomous Voice session');
+    expect(h.tool.description).toContain('physical playback settles');
+    expect(h.tool.description).toContain('when work starts');
+    expect(h.tool.description).toContain('meaningful finding');
+    expect(h.tool.description).toContain('feedback or a decision');
+    expect(h.tool.description).toContain('before every user-facing final response');
+    expect(h.tool.description).toContain('complete answer');
+    expect(h.tool.description).toContain('conclusions, questions, warnings, results, and next actions');
+    expect(h.tool.description).toContain('rather than a shorter summary');
     expect(h.tool.promptSnippet).toContain('MUST call narrate');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('you MUST call it');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('starting work');
@@ -88,6 +92,8 @@ describe('narrate Pi tool', () => {
     );
     expect(h.tool.promptGuidelines?.join('\n')).toContain('Only a narrate call produces speech');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('one complete utterance');
+    expect(h.tool.promptGuidelines?.join('\n')).toContain('Do not narrate a shorter summary');
+    expect(h.tool.promptGuidelines?.join('\n')).toContain('4,096-character narration limit');
     expect(h.tool.promptGuidelines?.join('\n')).toContain('Avoid Markdown, code, secrets, and raw paths');
 
     h.session.dispose();
@@ -141,7 +147,19 @@ describe('narrate Pi tool', () => {
     h.voiceTools.dispose();
   });
 
-  it('rejects inactive, non-TUI, stale, and mismatched sessions without playback', async () => {
+  it('narrates from a cockpit session, which speaks over the same local audio device', async () => {
+    const h = fixture('rpc');
+
+    await expect(
+      h.tool.execute('cockpit', { text: 'Spoken from the web.' }, undefined, undefined, h.boundContext),
+    ).resolves.toMatchObject({ details: { outcome: 'completed' } });
+    expect(h.narrateAgent).toHaveBeenCalledWith('Spoken from the web.', undefined);
+
+    h.session.dispose();
+    h.voiceTools.dispose();
+  });
+
+  it('rejects inactive, headless, stale, and mismatched sessions without playback', async () => {
     for (const state of ['disabled', 'starting', 'draining', 'shuttingDown'] as const) {
       const inactive = fixture();
       inactive.controller.state = state as never;
@@ -160,15 +178,6 @@ describe('narrate Pi tool', () => {
     });
     headless.session.dispose();
     headless.voiceTools.dispose();
-
-    const rpc = fixture();
-    await expect(
-      rpc.tool.execute('rpc', { text: 'Ignored.' }, undefined, undefined, context('session-1', true, 'rpc')),
-    ).resolves.toMatchObject({
-      details: { outcome: 'failed', error: { code: 'VOICE_TOOL_HOST_UNAVAILABLE' } },
-    });
-    rpc.session.dispose();
-    rpc.voiceTools.dispose();
 
     const stale = fixture();
     stale.session.setActive(false);

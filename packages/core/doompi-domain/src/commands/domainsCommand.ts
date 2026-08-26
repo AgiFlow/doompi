@@ -15,10 +15,13 @@ import {
   DOMAIN_COMMAND,
   domainItems,
   domainSummary,
+  domainToggleOptions,
   errorMessage,
   pickerTitle,
   splitDomains,
   switchedSummary,
+  toggledDomains,
+  toggleOptionDomain,
   transitionError,
   unchangedSummary,
   voiceSwitchToken,
@@ -124,6 +127,15 @@ export function registerDomainsCommand(
           const chosen = await pickDomains(ctx, dependencies);
           if (chosen === undefined) return;
           requested = chosen;
+          pickerConfirmed = true;
+        } else if (!queued && requested.length === 0 && ctx.mode === 'rpc') {
+          // An rpc client (the web cockpit) has a single-pick select and no
+          // matrix picker, so it composes the set one toggle per invocation.
+          const listing = await dependencies.catalog.list(ctx);
+          const options = domainToggleOptions(listing);
+          const picked = await ctx.ui.select(pickerTitle(listing), options);
+          if (picked === undefined) return;
+          requested = toggledDomains(listing.effective, toggleOptionDomain(picked));
           pickerConfirmed = true;
         }
 

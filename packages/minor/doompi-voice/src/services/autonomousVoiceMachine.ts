@@ -1,6 +1,9 @@
 import { assign, cancel, emit, raise, type SnapshotFrom, setup } from 'xstate';
 import { type NarrationBargeInEvidence, narrationBargeInIsActionable } from './narrationBargeIn.ts';
+import type { VoiceCompositionState } from './transcriptPolicy.ts';
 
+/** The failure code reported when no more specific one is available. */
+const GENERIC_FAILURE_CODE = 'autonomous_voice_failed';
 const GRACEFUL_STOP_TIMEOUT_MS = 20_000;
 const GRACEFUL_STOP_TIMER_ID = 'autonomous-voice-graceful-stop';
 const PLAYBACK_ECHO_TAIL_MS = 800;
@@ -29,6 +32,7 @@ export interface AutonomousVoiceContext {
   stopRequested: boolean;
   hardStopRequested: boolean;
   playbackGeneration: number;
+  compositionState: VoiceCompositionState;
   failure?: AutonomousVoiceFailure;
 }
 
@@ -55,6 +59,19 @@ export type AutonomousVoiceEvent =
   | ({ type: 'TRANSCRIPT_ACCEPTED'; revision: number; text: string } & AutonomousTurnIdentity)
   | ({ type: 'TRANSCRIPT_DISCARDED'; revision: number; reason: string } & AutonomousTurnIdentity)
   | ({ type: 'TRANSCRIPT_STOP_REQUESTED'; revision: number } & AutonomousTurnIdentity)
+  | ({
+      type: 'TRANSCRIPT_COMPOSITION_BUFFERED';
+      revision: number;
+      operation: 'open' | 'append';
+    } & AutonomousTurnIdentity)
+  | ({
+      type: 'TRANSCRIPT_COMPOSITION_REJECTED';
+      revision: number;
+      operation: 'open' | 'append';
+    } & AutonomousTurnIdentity)
+  | ({ type: 'TRANSCRIPT_COMPOSITION_CANCELLED'; revision: number } & AutonomousTurnIdentity)
+  | ({ type: 'TRANSCRIPT_COMPOSITION_EMPTY_SEND'; revision: number } & AutonomousTurnIdentity)
+  | ({ type: 'TRANSCRIPT_COMPOSITION_SEND_REQUESTED'; revision: number; text: string } & AutonomousTurnIdentity)
   | ({ type: 'DELIVERY_SUCCEEDED'; revision: number } & AutonomousTurnIdentity)
   | ({ type: 'DELIVERY_FAILED'; revision: number; code: string } & AutonomousTurnIdentity)
   | ({ type: 'CANDIDATE_ACKNOWLEDGED'; revision: number } & AutonomousTurnIdentity)
@@ -74,7 +91,12 @@ export type AutonomousVoiceEvent =
 
 export type AutonomousVoiceEffect =
   | { type: 'effect.enable'; sessionId: string }
-  | ({ type: 'effect.beginCapture' } & AutonomousTurnIdentity)
+  /**
+   * `composing` selects the shorter endpoint window while a draft collects, so a short
+   * command can finalize as its own turn instead of arriving glued to the sentence
+   * before it. The machine owns the state; the session resolves it to an interval.
+   */
+  | ({ type: 'effect.beginCapture'; composing: boolean } & AutonomousTurnIdentity)
   | ({ type: 'effect.cancelCapture' } & AutonomousTurnIdentity)
   | ({ type: 'effect.finalizeCapture'; reason: 'endpoint' | 'duration-limit' | 'toggle-off' } & AutonomousTurnIdentity)
   | ({
@@ -82,8 +104,14 @@ export type AutonomousVoiceEffect =
       revision: number;
       transcript: string;
       narrationOverlapPromoted: boolean;
+      compositionState: VoiceCompositionState;
     } & AutonomousTurnIdentity)
-  | ({ type: 'effect.deliver'; revision: number; text: string } & AutonomousTurnIdentity)
+  | ({
+      type: 'effect.deliver';
+      revision: number;
+      text: string;
+      intent?: 'immediate' | 'queuedFollowUp';
+    } & AutonomousTurnIdentity)
   | ({ type: 'effect.acknowledge'; revision: number; outcome: AutonomousCandidateOutcome } & AutonomousTurnIdentity)
   | { type: 'effect.prepareNextTurn'; sessionId: string }
   | {
@@ -109,6 +137,7 @@ function initialContext(): AutonomousVoiceContext {
     stopRequested: false,
     hardStopRequested: false,
     playbackGeneration: 0,
+    compositionState: 'inactive',
   };
 }
 
@@ -222,6 +251,12 @@ export const autonomousVoiceMachine = setup({
     assignRevision: assign(({ event }) => (hasRevision(event) ? { revision: event.revision } : {})),
     markCommitted: assign({ candidateOutcome: 'committed' as const }),
     markDiscarded: assign({ candidateOutcome: 'discarded' as const }),
+    markCompositionCollecting: assign({ compositionState: 'collecting' as const }),
+    markCompositionSubmitting: assign({ compositionState: 'submitting' as const }),
+    clearComposition: assign({ compositionState: 'inactive' as const }),
+    resumeCompositionAfterFailure: assign(({ context }) =>
+      context.compositionState === 'submitting' ? { compositionState: 'collecting' as const } : {},
+    ),
     markStopRequested: assign({ stopRequested: true }),
     markHardStopRequested: assign({ stopRequested: true, hardStopRequested: true }),
     assignFailure: assign(({ event }) => {
@@ -237,7 +272,7 @@ export const autonomousVoiceMachine = setup({
         return { failure: { code: 'transcription_timed_out', recoverable: true } };
       if (event.type === 'GRACEFUL_STOP_TIMED_OUT')
         return { failure: { code: 'graceful_stop_timed_out', recoverable: false } };
-      return { failure: { code: 'autonomous_voice_failed', recoverable: false } };
+      return { failure: { code: GENERIC_FAILURE_CODE, recoverable: false } };
     }),
     assignPlaybackGeneration: assign(({ event }) =>
       event.type === 'PLAYBACK_STARTED' ? { playbackGeneration: event.playbackGeneration } : {},
@@ -246,7 +281,11 @@ export const autonomousVoiceMachine = setup({
       if (!context.sessionId) throw new Error('Autonomous voice enable requires a session identity.');
       return { type: 'effect.enable', sessionId: context.sessionId };
     }),
-    requestCapture: emit(({ context }) => ({ type: 'effect.beginCapture', ...requiredIdentity(context) })),
+    requestCapture: emit(({ context }) => ({
+      type: 'effect.beginCapture',
+      ...requiredIdentity(context),
+      composing: context.compositionState === 'collecting',
+    })),
     requestCaptureCancellation: emit(({ context }) => ({
       type: 'effect.cancelCapture',
       ...requiredIdentity(context),
@@ -277,6 +316,7 @@ export const autonomousVoiceMachine = setup({
         revision: event.revision,
         transcript: event.transcript,
         narrationOverlapPromoted: context.narrationOverlapPromoted,
+        compositionState: context.compositionState,
       };
     }),
     requestDelivery: emit(({ event }) => {
@@ -288,6 +328,19 @@ export const autonomousVoiceMachine = setup({
         turnId: event.turnId,
         revision: event.revision,
         text: event.text,
+      };
+    }),
+    requestCompositionDelivery: emit(({ event }) => {
+      if (event.type !== 'TRANSCRIPT_COMPOSITION_SEND_REQUESTED')
+        throw new Error('Voice composition delivery requires a send request.');
+      return {
+        type: 'effect.deliver',
+        sessionId: event.sessionId,
+        captureId: event.captureId,
+        turnId: event.turnId,
+        revision: event.revision,
+        text: event.text,
+        intent: 'queuedFollowUp' as const,
       };
     }),
     requestAcknowledgement: emit(({ context }) => {
@@ -347,7 +400,7 @@ export const autonomousVoiceMachine = setup({
     })),
     reportFailure: emit(({ context }) => ({
       type: 'effect.reportFailure',
-      failure: context.failure ?? { code: 'autonomous_voice_failed', recoverable: false },
+      failure: context.failure ?? { code: GENERIC_FAILURE_CODE, recoverable: false },
     })),
   },
 }).createMachine({
@@ -555,6 +608,31 @@ export const autonomousVoiceMachine = setup({
                   target: 'acknowledging',
                   actions: ['markStopRequested', 'scheduleGracefulStopDeadline', 'markDiscarded'],
                 },
+                TRANSCRIPT_COMPOSITION_BUFFERED: {
+                  guard: 'isCurrentRevision',
+                  target: 'acknowledging',
+                  actions: ['markCompositionCollecting', 'markCommitted'],
+                },
+                TRANSCRIPT_COMPOSITION_REJECTED: {
+                  guard: 'isCurrentRevision',
+                  target: 'acknowledging',
+                  actions: ['markCompositionCollecting', 'markDiscarded'],
+                },
+                TRANSCRIPT_COMPOSITION_CANCELLED: {
+                  guard: 'isCurrentRevision',
+                  target: 'acknowledging',
+                  actions: ['clearComposition', 'markDiscarded'],
+                },
+                TRANSCRIPT_COMPOSITION_EMPTY_SEND: {
+                  guard: 'isCurrentRevision',
+                  target: 'acknowledging',
+                  actions: 'markDiscarded',
+                },
+                TRANSCRIPT_COMPOSITION_SEND_REQUESTED: {
+                  guard: 'isCurrentRevision',
+                  target: 'delivering',
+                  actions: ['markCompositionSubmitting', 'requestCompositionDelivery'],
+                },
                 TOGGLE_OFF_REQUESTED: [
                   {
                     guard: 'stopWasNotRequested',
@@ -569,12 +647,12 @@ export const autonomousVoiceMachine = setup({
                 DELIVERY_SUCCEEDED: {
                   guard: 'isCurrentRevision',
                   target: 'acknowledging',
-                  actions: 'markCommitted',
+                  actions: ['markCommitted', 'clearComposition'],
                 },
                 DELIVERY_FAILED: {
                   guard: 'isCurrentRevision',
                   target: 'acknowledging',
-                  actions: ['assignFailure', 'reportFailure', 'markDiscarded'],
+                  actions: ['assignFailure', 'reportFailure', 'markDiscarded', 'resumeCompositionAfterFailure'],
                 },
                 TOGGLE_OFF_REQUESTED: [
                   {

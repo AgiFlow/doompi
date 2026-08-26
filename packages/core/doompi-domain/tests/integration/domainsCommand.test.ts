@@ -67,7 +67,7 @@ let disposeAll: Array<() => void> = [];
 
 function setup(
   options: {
-    mode?: 'rpc' | 'tui';
+    mode?: 'rpc' | 'tui' | 'print';
     outcome?: TransitionOutcome;
     strategy?: 'pi-reload' | 'process-relaunch';
     picked?: string[] | undefined;
@@ -98,6 +98,8 @@ function setup(
         factory(undefined, {}, {}, vi.fn());
         return options.picked;
       }),
+      // The rpc toggle select; a test overrides it to pick a row.
+      select: vi.fn(async () => undefined),
     },
     sessionManager: { getSessionId: () => SESSION_ID, getBranch: () => [] },
     waitForIdle: vi.fn(async () => {
@@ -227,8 +229,18 @@ afterEach(() => {
 });
 
 describe('/domains', () => {
-  it('prints the selection when called with no argument outside the TUI', async () => {
+  it('opens a toggle select over rpc and does nothing when it is dismissed', async () => {
     const { handler, ctx, notifications, order } = setup();
+
+    await handler('', ctx);
+
+    expect(ctx.ui.select).toHaveBeenCalledWith('Domains (active: default)', ['[x] default', '[ ] development']);
+    expect(notifications).toEqual([]);
+    expect(order).toEqual([]);
+  });
+
+  it('prints the selection when called with no argument outside any interactive mode', async () => {
+    const { handler, ctx, notifications, order } = setup({ mode: 'print' });
 
     await handler('', ctx);
 
@@ -271,6 +283,15 @@ describe('/domains', () => {
       ],
     });
     expect(applyDomains).toHaveBeenCalledWith(['development'], expect.anything());
+  });
+
+  it('toggles the picked row over rpc and applies the composed set', async () => {
+    const { applyDomains, ctx, handler } = setup();
+    vi.mocked(ctx.ui.select).mockResolvedValueOnce('[ ] development');
+
+    await handler('', ctx);
+
+    expect(applyDomains).toHaveBeenCalledWith(['default', 'development'], expect.anything());
   });
 
   it('does nothing at all when the picker is dismissed', async () => {

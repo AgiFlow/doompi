@@ -602,6 +602,105 @@ describe('Doom configuration', () => {
       ),
     ).toThrow('voice.autoCapture.utteranceIdleMs');
   });
+  it('defaults the composition phrases to a usable set', () => {
+    const parsed = parseDoomConfig(
+      'voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    tts:\n      engine: macos-say\n',
+      '/global.yaml',
+    );
+    // Unlike start and stop phrases these cannot default to empty: with no send phrase a
+    // draft could be opened and never submitted.
+    expect(resolveVoiceConfig(parsed.voice!).autoCapture).toMatchObject({
+      composeOpenPhrases: ['hey doom', 'doom prompt'],
+      composeSendPhrases: ["that's it", 'doom send'],
+      composeCancelPhrases: ['doom cancel', 'scratch that'],
+      composeUtteranceIdleMs: 1200,
+      composeNudgeMs: 10_000,
+    });
+  });
+  it('parses explicit composition phrases and timings', () => {
+    const parsed = parseDoomConfig(
+      `voice:
+  autoCapture:
+    model: openai/gpt-4.1
+    composeOpenPhrases:
+      - start dictation
+    composeSendPhrases:
+      - all done
+    composeCancelPhrases:
+      - forget it
+    composeUtteranceIdleMs: 900
+    composeNudgeMs: 0
+    tts:
+      engine: macos-say
+`,
+      '/global.yaml',
+    );
+    expect(resolveVoiceConfig(parsed.voice!).autoCapture).toMatchObject({
+      composeOpenPhrases: ['start dictation'],
+      composeSendPhrases: ['all done'],
+      composeCancelPhrases: ['forget it'],
+      composeUtteranceIdleMs: 900,
+      composeNudgeMs: 0,
+    });
+  });
+  it('allows a compose-open phrase to double as a start phrase', () => {
+    // Addressing the agent and opening a draft are the same gesture, and the shipped
+    // defaults deliberately share `hey doom`. Forbidding the overlap would make the
+    // default configuration illegal.
+    const parsed = parseDoomConfig(
+      'voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    startPhrases: ["hey doom"]\n    composeOpenPhrases: ["Hey, Doom!"]\n    tts:\n      engine: macos-say\n',
+      '/global.yaml',
+    );
+    expect(resolveVoiceConfig(parsed.voice!).autoCapture).toMatchObject({
+      startPhrases: ['hey doom'],
+      composeOpenPhrases: ['Hey, Doom!'],
+    });
+  });
+  it.each([
+    ['send and cancel', 'composeSendPhrases: ["all done"]\n    composeCancelPhrases: ["All, Done!"]'],
+    ['open and send', 'composeOpenPhrases: ["all done"]\n    composeSendPhrases: ["all done"]'],
+    ['open and cancel', 'composeOpenPhrases: ["all done"]\n    composeCancelPhrases: ["all done"]'],
+    ['stop and send', 'stopPhrases: ["all done"]\n    composeSendPhrases: ["all done"]'],
+    ['stop and cancel', 'stopPhrases: ["all done"]\n    composeCancelPhrases: ["all done"]'],
+  ])('rejects a phrase claimed by both %s', (_name, body) => {
+    expect(() =>
+      parseDoomConfig(
+        `voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    ${body}\n    tts:\n      engine: macos-say\n`,
+        '/config.yaml',
+      ),
+    ).toThrow('does not allow a phrase in both');
+  });
+  it.each([800, 1200, 3000])('accepts composition idle bound %i', (composeUtteranceIdleMs) => {
+    const parsed = parseDoomConfig(
+      `voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    composeUtteranceIdleMs: ${composeUtteranceIdleMs}\n    tts:\n      engine: macos-say\n`,
+      '/config.yaml',
+    );
+    expect(resolveVoiceConfig(parsed.voice!).autoCapture?.composeUtteranceIdleMs).toBe(composeUtteranceIdleMs);
+  });
+  it.each([
+    ['below range', '799'],
+    ['above range', '3001'],
+    ['fraction', '1200.5'],
+  ])('rejects composition idle %s', (_name, value) => {
+    expect(() =>
+      parseDoomConfig(
+        `voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    composeUtteranceIdleMs: ${value}\n    tts:\n      engine: macos-say\n`,
+        '/config.yaml',
+      ),
+    ).toThrow('voice.autoCapture.composeUtteranceIdleMs');
+  });
+  it.each([
+    ['below range but not the off switch', '4999'],
+    ['above range', '60001'],
+    ['string', '"10000"'],
+  ])('rejects composition nudge %s', (_name, value) => {
+    expect(() =>
+      parseDoomConfig(
+        `voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    composeNudgeMs: ${value}\n    tts:\n      engine: macos-say\n`,
+        '/config.yaml',
+      ),
+    ).toThrow('voice.autoCapture.composeNudgeMs');
+  });
   it.each([1000, 15_000, 120_000])('accepts autonomous transcription timeout bound %i', (timeoutMs) => {
     const parsed = parseDoomConfig(
       `voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    transcriptionTimeoutMs: ${timeoutMs}\n    tts:\n      engine: macos-say\n`,

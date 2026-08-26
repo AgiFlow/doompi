@@ -1,8 +1,11 @@
 import type { AutonomousTurnIdentity } from './autonomousVoiceMachine.ts';
 
+export type VoiceDeliveryIntent = 'immediate' | 'queuedFollowUp';
+
 export interface VoiceDeliveryRequest extends AutonomousTurnIdentity {
   revision: number;
   text: string;
+  intent?: VoiceDeliveryIntent;
 }
 
 export type VoiceDeliveryResult =
@@ -10,7 +13,7 @@ export type VoiceDeliveryResult =
   | ({ kind: 'failed'; code: string } & Omit<VoiceDeliveryRequest, 'text'>);
 
 export interface VoiceDeliveryDependencies {
-  deliver(text: string): void;
+  deliver(text: string, intent?: VoiceDeliveryIntent): void;
   onResult(result: VoiceDeliveryResult): void;
 }
 
@@ -52,7 +55,8 @@ export class VoiceDelivery {
       revision: request.revision,
     };
     try {
-      this.dependencies.deliver(request.text);
+      if (request.intent) this.dependencies.deliver(request.text, request.intent);
+      else this.dependencies.deliver(request.text);
       this.dependencies.onResult({ kind: 'delivered', ...identity });
     } catch (error) {
       this.dependencies.onResult({

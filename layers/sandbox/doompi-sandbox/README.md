@@ -7,7 +7,7 @@ This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/d
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- `@earendil-works/pi-coding-agent` 0.84.2
+- `@earendil-works/pi-coding-agent` 0.84.3
 - One of `docker`, `podman`, `nerdctl`, or `finch` on the host for sandboxed launches
 
 ## Install

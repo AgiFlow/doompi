@@ -8,7 +8,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 type VibeLintConfig = {
   extends?: string[];
-  boundaries?: unknown;
+  boundaries?: Array<{ name: string }>;
   rules?: Record<string, unknown>;
 };
 
@@ -22,8 +22,11 @@ function readConfig(): VibeLintConfig {
 describe('import boundaries', () => {
   const config = readConfig();
 
-  it('uses the repository-owned canonical boundary preset', () => {
+  it('uses the repository-owned canonical boundary preset and declares no boundaries of its own', () => {
     expect(config.extends).toContain('doom-extension/recommended');
+    // web/ hosts the cockpit plugin, a root outside the src vocabulary; the
+    // doom-extension preset carries its boundary (web-plugin) and the tests
+    // boundary that reaches it, so a package-local block would only drift.
     expect(config.boundaries).toBeUndefined();
   });
 

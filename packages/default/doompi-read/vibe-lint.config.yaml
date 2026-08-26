@@ -1,11 +1,18 @@
+# The browser half of this package lives in web/, which the doom-extension
+# preset does not colour-check. doom-web owns that rule and its scope already
+# covers web/, so the plugin is declared for the one rule rather than for its
+# preset: the rest of that preset is scoped to a cockpit host's src/web tree
+# and would not apply here.
 plugins:
   - core
   - doom-extension
+  - doom-web
 
 extends:
   - core/recommended
   - doom-extension/recommended
 
 rules:
+  no-raw-theme-color: error
   boundary-import-allowlist: error
   file-naming-convention: error

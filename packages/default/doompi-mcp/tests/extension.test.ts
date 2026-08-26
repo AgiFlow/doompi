@@ -55,6 +55,7 @@ class TestBus implements EventBusLike {
 let repoRoot: string;
 let notify: ReturnType<typeof vi.fn>;
 let custom: ReturnType<typeof vi.fn>;
+let setStatus: ReturnType<typeof vi.fn>;
 let disconnectServer: ReturnType<typeof vi.fn>;
 let ensureConnected: ReturnType<typeof vi.fn>;
 let containerDispose: ReturnType<typeof vi.fn>;
@@ -67,7 +68,7 @@ function sessionContext(hasUI = false, cwd = repoRoot, includeUI = true): Extens
     hasUI,
     cwd,
     sessionManager,
-    ...(includeUI ? { ui: { notify, custom } } : {}),
+    ...(includeUI ? { ui: { notify, custom, setStatus } } : {}),
   } as unknown as ExtensionContext;
 }
 
@@ -214,6 +215,7 @@ beforeEach(() => {
   registeredExtensions.length = 0;
   notify = vi.fn();
   custom = vi.fn().mockResolvedValue(undefined);
+  setStatus = vi.fn();
   openExternalUrl.mockResolvedValue(undefined);
   disconnectServer = vi.fn().mockResolvedValue(undefined);
   ensureConnected = vi.fn().mockResolvedValue(undefined);
@@ -468,6 +470,19 @@ describe('doom mcp extension', () => {
     expect(readDoomMcpStatus(root)?.getSnapshot()).toEqual({
       servers: [{ name: 'pencil', state: 'not-connected', tools: [], resourceCount: 0 }],
     });
+  });
+
+  // The cockpit recognises `<server>_<tool>` calls by these names, and a
+  // browser session never sees the catalog any other way.
+  it('publishes the server names as the doom-mcp footer status and clears it on shutdown', async () => {
+    const extension = registerExtension();
+    await extension.startSession();
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+
+    expect(setStatus).toHaveBeenCalledWith('doom-mcp', 'pencil');
+
+    await extension.shutdownSession();
+    expect(setStatus).toHaveBeenLastCalledWith('doom-mcp', undefined);
   });
 
   it('removes the status service after shutdown', async () => {

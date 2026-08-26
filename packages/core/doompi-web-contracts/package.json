@@ -1,0 +1,85 @@
+{
+  "name": "@agimon-ai/doompi-web-contracts",
+  "version": "0.0.1-alpha.1",
+  "description": "Web cockpit plugin contracts for DoomPi: plugin definitions, slot contributions, session data channels, and hub channel sources.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "contracts",
+    "developer-tools",
+    "doompi",
+    "pi-package",
+    "plugin",
+    "typescript",
+    "web"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-web-contracts"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json",
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs",
+      "require": "./dist/testing.cjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "devDependencies": {
+    "@tanstack/store": "0.11.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@tanstack/store": "0.11.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

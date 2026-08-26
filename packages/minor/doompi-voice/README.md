@@ -13,7 +13,7 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2
+- Pi 0.84.3
 - macOS recording and `say` playback support
 - FFmpeg for audio capture
 - One supported local transcription engine: `whisper-cli`, `whisper`, or `mlx_whisper` (Apple
@@ -51,7 +51,12 @@ voice:
     model: provider/model-id
     startPhrases: []
     stopPhrases: []
+    composeOpenPhrases: [hey doom]
+    composeSendPhrases: ["that's it"]
+    composeCancelPhrases: [scratch that]
     utteranceIdleMs: 3000
+    composeUtteranceIdleMs: 1200
+    composeNudgeMs: 10000
     transcriptionTimeoutMs: 120000
     tts:
       engine: macos-say
@@ -68,13 +73,23 @@ defaults to 3,000.
 
 - `SPC v v` records and transcribes once; it does not enable autonomous Voice tools.
 - `SPC v e` enters autonomous capture and exits it again.
+- While autonomous capture is active, say `hey doom` at the beginning of a segment to open a long composed prompt. Later finalized segments are buffered until `that's it` submits the combined text or `doom cancel` discards it.
 - `describe_voice_tools` returns the active session's spoken capability catalog.
 - `use_voice_tools` executes a bounded ordered batch against that catalog.
-- `narrate` speaks one primary-agent-authored utterance.
+- `narrate` speaks one primary-agent-authored utterance and waits for physical playback.
 
-Each narration is limited to 4,096 characters, waits for playback, and returns `completed`,
-`interrupted`, `superseded`, or `failed`. Narration fails closed while Voice is starting or
-draining, during shutdown, reload, or deactivation, and when the request belongs to a stale session.
+Composition is for long spoken prompts, so a multi-part prompt is not submitted half-written. A short utterance needs no phrase and is delivered as soon as it finalizes.
+
+All three phrase sets are configurable and each ships with two defaults: `composeOpenPhrases` is `hey doom, doom prompt`, `composeSendPhrases` is `that's it, doom send`, and `composeCancelPhrases` is `doom cancel, scratch that`. Matching ignores case, punctuation and apostrophes, and tolerates small transcription differences, so `thats it` and `doom sent` are recognised. Send and cancel act as commands only while a draft is open, and only when the phrase is the whole segment or ends a sentence, so ordinary dictation containing those words stays content. While a draft collects, the endpoint window shortens to `composeUtteranceIdleMs` (default 1,200 ms) so a short command finalizes as its own turn. A composed prompt is queued as a Pi follow-up while Pi is busy.
+
+Drafts are held in memory for the active autonomous session and are limited to 32,768 characters. Worker restarts and five-minute idle capture rotation preserve the draft, but deactivation, extension reload, and process restart discard it. Wait until the status returns to `composing, listening` before speaking the next segment because capture pauses during transcription.
+
+Before a final response, narration contains the complete answer, including every user-relevant
+conclusion, question, warning, result, and next action in the written response. It does not use
+a shorter spoken summary that leaves essential information only in text. Each narration is
+limited to 4,096 characters and returns `completed`, `interrupted`, `superseded`, or `failed`.
+Narration fails closed while Voice is starting or draining, during shutdown, reload, or
+deactivation, and when the request belongs to a stale session.
 Only the currently active TUI session receives Voice-owned tools.
 
 If no `narrate` attempt is made before a final response, the active Voice session can produce one
@@ -99,6 +114,10 @@ This is not a blanket “nothing leaves the machine” guarantee:
 Manual recordings and autonomous spool windows are bounded to five minutes. Deactivation or
 cancellation interrupts pending capture and playback. A manual reload does not silently reactivate
 the microphone.
+
+## Architecture
+
+See [Architecture](./docs/ARCHITECTURE.md) for the thread and process topology, the path a single spoken turn takes, the XState lifecycle and how it relates to Pi, the module and cordis service graph, and narration gating and barge-in. [SPEC.md](./docs/SPEC.md) is the normative contract.
 
 ## Public API
 

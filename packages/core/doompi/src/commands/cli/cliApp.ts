@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type { HarnessTelemetry } from '../../adapters/telemetry/logSinkTelemetry.ts';
 import type { HarnessOptions } from '../../types/interfaces/harness';
 import type { BaseCommand } from '../baseCommand.ts';
@@ -130,32 +129,12 @@ export class CliApp {
       process.stdout.write(`${HARNESS_VERSION}\n`);
       return 0;
     }
-    // An inherited root wins, which is how a nested run stays pinned to the
-    // outer repository rather than re-deriving one from its own cwd.
     const telemetry = await this.getTelemetry();
-    const [
-      { readHarnessState },
-      { loadDomains },
-      { loadMajorModesConfig },
-      { toFailureReporter },
-      { findRepositoryRoot },
-    ] = await Promise.all([
-      import('../../adapters/config/harnessState.ts'),
-      import('@agimon-ai/doompi-config/domains'),
-      import('@agimon-ai/doompi-config/majorModes'),
+    const [{ resolveHarnessOptions }, { toFailureReporter }] = await Promise.all([
+      import('./harnessOptions.ts'),
       import('../../adapters/telemetry/logSinkTelemetry.ts'),
-      import('../../adapters/repository/repository.ts'),
     ]);
-    const inheritedRoot = readHarnessState(process.env, toFailureReporter(telemetry)).root;
-    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(initial.options.cwd);
-    const parsed = parseHarnessArgs(
-      args,
-      process.env,
-      process.cwd(),
-      loadMajorModesConfig(repoRoot).defaultMajorMode,
-      loadDomains(repoRoot).defaultDomains,
-    );
-    return this.runHarness({ repoRoot, ...parsed.options });
+    return this.runHarness(resolveHarnessOptions({ args, report: toFailureReporter(telemetry) }));
   }
 
   /** Flushes telemetry if this application created it lazily. */

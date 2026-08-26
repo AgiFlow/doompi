@@ -58,7 +58,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/log-sink-mcp": "0.29.16"
+    "@agimon-ai/log-sink-mcp": "0.29.19"
   },
   "devDependencies": {
     "@types/node": "26.2.0",

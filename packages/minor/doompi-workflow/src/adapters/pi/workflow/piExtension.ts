@@ -40,6 +40,7 @@ import {
   type WorkflowRunControl,
   type WorkflowRunRecord,
   type WorkflowStage,
+  WorkflowTerminalService,
 } from '@agimon-ai/workflow-mcp';
 import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type OverlayHandle, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
@@ -47,8 +48,6 @@ import { type RunProviderHandle, registerRunProvider } from '../../../services/b
 import { narrateWorkflowTransition, type WorkflowNarrationSink } from '../../../services/workflowNarration';
 import { WorkflowInspectorComponent, type WorkflowInspectorSelection } from '../../../tui/workflow/workflowInspector';
 import { TerminalInputBatcher } from '../../../tui/workflow/workflowOverlay';
-import { terminalReplaySchema } from '../../../schemas/workflowPi.ts';
-import { renderGridLines } from '../../../tui/workflow/terminalGrid';
 import {
   registerWorkflowFinishedRenderer,
   type WorkflowFinishedRun,
@@ -89,6 +88,13 @@ import {
   summarizeWorkflowFile,
   type WorkflowLauncherUi,
 } from './workflowLauncher';
+import {
+  isLaunchParseFailure,
+  parseWorkflowLaunchCommand,
+  resolveWorkflowEntry,
+  validateWorkflowLaunch,
+} from '../../../services/workflowLaunchCommand.ts';
+import { createWorkflowTerminalService } from '../../../services/workflowTerminal.ts';
 
 const DOOM_FULLSCREEN_UI_OPTIONS = {
   overlay: true,
@@ -226,8 +232,6 @@ const SHUTDOWN_FINALIZE_TIMEOUT_MS = 10_000;
 const FOLLOW_INTERVAL_MS = 2_000;
 const TAIL_LINES = 24;
 /** Below these a resized run has no room left to draw, so it keeps its own size and the panel clips. */
-const MIN_RESIZE_COLUMNS = 40;
-const MIN_RESIZE_ROWS = 10;
 /**
  * Overlay refresh cadence and size.
  *
@@ -480,7 +484,8 @@ const LAUNCHER_TMUX = 'tmux';
 const LAUNCHER_CMUX = 'cmux';
 const LAUNCHER_NATIVE = 'native';
 /** The cmux socket method that answers with a styled render grid rather than plain text. */
-const CMUX_REPLAY_METHOD = 'terminal.replay';
+/** The verb the cockpit's launch dialog sends; the leader board does the same work. */
+const WORKFLOW_LAUNCH_COMMAND = 'workflow-launch';
 type MultiplexerLauncher = typeof LAUNCHER_TMUX | typeof LAUNCHER_CMUX;
 
 const HOST_TERMINAL_OUTPUT_BLOCKED =
@@ -493,21 +498,6 @@ const HOST_TERMINAL_OUTPUT_BLOCKED =
  * opening or sending to it can foreground or type into Pi itself. New embedded
  * runs record `native`, but this guard also makes older records safe.
  */
-function launcherTargetsCurrentTerminal(record: WorkflowRunRecord): boolean {
-  const launcher = record.launcher;
-  if (launcher?.type === LAUNCHER_CMUX) {
-    const workspaceId = process.env[CMUX_WORKSPACE_ID_ENV];
-    return Boolean(workspaceId) && launcher.workspaceId === workspaceId;
-  }
-  if (launcher?.type !== LAUNCHER_TMUX) return false;
-
-  const paneId = process.env[TMUX_PANE_ENV];
-  const sessionName = process.env[WORKFLOW_TMUX_SESSION_NAME_ENV];
-  return (
-    (Boolean(paneId) && launcher.paneId === paneId) || (Boolean(sessionName) && launcher.sessionName === sessionName)
-  );
-}
-
 /**
  * A run with no recorded launcher, which reading and foregrounding both hit.
  *
@@ -1343,128 +1333,52 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     };
 
     /**
+     * This session's view of the terminals its runs were launched into.
+     *
+     * The engine owns how a launcher is read and driven; this owns how often,
+     * which is a property of the surface rather than of the run. Every panel
+     * here repaints five times a second and a scrape forks a CLI, so the two
+     * concerns stayed separate when the reads moved down into the engine.
+     */
+    const terminalFacade = new WorkflowTerminalService({
+      run: async (command, args, options) => {
+        const result = await pi.exec(command, [...args], { timeout: options.timeoutMs });
+        return { code: result.code, stdout: result.stdout, stderr: result.stderr };
+      },
+      lines: TAIL_LINES,
+      timeoutMs: PI_EXEC_TIMEOUT_MS,
+    });
+    const terminals = createWorkflowTerminalService<WorkflowRunRecord>({
+      terminal: terminalFacade,
+      now: () => Date.now(),
+      refreshMs: SCREEN_REFRESH_MS,
+    });
+
+    /**
      * Geometry last asked of each run, so a repaint that changes nothing costs
      * no exec. Keyed by run identity, like every other per-run cache here.
      */
     const launcherGeometry = new Map<string, string>();
 
     /**
-     * Match the run's own terminal to the panel showing it, where the launcher
-     * can do that.
+     * Match the run's own terminal to the panel showing it.
      *
-     * A run draws at whatever geometry its multiplexer gave it, so a panel
+     * A run draws at whatever geometry its launcher gave it, so a panel
      * narrower than that shows a clipped window onto a wider screen rather than
-     * a smaller rendering of it. tmux can be told an absolute size, and its
-     * `resize-window -x/-y` switches the window to manual sizing as a side
-     * effect - verified against tmux, not assumed from the manual page.
-     *
-     * cmux cannot: its `pane.resize` takes a direction and an amount, never a
-     * column count, so a cmux run keeps its own geometry and the panel keeps
-     * clipping it. That is the documented fallback, and it is also what a failed
-     * resize leaves behind, which is why a non-zero exit is not raised here.
+     * a smaller rendering of it. Which launchers can be told a size is the
+     * engine's business; not asking twice for the same size is this one's.
      *
      * The size is NOT restored when the panel closes: the window belongs to this
      * run, and a run that is watched at panel size should stay readable at panel
      * size for whoever attaches to it next.
      */
     const resizeLauncherViewport = (record: WorkflowRunRecord, columns: number, rows: number): void => {
-      const launcher = record.launcher;
-      if (!launcher || launcher.type !== LAUNCHER_TMUX || launcherTargetsCurrentTerminal(record)) return;
-      // Below this a full-screen run has no room to draw anything a reader could
-      // use, and shrinking it there would cost more than the clipping does.
-      if (columns < MIN_RESIZE_COLUMNS || rows < MIN_RESIZE_ROWS) return;
       const identity = runIdentity(record);
       const geometry = `${columns}x${rows}`;
       if (launcherGeometry.get(identity) === geometry) return;
       launcherGeometry.set(identity, geometry);
-      const target = launcher.windowId ?? launcher.paneId ?? launcher.sessionId ?? launcher.sessionName;
-      void pi.exec(LAUNCHER_TMUX, ['resize-window', '-t', target, '-x', String(columns), '-y', String(rows)], {
-        timeout: PI_EXEC_TIMEOUT_MS,
-      });
+      void terminalFacade.resize(record, columns, rows);
     };
-
-    /**
-     * A cmux workspace's screen WITH its colour, or undefined when this cmux
-     * cannot answer that way.
-     *
-     * Undefined rather than an error line, because the caller has a plain-text
-     * command that still works: a cmux without `terminal.replay` loses the
-     * colour, not the output. A malformed payload is treated the same way for
-     * the same reason.
-     */
-    const readCmuxRenderGrid = async (workspaceId: string): Promise<string[] | undefined> => {
-      const result = await pi.exec(
-        LAUNCHER_CMUX,
-        ['rpc', CMUX_REPLAY_METHOD, JSON.stringify({ workspace_id: workspaceId })],
-        { timeout: PI_EXEC_TIMEOUT_MS },
-      );
-      if (result.code !== 0) return undefined;
-      let payload: unknown;
-      try {
-        payload = JSON.parse(result.stdout);
-      } catch {
-        return undefined;
-      }
-      const parsed = terminalReplaySchema.safeParse(payload);
-      if (!parsed.success) return undefined;
-      const lines = renderGridLines(parsed.data.render_grid, TAIL_LINES);
-      return lines.length > 0 ? lines : undefined;
-    };
-
-    const readLauncherScreen = async (record: WorkflowRunRecord): Promise<string[]> => {
-      const launcher = record.launcher;
-      if (!launcher) return [NO_LAUNCHER_RECORDED];
-      if (launcherTargetsCurrentTerminal(record)) return [HOST_TERMINAL_OUTPUT_BLOCKED];
-      if (launcher.type === LAUNCHER_TMUX) {
-        const target = launcher.paneId ?? launcher.sessionId ?? launcher.sessionName;
-        // `-e` is what keeps the pane's colour: without it tmux renders the
-        // capture as plain text and every attribute is dropped at the source.
-        const result = await pi.exec(
-          LAUNCHER_TMUX,
-          ['capture-pane', '-p', '-e', '-t', target, '-S', `-${TAIL_LINES}`],
-          { timeout: PI_EXEC_TIMEOUT_MS },
-        );
-        if (result.code !== 0) {
-          return [`Unable to read ${record.runKey}: ${result.stderr.trim() || `tmux exited ${result.code}`}`];
-        }
-        return result.stdout.trimEnd().split('\n').slice(-TAIL_LINES);
-      }
-
-      if (launcher.type === LAUNCHER_NATIVE) {
-        // Hosted on a PTY inside a process, with no durable session to read
-        // back. Reading it belongs to whichever process owns that terminal.
-        return ['This run is hosted natively and has no launcher screen to read.'];
-      }
-
-      const grid = await readCmuxRenderGrid(launcher.workspaceId);
-      if (grid) return grid;
-
-      // `read-screen` reads as plain text, so this is the monochrome fallback
-      // for a cmux too old to answer `terminal.replay`, not the preferred path.
-      const result = await pi.exec(
-        LAUNCHER_CMUX,
-        ['read-screen', '--workspace', launcher.workspaceId, '--scrollback', '--lines', String(TAIL_LINES)],
-        { timeout: PI_EXEC_TIMEOUT_MS },
-      );
-      if (result.code !== 0) {
-        return [`Unable to read ${record.runKey}: ${result.stderr.trim() || `cmux exited ${result.code}`}`];
-      }
-      return result.stdout.trimEnd().split('\n').slice(-TAIL_LINES);
-    };
-
-    /**
-     * The last screen read for each run, and any read still in flight.
-     *
-     * Every surface that shows live output scrapes the multiplexer by forking a
-     * CLI, measured at ~75ms a call. The run panel repaints five times a second,
-     * which is the right cadence for a panel and far too fast for a fork: it
-     * spends a third of its life inside a child process, and the moment one read
-     * runs long the next tick starts another on top of it, unbounded.
-     *
-     * Two runs are never scraped concurrently for the same key, and no key is
-     * scraped faster than the interval, however many surfaces are watching.
-     */
-    const launcherScreens = new Map<string, { at: number; inFlight?: Promise<string[]>; lines: string[] }>();
 
     /**
      * A run's recent output, reusing a recent read rather than forking again.
@@ -1472,30 +1386,17 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
      * Rendering stays as fast as it ever was: the caller gets the cached lines
      * immediately and the next repaint picks up whatever the refresh found.
      */
-    const cachedLauncherScreen = async (record: WorkflowRunRecord): Promise<string[]> => {
-      const identity = runIdentity(record);
-      const entry = launcherScreens.get(identity) ?? { at: 0, lines: [] };
-      launcherScreens.set(identity, entry);
-      if (entry.inFlight) return entry.lines;
-      if (Date.now() - entry.at < SCREEN_REFRESH_MS) return entry.lines;
-
-      entry.inFlight = readLauncherScreen(record);
-      try {
-        entry.lines = await entry.inFlight;
-      } finally {
-        // Stamped after the read, not before: the interval is a gap between
-        // reads, so a slow scrape must not immediately earn another one.
-        entry.at = Date.now();
-        entry.inFlight = undefined;
-      }
-      return entry.lines;
+    const cachedLauncherScreen = (record: WorkflowRunRecord): Promise<string[]> => {
+      // Answered here rather than by the engine: the engine cannot know that
+      // the caller's own terminal is a Pi session with a status surface to
+      // send the reader to instead.
+      if (terminalFacade.targetsCurrentTerminal(record)) return Promise.resolve([HOST_TERMINAL_OUTPUT_BLOCKED]);
+      return terminals.screen(runIdentity(record), record, TAIL_LINES);
     };
 
     /** Runs whose screens can never change again cannot earn their memory back. */
     const forgetLauncherScreens = (live: Set<string>): void => {
-      for (const identity of launcherScreens.keys()) {
-        if (!live.has(identity)) launcherScreens.delete(identity);
-      }
+      terminals.forget(live);
       // The geometry cache is per run for the same reason the screens are: a
       // run that is gone can never be resized again.
       for (const identity of launcherGeometry.keys()) {
@@ -1512,7 +1413,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     const openLauncher = async (record: WorkflowRunRecord): Promise<string> => {
       const launcher = record.launcher;
       if (!launcher) return NO_LAUNCHER_RECORDED;
-      if (launcherTargetsCurrentTerminal(record)) return HOST_TERMINAL_OUTPUT_BLOCKED;
+      if (terminalFacade.targetsCurrentTerminal(record)) return HOST_TERMINAL_OUTPUT_BLOCKED;
       if (launcher.type === LAUNCHER_NATIVE) {
         return 'This run is hosted natively rather than in a multiplexer, so there is no separate window to bring forward.';
       }
@@ -1586,16 +1487,11 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
      * address, so it reports rather than silently dropping the keystrokes.
      */
     const sendToRun = async (record: WorkflowRunRecord, text: string): Promise<void> => {
-      const launcher = record.launcher;
-      if (!launcher || launcher.type === LAUNCHER_NATIVE || launcherTargetsCurrentTerminal(record)) return;
-      if (launcher.type === LAUNCHER_TMUX) {
-        const target = launcher.paneId ?? launcher.sessionId ?? launcher.sessionName;
-        await pi.exec(LAUNCHER_TMUX, ['send-keys', '-t', target, '-l', text], { timeout: PI_EXEC_TIMEOUT_MS });
-        return;
-      }
-      await pi.exec(LAUNCHER_CMUX, ['send', '--workspace', launcher.workspaceId, text], {
-        timeout: PI_EXEC_TIMEOUT_MS,
-      });
+      // Silently, because a panel only builds a keyboard for a run whose
+      // capabilities already said yes: reaching here with an unwritable run
+      // means the run changed under the panel, which is not the typist's problem.
+      if (!terminalFacade.capabilities(record).writable) return;
+      await terminalFacade.write(record, text);
     };
 
     /**
@@ -1620,12 +1516,10 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
      */
     const openOverlay = async (record: WorkflowRunRecord, ctx: ExtensionContext): Promise<string> => {
       closeOverlay();
-      // Exactly the launchers `sendToRun` can address. A natively hosted run has
-      // no multiplexer, so its panel is a view rather than a terminal, and
-      // saying so up front beats letting the user type into nothing.
-      const interactive =
-        !launcherTargetsCurrentTerminal(record) &&
-        (record.launcher?.type === LAUNCHER_TMUX || record.launcher?.type === LAUNCHER_CMUX);
+      // Exactly what the engine says this run's terminal will take. A run with
+      // no reachable terminal gets a panel that is a view rather than a
+      // keyboard, and saying so up front beats letting the user type into nothing.
+      const interactive = terminalFacade.capabilities(record).writable;
       const input = new TerminalInputBatcher((text) => sendToRun(record, text));
       let jobs: WorkflowProgressJob[] = [];
       let output: string[] = [];
@@ -2092,6 +1986,67 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
       );
     };
 
+    /**
+     * `/workflow-launch`: the same launch the catalog board performs, as a line.
+     *
+     * The cockpit can only send a session a prompt frame, so this is how a
+     * browser starts a workflow; typing it by hand does the same thing. Every
+     * value the board would have asked for in a dialog arrives on the line, and
+     * what the workflow requires is checked before anything is started, because
+     * a run missing its prompt starts and then waits for terminal input that is
+     * never coming.
+     */
+    const launchFromCommand = async (args: string, ctx: ExtensionContext): Promise<void> => {
+      const parsed = parseWorkflowLaunchCommand(args);
+      if (isLaunchParseFailure(parsed)) {
+        ctx.ui.notify(parsed.error, 'error');
+        return;
+      }
+      const entries = await loadWorkflowCatalog(feature.listWorkflowsTool, ctx.cwd);
+      const entry = resolveWorkflowEntry(entries, parsed.workflow);
+      if (!entry) {
+        ctx.ui.notify(`No workflow matches '${parsed.workflow}' under ${ctx.cwd}.`, 'error');
+        return;
+      }
+      const detail = summarizeWorkflowFile(entry.path, {
+        compatibleRunners,
+        parseWorkflow: (workflowPath: string) => parser.parseWorkflowFile(workflowPath),
+      });
+      if (detail.error !== undefined) {
+        ctx.ui.notify(`${entry.name} could not be read: ${detail.error}`, 'error');
+        return;
+      }
+      const problems = validateWorkflowLaunch(detail, parsed);
+      if (problems.length > 0) {
+        ctx.ui.notify(problems.join(' '), 'error');
+        return;
+      }
+      const workflow = parser.parseWorkflowFile(entry.path);
+      const input: WorkflowLaunchInput = {
+        workflowPath: entry.path,
+        ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
+        ...(typeof workflow.workspace === 'string' ? { workspace: workflow.workspace } : {}),
+        ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
+        ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
+      };
+      const result = await launchExecutor.execute(input, ctx);
+      // Trimmed for the same reason the board trims it: a launch that ran in
+      // this process answers with the engine's whole console log.
+      ctx.ui.notify(launchNotice(toolResultText(result)), 'info');
+    };
+
+    pi.registerCommand(WORKFLOW_LAUNCH_COMMAND, {
+      description: 'Launch a workflow: /workflow-launch <workflow> [runner=x] [key=value …] [prompt]',
+      handler: async (args, ctx) => {
+        await waitForReadiness();
+        try {
+          await launchFromCommand(args, ctx);
+        } catch (error) {
+          ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error');
+        }
+      },
+    });
+
     const openRecoveryHandoff = async (ctx: ExtensionContext): Promise<void> => {
       // Recovery adopts terminal work. Include failed runs from dead or other
       // sessions here; passive UI and all controls over live runs stay scoped.
@@ -2380,7 +2335,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
       inspectorOpen = false;
       inspectorRecords.clear();
       closeOverlay();
-      launcherScreens.clear();
+      terminals.forget(new Set());
       progressOverlay.setUICtx(ctx.ui);
 
       const activeTelemetry = getTelemetry(ctx);
@@ -2489,7 +2444,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
         inspectorHandle = undefined;
         inspectorOpen = false;
         inspectorRecords.clear();
-        launcherScreens.clear();
+        terminals.forget(new Set());
         closeOverlay();
         sessionRunCount = 0;
         if (context) clearFollow(context);

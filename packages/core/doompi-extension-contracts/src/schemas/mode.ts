@@ -263,6 +263,40 @@ export const MinorModeActionResponseSchema = Type.Object(
 );
 export type MinorModeActionResponse = Static<typeof MinorModeActionResponseSchema>;
 
+/**
+ * The custom session entry the catalog host journals whenever its projection
+ * changes. It rides Pi's entry_appended frames, so any RPC client (the web
+ * cockpit) sees minor-mode state live and on replay without a new protocol.
+ */
+export const DOOM_MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
+
+export interface MinorModeActionProjection {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly disabledReason?: string;
+  /** Whether invoking it needs arguments a client must ask for first. */
+  readonly needsInput: boolean;
+}
+
+export interface MinorModeRecordProjection {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly order: number;
+  readonly activation: MinorModeActivation;
+  readonly condition: MinorModeCondition;
+  readonly detail?: string;
+  readonly actions: readonly MinorModeActionProjection[];
+}
+
+export interface MinorModeProjection {
+  readonly version: 1;
+  readonly revision: number;
+  readonly modes: readonly MinorModeRecordProjection[];
+}
+
 export interface MinorModeOwnerActionResult {
   message?: string;
 }

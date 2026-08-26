@@ -17,6 +17,7 @@ import type { IBashRunService } from '../../types/bashRunService';
 import type { RunnerRecord } from '../../types/runnerRegistry';
 import { registerRunnerCompactionRecovery } from '../../services/runs/compaction.ts';
 import { cleanupLegacyRunnerStore, reconcileActiveRunners, stopRunnerProcess } from '../../services/runs/reconcile.ts';
+import { parseRunnersCommand } from '../../services/runs/runnersCommand.ts';
 import { formatRunnerFooterContribution, formatRunnerStatus } from '../../tui/format.ts';
 import { openRunnerSpace } from '../../tui/runnerSpace.ts';
 import { getLogTtlMs } from '../../types/config.ts';
@@ -26,6 +27,7 @@ const LEADER_SOURCE = '@agimon-ai/doompi-runner';
 const LEADER_GROUP_ORDER = 67;
 const COMMAND_NAME = 'runners';
 const ERR_REQUIRES_INTERACTIVE = '/runners requires interactive mode';
+const ERR_STOP_USAGE = 'Usage: /runners stop <runner-id> [reason]';
 
 import { RUNNER_SETTINGS_FILE, RunnerSettingsLoader } from '../RunnerSettings/RunnerSettingsLoader';
 import { setRunnerSettings } from '../../types/config.ts';
@@ -413,13 +415,53 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
     },
   });
 
+  /** Stops one of this session's runners; false when no such runner is active. */
+  const stopSessionRunner = async (
+    generation: number,
+    activeSessionId: string,
+    id: string,
+    reason?: string,
+  ): Promise<boolean> => {
+    if (!isCurrent(generation, activeSessionId)) return false;
+    const record = runners.find((candidate) => candidate.id === id);
+    if (!record) return false;
+    if (record.backend === RMUX_BACKEND && record.backendTarget) {
+      await rmuxBackend.stop(record.backendTarget, record.pid);
+    } else await launcher.stop(record.pid);
+    if (!isCurrent(generation, activeSessionId)) return true;
+    await registry.complete(
+      record.id,
+      { reason: STOPPED_REASON, code: null, signal: null, stopReason: reason },
+      record.sessionId,
+    );
+    if (isCurrent(generation, activeSessionId)) await refresh();
+    return true;
+  };
+
   pi.registerCommand(COMMAND_NAME, {
-    description: 'Open Runner Space: background processes started by bash',
-    handler: async (_args, ctx) => {
+    description: 'Open Runner Space: background processes started by bash. `/runners stop <id> [reason]` stops one.',
+    handler: async (args, ctx) => {
       if (!active) return;
       const generation = sessionGeneration;
       const activeSessionId = sessionId;
       if (!activeSessionId) return;
+      const request = parseRunnersCommand(args);
+      // The stop verb is how a client without an overlay (the web cockpit)
+      // controls a runner, so it must not need the interactive UI.
+      if (request.kind === 'stop') {
+        if (!request.id) {
+          ctx.ui.notify(ERR_STOP_USAGE, 'error');
+          return;
+        }
+        await waitForSessionReadiness();
+        await refresh();
+        if (!isCurrent(generation, activeSessionId)) return;
+        const stopped = await stopSessionRunner(generation, activeSessionId, request.id, request.reason);
+        if (!isCurrent(generation, activeSessionId)) return;
+        if (stopped) ctx.ui.notify(`Stopped runner ${request.id}.`, 'info');
+        else ctx.ui.notify(`No active runner ${request.id} in this session.`, 'error');
+        return;
+      }
       if (!ctx.hasUI) {
         ctx.ui.notify(ERR_REQUIRES_INTERACTIVE, 'error');
         return;
@@ -434,19 +476,7 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
         readLog: (logPath) =>
           isCurrent(generation, activeSessionId) ? logReader.read(logPath, { lines: 1_000 }).text : '',
         stopRunner: async (id, reason) => {
-          if (!isCurrent(generation, activeSessionId)) return;
-          const record = runners.find((candidate) => candidate.id === id);
-          if (!record) return;
-          if (record.backend === RMUX_BACKEND && record.backendTarget) {
-            await rmuxBackend.stop(record.backendTarget, record.pid);
-          } else await launcher.stop(record.pid);
-          if (!isCurrent(generation, activeSessionId)) return;
-          await registry.complete(
-            record.id,
-            { reason: STOPPED_REASON, code: null, signal: null, stopReason: reason },
-            record.sessionId,
-          );
-          if (isCurrent(generation, activeSessionId)) await refresh();
+          await stopSessionRunner(generation, activeSessionId, id, reason);
         },
       });
     },

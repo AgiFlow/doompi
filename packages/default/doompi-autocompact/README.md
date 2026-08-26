@@ -12,7 +12,7 @@ asynchronous checkpoints and combines each checkpoint with subsequent messages.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2
+- Pi 0.84.3
 - Authentication for the model selected for summarization
 
 ## Install

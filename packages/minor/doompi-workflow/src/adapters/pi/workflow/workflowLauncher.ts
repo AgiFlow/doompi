@@ -194,7 +194,6 @@ function catalogInputs(workflow: Workflow): WorkflowInputSummary[] {
 function catalogJobs(workflow: Workflow): WorkflowJobSummary[] {
   return Object.entries(workflow.jobs ?? {}).map(([name, job]) => ({
     name,
-    ...(job['runs-on'] ? { runsOn: job['runs-on'] } : {}),
     steps: (job.steps ?? []).map((step, index) => stepLabel(step, index)),
   }));
 }

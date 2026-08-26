@@ -96,7 +96,7 @@ import {
   resolveMcpDirectToolSelections,
 } from './mcpDirectToolAllowlist';
 import { encodeNestedPathEnv, type NestedPathEntry, parseNestedPathEnv } from './nestedPath';
-import { resolvePiPackageRoot } from './piSpawn';
+import { resolveInstalledPiPackageRoot, resolvePiPackageRoot, resolvePiPackageRootNearHost } from './piSpawn';
 import { encodeToolBudgetEnv, type ResolvedToolBudget } from './toolBudget';
 
 /**
@@ -564,6 +564,15 @@ function createLaunchTempDir(): string {
   return fs.mkdtempSync(path.join(currentChildLaunchTempDir(), TEMP_DIRECTORY_PREFIX));
 }
 
+/** `resolveInstalledPiPackageRoot` throws when the SDK exists only as an in-process alias; here that is just "no root". */
+function installedPiPackageRootOrUndefined(): string | undefined {
+  try {
+    return resolveInstalledPiPackageRoot();
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildPiArgs(input: BuildPiArgsInput): BuildPiArgsResult {
   const args = [...input.baseArgs];
 
@@ -647,7 +656,17 @@ export function buildPiArgs(input: BuildPiArgsInput): BuildPiArgsResult {
   const env: Record<string, string | undefined> = {
     ...(input.teamMember ? nativeTeamMemberEnvironment(input.teamMember) : clearNativeTeamMemberEnvironment()),
   };
-  const piPackageRoot = process.env[PI_CODING_AGENT_PACKAGE_ROOT_ENV] ?? resolvePiPackageRoot();
+  // A detached child cannot use the host's in-process module aliasing, so the
+  // Pi package root travels by env var. Resolution tiers: an inherited value,
+  // the strict entry-point walk (the host IS Pi), a Pi installation near the
+  // host's entry (the host embeds Pi, as the DoomPi CLI does), then this
+  // module's own resolver, which works when the SDK is installed on disk but
+  // not when the host aliases it in-process only.
+  const piPackageRoot =
+    process.env[PI_CODING_AGENT_PACKAGE_ROOT_ENV] ??
+    resolvePiPackageRoot() ??
+    resolvePiPackageRootNearHost() ??
+    installedPiPackageRootOrUndefined();
   if (piPackageRoot) env[PI_CODING_AGENT_PACKAGE_ROOT_ENV] = piPackageRoot;
   let toolDiagnosticPath: string | undefined;
   if (toolPlan.requiredChildTools.length > 0) {

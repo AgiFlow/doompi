@@ -213,7 +213,7 @@ describe('summarizeWorkflowFile', () => {
             workflow_dispatch: { inputs: { asset: { description: 'Asset id', required: true, default: 'latest' } } },
           },
           jobs: {
-            build: { 'runs-on': 'codex', steps: [{ name: 'compile' }, { uses: 'agiflow/publish' }, { run: 'ls' }] },
+            build: { steps: [{ name: 'compile' }, { uses: 'agiflow/publish' }, { run: 'ls' }] },
           },
         }),
     });
@@ -222,7 +222,7 @@ describe('summarizeWorkflowFile', () => {
     expect(detail.inputs).toEqual([{ name: 'asset', description: 'Asset id', required: true, default: 'latest' }]);
     // A `run:` step with no name is placed, not quoted: a shell line does not
     // belong in a summary pane.
-    expect(detail.jobs).toEqual([{ name: 'build', runsOn: 'codex', steps: ['compile', 'agiflow/publish', 'step 3'] }]);
+    expect(detail.jobs).toEqual([{ name: 'build', steps: ['compile', 'agiflow/publish', 'step 3'] }]);
     expect(detail.runners).toEqual(['codex']);
     expect(detail.error).toBeUndefined();
   });

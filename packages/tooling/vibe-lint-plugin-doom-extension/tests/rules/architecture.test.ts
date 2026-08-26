@@ -1182,7 +1182,7 @@ describe('Doom deterministic architecture rules', () => {
     it('leaves the host and unranked packages alone', () => {
       const host = manifestFor('@agimon-ai/doompi', {
         '@agimon-ai/doompi-voice': 'workspace:*',
-        '@earendil-works/pi-coding-agent': '0.84.2',
+        '@earendil-works/pi-coding-agent': '0.84.3',
       });
       expect(packageLayerOrder.check?.(host, root, boundaryContext())).toBeNull();
 

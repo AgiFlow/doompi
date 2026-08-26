@@ -10,6 +10,7 @@ import {
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { MUTE_ENV } from '../../adapters/compositionState.ts';
+import { readLauncherComposition } from '../../adapters/launcherComposition.ts';
 import { createMapResolvers, readSyncState } from '../../adapters/syncState.ts';
 import {
   createLayerResolvers,
@@ -40,6 +41,10 @@ export function currentTransitionSynchronization(
   environment: NodeJS.ProcessEnv = process.env,
   _currentMajorMode?: string,
 ): TransitionSynchronization {
+  // A composing launcher session recomposes on reload, so it is neither the
+  // frozen launcher case nor the synced one. Checked before `alreadyComposed`
+  // because such a session never runs the synced composer that sets it.
+  if (readLauncherComposition(environment)) return { kind: 'launcher-composed' };
   if (!alreadyComposed(environment)) return { kind: 'launcher' };
   try {
     const state = readSyncState(repositoryRoot, environment.HOME);
@@ -67,11 +72,26 @@ export function currentTransitionSynchronization(
   }
 }
 
+/**
+ * The launch values that enter parent activation alongside the selection.
+ *
+ * They are fixed for the process but not all readable from the environment, so
+ * a composing launcher session supplies them from its record. Getting them
+ * wrong does not change which disposition is chosen, because both sides of
+ * every comparison share the error, but it does publish a fingerprint that no
+ * other reader of harness state agrees with.
+ */
+interface CompositionIdentity {
+  agents: boolean;
+  autoStop: boolean;
+  mute: boolean;
+  preset: string;
+}
+
 function compositionResolver(
   repositoryRoot: string,
-  harness: ReturnType<typeof requireDoomConfigContext>['harness'],
+  identity: CompositionIdentity,
   resolvers: ExtensionLayerResolvers,
-  preset: string,
 ): (selection: TransitionSelectionSnapshot) =>
   | {
       readonly fingerprint: string;
@@ -83,10 +103,10 @@ function compositionResolver(
   return (selection) => {
     try {
       const composition = resolveExtensionComposition({
-        agents: harness.agents,
-        autoStop: false,
-        mute: process.env[MUTE_ENV] === ENABLED_FLAG,
-        preset,
+        agents: identity.agents,
+        autoStop: identity.autoStop,
+        mute: identity.mute,
+        preset: identity.preset,
         personaEntry: resolvers.packageEntry(PERSONA_ENTRY),
         majorMode: selection.majorMode,
         layers: [...selection.layers],
@@ -139,11 +159,20 @@ function transitionCoordinatorPlugin(cordis: Context): void {
     const majorModesConfig = loadMajorModesConfig(repositoryRoot);
     const state = alreadyComposed() ? readSyncState(repositoryRoot, process.env.HOME) : undefined;
     const resolvers = state ? createMapResolvers(state.resolved, state.compiled) : createLayerResolvers(repositoryRoot);
+    // A composing launcher session records the launch identity it was started
+    // with; every other session recovers what it can from the environment.
+    const launcher = readLauncherComposition();
     const resolveComposition = compositionResolver(
       repositoryRoot,
-      harness,
+      launcher
+        ? { agents: launcher.agents, autoStop: launcher.autoStop, mute: launcher.mute, preset: launcher.preset }
+        : {
+            agents: harness.agents,
+            autoStop: false,
+            mute: process.env[MUTE_ENV] === ENABLED_FLAG,
+            preset: state?.selection.preset ?? DEFAULT_PRESET,
+          },
       resolvers,
-      state?.selection.preset ?? DEFAULT_PRESET,
     );
     const currentSelection: TransitionSelectionSnapshot = {
       domains: [...harness.domains],

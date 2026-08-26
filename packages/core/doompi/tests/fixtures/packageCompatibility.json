@@ -286,7 +286,7 @@
       "./src/prompts/doompi-author-domain/SKILL.md",
       "./src/prompts/doompi-author-domain/references/domains-contract.md"
     ],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -317,7 +317,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web"],
     "os": [],
     "cpu": []
   },
@@ -342,18 +342,22 @@
       "./mcp-tool-resolver": "tir",
       "./mode": "tir",
       "./narration": "tir",
-      "./package.json": "esm",
+      "./package-api": "tir",
+      "./package-api-loader": "tir",
       "./protocol": "tir",
       "./readiness": "tir",
+      "./relaunch-handoff": "tir",
       "./sandbox-harness": "tir",
       "./skills": "tir",
       "./subagent-policy": "tir",
       "./subagent-tool": "tir",
-      "./tool-overrides": "tir",
       "./transition": "tir",
+      "./tool-overrides": "tir",
       "./ui-hub": "tir",
+      "./voice-tools": "tir",
       "./voice-reload-handoff": "tir",
-      "./voice-tools": "tir"
+      "./package.json": "esm",
+      "./testing": "tir"
     },
     "exportTargets": {
       ".": {
@@ -451,7 +455,16 @@
         "import": "./dist/narration.mjs",
         "require": "./dist/narration.cjs"
       },
-      "./package.json": "./package.json",
+      "./package-api": {
+        "types": "./dist/packageApi.d.mts",
+        "import": "./dist/packageApi.mjs",
+        "require": "./dist/packageApi.cjs"
+      },
+      "./package-api-loader": {
+        "types": "./dist/packageApiLoader.d.mts",
+        "import": "./dist/packageApiLoader.mjs",
+        "require": "./dist/packageApiLoader.cjs"
+      },
       "./protocol": {
         "types": "./dist/protocol.d.mts",
         "import": "./dist/protocol.mjs",
@@ -462,10 +475,15 @@
         "import": "./dist/readiness.mjs",
         "require": "./dist/readiness.cjs"
       },
+      "./relaunch-handoff": {
+        "types": "./dist/relaunchHandoff.d.mts",
+        "import": "./dist/relaunchHandoff.mjs",
+        "require": "./dist/relaunchHandoff.cjs"
+      },
       "./sandbox-harness": {
+        "types": "./dist/sandboxHarness.d.mts",
         "import": "./dist/sandboxHarness.mjs",
-        "require": "./dist/sandboxHarness.cjs",
-        "types": "./dist/sandboxHarness.d.mts"
+        "require": "./dist/sandboxHarness.cjs"
       },
       "./skills": {
         "types": "./dist/skills.d.mts",
@@ -482,30 +500,36 @@
         "import": "./dist/subagentTool.mjs",
         "require": "./dist/subagentTool.cjs"
       },
-      "./tool-overrides": {
-        "types": "./dist/toolOverrides.d.mts",
-        "import": "./dist/toolOverrides.mjs",
-        "require": "./dist/toolOverrides.cjs"
-      },
       "./transition": {
         "types": "./dist/transition.d.mts",
         "import": "./dist/transition.mjs",
         "require": "./dist/transition.cjs"
+      },
+      "./tool-overrides": {
+        "types": "./dist/toolOverrides.d.mts",
+        "import": "./dist/toolOverrides.mjs",
+        "require": "./dist/toolOverrides.cjs"
       },
       "./ui-hub": {
         "types": "./dist/uiHub.d.mts",
         "import": "./dist/uiHub.mjs",
         "require": "./dist/uiHub.cjs"
       },
+      "./voice-tools": {
+        "types": "./dist/voiceTools.d.mts",
+        "import": "./dist/voiceTools.mjs",
+        "require": "./dist/voiceTools.cjs"
+      },
       "./voice-reload-handoff": {
         "types": "./dist/voiceReloadHandoff.d.mts",
         "import": "./dist/voiceReloadHandoff.mjs",
         "require": "./dist/voiceReloadHandoff.cjs"
       },
-      "./voice-tools": {
-        "types": "./dist/voiceTools.d.mts",
-        "import": "./dist/voiceTools.mjs",
-        "require": "./dist/voiceTools.cjs"
+      "./package.json": "./package.json",
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "import": "./dist/testing.mjs",
+        "require": "./dist/testing.cjs"
       }
     },
     "main": "./dist/index.cjs",
@@ -576,7 +600,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-goal/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -607,7 +631,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web"],
     "os": [],
     "cpu": []
   },
@@ -667,7 +691,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-help/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -778,7 +802,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-loop/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -851,7 +875,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-mcp/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "src/types/webMcp.ts", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -949,7 +973,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-plan/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1127,7 +1151,7 @@
       "./src/prompts/doompi-author-profile/SKILL.md",
       "./src/prompts/doompi-author-profile/references/profiles-contract.md"
     ],
-    "files": ["dist", "llms.txt", "README.md", "src/prompts", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "README.md", "src/prompts", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1158,7 +1182,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web"],
     "os": [],
     "cpu": []
   },
@@ -1207,6 +1231,7 @@
       "./services/RunnerRegistry/RunnerRegistry": "tir",
       "./services/Spawner": "tir",
       "./services/Spawner/NodeSpawner": "tir",
+      "./session-api": "tir",
       "./session": "tir",
       "./tool/bashTool": "tir",
       "./tool/responseEnvelope": "tir",
@@ -1215,6 +1240,7 @@
       "./tui/format": "tir",
       "./tui/runnerSpace": "tir",
       "./types": "tir",
+      "./web-hub": "tir",
       "./package.json": "esm"
     },
     "exportTargets": {
@@ -1433,6 +1459,11 @@
         "import": "./dist/services/Spawner/NodeSpawner.mjs",
         "require": "./dist/services/Spawner/NodeSpawner.cjs"
       },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
       "./session": {
         "types": "./dist/session.d.mts",
         "import": "./dist/session.mjs",
@@ -1473,6 +1504,11 @@
         "import": "./dist/types.mjs",
         "require": "./dist/types.cjs"
       },
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      },
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
@@ -1490,7 +1526,18 @@
       "./skills/doom-runner/SKILL.md",
       "./src/prompts/doompi-use-runner/SKILL.md"
     ],
-    "files": ["dist", "skills", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "skills",
+      "llms.txt",
+      "src/prompts",
+      "src/types/webRunners.ts",
+      "src/types/webRunnerLog.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -1689,7 +1736,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "package.json"],
+    "files": ["dist", "web", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1701,7 +1748,8 @@
       "./api/team-snapshot": "esm",
       "./env": "esm",
       "./extensions/pi": "esm",
-      "./package.json": "esm"
+      "./package.json": "esm",
+      "./web-hub": "tir"
     },
     "exportTargets": {
       ".": "./dist/index.mjs",
@@ -1710,7 +1758,12 @@
       "./api/team-snapshot": "./dist/api/teamSnapshot.mjs",
       "./env": "./dist/env.mjs",
       "./extensions/pi": "./dist/extensions/pi.mjs",
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      }
     },
     "main": null,
     "types": "./dist/index.d.mts",
@@ -1720,7 +1773,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web", "src/types/webSubagents.ts"],
     "os": [],
     "cpu": []
   },
@@ -1780,7 +1833,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1951,7 +2004,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./themes/doom-pi-dark.json"],
-    "files": ["dist", "themes"],
+    "files": ["dist", "web", "themes"],
     "os": [],
     "cpu": []
   },
@@ -1982,7 +2035,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-voice/SKILL.md"],
-    "files": ["dist", "models", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "models", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1991,7 +2044,8 @@
       ".": "tir",
       "./extensions/pi": "tir",
       "./package.json": "esm",
-      "./skills/workflow-recovery/SKILL.md": "esm"
+      "./skills/workflow-recovery/SKILL.md": "esm",
+      "./web-hub": "tir"
     },
     "exportTargets": {
       ".": {
@@ -2005,7 +2059,12 @@
         "require": "./dist/extensions/pi.cjs"
       },
       "./package.json": "./package.json",
-      "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md"
+      "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md",
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      }
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
@@ -2021,7 +2080,16 @@
       "./src/prompts/doompi-author-workflow/SKILL.md",
       "./src/prompts/doompi-use-workflow/SKILL.md"
     ],
-    "files": ["dist", "llms.txt", "README.md", "src/prompts", "skills/workflow-recovery/SKILL.md"],
+    "files": [
+      "dist",
+      "llms.txt",
+      "README.md",
+      "src/prompts",
+      "skills/workflow-recovery/SKILL.md",
+      "web",
+      "src/types/webWorkflows.ts",
+      "src/types/webWorkflowTerminal.ts"
+    ],
     "os": [],
     "cpu": []
   },
@@ -2356,6 +2424,68 @@
       "./src/prompts/doompi-author-extension/references/extension-contract.md"
     ],
     "files": ["assets", "dist", "llms.txt", "README.md", "src/prompts"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-web-components": {
+    "exports": {
+      ".": "tir",
+      "./theme": "tir",
+      "./styles.css": "esm",
+      "./themes/*.json": "esm",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./theme": {
+        "types": "./dist/theme.d.mts",
+        "import": "./dist/theme.mjs",
+        "require": "./dist/theme.cjs"
+      },
+      "./styles.css": "./styles/tokens.css",
+      "./themes/*.json": "./themes/*.json",
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {},
+    "assets": [],
+    "files": ["dist", "styles", "themes", "llms.txt", "README.md", "LICENSE"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-web-contracts": {
+    "exports": {
+      ".": "tir",
+      "./package.json": "esm",
+      "./testing": "tir"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./package.json": "./package.json",
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "import": "./dist/testing.mjs",
+        "require": "./dist/testing.cjs"
+      }
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {},
+    "assets": [],
+    "files": ["dist"],
     "os": [],
     "cpu": []
   }

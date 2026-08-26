@@ -1,0 +1,567 @@
+import fs from 'node:fs';
+import type { ChannelFrame, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import { createFrameRing, type FrameRing } from '../services/frameRing.ts';
+import {
+  initialPresence,
+  presenceAfterCommand,
+  presenceAfterRestoredEntry,
+  reducePresence,
+  type SessionPresence,
+} from '../services/sessionPresence.ts';
+import type { SessionAttachment } from '../types/bridge.ts';
+import {
+  DIALOG_ANSWERED_TYPE,
+  HISTORY_PAGE_SIZE,
+  HISTORY_PAGE_TYPE,
+  type HistoryPageFrame,
+  MINOR_MODE_ENTRY_TYPE,
+  SESSION_BACKLOG_TYPE,
+  type SessionBacklogFrame,
+  type SessionGitStatus,
+  type SessionSummary,
+} from '../types/hub.ts';
+import type { SessionRecord } from '../types/registry.ts';
+import type { BridgeState, SessionFrame } from '../types/session.ts';
+import type { RecordSource } from './registryWatcher.ts';
+import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSpawner.ts';
+import { attachToSession } from './sessionSocketClient.ts';
+
+const GIT_REFRESH_MS = 10_000;
+const GET_ENTRIES_COMMAND = 'get_entries';
+/**
+ * How much of a long transcript a fresh attach restores. The ring holds 512
+ * frames and live ones have to fit beside the history, so a session with
+ * thousands of messages gives up its oldest rather than its newest.
+ */
+const DEFAULT_RESTORE_LIMIT = 300;
+/**
+ * Journalled messages retained per session for paging back through. Well past
+ * any transcript a reader scrolls by hand, and still bounded: a hub watching a
+ * dozen long sessions holds a list, not a session's whole life.
+ */
+const DEFAULT_JOURNAL_LIMIT = 5000;
+const ENTRY_APPENDED_TYPE = 'entry_appended';
+
+export type HubEvent =
+  | { kind: 'upsert'; session: SessionSummary }
+  | { kind: 'removed'; sessionId: string }
+  | { kind: 'frame'; sessionId: string; frame: SessionFrame }
+  | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown };
+
+export interface SessionHubOptions {
+  source: RecordSource;
+  /** Absent only in tests; without one, creating sessions is refused. */
+  spawner?: SessionSpawner;
+  /** Injectable for tests; defaults to asking git about the session cwd. */
+  readGit?: (cwd: string) => Promise<SessionGitStatus | undefined>;
+  /** The hub's data channels (built-in and plugin-provided sources). */
+  channels?: readonly WebHubChannel[];
+  /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
+  signal?: (pid: number) => void;
+  ringLimit?: number;
+  /** Journalled messages restored per session on attach; the rest is kept for paging back through. */
+  restoreLimit?: number;
+  /** Journalled messages retained per session for paging; the oldest are forgotten first. */
+  journalLimit?: number;
+  gitRefreshMs?: number;
+  onNotice?: (message: string) => void;
+}
+
+export type StopOutcome = { ok: true } | { ok: false; code: 'unknown' | 'self' | 'signal_failed'; error: string };
+
+export interface SessionHub {
+  snapshot(): SessionSummary[];
+  /** The registry records behind the live sessions, for clients that dial them directly. */
+  records(): SessionRecord[];
+  /** Asks a session's server to exit; the session leaves once its record is withdrawn. */
+  stop(sessionId: string): StopOutcome;
+  /** Streams every change; pages filter frame events by their subscriptions. */
+  onEvent(listener: (event: HubEvent) => void): () => void;
+  /** Recent history for one session, or undefined for an unknown id. */
+  backlog(sessionId: string): SessionBacklogFrame | undefined;
+  /** One older window of a session's transcript, for a page scrolling back. */
+  history(sessionId: string, request: { before?: string; limit?: number }): HistoryPageFrame | undefined;
+  /** Frame types of the loaded data channels, for the hello frame. */
+  channelTypes(): string[];
+  /** Every channel's subscribe-time snapshot for one session; empty for an unknown id. */
+  channelFrames(sessionId: string): ChannelFrame[];
+  /** The journal behind one thread of a session, from the first data channel that names it; undefined until one does. */
+  threadJournal(sessionId: string, threadId: string): string | undefined;
+  command(sessionId: string, frame: SessionFrame): void;
+  create(input: SpawnSessionInput): Promise<SpawnOutcome>;
+  close(): void;
+}
+
+interface ManagedSession {
+  record: SessionRecord;
+  attachment?: SessionAttachment;
+  ring: FrameRing;
+  presence: SessionPresence;
+  attach: BridgeState;
+  attachReason?: string;
+  git?: SessionGitStatus;
+  lastSummaryJson?: string;
+  /**
+   * Journal entry ids this hub has already published. Pi reports a message
+   * entry only when the journal is read, never as it is written, so the hub
+   * re-reads on each run boundary; remembering what it sent is what keeps that
+   * re-read from replaying the whole transcript every time.
+   */
+  emittedEntryIds: Set<string>;
+  /** Whether the first journal read has been published; later reads are refreshes. */
+  restoredJournal: boolean;
+  /**
+   * Every journalled message the session has reported, oldest first.
+   *
+   * The attach path publishes only the newest slice, so without this the rest
+   * of a long transcript would exist only on disk and a reader scrolling up
+   * would find nothing. Bounded, because a hub watching many long sessions
+   * should not grow without limit; the oldest go first, which is also the
+   * order a reader runs out of interest in them.
+   */
+  journal: Record<string, unknown>[];
+}
+
+interface StartedChannel {
+  frameType: string;
+  source: HubChannelSource;
+}
+
+/**
+ * The journal entries a cockpit can render, oldest first.
+ *
+ * A session outlives every hub that watches it: it may have been driven from
+ * the TUI for an hour before a cockpit existed, and a hub restart forgets the
+ * live ring entirely. Without this the timeline of a long-running session
+ * opens empty, which reads as "the agent has done nothing" rather than "this
+ * page arrived late". The journal is the session's own record, so replaying it
+ * is the only honest way to show what came before.
+ *
+ * Two kinds survive the filter: the messages that are the transcript, and the
+ * newest minor-mode catalog entry, which the runtime journals as a custom
+ * entry and which a late hub would otherwise never see.
+ */
+function renderableJournalEntries(frame: SessionFrame, limit: number): Record<string, unknown>[] {
+  const data = frame.data;
+  if (typeof data !== 'object' || data === null) return [];
+  const entries = (data as { entries?: unknown }).entries;
+  if (!Array.isArray(entries)) return [];
+
+  const messages: Record<string, unknown>[] = [];
+  let minorModes: Record<string, unknown> | undefined;
+  for (const entry of entries) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const candidate = entry as Record<string, unknown>;
+    if (candidate.type === 'message') messages.push(candidate);
+    else if (candidate.type === 'custom' && candidate.customType === MINOR_MODE_ENTRY_TYPE) minorModes = candidate;
+  }
+
+  // The ring is bounded and live frames must still fit, so only the tail of a
+  // long transcript is published on attach; the rest is retained for the page
+  // to page back through rather than dropped on the floor.
+  const kept = messages.length > limit ? messages.slice(-limit) : messages;
+  return minorModes === undefined ? kept : [...kept, minorModes];
+}
+
+/**
+ * Every message a journal read carries, oldest first, with no tail limit.
+ *
+ * This is what the page pages back through. The attach path publishes only the
+ * newest slice, because the ring is bounded and the live stream has to fit
+ * beside it, but a reader scrolling up wants what came before, and the session
+ * already told the hub all of it.
+ */
+function journalMessages(frame: SessionFrame): Record<string, unknown>[] {
+  const data = frame.data;
+  if (typeof data !== 'object' || data === null) return [];
+  const entries = (data as { entries?: unknown }).entries;
+  if (!Array.isArray(entries)) return [];
+  const messages: Record<string, unknown>[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const candidate = entry as Record<string, unknown>;
+    if (candidate.type === 'message') messages.push(candidate);
+  }
+  return messages;
+}
+
+/**
+ * Whether a journal entry is one no live frame reports.
+ *
+ * Pi publishes a frame for everything the agent does, but a user message only
+ * ever reaches the journal: the agent did not produce it. That is invisible
+ * when something other than a cockpit sends it, which is how autonomous voice
+ * prompts the agent with what it heard. The catalog entry is here because
+ * re-reading it only replaces a projection, so a refresh cannot double it.
+ */
+function isUnreportedEntry(entry: Record<string, unknown>): boolean {
+  if (entry.type === 'custom') return entry.customType === MINOR_MODE_ENTRY_TYPE;
+  const message = entry.message;
+  if (typeof message !== 'object' || message === null) return false;
+  return (message as { role?: unknown }).role === 'user';
+}
+
+/** Where an entry sits in the retained journal, or -1 when this hub never held it. */
+function indexOfEntry(journal: readonly Record<string, unknown>[], id: string): number {
+  return journal.findIndex((entry) => entry.id === id);
+}
+
+function readTokenFile(record: SessionRecord): string {
+  return fs.readFileSync(record.tokenFile, 'utf8').trim();
+}
+
+function attachRelevantChanged(previous: SessionRecord, next: SessionRecord): boolean {
+  return previous.socketPath !== next.socketPath || previous.tokenFile !== next.tokenFile || previous.pid !== next.pid;
+}
+
+function scopeOf(record: SessionRecord): HubSessionScope {
+  return { sessionId: record.id, cwd: record.cwd };
+}
+
+/**
+ * Holds the hub's live view of every registered session.
+ *
+ * One attachment per session: the hub is "the one client" each socket allows,
+ * and every page multiplexes behind it. Presence is reduced from the frame
+ * stream so the rail describes sessions nobody is viewing, and a bounded ring
+ * per session gives late pages their history, since a permanently attached
+ * socket never fills the server-side backlog. Session data beyond the agent
+ * stream comes from channels: each one watches its own source and publishes
+ * per-session payloads the hub fans out by frame type.
+ */
+export function createSessionHub(options: SessionHubOptions): SessionHub {
+  const sessions = new Map<string, ManagedSession>();
+  const listeners = new Set<(event: HubEvent) => void>();
+  const readGit = options.readGit;
+  const restoreLimit = options.restoreLimit ?? DEFAULT_RESTORE_LIMIT;
+  const journalLimit = options.journalLimit ?? DEFAULT_JOURNAL_LIMIT;
+  const signal =
+    options.signal ??
+    ((pid: number): void => {
+      process.kill(pid, 'SIGTERM');
+    });
+  let closed = false;
+
+  const emit = (event: HubEvent): void => {
+    for (const listener of listeners) listener(event);
+  };
+
+  const startedChannels: StartedChannel[] = (options.channels ?? []).map((channel) => ({
+    frameType: channel.frameType,
+    source: channel.start({
+      sessions: () => [...sessions.values()].map((managed) => scopeOf(managed.record)),
+      publish: (sessionId, payload) => {
+        if (closed) return;
+        emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload });
+      },
+      onNotice: (message) => options.onNotice?.(message),
+    }),
+  }));
+
+  const toSummary = (managed: ManagedSession): SessionSummary => ({
+    id: managed.record.id,
+    name: managed.presence.sessionName ?? managed.record.name,
+    cwd: managed.record.cwd,
+    createdAt: managed.record.createdAt,
+    updatedAt: managed.presence.updatedAt,
+    phase: managed.presence.phase,
+    phaseSince: managed.presence.phaseSince,
+    attach: managed.attach,
+    ...(managed.attachReason === undefined ? {} : { attachReason: managed.attachReason }),
+    pendingMessageCount: managed.presence.pendingMessageCount,
+    everPrompted: managed.presence.everPrompted,
+    awaitingInput: managed.presence.awaitingInput,
+    ...(managed.presence.lastSettledAt === undefined ? {} : { lastSettledAt: managed.presence.lastSettledAt }),
+    socketPath: managed.record.socketPath,
+    ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
+    ...(managed.git === undefined ? {} : { git: managed.git }),
+  });
+
+  const pushSummary = (managed: ManagedSession): void => {
+    const summary = toSummary(managed);
+    const json = JSON.stringify(summary);
+    if (json === managed.lastSummaryJson) return;
+    managed.lastSummaryJson = json;
+    emit({ kind: 'upsert', session: summary });
+  };
+
+  const refreshGit = (managed: ManagedSession): void => {
+    if (!readGit) return;
+    void readGit(managed.record.cwd).then((git) => {
+      if (closed || sessions.get(managed.record.id) !== managed) return;
+      managed.git = git;
+      pushSummary(managed);
+    });
+  };
+
+  const startAttachment = (managed: ManagedSession): void => {
+    let token: string;
+    try {
+      token = readTokenFile(managed.record);
+    } catch (error) {
+      // The record beat the token file, or perms are off; the registry poll
+      // re-runs reconcile, which retries this until it works.
+      managed.attachment = undefined;
+      managed.attach = 'closed';
+      managed.attachReason = `The token file is unreadable: ${error instanceof Error ? error.message : String(error)}`;
+      pushSummary(managed);
+      return;
+    }
+    managed.attachment = attachToSession({
+      socketPath: managed.record.socketPath,
+      ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
+      token,
+      handlers: {
+        onFrame: (frame) => {
+          // The journal answer is the session's whole history. Each entry it
+          // carries is re-emitted as the append it once was, so it travels the
+          // same path as a live publish: into the ring for pages that
+          // subscribe later, and straight out to the ones already watching.
+          if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
+            // Keep the whole transcript before publishing any of it: the page
+            // pages back through this, and a read that arrives after the first
+            // one is the newest picture of the same history.
+            const whole = journalMessages(frame);
+            managed.journal = whole.length > journalLimit ? whole.slice(-journalLimit) : whole;
+            const restoredAt = new Date().toISOString();
+            const refreshing = managed.restoredJournal;
+            managed.restoredJournal = true;
+            let presenceChanged = false;
+            for (const entry of renderableJournalEntries(frame, restoreLimit)) {
+              // Once the transcript is on the page the live stream carries
+              // everything the agent does, and it carries it with no journal id
+              // to match on. Publishing an answer twice is the cost of getting
+              // that wrong, so a refresh only adds what no frame can carry.
+              if (refreshing && !isUnreportedEntry(entry)) continue;
+              const entryId = typeof entry.id === 'string' ? entry.id : undefined;
+              if (entryId !== undefined) {
+                if (managed.emittedEntryIds.has(entryId)) continue;
+                managed.emittedEntryIds.add(entryId);
+              }
+              const restored = { type: ENTRY_APPENDED_TYPE, entry };
+              managed.ring.record(restored);
+              emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
+              const next = presenceAfterRestoredEntry(managed.presence, entry, restoredAt);
+              presenceChanged ||= next !== managed.presence;
+              managed.presence = next;
+            }
+            // The rail introduces a session by what it has done, so a restored
+            // transcript has to reach the summary as well as the timeline.
+            if (presenceChanged) pushSummary(managed);
+            return;
+          }
+          const wasPhase = managed.presence.phase;
+          managed.ring.record(frame);
+          const next = reducePresence(managed.presence, frame, new Date().toISOString());
+          const changed = next !== managed.presence;
+          managed.presence = next;
+          emit({ kind: 'frame', sessionId: managed.record.id, frame });
+          if (changed) pushSummary(managed);
+          // A finished run is when the tree most plausibly changed.
+          if (wasPhase !== 'idle' && next.phase === 'idle') refreshGit(managed);
+          // A run boundary is the one moment a message can have been journalled
+          // without any frame carrying it: an extension that prompts the agent
+          // (autonomous voice dictating what it heard) sends the message
+          // itself, so the only report of it is the journal. Re-reading here is
+          // what puts it on the page; entries already published are skipped.
+          if (wasPhase !== next.phase) managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
+        },
+        onStatus: (status) => {
+          managed.attach = status.state;
+          managed.attachReason = status.reason;
+          // A fresh attach is the moment to ask for the facts events do not
+          // carry (name, pending count, streaming flags) and for the journal,
+          // whose minor-mode entry this hub missed if the session predates it.
+          if (status.state === 'attached') {
+            managed.attachment?.send({ type: 'get_state' });
+            managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
+          }
+          pushSummary(managed);
+        },
+      },
+    });
+  };
+
+  const startSession = (record: SessionRecord): void => {
+    const managed: ManagedSession = {
+      record,
+      ring: createFrameRing(options.ringLimit),
+      journal: [],
+      presence: initialPresence(new Date().toISOString()),
+      attach: 'connecting',
+      emittedEntryIds: new Set<string>(),
+      restoredJournal: false,
+    };
+    sessions.set(record.id, managed);
+    options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
+    startAttachment(managed);
+    pushSummary(managed);
+    refreshGit(managed);
+    for (const channel of startedChannels) channel.source.sessionAdded?.(scopeOf(record));
+  };
+
+  const reconcile = (records: SessionRecord[]): void => {
+    const seen = new Set<string>();
+    for (const record of records) {
+      seen.add(record.id);
+      const managed = sessions.get(record.id);
+      if (!managed) {
+        startSession(record);
+        continue;
+      }
+      const reattach = attachRelevantChanged(managed.record, record);
+      managed.record = record;
+      if (reattach) {
+        // A new pid means a restarted server, possibly with a rotated token.
+        managed.attachment?.close();
+        startAttachment(managed);
+      } else if (!managed.attachment) {
+        startAttachment(managed);
+      }
+      pushSummary(managed);
+    }
+    for (const [id, managed] of sessions) {
+      if (seen.has(id)) continue;
+      managed.attachment?.close();
+      sessions.delete(id);
+      for (const channel of startedChannels) channel.source.sessionRemoved?.(id);
+      options.onNotice?.(`session ${id} left`);
+      emit({ kind: 'removed', sessionId: id });
+    }
+  };
+
+  options.source.subscribe(reconcile);
+  const gitTimer = readGit
+    ? setInterval(() => {
+        for (const managed of sessions.values()) refreshGit(managed);
+      }, options.gitRefreshMs ?? GIT_REFRESH_MS)
+    : undefined;
+
+  return {
+    records() {
+      return [...sessions.values()].map((managed) => managed.record);
+    },
+    snapshot() {
+      return [...sessions.values()]
+        .sort(
+          (left, right) =>
+            left.record.createdAt.localeCompare(right.record.createdAt) ||
+            left.record.id.localeCompare(right.record.id),
+        )
+        .map(toSummary);
+    },
+    stop(sessionId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return { ok: false, code: 'unknown', error: 'Unknown session.' };
+      // Single-session mode records this very process; killing it would take
+      // the cockpit down with the session.
+      if (managed.record.pid === process.pid) {
+        return { ok: false, code: 'self', error: 'This session hosts the cockpit; stop it from its own terminal.' };
+      }
+      try {
+        signal(managed.record.pid);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return { ok: false, code: 'signal_failed', error: `Could not signal the session server: ${reason}` };
+      }
+      options.onNotice?.(`asked session ${sessionId} to stop`);
+      return { ok: true };
+    },
+    onEvent(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    backlog(sessionId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return undefined;
+      const { frames, dropped } = managed.ring.snapshot();
+      return { type: SESSION_BACKLOG_TYPE, sessionId, frames, dropped };
+    },
+    history(sessionId, request) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return undefined;
+      const limit = Math.max(1, Math.min(request.limit ?? HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE));
+      // The page names the oldest entry it holds, so the window ends where the
+      // page begins. An unknown cursor means the page holds something this hub
+      // never sent, which a re-read can cause; answering from the end is the
+      // honest fallback and the page reconciles by id.
+      const end = request.before === undefined ? managed.journal.length : indexOfEntry(managed.journal, request.before);
+      const stop = end < 0 ? managed.journal.length : end;
+      const start = Math.max(0, stop - limit);
+      const window = managed.journal.slice(start, stop);
+      const oldest = window[0];
+      return {
+        type: HISTORY_PAGE_TYPE,
+        sessionId,
+        frames: window.map((entry) => ({ type: ENTRY_APPENDED_TYPE, entry })),
+        cursor: typeof oldest?.id === 'string' ? oldest.id : null,
+        hasMore: start > 0,
+        ...(request.before === undefined ? {} : { before: request.before }),
+      };
+    },
+    channelTypes() {
+      return startedChannels.map((channel) => channel.frameType);
+    },
+    channelFrames(sessionId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return [];
+      const scope = scopeOf(managed.record);
+      const frames: ChannelFrame[] = [];
+      for (const channel of startedChannels) {
+        const payload = channel.source.payloadFor(scope);
+        if (payload !== undefined) frames.push({ type: channel.frameType, sessionId, payload });
+      }
+      return frames;
+    },
+    threadJournal(sessionId, threadId) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return undefined;
+      const scope = scopeOf(managed.record);
+      for (const channel of startedChannels) {
+        const journal = channel.source.threadJournal?.(scope, threadId);
+        if (journal !== undefined) return journal;
+      }
+      return undefined;
+    },
+    command(sessionId, frame) {
+      const managed = sessions.get(sessionId);
+      if (!managed) return;
+      managed.attachment?.send(frame);
+      // The agent never announces that a dialog was answered, so an
+      // extension_ui_request in the ring would reopen on every replay. This
+      // synthetic close travels the same path as agent frames: it closes the
+      // dialog on other live tabs now and on backlog replays forever after.
+      if (frame.type === 'extension_ui_response' && typeof frame.id === 'string') {
+        const closed = { type: DIALOG_ANSWERED_TYPE, id: frame.id };
+        managed.ring.record(closed);
+        emit({ kind: 'frame', sessionId: managed.record.id, frame: closed });
+      }
+      const next = presenceAfterCommand(managed.presence, frame, new Date().toISOString());
+      if (next !== managed.presence) {
+        managed.presence = next;
+        pushSummary(managed);
+      }
+    },
+    create(input) {
+      if (!options.spawner) {
+        return Promise.resolve({
+          ok: false,
+          code: 'invalid_request',
+          error: 'This cockpit serves a fixed session and cannot create new ones.',
+        });
+      }
+      return options.spawner.spawn(input);
+    },
+    close() {
+      closed = true;
+      options.source.close();
+      for (const channel of startedChannels) channel.source.close();
+      if (gitTimer) clearInterval(gitTimer);
+      for (const managed of sessions.values()) {
+        managed.attachment?.close();
+      }
+      sessions.clear();
+      listeners.clear();
+    },
+  };
+}

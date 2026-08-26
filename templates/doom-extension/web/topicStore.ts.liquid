@@ -1,0 +1,32 @@
+import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
+import { {{ topic | camelCase }}ChannelType, type {{ topic | pascalCase }}ItemView } from '../src/types/web{{ topic | pascalCase }}.ts';
+
+/**
+ * One session's record: the hub's last report plus whatever this page does
+ * with it (a selection, a dismissed id, a pending request). Records are
+ * immutable values; the reducer and every action return a new one.
+ */
+export interface {{ topic | pascalCase }}Session {
+  items: {{ topic | pascalCase }}ItemView[];
+}
+
+export const {{ topic | camelCase }} = defineSessionStore<{{ topic | pascalCase }}Session>({ items: [] });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export interface {{ topic | pascalCase }}Payload {
+  items: {{ topic | pascalCase }}ItemView[];
+}
+
+/** The plugin's session data channel: '{{ channelName }}' payloads into the store. */
+export const {{ topic | camelCase }}Channel = {{ topic | camelCase }}.channel<{{ topic | pascalCase }}Payload>({
+  channel: {{ topic | camelCase }}ChannelType,
+  parse(input) {
+    if (!isRecord(input) || !Array.isArray(input.items)) return null;
+    return { items: input.items.filter(isRecord) as unknown as {{ topic | pascalCase }}ItemView[] };
+  },
+  // Fold one payload into the record; reconcile any ephemeral field against it here.
+  reduce: (current, { items }) => ({ ...current, items }),
+});

@@ -1,0 +1,16 @@
+export {
+  declaredApisOf,
+  DOOM_API_EXPORT,
+  DOOM_API_MANIFEST_FIELD,
+  DOOM_API_ROUTE_PREFIX,
+  DOOM_API_SCOPES,
+  type DeclaredPackageApi,
+  type DoomApi,
+  type DoomApiContext,
+  type DoomApiEntryDeclaration,
+  type DoomApiHandler,
+  DoomApiManifestError,
+  type DoomApiScope,
+  isDoomApi,
+  orderDeclaredApis,
+} from '../schemas/packageApi.ts';

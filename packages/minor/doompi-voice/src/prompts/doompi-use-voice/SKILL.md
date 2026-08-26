@@ -11,11 +11,12 @@ Use Voice on macOS when the user wants spoken input, spoken output, or an autono
 
 - Use `SPC v v` for one manual recording and transcription. This does not activate autonomous Voice tools.
 - Use `SPC v e` to enter autonomous capture for the current session, and again to exit it.
+- For a long autonomous prompt with thinking pauses, begin a segment with `doom prompt`. Wait for `composing, listening` before each later segment. Say standalone `doom send` to submit the combined prompt or standalone `doom cancel` to discard it.
 - Call `describe_voice_tools` before any batch. It lists the registered capabilities and returns the `catalog_token` that `use_voice_tools` requires; there is no other source for that token.
 - Call `describe_voice_tools` again with `names` to read a capability's `input_schema` before running it. The bare call returns names and descriptions only.
 - Call `use_voice_tools` with that exact `catalog_token` and a bounded, ordered batch. Every call is preflighted together, so one invalid input rejects all of them.
 - Treat a `VOICE_TOOL_STALE_CATALOG` rejection as a moved catalog. Use the fresh token returned with the rejection, or describe again. Do not resend the rejected token.
-- Use `narrate` for one primary-agent-authored utterance. Keep it concise and relevant to the current turn.
+- Use `narrate` for one primary-agent-authored utterance. Before a final response, speak the complete answer, including every user-relevant conclusion, question, warning, result, and next action. Never leave essential information only in the written response.
 
 ## Configure and verify
 
@@ -27,6 +28,8 @@ Use Voice on macOS when the user wants spoken input, spoken output, or an autono
 ## Operate safely
 
 - Treat microphone activation as session-scoped. Reload and deactivation do not silently reactivate it.
+- Treat composition drafts as session-scoped and in-memory. They survive worker restart and idle capture rotation, but deactivation, reload, shutdown, and process restart discard them.
+- `doom send` and `doom cancel` are command-only composition segments. Outside an active draft they remain ordinary transcript content.
 - Expect pending capture and playback to stop during deactivation, cancellation, reload, or shutdown.
 - Audio remains in private local worker storage, but transcripts enter Pi as user input and some bounded text may reach the configured model provider.
 - If Voice reports a stale session, starting, draining, or failed state, do not retry blindly. Recheck configuration and the current session, then activate again only with user intent.

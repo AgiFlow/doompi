@@ -2,6 +2,7 @@ packages:
   - packages/core/*
   - packages/default/*
   - packages/minor/*
+  - packages/clients/*
   - packages/tooling/*
   - layers/*/*
   - "!**/dist/**"
@@ -36,11 +37,15 @@ onlyBuiltDependencies:
   - protobufjs
 
 minimumReleaseAgeExclude:
-  - "@agimon-ai/foundation-exec@0.26.16"
-  - "@agimon-ai/foundation-port-registry@0.29.16"
-  - "@agimon-ai/foundation-process-registry@0.29.16"
-  - "@agimon-ai/foundation-validator@0.26.16"
-  - "@agimon-ai/log-sink-mcp@0.29.16"
-  - "@agimon-ai/mcp-proxy@0.31.16"
-  - "@agimon-ai/vibe-lint@0.0.1-alpha.26"
-  - "@agimon-ai/workflow-mcp@0.23.16"
+  - "@agimon-ai/foundation-exec@0.26.16||0.26.19"
+  - "@agimon-ai/foundation-port-registry@0.29.16||0.29.19"
+  - "@agimon-ai/foundation-process-registry@0.29.16||0.29.19"
+  - "@agimon-ai/foundation-validator@0.26.16||0.26.19"
+  - "@agimon-ai/log-sink-mcp@0.29.16||0.29.19"
+  - "@agimon-ai/mcp-proxy@0.31.16||0.31.19"
+  - "@agimon-ai/vibe-lint@0.0.1-alpha.26||0.0.1-alpha.29"
+  - "@agimon-ai/workflow-mcp@0.23.16||0.23.19"
+  - "@tanstack/query-core@5.102.1"
+  - "@tanstack/react-query@5.102.1"
+  - "@tanstack/react-router@1.170.32"
+  - "@tanstack/router-core@1.171.27"

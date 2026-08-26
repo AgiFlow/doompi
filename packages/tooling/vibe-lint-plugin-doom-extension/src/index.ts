@@ -18,6 +18,8 @@ export {
   noProtocolChannelLiterals,
   noRawPiEvents,
   noSameRunnerProtocol,
+  packageApiEntry,
+  packageApiManifest,
   piExtensionDefaultFactory,
   piPeerVersion,
   providerOwnedPolicy,
@@ -26,4 +28,9 @@ export {
   schemaPlacement,
   serviceBoundary,
   thinPiAdapter,
+  webPluginEntry,
+  webPluginImportAllowlist,
+  webPluginManifest,
+  webPluginNoModuleState,
+  webPluginToolRenderers,
 } from './rules/index.js';

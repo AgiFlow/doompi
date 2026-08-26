@@ -27,3 +27,6 @@ export {
 export { piExtensionDefaultFactory } from './piExtensionContract.js';
 export { doomPromptShape } from './prompts.js';
 export { rules } from './registry.js';
+export { packageApiEntry, packageApiManifest } from './packageApi.js';
+export { webPluginEntry, webPluginImportAllowlist, webPluginManifest, webPluginNoModuleState } from './webPlugin.js';
+export { webPluginToolRenderers } from './webPluginTools.js';

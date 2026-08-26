@@ -11,7 +11,7 @@ import {
 import { AutonomousVoiceTelemetry } from './autonomousVoiceTelemetry.ts';
 import { projectAutonomousVoiceUi } from './autonomousVoiceUi.ts';
 import { applyTranscriptPolicy } from './transcriptPolicy.ts';
-import { VoiceDelivery, type VoiceDeliveryResult } from './voiceDelivery.ts';
+import { VoiceDelivery, type VoiceDeliveryIntent, type VoiceDeliveryResult } from './voiceDelivery.ts';
 import type {
   VoiceCandidateOutcome,
   VoiceFinalizeReason,
@@ -20,6 +20,7 @@ import type {
 } from './voiceWorkerProtocol.ts';
 
 const MAX_CAPTURE_DURATION_MS = 300_000;
+const MAX_COMPOSITION_CHARACTERS = 32_768;
 const WORKER_FINALIZE_REASON = {
   endpoint: 'soft-endpoint',
   'duration-limit': 'duration-limit',
@@ -71,7 +72,7 @@ export interface AutonomousVoiceSessionDependencies {
   client: AutonomousVoiceWorkerPort;
   clock: IClock;
   ui: AutoCaptureUi;
-  deliver(this: void, text: string): void;
+  deliver(this: void, text: string, intent?: VoiceDeliveryIntent): void;
   narrationReferences(): readonly string[];
   correctTranscript?(this: void, transcript: string, signal: AbortSignal): Promise<string>;
   abortPlayback(): Promise<void>;
@@ -110,6 +111,8 @@ export class AutonomousVoiceSession {
   private hardStopStarted = false;
   private started = false;
   private lastActivationState: AutoCaptureActivationState = 'disabled';
+  private compositionDraft: string[] = [];
+  private pendingCompositionSubmission: (AutonomousTurnIdentity & { revision: number }) | undefined;
 
   public constructor(private readonly dependencies: AutonomousVoiceSessionDependencies) {
     this.identities = new AutonomousTurnIdentityFactory(dependencies.clock, dependencies.identityNonceFactory);
@@ -351,7 +354,12 @@ export class AutonomousVoiceSession {
     }
   }
 
-  private beginCapture(identity: AutonomousTurnIdentity): void {
+  private beginCapture(effect: Extract<AutonomousVoiceEffect, { type: 'effect.beginCapture' }>): void {
+    const identity: AutonomousTurnIdentity = {
+      sessionId: effect.sessionId,
+      captureId: effect.captureId,
+      turnId: effect.turnId,
+    };
     const autoConfig = this.dependencies.config.autoCapture;
     if (!autoConfig) {
       this.actor.send({
@@ -370,7 +378,7 @@ export class AutonomousVoiceSession {
         mode: 'autonomous',
         config: workerConfiguration(this.dependencies.config),
         maxDurationMs: MAX_CAPTURE_DURATION_MS,
-        utteranceIdleMs: autoConfig.utteranceIdleMs,
+        utteranceIdleMs: effect.composing ? autoConfig.composeUtteranceIdleMs : autoConfig.utteranceIdleMs,
         transcriptionTimeoutMs: autoConfig.transcriptionTimeoutMs,
       });
     } catch (error) {
@@ -383,13 +391,14 @@ export class AutonomousVoiceSession {
     }
   }
 
-  private correctAndAcceptTranscript(
+  private correctAndHandleTranscript(
     effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
     transcript: string,
+    onAccepted: (transcript: string) => void,
   ): void {
     const correct = this.dependencies.correctTranscript;
     if (!correct) {
-      this.acceptTranscript(effect, transcript);
+      onAccepted(transcript);
       return;
     }
     this.abortTranscriptCorrection();
@@ -398,8 +407,8 @@ export class AutonomousVoiceSession {
     void Promise.resolve()
       .then(() => correct(transcript, abortController.signal))
       .then(
-        (corrected) => this.finishTranscriptCorrection(abortController, effect, corrected),
-        () => this.finishTranscriptCorrection(abortController, effect, transcript),
+        (corrected) => this.finishTranscriptCorrection(abortController, effect, corrected, onAccepted),
+        () => this.finishTranscriptCorrection(abortController, effect, transcript, onAccepted),
       );
   }
 
@@ -407,11 +416,21 @@ export class AutonomousVoiceSession {
     abortController: AbortController,
     effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
     transcript: string,
+    onAccepted: (transcript: string) => void,
   ): void {
     if (this.transcriptCorrectionAbort !== abortController) return;
     this.transcriptCorrectionAbort = undefined;
-    if (!this.snapshot.matches({ active: { capture: 'applyingPolicy' } })) return;
-    this.acceptTranscript(effect, transcript);
+    const snapshot = this.snapshot;
+    const context = snapshot.context;
+    if (!snapshot.matches({ active: { capture: 'applyingPolicy' } })) return;
+    if (
+      context.sessionId !== effect.sessionId ||
+      context.captureId !== effect.captureId ||
+      context.turnId !== effect.turnId ||
+      context.revision !== effect.revision
+    )
+      return;
+    onAccepted(transcript);
   }
 
   private acceptTranscript(
@@ -428,6 +447,136 @@ export class AutonomousVoiceSession {
     });
   }
 
+  private bufferCompositionSegment(
+    effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    operation: 'open' | 'append',
+    transcript: string,
+  ): void {
+    if (operation === 'open') this.clearCompositionDraft();
+    const candidate = [...this.compositionDraft, ...(transcript ? [transcript] : [])].join(' ');
+    if (Array.from(candidate).length > MAX_COMPOSITION_CHARACTERS) {
+      this.dependencies.ui.notify(
+        `Voice composition is limited to ${String(MAX_COMPOSITION_CHARACTERS)} characters; the latest segment was not added.`,
+        'warning',
+      );
+      this.actor.send({
+        type: 'TRANSCRIPT_COMPOSITION_REJECTED',
+        sessionId: effect.sessionId,
+        captureId: effect.captureId,
+        turnId: effect.turnId,
+        revision: effect.revision,
+        operation,
+      });
+      return;
+    }
+    if (transcript) this.compositionDraft.push(transcript);
+    if (operation === 'open') {
+      const send = this.spokenPhrase('send');
+      const cancel = this.spokenPhrase('cancel');
+      const how = [...(send ? [`say ${send} to submit`] : []), ...(cancel ? [`say ${cancel} to discard`] : [])].join(
+        ', or ',
+      );
+      // Either list can be configured empty, so the guidance is omitted rather than
+      // naming a phrase that would do nothing.
+      const guidance = how ? ` ${how.charAt(0).toUpperCase()}${how.slice(1)}.` : '';
+      this.dependencies.ui.notify(`Voice composition started.${guidance}`, 'info');
+    }
+    this.actor.send({
+      type: 'TRANSCRIPT_COMPOSITION_BUFFERED',
+      sessionId: effect.sessionId,
+      captureId: effect.captureId,
+      turnId: effect.turnId,
+      revision: effect.revision,
+      operation,
+    });
+  }
+
+  /**
+   * The first configured phrase for a composition command, quoted for a notice.
+   *
+   * These notices are the only instruction a user gets, and a user who reconfigured the
+   * phrases, or who is on the shipped defaults after they changed, would otherwise be
+   * told to say words that do nothing.
+   */
+  private spokenPhrase(kind: 'send' | 'cancel'): string | undefined {
+    const auto = this.dependencies.config.autoCapture;
+    const phrases = kind === 'send' ? auto?.composeSendPhrases : auto?.composeCancelPhrases;
+    const phrase = phrases?.[0]?.trim();
+    return phrase ? `"${phrase}"` : undefined;
+  }
+
+  private requestCompositionSend(
+    effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    trailingSegment?: string,
+  ): void {
+    const segments = [...this.compositionDraft, ...(trailingSegment ? [trailingSegment] : [])];
+    const text = segments.join(' ').trim();
+    if (Array.from(text).length > MAX_COMPOSITION_CHARACTERS) {
+      this.dependencies.ui.notify(
+        `Voice composition is limited to ${String(MAX_COMPOSITION_CHARACTERS)} characters; the latest segment was not added.`,
+        'warning',
+      );
+      this.actor.send({
+        type: 'TRANSCRIPT_COMPOSITION_REJECTED',
+        sessionId: effect.sessionId,
+        captureId: effect.captureId,
+        turnId: effect.turnId,
+        revision: effect.revision,
+        operation: 'append',
+      });
+      return;
+    }
+    if (trailingSegment) this.compositionDraft.push(trailingSegment);
+    if (!text) {
+      const cancel = this.spokenPhrase('cancel');
+      this.dependencies.ui.notify(
+        cancel
+          ? `Voice composition is empty. Add content or say ${cancel} to discard.`
+          : 'Voice composition is empty. Add content or cancel it.',
+        'warning',
+      );
+      this.actor.send({
+        type: 'TRANSCRIPT_COMPOSITION_EMPTY_SEND',
+        sessionId: effect.sessionId,
+        captureId: effect.captureId,
+        turnId: effect.turnId,
+        revision: effect.revision,
+      });
+      return;
+    }
+    this.pendingCompositionSubmission = {
+      sessionId: effect.sessionId,
+      captureId: effect.captureId,
+      turnId: effect.turnId,
+      revision: effect.revision,
+    };
+    this.actor.send({
+      type: 'TRANSCRIPT_COMPOSITION_SEND_REQUESTED',
+      sessionId: effect.sessionId,
+      captureId: effect.captureId,
+      turnId: effect.turnId,
+      revision: effect.revision,
+      text,
+    });
+  }
+
+  private cancelComposition(effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>): void {
+    this.clearCompositionDraft();
+    this.dependencies.ui.notify('Voice composition draft discarded.', 'info');
+    this.actor.send({
+      type: 'TRANSCRIPT_COMPOSITION_CANCELLED',
+      sessionId: effect.sessionId,
+      captureId: effect.captureId,
+      turnId: effect.turnId,
+      revision: effect.revision,
+    });
+  }
+
+  private clearCompositionDraft(): void {
+    this.compositionDraft = [];
+    this.pendingCompositionSubmission = undefined;
+  }
+
   private abortTranscriptCorrection(): void {
     this.transcriptCorrectionAbort?.abort(new Error('Voice command correction stopped.'));
   }
@@ -438,12 +587,45 @@ export class AutonomousVoiceSession {
     const result = applyTranscriptPolicy({
       transcript: effect.transcript,
       narrationOverlapPromoted: effect.narrationOverlapPromoted,
+      compositionState: effect.compositionState,
       startPhrases: autoConfig.startPhrases,
       stopPhrases: autoConfig.stopPhrases,
+      compositionPhrases: {
+        open: autoConfig.composeOpenPhrases,
+        send: autoConfig.composeSendPhrases,
+        cancel: autoConfig.composeCancelPhrases,
+      },
       narrationReferences: this.dependencies.narrationReferences(),
     });
     if (result.action === 'deliver') {
-      this.correctAndAcceptTranscript(effect, result.text);
+      this.correctAndHandleTranscript(effect, result.text, (transcript) => this.acceptTranscript(effect, transcript));
+      return;
+    }
+    if (result.action === 'compose-open' || result.action === 'compose-append') {
+      const operation = result.action === 'compose-open' ? 'open' : 'append';
+      if (!result.text) {
+        this.bufferCompositionSegment(effect, operation, result.text);
+        return;
+      }
+      this.correctAndHandleTranscript(effect, result.text, (transcript) =>
+        this.bufferCompositionSegment(effect, operation, transcript),
+      );
+      return;
+    }
+    if (result.action === 'compose-send') {
+      // Content spoken ahead of a trailing send command is still user content, so it goes
+      // through correction and into the draft before the draft is submitted.
+      if (!result.text) {
+        this.requestCompositionSend(effect);
+        return;
+      }
+      this.correctAndHandleTranscript(effect, result.text, (transcript) =>
+        this.requestCompositionSend(effect, transcript),
+      );
+      return;
+    }
+    if (result.action === 'compose-cancel') {
+      this.cancelComposition(effect);
       return;
     }
     if (result.action === 'stop') {
@@ -467,6 +649,22 @@ export class AutonomousVoiceSession {
   }
 
   private receiveDeliveryResult(result: VoiceDeliveryResult): void {
+    const pending = this.pendingCompositionSubmission;
+    const matchesPending =
+      pending !== undefined &&
+      result.sessionId === pending.sessionId &&
+      result.captureId === pending.captureId &&
+      result.turnId === pending.turnId &&
+      result.revision === pending.revision;
+    if (matchesPending) {
+      if (result.kind === 'delivered') {
+        this.clearCompositionDraft();
+        this.dependencies.ui.notify('Voice composition was accepted by Pi.', 'info');
+      } else {
+        this.pendingCompositionSubmission = undefined;
+        this.dependencies.ui.notify('Voice composition was not accepted; the draft was retained.', 'warning');
+      }
+    }
     if (result.kind === 'delivered') {
       this.actor.send({ type: 'DELIVERY_SUCCEEDED', ...result });
       return;
@@ -531,6 +729,9 @@ export class AutonomousVoiceSession {
   private prepareStop(): void {
     this.abortTranscriptCorrection();
     this.delivery.clear();
+    if (this.compositionDraft.length > 0)
+      this.dependencies.ui.notify('Voice composition draft discarded while stopping autonomous voice.', 'warning');
+    this.clearCompositionDraft();
     this.requestPlaybackAbort();
     const identity = this.currentIdentity();
     if (!identity) return;

@@ -1,3 +1,5 @@
+import type { HarnessState } from '@agimon-ai/doompi-config/types';
+import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
@@ -5,10 +7,32 @@ import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-extension-contracts/t
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { registerProfileCommand } from '../../commands/profileCommand.ts';
-import type { ProfileTelemetry } from '../../types/telemetry.ts';
+import { PROFILE_STATUS_KEY, profileStatus } from '../../services/profileText.ts';
+import { PROFILE_EVENT, type ProfileTelemetry } from '../../types/telemetry.ts';
 import { createProfileTelemetry } from '../telemetry/logSinkTelemetry.ts';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-profile';
+
+/**
+ * Whether the session has any profiles to offer. Reading the catalogue is
+ * the one startup cost the axis needs; a broken catalogue reports true so
+ * the axis stays on the bar and /profile can explain the failure.
+ */
+async function profileCatalogueExists(
+  state: Pick<HarnessState, 'root'>,
+  telemetry: ProfileTelemetry,
+): Promise<boolean> {
+  try {
+    const [{ requireHarnessRoot }, { loadProfiles }] = await Promise.all([
+      import('@agimon-ai/doompi-config/harnessStore'),
+      import('@agimon-ai/doompi-config/profiles'),
+    ]);
+    return loadProfiles(requireHarnessRoot(state)).length > 0;
+  } catch (error) {
+    void telemetry.recordError(PROFILE_EVENT.profileLoadFailed, error);
+    return true;
+  }
+}
 
 /**
  * The package's single standard Pi factory.
@@ -65,7 +89,7 @@ function profilePlugin(cordis: Context, config: ProfilePluginConfig): void {
   });
 
   let activeContext: Context | undefined;
-  cordis.inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE], (context) => {
+  const runtimeInjection = cordis.inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE], (context) => {
     activeContext = context;
     return () => {
       if (activeContext === context) activeContext = undefined;
@@ -77,6 +101,12 @@ function profilePlugin(cordis: Context, config: ProfilePluginConfig): void {
   };
   cordis.effect(function* () {
     registerProfileCommand(config.pi, config.telemetry, requireRuntimeContext);
+    config.pi.on('session_start', async (_event, ctx) => {
+      await runtimeInjection.await();
+      const state = requireDoomConfigContext(requireRuntimeContext()).harness;
+      const status = profileStatus(state.profile, await profileCatalogueExists(state, config.telemetry));
+      if (status !== undefined) ctx.ui.setStatus(PROFILE_STATUS_KEY, status);
+    });
     yield () => undefined;
   }, PACKAGE_SOURCE);
 }

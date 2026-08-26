@@ -107,6 +107,12 @@ function majorModeDisposition(
   diagnostic: TransitionDiagnosticCode;
   strategy?: TransitionExecutionStrategy;
 } {
+  // The entry composes from live selection on every load, so any candidate is
+  // reachable: a built aggregate when one exists, the individual entries when
+  // it does not. Nothing here can be sync-required.
+  if (synchronization.kind === 'launcher-composed') {
+    return { disposition: 'reload', diagnostic: 'transition.reload.major-mode', strategy: 'pi-reload' };
+  }
   if (synchronization.kind === 'synchronized') {
     if (!synchronization.resolutionAvailable || !candidate.compositionFingerprint) {
       return {

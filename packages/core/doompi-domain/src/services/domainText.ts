@@ -8,6 +8,8 @@ import { type DomainListing, SAFE_DOMAIN_NAME } from '../types/domains.ts';
 
 const DOMAIN_SEPARATOR = ',';
 export const DOMAIN_COMMAND = 'domains';
+/** Footer status key the cockpit's domains axis reads. */
+export const DOMAIN_STATUS_KEY = 'doom-domain';
 export const VOICE_SWITCH_TOKEN_PREFIX = '--voice-switch-token=';
 /** What an empty selection reads as, which is a real state rather than an error. */
 export const NONE = '(none)';
@@ -18,6 +20,11 @@ export function splitDomains(value: string): string[] {
     .split(DOMAIN_SEPARATOR)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/** The published axis content: the active domains in the same comma-separated shape splitDomains reads. */
+export function domainStatus(domains: readonly string[]): string {
+  return domains.join(DOMAIN_SEPARATOR);
 }
 
 /** Picker rows for the domain multi-select. */
@@ -47,6 +54,30 @@ export function unchangedSummary(domains: readonly string[]): string {
 
 export function pickerTitle(listing: DomainListing): string {
   return `Domains (active: ${listing.effective.join(', ') || NONE})`;
+}
+
+const MARK_ON = '[x]';
+const MARK_OFF = '[ ]';
+const OPTION_PREFIX = /^\[[ x]\] /;
+
+/**
+ * Rows for a single-pick select where domains compose: each row shows the
+ * membership it would flip, so a client without a multi-select still reaches
+ * every set one toggle at a time.
+ */
+export function domainToggleOptions(listing: DomainListing): string[] {
+  const active = new Set(listing.effective);
+  return listing.available.map((name) => `${active.has(name) ? MARK_ON : MARK_OFF} ${name}`);
+}
+
+/** The domain a toggle row names. */
+export function toggleOptionDomain(option: string): string {
+  return option.replace(OPTION_PREFIX, '').trim();
+}
+
+/** The effective set with one domain flipped, order preserved for the rest. */
+export function toggledDomains(effective: readonly string[], name: string): string[] {
+  return effective.includes(name) ? effective.filter((domain) => domain !== name) : [...effective, name];
 }
 
 /**

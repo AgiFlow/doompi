@@ -1,0 +1,283 @@
+boilerplate:
+  - name: scaffold-doom-web
+    targetFolder: packages/clients
+    description: |-
+      Create a publishable DoomPi web package: a Hono executable hosting a multi-session cockpit hub that discovers running doompi-server sessions through the registry directory, multiplexes their authenticated sockets behind one page WebSocket, and serves a React cockpit built by Vite.
+
+      The generated package boots against real sessions on the first run. It ships the session hub (registry watcher, one socket attachment per session, a bounded replay ring, presence derivation, a spawner for sessions created from the page), the frame reducer, a feature-sliced client (sessions rail, session timeline and composer, subagents fleet grid, status rail, extension-UI dialogs, command palette) with a build-time web plugin system that assembles tabs and data channels from doompiWeb manifests across the workspace, and the test pyramid that covers them: vitest unit and integration suites plus Playwright end-to-end specs driving the built executable against scripted session sockets.
+
+      Use it for any browser surface that attaches to supervised Pi sessions. It registers no Pi extension and is not part of a mode; it is a standalone executable, or the process doompi-server --web starts.
+    variables_schema:
+      type: object
+      properties:
+        packageName:
+          type: string
+          description: Unscoped npm package name, also the executable name
+          pattern: "^doompi-[a-z0-9]+(-[a-z0-9]+)*$"
+          minLength: 8
+          maxLength: 58
+          example: doompi-web
+        packageDescription:
+          type: string
+          description: Public npm package description; quotes, backslashes, and newlines are rejected so generated JSON stays valid
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Web cockpit for DoomPi sessions
+        packageKeyword:
+          type: string
+          description: Lowercase capability-specific npm search keyword
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: session-console
+        author:
+          type: string
+          description: Package author and copyright holder
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,'()-]*$"
+          minLength: 1
+          maxLength: 120
+          default: Vuong Ngo
+          example: Vuong Ngo
+        copyrightYear:
+          type: string
+          description: Year recorded in the LICENSE copyright line
+          pattern: "^[0-9]{4}$"
+          default: "2026"
+          example: "2026"
+      required:
+        - packageName
+        - packageDescription
+        - packageKeyword
+      additionalProperties: false
+    includes:
+      - .oxlintrc.json
+      - LICENSE
+      - README.md
+      - llms.txt
+      - package.json
+      - playwright.config.ts
+      - project.json
+      - src/adapters/authRoutes.ts
+      - src/adapters/directoryListing.ts
+      - src/adapters/directorySearch.ts
+      - src/adapters/gitStatus.ts
+      - src/adapters/httpServer.ts
+      - src/adapters/hubProbe.ts
+      - src/adapters/packageApiProxy.ts
+      - src/adapters/providerAuth.ts
+      - src/adapters/registryWatcher.ts
+      - src/adapters/serverSpawner.ts
+      - src/adapters/sessionFiles.ts
+      - src/adapters/sessionHub.ts
+      - src/adapters/sessionSocketClient.ts
+      - src/adapters/webBundler.ts
+      - src/adapters/webHubPluginLoader.ts
+      - src/adapters/webHubPlugins.generated.ts
+      - src/adapters/webPluginGenerate.ts
+      - src/adapters/webPluginScan.ts
+      - src/adapters/webPluginVite.ts
+      - src/bin/serve.ts
+      - src/exports/bundler.ts
+      - src/exports/index.ts
+      - src/services/directoryMatch.ts
+      - src/services/fileMatch.ts
+      - src/services/fileMedia.ts
+      - src/services/frameRing.ts
+      - src/services/loginFlow.ts
+      - src/services/registryStore.ts
+      - src/services/retryPolicy.ts
+      - src/services/serveOptions.ts
+      - src/services/sessionFraming.ts
+      - src/services/sessionPresence.ts
+      - src/services/staticAssets.ts
+      - src/services/webDevRoots.ts
+      - src/services/webPluginManifest.ts
+      - src/types/auth.ts
+      - src/types/bridge.ts
+      - src/types/hub.ts
+      - src/types/media.ts
+      - src/types/registry.ts
+      - src/types/session.ts
+      - src/web/app/Providers.tsx
+      - src/web/app/sessionRuntime.ts
+      - src/web/app/webPlugins.generated.ts
+      - src/web/components/Markdown.tsx
+      - src/web/components/MascotMark.tsx
+      - src/web/components/PluginSurface.tsx
+      - src/web/components/ToolRendererBoundary.tsx
+      - src/web/features/activity/ActivityDock.tsx
+      - src/web/features/connection/RefusedCard.tsx
+      - src/web/features/dialogs/DialogOverlay.tsx
+      - src/web/features/leader/CommandPalette.tsx
+      - src/web/features/selection/SelectionBar.tsx
+      - src/web/features/session/Composer.tsx
+      - src/web/features/session/MentionPreviews.tsx
+      - src/web/features/session/Timeline.tsx
+      - src/web/features/session/ToolCard.tsx
+      - src/web/features/sessions/NewSessionDialog.tsx
+      - src/web/features/sessions/SessionRail.tsx
+      - src/web/features/settings/AppearanceSettings.tsx
+      - src/web/features/settings/LoginFlowDialog.tsx
+      - src/web/features/settings/PluginSettings.tsx
+      - src/web/features/settings/ProviderSettings.tsx
+      - src/web/features/settings/SettingsMenu.tsx
+      - src/web/features/status/TopBar.tsx
+      - src/web/index.html
+      - src/web/lib/authApi.ts
+      - src/web/lib/commands.ts
+      - src/web/lib/composition.ts
+      - src/web/lib/fileMentions.ts
+      - src/web/lib/hubApi.ts
+      - src/web/lib/leaderTree.ts
+      - src/web/lib/pluginRegistry.ts
+      - src/web/lib/pluginSlotProps.ts
+      - src/web/lib/promptFocus.ts
+      - src/web/lib/sessionModel.ts
+      - src/web/lib/sessionSummary.ts
+      - src/web/lib/settingsSections.ts
+      - src/web/lib/statusLine.ts
+      - src/web/lib/toolMessageProps.ts
+      - src/web/lib/transport.ts
+      - src/web/lib/wsClient.ts
+      - src/web/main.tsx
+      - src/web/public/apple-touch-icon.png
+      - src/web/public/favicon-16.png
+      - src/web/public/favicon-32.png
+      - src/web/public/favicon.ico
+      - src/web/public/favicon.svg
+      - src/web/public/icon-512.png
+      - src/web/routes/CockpitPage.tsx
+      - src/web/routes/SettingsPage.tsx
+      - src/web/routes/routeTree.tsx
+      - src/web/stores/menuStore.ts
+      - src/web/stores/paletteStore.ts
+      - src/web/stores/sessionStore.ts
+      - src/web/stores/sessionsStore.ts
+      - src/web/stores/themeStore.ts
+      - src/web/stores/uiStore.ts
+      - src/web/stores/useOpenTab.ts
+      - src/web/stores/usePluginSlotProps.ts
+      - src/web/styles/app.css
+      - src/web/styles/webPluginSources.generated.css
+      - src/web/vite-env.d.ts
+      - tests/contract/packageShape.test.ts
+      - tests/contract/webPluginRegistry.test.ts
+      - tests/contract/workspaceWebPlugins.test.ts
+      - tests/e2e/activity.spec.ts
+      - tests/e2e/appearance.spec.ts
+      - tests/e2e/composer.spec.ts
+      - tests/e2e/connection.spec.ts
+      - tests/e2e/dialogs.spec.ts
+      - tests/e2e/leader.spec.ts
+      - tests/e2e/model.spec.ts
+      - tests/e2e/multiSession.spec.ts
+      - tests/e2e/selection.spec.ts
+      - tests/e2e/session.spec.ts
+      - tests/e2e/settings.spec.ts
+      - tests/e2e/states.spec.ts
+      - tests/e2e/status.spec.ts
+      - tests/e2e/subagents.spec.ts
+      - tests/e2e/toolRenderers.spec.ts
+      - tests/e2e/workflows.spec.ts
+      - tests/fixtures/crash-plugin/package.json
+      - tests/fixtures/crash-plugin/web/index.tsx
+      - tests/integration/bridge.test.ts
+      - tests/integration/hub.test.ts
+      - tests/integration/packageApi.test.ts
+      - tests/integration/spawner.test.ts
+      - tests/integration/webBundler.test.ts
+      - tests/support/bundleSetup.ts
+      - tests/support/cockpit.ts
+      - tests/support/fakeAuthRuntime.ts
+      - tests/support/fakeSession.ts
+      - tests/support/runnerRuns.ts
+      - tests/support/subagentRuns.ts
+      - tests/support/vitestEnv.ts
+      - tests/support/workflowRuns.ts
+      - tests/unit/authApi.test.ts
+      - tests/unit/authRoutes.test.ts
+      - tests/unit/clientStores.test.ts
+      - tests/unit/composition.test.ts
+      - tests/unit/directoryListing.test.ts
+      - tests/unit/directoryMatch.test.ts
+      - tests/unit/fileMatch.test.ts
+      - tests/unit/fileMedia.test.ts
+      - tests/unit/fileMentions.test.ts
+      - tests/unit/hubApi.test.ts
+      - tests/unit/hubServices.test.ts
+      - tests/unit/leaderTree.test.ts
+      - tests/unit/loginFlow.test.ts
+      - tests/unit/pluginRegistry.test.ts
+      - tests/unit/pluginSlotProps.test.ts
+      - tests/unit/providerAuth.test.ts
+      - tests/unit/serverServices.test.ts
+      - tests/unit/sessionFiles.test.ts
+      - tests/unit/sessionModel.test.ts
+      - tests/unit/sessionSummary.test.ts
+      - tests/unit/toolMessageProps.test.ts
+      - tests/unit/webDevRoots.test.ts
+      - tests/unit/webPluginManifest.test.ts
+      - tests/unit/wsClient.test.ts
+      - tsconfig.json
+      - tsdown.config.ts
+      - vibe-lint.config.yaml
+      - vite.config.ts
+      - vitest.config.ts
+    instruction: |-
+      The generated package already runs. Verify it before changing anything:
+      - `pnpm install` at the repository root, then `pnpm build` in the package. The build order matters: tsdown cleans dist, so the server is built before Vite writes dist/web.
+      - `pnpm test` for the vitest suites, then `pnpm exec playwright install chromium` once and `pnpm test:e2e` for the browser suites.
+
+      Respect the two import graphs; the doom-web vibe-lint preset enforces them.
+      - Server: src/types then src/services then src/adapters then src/bin, with src/exports free to import any of them. Socket, HTTP, and process access belongs in src/adapters, never in src/services.
+      - Client, under src/web: types then lib then stores then components then features then routes then app. One feature must not import another; lift shared code into components, lib, or stores.
+      - src/types is the only module both sides may import. Nothing under src/web may reach the server layers.
+
+      The cockpit is multi-session. The hub in src/adapters/sessionHub.ts holds one socket attachment per registered session and every page-facing frame is enveloped by session id (src/types/hub.ts is that contract). On the client, session-scoped state lives in per-session stores keyed by session id (src/web/stores/sessionStore.ts is a registry, src/web/stores/sessionsStore.ts holds the rail), the active session is the route param, and store actions default to the focused session.
+
+      Render only what the session reports. Pi's RPC protocol is the single source of truth, so add a frame to the reducer in src/web/lib/sessionModel.ts before rendering it, and leave a surface out rather than inventing a value the agent never sent. The rail renders from hub summaries alone; if a fact is not in SessionSummary, derive it in src/services/sessionPresence.ts before showing it.
+
+      Tabs beyond the conversation are web plugins, and no plugin package is ever a dependency of this one. A plugin declares a doompiWeb block in its package.json (client entry, optional hub entry with its built dist, channels); the package's own build only regenerates the committed builtin registry from its own manifest (src/adapters/webPluginGenerate.ts at config-load of vite.config.ts and tsdown.config.ts, checked in CI and by tests/contract/webPluginRegistry.test.ts). The full plugin set is assembled later, on the user's machine: doompi sync scans the installed composition's package roots, generates the entry modules, and runs the ./bundler subpath (src/adapters/webBundler.ts) to rebuild the SPA into ~/.doompi/web/current, which serveWeb prefers over the packaged bundle; the bundle carries webPlugins.server.json naming each plugin's built hub entry, which the hub imports lazily so an absent package is a notice and an empty tab, never a crash. No plugin ships in this package: the reference plugins are @agimon-ai/doompi-team (subagents tab, channel, and activity group) and @agimon-ai/doompi-workflow (workflows tab, channel, minor mode, and activity group); the minor-mode packages show the metadata-only shape.
+
+feature:
+  - name: scaffold-doom-web-feature
+    description: |-
+      Add a feature slice to a DoomPi web package: a folder under src/web/features owning its components and any state it needs, plus a Playwright spec that drives it end to end.
+
+      Use it when a new browser surface reads or writes session state. Do not use it for a shared primitive; those belong in src/web/components.
+    variables_schema:
+      type: object
+      properties:
+        featureName:
+          type: string
+          description: Feature folder name in kebab-case
+          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          minLength: 2
+          maxLength: 40
+          example: activity
+        componentName:
+          type: string
+          description: Root component name in PascalCase
+          pattern: "^[A-Z][A-Za-z0-9]*$"
+          minLength: 2
+          maxLength: 60
+          example: ActivityDock
+      required:
+        - featureName
+        - componentName
+      additionalProperties: false
+    includes:
+      - src/web/features/session/Timeline.tsx->src/web/features/{{ featureName }}/{{ componentName }}.tsx
+      - tests/e2e/session.spec.ts->tests/e2e/{{ featureName }}.spec.ts
+    instruction: |-
+      Replace the copied bodies; they are there to show the shape, not to be kept.
+
+      The component reads state with `useStore` from the stores layer and sends commands through the exported action functions. It must not import another feature, and it must not open its own socket: the composition root owns the transport.
+
+      The spec uses the `cockpit` fixture, which spawns the built executable against a scripted session socket. Emit the frames the real agent would emit, then assert on `data-testid` hooks; add a hook rather than matching on styling or copy.
+
+      Anything the slice renders must come from a frame the session actually sends. If Pi's RPC protocol has no source for it, say so instead of rendering a placeholder value.
+    patterns:
+      - src/web/features/**/*.tsx
+      - tests/e2e/**/*.spec.ts

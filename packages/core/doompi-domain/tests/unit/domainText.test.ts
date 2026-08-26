@@ -2,19 +2,34 @@ import type { DoomTransitionResult } from '@agimon-ai/doompi-extension-contracts
 import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { describe, expect, it } from 'vitest';
 import {
+  DOMAIN_STATUS_KEY,
   domainItems,
+  domainStatus,
   domainSummary,
+  domainToggleOptions,
   errorMessage,
   normalizeDomainNames,
   pickerTitle,
   splitDomains,
   switchedSummary,
+  toggledDomains,
+  toggleOptionDomain,
   transitionError,
   unchangedSummary,
   voiceSwitchToken,
 } from '../../src/services/domainText.ts';
 
 const listing = { active: ['default'], effective: ['default'], available: ['default', 'development'] };
+
+describe('toggle rows', () => {
+  it('marks membership, reads the domain back, and flips one at a time', () => {
+    expect(domainToggleOptions(listing)).toEqual(['[x] default', '[ ] development']);
+    expect(toggleOptionDomain('[ ] development')).toBe('development');
+    expect(toggleOptionDomain('[x] default')).toBe('default');
+    expect(toggledDomains(['default'], 'development')).toEqual(['default', 'development']);
+    expect(toggledDomains(['default', 'development'], 'default')).toEqual(['development']);
+  });
+});
 
 describe('splitDomains', () => {
   it('trims and drops the blanks a trailing comma leaves behind', () => {
@@ -111,5 +126,17 @@ describe('error rendering', () => {
       outcome: 'rejected',
     };
     expect(transitionError(result).message).toBe('Domain transition was rejected: transition.rejected.duplicate');
+  });
+});
+
+describe('domainStatus', () => {
+  it('publishes the active domains in the shape splitDomains reads back', () => {
+    expect(domainStatus(['development', 'testing'])).toBe('development,testing');
+    expect(splitDomains(domainStatus(['development', 'testing']))).toEqual(['development', 'testing']);
+  });
+
+  it('publishes empty for no active domains, which keeps the axis on the bar', () => {
+    expect(domainStatus([])).toBe('');
+    expect(DOMAIN_STATUS_KEY).toBe('doom-domain');
   });
 });

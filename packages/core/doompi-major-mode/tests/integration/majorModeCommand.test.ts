@@ -40,9 +40,14 @@ const reloadHandoffs = createVoiceReloadHandoffStore({
   createToken: () => crypto.randomUUID(),
 });
 
-function dependencies(currentMajorMode = 'copilot') {
+function dependencies(
+  currentMajorMode = 'copilot',
+  requestSupervisedRelaunch?: (majorMode: string, operationId: string) => boolean,
+) {
   const view: MajorModeView = { config, majorMode: currentMajorMode, domains: ['default'] };
   return {
+    supervisedRelaunchAvailable: () => requestSupervisedRelaunch !== undefined,
+    requestSupervisedRelaunch: requestSupervisedRelaunch ?? (() => false),
     cordisContext: () => {
       if (!runtimeContext) throw new Error('test runtime context is unavailable');
       return runtimeContext;
@@ -56,10 +61,13 @@ function dependencies(currentMajorMode = 'copilot') {
   };
 }
 
-function handlerFor(currentMajorMode = 'copilot'): (args: string, ctx: never) => Promise<void> {
+function handlerFor(
+  currentMajorMode = 'copilot',
+  requestSupervisedRelaunch?: (majorMode: string, operationId: string) => boolean,
+): (args: string, ctx: never) => Promise<void> {
   const registerCommand = vi.fn();
   const pi = { registerCommand, appendEntry: vi.fn() } as unknown as ExtensionAPI;
-  registerMajorModeCommand(pi, telemetry, dependencies(currentMajorMode));
+  registerMajorModeCommand(pi, telemetry, dependencies(currentMajorMode, requestSupervisedRelaunch));
   const command = registerCommand.mock.calls[0]?.[1] as { handler: (args: string, ctx: never) => Promise<void> };
   return command.handler;
 }
@@ -206,6 +214,54 @@ describe('/mode command', () => {
 
     expect(applyMajorMode).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('is pending'), 'info');
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('hands the relaunch to the supervisor and shuts down when one listens', async () => {
+    const requested: string[] = [];
+    const handler = handlerFor('copilot', (majorMode) => {
+      requested.push(majorMode);
+      return true;
+    });
+    const notify = vi.fn();
+    const reload = vi.fn(async () => undefined);
+    const shutdown = vi.fn();
+    const waitForIdle = vi.fn(async () => undefined);
+    const context = {
+      mode: 'rpc',
+      cwd: root,
+      ui: {
+        notify,
+        setStatus: vi.fn(),
+        select: vi.fn(async () => '[ ] minimal: team'),
+        theme: { fg: (_c: string, t: string) => t, bold: (t: string) => t },
+      },
+      waitForIdle,
+      reload,
+      shutdown,
+      sessionManager: { getSessionId: () => 'major-mode-supervised-session' },
+    } as unknown as ExtensionContext;
+    runtimeContext = new Context();
+    provideDoomConfigContext(runtimeContext, {
+      settings: { projectTrust: 'ask' },
+      harness: getHarnessState(),
+      requiresRelaunch: false,
+    });
+    const harness = getHarnessState();
+    disposeCoordinator = bindStubCoordinator(
+      runtimeContext,
+      context.sessionManager.getSessionId(),
+      { domains: [...harness.domains], majorMode: harness.majorMode, layers: [...harness.layers] },
+      'applied',
+      'process-relaunch',
+    ).dispose;
+
+    await handler('', context as never);
+
+    expect(requested).toEqual(['minimal']);
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('restarting the agent'), 'info');
+    expect(waitForIdle).toHaveBeenCalledOnce();
+    expect(shutdown).toHaveBeenCalledOnce();
     expect(reload).not.toHaveBeenCalled();
   });
 

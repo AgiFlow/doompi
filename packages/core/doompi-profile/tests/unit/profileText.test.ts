@@ -1,6 +1,13 @@
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import { describe, expect, it } from 'vitest';
-import { profileDescription, profileItems, profileSummary, profileTitle } from '../../src/services/profileText.ts';
+import {
+  PROFILE_STATUS_KEY,
+  profileDescription,
+  profileItems,
+  profileStatus,
+  profileSummary,
+  profileTitle,
+} from '../../src/services/profileText.ts';
 
 const marketing: AgentProfile = {
   name: 'marketing-agiflow',
@@ -44,5 +51,22 @@ describe('profile picker text', () => {
   it('names the current profile in the picker title', () => {
     expect(profileTitle('marketing-agiflow')).toBe('Profile (current: marketing-agiflow)');
     expect(profileTitle(undefined)).toBe('Profile (current: (none))');
+  });
+});
+
+describe('profile axis status', () => {
+  it('publishes the active profile name, even when its catalogue is gone', () => {
+    expect(profileStatus('marketing-agiflow', true)).toBe('marketing-agiflow');
+    expect(profileStatus('marketing-agiflow', false)).toBe('marketing-agiflow');
+  });
+
+  it('publishes empty while profiles exist with none active', () => {
+    expect(profileStatus(undefined, true)).toBe('');
+  });
+
+  it('withholds the status when there is nothing to select', () => {
+    expect(profileStatus(undefined, false)).toBeUndefined();
+    expect(profileStatus('', false)).toBeUndefined();
+    expect(PROFILE_STATUS_KEY).toBe('doom-profile');
   });
 });

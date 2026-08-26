@@ -30,9 +30,12 @@
   },
   "files": [
     "dist",
+    "web",
     "skills",
     "llms.txt",
     "src/prompts",
+    "src/types/webRunners.ts",
+    "src/types/webRunnerLog.ts",
     "README.md",
     "LICENSE",
     "package.json"
@@ -257,6 +260,11 @@
       "import": "./dist/services/Spawner/NodeSpawner.mjs",
       "require": "./dist/services/Spawner/NodeSpawner.cjs"
     },
+    "./session-api": {
+      "types": "./dist/sessionApi.d.mts",
+      "import": "./dist/sessionApi.mjs",
+      "require": "./dist/sessionApi.cjs"
+    },
     "./session": {
       "types": "./dist/session.d.mts",
       "import": "./dist/session.mjs",
@@ -297,6 +305,11 @@
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
     },
+    "./web-hub": {
+      "types": "./dist/webHub.d.mts",
+      "import": "./dist/webHub.mjs",
+      "require": "./dist/webHub.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -306,7 +319,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -314,24 +327,31 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
-    "@agimon-ai/foundation-process-registry": "0.29.16",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/foundation-process-registry": "0.29.19",
     "@deepseek-ai/cordis": "4.0.1",
     "@rmux/sdk": "0.6.5",
     "@xterm/headless": "6.0.0",
+    "hono": "4.13.3",
     "typebox": "1.3.16"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
-    "@earendil-works/pi-tui": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
-    "@earendil-works/pi-tui": "0.84.2"
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -353,6 +373,24 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "runner",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
+  },
+  "doompiWeb": {
+    "pluginId": "runner",
+    "channels": [
+      "runner_runs"
+    ],
+    "client": "./web/index.ts",
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "dist": "./dist/webHub.mjs"
+    }
   },
   "pi": {
     "extensions": [

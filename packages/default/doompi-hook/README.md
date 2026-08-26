@@ -12,7 +12,7 @@ after one, at session start, when the agent settles, and at session end. Command
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2
+- Pi 0.84.3
 - `/bin/bash`
 
 Configure hooks in `.doom/hooks.yaml`:

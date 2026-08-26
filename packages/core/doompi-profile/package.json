@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "web",
     "llms.txt",
     "README.md",
     "src/prompts",
@@ -61,7 +62,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -70,13 +71,14 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
-    "@earendil-works/pi-coding-agent": "0.84.2",
-    "@earendil-works/pi-tui": "0.84.2",
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3",
     "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
@@ -84,8 +86,8 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.2",
-    "@earendil-works/pi-tui": "0.84.2"
+    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-tui": "0.84.3"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -97,6 +99,11 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "profile",
+    "channels": [],
+    "client": "./web/index.ts"
   },
   "pi": {
     "extensions": [

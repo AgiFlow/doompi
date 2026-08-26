@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest';
+import {
+  {{ toolName | camelCase }}CallSummary,
+  {{ toolName | camelCase }}ResultLines,
+  {{ toolName | camelCase }}ToolName,
+} from '../../web/{{ toolName | camelCase }}ToolRender.ts';
+
+describe('the {{ toolName }} tool view', () => {
+  it('names the tool the package registers', () => {
+    expect({{ toolName | camelCase }}ToolName).toBe('{{ toolName }}');
+  });
+
+  it('summarises the call and turns the result into toned lines', () => {
+    expect({{ toolName | camelCase }}CallSummary({ path: 'src/a.ts' })).toBe('src/a.ts');
+    expect({{ toolName | camelCase }}CallSummary({})).toBe('');
+    expect({{ toolName | camelCase }}ResultLines(null)).toEqual([]);
+    expect({{ toolName | camelCase }}ResultLines({ content: [{ type: 'text', text: 'one\ntwo' }], details: undefined })).toEqual([
+      { text: 'one', tone: 'dim' },
+      { text: 'two', tone: 'dim' },
+    ]);
+  });
+});

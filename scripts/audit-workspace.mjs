@@ -10,6 +10,7 @@ const packageGroups = [
   path.join(root, 'packages', 'core'),
   path.join(root, 'packages', 'default'),
   path.join(root, 'packages', 'minor'),
+  path.join(root, 'packages', 'clients'),
   path.join(root, 'layers'),
 ];
 const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
@@ -28,7 +29,15 @@ const runnerNativePackages = new Set([
 ]);
 const toolingPackageDirectory = path.join(root, 'packages', 'tooling', 'vibe-lint-plugin-doom-extension');
 const toolingPackageName = '@agimon-ai/vibe-lint-plugin-doom-extension';
-const vibeLintVersion = '0.0.1-alpha.26';
+// Rule plugins that govern a stack still in development are legal workspace
+// targets even when the package audit scans only runtime package groups.
+const additionalToolingPackageNames = ['@agimon-ai/vibe-lint-plugin-doom-web'];
+const unreleasedOwnedPackageNames = new Set([
+  '@agimon-ai/doompi-web',
+  '@agimon-ai/doompi-web-components',
+  '@agimon-ai/doompi-web-contracts',
+]);
+const vibeLintVersion = '0.0.1-alpha.29';
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -70,15 +79,19 @@ const ownedNames = new Set(manifests.map(({ name }) => name));
 const packageRecords = packageDirectories.map((directory, index) => ({
   directory,
   manifest: manifests[index],
-  kind: directory.startsWith(path.join(root, 'packages', 'core') + path.sep) ? 'core' : 'selectable',
+  kind: directory.startsWith(path.join(root, 'packages', 'core') + path.sep)
+    ? 'core'
+    : directory.startsWith(path.join(root, 'packages', 'clients') + path.sep)
+      ? 'client'
+      : 'selectable',
 }));
 const packageByName = new Map(packageRecords.map((record) => [record.manifest.name, record]));
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
-const workspacePackageNames = new Set([...ownedNames, toolingPackageName]);
+const workspacePackageNames = new Set([...ownedNames, toolingPackageName, ...additionalToolingPackageNames]);
 
-if (packageDirectories.length !== 41 || ownedNames.size !== 41) {
+if (packageDirectories.length !== 44 || ownedNames.size !== 44) {
   fail(
-    `Expected exactly 41 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 44 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {
@@ -142,15 +155,16 @@ function selectableDependencyAllowed(owner, target) {
 }
 
 function assertDispensableEdge(ownerRecord, targetRecord, source) {
-  if (ownerRecord.manifest.name === targetRecord.manifest.name || targetRecord.kind !== 'selectable') return;
+  if (ownerRecord.manifest.name === targetRecord.manifest.name || targetRecord.kind === 'core') return;
+  if (ownerRecord.kind === 'client' && targetRecord.kind === 'client') return;
   if (selectableDependencyAllowed(ownerRecord.manifest.name, targetRecord.manifest.name)) return;
   if (ownerRecord.kind === 'core') {
     fail(
-      `${ownerRecord.manifest.name} must not depend on selectable package ${targetRecord.manifest.name} through ${source}`,
+      `${ownerRecord.manifest.name} must not depend on ${targetRecord.kind} package ${targetRecord.manifest.name} through ${source}`,
     );
   }
   fail(
-    `${ownerRecord.manifest.name} must collaborate with selectable package ${targetRecord.manifest.name} through shared contracts, not ${source}`,
+    `${ownerRecord.manifest.name} must collaborate with ${targetRecord.kind} package ${targetRecord.manifest.name} through shared contracts, not ${source}`,
   );
 }
 
@@ -180,9 +194,15 @@ for (const ownerRecord of packageRecords) {
 
 const nx = readJson(path.join(root, 'nx.json'));
 const releaseProjects = nx.release?.groups?.alpha?.projects ?? [];
-const releasedNames = new Set([...ownedNames, toolingPackageName]);
-if (releaseProjects.length !== 42 || new Set(releaseProjects).size !== 42) {
-  fail(`Expected the alpha release group to contain 42 unique projects, found ${releaseProjects.length}`);
+const releasedNames = new Set([
+  ...[...ownedNames].filter((name) => !unreleasedOwnedPackageNames.has(name)),
+  toolingPackageName,
+  ...additionalToolingPackageNames,
+]);
+if (releaseProjects.length !== releasedNames.size || new Set(releaseProjects).size !== releasedNames.size) {
+  fail(
+    `Expected the alpha release group to contain ${releasedNames.size} unique projects, found ${releaseProjects.length}`,
+  );
 }
 for (const name of releasedNames) if (!releaseProjects.includes(name)) fail(`Release group is missing ${name}`);
 for (const name of releaseProjects)
@@ -225,6 +245,7 @@ if (fs.existsSync(lockfilePath)) {
   const ownedDirectoryNames = new Set([
     ...packageDirectories.map((directory) => path.basename(directory)),
     path.basename(toolingPackageDirectory),
+    'vibe-lint-plugin-doom-web',
   ]);
   for (const match of lockfile.matchAll(/^\s+version:\s+link:(\S+)$/gmu)) {
     if (!ownedDirectoryNames.has(path.basename(match[1]))) {
@@ -266,5 +287,5 @@ if (rmuxPayloadCount !== 12) fail(`Expected 12 RMUX vendor files, found ${rmuxPa
 if (rtkPayloadCount !== 4) fail(`Expected 4 RTK vendor files, found ${rtkPayloadCount}`);
 
 console.log(
-  'Workspace audit passed: 41 runtime packages, 1 tooling package, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
+  'Workspace audit passed: 44 runtime packages, 2 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
 );

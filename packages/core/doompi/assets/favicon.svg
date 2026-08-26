@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="DoomPi">
+  <rect width="32" height="32" rx="7" fill="#1c1f24"/>
+  <g fill="#ecbe7b">
+    <path d="M7.0 10.0 Q6.2 4.2 9.3 3.0 Q10.4 6.3 12.1 9.6 Z"/>
+    <path d="M25.0 10.0 Q25.8 4.2 22.7 3.0 Q21.6 6.3 19.9 9.6 Z"/>
+  </g>
+  <g fill="#c678dd">
+    <rect x="3.2" y="8.6" width="25.6" height="7.6" rx="3.4"/>
+    <rect x="6.9" y="14.0" width="5.5" height="13.0" rx="2.5"/>
+    <rect x="19.6" y="14.0" width="5.5" height="13.0" rx="2.5"/>
+  </g>
+  <g fill="#1c1f24">
+    <circle cx="10.9" cy="12.3" r="1.9"/>
+    <circle cx="21.1" cy="12.3" r="1.9"/>
+  </g>
+</svg>

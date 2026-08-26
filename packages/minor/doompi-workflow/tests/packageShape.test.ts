@@ -16,7 +16,9 @@ const PACKAGE_README = 'README.md';
 const RECOVERY_SKILL = 'skills/workflow-recovery/SKILL.md';
 const PROMPTS_ROOT = 'src/prompts';
 const SKILL_EXPORT = `./${RECOVERY_SKILL}`;
-const EXPORT_SUBPATHS = ['.', './extensions/pi', './package.json', SKILL_EXPORT];
+// The web plugin is not an export: the cockpit's bundler compiles it from the
+// source the doompiWeb manifest names; './web-hub' is the built hub channel entry.
+const EXPORT_SUBPATHS = ['.', './extensions/pi', './package.json', './web-hub', SKILL_EXPORT];
 const STANDARD_ENTRY = './dist/extensions/pi.mjs';
 
 function objectValue(value: unknown): JsonRecord {
@@ -48,8 +50,8 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
   it('declares the shared Doom UI and exact Cordis runtime without retaining rig packages', () => {
     expect(dependencyNames(PACKAGE_MANIFEST.dependencies)).toContain('@agimon-ai/doompi-ui');
     expect(objectValue(PACKAGE_MANIFEST.dependencies)['@deepseek-ai/cordis']).toBe('4.0.1');
-    expect(objectValue(PACKAGE_MANIFEST.devDependencies)['@earendil-works/pi-coding-agent']).toBe('0.84.2');
-    expect(objectValue(PACKAGE_MANIFEST.peerDependencies)['@earendil-works/pi-coding-agent']).toBe('0.84.2');
+    expect(objectValue(PACKAGE_MANIFEST.devDependencies)['@earendil-works/pi-coding-agent']).toBe('0.84.3');
+    expect(objectValue(PACKAGE_MANIFEST.peerDependencies)['@earendil-works/pi-coding-agent']).toBe('0.84.3');
     expect(dependencyNames(PACKAGE_MANIFEST.dependencies).some((name) => name.startsWith('@agimonai/rig-'))).toBe(
       false,
     );

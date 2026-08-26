@@ -1,0 +1,54 @@
+import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { afterEach, describe, expect, it } from 'vitest';
+import { {{ topic | camelCase }}, {{ topic | camelCase }}Channel } from '../../web/{{ topic | camelCase }}Store.ts';
+import { webPlugin } from '../../web/index.ts';
+
+/**
+ * The cockpit half of this package, mounted.
+ *
+ * The host catches whatever a plugin component throws and swaps in a fallback,
+ * so a broken one is invisible: the page still renders, just without this
+ * panel. Static markup cannot reach a click or an effect, which stay with the
+ * cockpit's Playwright suite, but it does prove the component mounts and reads
+ * the props the host actually sends.
+ */
+
+afterEach(() => {{ topic | camelCase }}.reset());
+
+describe('the {{ pluginId }} tab', () => {
+  it('draws the empty session, which is the first thing anyone sees', () => {
+    const panel = webPlugin.tabs?.[0]?.panel;
+    expect(panel).toBeDefined();
+
+    const rendered = renderPlugin(panel!, slotPropsFixture({ sessionId: 's1' }).props);
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('{{ pluginId }}-empty');
+  });
+
+  it('draws what the hub reported for this session', () => {
+    expect(driveChannel({{ topic | camelCase }}Channel, 's1', { items: [{ id: 'a', name: 'a', state: 'running' }] })).toEqual({
+      accepted: true,
+    });
+
+    const rendered = renderPlugin(webPlugin.tabs![0]!.panel, slotPropsFixture({ sessionId: 's1' }).props);
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('{{ pluginId }}-panel');
+  });
+
+  it('draws with nothing focused', () => {
+    // The host holds sessionId null before the first session is focused and
+    // after the last one closes; a component that assumes a session crashes on
+    // an empty cockpit.
+    const rendered = renderPlugin(webPlugin.tabs![0]!.panel, slotPropsFixture({ sessionId: null }).props);
+
+    expect(rendered.error).toBeUndefined();
+  });
+
+  it('rejects a malformed payload at the parse gate', () => {
+    // The channel is the one place this plugin reads input it did not produce.
+    expect(driveChannel({{ topic | camelCase }}Channel, 's1', 'junk').accepted).toBe(false);
+    expect({{ topic | camelCase }}.store.state.s1).toBeUndefined();
+  });
+});

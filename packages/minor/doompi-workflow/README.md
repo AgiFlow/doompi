@@ -13,7 +13,7 @@ host-executed steps, while DoomPi provides session-scoped tools and TUI surfaces
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.2 and Pi TUI 0.84.2
+- Pi 0.84.3 and Pi TUI 0.84.3
 
 ## Install
 
@@ -36,23 +36,20 @@ name: verify
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     steps:
       - name: Run tests
         run: pnpm test
 
   summarize:
-    runs-on: ubuntu-latest
     needs: test
     steps:
       - name: Record result
         run: node scripts/write-verification-summary.mjs
 ```
 
-The GitHub-style `runs-on` value does not create an Ubuntu VM or container. `run` commands execute
-on the host with the workflow process's environment and privileges. Review workflow files as
-executable code. Runner-specific `interactiveRun` mappings are available for commands that require
-a TTY.
+`run` commands execute on the host with the workflow process's environment and privileges. There is
+no VM, container, or sandbox. Review workflow files as executable code. Runner-specific
+`interactiveRun` mappings are available for commands that require a TTY.
 
 ## Launch and monitor
 
@@ -119,6 +116,15 @@ pnpm lint
 
 Maintained by [Agimon](https://agimon.ai/about).
 
+## Web cockpit plugin
+
+The `web/` directory is this package's DoomPi web cockpit plugin: the workflows tab, its store,
+and its `workflow_runs` session channel, compiled into the cockpit bundle by `doompi-web`'s build.
+The hub-side data source ships behind the `./web-hub` subpath and reads the workflow registry
+(run.json plus progress.ndjson) exactly as the engine writes it. Both halves are declared by the
+`doompiWeb` block in package.json.
+
 ## License
 
-MIT
+MIT, except the `web/` directory, which is source available under the DoomPi Web License (see
+`web/LICENSE`): free to use, including commercially, but not to redistribute.

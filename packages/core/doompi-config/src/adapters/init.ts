@@ -32,6 +32,18 @@ export const DOOM_CONFIG_TEMPLATES: Readonly<Record<DoomSeedFile, string>> = {
 #     stopPhrases:
 #       - stop speaking
 #     utteranceIdleMs: 3000
+#     # Long prompts only: open a draft, keep talking, then send it in one piece.
+#     # Short utterances are delivered as you finish them and need no phrase.
+#     composeOpenPhrases:
+#       - hey doom
+#     composeSendPhrases:
+#       - that's it
+#     composeCancelPhrases:
+#       - scratch that
+#     # Endpoint window while a draft collects, so a short command lands on its own.
+#     composeUtteranceIdleMs: 1200
+#     # Silence before Voice reminds you a draft is open. 0 turns the reminder off.
+#     composeNudgeMs: 10000
 #     tts:
 #       engine: macos-say
 #       voice: Samantha

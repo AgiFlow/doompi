@@ -30,6 +30,14 @@ import type {
  * what actually bounds the text.
  */
 const MAX_BLOCK_LENGTH = 8_000;
+/**
+ * The ceiling for the digest carried in the `describe_voice_tools` description.
+ *
+ * Far tighter than `MAX_BLOCK_LENGTH` because this text is part of the tool schema
+ * rather than a result: it rides every request for the life of the session, where a
+ * catalog block is paid for once by the call that asked for it.
+ */
+const MAX_DIGEST_LENGTH = 2_000;
 /** Head room kept back from the cap so the truncation notice itself always fits. */
 const TRUNCATION_RESERVE = 200;
 
@@ -86,8 +94,13 @@ function element(tag: string, text: string, indent = '  '): string {
  * Blocks are dropped from the end and counted rather than cut mid-element: a half
  * serialized `<capability>` would read as a complete one that happens to lack a schema.
  */
-function assemble(head: readonly string[], blocks: readonly string[][], tail: readonly string[]): string {
-  let budget = MAX_BLOCK_LENGTH - [...head, ...tail].join('\n').length - TRUNCATION_RESERVE;
+function assemble(
+  head: readonly string[],
+  blocks: readonly string[][],
+  tail: readonly string[],
+  limit = MAX_BLOCK_LENGTH,
+): string {
+  let budget = limit - [...head, ...tail].join('\n').length - TRUNCATION_RESERVE;
   const kept: string[] = [];
   let index = 0;
   for (; index < blocks.length; index += 1) {
@@ -114,6 +127,33 @@ function capabilityBlock(tool: VoiceToolCatalogEntry, detailed: boolean): string
     element('input_schema', jsonText(tool.inputSchema), '    '),
     '  </capability>',
   ];
+}
+
+/**
+ * The capability list carried in the `describe_voice_tools` tool description.
+ *
+ * Without it the model has no lexical bridge to the façade: the contributed names are
+ * the only place `minor_mode` or `switch_domains` is written down, and they reach the
+ * model solely in a result it has no reason to ask for. Asking the agent to switch a
+ * minor mode then matches nothing and the façade goes unused.
+ *
+ * Deliberately narrower than `formatCatalog`. No `catalog_token`, because the token is
+ * session-scoped and a description is cached across the session; the model must still
+ * take it from a live result. No `enabled`, because that flips on every activation and
+ * would re-register the tool, and therefore rebuild the system prompt, each time.
+ * Returns `undefined` for an empty catalog so the caller keeps the protocol text alone
+ * rather than advertising a header with nothing under it.
+ */
+export function formatCatalogDigest(tools: readonly VoiceToolCatalogEntry[]): string | undefined {
+  if (tools.length === 0) return undefined;
+  return assemble(
+    ['<voice_tool_catalog>'],
+    tools.map((tool) => [
+      `  <capability name="${escapeAttribute(tool.name)}">${escapeText(tool.description)}</capability>`,
+    ]),
+    ['</voice_tool_catalog>'],
+    MAX_DIGEST_LENGTH,
+  );
 }
 
 function conflictLine(conflict: VoiceToolConflictDiagnostic): string {
