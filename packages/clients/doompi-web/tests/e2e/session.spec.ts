@@ -191,7 +191,9 @@ test('follows the newest reply, and stops following once the reader scrolls back
 
   // Reading back through the transcript unpins it: more output must not yank
   // the reader to the bottom mid-sentence.
-  await timeline.evaluate((element) => element.scrollTo({ top: 0 }));
+  await timeline.hover();
+  await page.mouse.wheel(0, -10_000);
+  await expect.poll(() => timeline.evaluate((element) => element.scrollTop)).toBe(0);
   const readingPosition = await timeline.evaluate((element) => ({
     top: element.scrollTop,
     height: element.scrollHeight,
