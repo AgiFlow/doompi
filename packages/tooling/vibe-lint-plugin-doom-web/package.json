@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/vibe-lint-plugin-doom-web",
-  "version": "0.0.1-alpha.35",
+  "version": "0.0.1-alpha.36",
   "description": "Deterministic Vibe-Lint rules for DoomPi web packages",
   "keywords": [
     "doompi",

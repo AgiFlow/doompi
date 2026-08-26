@@ -1,3 +1,24 @@
+## 0.0.1-alpha.2 (2026-08-26)
+
+### 🚀 Features
+
+- serve sessions over Pi's protocol and share test harnesses ([6f22b41](https://github.com/AgiFlow/doompi/commit/6f22b41))
+
+### 🩹 Fixes
+
+- **root:** stabilize streaming and session restoration ([d38e54b](https://github.com/AgiFlow/doompi/commit/d38e54b))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.39
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.37
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.1 (2026-08-26)
 
 ### 🚀 Features

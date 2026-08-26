@@ -1,3 +1,17 @@
+## 0.0.1-alpha.39 (2026-08-26)
+
+### 🚀 Features
+
+- serve sessions over Pi's protocol and share test harnesses ([6f22b41](https://github.com/AgiFlow/doompi/commit/6f22b41))
+- expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
+- **doompi:** journal the minor-mode catalog so clients see real state ([e20ce91](https://github.com/AgiFlow/doompi/commit/e20ce91))
+- **doompi-server:** relaunch the agent when a major-mode switch needs it ([8f9c1ee](https://github.com/AgiFlow/doompi/commit/8f9c1ee))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.38 (2026-08-26)
 
 ### 🚀 Features

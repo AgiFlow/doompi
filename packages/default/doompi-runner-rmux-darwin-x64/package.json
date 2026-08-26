@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-runner-rmux-darwin-x64",
-  "version": "0.0.1-alpha.38",
+  "version": "0.0.1-alpha.39",
   "description": "Prebuilt RMUX runtime for DoomPi Runner on macOS x64.",
   "keywords": [
     "ai",

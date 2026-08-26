@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-edit",
-  "version": "0.0.1-alpha.10",
+  "version": "0.0.1-alpha.11",
   "description": "Snapshot-bound hashline edit tool for Pi and DoomPi.",
   "keywords": [
     "ai",
