@@ -4,7 +4,7 @@
 
 This is the normative product and engineering specification for autonomous voice in `@agimon-ai/doompi-voice`.
 
-`SPC v e` enables a hands-free loop that listens for a user utterance, detects its end, transcribes it locally, submits it to Pi, lets the primary agent speak its own updates, and returns to listening. The loop must continue without requiring another key press. Pressing `SPC v e` again stops that loop predictably. Direct primary-agent narration is authoritative. Voice MUST NOT infer automatic intent, plan, milestone, or tool-progress speech from Pi lifecycle events. Its only lifecycle-derived speech is the bounded final-response fallback in AV-USER-007 when the agent never attempts `narrate`.
+`SPC v e` enables a hands-free loop that listens for a user utterance, detects its end, transcribes it locally, submits it to Pi, lets the primary agent speak its own updates, and returns to listening. The loop must continue without requiring another key press. Pressing `SPC v e` again stops that loop predictably. Direct primary-agent narration is authoritative. Voice MUST NOT infer automatic intent, plan, milestone, or tool-progress speech from Pi lifecycle events. Its only lifecycle-derived speech is the bounded final-response fallback in AV-USER-008 when the agent never attempts `narrate`.
 
 This document describes the required end state. Existing code and passing unit tests are not evidence of compliance unless they satisfy the acceptance criteria in this specification through the canonical runtime.
 
@@ -13,6 +13,8 @@ The lifecycle MUST be implemented with **XState v5**. Hand-written state flags m
 The manual `SPC v v` dictation flow remains a separate product mode and is not governed by this specification except for shared recorder, transcription, and privacy requirements.
 
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative.
+
+[ARCHITECTURE.md](./ARCHITECTURE.md) is the companion descriptive document. It explains how the implementation is actually arranged and records the places where it currently diverges from this specification.
 
 ## 1.1 Cross-extension capability façade
 
@@ -30,6 +32,15 @@ and keeps result details for logs and the TUI, `describe_voice_tools` MUST place
 the token and the capability catalog in model-visible content, and
 `use_voice_tools` MUST place a fresh token and every call result there too.
 Publishing either solely in result details does not satisfy this requirement. All three Voice-owned tools MUST be reconciled together.
+
+Contributed capability names are otherwise absent from pushed context, so an agent
+asked to use one has nothing to match on and never calls the façade. The
+`describe_voice_tools` description MUST therefore carry a digest of the registered
+capabilities as capability name and description only. That digest MUST NOT contain a
+catalog token, a capability input schema, or per-activation enablement, so the token
+remains obtainable only from a live result and activation does not rewrite the tool
+description. Voice MUST republish the description when the digest changes and MUST NOT
+republish it otherwise.
 Starting, draining, deactivation, stale or mismatched sessions, headless hosts,
 and shutdown MUST remove them from the active set or fail execution closed
 without restoring stale tools.
@@ -105,9 +116,13 @@ Latency measurements MUST separate endpoint waiting, recorder drain, WAV creatio
 
 ### AV-USER-007 - Explicit composition
 
-While autonomous voice is active, a normalized leading `doom prompt` phrase MUST open a session-scoped composition draft. The remainder of that segment and later finalized content segments MUST be buffered without prompt delivery. A normalized command-only `doom send` MUST submit the combined draft once, and a normalized command-only `doom cancel` MUST discard it without submitting.
+While autonomous voice is active, a normalized leading phrase from the configured `composeOpenPhrases` set MUST open a session-scoped composition draft. The remainder of that segment and later finalized content segments MUST be buffered without prompt delivery. A phrase from `composeSendPhrases` MUST submit the combined draft once, and a phrase from `composeCancelPhrases` MUST discard it without submitting.
 
-Composition control phrases MUST be decided before optional command correction. `doom send` and `doom cancel` MUST remain ordinary transcript content outside composition. A busy composed submission MUST use Pi follow-up delivery rather than steering the current turn. Empty send and draft-limit rejection MUST retain composition and produce visible feedback. Synchronous delivery failure MUST retain the draft for a later retry.
+Composition exists for long spoken prompts, so that a multi-part prompt is not submitted half-written. An ordinary short utterance needs no phrase and is delivered when it finalizes.
+
+The three sets default to `[hey doom, doom prompt]`, `[that's it, doom send]` and `[doom cancel, scratch that]`. Matching MUST tolerate bounded per-token transcription variance rather than requiring exact equality, because a transcriber routinely returns a near miss for a phrase the user said correctly. A send or cancel phrase MUST be recognised when it is the entire finalized segment, and MAY additionally be recognised as a trailing phrase closing a longer segment only when sentence punctuation precedes it, at a stricter tolerance, with the preceding content preserved into the draft. A phrase appearing anywhere else in a segment MUST remain content.
+
+Composition control phrases MUST be decided before optional command correction. Send and cancel phrases MUST remain ordinary transcript content outside composition. A busy composed submission MUST use Pi follow-up delivery rather than steering the current turn. Empty send and draft-limit rejection MUST retain composition and produce visible feedback. Synchronous delivery failure MUST retain the draft for a later retry.
 
 Draft text MUST remain outside XState context, be limited to 32,768 Unicode characters, and be cleared on cancellation, successful synchronous submission, deactivation, reload, shutdown, or session cleanup. Worker restart and idle capture rotation within the same autonomous session MUST preserve it. The UI MUST distinguish collecting and submitting from ordinary listening.
 
@@ -133,31 +148,72 @@ No controller field such as `activationState`, `emptyRevision`, `candidateGenera
 
 ### 3.2 Top-level states
 
-```text
-                         +---------------------------+
-                         |                           |
-                         v                           |
-off -> enabling -> startingCapture -> listening -> speech
- ^         |              |               ^          |
- |         |              |               |          v
- |         +-> failed <---+               |      finalizing
- |                                        |          |
- |                                        |          v
- |                                        |      transcribing
- |                                        |          |
- |                                        |          v
- |                                        |       applyingPolicy
- |                                        |          |
- |                                        |          v
- |                                        +--- startingNextTurn
- |
- +---------------- stopping <--- any enabled state
+```mermaid
+stateDiagram-v2
+  [*] --> off
+
+  off --> enabling: ENABLE_REQUESTED
+  enabling --> active: ENABLE_SUCCEEDED
+  enabling --> failed: ENABLE_FAILED
+  enabling --> stopping: TOGGLE_OFF_REQUESTED or HARD_STOP_REQUESTED
+
+  state active {
+    [*] --> startingCapture
+    startingCapture --> listening: CAPTURE_READY
+
+    listening --> speech: SPEECH_CONFIRMED
+    listening --> speech: BARGE_IN_EVIDENCE actionable
+    listening --> startingNextTurn: CAPTURE_DURATION_LIMIT_REACHED
+
+    speech --> finalizing: ENDPOINT_REACHED
+    speech --> finalizing: CAPTURE_DURATION_LIMIT_REACHED
+    speech --> finalizing: TOGGLE_OFF_REQUESTED
+
+    finalizing --> transcribing: CAPTURE_DRAINED or CAPTURE_PROCESSING
+
+    transcribing --> applyingPolicy: TRANSCRIPTION_SUCCEEDED
+    transcribing --> acknowledging: TRANSCRIPTION_EMPTY
+
+    applyingPolicy --> delivering: TRANSCRIPT_ACCEPTED
+    applyingPolicy --> delivering: TRANSCRIPT_COMPOSITION_SEND_REQUESTED
+    applyingPolicy --> acknowledging: TRANSCRIPT_DISCARDED or TRANSCRIPT_STOP_REQUESTED
+    applyingPolicy --> acknowledging: TRANSCRIPT_COMPOSITION_BUFFERED, REJECTED, CANCELLED, or EMPTY_SEND
+
+    delivering --> acknowledging: DELIVERY_SUCCEEDED
+    delivering --> acknowledging: DELIVERY_FAILED
+
+    acknowledging --> startingNextTurn: CANDIDATE_ACKNOWLEDGED
+    startingNextTurn --> startingCapture: NEXT_TURN_READY
+    --
+    [*] --> silent
+    silent --> playing: PLAYBACK_STARTED
+    playing --> echoTail: PLAYBACK_ENDED
+    echoTail --> playing: PLAYBACK_STARTED
+    echoTail --> silent: after 800 ms
+  }
+
+  active --> stopping: TOGGLE_OFF_REQUESTED or HARD_STOP_REQUESTED
+  active --> stopping: GRACEFUL_STOP_TIMED_OUT
+  active --> stopping: CANDIDATE_ACKNOWLEDGED while stopping
+  active --> failed: CAPTURE_START_FAILED
+  active --> failed: TRANSCRIPTION_FAILED or TRANSCRIPTION_TIMED_OUT
+  active --> failed: WORKER_EXHAUSTED
+
+  stopping --> off: STOP_COMPLETED
+  failed --> off: STOP_COMPLETED
+  failed --> off: after 20 s
 ```
 
-Required state values:
+Required top-level state values:
 
 - `off`
 - `enabling`
+- `active`
+- `stopping`
+- `failed`
+
+`active` MUST be a parallel state with two concurrent regions. The `capture` region MUST contain:
+
 - `startingCapture`
 - `listening`
 - `speech`
@@ -165,16 +221,19 @@ Required state values:
 - `transcribing`
 - `applyingPolicy`
 - `delivering`
+- `acknowledging`
 - `startingNextTurn`
-- `stopping`
-- `failed`
 
-Narration/playback is a parallel region, not a replacement for the capture lifecycle:
+Narration/playback is the second region, not a replacement for the capture lifecycle:
 
 - `silent`
 - `playing`
 - `echoTail`
-- `narrationFailed`
+
+Transitions drawn from `active` leave the parallel region for a top-level node. Their origins are
+`CAPTURE_START_FAILED` from `startingCapture`, `TRANSCRIPTION_FAILED` and
+`TRANSCRIPTION_TIMED_OUT` from `transcribing`, and `CANDIDATE_ACKNOWLEDGED` from `acknowledging`
+when a stop has already been requested.
 
 ### 3.3 Machine context
 
@@ -200,20 +259,20 @@ The machine MUST define and exhaustively handle typed events equivalent to:
 - `ENABLE_REQUESTED`
 - `ENABLE_SUCCEEDED`
 - `ENABLE_FAILED`
-- `CAPTURE_REQUESTED`
 - `CAPTURE_READY`
 - `CAPTURE_START_FAILED`
-- `ACTIVITY_OBSERVED`
-- `SPEECH_CONFIRMED`
-- `SPEECH_ENDED`
-- `ENDPOINT_REACHED`
+- `CAPTURE_PROCESSING`
 - `CAPTURE_DRAINED`
+- `CAPTURE_DURATION_LIMIT_REACHED`
+- `SPEECH_CONFIRMED`
+- `ENDPOINT_REACHED`
 - `TRANSCRIPTION_SUCCEEDED`
 - `TRANSCRIPTION_EMPTY`
 - `TRANSCRIPTION_FAILED`
 - `TRANSCRIPTION_TIMED_OUT`
 - `TRANSCRIPT_ACCEPTED`
 - `TRANSCRIPT_DISCARDED`
+- `TRANSCRIPT_STOP_REQUESTED`
 - `TRANSCRIPT_COMPOSITION_BUFFERED`
 - `TRANSCRIPT_COMPOSITION_REJECTED`
 - `TRANSCRIPT_COMPOSITION_CANCELLED`
@@ -222,13 +281,22 @@ The machine MUST define and exhaustively handle typed events equivalent to:
 - `DELIVERY_SUCCEEDED`
 - `DELIVERY_FAILED`
 - `CANDIDATE_ACKNOWLEDGED`
+- `NEXT_TURN_READY`
 - `PLAYBACK_STARTED`
 - `PLAYBACK_ENDED`
-- `ECHO_TAIL_EXPIRED`
+- `BARGE_IN_EVIDENCE`
 - `TOGGLE_OFF_REQUESTED`
-- `GRACEFUL_STOP_TIMED_OUT`
 - `HARD_STOP_REQUESTED`
+- `GRACEFUL_STOP_TIMED_OUT`
+- `STOP_COMPLETED`
 - `WORKER_EXHAUSTED`
+
+Capture is requested by the `startingCapture` entry effect rather than by an event, and echo-tail
+expiry is a delayed transition rather than a typed event, so neither has a member here.
+
+`ACTIVITY_OBSERVED` and `SPEECH_ENDED` are additionally declared in the implementation but
+currently have no producer and no handler. They do not satisfy the exhaustive-handling requirement
+above and MUST be either wired or removed.
 
 Worker events MUST be rejected unless session, capture, turn, revision, and playback generation match the current machine context where applicable.
 
@@ -269,7 +337,7 @@ Autonomous voice MUST be decomposed by aspects that independently affect the fin
 
 ### 4.1 Lifecycle aspect
 
-**Module:** `src/services/voice/autonomousVoiceMachine.ts`
+**Module:** `src/services/autonomousVoiceMachine.ts`
 
 Responsibilities:
 
@@ -284,7 +352,7 @@ Impact on result: prevents missing turns, duplicate delivery, stuck toggle-off, 
 
 ### 4.2 Session/turn identity aspect
 
-**Module:** `src/services/voice/autonomousTurn.ts`
+**Module:** `src/services/autonomousTurn.ts`
 
 Responsibilities:
 
@@ -299,9 +367,8 @@ Impact on result: prevents an old ASR, worker restart, or playback event from mu
 
 **Modules:**
 
-- `src/services/voice/captureSession.ts`
+- `src/services/captureSession.ts`
 - `src/adapters/audio/infrastructure.ts`
-- worker-facing capture port under `src/types`
 
 Responsibilities:
 
@@ -317,8 +384,8 @@ Impact on result: determines whether speech exists, whether audio is complete, a
 
 **Modules:**
 
-- `src/services/voice/playbackGate.ts`
-- `src/services/voice/narrationBargeIn.ts`
+- `src/services/playbackGate.ts`
+- `src/services/narrationBargeIn.ts`
 
 Responsibilities:
 
@@ -339,9 +406,9 @@ The default lane remains half-duplex: playback and echo-tail PCM is excluded fro
 
 **Modules:**
 
-- `src/services/voice/vad.ts`
+- `src/services/vad.ts`
 - `src/adapters/audio/silero.ts`
-- `src/services/voice/autonomousEndpoint.ts`
+- `src/services/autonomousEndpoint.ts`
 
 Responsibilities:
 
@@ -361,7 +428,7 @@ Impact on result: determines when speech is processed and directly controls perc
 
 **Modules:**
 
-- `src/services/voice/turnSpool.ts`
+- `src/services/turnSpool.ts`
 - `src/adapters/process/turnSpool.ts`
 
 Responsibilities:
@@ -377,7 +444,7 @@ Impact on result: determines transcript completeness, crash recovery, and worker
 
 ### 4.7 Transcription aspect
 
-**Module:** `src/services/voice/turnTranscriber.ts`
+**Module:** `src/services/turnTranscriber.ts`
 
 Responsibilities:
 
@@ -393,7 +460,7 @@ Interim full-spool ASR followed by final full-spool ASR is noncompliant.
 
 ### 4.8 Transcript policy aspect
 
-**Module:** `src/services/voice/transcriptPolicy.ts`
+**Module:** `src/services/transcriptPolicy.ts`
 
 Responsibilities:
 
@@ -413,7 +480,7 @@ Start phrases remain optional leading control phrases during ordinary active lis
 
 **Modules:**
 
-- `src/services/voice/commandCorrection.ts`
+- `src/services/commandCorrection.ts`
 - `src/adapters/pi/voiceCommandContext.ts`
 
 Responsibilities:
@@ -429,7 +496,7 @@ Impact on result: improves spelling of contextual names and technical terms with
 
 ### 4.10 Delivery and acknowledgement aspect
 
-**Module:** `src/services/voice/voiceDelivery.ts`
+**Module:** `src/services/voiceDelivery.ts`
 
 Responsibilities:
 
@@ -448,9 +515,9 @@ Impact on result: prevents lost prompts, duplicate prompts, and orphan spools.
 
 **Modules:**
 
-- `src/services/voice/narration.ts`
-- `src/services/voice/narrationPlayback.ts`
-- `src/services/voice/fallbackNarration.ts`
+- `src/services/narration.ts`
+- `src/services/narrationPlayback.ts`
+- `src/services/fallbackNarration.ts`
 - `src/adapters/pi/narrationTool.ts`
 - `src/adapters/pi/voice.ts`
 
@@ -470,7 +537,7 @@ The playback service and coordinator MUST NOT own an autonomous run, inspect age
 
 ### 4.12 UI projection aspect
 
-**Module:** `src/services/voice/autonomousVoiceUi.ts`
+**Module:** `src/services/autonomousVoiceUi.ts`
 
 Responsibilities:
 
@@ -484,7 +551,7 @@ Impact on result: makes operational state truthful and debuggable.
 
 ### 4.13 Worker protocol aspect
 
-**Module:** `src/services/voice/voiceWorkerProtocol.ts`
+**Module:** `src/services/voiceWorkerProtocol.ts`
 
 Responsibilities:
 
@@ -497,7 +564,7 @@ Impact on result: protects privacy and prevents host/worker state drift.
 
 ### 4.14 Observability aspect
 
-**Module:** `src/services/voice/autonomousVoiceTelemetry.ts`
+**Module:** `src/services/autonomousVoiceTelemetry.ts`
 
 Responsibilities:
 
@@ -540,6 +607,8 @@ Default behavior:
 `utteranceIdleMs` is measured from the last accepted voiced frame. The default is 3000 ms and the supported configuration range is 1500–10000 ms.
 
 The VAD trailing-silence window is part of that total, not additional to it. Exactly one endpoint deadline may be active for the current speech generation.
+
+While a composition draft is collecting, the endpoint MUST instead use `composeUtteranceIdleMs`, default 1200 ms with a supported range of 800 to 3000 ms. A turn produces exactly one transcript, so at the ordinary window a short command spoken after a brief pause arrives appended to the sentence before it and cannot be adjudicated as a command. Over-splitting is acceptable in this mode because draft segments are rejoined.
 
 ### AV-VAD-003 — No acoustic TTS cancellation
 

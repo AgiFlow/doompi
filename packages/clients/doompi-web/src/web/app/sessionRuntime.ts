@@ -1,5 +1,6 @@
 import {
   HISTORY_PAGE_TYPE,
+  HUB_RESYNCED_TYPE,
   SESSION_BACKLOG_TYPE,
   SESSION_FRAME_TYPE,
   SESSION_REMOVED_TYPE,
@@ -11,6 +12,7 @@ import {
   unsubscribeFrame,
 } from '../../types/hub.ts';
 import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
+import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
@@ -60,10 +62,14 @@ export function startSessionRuntime(): () => void {
   // The hub-side subscription this page currently holds; it dies with the
   // socket, which is why the snapshot handler re-subscribes.
   let subscribed: string | null = null;
+  // The transcript comes from Pi's protocol; this socket keeps carrying what
+  // the protocol has no shape for.
+  const protocol = startProtocolRuntime();
 
   const syncSubscription = (force = false): void => {
     const { activeId, byId } = sessionsStore.state;
     const target = activeId !== null && activeId in byId ? activeId : null;
+    protocol.focus(target);
     if (!force && target === subscribed) return;
     if (subscribed !== null && subscribed !== target) sendHubFrame(unsubscribeFrame(subscribed));
     subscribed = target;
@@ -73,6 +79,12 @@ export function startSessionRuntime(): () => void {
   const socket = createSessionSocket(sessionSocketUrl(window.location), {
     onFrame(frame) {
       switch (frame.type) {
+        // Sync rebuilt the bundle this page is running. Nothing in a loaded
+        // bundle notices its source moved, so the page picks the new one up.
+        case HUB_RESYNCED_TYPE:
+          window.location.reload();
+          return;
+
         case SESSIONS_SNAPSHOT_TYPE:
           applySessionsSnapshot(frame);
           // A snapshot means a fresh socket; any prior subscription died with
@@ -169,6 +181,7 @@ export function startSessionRuntime(): () => void {
 
   return () => {
     subscription.unsubscribe();
+    protocol.stop();
     releaseTransport();
     socket.close();
   };

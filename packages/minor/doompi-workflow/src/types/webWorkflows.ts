@@ -123,7 +123,6 @@ export interface WorkflowCatalogInputView {
 
 export interface WorkflowCatalogJobView {
   name: string;
-  runsOn?: string;
   steps: string[];
 }
 

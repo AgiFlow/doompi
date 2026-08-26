@@ -1,10 +1,7 @@
 export interface ServeOptions {
-  /** Fixed single-session mode; absent means hub mode. */
-  socketPath?: string;
-  tokenFile?: string;
-  /** Hub mode registry override; the default is resolved by the caller. */
+  /** Registry override; the default is resolved by the caller. */
   registryDir?: string;
-  /** Hub mode: command launching created sessions; defaults to doompi-server. */
+  /** Command launching created sessions; the caller resolves one when this is absent. */
   spawnCommand?: string;
   port: number;
   host: string;
@@ -22,14 +19,11 @@ function requireValue(flag: string, value: string | undefined): string {
 /**
  * Parses the doompi-web command line.
  *
- * With no mode flags at all the cockpit is a hub over the default registry
- * directory; --socket pins it to one session instead. The token is read from a
- * file rather than an argument so it never lands in the process table where
- * any local user can read it.
+ * Every flag is an override. Bare `doompi-web` is a hub over the default
+ * registry directory on the default loopback port, which is the way it is
+ * meant to be run; nothing here is required to get a working cockpit.
  */
 export function parseServeOptions(argv: readonly string[]): ServeOptions {
-  let socketPath: string | undefined;
-  let tokenFile: string | undefined;
   let registryDir: string | undefined;
   let spawnCommand: string | undefined;
   let port = DEFAULT_PORT;
@@ -39,12 +33,6 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     switch (flag) {
-      case '--socket':
-        socketPath = requireValue(flag, argv[++index]);
-        break;
-      case '--auth-token-file':
-        tokenFile = requireValue(flag, argv[++index]);
-        break;
       case '--registry-dir':
         registryDir = requireValue(flag, argv[++index]);
         break;
@@ -71,10 +59,5 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
     }
   }
 
-  if (socketPath !== undefined || tokenFile !== undefined) {
-    if (!socketPath) throw new Error('--socket is required when --auth-token-file is given.');
-    if (!tokenFile) throw new Error('--auth-token-file is required when --socket is given.');
-    if (registryDir !== undefined) throw new Error('Pass either --registry-dir or --socket, not both.');
-  }
-  return { socketPath, tokenFile, registryDir, spawnCommand, port, host, assetsDir };
+  return { registryDir, spawnCommand, port, host, assetsDir };
 }

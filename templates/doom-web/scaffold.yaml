@@ -63,6 +63,7 @@ boilerplate:
       - src/adapters/directorySearch.ts
       - src/adapters/gitStatus.ts
       - src/adapters/httpServer.ts
+      - src/adapters/hubProbe.ts
       - src/adapters/packageApiProxy.ts
       - src/adapters/providerAuth.ts
       - src/adapters/registryWatcher.ts

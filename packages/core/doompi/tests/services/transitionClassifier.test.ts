@@ -139,6 +139,34 @@ describe('transition classifier', () => {
     });
   });
 
+  it('reloads a changed extension closure when the launcher session composes on load', () => {
+    // The same switch that forces a relaunch on a frozen launcher session.
+    const relaunch = classifyTransition(request({ axis: 'major-mode', majorMode: 'team' }), context());
+    const composed = classifyTransition(
+      request({ axis: 'major-mode', majorMode: 'team' }),
+      context({ kind: 'launcher-composed' }),
+    );
+
+    expect(relaunch.disposition).toBe('relaunch');
+    expect(composed).toMatchObject({
+      disposition: 'reload',
+      strategy: 'pi-reload',
+      diagnostics: ['transition.reload.major-mode'],
+      externalRelaunchRequired: false,
+    });
+  });
+
+  it('never reports sync-required for a composing launcher session', () => {
+    // It can always fall back to the individual entries, so an unbuilt
+    // aggregate is not a reason to refuse the switch.
+    const result = classifyTransition(
+      request({ axis: 'major-mode', majorMode: 'team' }),
+      context({ kind: 'launcher-composed' }),
+    );
+
+    expect(result.disposition).not.toBe('sync-required');
+  });
+
   it('treats structural Task layer changes as launcher relaunches', () => {
     const withoutTask: TransitionClassifierContext = {
       ...context(),

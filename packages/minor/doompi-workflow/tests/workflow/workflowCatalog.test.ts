@@ -52,7 +52,7 @@ function detail(overrides: Partial<WorkflowCatalogDetail> = {}): WorkflowCatalog
   return {
     triggers: ['user_prompt'],
     inputs: [{ name: 'asset', description: 'Asset id', required: true }],
-    jobs: [{ name: 'build', runsOn: 'codex', steps: ['compile'] }],
+    jobs: [{ name: 'build', steps: ['compile'] }],
     runners: ['codex'],
     ...overrides,
   };

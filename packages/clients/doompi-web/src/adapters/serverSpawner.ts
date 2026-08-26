@@ -3,8 +3,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { sessionRecordPath } from '../services/registryStore.ts';
+import { type BundledServerLaunch, defaultServerLaunch } from './bundledServer.ts';
 
-const DEFAULT_SPAWN_COMMAND = 'doompi-server';
+/** Names the server in messages; the resolved command is a node path nobody would recognise. */
+const SERVER_LABEL = 'doompi-server';
 const SPAWNED_SEGMENT = 'spawned';
 const SOCKET_FILE = 's.sock';
 const TOKEN_FILE = 'token';
@@ -35,7 +37,7 @@ export interface SessionSpawner {
 
 export interface ServerSpawnerOptions {
   registryDir: string;
-  /** Overridable so tests can stand in a fake server; defaults to doompi-server on PATH. */
+  /** Overridable so tests can stand in a fake server; defaults to the installation's own doompi-server. */
   command?: string;
   onNotice?: (message: string) => void;
 }
@@ -55,9 +57,13 @@ function logTail(logPath: string): string {
  * itself like any other, which is why success is defined as "its record
  * appeared", not as anything about the child process. The hub stopping later
  * does not take created sessions down with it.
+ *
+ * Without an explicit command the server comes from this installation rather
+ * than from PATH, so the cockpit needs no flag to launch the build it belongs
+ * to. The resolution happens per session because it reads the session's own
+ * working directory.
  */
 export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawner {
-  const command = options.command ?? DEFAULT_SPAWN_COMMAND;
   return {
     spawn(input) {
       let stats: fs.Stats;
@@ -73,6 +79,22 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
           error: `The working directory must be an absolute path to a directory, received "${input.cwd}".`,
         });
       }
+
+      // Resolved before anything is written, so a broken installation fails
+      // without leaving a session directory nobody will ever use.
+      let launch: BundledServerLaunch;
+      try {
+        launch = options.command
+          ? { command: options.command, args: [], environment: process.env }
+          : defaultServerLaunch(input.cwd, process.env);
+      } catch (error) {
+        return Promise.resolve({
+          ok: false,
+          code: 'spawn_failed',
+          error: `Could not locate ${SERVER_LABEL}: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+      const command = options.command ?? SERVER_LABEL;
 
       const sessionId = crypto.randomUUID();
       // The directory borrows only a prefix of the id: sun_path is capped
@@ -109,7 +131,12 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
         '--registry-dir',
         options.registryDir,
       ];
-      const child = spawn(command, args, { cwd: input.cwd, detached: true, stdio: ['ignore', log, log] });
+      const child = spawn(launch.command, [...launch.args, ...args], {
+        cwd: input.cwd,
+        detached: true,
+        stdio: ['ignore', log, log],
+        env: launch.environment,
+      });
       fs.closeSync(log);
 
       return new Promise((resolve) => {

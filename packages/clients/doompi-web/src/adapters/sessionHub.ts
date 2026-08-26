@@ -50,12 +50,10 @@ export type HubEvent =
 
 export interface SessionHubOptions {
   source: RecordSource;
-  /** Absent in single-session mode, where creating sessions is not offered. */
+  /** Absent only in tests; without one, creating sessions is refused. */
   spawner?: SessionSpawner;
   /** Injectable for tests; defaults to asking git about the session cwd. */
   readGit?: (cwd: string) => Promise<SessionGitStatus | undefined>;
-  /** Injectable for the fixed single-session mode, which already holds the token. */
-  readToken?: (record: SessionRecord) => string;
   /** The hub's data channels (built-in and plugin-provided sources). */
   channels?: readonly WebHubChannel[];
   /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
@@ -73,6 +71,8 @@ export type StopOutcome = { ok: true } | { ok: false; code: 'unknown' | 'self' |
 
 export interface SessionHub {
   snapshot(): SessionSummary[];
+  /** The registry records behind the live sessions, for clients that dial them directly. */
+  records(): SessionRecord[];
   /** Asks a session's server to exit; the session leaves once its record is withdrawn. */
   stop(sessionId: string): StopOutcome;
   /** Streams every change; pages filter frame events by their subscriptions. */
@@ -233,7 +233,6 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const sessions = new Map<string, ManagedSession>();
   const listeners = new Set<(event: HubEvent) => void>();
   const readGit = options.readGit;
-  const readToken = options.readToken ?? readTokenFile;
   const restoreLimit = options.restoreLimit ?? DEFAULT_RESTORE_LIMIT;
   const journalLimit = options.journalLimit ?? DEFAULT_JOURNAL_LIMIT;
   const signal =
@@ -298,7 +297,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   const startAttachment = (managed: ManagedSession): void => {
     let token: string;
     try {
-      token = readToken(managed.record);
+      token = readTokenFile(managed.record);
     } catch (error) {
       // The record beat the token file, or perms are off; the registry poll
       // re-runs reconcile, which retries this until it works.
@@ -439,6 +438,9 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     : undefined;
 
   return {
+    records() {
+      return [...sessions.values()].map((managed) => managed.record);
+    },
     snapshot() {
       return [...sessions.values()]
         .sort(

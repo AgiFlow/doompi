@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { ensureElicitationSessionId, overridePiThemes } from '../../src/adapters/launchPlan.ts';
 import {
   buildVibeLintPiArgs,
-  ensureElicitationSessionId,
   formatVibeLintResponse,
-  overridePiThemes,
   parseVibeLintInvocation,
 } from '../../src/commands/launchCommand.ts';
 

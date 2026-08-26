@@ -72,6 +72,11 @@ export function parseSessionRecord(raw: string): SessionRecord | undefined {
     ...(typeof record.apiSocketPath === 'string' && record.apiSocketPath !== ''
       ? { apiSocketPath: record.apiSocketPath }
       : {}),
+    // Also optional: a server predating the protocol socket serves only the
+    // framed one, and a client that needs the protocol says so itself.
+    ...(typeof record.protocolSocketPath === 'string' && record.protocolSocketPath !== ''
+      ? { protocolSocketPath: record.protocolSocketPath }
+      : {}),
     pid: record.pid,
     createdAt: record.createdAt as string,
   };

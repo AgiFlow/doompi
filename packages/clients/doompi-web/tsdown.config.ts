@@ -8,9 +8,8 @@ ensureBuiltinWebPluginModules({ check: Boolean(process.env.CI) });
 export default defineConfig({
   entry: {
     '*': 'src/exports/**/*.ts',
-    // Executables keep their own entries: re-exports would load them instead of
-    // running them.
-    'bin/server': 'src/bin/server.ts',
+    // The executable keeps its own entry: a re-export would load it instead of
+    // running it.
     'bin/serve': 'src/bin/serve.ts',
   },
   clean: true,

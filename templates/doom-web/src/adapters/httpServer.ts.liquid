@@ -31,10 +31,9 @@ import {
   SUBSCRIBE_TYPE,
   UNSUBSCRIBE_TYPE,
 } from '../types/hub.ts';
-import type { SessionRecord } from '../types/registry.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
-import { staticRecordSource, watchRegistry } from './registryWatcher.ts';
+import { watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
@@ -48,8 +47,6 @@ const SESSION_ROUTE = '/api/session';
 /** Directory suggestions per picker query; more than this means "type further". */
 const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
-/** Stands in for a registry id in fixed single-session mode. */
-const LOCAL_SESSION_ID = 'local';
 /** Env override for the assets directory, set by launchers that know a synced bundle. */
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
@@ -113,40 +110,14 @@ function buildHub(
   notice: (message: string) => void,
   channels: readonly WebHubChannel[],
 ): SessionHub {
-  if (options.registryDir !== undefined) {
-    if (options.socketPath !== undefined || options.token !== undefined) {
-      throw new Error('Pass either a registry directory or a socket, not both.');
-    }
-    return createSessionHub({
-      source: watchRegistry(options.registryDir, notice),
-      spawner: createServerSpawner({
-        registryDir: options.registryDir,
-        command: options.spawnCommand,
-        onNotice: notice,
-      }),
-      readGit: readGitStatus,
-      channels,
-      onNotice: notice,
-    });
-  }
-  if (options.socketPath === undefined || options.token === undefined) {
-    throw new Error('Pass a registry directory for hub mode, or a socket path and token for single-session mode.');
-  }
-  const token = options.token;
-  const record: SessionRecord = {
-    version: 1,
-    id: LOCAL_SESSION_ID,
-    name: 'untitled',
-    cwd: process.cwd(),
-    socketPath: options.socketPath,
-    tokenFile: '',
-    pid: process.pid,
-    createdAt: new Date().toISOString(),
-  };
   return createSessionHub({
-    source: staticRecordSource(record),
+    source: watchRegistry(options.registryDir, notice),
+    spawner: createServerSpawner({
+      registryDir: options.registryDir,
+      command: options.spawnCommand,
+      onNotice: notice,
+    }),
     readGit: readGitStatus,
-    readToken: () => token,
     channels,
     onNotice: notice,
   });

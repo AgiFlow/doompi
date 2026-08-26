@@ -354,7 +354,12 @@ export class AutonomousVoiceSession {
     }
   }
 
-  private beginCapture(identity: AutonomousTurnIdentity): void {
+  private beginCapture(effect: Extract<AutonomousVoiceEffect, { type: 'effect.beginCapture' }>): void {
+    const identity: AutonomousTurnIdentity = {
+      sessionId: effect.sessionId,
+      captureId: effect.captureId,
+      turnId: effect.turnId,
+    };
     const autoConfig = this.dependencies.config.autoCapture;
     if (!autoConfig) {
       this.actor.send({
@@ -373,7 +378,7 @@ export class AutonomousVoiceSession {
         mode: 'autonomous',
         config: workerConfiguration(this.dependencies.config),
         maxDurationMs: MAX_CAPTURE_DURATION_MS,
-        utteranceIdleMs: autoConfig.utteranceIdleMs,
+        utteranceIdleMs: effect.composing ? autoConfig.composeUtteranceIdleMs : autoConfig.utteranceIdleMs,
         transcriptionTimeoutMs: autoConfig.transcriptionTimeoutMs,
       });
     } catch (error) {
@@ -465,11 +470,17 @@ export class AutonomousVoiceSession {
       return;
     }
     if (transcript) this.compositionDraft.push(transcript);
-    if (operation === 'open')
-      this.dependencies.ui.notify(
-        'Voice composition started. Say Doom send to submit or Doom cancel to discard.',
-        'info',
+    if (operation === 'open') {
+      const send = this.spokenPhrase('send');
+      const cancel = this.spokenPhrase('cancel');
+      const how = [...(send ? [`say ${send} to submit`] : []), ...(cancel ? [`say ${cancel} to discard`] : [])].join(
+        ', or ',
       );
+      // Either list can be configured empty, so the guidance is omitted rather than
+      // naming a phrase that would do nothing.
+      const guidance = how ? ` ${how.charAt(0).toUpperCase()}${how.slice(1)}.` : '';
+      this.dependencies.ui.notify(`Voice composition started.${guidance}`, 'info');
+    }
     this.actor.send({
       type: 'TRANSCRIPT_COMPOSITION_BUFFERED',
       sessionId: effect.sessionId,
@@ -480,12 +491,50 @@ export class AutonomousVoiceSession {
     });
   }
 
+  /**
+   * The first configured phrase for a composition command, quoted for a notice.
+   *
+   * These notices are the only instruction a user gets, and a user who reconfigured the
+   * phrases, or who is on the shipped defaults after they changed, would otherwise be
+   * told to say words that do nothing.
+   */
+  private spokenPhrase(kind: 'send' | 'cancel'): string | undefined {
+    const auto = this.dependencies.config.autoCapture;
+    const phrases = kind === 'send' ? auto?.composeSendPhrases : auto?.composeCancelPhrases;
+    const phrase = phrases?.[0]?.trim();
+    return phrase ? `"${phrase}"` : undefined;
+  }
+
   private requestCompositionSend(
     effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    trailingSegment?: string,
   ): void {
-    const text = this.compositionDraft.join(' ').trim();
+    const segments = [...this.compositionDraft, ...(trailingSegment ? [trailingSegment] : [])];
+    const text = segments.join(' ').trim();
+    if (Array.from(text).length > MAX_COMPOSITION_CHARACTERS) {
+      this.dependencies.ui.notify(
+        `Voice composition is limited to ${String(MAX_COMPOSITION_CHARACTERS)} characters; the latest segment was not added.`,
+        'warning',
+      );
+      this.actor.send({
+        type: 'TRANSCRIPT_COMPOSITION_REJECTED',
+        sessionId: effect.sessionId,
+        captureId: effect.captureId,
+        turnId: effect.turnId,
+        revision: effect.revision,
+        operation: 'append',
+      });
+      return;
+    }
+    if (trailingSegment) this.compositionDraft.push(trailingSegment);
     if (!text) {
-      this.dependencies.ui.notify('Voice composition is empty. Add content or say Doom cancel.', 'warning');
+      const cancel = this.spokenPhrase('cancel');
+      this.dependencies.ui.notify(
+        cancel
+          ? `Voice composition is empty. Add content or say ${cancel} to discard.`
+          : 'Voice composition is empty. Add content or cancel it.',
+        'warning',
+      );
       this.actor.send({
         type: 'TRANSCRIPT_COMPOSITION_EMPTY_SEND',
         sessionId: effect.sessionId,
@@ -541,6 +590,11 @@ export class AutonomousVoiceSession {
       compositionState: effect.compositionState,
       startPhrases: autoConfig.startPhrases,
       stopPhrases: autoConfig.stopPhrases,
+      compositionPhrases: {
+        open: autoConfig.composeOpenPhrases,
+        send: autoConfig.composeSendPhrases,
+        cancel: autoConfig.composeCancelPhrases,
+      },
       narrationReferences: this.dependencies.narrationReferences(),
     });
     if (result.action === 'deliver') {
@@ -559,7 +613,15 @@ export class AutonomousVoiceSession {
       return;
     }
     if (result.action === 'compose-send') {
-      this.requestCompositionSend(effect);
+      // Content spoken ahead of a trailing send command is still user content, so it goes
+      // through correction and into the draft before the draft is submitted.
+      if (!result.text) {
+        this.requestCompositionSend(effect);
+        return;
+      }
+      this.correctAndHandleTranscript(effect, result.text, (transcript) =>
+        this.requestCompositionSend(effect, transcript),
+      );
       return;
     }
     if (result.action === 'compose-cancel') {

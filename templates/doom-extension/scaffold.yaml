@@ -367,6 +367,7 @@ features:
       - src/adapters/webTopicChannel.ts->src/adapters/web{{ topic | pascalCase }}Channel.ts
       - src/exports/webHub.ts
       - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
+      - tests/web/topicPanel.test.ts->tests/web/{{ topic | camelCase }}Panel.test.ts
     instruction: |-
       Generate the package's cockpit plugin: web/index.ts exporting webPlugin through defineWebPlugin, web/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its channel, web/{{ topic | pascalCase }}Panel.tsx as the tab, src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types both halves share, src/adapters/web{{ topic | pascalCase }}Channel.ts as the hub's data source, and src/exports/webHub.ts as the built hub entry.
 
@@ -375,7 +376,8 @@ features:
       Complete the package integration after generation:
       - Add the doompiWeb block to package.json: pluginId "{{ pluginId }}", channels ["{{ channelName }}"], client "./web/index.ts", hub { entry "./src/exports/webHub.ts", dist "./dist/webHub.mjs" }, and registrationOrder only if this plugin must install before or after another for a tool matcher or start hook (it is an optional tiebreak, default 1000).
       - Add "web" and "src/types/web{{ topic | pascalCase }}.ts" to the files allowlist, and a "./web-hub" export pointing at dist/webHub.d.mts, dist/webHub.mjs, dist/webHub.cjs (tsdown builds it from src/exports).
-      - Add @agimon-ai/doompi-web-contracts and @agimon-ai/doompi-web-components (both workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, and @types/react 19.2.7 to devDependencies.
+      - Add @agimon-ai/doompi-web-contracts and @agimon-ai/doompi-web-components (both workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, @types/react 19.2.7, react-dom 19.2.8, and @types/react-dom 19.2.3 to devDependencies. react-dom is what renders a component to markup in tests/web.
+      - Component tests live in tests/web, never under web/: the web-plugin import allowlist governs every file under web/ and would reject react-dom/server. The scaffolded tsconfigs already route them, the package tsconfig excluding tests/web and web/tsconfig.json including it, so the JSX project compiles them and no third tsc invocation is needed.
       - Change the typecheck script to "tsc --noEmit && tsc --noEmit -p web/tsconfig.json".
       - Replace the placeholder item view and the hub watcher stub with the package's real records and source; the channel name constant in src/types must equal the doompiWeb channels entry.
       - Every Pi tool this package registers needs a timeline item: scaffold one per tool with scaffold-doom-web-tool-card and list it under toolRenderers (web-plugin-tool-renderers checks package.json against src/** and web/**). The shell owns the frame, tone, badge, and expand toggle; a card supplies the header summary and the body.

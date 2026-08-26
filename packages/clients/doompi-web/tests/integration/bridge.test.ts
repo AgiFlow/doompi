@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
@@ -6,27 +9,35 @@ import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
 type Frame = Record<string, unknown>;
 
-const LOCAL = 'local';
+/** The one session these specs register; the routes address it by id. */
+const SESSION = 'bridged';
 
-let running: Array<{ server: WebServer; session: FakeSession }> = [];
+let running: Array<{ server: WebServer; session: FakeSession; registryDir: string }> = [];
 
 afterEach(async () => {
-  for (const { server, session } of running) {
+  for (const { server, session, registryDir } of running) {
     await server.close();
     await session.close();
+    fs.rmSync(registryDir, { recursive: true, force: true });
   }
   running = [];
 });
 
 async function bridge(overrides: { token?: string } = {}): Promise<{ session: FakeSession; server: WebServer }> {
-  const session = await startFakeSession();
+  const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-bridge-'));
+  // The session claims this package as its working directory, a real
+  // repository, so the file completion and mention routes have something to
+  // list. A wrong token goes into the file the record names, because that is
+  // the only place the hub reads one from.
+  const session = await startFakeSession({ id: SESSION, registryDir, cwd: process.cwd() });
+  if (overrides.token !== undefined) fs.writeFileSync(session.tokenFile, overrides.token, { mode: 0o600 });
   const server = await serveWeb({
-    socketPath: session.socketPath,
-    token: overrides.token ?? session.token,
+    registryDir,
+    spawnCommand: path.join(registryDir, 'no-such-server'),
     port: 0,
     assetsDir: '/nonexistent-assets',
   });
-  const pair = { server, session };
+  const pair = { server, session, registryDir };
   running.push(pair);
   return pair;
 }
@@ -91,7 +102,7 @@ describe('the hub bridge', () => {
     expect(await response.json()).toMatchObject({ ok: true, role: 'hub', protocol: 1, sessions: 1 });
   });
 
-  it('validates a create request and refuses creation in fixed mode', async () => {
+  it('validates a create request before it reaches the spawner', async () => {
     const { server } = await bridge();
 
     const badBody = await fetch(`${server.url}/api/sessions`, { method: 'POST', body: 'not json' });
@@ -105,21 +116,22 @@ describe('the hub bridge', () => {
     expect(noCwd.status).toBe(400);
     expect(await noCwd.json()).toMatchObject({ error: expect.stringMatching(/cwd/) as string });
 
-    // Fixed single-session mode has no spawner by design.
-    const fixed = await fetch(`${server.url}/api/sessions`, {
+    const missingDirectory = await fetch(`${server.url}/api/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/anywhere' }),
+      body: JSON.stringify({ cwd: '/no/such/directory' }),
     });
-    expect(fixed.status).toBe(400);
-    expect(await fixed.json()).toMatchObject({ error: expect.stringMatching(/fixed session/) as string });
+    expect(missingDirectory.status).toBe(400);
+    expect(await missingDirectory.json()).toMatchObject({
+      error: expect.stringMatching(/No such directory/) as string,
+    });
   });
 
   it('answers file completion queries scoped to a known session', async () => {
     const { server } = await bridge();
-    // Single-session mode records process.cwd() as the session cwd, which is
-    // this package: a real repository for git-backed listing.
-    const hit = await fetch(`${server.url}/api/sessions/${LOCAL}/files?q=composer`);
+    // The registered session names this package as its cwd: a real repository
+    // for git-backed listing.
+    const hit = await fetch(`${server.url}/api/sessions/${SESSION}/files?q=composer`);
     expect(hit.ok).toBe(true);
     const body = (await hit.json()) as { files: string[] };
     expect(body.files.length).toBeGreaterThan(0);
@@ -132,19 +144,19 @@ describe('the hub bridge', () => {
 
   it('serves a mentioned file from the session directory and refuses to leave it', async () => {
     const { server } = await bridge();
-    const hit = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=package.json`);
+    const hit = await fetch(`${server.url}/api/sessions/${SESSION}/file?path=package.json`);
     expect(hit.status).toBe(200);
     expect(hit.headers.get('content-type')).toBe('application/octet-stream');
     expect(hit.headers.get('content-disposition')).toBe('attachment; filename="package.json"');
     expect(((await hit.json()) as { name: string }).name).toBe('@agimon-ai/doompi-web');
 
-    const escape = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=../../../package.json`);
+    const escape = await fetch(`${server.url}/api/sessions/${SESSION}/file?path=../../../package.json`);
     expect(escape.status).toBe(403);
-    const absolute = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=${encodeURIComponent('/etc/hosts')}`);
+    const absolute = await fetch(`${server.url}/api/sessions/${SESSION}/file?path=${encodeURIComponent('/etc/hosts')}`);
     expect(absolute.status).toBe(403);
-    const directory = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=src`);
+    const directory = await fetch(`${server.url}/api/sessions/${SESSION}/file?path=src`);
     expect(directory.status).toBe(404);
-    const missing = await fetch(`${server.url}/api/sessions/${LOCAL}/file?path=no/such/file.png`);
+    const missing = await fetch(`${server.url}/api/sessions/${SESSION}/file?path=no/such/file.png`);
     expect(missing.status).toBe(404);
     const unknown = await fetch(`${server.url}/api/sessions/unknown/file?path=package.json`);
     expect(unknown.status).toBe(404);
@@ -152,7 +164,7 @@ describe('the hub bridge', () => {
 
   it('refuses to stop the session hosting the cockpit and knows no other', async () => {
     const { server } = await bridge();
-    const self = await fetch(`${server.url}/api/sessions/${LOCAL}`, { method: 'DELETE' });
+    const self = await fetch(`${server.url}/api/sessions/${SESSION}`, { method: 'DELETE' });
     expect(self.status).toBe(409);
     const unknown = await fetch(`${server.url}/api/sessions/unknown`, { method: 'DELETE' });
     expect(unknown.status).toBe(404);
@@ -176,7 +188,7 @@ describe('the hub bridge', () => {
     expect(frames[1].type).toBe('sessions_snapshot');
 
     await session.waitForAttach();
-    await waitFor(() => latestSummary(frames, LOCAL)?.attach === 'attached', 'the attached summary');
+    await waitFor(() => latestSummary(frames, SESSION)?.attach === 'attached', 'the attached summary');
   });
 
   it('never hands the browser the attach token', async () => {
@@ -184,7 +196,7 @@ describe('the hub bridge', () => {
     const { socket, frames } = await openSocket(server.url);
 
     await session.waitForAttach();
-    subscribe(socket, LOCAL);
+    subscribe(socket, SESSION);
     await waitFor(() => frames.some((frame) => frame.type === 'session_backlog'), 'the backlog');
     expect(JSON.stringify(frames)).not.toContain(session.token);
   });
@@ -194,8 +206,8 @@ describe('the hub bridge', () => {
     const { socket, frames } = await openSocket(server.url);
 
     await session.waitForAttach();
-    subscribe(socket, LOCAL);
-    command(socket, LOCAL, { type: 'prompt', message: 'hello' });
+    subscribe(socket, SESSION);
+    command(socket, SESSION, { type: 'prompt', message: 'hello' });
     const received = await session.waitForCommand('prompt');
     expect(received.message).toBe('hello');
 
@@ -210,7 +222,7 @@ describe('the hub bridge', () => {
     await session.waitForAttach();
     session.emit({ type: 'agent_start' });
     // The phase upsert still arrives; the raw frame does not.
-    await waitFor(() => latestSummary(frames, LOCAL)?.phase === 'turn', 'the phase upsert');
+    await waitFor(() => latestSummary(frames, SESSION)?.phase === 'turn', 'the phase upsert');
     expect(sessionFrames(frames)).toHaveLength(0);
   });
 
@@ -219,8 +231,8 @@ describe('the hub bridge', () => {
     const { socket } = await openSocket(server.url);
 
     await session.waitForAttach();
-    command(socket, LOCAL, { type: 'attach', token: 'stolen' });
-    command(socket, LOCAL, { type: 'abort' });
+    command(socket, SESSION, { type: 'attach', token: 'stolen' });
+    command(socket, SESSION, { type: 'abort' });
 
     await session.waitForCommand('abort');
     expect(session.received.some((frame) => frame.type === 'attach')).toBe(false);
@@ -235,7 +247,7 @@ describe('the hub bridge', () => {
     socket.send(JSON.stringify([1, 2]));
     // An un-enveloped command has no session address and goes nowhere.
     socket.send(JSON.stringify({ type: 'steer', message: 'lost' }));
-    command(socket, LOCAL, { type: 'abort' });
+    command(socket, SESSION, { type: 'abort' });
 
     await session.waitForCommand('abort');
     expect(session.received.some((frame) => frame.type === 'steer')).toBe(false);
@@ -259,7 +271,7 @@ describe('the hub bridge', () => {
     const { server, session } = await bridge();
     const { socket, frames } = await openSocket(server.url);
     await session.waitForAttach();
-    subscribe(socket, LOCAL);
+    subscribe(socket, SESSION);
 
     session.dropClient();
     session.emit({ type: 'agent_start' });
@@ -277,7 +289,7 @@ describe('the hub bridge', () => {
     const { server, session } = await bridge();
     const first = await openSocket(server.url);
     await session.waitForAttach();
-    subscribe(first.socket, LOCAL);
+    subscribe(first.socket, SESSION);
     // The backlog reply proves the subscription is registered; only then is a
     // fresh emit guaranteed to arrive live rather than racing the subscribe.
     await waitFor(() => first.frames.some((frame) => frame.type === 'session_backlog'), 'the first backlog');
@@ -287,7 +299,7 @@ describe('the hub bridge', () => {
     // A second page starts blind and catches up from the hub's ring; both
     // pages then see live frames, which the per-tab attachment model forbade.
     const second = await openSocket(server.url);
-    subscribe(second.socket, LOCAL);
+    subscribe(second.socket, SESSION);
     await waitFor(() => second.frames.some((frame) => frame.type === 'session_backlog'), 'the backlog');
     expect(backlogFrames(second.frames).some((frame) => frame.type === 'agent_start')).toBe(true);
 
@@ -308,7 +320,7 @@ describe('the hub bridge', () => {
     session.emit({ type: 'agent_start' });
 
     const second = await openSocket(server.url);
-    subscribe(second.socket, LOCAL);
+    subscribe(second.socket, SESSION);
     await waitFor(() => second.frames.some((frame) => frame.type === 'session_backlog'), 'the backlog');
     expect(backlogFrames(second.frames).some((frame) => frame.type === 'agent_start')).toBe(true);
   });

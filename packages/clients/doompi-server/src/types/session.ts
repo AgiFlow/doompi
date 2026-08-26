@@ -22,3 +22,17 @@ export interface AgentProcessOptions {
 }
 
 export type AgentProcessFactory = (options: AgentProcessOptions) => AgentProcess;
+
+/**
+ * Resolves what to spawn for one agent run.
+ *
+ * Composing the extension matrix is the launcher's job, not the CLI's, so the
+ * server owns it directly instead of shelling out to a process whose only
+ * remaining work would be to compose and wait.
+ */
+export interface AgentLauncher {
+  /** Spawn parameters for a major mode, or for the launch selection when omitted. */
+  resolve(majorMode?: string): Promise<AgentProcessOptions>;
+  /** Releases resources staged by the most recent resolve. */
+  cleanup(): Promise<void>;
+}

@@ -52,14 +52,22 @@ const FIELD_AUTO_MODEL = 'autoCapture.model';
 const FIELD_AUTO_START = 'autoCapture.startPhrases';
 const FIELD_AUTO_STOP = 'autoCapture.stopPhrases';
 const FIELD_AUTO_IDLE = 'autoCapture.utteranceIdleMs';
+const FIELD_COMPOSE_OPEN = 'autoCapture.composeOpenPhrases';
+const FIELD_COMPOSE_SEND = 'autoCapture.composeSendPhrases';
+const FIELD_COMPOSE_CANCEL = 'autoCapture.composeCancelPhrases';
+const FIELD_COMPOSE_IDLE = 'autoCapture.composeUtteranceIdleMs';
+const FIELD_COMPOSE_NUDGE = 'autoCapture.composeNudgeMs';
 const FIELD_TTS_ENGINE = 'autoCapture.tts.engine';
 const FIELD_TTS_VOICE = 'autoCapture.tts.voice';
 const FIELD_TTS_RATE = 'autoCapture.tts.rate';
 /** How a phrase list is written and read back in a single-line field. */
 const PHRASE_SEPARATOR = ', ';
 const PHRASE_SPLIT = /\s*,\s*/;
+const DEFAULT_TTS_ENGINE = 'macos-say';
 /** `VoiceTtsEngine` is a single literal today; a choice list keeps it discoverable. */
-const TTS_ENGINE_CHOICES = [{ id: 'macos-say', label: 'macos-say', detail: 'macOS `say`', action: CONFIG_ACTION.set }];
+const TTS_ENGINE_CHOICES = [
+  { id: DEFAULT_TTS_ENGINE, label: DEFAULT_TTS_ENGINE, detail: 'macOS `say`', action: CONFIG_ACTION.set },
+];
 /** Clearing the language is what `auto` means in the file, so the entry clears. */
 const LANGUAGE_AUTO_ID = 'auto';
 /**
@@ -102,6 +110,11 @@ const MAX_DETAIL_LENGTH = 240;
 const MAX_STEPS = 24;
 const MAX_STEP_LABEL = 96;
 const MAX_STEP_DETAIL = 160;
+/** The two phases an install passes through, named so the comparisons cannot drift. */
+const INSTALL_CONFIRMING = 'confirming' as const;
+const INSTALL_RUNNING = 'running' as const;
+/** How much of a command is used as the borrowed terminal's title. */
+const MAX_COMMAND_NAME_LENGTH = 48;
 
 export interface VoiceConfigDeps {
   resolver: IExecutableResolver;
@@ -196,7 +209,7 @@ function modelTargetPath(entry: VoiceCatalogEntry, configDirectory: string): str
 interface InstallState {
   entryId: string;
   plan: InstallPlan;
-  phase: 'confirming' | 'running';
+  phase: typeof INSTALL_CONFIRMING | typeof INSTALL_RUNNING;
   progress?: { label: string; ratio?: number };
   controller?: AbortController;
   /** The terminal the current command is running on, when one is. */
@@ -211,24 +224,39 @@ const SIMPLE_FIELD_PATHS: Readonly<Record<string, readonly string[]>> = {
   [FIELD_AUTO_START]: [...VOICE_PATH, 'autoCapture', 'startPhrases'],
   [FIELD_AUTO_STOP]: [...VOICE_PATH, 'autoCapture', 'stopPhrases'],
   [FIELD_AUTO_IDLE]: [...VOICE_PATH, 'autoCapture', 'utteranceIdleMs'],
+  [FIELD_COMPOSE_OPEN]: [...VOICE_PATH, 'autoCapture', 'composeOpenPhrases'],
+  [FIELD_COMPOSE_SEND]: [...VOICE_PATH, 'autoCapture', 'composeSendPhrases'],
+  [FIELD_COMPOSE_CANCEL]: [...VOICE_PATH, 'autoCapture', 'composeCancelPhrases'],
+  [FIELD_COMPOSE_IDLE]: [...VOICE_PATH, 'autoCapture', 'composeUtteranceIdleMs'],
+  [FIELD_COMPOSE_NUDGE]: [...VOICE_PATH, 'autoCapture', 'composeNudgeMs'],
   [FIELD_TTS_ENGINE]: [...VOICE_PATH, 'autoCapture', 'tts', 'engine'],
   [FIELD_TTS_VOICE]: [...VOICE_PATH, 'autoCapture', 'tts', 'voice'],
   [FIELD_TTS_RATE]: [...VOICE_PATH, 'autoCapture', 'tts', 'rate'],
 };
-const LIST_FIELDS = new Set<string>([FIELD_AUTO_START, FIELD_AUTO_STOP]);
+const LIST_FIELDS = new Set<string>([
+  FIELD_AUTO_START,
+  FIELD_AUTO_STOP,
+  FIELD_COMPOSE_OPEN,
+  FIELD_COMPOSE_SEND,
+  FIELD_COMPOSE_CANCEL,
+]);
 const AUTO_CAPTURE_PATH = [...VOICE_PATH, 'autoCapture'] as const;
 const TTS_ENGINE_PATH = [...AUTO_CAPTURE_PATH, 'tts', 'engine'] as const;
-const DEFAULT_TTS_ENGINE = 'macos-say';
 const AUTO_CAPTURE_FIELDS = new Set<string>([
   FIELD_AUTO_MODEL,
   FIELD_AUTO_START,
   FIELD_AUTO_STOP,
   FIELD_AUTO_IDLE,
+  FIELD_COMPOSE_OPEN,
+  FIELD_COMPOSE_SEND,
+  FIELD_COMPOSE_CANCEL,
+  FIELD_COMPOSE_IDLE,
+  FIELD_COMPOSE_NUDGE,
   FIELD_TTS_ENGINE,
   FIELD_TTS_VOICE,
   FIELD_TTS_RATE,
 ]);
-const NUMBER_FIELDS = new Set<string>([FIELD_AUTO_IDLE, FIELD_TTS_RATE]);
+const NUMBER_FIELDS = new Set<string>([FIELD_AUTO_IDLE, FIELD_COMPOSE_IDLE, FIELD_COMPOSE_NUDGE, FIELD_TTS_RATE]);
 
 /**
  * The panel edits single-line text, while the config file holds lists and
@@ -289,7 +317,7 @@ export class VoiceConfigController {
     const activeEngine = voice?.engine;
     const activeModel = this.activeModelId(voice);
     const installing = this.install;
-    const modelField = installing?.phase === 'running' ? installing : undefined;
+    const modelField = installing?.phase === INSTALL_RUNNING ? installing : undefined;
 
     const choices: ConfigChoice[] = VOICE_CATALOG.map((entry) => {
       const installed = this.installedIds.has(entry.id);
@@ -346,7 +374,7 @@ export class VoiceConfigController {
             ...(modelField?.pty?.awaitingInput() ? { awaitingInput: true } : {}),
             // The command list goes in `detail`, which the panel wraps under the
             // row. Right-aligning it as a status ran it off the edge of the pane.
-            ...(installing?.phase === 'confirming'
+            ...(installing?.phase === INSTALL_CONFIRMING
               ? {
                   detail: confirmSummary(installing.plan),
                   actions: [
@@ -437,6 +465,54 @@ export class VoiceConfigController {
             detail: 'Silence in milliseconds that ends an utterance.',
             ...(auto?.utteranceIdleMs === undefined ? {} : { value: String(auto.utteranceIdleMs) }),
           },
+          // Long-prompt composition. Short utterances are delivered as they finish and
+          // need none of this; these phrases exist so a multi-part prompt is not
+          // submitted half-written.
+          {
+            id: FIELD_COMPOSE_OPEN,
+            label: 'compose open',
+            kind: 'text',
+            keyPath: 'voice.autoCapture.composeOpenPhrases',
+            placeholder: 'hey doom, doom prompt',
+            detail: 'Phrases that start a long spoken prompt. Separate them with commas.',
+            ...(auto?.composeOpenPhrases?.length ? { value: auto.composeOpenPhrases.join(PHRASE_SEPARATOR) } : {}),
+          },
+          {
+            id: FIELD_COMPOSE_SEND,
+            label: 'compose send',
+            kind: 'text',
+            keyPath: 'voice.autoCapture.composeSendPhrases',
+            placeholder: "that's it, doom send",
+            detail: 'Phrases that submit the collected prompt. Separate them with commas.',
+            ...(auto?.composeSendPhrases?.length ? { value: auto.composeSendPhrases.join(PHRASE_SEPARATOR) } : {}),
+          },
+          {
+            id: FIELD_COMPOSE_CANCEL,
+            label: 'compose cancel',
+            kind: 'text',
+            keyPath: 'voice.autoCapture.composeCancelPhrases',
+            placeholder: 'doom cancel, scratch that',
+            detail: 'Phrases that discard the collected prompt. Separate them with commas.',
+            ...(auto?.composeCancelPhrases?.length ? { value: auto.composeCancelPhrases.join(PHRASE_SEPARATOR) } : {}),
+          },
+          {
+            id: FIELD_COMPOSE_IDLE,
+            label: 'compose idle',
+            kind: 'text',
+            keyPath: 'voice.autoCapture.composeUtteranceIdleMs',
+            placeholder: '1200',
+            detail: 'Shorter silence used while collecting, so a send command lands on its own.',
+            ...(auto?.composeUtteranceIdleMs === undefined ? {} : { value: String(auto.composeUtteranceIdleMs) }),
+          },
+          {
+            id: FIELD_COMPOSE_NUDGE,
+            label: 'compose reminder',
+            kind: 'text',
+            keyPath: 'voice.autoCapture.composeNudgeMs',
+            placeholder: '10000',
+            detail: 'Silence before Voice reminds you a prompt is still open. 0 turns it off.',
+            ...(auto?.composeNudgeMs === undefined ? {} : { value: String(auto.composeNudgeMs) }),
+          },
           {
             id: FIELD_TTS_ENGINE,
             label: 'tts engine',
@@ -494,7 +570,7 @@ export class VoiceConfigController {
 
   reportError(error: unknown): void {
     this.notice = error instanceof Error ? error.message : String(error);
-    if (this.install?.phase === 'running') this.install = undefined;
+    if (this.install?.phase === INSTALL_RUNNING) this.install = undefined;
     this.deps.onStatus?.(undefined);
   }
 
@@ -520,14 +596,14 @@ export class VoiceConfigController {
   }
 
   private readiness(voice: ResolvedVoiceConfig | undefined): string {
-    if (this.install?.phase === 'running') return 'installing';
+    if (this.install?.phase === INSTALL_RUNNING) return 'installing';
     return this.activeModelId(voice) ? 'ready' : 'no model installed';
   }
 
   private beginInstall(entryId: string | undefined): void {
     const entry = entryId ? catalogEntryById(entryId) : undefined;
     if (!entry) return;
-    if (this.install?.phase === 'running') {
+    if (this.install?.phase === INSTALL_RUNNING) {
       // One at a time: two installs would race on the same config write.
       this.notice = 'An install is already running.';
       return;
@@ -545,7 +621,7 @@ export class VoiceConfigController {
       this.notice = blocker;
       return;
     }
-    this.install = { entryId: entry.id, plan, phase: 'confirming' };
+    this.install = { entryId: entry.id, plan, phase: INSTALL_CONFIRMING };
   }
 
   private async selectModel(entryId: string | undefined): Promise<void> {
@@ -558,11 +634,11 @@ export class VoiceConfigController {
 
   private async runInstall(): Promise<void> {
     const state = this.install;
-    if (!state || state.phase !== 'confirming') return;
+    if (!state || state.phase !== INSTALL_CONFIRMING) return;
     const entry = catalogEntryById(state.entryId);
     if (!entry) return;
     const controller = new AbortController();
-    this.install = { ...state, phase: 'running', controller };
+    this.install = { ...state, phase: INSTALL_RUNNING, controller };
 
     try {
       for (const step of state.plan.steps) {
@@ -648,7 +724,7 @@ export class VoiceConfigController {
     }
     const handle = await this.deps.runCommand({
       id: `voice-install-${Date.now()}`,
-      name: command.slice(0, 48),
+      name: command.slice(0, MAX_COMMAND_NAME_LENGTH),
       command,
       cwd: this.deps.cwd?.() ?? process.cwd(),
     });

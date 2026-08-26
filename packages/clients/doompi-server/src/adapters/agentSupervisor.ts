@@ -1,18 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseRelaunchHandoff, type RelaunchHandoff } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
-import { relaunchAgentArgs } from '../services/serveOptions.ts';
-import type { AgentProcess, SessionFrame } from '../types/session.ts';
+import type { AgentLauncher, AgentProcess, AgentProcessOptions, SessionFrame } from '../types/session.ts';
 import { spawnAgentProcess } from './agentProcess.ts';
 
 /** How long a relaunching agent may take to flush and exit before it is killed. */
 const GRACEFUL_EXIT_TIMEOUT_MS = 15_000;
 
 export interface AgentSupervisorOptions {
-  command: string;
-  args: string[];
-  cwd: string;
-  env: NodeJS.ProcessEnv;
+  /** Composes and resolves what to spawn, per major mode. */
+  launcher: AgentLauncher;
   /** File the agent writes to request a relaunch; consumed on agent exit. */
   relaunchFile: string;
   onNotice?: (message: string) => void;
@@ -34,10 +31,9 @@ export interface AgentSupervisorOptions {
  * and session id all stay, and the replacement resumes the same Pi session. An
  * exit without the file is a real exit and settles `exited` as before.
  */
-export function superviseAgentRelaunches(options: AgentSupervisorOptions): AgentProcess {
+export async function superviseAgentRelaunches(options: AgentSupervisorOptions): Promise<AgentProcess> {
   const spawn = options.spawn ?? spawnAgentProcess;
   const listeners: Array<(frame: SessionFrame) => void> = [];
-  let args = [...options.args];
   let stopping = false;
   let current: AgentProcess | undefined;
   let endRequested = false;
@@ -89,6 +85,10 @@ export function superviseAgentRelaunches(options: AgentSupervisorOptions): Agent
     watcher?.close();
   };
 
+  // Resolved before the loop so a composition failure fails the server start
+  // rather than surfacing as an agent that never came up.
+  const first = await options.launcher.resolve();
+
   const exited = new Promise<number>((resolve) => {
     const attach = (agent: AgentProcess): void => {
       current = agent;
@@ -96,7 +96,7 @@ export function superviseAgentRelaunches(options: AgentSupervisorOptions): Agent
       agent.onFrame((frame) => {
         for (const listener of listeners) listener(frame);
       });
-      void agent.exited.then((code) => {
+      void agent.exited.then(async (code) => {
         if (escalation) clearTimeout(escalation);
         escalation = undefined;
         const handoff = stopping ? undefined : takeHandoff();
@@ -105,12 +105,24 @@ export function superviseAgentRelaunches(options: AgentSupervisorOptions): Agent
           resolve(code);
           return;
         }
-        args = relaunchAgentArgs(args, handoff.majorMode);
         options.onNotice?.(`relaunching the agent with major mode ${handoff.majorMode}`);
-        attach(spawn({ command: options.command, args, cwd: options.cwd, env: options.env }));
+        let next: AgentProcessOptions;
+        try {
+          next = await options.launcher.resolve(handoff.majorMode);
+        } catch (error) {
+          // The requested matrix did not compose. Settling on the exit code the
+          // agent already gave is the only honest outcome: there is nothing to
+          // relaunch into, and a half-built composition must not run.
+          const detail = error instanceof Error ? error.message : String(error);
+          options.onNotice?.(`could not compose major mode ${handoff.majorMode}: ${detail}`);
+          settle();
+          resolve(code);
+          return;
+        }
+        attach(spawn(next));
       });
     };
-    attach(spawn({ command: options.command, args, cwd: options.cwd, env: options.env }));
+    attach(spawn(first));
   });
 
   return {

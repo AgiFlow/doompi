@@ -31,6 +31,9 @@ export default defineConfig({
     // own compiled path, so an entry keyed without the prefix lands outside
     // the directory the runtime looks in.
     'src/adapters/syncedRuntimeBuilder': 'src/adapters/syncedRuntimeBuilder.ts',
+    // Pi loads this one by path, so it has to exist as its own module rather
+    // than folded into whichever entry happens to reference it.
+    'src/extensions/entries/launcherBootstrap': 'src/extensions/entries/launcherBootstrap.ts',
     'src/extensions/entries/transitionCoordinator': 'src/extensions/entries/transitionCoordinator.ts',
     'src/services/extensionAssembler': 'src/services/extensionAssembler.ts',
   },

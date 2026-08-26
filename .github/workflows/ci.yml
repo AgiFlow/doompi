@@ -63,6 +63,50 @@ jobs:
       - name: Test packages
         run: pnpm nx run-many -t test --parallel=3
 
+  # Browser gate for the cockpit.
+  #
+  # Package tests render every plugin component to static markup, which proves
+  # they mount and read the props the host sends. What they cannot reach is a
+  # click, an effect, or a Radix portal, so the specs here are the only thing
+  # that exercises the cockpit as a running program: sessions, the transcript,
+  # dialogs, leader keys, and the plugin tabs.
+  #
+  # It runs on pull requests for the reason the packed-install gate below
+  # already records: a gate that only runs after merge lets regressions through
+  # review. The bundle it serves is built by the same code path `doompi sync`
+  # runs, over every plugin package found by walking the workspace.
+  browser:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out materialized package snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up DoomPi workspace
+        uses: ./.github/actions/setup-monorepo
+
+      - name: Build the cockpit and the servers it spawns
+        run: pnpm cockpit:build
+
+      - name: Install the Chromium the suite drives
+        run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
+
+      - name: Drive the cockpit in a browser
+        run: pnpm nx run @agimon-ai/doompi-web:test:e2e
+
+      - name: Keep the traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: |
+            packages/clients/doompi-web/playwright-report
+            packages/clients/doompi-web/test-results
+          retention-days: 7
+
   # Packed-install gate: packs and installs every package for real, checks the
   # frozen published compatibility baseline, then asserts startup latency.
   #

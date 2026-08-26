@@ -25,6 +25,7 @@ import {
   prependHistory,
   reduceSession,
   type SessionState,
+  type TimelineEntry,
 } from '../lib/sessionModel.ts';
 import { HISTORY_REQUEST_TYPE } from '../../types/hub.ts';
 import { sendFrame, sendHubFrame } from '../lib/transport.ts';
@@ -57,7 +58,9 @@ export function useActiveSession<T>(selector: (state: SessionState) => T): T {
 }
 
 export function applySessionFrame(sessionId: string, frame: Record<string, unknown>): void {
-  sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame));
+  // The transcript arrives over Pi's protocol; this wire carries what the
+  // protocol has no shape for.
+  sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame, { transcriptFromProtocol: true }));
 }
 
 /**
@@ -129,6 +132,26 @@ export function seedHistoryCursor(sessionId: string, cursor: string | null): voi
 }
 
 /** A subscribe replays history from scratch; the fold must start clean too. */
+/**
+ * Replaces the timeline with the protocol's authoritative transcript.
+ *
+ * The protocol is snapshot-authoritative, so a snapshot supersedes whatever
+ * the page had rather than merging into it: that is what removes the local
+ * echo, the replay de-duplication, and the journal re-reads the framed wire
+ * needed. Everything DoomPi owns on this state, dialogs and modes and
+ * statuses, is left exactly as it was.
+ */
+export function applyProtocolTranscript(sessionId: string, entries: TimelineEntry[], streaming: boolean): void {
+  sessionStoreFor(sessionId).setState((state) => ({
+    ...state,
+    entries,
+    streaming,
+    settled: !streaming,
+    pendingUserId: null,
+    pendingUserText: '',
+  }));
+}
+
 export function resetSessionStore(sessionId: string): void {
   sessionStoreFor(sessionId).setState(() => initialSessionState);
   history.delete(sessionId);

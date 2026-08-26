@@ -4,6 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
+import { PiServer } from '@earendil-works/pi-server';
+import { createPiHubService } from './piHubService.ts';
+import { createSyncGuard } from './syncGuard.ts';
+import { createPiWebSocketListener } from './piWebSocketListener.ts';
 import { Hono } from 'hono';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
@@ -17,29 +21,29 @@ import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
-  HUB_PROTOCOL_VERSION,
-  HUB_ROLE,
-  hubHello,
-  SESSION_COMMAND_TYPE,
-  SESSION_REMOVED_TYPE,
-  SESSION_UPSERT_TYPE,
-  sessionFrameEnvelope,
   API_SESSION_QUERY_PARAM,
   DIRECTORIES_API_ROUTE,
   HISTORY_REQUEST_TYPE,
+  HUB_PROTOCOL_VERSION,
+  HUB_RESYNCED_TYPE,
+  HUB_ROLE,
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
+  SESSION_COMMAND_TYPE,
+  SESSION_REMOVED_TYPE,
+  SESSION_UPSERT_TYPE,
   SUBSCRIBE_THREAD_TYPE,
   SUBSCRIBE_TYPE,
-  threadBacklog,
-  threadFrameEnvelope,
   UNSUBSCRIBE_THREAD_TYPE,
   UNSUBSCRIBE_TYPE,
+  hubHello,
+  sessionFrameEnvelope,
+  threadBacklog,
+  threadFrameEnvelope,
 } from '../types/hub.ts';
-import type { SessionRecord } from '../types/registry.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
-import { staticRecordSource, watchRegistry } from './registryWatcher.ts';
+import { watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
@@ -51,11 +55,12 @@ import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
 const SESSION_ROUTE = '/api/session';
+// Pi's protocol rides its own socket so the DoomPi channel keeps the
+// vocabulary the protocol has no shape for: dialogs, minor modes, selection.
+const PROTOCOL_ROUTE = '/api/pi';
 /** Directory suggestions per picker query; more than this means "type further". */
 const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
-/** Stands in for a registry id in fixed single-session mode. */
-const LOCAL_SESSION_ID = 'local';
 /** Env override for the assets directory, set by launchers that know a synced bundle. */
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
@@ -124,40 +129,14 @@ function buildHub(
   notice: (message: string) => void,
   channels: readonly WebHubChannel[],
 ): SessionHub {
-  if (options.registryDir !== undefined) {
-    if (options.socketPath !== undefined || options.token !== undefined) {
-      throw new Error('Pass either a registry directory or a socket, not both.');
-    }
-    return createSessionHub({
-      source: watchRegistry(options.registryDir, notice),
-      spawner: createServerSpawner({
-        registryDir: options.registryDir,
-        command: options.spawnCommand,
-        onNotice: notice,
-      }),
-      readGit: readGitStatus,
-      channels,
-      onNotice: notice,
-    });
-  }
-  if (options.socketPath === undefined || options.token === undefined) {
-    throw new Error('Pass a registry directory for hub mode, or a socket path and token for single-session mode.');
-  }
-  const token = options.token;
-  const record: SessionRecord = {
-    version: 1,
-    id: LOCAL_SESSION_ID,
-    name: 'untitled',
-    cwd: process.cwd(),
-    socketPath: options.socketPath,
-    tokenFile: '',
-    pid: process.pid,
-    createdAt: new Date().toISOString(),
-  };
   return createSessionHub({
-    source: staticRecordSource(record),
+    source: watchRegistry(options.registryDir, notice),
+    spawner: createServerSpawner({
+      registryDir: options.registryDir,
+      command: options.spawnCommand,
+      onNotice: notice,
+    }),
     readGit: readGitStatus,
-    readToken: () => token,
     channels,
     onNotice: notice,
   });
@@ -253,8 +232,27 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     resolve: (sessionId, threadId) => hub.threadJournal(sessionId, threadId),
     onNotice: notice,
   });
+  // A session reads what sync produced, and nothing makes the person who
+  // opened the cockpit run sync first. The hub keeps the repository current.
+  const syncGuard = createSyncGuard({ repoRoot: process.cwd(), onNotice: notice });
+  await syncGuard.ensureSynced();
+  /** Every attached page, so a rebuild can tell them all to pick it up. */
+  const pages = new Set<(frame: object) => void>();
+
   const app = new Hono();
   const nodeWs = createNodeWebSocket({ app });
+  // Every running session already serves Pi's protocol; the hub composes them
+  // into one server so a browser sees a single endpoint with many sessions.
+  const protocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
+  const protocolServer = new PiServer(
+    createPiHubService({
+      records: () => hub.records(),
+      spawn: (input) => hub.create(input),
+      onNotice: notice,
+    }),
+    { listeners: [protocolListener], onError: (error) => notice(`protocol: ${error.message}`) },
+  );
+  await protocolServer.start();
   // Provider credentials belong to the machine, not to a session: the hub
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
@@ -286,6 +284,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       return context.json({ error: 'A cwd string is required.' }, 400);
     }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
+    await syncGuard.ensureSynced();
     const outcome = await hub.create({ cwd: body.cwd, name });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
@@ -344,6 +343,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
       let disconnect: (() => void) | undefined;
       let disconnectThreads: (() => void) | undefined;
+      /** Held on the socket, not inside onOpen, so close can withdraw it. */
+      let registered: ((frame: object) => void) | undefined;
       /** Lets go of every followed thread, or only a departed session's. */
       const releaseThreads = (sessionId?: string): void => {
         for (const [key, held] of threadSubscriptions) {
@@ -361,6 +362,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               // The browser went away mid-write; onClose tears the socket down.
             }
           };
+          registered = post;
+          pages.add(post);
           post(hubHello(hub.channelTypes()));
           post({ type: SESSIONS_SNAPSHOT_TYPE, sessions: hub.snapshot() });
           disconnect = hub.onEvent((event) => {
@@ -450,6 +453,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           }
         },
         onClose() {
+          if (registered) pages.delete(registered);
+          registered = undefined;
           disconnect?.();
           disconnect = undefined;
           disconnectThreads?.();
@@ -457,6 +462,40 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           subscriptions.clear();
           releaseThreads();
           notice('browser detached');
+        },
+      };
+    }),
+  );
+
+  app.get(
+    PROTOCOL_ROUTE,
+    nodeWs.upgradeWebSocket(() => {
+      let handler: ReturnType<typeof protocolListener.accept>;
+      return {
+        onOpen(_event, ws) {
+          handler = protocolListener.accept({
+            send: (data) => ws.send(data as ArrayBuffer),
+            close: () => ws.close(),
+            get readyState() {
+              return ws.readyState;
+            },
+          });
+        },
+        onMessage(event) {
+          const data = event.data;
+          if (typeof data === 'string') return;
+          if (data instanceof ArrayBuffer) handler?.onData(new Uint8Array(data));
+          else if (ArrayBuffer.isView(data)) {
+            handler?.onData(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+          }
+        },
+        onClose() {
+          handler?.onClose();
+          handler = undefined;
+        },
+        onError(event) {
+          handler?.onError(event instanceof Error ? event : new Error('The protocol socket failed'));
+          handler = undefined;
         },
       };
     }),
@@ -474,6 +513,12 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.body(new Uint8Array(index), 200, { 'Content-Type': 'text/html; charset=utf-8' });
   });
 
+  // A rebuilt bundle only changes on disk, so the page it replaced has to be
+  // told; nothing about a loaded bundle notices that its source moved.
+  syncGuard.watch(() => {
+    for (const post of pages) post({ type: HUB_RESYNCED_TYPE });
+  });
+
   return new Promise<WebServer>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port: options.port, hostname: host }, (info) => {
       nodeWs.injectWebSocket(server);
@@ -485,6 +530,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         close: () =>
           new Promise<void>((done) => {
             threads.close();
+            syncGuard.close();
+            void protocolServer.close();
             hub.close();
             providerAuth.close();
             for (const handler of pluginApis) handler.close();

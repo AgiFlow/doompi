@@ -63,7 +63,6 @@ export interface WorkflowInputSummary {
 
 export interface WorkflowJobSummary {
   name: string;
-  runsOn?: string;
   steps: readonly string[];
 }
 
@@ -191,7 +190,6 @@ export function workflowDetailLines(
   }
   for (const job of detail.jobs) {
     lines.push(theme.bold(theme.fg('accent', job.name)));
-    if (job.runsOn) lines.push(theme.fg('dim', `  runs-on ${job.runsOn}`));
     if (job.steps.length === 0) lines.push(theme.fg('dim', '  no steps'));
     else for (const step of job.steps) appendWrapped(lines, `  • ${step}`, width, 'text', theme);
     lines.push('');

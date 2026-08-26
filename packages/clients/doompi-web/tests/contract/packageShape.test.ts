@@ -47,13 +47,13 @@ describe('doompi-web package contract', () => {
     expect(keywords).toEqual(keywords.map((keyword) => keyword.toLowerCase()));
   });
 
-  it('publishes exactly the web and server executables with a closed export surface', async () => {
+  it('publishes exactly one executable with a closed export surface', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.bin).toEqual({
-      'doompi-server': './dist/bin/server.mjs',
-      'doompi-web': './dist/bin/serve.mjs',
-    });
+    // One package, one command. A second bin here shadowed the one
+    // @agimon-ai/doompi-server publishes under the same name; the hub now
+    // resolves its Server from this dependency tree instead.
+    expect(manifest.bin).toEqual({ 'doompi-web': './dist/bin/serve.mjs' });
     expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './bundler', './package.json']);
   });
 
@@ -67,8 +67,8 @@ describe('doompi-web package contract', () => {
     // bundler subpath must work from an installed package, so Vite, React,
     // Tailwind, the TanStack runtimes, the plugin contracts, and the shared
     // component library ship as dependencies alongside the hono trio. Web is
-    // also the user-facing distribution, so it ships the DoomPi agent and
-    // Server client needed by its two commands. Plugin packages are still
+    // also the user-facing distribution, so it ships the DoomPi agent and the
+    // Server the hub launches sessions with. Plugin packages are still
     // discovered from manifests rather than depended on.
     expect(runtime).toEqual([
       '@agimon-ai/doompi',
@@ -76,7 +76,10 @@ describe('doompi-web package contract', () => {
       '@agimon-ai/doompi-server',
       '@agimon-ai/doompi-web-components',
       '@agimon-ai/doompi-web-contracts',
+      '@earendil-works/pi-client',
       '@earendil-works/pi-coding-agent',
+      '@earendil-works/pi-protocol',
+      '@earendil-works/pi-server',
       '@hono/node-server',
       '@hono/node-ws',
       '@tailwindcss/vite',

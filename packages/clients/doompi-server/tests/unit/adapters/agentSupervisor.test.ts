@@ -4,7 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { serializeRelaunchHandoff } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { type AgentSupervisorOptions, superviseAgentRelaunches } from '../../../src/adapters/agentSupervisor.ts';
-import type { AgentProcess, AgentProcessOptions, SessionFrame } from '../../../src/types/session.ts';
+import { relaunchAgentArgs } from '../../../src/services/serveOptions.ts';
+import type { AgentLauncher, AgentProcess, AgentProcessOptions, SessionFrame } from '../../../src/types/session.ts';
 
 interface FakeChild extends AgentProcess {
   emit(frame: SessionFrame): void;
@@ -59,16 +60,34 @@ afterEach(() => {
   fs.rmSync(workDir, { recursive: true, force: true });
 });
 
-function supervise(overrides: Partial<AgentSupervisorOptions> = {}): {
+const BASE_ARGS = ['--name', 'web', '--mode', 'rpc'];
+
+/**
+ * Stands in for the composing launcher.
+ *
+ * It applies the same major-mode rewrite the real one does, so these tests
+ * still assert the argument vector the replacement child is spawned with.
+ */
+function fakeLauncher(): AgentLauncher {
+  return {
+    resolve: (majorMode) =>
+      Promise.resolve({
+        command: 'pi',
+        args: majorMode === undefined ? [...BASE_ARGS] : relaunchAgentArgs(BASE_ARGS, majorMode),
+        cwd: workDir,
+        env: {},
+      }),
+    cleanup: () => Promise.resolve(),
+  };
+}
+
+async function supervise(overrides: Partial<AgentSupervisorOptions> = {}): Promise<{
   agent: AgentProcess;
   relaunchFile: string;
-} {
+}> {
   const relaunchFile = path.join(workDir, 'session.relaunch.json');
-  const agent = superviseAgentRelaunches({
-    command: 'doompi',
-    args: ['--name', 'web', '--mode', 'rpc'],
-    cwd: workDir,
-    env: {},
+  const agent = await superviseAgentRelaunches({
+    launcher: fakeLauncher(),
     relaunchFile,
     onNotice: (message) => notices.push(message),
     spawn: (options) => {
@@ -88,7 +107,7 @@ async function settled(): Promise<void> {
 
 describe('superviseAgentRelaunches', () => {
   it('fans frames both ways for the current child', async () => {
-    const { agent } = supervise();
+    const { agent } = await supervise();
     const seen: SessionFrame[] = [];
     agent.onFrame((frame) => seen.push(frame));
     spawned[0]?.emit({ type: 'hello' });
@@ -100,7 +119,7 @@ describe('superviseAgentRelaunches', () => {
   });
 
   it('relaunches with the recorded major mode and keeps listeners attached', async () => {
-    const { agent, relaunchFile } = supervise();
+    const { agent, relaunchFile } = await supervise();
     const seen: SessionFrame[] = [];
     agent.onFrame((frame) => seen.push(frame));
 
@@ -130,7 +149,7 @@ describe('superviseAgentRelaunches', () => {
   });
 
   it('ends the agent input when the relaunch file appears, and escalates if ignored', async () => {
-    const { relaunchFile } = supervise({ gracefulExitTimeoutMs: 200 });
+    const { relaunchFile } = await supervise({ gracefulExitTimeoutMs: 200 });
     fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
 
     // The watcher asks for a graceful end first.
@@ -147,7 +166,7 @@ describe('superviseAgentRelaunches', () => {
   });
 
   it('treats a malformed relaunch file as a real exit', async () => {
-    const { agent, relaunchFile } = supervise();
+    const { agent, relaunchFile } = await supervise();
     fs.writeFileSync(relaunchFile, 'not json');
     spawned[0]?.exit(1);
     await expect(agent.exited).resolves.toBe(1);
@@ -156,17 +175,40 @@ describe('superviseAgentRelaunches', () => {
   });
 
   it('never relaunches after stop, even when the file exists', async () => {
-    const { agent, relaunchFile } = supervise();
+    const { agent, relaunchFile } = await supervise();
     fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
     agent.stop();
     await expect(agent.exited).resolves.toBe(0);
     expect(spawned).toHaveLength(1);
   });
 
-  it('clears a relaunch file left behind by a crashed run at startup', () => {
+  it('settles on the exit code when the requested mode will not compose', async () => {
+    const relaunchFile = path.join(workDir, 'session.relaunch.json');
+    const { agent } = await supervise({
+      relaunchFile,
+      launcher: {
+        resolve: (majorMode) =>
+          majorMode === undefined
+            ? Promise.resolve({ command: 'pi', args: [...BASE_ARGS], cwd: workDir, env: {} })
+            : Promise.reject(new Error('modes.yaml is malformed')),
+        cleanup: () => Promise.resolve(),
+      },
+    });
+
+    fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
+    spawned[0]?.exit(2);
+
+    // Nothing to relaunch into, so the agent's own exit code stands rather
+    // than the server hanging on a replacement that will never arrive.
+    await expect(agent.exited).resolves.toBe(2);
+    expect(spawned).toHaveLength(1);
+    expect(notices.some((notice) => notice.includes('modes.yaml is malformed'))).toBe(true);
+  });
+
+  it('clears a relaunch file left behind by a crashed run at startup', async () => {
     const relaunchFile = path.join(workDir, 'stale.relaunch.json');
     fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
-    supervise({ relaunchFile });
+    await supervise({ relaunchFile });
     expect(fs.existsSync(relaunchFile)).toBe(false);
   });
 });

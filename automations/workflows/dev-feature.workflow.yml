@@ -61,7 +61,6 @@ on:
 jobs:
   plan:
     description: Turn the request into an evidence-backed implementation and test plan.
-    runs-on: macos-latest
     system-prompt: |
       Use the `doompi-development` and `doompi-testing` skills from the engineering domain.
       Inspect the repository before deciding the approach. Do not edit repository files.
@@ -84,7 +83,6 @@ jobs:
 
   implement:
     description: Implement the approved plan in the current checkout.
-    runs-on: macos-latest
     needs: plan
     system-prompt: |
       Act as the `doompi-developer` agent and apply the `doompi-development` skill.
@@ -109,7 +107,6 @@ jobs:
 
   verify:
     description: Run focused and repository-required checks without editing source files.
-    runs-on: macos-latest
     needs: implement
     system-prompt: |
       Act as the `doompi-tester` agent and apply the `doompi-testing` skill.
@@ -133,7 +130,6 @@ jobs:
 
   review:
     description: Review the implementation independently for correctness and regression risk.
-    runs-on: macos-latest
     needs: implement
     system-prompt: |
       Act as the `doompi-reviewer` agent and apply the `doompi-review` skill.
@@ -157,7 +153,6 @@ jobs:
 
   finalize:
     description: Produce a concise evidence-backed handoff.
-    runs-on: macos-latest
     needs: [verify, review]
     system-prompt: |
       Read $WORKFLOW_RUN_DIR/plan.md, $WORKFLOW_RUN_DIR/implementation.md,

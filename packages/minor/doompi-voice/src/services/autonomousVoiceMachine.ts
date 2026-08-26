@@ -2,6 +2,8 @@ import { assign, cancel, emit, raise, type SnapshotFrom, setup } from 'xstate';
 import { type NarrationBargeInEvidence, narrationBargeInIsActionable } from './narrationBargeIn.ts';
 import type { VoiceCompositionState } from './transcriptPolicy.ts';
 
+/** The failure code reported when no more specific one is available. */
+const GENERIC_FAILURE_CODE = 'autonomous_voice_failed';
 const GRACEFUL_STOP_TIMEOUT_MS = 20_000;
 const GRACEFUL_STOP_TIMER_ID = 'autonomous-voice-graceful-stop';
 const PLAYBACK_ECHO_TAIL_MS = 800;
@@ -89,7 +91,12 @@ export type AutonomousVoiceEvent =
 
 export type AutonomousVoiceEffect =
   | { type: 'effect.enable'; sessionId: string }
-  | ({ type: 'effect.beginCapture' } & AutonomousTurnIdentity)
+  /**
+   * `composing` selects the shorter endpoint window while a draft collects, so a short
+   * command can finalize as its own turn instead of arriving glued to the sentence
+   * before it. The machine owns the state; the session resolves it to an interval.
+   */
+  | ({ type: 'effect.beginCapture'; composing: boolean } & AutonomousTurnIdentity)
   | ({ type: 'effect.cancelCapture' } & AutonomousTurnIdentity)
   | ({ type: 'effect.finalizeCapture'; reason: 'endpoint' | 'duration-limit' | 'toggle-off' } & AutonomousTurnIdentity)
   | ({
@@ -265,7 +272,7 @@ export const autonomousVoiceMachine = setup({
         return { failure: { code: 'transcription_timed_out', recoverable: true } };
       if (event.type === 'GRACEFUL_STOP_TIMED_OUT')
         return { failure: { code: 'graceful_stop_timed_out', recoverable: false } };
-      return { failure: { code: 'autonomous_voice_failed', recoverable: false } };
+      return { failure: { code: GENERIC_FAILURE_CODE, recoverable: false } };
     }),
     assignPlaybackGeneration: assign(({ event }) =>
       event.type === 'PLAYBACK_STARTED' ? { playbackGeneration: event.playbackGeneration } : {},
@@ -274,7 +281,11 @@ export const autonomousVoiceMachine = setup({
       if (!context.sessionId) throw new Error('Autonomous voice enable requires a session identity.');
       return { type: 'effect.enable', sessionId: context.sessionId };
     }),
-    requestCapture: emit(({ context }) => ({ type: 'effect.beginCapture', ...requiredIdentity(context) })),
+    requestCapture: emit(({ context }) => ({
+      type: 'effect.beginCapture',
+      ...requiredIdentity(context),
+      composing: context.compositionState === 'collecting',
+    })),
     requestCaptureCancellation: emit(({ context }) => ({
       type: 'effect.cancelCapture',
       ...requiredIdentity(context),
@@ -389,7 +400,7 @@ export const autonomousVoiceMachine = setup({
     })),
     reportFailure: emit(({ context }) => ({
       type: 'effect.reportFailure',
-      failure: context.failure ?? { code: 'autonomous_voice_failed', recoverable: false },
+      failure: context.failure ?? { code: GENERIC_FAILURE_CODE, recoverable: false },
     })),
   },
 }).createMachine({

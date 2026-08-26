@@ -9,6 +9,7 @@ const REPOSITORY_CLI = ['node_modules', '@agimon-ai', 'doompi', 'dist', 'bin', '
 
 export interface BundledServerLaunch {
   readonly command: string;
+  /** Leading arguments the command needs; a caller appends its own after these. */
   readonly args: readonly string[];
   readonly environment: NodeJS.ProcessEnv;
 }
@@ -29,9 +30,16 @@ export function repositoryDoomPiCli(cwd: string, exists: FileExists = fs.existsS
   }
 }
 
-/** Resolves the Server and fallback agent shipped by a DoomPi Web installation. */
-export function bundledServerLaunch(
-  argv: readonly string[],
+/**
+ * Resolves the Server and fallback agent shipped by a DoomPi Web installation.
+ *
+ * This is what makes `doompi-web` need no flags: the hub launches the
+ * doompi-server sitting in its own dependency tree rather than whichever one
+ * PATH happens to name, and points it at the agent from the same install, so a
+ * checkout runs its own build. A repository that pins its own DoomPi still
+ * wins, since a session created there should run that repository's agent.
+ */
+export function defaultServerLaunch(
   cwd: string,
   environment: NodeJS.ProcessEnv,
   parentUrl: string = import.meta.url,
@@ -47,7 +55,7 @@ export function bundledServerLaunch(
 
   return {
     command: process.execPath,
-    args: [server, ...argv],
+    args: [server],
     environment: {
       ...agentEnvironment,
       [WEB_MODULE_ENV]: environment[WEB_MODULE_ENV] || pathToFileURL(bundledWeb).href,

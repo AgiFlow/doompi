@@ -1,13 +1,10 @@
-import { randomUUID } from 'node:crypto';
-import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
 import spawn from 'cross-spawn';
 import { forwardSignals, waitForExit } from '../adapters/compatibility/process.ts';
-import { updateHarnessState } from '../adapters/config/harnessState.ts';
 import { HARNESS_EVENT, type HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
-import { applyProjectTrust, hasProjectTrustOption, loadDoomConfig } from '../services/config/projectTrust';
-import type { DoomConfig } from '../services/config/projectTrust';
+import { hasProjectTrustOption } from '../services/config/projectTrust';
 import type { HarnessContext } from '../adapters/harnessContext';
 import type { HarnessOptions } from '../types/interfaces/harness';
+import { resolveLaunchPlan } from '../adapters/launchPlan.ts';
 import { piCliPath } from '../adapters/modules/moduleResolution';
 import { isRecord } from '../adapters/serialization/json';
 import { BaseCommand } from './baseCommand.ts';
@@ -17,22 +14,9 @@ const PRINT_OPTION = '--print';
 const APPROVE_OPTION = '--approve';
 const NO_SESSION_OPTION = '--no-session';
 const SYSTEM_PROMPT_OPTION = '--system-prompt';
-const THEME_OPTION = '--theme';
-const NO_THEMES_OPTION = '--no-themes';
-const EXTENSION_OPTION = '--extension';
 const IGNORE_STDIO = 'ignore';
 const PIPE_STDIO = 'pipe';
 const INHERIT_STDIO = 'inherit';
-const ENABLED_ENV = '1';
-const ELICITATION_SESSION_ENV = 'ELICITATION_SESSION_ID';
-
-/** Gives each Doompi launch a stable fallback identity without replacing one supplied by its caller. */
-export function ensureElicitationSessionId(environment: NodeJS.ProcessEnv): string {
-  const provided = environment[ELICITATION_SESSION_ENV]?.trim();
-  const sessionId = provided || randomUUID();
-  environment[ELICITATION_SESSION_ENV] = sessionId;
-  return sessionId;
-}
 
 export interface VibeLintInvocation {
   prompt: string;
@@ -88,11 +72,6 @@ export function formatVibeLintResponse(content: string): string {
   return `${JSON.stringify({ content: content.trim() })}\n`;
 }
 
-/** Ignores configured themes and loads only themes explicitly passed to the launcher. */
-export function overridePiThemes(piArgs: string[], themePath: string): string[] {
-  return [NO_THEMES_OPTION, THEME_OPTION, themePath, ...piArgs];
-}
-
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -115,58 +94,11 @@ export class LaunchCommand extends BaseCommand {
   }
 
   async execute(context: HarnessContext, telemetry: HarnessTelemetry): Promise<number> {
-    const { options, environment } = context;
-    ensureElicitationSessionId(environment);
-
-    const { buildRuntimeBundle, createRuntimeExtensionPlan } = await import('../adapters/runtimeBundle.ts');
-    const extensionPlan = createRuntimeExtensionPlan(context);
-    const { extensions, childExtensions } = extensionPlan;
-    updateHarnessState(
-      {
-        childExtensions,
-        compositionFingerprint: extensionPlan.fingerprint,
-      },
-      environment,
-    );
-
-    // Pi normally imports each package entry separately. Flattening the exact
-    // Pi load order into one graph removes repeated module resolution and parse
-    // work. The graph manifest makes the common path a stat-only cache hit;
-    // compilation failure keeps the historical extension list intact.
-    let launchExtensions = extensions;
-    try {
-      const built = await buildRuntimeBundle(context, extensionPlan);
-      launchExtensions = [built.bundle];
-      // A synced repository also has the doom wrapper in project settings. It
-      // must not compose the same factories after this aggregate has run.
-      environment[DOOMPI_EXTENSIONS_PROVIDED_ENV] = ENABLED_ENV;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`[doompi] extension bundle unavailable; using individual entries: ${detail}\n`);
-    }
-
-    // A malformed .doom/config.yaml aborts the launch, and the message only
-    // reaches the terminal that ran it, so record it before it propagates.
-    let doomConfig: DoomConfig;
-    try {
-      doomConfig = loadDoomConfig(options.repoRoot);
-    } catch (error) {
-      await telemetry.recordError(HARNESS_EVENT.configLoadFailed, error, { 'harness.phase': 'load_config' });
-      throw error;
-    }
-
-    // Whether a session ran with repository approval is the single most useful
-    // fact when reconstructing what an agent was allowed to do.
-    void telemetry.recordEvent(HARNESS_EVENT.projectTrustResolved, {
-      'harness.project_trust': doomConfig.projectTrust,
-      'harness.project_trust.overridden': hasProjectTrustOption(options.piArgs),
-    });
-
-    let piArgs = applyProjectTrust(options.piArgs, doomConfig);
-    piArgs = overridePiThemes(piArgs, context.defaultThemePath);
-    // launchExtensions is canonical factory activation order. Keep CLI argument
-    // adaptation here rather than leaking reversal rules into composition.
-    piArgs = [...launchExtensions.flatMap((extension) => [EXTENSION_OPTION, extension]), ...piArgs];
+    const { options } = context;
+    const plan = await resolveLaunchPlan(context, telemetry);
+    const environment = plan.environment;
+    let piArgs = plan.piArgs;
+    const launchExtensions = plan.extensions;
 
     if (options.outputFormat === VIBE_LINT_FORMAT) {
       const invocation = parseVibeLintInvocation(await readStdin());

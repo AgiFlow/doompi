@@ -36,23 +36,20 @@ name: verify
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     steps:
       - name: Run tests
         run: pnpm test
 
   summarize:
-    runs-on: ubuntu-latest
     needs: test
     steps:
       - name: Record result
         run: node scripts/write-verification-summary.mjs
 ```
 
-The GitHub-style `runs-on` value does not create an Ubuntu VM or container. `run` commands execute
-on the host with the workflow process's environment and privileges. Review workflow files as
-executable code. Runner-specific `interactiveRun` mappings are available for commands that require
-a TTY.
+`run` commands execute on the host with the workflow process's environment and privileges. There is
+no VM, container, or sandbox. Review workflow files as executable code. Runner-specific
+`interactiveRun` mappings are available for commands that require a TTY.
 
 ## Launch and monitor
 

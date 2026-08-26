@@ -37,7 +37,12 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs",
+      "require": "./dist/testing.cjs"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -53,14 +58,26 @@
     "@tanstack/store": "0.11.1",
     "@types/node": "26.2.0",
     "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "4.1.11",
     "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@tanstack/store": "0.11.1"
+    "@tanstack/store": "0.11.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.19.0"

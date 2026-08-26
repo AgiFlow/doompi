@@ -1,6 +1,11 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
-import { create{{ topic | pascalCase }}Api } from '../../src/adapters/{{ topic | camelCase }}Api.ts';
+import { api, create{{ topic | pascalCase }}Api } from '../../src/adapters/{{ topic | camelCase }}Api.ts';
 import { API_BASE_PATH, itemPath, itemUrl, SESSION_QUERY_PARAM } from '../../src/types/{{ topic | camelCase }}Api.ts';
+
+const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 
 /**
  * The client builds absolute URLs and the host mounts the app under a prefix it
@@ -32,5 +37,33 @@ describe('the {{ pluginId }} API', () => {
 
   it('escapes an id so an odd name cannot reshape the path', () => {
     expect(itemPath('a/b')).toBe('/items/a%2Fb');
+  });
+});
+
+/**
+ * The same routes reached the way a browser reaches them: through the mount the
+ * host strips. Calling the app directly proves the routes and not the mount, so
+ * an API written with absolute paths passes the block above and answers nothing
+ * in a running cockpit.
+ */
+describe('the {{ pluginId }} API as a host mounts it', () => {
+  it('answers on the full path, and refuses one outside its mount', async () => {
+    const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: '/repo' });
+
+    const response = await mounted.fetch(`/api/plugin/${API_BASE_PATH}${itemPath('item-1')}`);
+
+    expect(mounted.mountPath).toBe(`/api/plugin/${API_BASE_PATH}`);
+    expect(response.status).toBe(200);
+    expect((await mounted.fetch('/api/plugin/elsewhere/items')).status).toBe(404);
+    mounted.close();
+  });
+
+  it('serves the base path the manifest mounts it at', () => {
+    // Vibe-Lint reads the manifest statically and cannot see this value, so
+    // nothing else compares the two. A rename on one side alone means no
+    // client URL ever lands.
+    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' })).toMatchObject({
+      basePath: API_BASE_PATH,
+    });
   });
 });

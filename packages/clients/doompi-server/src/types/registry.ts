@@ -28,6 +28,13 @@ export interface SessionRecord {
    * answers rather than waits on.
    */
   apiSocketPath?: string;
+  /**
+   * Socket speaking Pi's own protocol, for clients that use PiClient.
+   *
+   * Absent on a server too old to serve one, so a client falls back to the
+   * framed session socket rather than failing to attach.
+   */
+  protocolSocketPath?: string;
   /** Server pid; a reader treats a dead pid as a stale record. */
   pid: number;
   /** ISO 8601 timestamp of registration. */

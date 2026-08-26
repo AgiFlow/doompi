@@ -12,7 +12,22 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text'],
-      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.d.ts', '**/*.config.*', '**/coverage/**'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        'tests/',
+        '**/*.d.ts',
+        '**/*.config.*',
+        '**/coverage/**',
+        // Components are rendered to static markup in tests/web, which proves
+        // they mount and read the props the host sends but can never reach a
+        // click handler or an effect. Counting those lines toward a threshold
+        // only buys assertions that pad it. Their behaviour is the cockpit's
+        // Playwright suite's, the same split doompi-web-components makes for
+        // its portal-rendered primitives. The plain modules beside them,
+        // stores and render helpers, stay counted.
+        'web/**/*.tsx',
+      ],
       reportOnFailure: false,
       enabled: true,
       skipFull: true,

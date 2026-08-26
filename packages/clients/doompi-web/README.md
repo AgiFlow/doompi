@@ -30,32 +30,37 @@ npm install -g @agimon-ai/doompi-web
 doompi-web
 ```
 
-Then open `http://127.0.0.1:7433`. Bare `doompi-web` is the hub: it watches the session registry
-(`~/.doompi/run` by default), attaches to every registered session, shows them all in the rail, and
-can start new ones from the page. Pass `--socket` instead to pin the cockpit to exactly one
-session, the pre-hub behavior.
+Then open `http://127.0.0.1:7433`. That is the whole command: no flag is required, and every one
+below is an override. `doompi-web` is the hub. It watches the session registry (`~/.doompi/run` by
+default), attaches to every registered session, shows them all in the rail, and can start new ones
+from the page. Sessions it starts run the `doompi-server` and the agent from this installation, so
+the cockpit and the sessions it creates are always the same build.
 
-Working on this repository, run the hub through the workspace script instead:
+Running it twice is not an error. The second one finds the first over the port, prints its URL, and
+exits, because one hub already serves every session.
+
+Working on this repository, one command builds what it needs and starts it:
 
 ```bash
-pnpm cockpit:build   # doompi, doompi-server, doompi-web
 pnpm cockpit
 ```
 
-It points `--spawn-command` and `DOOMPI_AGENT_COMMAND` at this checkout's builds. Without them a
-session created from the page runs whichever `doompi` is on PATH, which is a different composition:
-its extensions, commands, and minor modes are not the ones being edited here, so a change looks
+Nx caches the build, so a warm run is effectively just the hub. Sessions created from the page run
+this checkout's builds, which matters: a session on some other `doompi` is a different composition,
+and its extensions, commands, and minor modes are not the ones being edited here, so a change looks
 like it did nothing.
 
-| Flag                | Default         | Meaning                                          |
-| ------------------- | --------------- | ------------------------------------------------ |
-| `--registry-dir`    | `~/.doompi/run` | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |
-| `--spawn-command`   | `doompi-server` | Command launching sessions created from the page |
-| `--socket`          | off             | Fixed single-session mode: the socket to attach  |
-| `--auth-token-file` | with `--socket` | File holding that socket's attach token          |
-| `--port`            | `7433`          | HTTP port                                        |
-| `--host`            | `127.0.0.1`     | Bind address                                     |
-| `--assets`          | bundled         | Override the built SPA directory                 |
+| Flag              | Default         | Meaning                                          |
+| ----------------- | --------------- | ------------------------------------------------ |
+| `--registry-dir`  | `~/.doompi/run` | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |
+| `--spawn-command` | this install    | Command launching sessions created from the page |
+| `--port`          | `7433`          | HTTP port                                        |
+| `--host`          | `127.0.0.1`     | Bind address                                     |
+| `--assets`        | bundled         | Override the built SPA directory                 |
+
+Installing this package gives you `doompi-web` and nothing else. For a session server you run
+yourself, install [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server); the hub
+does not need it on PATH to create sessions.
 
 ## Security
 
@@ -126,13 +131,14 @@ npm pack --dry-run
 
 ### Plugin dev loop
 
-`pnpm dev` serves the cockpit from source on port 7434 and proxies `/api` (including the socket)
-to a hub on 7433. Point it at plugin packages and their `web/` sources hot-reload too, generated
-into `.dev/` and aliased over the empty committed registry exactly as `doompi sync` does:
+Two servers, so two terminals, and neither takes a flag. `pnpm dev` serves the cockpit from source
+on port 7434 and proxies `/api` (including the socket) to the hub on 7433. Point it at plugin
+packages and their `web/` sources hot-reload too, generated into `.dev/` and aliased over the empty
+committed registry exactly as `doompi sync` does:
 
 ```bash
-doompi-web                                   # the hub, serving the synced bundle on 7433
-pnpm dev                                     # serves the composition the last doompi sync bundled
+pnpm cockpit                                   # terminal one, at the repository root: the hub on 7433
+pnpm dev                                       # terminal two, here: the composition the last doompi sync bundled
 DOOMPI_WEB_PLUGIN_ROOTS=/path/to/pkg pnpm dev  # or an explicit list, path-delimiter separated
 ```
 

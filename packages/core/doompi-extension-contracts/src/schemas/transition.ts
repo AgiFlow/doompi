@@ -72,6 +72,17 @@ export interface DoomTransitionRequest {
 
 export type TransitionSynchronization =
   | { readonly kind: 'launcher' }
+  /**
+   * A launcher session whose Pi entry resolves its composition on every load.
+   *
+   * Pi freezes the CLI extension list at construction, so a session handed a
+   * fingerprint-named bundle cannot change composition without a new process.
+   * One entry that reads the selection when its factory runs lifts that limit:
+   * the list Pi holds never changes, and a reload composes again. Such a
+   * session is never `sync-required`, because the entry falls back to the
+   * individual extension paths when no aggregate has been built yet.
+   */
+  | { readonly kind: 'launcher-composed' }
   | {
       readonly kind: 'synchronized';
       readonly resolutionAvailable: boolean;

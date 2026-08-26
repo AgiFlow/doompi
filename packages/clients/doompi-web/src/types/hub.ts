@@ -86,6 +86,14 @@ export const SESSION_BACKLOG_TYPE = 'session_backlog';
 export const SESSION_FRAME_TYPE = 'session_frame';
 /** Hub-synthesized close for an answered dialog; Pi itself never announces one. */
 export const DIALOG_ANSWERED_TYPE = 'extension_ui_answered';
+/**
+ * Sync rebuilt the artifacts this page is running against.
+ *
+ * The plugin bundle the browser loaded is one of them, and a bundle only
+ * changes on disk: nothing about the running page notices. The page reloads
+ * itself rather than staying on surfaces the repository no longer describes.
+ */
+export const HUB_RESYNCED_TYPE = 'hub_resynced';
 
 /**
  * The custom session entry the DoomPi runtime journals with its minor-mode

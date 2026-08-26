@@ -816,6 +816,10 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
     cordis.provide(DOOM_VOICE_TOOLS_SERVICE, voiceTools);
     yield () => voiceTools.dispose();
     let voiceToolSession: VoiceToolSessionHandle<ExtensionContext> | undefined;
+    // Contributors register through cordis injection, so they all land after the façade
+    // is registered. Without this the description would be built once, from an empty
+    // catalog, and never name a capability.
+    let voiceToolCatalogSubscription: (() => void) | undefined;
     let narrationToolRuntime: NarrationToolRuntime | undefined;
     let active = true;
     let sessionGeneration = 0;
@@ -850,6 +854,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         contextSessionId === voiceToolSession.sessionId;
       voiceToolSession?.setActive(enabled);
       reconcileVoiceModeTools(pi, enabled);
+      voiceToolFacades?.refresh();
     };
     const autoController = new VoiceWorkerAutoCaptureController({
       loadConfig: () => {
@@ -982,6 +987,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       lastUi = undefined;
       lastAutoUi = undefined;
       narrationToolRuntime = undefined;
+      voiceToolCatalogSubscription?.();
+      voiceToolCatalogSubscription = undefined;
       voiceToolSession?.setActive(false);
       voiceToolSession?.dispose();
       voiceToolSession = undefined;
@@ -992,6 +999,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         try {
           const session = voiceTools.bindSession(sessionId, ctx);
           voiceToolSession = session;
+          voiceToolCatalogSubscription = session.subscribe(() => voiceToolFacades?.refresh());
           narrationToolRuntime = { context: ctx, session, controller: autoController };
           reloadHandoff = reason === 'reload' && reloadHandoffs.consume(sessionId) !== undefined;
         } catch (error) {
@@ -1036,6 +1044,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       sessionGeneration += 1;
       reconcileVoiceTools('disabled');
       narrationToolRuntime = undefined;
+      voiceToolCatalogSubscription?.();
+      voiceToolCatalogSubscription = undefined;
       voiceToolSession?.setActive(false);
       voiceToolSession?.dispose();
       voiceToolSession = undefined;

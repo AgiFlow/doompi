@@ -16,25 +16,36 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
-import { formatBatch, formatCatalog, formatError } from '../../services/voiceToolPrompt.ts';
+import { formatBatch, formatCatalog, formatCatalogDigest, formatError } from '../../services/voiceToolPrompt.ts';
 import { renderVoiceToolCall, renderVoiceToolResult } from './voiceToolRender.ts';
 
 const DESCRIBE_LABEL = 'Describe voice tools';
 const USE_LABEL = 'Use voice tools';
 
 /**
- * Both descriptions are static.
+ * `use_voice_tools` is static; `describe_voice_tools` carries the capability names.
  *
- * They used to be rebuilt from the live catalog on every revision, which put a
- * semicolon-joined capability dump in the tool list on every request and invalidated the
- * prompt cache each time a capability registered. The catalog is worth nothing to the
- * model without a token it can only get by calling the tool, so the listing belongs in
- * the result and the description belongs to the protocol.
+ * The description was static on both for a while, because rebuilding it from the live
+ * catalog on every revision invalidated the prompt cache each time a capability
+ * registered. That traded away the only thing that makes the façade discoverable: the
+ * contributed names appear nowhere else in pushed context, so a model asked to switch a
+ * minor mode has nothing to match on and never calls the tool at all. A protocol-only
+ * description describes a door with no sign on it.
+ *
+ * The cost is bounded rather than paid per revision. `refresh` re-registers only when
+ * the rendered digest actually changes, and it excludes the session-scoped token and the
+ * per-activation `enabled` flag, which are the two values that would otherwise move
+ * constantly. Contributors all register during startup, so the name set reaches a fixed
+ * point there and the description is stable for the rest of the session.
  */
-const DESCRIBE_DESCRIPTION =
+const DESCRIBE_PROTOCOL_TEXT =
   'Discover the voice capabilities registered for this session and obtain the catalog token that use_voice_tools requires. Call with no arguments to list capability names and descriptions. Call with names to also read each capability input schema. The token changes whenever the catalog changes.';
 const USE_DESCRIPTION =
   'Run registered voice capabilities as one sequential batch. Requires the catalog token from the most recent describe_voice_tools result and one call per capability, each input matching that capability input schema. The whole batch is validated before anything runs, so a rejected batch executes nothing.';
+
+function describeDescription(digest: string | undefined): string {
+  return digest ? `${DESCRIBE_PROTOCOL_TEXT}\n\n${digest}` : DESCRIBE_PROTOCOL_TEXT;
+}
 
 const DESCRIBE_PROMPT_SNIPPET = 'List the registered autonomous voice capabilities and obtain a catalog token.';
 const USE_PROMPT_SNIPPET = 'Run one or more registered autonomous voice capabilities in order.';
@@ -56,6 +67,13 @@ const NO_SESSION_ERROR: VoiceToolErrorPayload = {
 };
 
 export interface VoiceToolFacadeRegistration {
+  /**
+   * Re-publishes `describe_voice_tools` when the capability list has changed.
+   *
+   * Cheap to call on every catalog revision: re-registration only happens when the
+   * rendered digest differs, because `registerTool` rebuilds the whole system prompt.
+   */
+  refresh(): void;
   /** Drops the façade registration and prevents future use. */
   dispose(): void;
 }
@@ -109,12 +127,13 @@ function currentContextMatchesSession(
 
 function createDescribeTool(
   sessionProvider: VoiceToolSessionProvider,
-  waitUntilReady?: VoiceToolReadinessWaiter,
+  waitUntilReady: VoiceToolReadinessWaiter | undefined,
+  digest: string | undefined,
 ): DescribeTool {
   return {
     name: VOICE_DESCRIBE_TOOL_NAME,
     label: DESCRIBE_LABEL,
-    description: DESCRIBE_DESCRIPTION,
+    description: describeDescription(digest),
     promptSnippet: DESCRIBE_PROMPT_SNIPPET,
     promptGuidelines: [...DESCRIBE_PROMPT_GUIDELINES],
     parameters: VoiceToolDescribeInputSchema,
@@ -199,10 +218,19 @@ export function registerVoiceToolFacades(
   waitUntilReady?: VoiceToolReadinessWaiter,
 ): VoiceToolFacadeRegistration {
   let disposed = false;
+  let digest: string | undefined;
   const live: VoiceToolSessionProvider = () => (disposed ? undefined : sessionProvider());
-  pi.registerTool(createDescribeTool(live, waitUntilReady));
+  pi.registerTool(createDescribeTool(live, waitUntilReady, digest));
   pi.registerTool(createUseTool(live, waitUntilReady));
   return {
+    refresh() {
+      if (disposed) return;
+      // A bare describe: the digest carries names and descriptions, never schemas.
+      const next = formatCatalogDigest(sessionProvider()?.describe().tools ?? []);
+      if (next === digest) return;
+      digest = next;
+      pi.registerTool(createDescribeTool(live, waitUntilReady, digest));
+    },
     dispose() {
       disposed = true;
     },

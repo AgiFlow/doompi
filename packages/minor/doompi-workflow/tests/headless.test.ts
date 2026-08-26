@@ -17,40 +17,19 @@ vi.mock('@agimon-ai/doompi-ui/footer', () => {
   throw new Error(missingUiMessage);
 });
 
-function headlessPi() {
-  const eventListeners = new Map<string, Set<(data: unknown) => void>>();
-  return {
-    events: {
-      emit(channel: string, data: unknown) {
-        for (const listener of eventListeners.get(channel) ?? []) listener(data);
-      },
-      on(channel: string, listener: (data: unknown) => void) {
-        const listeners = eventListeners.get(channel) ?? new Set<(data: unknown) => void>();
-        listeners.add(listener);
-        eventListeners.set(channel, listeners);
-        return () => listeners.delete(listener);
-      },
-    },
-    exec: vi.fn(),
-    getActiveTools: vi.fn(() => []),
-    on: vi.fn(() => vi.fn()),
-    registerCommand: vi.fn(),
-    registerMessageRenderer: vi.fn(),
-    registerShortcut: vi.fn(),
-    registerTool: vi.fn(),
-    sendMessage: vi.fn(),
-    sendUserMessage: vi.fn(),
-    setActiveTools: vi.fn(),
-  };
-}
+import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
 
 describe('doom-workflow headless entry', () => {
   it('loads the sole standard Pi entry without the optional UI provider', async () => {
     vi.resetModules();
     const standard = await import('../src/exports/extensions/pi.ts');
-    const pi = headlessPi();
+    // A host with no terminal is also a host with no doompi-ui on its module
+    // path, and the entry has to survive both at once.
+    const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
 
-    await expect(standard.default(pi as never)).resolves.toBeUndefined();
-    expect(pi.registerTool).toHaveBeenCalled();
+    await expect(standard.default(host.pi)).resolves.toBeUndefined();
+
+    expect(host.tools.length).toBeGreaterThan(0);
+    await host.dispose();
   });
 });

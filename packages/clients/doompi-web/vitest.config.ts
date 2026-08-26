@@ -7,6 +7,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['tests/support/vitestEnv.ts'],
+    // Every serveWeb starts a sync guard, which spawns a real `doompi sync`
+    // and waits for it: about 1.3s per hub, and the drift never clears from a
+    // package directory, so it re-runs for each one. Under the whole suite in
+    // parallel that puts the first hub in a file over a 5s budget.
+    testTimeout: 15_000,
     bail: 10,
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts', 'tests/contract/**/*.test.ts'],
     exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*', 'tests/e2e/**/*'],

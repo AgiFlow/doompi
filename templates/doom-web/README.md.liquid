@@ -30,20 +30,21 @@ npm install -g @agimon-ai/{{ packageName }}
 {{ packageName }}
 ```
 
-Then open `http://127.0.0.1:7433`. Bare `{{ packageName }}` is the hub: it watches the session registry
+Then open `http://127.0.0.1:7433`. That is the whole command: no flag is required, and every one
+below is an override. `{{ packageName }}` is the hub. It watches the session registry
 (`~/.doompi/run` by default), attaches to every registered session, shows them all in the rail, and
-can start new ones from the page. Pass `--socket` instead to pin the cockpit to exactly one
-session, the pre-hub behavior.
+can start new ones from the page.
 
-| Flag                | Default         | Meaning                                          |
-| ------------------- | --------------- | ------------------------------------------------ |
-| `--registry-dir`    | `~/.doompi/run` | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |
-| `--spawn-command`   | `doompi-server` | Command launching sessions created from the page |
-| `--socket`          | off             | Fixed single-session mode: the socket to attach  |
-| `--auth-token-file` | with `--socket` | File holding that socket's attach token          |
-| `--port`            | `7433`          | HTTP port                                        |
-| `--host`            | `127.0.0.1`     | Bind address                                     |
-| `--assets`          | bundled         | Override the built SPA directory                 |
+Running it twice is not an error. The second one finds the first over the port, prints its URL, and
+exits, because one hub already serves every session.
+
+| Flag              | Default         | Meaning                                          |
+| ----------------- | --------------- | ------------------------------------------------ |
+| `--registry-dir`  | `~/.doompi/run` | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |
+| `--spawn-command` | `doompi-server` | Command launching sessions created from the page |
+| `--port`          | `7433`          | HTTP port                                        |
+| `--host`          | `127.0.0.1`     | Bind address                                     |
+| `--assets`        | bundled         | Override the built SPA directory                 |
 
 ## Security
 

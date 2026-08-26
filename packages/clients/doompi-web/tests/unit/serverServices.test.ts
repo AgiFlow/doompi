@@ -8,50 +8,36 @@ import { createFrameDecoder, encodeFrame } from '../../src/services/sessionFrami
 import { contentTypeFor, resolveAssetPath } from '../../src/services/staticAssets.ts';
 
 describe('parseServeOptions', () => {
-  const base = ['--socket', '/run/s.sock', '--auth-token-file', '/run/token'];
-
-  it('reads the socket pair and defaults the rest to loopback', () => {
-    expect(parseServeOptions(base)).toEqual({
-      socketPath: '/run/s.sock',
-      tokenFile: '/run/token',
+  it('needs no arguments at all: bare doompi-web is a loopback hub', () => {
+    expect(parseServeOptions([])).toEqual({
       registryDir: undefined,
+      spawnCommand: undefined,
       port: 7433,
       host: '127.0.0.1',
       assetsDir: undefined,
     });
   });
 
-  it('defaults to hub mode when no mode flag is given', () => {
-    const options = parseServeOptions([]);
-    expect(options.socketPath).toBeUndefined();
-    expect(options.tokenFile).toBeUndefined();
-    expect(options.registryDir).toBeUndefined();
-  });
-
-  it('reads a registry directory for hub mode', () => {
+  it('reads the overrides it offers', () => {
     expect(parseServeOptions(['--registry-dir', '/custom/run']).registryDir).toBe('/custom/run');
     expect(parseServeOptions(['--spawn-command', '/opt/fake-server']).spawnCommand).toBe('/opt/fake-server');
-  });
-
-  it('refuses to mix hub mode with a fixed socket', () => {
-    expect(() => parseServeOptions([...base, '--registry-dir', '/custom/run'])).toThrow(/not both/);
-  });
-
-  it('accepts the optional flags', () => {
-    const options = parseServeOptions([...base, '--port', '9000', '--host', '0.0.0.0', '--assets', '/srv/web']);
-    expect(options).toMatchObject({ port: 9000, host: '0.0.0.0', assetsDir: '/srv/web' });
-  });
-
-  it('insists on both halves of the credential', () => {
-    expect(() => parseServeOptions(['--auth-token-file', '/run/token'])).toThrow(/--socket is required/);
-    expect(() => parseServeOptions(['--socket', '/run/s.sock'])).toThrow(/--auth-token-file is required/);
+    expect(parseServeOptions(['--port', '9000', '--host', '0.0.0.0', '--assets', '/srv/web'])).toMatchObject({
+      port: 9000,
+      host: '0.0.0.0',
+      assetsDir: '/srv/web',
+    });
   });
 
   it('rejects malformed input rather than guessing', () => {
-    expect(() => parseServeOptions([...base, '--port', 'http'])).toThrow(/expects a port number/);
-    expect(() => parseServeOptions([...base, '--port', '70000'])).toThrow(/expects a port number/);
-    expect(() => parseServeOptions([...base, '--socket', '--port'])).toThrow(/needs a value/);
+    expect(() => parseServeOptions(['--port', 'http'])).toThrow(/expects a port number/);
+    expect(() => parseServeOptions(['--port', '70000'])).toThrow(/expects a port number/);
+    expect(() => parseServeOptions(['--registry-dir', '--port'])).toThrow(/needs a value/);
     expect(() => parseServeOptions(['--nonsense'])).toThrow(/Unknown option/);
+  });
+
+  it('no longer accepts the withdrawn single-session flags', () => {
+    expect(() => parseServeOptions(['--socket', '/run/s.sock'])).toThrow(/Unknown option/);
+    expect(() => parseServeOptions(['--auth-token-file', '/run/token'])).toThrow(/Unknown option/);
   });
 });
 

@@ -26,13 +26,9 @@ export interface WebServerOptions {
   /** Directory holding the built SPA. Defaults to the bundled dist/web. */
   assetsDir?: string;
   onNotice?: (message: string) => void;
-  /** Hub mode: watch this registry directory for running sessions. */
-  registryDir?: string;
-  /** Fixed single-session mode: dial exactly this socket. */
-  socketPath?: string;
-  /** Fixed single-session mode: the attach token for that socket. */
-  token?: string;
-  /** Hub mode: command launching created sessions; overridable so tests can stand in a fake. */
+  /** Watch this registry directory for running sessions. */
+  registryDir: string;
+  /** Command launching created sessions; overridable so tests can stand in a fake. */
   spawnCommand?: string;
   /** Provider auth runtime; overridable so tests can stand in a fake for Pi's ModelRuntime. */
   authRuntime?: () => Promise<AuthRuntime>;

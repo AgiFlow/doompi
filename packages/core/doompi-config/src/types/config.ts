@@ -37,7 +37,12 @@ export interface VoiceAutoCaptureConfig {
   model: string;
   startPhrases?: string[];
   stopPhrases?: string[];
+  composeOpenPhrases?: string[];
+  composeSendPhrases?: string[];
+  composeCancelPhrases?: string[];
   utteranceIdleMs?: number;
+  composeUtteranceIdleMs?: number;
+  composeNudgeMs?: number;
   transcriptionTimeoutMs?: number;
   tts: VoiceTtsConfig;
 }
@@ -45,7 +50,12 @@ export interface ResolvedVoiceAutoCaptureConfig {
   model: string;
   startPhrases: string[];
   stopPhrases: string[];
+  composeOpenPhrases: string[];
+  composeSendPhrases: string[];
+  composeCancelPhrases: string[];
   utteranceIdleMs: number;
+  composeUtteranceIdleMs: number;
+  composeNudgeMs: number;
   transcriptionTimeoutMs?: number;
   tts: VoiceTtsConfig;
 }

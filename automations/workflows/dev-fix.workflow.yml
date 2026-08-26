@@ -59,7 +59,6 @@ on:
 jobs:
   diagnose:
     description: Reproduce the defect and establish an evidence-backed root cause.
-    runs-on: macos-latest
     system-prompt: |
       Use the `doompi-development` and `doompi-testing` skills from the engineering domain.
       Inspect the repository and reproduce the reported behavior when safe. Do not edit repository files.
@@ -84,7 +83,6 @@ jobs:
 
   fix:
     description: Apply the smallest fix supported by the diagnosis.
-    runs-on: macos-latest
     needs: diagnose
     system-prompt: |
       Act as the `doompi-developer` agent and apply the `doompi-development` skill.
@@ -109,7 +107,6 @@ jobs:
 
   verify:
     description: Prove the defect is fixed and focused regressions pass.
-    runs-on: macos-latest
     needs: fix
     system-prompt: |
       Act as the `doompi-tester` agent and apply the `doompi-testing` skill.
@@ -133,7 +130,6 @@ jobs:
 
   summarize:
     description: Produce a concise evidence-backed fix handoff.
-    runs-on: macos-latest
     needs: verify
     system-prompt: |
       Read $WORKFLOW_RUN_DIR/diagnosis.md, $WORKFLOW_RUN_DIR/implementation.md,

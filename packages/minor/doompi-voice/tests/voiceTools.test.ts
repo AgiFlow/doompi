@@ -66,7 +66,7 @@ describe('voice Pi façade tools', () => {
     expect(describe).toBeDefined();
     expect(use).toBeDefined();
 
-    // The description is fixed protocol text now, not a rebuilt capability dump.
+    // Registered before any refresh, so the catalog has not reached the description yet.
     expect(describe?.description).toContain('catalog token');
     expect(describe?.description).not.toContain('transcribe');
     expect(describe?.promptGuidelines?.join('\n')).toContain('before every use_voice_tools batch');
@@ -110,6 +110,59 @@ describe('voice Pi façade tools', () => {
 
     registration.dispose();
     facades.dispose();
+    session.dispose();
+    voiceTools.dispose();
+  });
+
+  it('publishes the capability names into the describe description, and only when they change', () => {
+    const registrations: RegisteredTool[] = [];
+    const registered = new Map<string, RegisteredTool>();
+    const pi = {
+      registerTool: (tool: RegisteredTool) => {
+        registrations.push(tool);
+        registered.set(tool.name, tool);
+      },
+    };
+    const voiceTools = createDoomVoiceToolsService<ExtensionContext>('voice-digest-test');
+    const session = voiceTools.bindSession('digest-session', context('digest-session'));
+    const facades = registerVoiceToolFacades(pi as unknown as Pick<ExtensionAPI, 'registerTool'>, () => session);
+    expect(registrations).toHaveLength(2);
+
+    // An empty catalog keeps the protocol text alone rather than an empty header.
+    facades.refresh();
+    expect(registrations).toHaveLength(2);
+    expect(registered.get('describe_voice_tools')?.description).not.toContain('<voice_tool_catalog>');
+
+    // Contributors register after the façade, which is the case the digest exists for.
+    const minorMode = voiceTools.register(definition('minor_mode'));
+    facades.refresh();
+    expect(registrations).toHaveLength(3);
+    const description = registered.get('describe_voice_tools')?.description ?? '';
+    expect(description).toContain('catalog token');
+    expect(description).toContain('<capability name="minor_mode">Description for minor_mode</capability>');
+    // Session-scoped and activation-scoped values must stay out, or every activation
+    // would rebuild the system prompt.
+    expect(description).not.toContain('catalog_token>');
+    expect(description).not.toContain('enabled=');
+
+    // An unchanged catalog must not re-register: `registerTool` rebuilds the prompt.
+    facades.refresh();
+    session.setActive(true);
+    facades.refresh();
+    expect(registrations).toHaveLength(3);
+
+    // Deregistration is a change like any other.
+    minorMode.dispose();
+    facades.refresh();
+    expect(registrations).toHaveLength(4);
+    expect(registered.get('describe_voice_tools')?.description).not.toContain('minor_mode');
+
+    // A disposed façade stops publishing.
+    facades.dispose();
+    voiceTools.register(definition('major_mode'));
+    facades.refresh();
+    expect(registrations).toHaveLength(4);
+
     session.dispose();
     voiceTools.dispose();
   });

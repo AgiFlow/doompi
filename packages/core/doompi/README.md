@@ -218,7 +218,6 @@ on:
 
 jobs:
   implement:
-    runs-on: ubuntu-latest
     steps:
       - name: Build the feature
         timeout-minutes: 180
@@ -228,7 +227,6 @@ jobs:
               --cwd "$PWD" "$JOB_SYSTEM_PROMPT"
 
   article:
-    runs-on: ubuntu-latest
     needs: implement
     steps:
       - name: Write the article

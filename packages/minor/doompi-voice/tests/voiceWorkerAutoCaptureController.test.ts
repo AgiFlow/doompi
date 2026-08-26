@@ -25,6 +25,13 @@ const config: ResolvedVoiceConfig = {
     startPhrases: ['computer'],
     stopPhrases: ['stop listening'],
     utteranceIdleMs: 3_000,
+    // The shipped defaults carry the original phrases alongside the new ones, so these
+    // cases double as the backward-compatibility proof for `doom prompt` / `doom send`.
+    composeOpenPhrases: ['hey doom', 'doom prompt'],
+    composeSendPhrases: ["that's it", 'doom send'],
+    composeCancelPhrases: ['doom cancel', 'scratch that'],
+    composeUtteranceIdleMs: 1_200,
+    composeNudgeMs: 10_000,
     transcriptionTimeoutMs: 15_000,
     tts: { engine: 'macos-say' },
   },
@@ -353,6 +360,30 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.client.beginCapture).toHaveBeenCalledTimes(21);
   });
 
+  it('shortens the endpoint window for the turns that follow an opened draft', async () => {
+    const h = harness();
+    await enable(h);
+    const capturesOf = () => vi.mocked(h.client.beginCapture).mock.calls.map(([input]) => input.utteranceIdleMs);
+
+    // The first capture predates any draft, so it uses the ordinary window.
+    expect(capturesOf()).toEqual([3_000]);
+
+    const opened = await finishTurn(h, 'doom prompt Refactor voice.', 1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+
+    // Once collecting, a short command has to be able to finalize as its own turn, which
+    // it cannot do behind a three-second silence.
+    expect(capturesOf().at(-1)).toBe(1_200);
+
+    const sent = await finishTurn(h, 'Doom, send.', 2);
+    h.acknowledge(sent.identity, 2, sent.outcome);
+    await flush();
+    h.ready();
+    expect(capturesOf().at(-1)).toBe(3_000);
+  });
+
   it('buffers multiple finalized segments until standalone Doom send', async () => {
     const h = harness();
     await enable(h);
@@ -361,7 +392,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(opened.outcome).toBe('committed');
     expect(h.deliver).not.toHaveBeenCalled();
     expect(h.ui.notify).toHaveBeenCalledWith(
-      'Voice composition started. Say Doom send to submit or Doom cancel to discard.',
+      'Voice composition started. Say "that\'s it" to submit, or say "doom cancel" to discard.',
       'info',
     );
     h.candidate(opened.identity, 'doom prompt Refactor voice.', 1);
@@ -425,7 +456,10 @@ describe('VoiceWorkerAutoCaptureController', () => {
     const emptySend = await finishTurn(h, 'doom send', 2);
     expect(emptySend.outcome).toBe('discarded');
     expect(h.deliver).not.toHaveBeenCalled();
-    expect(h.ui.notify).toHaveBeenCalledWith('Voice composition is empty. Add content or say Doom cancel.', 'warning');
+    expect(h.ui.notify).toHaveBeenCalledWith(
+      'Voice composition is empty. Add content or say "doom cancel" to discard.',
+      'warning',
+    );
     h.acknowledge(emptySend.identity, 2, emptySend.outcome);
     await flush();
     h.ready();

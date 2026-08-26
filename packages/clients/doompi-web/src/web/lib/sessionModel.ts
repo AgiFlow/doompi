@@ -516,7 +516,8 @@ function applyJournalEntry(state: SessionState, entry: Frame): SessionState {
  * measurements.
  */
 export function prependHistory(state: SessionState, frames: readonly Frame[], page: number): SessionState {
-  const older = frames.reduce(reduceSession, initialSessionState);
+  // Wrapped: reduce would otherwise pass the index as the options argument.
+  const older = frames.reduce((carried, frame) => reduceSession(carried, frame), initialSessionState);
   const known = new Set(state.restoredIds);
   const restored = older.restoredIds.filter((id) => !known.has(id));
   if (restored.length === 0) return state;
@@ -537,12 +538,35 @@ export function prependHistory(state: SessionState, frames: readonly Frame[], pa
  * Pure and total: an unrecognised frame returns the state unchanged, so a Pi
  * protocol addition cannot break the cockpit, it just is not rendered yet.
  */
-export function reduceSession(state: SessionState, frame: Frame): SessionState {
+/** Frames whose only product is a timeline entry the protocol now publishes. */
+const TRANSCRIPT_FRAMES = new Set([
+  'message_update',
+  'message_end',
+  'tool_execution_start',
+  'tool_execution_update',
+  'tool_execution_end',
+]);
+
+export interface ReduceSessionOptions {
+  /**
+   * The protocol supplies the transcript, so this reducer must not build one.
+   *
+   * Both would otherwise write the same timeline from different sources: the
+   * snapshot replaces it wholesale while these frames append to it, and the
+   * result flickers between the two. The frames still reach here for
+   * everything else they carry, which is why this is a filter rather than a
+   * missing subscription.
+   */
+  transcriptFromProtocol?: boolean;
+}
+
+export function reduceSession(state: SessionState, frame: Frame, options: ReduceSessionOptions = {}): SessionState {
   const type = asString(frame.type);
+  if (options.transcriptFromProtocol && TRANSCRIPT_FRAMES.has(type)) return state;
 
   switch (type) {
     case 'replay':
-      return isRecord(frame.frame) ? reduceSession(state, frame.frame) : state;
+      return isRecord(frame.frame) ? reduceSession(state, frame.frame, options) : state;
 
     case 'agent_start':
       return { ...state, streaming: true, settled: false, toolsThisRun: 0 };
@@ -571,6 +595,7 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
       });
 
     case 'agent_settled': {
+      if (options.transcriptFromProtocol) return { ...state, streaming: false, settled: true };
       const closed = closeAssistant(state, undefined);
       const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
       return { ...marked, streaming: false, settled: true };
@@ -608,7 +633,9 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
         if (!data || !Array.isArray(data.modes)) return state;
         return { ...state, minorModes: data as unknown as MinorModeProjection };
       }
-      return applyJournalEntry(state, entry);
+      // A journalled user message is a transcript entry the protocol already
+      // publishes; the catalog above is DoomPi's own and always applies.
+      return options.transcriptFromProtocol ? state : applyJournalEntry(state, entry);
     }
 
     case 'response':

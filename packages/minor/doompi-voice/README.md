@@ -51,7 +51,12 @@ voice:
     model: provider/model-id
     startPhrases: []
     stopPhrases: []
+    composeOpenPhrases: [hey doom]
+    composeSendPhrases: ["that's it"]
+    composeCancelPhrases: [scratch that]
     utteranceIdleMs: 3000
+    composeUtteranceIdleMs: 1200
+    composeNudgeMs: 10000
     transcriptionTimeoutMs: 120000
     tts:
       engine: macos-say
@@ -68,12 +73,14 @@ defaults to 3,000.
 
 - `SPC v v` records and transcribes once; it does not enable autonomous Voice tools.
 - `SPC v e` enters autonomous capture and exits it again.
-- While autonomous capture is active, say `doom prompt` at the beginning of a segment to open a composed prompt. Later finalized segments are buffered until standalone `doom send` submits the combined text or standalone `doom cancel` discards it.
+- While autonomous capture is active, say `hey doom` at the beginning of a segment to open a long composed prompt. Later finalized segments are buffered until `that's it` submits the combined text or `doom cancel` discards it.
 - `describe_voice_tools` returns the active session's spoken capability catalog.
 - `use_voice_tools` executes a bounded ordered batch against that catalog.
 - `narrate` speaks one primary-agent-authored utterance and waits for physical playback.
 
-Composition commands ignore case and punctuation. `doom send` and `doom cancel` are commands only while a draft is active and only when they are the entire segment. Ordinary autonomous turns keep their current automatic submission behavior. A composed prompt is queued as a Pi follow-up while Pi is busy.
+Composition is for long spoken prompts, so a multi-part prompt is not submitted half-written. A short utterance needs no phrase and is delivered as soon as it finalizes.
+
+All three phrase sets are configurable and each ships with two defaults: `composeOpenPhrases` is `hey doom, doom prompt`, `composeSendPhrases` is `that's it, doom send`, and `composeCancelPhrases` is `doom cancel, scratch that`. Matching ignores case, punctuation and apostrophes, and tolerates small transcription differences, so `thats it` and `doom sent` are recognised. Send and cancel act as commands only while a draft is open, and only when the phrase is the whole segment or ends a sentence, so ordinary dictation containing those words stays content. While a draft collects, the endpoint window shortens to `composeUtteranceIdleMs` (default 1,200 ms) so a short command finalizes as its own turn. A composed prompt is queued as a Pi follow-up while Pi is busy.
 
 Drafts are held in memory for the active autonomous session and are limited to 32,768 characters. Worker restarts and five-minute idle capture rotation preserve the draft, but deactivation, extension reload, and process restart discard it. Wait until the status returns to `composing, listening` before speaking the next segment because capture pauses during transcription.
 
@@ -107,6 +114,10 @@ This is not a blanket “nothing leaves the machine” guarantee:
 Manual recordings and autonomous spool windows are bounded to five minutes. Deactivation or
 cancellation interrupts pending capture and playback. A manual reload does not silently reactivate
 the microphone.
+
+## Architecture
+
+See [Architecture](./docs/ARCHITECTURE.md) for the thread and process topology, the path a single spoken turn takes, the XState lifecycle and how it relates to Pi, the module and cordis service graph, and narration gating and barge-in. [SPEC.md](./docs/SPEC.md) is the normative contract.
 
 ## Public API
 

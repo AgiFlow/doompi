@@ -12,6 +12,7 @@ interface PackageManifest {
   readonly pi?: unknown;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly peerDependencies?: Readonly<Record<string, string>>;
+  readonly peerDependenciesMeta?: Readonly<Record<string, { optional?: boolean }>>;
 }
 
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
@@ -30,12 +31,21 @@ describe('doompi-web-contracts package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.pi).toBeUndefined();
     // Contracts carry no runtime dependency of their own, so any plugin author
-    // can adopt them; react appears only as a devDependency for its component
-    // types. defineSessionStore constructs a TanStack store, but the host owns
-    // the one instance the cockpit bundle dedupes on, so it is a peer.
+    // can adopt them. defineSessionStore constructs a TanStack store, but the
+    // host owns the one instance the cockpit bundle dedupes on, so it is a peer.
+    // react and react-dom are peers only because ./testing renders a component
+    // to markup; both are optional, so the contract itself still installs bare.
     expect(manifest.dependencies).toBeUndefined();
-    expect(manifest.peerDependencies).toEqual({ '@tanstack/store': '0.11.1' });
-    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './package.json']);
+    expect(manifest.peerDependencies).toEqual({
+      '@tanstack/store': '0.11.1',
+      react: '19.2.8',
+      'react-dom': '19.2.8',
+    });
+    expect(manifest.peerDependenciesMeta).toEqual({
+      react: { optional: true },
+      'react-dom': { optional: true },
+    });
+    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './package.json', './testing']);
     expect(manifest.files).toEqual(['dist']);
   });
 });

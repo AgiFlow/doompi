@@ -14,7 +14,7 @@ import {
 } from '../../src/web/lib/sessionModel.ts';
 
 const fold = (frames: Array<Record<string, unknown>>, from: SessionState = initialSessionState): SessionState =>
-  frames.reduce(reduceSession, from);
+  frames.reduce((carried, frame) => reduceSession(carried, frame), from);
 
 const assistant = (state: SessionState): AssistantEntry =>
   state.entries.find((entry) => entry.kind === 'assistant') as AssistantEntry;
@@ -416,7 +416,7 @@ describe('reduceSession', () => {
     const replayed = [
       { type: 'extension_ui_request', id: 'r1', method: 'select', options: ['a'] },
       { type: 'extension_ui_answered', id: 'r1' },
-    ].reduce(reduceSession, initialSessionState);
+    ].reduce((carried, frame) => reduceSession(carried, frame), initialSessionState);
     expect(replayed.dialog).toBeNull();
   });
 

@@ -110,15 +110,3 @@ export function watchRegistry(registryDir: string, onNotice?: (message: string) 
     },
   };
 }
-
-/** Wraps the fixed single-session CLI mode in the same source shape the hub consumes. */
-export function staticRecordSource(record: SessionRecord): RecordSource {
-  return {
-    subscribe(listener) {
-      listener([record]);
-    },
-    close() {
-      // Nothing to release.
-    },
-  };
-}
