@@ -22,6 +22,7 @@ import { type ScriptedModel, startScriptedModel } from './support/scriptedModel.
  */
 
 const REPO_DOOMPI_CLI = fileURLToPath(new URL('../../dist/bin/cli.mjs', import.meta.url));
+const CHECKED_IN_MODES = fileURLToPath(new URL('../fixtures/repository/.doom/modes.yaml', import.meta.url));
 const TEST_TIMEOUT_MS = 120_000;
 /** The turn is one round trip to a local server; a slow machine is still seconds. */
 const SETTLE_TIMEOUT_MS = 60_000;
@@ -51,6 +52,7 @@ function createFixture(model: ScriptedModel): Fixture {
   const agentDirectory = path.join(base, 'agent');
   for (const directory of [root, home, agentDirectory]) fs.mkdirSync(directory, { recursive: true });
   writeMinimalDoomRepository(root);
+  fs.copyFileSync(CHECKED_IN_MODES, path.join(root, '.doom', 'modes.yaml'));
 
   return {
     root,
@@ -62,10 +64,10 @@ function createFixture(model: ScriptedModel): Fixture {
       // whatever was set directly (harnessContext.ts), so this is the seam.
       OLLAMA_BASE_URL: model.baseUrl,
       OLLAMA_API_KEY: 'scripted-system-test',
-      // Inherited DOOMPI_ state would make the run read the developer's session
-      // rather than the one this fixture built. DOOMPI_ROOT is deliberately not
-      // set: the launcher finds the repository from its cwd, and pinning it
-      // here changes which modes.yaml it resolves against.
+      // Parent-only DoomPi state must not redirect the child away from this fixture.
+      DOOMPI_ROOT: undefined,
+      DOOMPI_STATE: undefined,
+      DOOMPI_CORDIS_HOST_REQUIRED: undefined,
       DOOMPI_MAJOR_MODE: undefined,
       DOOMPI_LAYERS: undefined,
     },
