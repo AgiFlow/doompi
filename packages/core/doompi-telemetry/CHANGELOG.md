@@ -1,3 +1,13 @@
+## 0.0.1-alpha.38 (2026-08-26)
+
+### 🚀 Features
+
+- expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.37 (2026-08-23)
 
 This was a version bump only for @agimon-ai/doompi-telemetry to align it with other projects, there were no code changes.
