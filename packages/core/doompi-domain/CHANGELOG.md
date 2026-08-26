@@ -1,3 +1,30 @@
+## 0.0.1-alpha.17 (2026-08-26)
+
+### 🚀 Features
+
+- expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
+- **vibe-lint-plugin-doom-web:** flag a restyled element and colour-check every web tree ([985f710](https://github.com/AgiFlow/doompi/commit/985f710))
+- **doompi-web:** restore session transcripts and finish the selection axes ([c698bd2](https://github.com/AgiFlow/doompi/commit/c698bd2))
+- **doompi-web:** plugin-declared slots, session stores, and a plugin dev loop ([478a584](https://github.com/AgiFlow/doompi/commit/478a584))
+- **doompi-web:** profile and domain packages own their selection axes ([71f8ab8](https://github.com/AgiFlow/doompi/commit/71f8ab8))
+
+### 🩹 Fixes
+
+- **doompi-domain:** give /domains a picker over rpc ([ff39c28](https://github.com/AgiFlow/doompi/commit/ff39c28))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.2
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.37
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.16 (2026-08-26)
 
 ### 🚀 Features
