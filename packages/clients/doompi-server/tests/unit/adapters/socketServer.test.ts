@@ -151,6 +151,61 @@ describe('serveSessionSocket', () => {
     expect(second.frames[1]).toEqual({ type: 'replay', frame: { type: 'message_update', text: 'while away' } });
   });
 
+  it('replays the latest UI projections after a client reconnects', async () => {
+    const agent = fakeAgent();
+    const socketPath = startSocket(agent, 1);
+    agent.emit({
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'doom-major-mode',
+      statusText: '[minimal]',
+    });
+
+    const first = await connect(socketPath);
+    first.socket.write(encodeFrame({ type: 'attach', token: TOKEN }));
+    await waitFor(() => first.frames.length > 1, 'the initial projection');
+    expect(first.frames).toEqual([
+      { type: 'attached', replayed: 1, dropped: 0 },
+      {
+        type: 'replay',
+        frame: {
+          type: 'extension_ui_request',
+          method: 'setStatus',
+          statusKey: 'doom-major-mode',
+          statusText: '[minimal]',
+        },
+      },
+    ]);
+
+    agent.emit({
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'doom-major-mode',
+      statusText: '[copilot]:development,testing',
+    });
+    await waitFor(() => first.frames.length > 2, 'the updated projection');
+    first.socket.destroy();
+    await waitFor(() => !sockets[0]?.attached, 'the detach');
+    agent.emit({ type: 'message_update', text: 'older' });
+    agent.emit({ type: 'message_update', text: 'newest' });
+
+    const second = await connect(socketPath);
+    second.socket.write(encodeFrame({ type: 'attach', token: TOKEN }));
+    await waitFor(() => second.frames.length > 2, 'the projection and detached replay');
+    expect(second.frames).toEqual([
+      { type: 'attached', replayed: 2, dropped: 1 },
+      {
+        type: 'replay',
+        frame: {
+          type: 'extension_ui_request',
+          method: 'setStatus',
+          statusKey: 'doom-major-mode',
+          statusText: '[copilot]:development,testing',
+        },
+      },
+      { type: 'replay', frame: { type: 'message_update', text: 'newest' } },
+    ]);
+  });
   it('lets a restarted server reclaim the path a crash left behind', async () => {
     const socketPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-server-')), 'session.sock');
     // A crashed server leaves a path nothing answers on; a plain file behaves

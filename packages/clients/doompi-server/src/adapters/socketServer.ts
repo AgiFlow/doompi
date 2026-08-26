@@ -59,6 +59,12 @@ function sameToken(candidate: string, expected: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+function uiProjectionKey(frame: SessionFrame): string | undefined {
+  if (frame.type !== 'extension_ui_request') return undefined;
+  if (frame.method === 'setStatus' && typeof frame.statusKey === 'string') return `status:${frame.statusKey}`;
+  if (frame.method === 'setWidget' && typeof frame.widgetKey === 'string') return `widget:${frame.widgetKey}`;
+  return undefined;
+}
 /**
  * Publishes one supervised agent on an authenticated unix socket.
  *
@@ -68,11 +74,14 @@ function sameToken(candidate: string, expected: string): boolean {
  */
 export function serveSessionSocket(options: SessionSocketOptions): SessionSocket {
   const backlog = createDetachedBacklog(options.backlogLimit ?? DEFAULT_BACKLOG);
+  const uiProjections = new Map<string, SessionFrame>();
   let client: net.Socket | undefined;
 
   options.agent.onFrame((frame) => {
+    const projectionKey = uiProjectionKey(frame);
+    if (projectionKey !== undefined) uiProjections.set(projectionKey, frame);
     if (client) client.write(encodeFrame(frame));
-    else backlog.record(frame);
+    else if (projectionKey === undefined) backlog.record(frame);
   });
 
   const server = net.createServer((connection) => {
@@ -110,9 +119,10 @@ export function serveSessionSocket(options: SessionSocketOptions): SessionSocket
         authenticated = true;
         client = connection;
         const drained = backlog.drain();
-        connection.write(encodeFrame(handshakeAccepted(drained.frames.length, drained.dropped)));
-        for (const missed of drained.frames) connection.write(encodeFrame(replayFrame(missed)));
-        options.onNotice?.(`client attached, replayed ${drained.frames.length} frame(s)`);
+        const replayed = [...uiProjections.values(), ...drained.frames];
+        connection.write(encodeFrame(handshakeAccepted(replayed.length, drained.dropped)));
+        for (const missed of replayed) connection.write(encodeFrame(replayFrame(missed)));
+        options.onNotice?.(`client attached, replayed ${replayed.length} frame(s)`);
       }
     });
 

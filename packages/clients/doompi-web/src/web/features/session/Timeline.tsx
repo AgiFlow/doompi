@@ -9,7 +9,7 @@ import {
   Separator,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
@@ -39,6 +39,9 @@ const PAGE_BACK_THRESHOLD_PX = 400;
  * there; everything above it is what makes a long session slow.
  */
 const LIVE_TAIL_ENTRIES = 40;
+/** How quickly the viewport catches a moving streaming tail without snapping to it. */
+const FOLLOW_EASING = 0.32;
+const FOLLOW_MIN_STEP_PX = 2;
 
 /**
  * The speaker's label.
@@ -56,7 +59,7 @@ function Gutter({ label, tone, trailing = false }: { label: string; tone: string
   );
 }
 
-function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
+const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
   if (entry.kind === 'user') {
     return (
       // What the reader said sits inboard of what the session said, on its own
@@ -141,7 +144,7 @@ function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string |
       </p>
     </div>
   );
-}
+});
 
 /**
  * One transcript, whichever fold it reads: the focused session's own, or a
@@ -166,6 +169,9 @@ export function Transcript({
   // an event fires after the fact and a fast run can grow the transcript
   // before the browser has reported the reader's scroll.
   const lastHeight = useRef(0);
+  const following = useRef(true);
+  const followFrame = useRef<number | null>(null);
+  const animatingFollow = useRef(false);
   const [unread, setUnread] = useState(false);
   const hasOlder = useHasOlderHistory(sessionId);
   // Where the bottom of the transcript sat before a window was prepended.
@@ -182,30 +188,78 @@ export function Transcript({
   const atBottom = (element: HTMLDivElement, height: number): boolean =>
     element.scrollTop + element.clientHeight >= height - PINNED_THRESHOLD_PX;
 
-  const jumpToLatest = (): void => {
+  const cancelFollowAnimation = (): void => {
+    if (followFrame.current !== null) cancelAnimationFrame(followFrame.current);
+    followFrame.current = null;
+    animatingFollow.current = false;
+  };
+
+  const followLatest = (): void => {
     const element = scroller.current;
-    if (!element) return;
+    if (!element || followFrame.current !== null) return;
+    animatingFollow.current = true;
+    const step = (): void => {
+      const current = scroller.current;
+      if (!current || !following.current) {
+        followFrame.current = null;
+        animatingFollow.current = false;
+        return;
+      }
+      const target = Math.max(0, current.scrollHeight - current.clientHeight);
+      const distance = target - current.scrollTop;
+      if (Math.abs(distance) <= 1) {
+        current.scrollTop = target;
+        followFrame.current = null;
+        animatingFollow.current = false;
+        setUnread(false);
+        return;
+      }
+      const movement = Math.max(FOLLOW_MIN_STEP_PX, Math.abs(distance) * FOLLOW_EASING);
+      current.scrollTop += Math.sign(distance) * Math.min(Math.abs(distance), movement);
+      followFrame.current = requestAnimationFrame(step);
+    };
+    followFrame.current = requestAnimationFrame(step);
+  };
+
+  const jumpToLatest = (): void => {
+    following.current = true;
     setUnread(false);
-    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+    followLatest();
   };
 
   /** Reaching the bottom by hand is the same as never having left it. */
   const onScroll = (): void => {
     const element = scroller.current;
     if (!element) return;
-    if (atBottom(element, element.scrollHeight)) setUnread(false);
+    const bottom = atBottom(element, element.scrollHeight);
+    if (!animatingFollow.current) following.current = bottom;
+    if (bottom) setUnread(false);
     if (element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
       anchor.current = { height: element.scrollHeight, top: element.scrollTop };
       requestOlderHistory(sessionId);
     }
   };
 
+  /** Wheel input is explicit intent to leave an in-flight live follow. */
+  const onWheel = (): void => {
+    cancelFollowAnimation();
+    following.current = false;
+  };
+
+  /** Pointer input may become a scrollbar drag; its scroll event decides pinning. */
+  const onPointerDown = (): void => {
+    cancelFollowAnimation();
+  };
+
   // A different fold starts at the bottom of its transcript.
-  useEffect(() => {
+  useLayoutEffect(() => {
+    cancelFollowAnimation();
     lastHeight.current = 0;
     firstId.current = null;
     anchor.current = null;
+    following.current = true;
     setUnread(false);
+    return cancelFollowAnimation;
   }, [store]);
 
   useLayoutEffect(() => {
@@ -225,12 +279,21 @@ export function Transcript({
         return;
       }
     }
-    // Was the reader at the end before this entry made the transcript longer?
-    const following = atBottom(element, lastHeight.current);
-    lastHeight.current = element.scrollHeight;
-    if (following) {
+    // The first layout starts at the end without animating through the whole
+    // transcript. Later growth chases the live tail one frame at a time.
+    if (lastHeight.current === 0) {
       element.scrollTop = element.scrollHeight;
+      lastHeight.current = element.scrollHeight;
+      following.current = true;
       setUnread(false);
+      return;
+    }
+    const shouldFollow = following.current || atBottom(element, lastHeight.current);
+    lastHeight.current = element.scrollHeight;
+    if (shouldFollow) {
+      following.current = true;
+      setUnread(false);
+      followLatest();
       return;
     }
     setUnread(true);
@@ -243,6 +306,8 @@ export function Transcript({
       <div
         ref={scroller}
         onScroll={onScroll}
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
         data-testid={testId}
         className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]"
       >

@@ -91,8 +91,11 @@ describe('doompi-server over the pi protocol', () => {
     const connected = await connect();
     const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
     const snapshots: number[] = [];
+    const progress: unknown[] = [];
     lease.subscribe((snapshot) => snapshots.push(snapshot.revision));
-
+    lease.onEvent((event) => {
+      if (event.type === 'session_progress') progress.push(event.progress);
+    });
     const prompting = lease.prompt('what changed?');
     await vitestTick();
 
@@ -101,6 +104,10 @@ describe('doompi-server over the pi protocol', () => {
 
     agent.emit({ type: 'agent_start' });
     agent.emit({ type: 'message_start', message: { id: 'm1', role: 'assistant', content: [] } });
+    agent.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'a file' },
+    });
     agent.emit({
       type: 'message_end',
       message: { id: 'm1', role: 'assistant', content: [{ type: 'text', text: 'a file' }], stopReason: 'stop' },
@@ -112,6 +119,12 @@ describe('doompi-server over the pi protocol', () => {
     expect(settled.phase).toBe('idle');
     expect(settled.transcript).toHaveLength(1);
     expect(settled.transcript[0]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'a file' }] });
+    expect(progress).toContainEqual(
+      expect.objectContaining({
+        type: 'item_updated',
+        item: expect.objectContaining({ content: [{ type: 'text', text: 'a file' }], status: 'streaming' }),
+      }),
+    );
     // Snapshots reached the subscriber, and revisions only ever move forward.
     expect(snapshots.length).toBeGreaterThan(0);
     expect([...snapshots].sort((a, b) => a - b)).toEqual(snapshots);

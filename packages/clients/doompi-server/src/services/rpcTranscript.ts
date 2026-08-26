@@ -89,6 +89,57 @@ function assistantContent(value: unknown): AssistantTranscriptItem['content'] {
   return parts;
 }
 
+type AssistantContentPart = AssistantTranscriptItem['content'][number];
+
+/** Applies Pi RPC's delta-only assistant event to the live protocol item. */
+function applyAssistantEvent(
+  content: AssistantTranscriptItem['content'],
+  value: unknown,
+): AssistantTranscriptItem['content'] {
+  if (!isRecord(value) || !Number.isInteger(value.contentIndex) || (value.contentIndex as number) < 0) return content;
+  const index = value.contentIndex as number;
+  const parts: Array<AssistantContentPart | undefined> = [...content];
+  const existing = parts[index];
+  switch (value.type) {
+    case 'text_start':
+      parts[index] = existing?.type === 'text' ? existing : { type: 'text', text: '' };
+      break;
+    case 'text_delta':
+      parts[index] = { type: 'text', text: (existing?.type === 'text' ? existing.text : '') + text(value.delta) };
+      break;
+    case 'text_end':
+      parts[index] = { type: 'text', text: text(value.content, existing?.type === 'text' ? existing.text : '') };
+      break;
+    case 'thinking_start':
+      parts[index] = existing?.type === 'thinking' ? existing : { type: 'thinking', thinking: '' };
+      break;
+    case 'thinking_delta':
+      parts[index] = {
+        type: 'thinking',
+        thinking: (existing?.type === 'thinking' ? existing.thinking : '') + text(value.delta),
+      };
+      break;
+    case 'thinking_end':
+      parts[index] = {
+        type: 'thinking',
+        thinking: text(value.content, existing?.type === 'thinking' ? existing.thinking : ''),
+      };
+      break;
+    case 'toolcall_start': {
+      const toolCallId = text(value.id);
+      const toolName = text(value.toolName);
+      if (toolCallId && toolName) parts[index] = { type: 'toolCall', toolCallId, toolName, input: {} };
+      break;
+    }
+    case 'toolcall_end': {
+      const completed = assistantContent([value.toolCall])[0];
+      if (completed) parts[index] = completed;
+      break;
+    }
+  }
+  return parts.filter((part): part is AssistantContentPart => part !== undefined);
+}
+
 /** Maps a user or tool payload onto the protocol's text-and-image union. */
 function plainContent(value: unknown): UserTranscriptItem['content'] {
   if (typeof value === 'string') return [{ type: 'text', text: value }];
@@ -150,6 +201,7 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
   };
   /** Assistant messages still streaming, by message id. */
   const streaming = new Map<string, AssistantTranscriptItem>();
+  let activeAssistantId: string | undefined;
   /** Tool calls still running, by tool call id. */
   const running = new Map<string, ToolTranscriptItem>();
 
@@ -250,15 +302,18 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           const id = text(message.id, `assistant-${snapshot.revision}`);
           const item = assistantFrom(frame.message, id);
           streaming.set(id, item);
+          activeAssistantId = id;
           return { progress: { type: 'item_started', item } };
         }
         case 'message_update': {
-          const id = text(isRecord(frame.message) ? frame.message.id : undefined);
+          const id = text(isRecord(frame.message) ? frame.message.id : undefined, activeAssistantId);
           const existing = streaming.get(id);
           if (!existing) return {};
           const item: AssistantTranscriptItem = {
             ...existing,
-            content: assistantContent(isRecord(frame.message) ? frame.message.content : undefined),
+            content: isRecord(frame.message)
+              ? assistantContent(frame.message.content)
+              : applyAssistantEvent(existing.content, frame.assistantMessageEvent),
           };
           streaming.set(id, item);
           return { progress: { type: 'item_updated', item } };
@@ -274,9 +329,10 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           // A tool result closes here too, but the transcript builds tool items
           // from the execution frames, which carry the call as well as its result.
           if (ended.role !== 'assistant') return {};
-          const id = text(ended.id);
+          const id = text(ended.id, activeAssistantId);
           const started = streaming.get(id) ?? assistantFrom(frame.message, id || `assistant-${snapshot.revision}`);
           streaming.delete(started.id);
+          if (activeAssistantId === started.id) activeAssistantId = undefined;
           const message = ended;
           const stopReason = text(message.stopReason);
           const errorMessage = text(message.errorMessage);

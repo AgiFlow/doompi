@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serializeRelaunchHandoff } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { type AgentSupervisorOptions, superviseAgentRelaunches } from '../../../src/adapters/agentSupervisor.ts';
 import { relaunchAgentArgs } from '../../../src/services/serveOptions.ts';
@@ -118,6 +118,28 @@ describe('superviseAgentRelaunches', () => {
     await expect(agent.exited).resolves.toBe(0);
   });
 
+  it('replays startup frames to every server-side consumer', async () => {
+    const { agent } = await supervise();
+    spawned[0]?.emit({ type: 'extension_ui_request', method: 'setStatus', statusKey: 'doom-major-mode' });
+    spawned[0]?.emit({ type: 'extension_ui_request', method: 'setStatus', statusKey: 'doom-team-agents' });
+
+    const first: SessionFrame[] = [];
+    const second: SessionFrame[] = [];
+    agent.onFrame((frame) => first.push(frame));
+    agent.onFrame((frame) => second.push(frame));
+
+    const startup = [
+      { type: 'extension_ui_request', method: 'setStatus', statusKey: 'doom-major-mode' },
+      { type: 'extension_ui_request', method: 'setStatus', statusKey: 'doom-team-agents' },
+    ];
+    expect(first).toEqual(startup);
+    expect(second).toEqual(startup);
+
+    spawned[0]?.emit({ type: 'agent_settled' });
+    expect(first).toEqual([...startup, { type: 'agent_settled' }]);
+    expect(second).toEqual([...startup, { type: 'agent_settled' }]);
+  });
+
   it('relaunches with the recorded major mode and keeps listeners attached', async () => {
     const { agent, relaunchFile } = await supervise();
     const seen: SessionFrame[] = [];
@@ -149,17 +171,16 @@ describe('superviseAgentRelaunches', () => {
   });
 
   it('ends the agent input when the relaunch file appears, and escalates if ignored', async () => {
-    const { relaunchFile } = await supervise({ gracefulExitTimeoutMs: 200 });
+    const { relaunchFile } = await supervise({ gracefulExitTimeoutMs: 500 });
     fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
 
-    // The watcher asks for a graceful end first.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(spawned[0]?.inputEnded).toBe(true);
+    // The watcher asks for a graceful end first. Wait for the filesystem event
+    // instead of assuming it will arrive within a fixed scheduling window.
+    await vi.waitFor(() => expect(spawned[0]?.inputEnded).toBe(true), { timeout: 5_000 });
     expect(spawned[0]?.stopped).toBe(false);
 
     // An agent that ignores the request is killed, and the relaunch proceeds.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    expect(spawned[0]?.stopped).toBe(true);
+    await vi.waitFor(() => expect(spawned[0]?.stopped).toBe(true), { timeout: 1_000 });
     await settled();
     expect(spawned).toHaveLength(2);
     expect(spawned[1]?.options.args).toEqual(['--name', 'web', '--mode', 'rpc', '--major-mode', 'minimal']);

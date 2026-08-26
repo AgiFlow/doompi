@@ -80,6 +80,59 @@ describe('rpc transcript projection', () => {
     assertEncodable(ended.snapshot);
   });
 
+  it('assembles the delta-only assistant events emitted by current Pi RPC', () => {
+    const subject = transcript();
+    const message = {
+      id: 'm1',
+      role: 'assistant',
+      content: [],
+      model: { provider: 'anthropic', id: 'opus' },
+    };
+
+    subject.apply({ type: 'message_start', message });
+    const textDelta = subject.apply({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Hello' },
+    });
+    const thinkingDelta = subject.apply({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'thinking_delta', contentIndex: 1, delta: 'Checking' },
+    });
+
+    expect(textDelta.progress).toMatchObject({
+      type: 'item_updated',
+      item: { content: [{ type: 'text', text: 'Hello' }] },
+    });
+    expect(thinkingDelta.progress).toMatchObject({
+      type: 'item_updated',
+      item: {
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'thinking', thinking: 'Checking' },
+        ],
+      },
+    });
+
+    const ended = subject.apply({
+      type: 'message_end',
+      message: {
+        ...message,
+        content: [
+          { type: 'text', text: 'Hello world' },
+          { type: 'thinking', thinking: 'Checked' },
+        ],
+        stopReason: 'stop',
+      },
+    });
+    expect(ended.snapshot?.transcript[0]).toMatchObject({
+      status: 'complete',
+      content: [
+        { type: 'text', text: 'Hello world' },
+        { type: 'thinking', thinking: 'Checked' },
+      ],
+    });
+  });
+
   it('maps an aborted message onto the aborted status the schema requires', () => {
     const subject = transcript();
     apply(subject, [{ type: 'message_start', message: { id: 'm1', role: 'assistant', content: [] } }]);

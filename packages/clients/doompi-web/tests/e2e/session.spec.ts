@@ -159,6 +159,7 @@ test('previews the files a prompt mentions and renders the reply as markdown', a
 test('follows the newest reply, and stops following once the reader scrolls back', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  await expect(page.getByTestId('connection-status')).toHaveText(/attached/);
 
   const timeline = page.getByTestId('timeline');
   const atBottom = () =>
@@ -191,11 +192,18 @@ test('follows the newest reply, and stops following once the reader scrolls back
   // Reading back through the transcript unpins it: more output must not yank
   // the reader to the bottom mid-sentence.
   await timeline.evaluate((element) => element.scrollTo({ top: 0 }));
+  const readingPosition = await timeline.evaluate((element) => ({
+    top: element.scrollTop,
+    height: element.scrollHeight,
+  }));
   cockpit.session.emit({
     type: 'message_update',
     assistantMessageEvent: { type: 'text_delta', delta: 'arrived while reading\n' },
   });
   await expect(page.getByTestId('timeline-jump')).toBeVisible();
+  const heldPosition = await timeline.evaluate((element) => ({ top: element.scrollTop, height: element.scrollHeight }));
+  expect(heldPosition.top).toBe(readingPosition.top);
+  expect(heldPosition.height).toBeGreaterThan(readingPosition.height);
   expect(await atBottom()).toBe(false);
 
   // The way back is one click, and it starts following again.

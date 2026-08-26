@@ -6,6 +6,8 @@ import { spawnAgentProcess } from './agentProcess.ts';
 
 /** How long a relaunching agent may take to flush and exit before it is killed. */
 const GRACEFUL_EXIT_TIMEOUT_MS = 15_000;
+/** Startup frames retained for every server-side consumer of this agent generation. */
+const EARLY_FRAME_LIMIT = 512;
 
 export interface AgentSupervisorOptions {
   /** Composes and resolves what to spawn, per major mode. */
@@ -34,6 +36,7 @@ export interface AgentSupervisorOptions {
 export async function superviseAgentRelaunches(options: AgentSupervisorOptions): Promise<AgentProcess> {
   const spawn = options.spawn ?? spawnAgentProcess;
   const listeners: Array<(frame: SessionFrame) => void> = [];
+  const earlyFrames: SessionFrame[] = [];
   let stopping = false;
   let current: AgentProcess | undefined;
   let endRequested = false;
@@ -93,7 +96,13 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
     const attach = (agent: AgentProcess): void => {
       current = agent;
       endRequested = false;
+      earlyFrames.length = 0;
       agent.onFrame((frame) => {
+        if (listeners.length === 0) {
+          if (earlyFrames.length === EARLY_FRAME_LIMIT) earlyFrames.shift();
+          earlyFrames.push(frame);
+          return;
+        }
         for (const listener of listeners) listener(frame);
       });
       void agent.exited.then(async (code) => {
@@ -131,6 +140,7 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
     },
     onFrame(listener) {
       listeners.push(listener);
+      for (const frame of earlyFrames) listener(frame);
     },
     exited,
     endInput() {
