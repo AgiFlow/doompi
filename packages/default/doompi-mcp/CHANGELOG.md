@@ -1,3 +1,25 @@
+## 0.0.1-alpha.38 (2026-08-26)
+
+### 🚀 Features
+
+- expand workflow cockpit and voice composition ([4917a2b](https://github.com/AgiFlow/doompi/commit/4917a2b))
+- expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
+- **vibe-lint-plugin-doom-web:** flag a restyled element and colour-check every web tree ([985f710](https://github.com/AgiFlow/doompi/commit/985f710))
+- **doompi-web:** let plugins own each tool call's message on a shared MessageItem shell ([26ca25f](https://github.com/AgiFlow/doompi/commit/26ca25f))
+- **doompi-web:** restore session transcripts and finish the selection axes ([c698bd2](https://github.com/AgiFlow/doompi/commit/c698bd2))
+- **doompi-web:** plugin-declared slots, session stores, and a plugin dev loop ([478a584](https://github.com/AgiFlow/doompi/commit/478a584))
+- **doompi-web:** add tool renderers, Leader Space bindings, and a provider settings page ([7f45ffe](https://github.com/AgiFlow/doompi/commit/7f45ffe))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.37 (2026-08-23)
 
 ### 🚀 Features

@@ -1,3 +1,31 @@
+## 0.0.1-alpha.38 (2026-08-26)
+
+### 🚀 Features
+
+- serve sessions over Pi's protocol and share test harnesses ([6f22b41](https://github.com/AgiFlow/doompi/commit/6f22b41))
+- expand workflow cockpit and voice composition ([4917a2b](https://github.com/AgiFlow/doompi/commit/4917a2b))
+- expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
+- **doompi-voice:** show voice in the activity dock ([ae3314f](https://github.com/AgiFlow/doompi/commit/ae3314f))
+- **vibe-lint-plugin-doom-web:** flag a restyled element and colour-check every web tree ([985f710](https://github.com/AgiFlow/doompi/commit/985f710))
+- **doompi-web:** let plugins own each tool call's message on a shared MessageItem shell ([26ca25f](https://github.com/AgiFlow/doompi/commit/26ca25f))
+- **doompi-web:** restore session transcripts and finish the selection axes ([c698bd2](https://github.com/AgiFlow/doompi/commit/c698bd2))
+- **doompi-web:** plugin-declared slots, session stores, and a plugin dev loop ([478a584](https://github.com/AgiFlow/doompi/commit/478a584))
+- **doompi-web:** add tool renderers, Leader Space bindings, and a provider settings page ([7f45ffe](https://github.com/AgiFlow/doompi/commit/7f45ffe))
+- **doompi-web:** let packages own their activity-dock groups with live runner and workflow detail ([781cae1](https://github.com/AgiFlow/doompi/commit/781cae1))
+- **doompi-web-contracts:** let every package declare its cockpit minor mode ([fb4e556](https://github.com/AgiFlow/doompi/commit/fb4e556))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.37 (2026-08-23)
 
 ### 🧱 Updated Dependencies
