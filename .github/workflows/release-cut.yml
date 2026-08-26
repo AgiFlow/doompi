@@ -81,6 +81,7 @@ jobs:
         if: env.RELEASE_PROJECTS != ''
         run: |
           set -euo pipefail
+          pnpm audit:workspace
           pnpm fmt:check
           pnpm nx run-many -t build --parallel=3
           pnpm examples:check

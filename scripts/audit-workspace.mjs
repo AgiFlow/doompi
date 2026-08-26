@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,11 +31,11 @@ const toolingPackageName = '@agimon-ai/vibe-lint-plugin-doom-extension';
 // Rule plugins that govern a stack still in development are legal workspace
 // targets even when the package audit scans only runtime package groups.
 const additionalToolingPackageNames = ['@agimon-ai/vibe-lint-plugin-doom-web'];
-const unreleasedOwnedPackageNames = new Set([
-  '@agimon-ai/doompi-web',
-  '@agimon-ai/doompi-web-components',
-  '@agimon-ai/doompi-web-contracts',
-]);
+// Owned packages that are deliberately kept off the registry. A name here must
+// never be a runtime dependency of a released package: the release publishes
+// the resolved `workspace:*` version, so a released package that points at an
+// unreleased one ships a dependency npm cannot install.
+const unreleasedOwnedPackageNames = new Set([]);
 const vibeLintVersion = '0.0.1-alpha.29';
 
 function readJson(file) {
@@ -207,6 +206,16 @@ if (releaseProjects.length !== releasedNames.size || new Set(releaseProjects).si
 for (const name of releasedNames) if (!releaseProjects.includes(name)) fail(`Release group is missing ${name}`);
 for (const name of releaseProjects)
   if (!releasedNames.has(name)) fail(`Release group includes non-owned package ${name}`);
+for (const { manifest } of packageRecords) {
+  if (!releasedNames.has(manifest.name)) continue;
+  for (const section of runtimeDependencySections) {
+    for (const name of Object.keys(manifest[section] ?? {})) {
+      if (ownedNames.has(name) && !releasedNames.has(name)) {
+        fail(`${manifest.name} is released but depends on the unreleased ${name} through ${section}`);
+      }
+    }
+  }
+}
 
 const pluginsRoot = path.join(root, 'plugins');
 const examplePlugins = fs
