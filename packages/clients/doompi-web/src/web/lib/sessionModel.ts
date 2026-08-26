@@ -562,7 +562,9 @@ export interface ReduceSessionOptions {
 
 export function reduceSession(state: SessionState, frame: Frame, options: ReduceSessionOptions = {}): SessionState {
   const type = asString(frame.type);
-  if (options.transcriptFromProtocol && TRANSCRIPT_FRAMES.has(type)) return state;
+  if (options.transcriptFromProtocol && TRANSCRIPT_FRAMES.has(type)) {
+    return type === 'tool_execution_start' ? { ...state, toolsThisRun: state.toolsThisRun + 1 } : state;
+  }
 
   switch (type) {
     case 'replay':
@@ -595,8 +597,7 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
       });
 
     case 'agent_settled': {
-      if (options.transcriptFromProtocol) return { ...state, streaming: false, settled: true };
-      const closed = closeAssistant(state, undefined);
+      const closed = options.transcriptFromProtocol ? state : closeAssistant(state, undefined);
       const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
       return { ...marked, streaming: false, settled: true };
     }

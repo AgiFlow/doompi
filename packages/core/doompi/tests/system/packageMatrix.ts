@@ -62,6 +62,8 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-ui': 'packages/core/doompi-ui',
   '@agimon-ai/doompi-user-feedback': 'layers/ask-user/doompi-user-feedback',
   '@agimon-ai/doompi-voice': 'packages/minor/doompi-voice',
+  '@agimon-ai/doompi-web-components': 'packages/core/doompi-web-components',
+  '@agimon-ai/doompi-web-contracts': 'packages/core/doompi-web-contracts',
   '@agimon-ai/doompi-workflow': 'packages/minor/doompi-workflow',
 };
 

@@ -19,6 +19,7 @@ import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import {
   applyHistoryPage,
   applySessionFrame,
+  applyThreadFrame,
   dropSessionStore,
   refreshSessionFacts,
   resetSessionStore,
@@ -149,13 +150,13 @@ export function startSessionRuntime(): () => void {
           if (!Array.isArray(frame.frames)) return;
           const key = threadStoreKey(frame.sessionId, frame.threadId);
           resetSessionStore(key);
-          for (const replayed of frame.frames.filter(isRecord)) applySessionFrame(key, replayed);
+          for (const replayed of frame.frames.filter(isRecord)) applyThreadFrame(key, replayed);
           return;
         }
         case THREAD_FRAME_TYPE: {
           if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
           if (!isRecord(frame.frame)) return;
-          applySessionFrame(threadStoreKey(frame.sessionId, frame.threadId), frame.frame);
+          applyThreadFrame(threadStoreKey(frame.sessionId, frame.threadId), frame.frame);
           return;
         }
         default:

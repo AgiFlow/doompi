@@ -63,6 +63,11 @@ export function applySessionFrame(sessionId: string, frame: Record<string, unkno
   sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame, { transcriptFromProtocol: true }));
 }
 
+/** A thread has no protocol session, so its journal remains its authoritative transcript. */
+export function applyThreadFrame(threadKey: string, frame: Record<string, unknown>): void {
+  sessionStoreFor(threadKey).setState((state) => reduceSession(state, frame));
+}
+
 /**
  * One session's paging state: how far back the page has read, and whether a
  * request is already in flight. Kept beside the timeline rather than inside it
@@ -131,20 +136,44 @@ export function seedHistoryCursor(sessionId: string, cursor: string | null): voi
   setHistory(sessionId, { ...NO_HISTORY, cursor });
 }
 
-/** A subscribe replays history from scratch; the fold must start clean too. */
+/** Keeps DoomPi-only timeline entries beside the protocol items that preceded them. */
+function mergeProtocolEntries(previous: TimelineEntry[], protocol: TimelineEntry[]): TimelineEntry[] {
+  const protocolKinds = new Set(['user', 'assistant', 'tool']);
+  const localByAnchor = new Map<string | null, TimelineEntry[]>();
+  let anchor: string | null = null;
+  for (const entry of previous) {
+    if (protocolKinds.has(entry.kind)) {
+      anchor = entry.id;
+      continue;
+    }
+    const local = localByAnchor.get(anchor) ?? [];
+    local.push(entry);
+    localByAnchor.set(anchor, local);
+  }
+
+  const merged = [...(localByAnchor.get(null) ?? [])];
+  const used = new Set<string | null>([null]);
+  for (const entry of protocol) {
+    merged.push(entry, ...(localByAnchor.get(entry.id) ?? []));
+    used.add(entry.id);
+  }
+  for (const [entryAnchor, local] of localByAnchor) {
+    if (!used.has(entryAnchor)) merged.push(...local);
+  }
+  return merged;
+}
+
 /**
- * Replaces the timeline with the protocol's authoritative transcript.
+ * Replaces protocol-owned transcript items with the authoritative snapshot.
  *
- * The protocol is snapshot-authoritative, so a snapshot supersedes whatever
- * the page had rather than merging into it: that is what removes the local
- * echo, the replay de-duplication, and the journal re-reads the framed wire
- * needed. Everything DoomPi owns on this state, dialogs and modes and
- * statuses, is left exactly as it was.
+ * Local echoes disappear when the protocol publishes them. DoomPi-only entries,
+ * such as notices, queued messages, and run dividers, retain their place beside
+ * the protocol item that preceded them.
  */
 export function applyProtocolTranscript(sessionId: string, entries: TimelineEntry[], streaming: boolean): void {
   sessionStoreFor(sessionId).setState((state) => ({
     ...state,
-    entries,
+    entries: mergeProtocolEntries(state.entries, entries),
     streaming,
     settled: !streaming,
     pendingUserId: null,

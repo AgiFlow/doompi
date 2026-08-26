@@ -286,7 +286,7 @@
       "./src/prompts/doompi-author-domain/SKILL.md",
       "./src/prompts/doompi-author-domain/references/domains-contract.md"
     ],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -317,7 +317,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web"],
     "os": [],
     "cpu": []
   },
@@ -356,7 +356,8 @@
       "./ui-hub": "tir",
       "./voice-tools": "tir",
       "./voice-reload-handoff": "tir",
-      "./package.json": "esm"
+      "./package.json": "esm",
+      "./testing": "tir"
     },
     "exportTargets": {
       ".": {
@@ -524,7 +525,12 @@
         "import": "./dist/voiceReloadHandoff.mjs",
         "require": "./dist/voiceReloadHandoff.cjs"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "import": "./dist/testing.mjs",
+        "require": "./dist/testing.cjs"
+      }
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
@@ -594,7 +600,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-goal/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -625,7 +631,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web"],
     "os": [],
     "cpu": []
   },
@@ -685,7 +691,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-help/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -796,7 +802,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-loop/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -869,7 +875,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-mcp/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "src/types/webMcp.ts", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -967,7 +973,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-plan/SKILL.md"],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1145,7 +1151,7 @@
       "./src/prompts/doompi-author-profile/SKILL.md",
       "./src/prompts/doompi-author-profile/references/profiles-contract.md"
     ],
-    "files": ["dist", "llms.txt", "README.md", "src/prompts", "LICENSE", "package.json"],
+    "files": ["dist", "web", "llms.txt", "README.md", "src/prompts", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1176,7 +1182,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web"],
     "os": [],
     "cpu": []
   },
@@ -1730,7 +1736,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "package.json"],
+    "files": ["dist", "web", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1742,7 +1748,8 @@
       "./api/team-snapshot": "esm",
       "./env": "esm",
       "./extensions/pi": "esm",
-      "./package.json": "esm"
+      "./package.json": "esm",
+      "./web-hub": "tir"
     },
     "exportTargets": {
       ".": "./dist/index.mjs",
@@ -1751,7 +1758,12 @@
       "./api/team-snapshot": "./dist/api/teamSnapshot.mjs",
       "./env": "./dist/env.mjs",
       "./extensions/pi": "./dist/extensions/pi.mjs",
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      }
     },
     "main": null,
     "types": "./dist/index.d.mts",
@@ -1761,7 +1773,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web", "src/types/webSubagents.ts"],
     "os": [],
     "cpu": []
   },
@@ -1821,7 +1833,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1992,7 +2004,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./themes/doom-pi-dark.json"],
-    "files": ["dist", "themes"],
+    "files": ["dist", "web", "themes"],
     "os": [],
     "cpu": []
   },
@@ -2023,7 +2035,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-voice/SKILL.md"],
-    "files": ["dist", "models", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": ["dist", "web", "models", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -2032,7 +2044,8 @@
       ".": "tir",
       "./extensions/pi": "tir",
       "./package.json": "esm",
-      "./skills/workflow-recovery/SKILL.md": "esm"
+      "./skills/workflow-recovery/SKILL.md": "esm",
+      "./web-hub": "tir"
     },
     "exportTargets": {
       ".": {
@@ -2046,7 +2059,12 @@
         "require": "./dist/extensions/pi.cjs"
       },
       "./package.json": "./package.json",
-      "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md"
+      "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md",
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      }
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
@@ -2062,7 +2080,16 @@
       "./src/prompts/doompi-author-workflow/SKILL.md",
       "./src/prompts/doompi-use-workflow/SKILL.md"
     ],
-    "files": ["dist", "llms.txt", "README.md", "src/prompts", "skills/workflow-recovery/SKILL.md"],
+    "files": [
+      "dist",
+      "llms.txt",
+      "README.md",
+      "src/prompts",
+      "skills/workflow-recovery/SKILL.md",
+      "web",
+      "src/types/webWorkflows.ts",
+      "src/types/webWorkflowTerminal.ts"
+    ],
     "os": [],
     "cpu": []
   },
@@ -2397,6 +2424,68 @@
       "./src/prompts/doompi-author-extension/references/extension-contract.md"
     ],
     "files": ["assets", "dist", "llms.txt", "README.md", "src/prompts"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-web-components": {
+    "exports": {
+      ".": "tir",
+      "./theme": "tir",
+      "./styles.css": "esm",
+      "./themes/*.json": "esm",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./theme": {
+        "types": "./dist/theme.d.mts",
+        "import": "./dist/theme.mjs",
+        "require": "./dist/theme.cjs"
+      },
+      "./styles.css": "./styles/tokens.css",
+      "./themes/*.json": "./themes/*.json",
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {},
+    "assets": [],
+    "files": ["dist", "styles", "themes", "llms.txt", "README.md", "LICENSE"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-web-contracts": {
+    "exports": {
+      ".": "tir",
+      "./package.json": "esm",
+      "./testing": "tir"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./package.json": "./package.json",
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "import": "./dist/testing.mjs",
+        "require": "./dist/testing.cjs"
+      }
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {},
+    "assets": [],
+    "files": ["dist"],
     "os": [],
     "cpu": []
   }

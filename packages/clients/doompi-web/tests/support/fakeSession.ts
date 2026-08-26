@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-
+import { createAgentServerService, serveProtocolSocket } from '@agimon-ai/doompi-server';
+import type { SessionSnapshot, TranscriptItem } from '@earendil-works/pi-protocol';
 export type Frame = Record<string, unknown>;
 
 export interface FakeSession {
@@ -26,6 +27,8 @@ export interface FakeSession {
 }
 
 const encode = (frame: Frame): string => `${JSON.stringify(frame)}\n`;
+
+const stringValue = (value: unknown, fallback = ''): string => (typeof value === 'string' ? value : fallback);
 
 let fakeSessionCounter = 0;
 
@@ -64,6 +67,201 @@ export interface FakeSessionOptions {
   apiSocketPath?: string;
 }
 
+function fixtureTranscript(id: string, cwd: string, name: string) {
+  const now = Date.now();
+  let revision = 0;
+  let nextId = 1;
+  let activeAssistantId: string | undefined;
+  let snapshot: SessionSnapshot = {
+    id,
+    cwd,
+    name,
+    createdAt: now,
+    updatedAt: now,
+    phase: 'idle',
+    model: { provider: 'unknown', id: 'unknown' },
+    thinkingLevel: 'medium',
+    attached: false,
+    locked: false,
+    revision,
+    transcript: [],
+    queuedSteer: [],
+    queuedSteerCount: 0,
+  };
+
+  const commit = (updates: Partial<SessionSnapshot>): SessionSnapshot => {
+    revision += 1;
+    snapshot = { ...snapshot, ...updates, revision, updatedAt: Date.now() };
+    return snapshot;
+  };
+
+  const journalTranscript = (entries: unknown[]): TranscriptItem[] => {
+    const transcript: TranscriptItem[] = [];
+    for (const raw of entries) {
+      if (typeof raw !== 'object' || raw === null) continue;
+      const entry = raw as Frame;
+      const message =
+        typeof entry.message === 'object' && entry.message !== null ? (entry.message as Frame) : undefined;
+      const content = Array.isArray(message?.content) ? (message.content as Frame[]) : [];
+      const textContent = content
+        .filter((part) => part.type === 'text')
+        .map((part) => ({ type: 'text' as const, text: stringValue(part.text) }));
+      if (message?.role === 'user') {
+        transcript.push({
+          id: String(entry.id),
+          role: 'user',
+          content: textContent,
+          timestamp: now,
+        });
+      } else if (message?.role === 'assistant') {
+        const assistantId = String(entry.id);
+        const assistantContent: Extract<TranscriptItem, { role: 'assistant' }>['content'] = [];
+        for (const part of content) {
+          if (part.type === 'text') assistantContent.push({ type: 'text', text: stringValue(part.text) });
+          else if (part.type === 'thinking')
+            assistantContent.push({ type: 'thinking', thinking: stringValue(part.thinking) });
+        }
+        transcript.push({
+          id: assistantId,
+          role: 'assistant',
+          content: assistantContent,
+          model: { provider: 'unknown', id: 'unknown' },
+          status: 'complete',
+          stopReason: 'stop',
+          timestamp: now,
+        });
+        for (const part of content) {
+          if (part.type !== 'toolCall') continue;
+          transcript.push({
+            id: String(part.id),
+            role: 'tool',
+            toolCallId: String(part.id),
+            toolName: stringValue(part.name, 'tool'),
+            input: (typeof part.arguments === 'object' && part.arguments !== null ? part.arguments : {}) as never,
+            content: [],
+            status: 'running',
+            isError: false,
+            timestamp: now,
+          });
+        }
+      } else if (message?.role === 'toolResult') {
+        const toolCallId = String(message.toolCallId);
+        const index = transcript.findIndex((item) => item.role === 'tool' && item.toolCallId === toolCallId);
+        if (index === -1) continue;
+        const tool = transcript[index];
+        if (tool?.role !== 'tool') continue;
+        const completed = { ...tool, content: textContent };
+        transcript[index] =
+          message.isError === true
+            ? { ...completed, status: 'error', isError: true }
+            : { ...completed, status: 'complete', isError: false };
+      }
+    }
+    return transcript;
+  };
+
+  return {
+    snapshot: () => structuredClone(snapshot),
+    phase: () => snapshot.phase,
+    apply(frame: Frame) {
+      const transcript = [...snapshot.transcript];
+      if (frame.type === 'agent_start') return { snapshot: commit({ phase: 'turn' }) };
+      if (frame.type === 'agent_settled') {
+        if (activeAssistantId) {
+          const index = transcript.findIndex((item) => item.id === activeAssistantId);
+          const assistant = transcript[index];
+          if (assistant?.role === 'assistant')
+            transcript[index] = { ...assistant, status: 'complete', stopReason: 'stop' };
+          activeAssistantId = undefined;
+        }
+        return { snapshot: commit({ phase: 'idle', transcript }) };
+      }
+      if (frame.type === 'message_update') {
+        const event = typeof frame.assistantMessageEvent === 'object' ? (frame.assistantMessageEvent as Frame) : {};
+        if (!activeAssistantId) {
+          activeAssistantId = `assistant-${nextId++}`;
+          transcript.push({
+            id: activeAssistantId,
+            role: 'assistant',
+            content: [],
+            model: { provider: 'unknown', id: 'unknown' },
+            status: 'streaming',
+            timestamp: now,
+          });
+        }
+        const index = transcript.findIndex((item) => item.id === activeAssistantId);
+        const assistant = transcript[index];
+        if (assistant?.role !== 'assistant') return {};
+        const kind = event.type === 'thinking_delta' ? 'thinking' : 'text';
+        const current = assistant.content.find((part) => part.type === kind);
+        const value =
+          kind === 'thinking' && current?.type === 'thinking'
+            ? current.thinking
+            : current?.type === 'text'
+              ? current.text
+              : '';
+        const delta = stringValue(event.delta);
+        const part =
+          kind === 'thinking'
+            ? ({ type: 'thinking', thinking: value + delta } as const)
+            : ({ type: 'text', text: value + delta } as const);
+        transcript[index] = {
+          ...assistant,
+          content: [...assistant.content.filter((item) => item.type !== kind), part],
+        };
+        return { snapshot: commit({ transcript }) };
+      }
+      if (frame.type === 'tool_execution_start') {
+        transcript.push({
+          id: String(frame.toolCallId),
+          role: 'tool',
+          toolCallId: String(frame.toolCallId),
+          toolName: stringValue(frame.toolName, 'tool'),
+          input: (typeof frame.args === 'object' && frame.args !== null ? frame.args : {}) as never,
+          content: [],
+          status: 'running',
+          isError: false,
+          timestamp: now,
+        });
+        return { snapshot: commit({ transcript }) };
+      }
+      if (frame.type === 'tool_execution_update' || frame.type === 'tool_execution_end') {
+        const index = transcript.findIndex((item) => item.role === 'tool' && item.toolCallId === frame.toolCallId);
+        const tool = transcript[index];
+        if (tool?.role !== 'tool') return {};
+        const result = (frame.type === 'tool_execution_update' ? frame.partialResult : frame.result) as
+          | Frame
+          | undefined;
+        const content = Array.isArray(result?.content)
+          ? (result.content as Frame[])
+              .filter((part) => part.type === 'text')
+              .map((part) => ({ type: 'text' as const, text: stringValue(part.text) }))
+          : tool.content;
+        if (frame.type === 'tool_execution_update') {
+          transcript[index] = { ...tool, content, details: result as never };
+        } else {
+          const completed = {
+            ...tool,
+            content,
+            ...(result?.details === undefined ? {} : { details: result.details as never }),
+          };
+          transcript[index] =
+            frame.isError === true
+              ? { ...completed, status: 'error', isError: true }
+              : { ...completed, status: 'complete', isError: false };
+        }
+        return { snapshot: commit({ transcript }) };
+      }
+      if (frame.type === 'response' && frame.command === 'get_entries') {
+        const data = typeof frame.data === 'object' && frame.data !== null ? (frame.data as Frame) : {};
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        return { snapshot: commit({ transcript: journalTranscript(entries).slice(-300) }) };
+      }
+      return {};
+    },
+  };
+}
+
 /**
  * A stand-in for doompi-server's socket.
  *
@@ -73,6 +271,8 @@ export interface FakeSessionOptions {
 export async function startFakeSession(options: FakeSessionOptions = {}): Promise<FakeSession> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
   const id = options.id ?? `fake-${(fakeSessionCounter += 1)}`;
+  const name = options.name ?? 'untitled';
+  const cwd = options.cwd ?? dir;
   const socketPath = path.join(dir, 'session.sock');
   const tokenFile = path.join(dir, 'token');
   const token = `tok-${Math.random().toString(36).slice(2)}`;
@@ -85,7 +285,24 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
   let dropped = 0;
   const attachWaiters: Array<() => void> = [];
   const commandWaiters: Array<{ type: string; resolve: (frame: Frame) => void }> = [];
-
+  const protocolListeners: Array<(frame: Frame) => void> = [];
+  const protocolSocket = await serveProtocolSocket({
+    socketPath: `${socketPath}.pi`,
+    service: createAgentServerService({
+      agent: {
+        send: (frame: Frame) => received.push(frame),
+        onFrame: (listener: (frame: Frame) => void) => protocolListeners.push(listener),
+        exited: new Promise<number>(() => undefined),
+        endInput: () => undefined,
+        stop: () => undefined,
+      },
+      transcript: fixtureTranscript(id, cwd, name),
+      sessionId: id,
+      sessionName: name,
+      cwd,
+      createdAt: Date.now(),
+    }),
+  });
   const server = net.createServer((connection) => {
     connection.setEncoding('utf8');
     let buffered = '';
@@ -151,10 +368,11 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
       JSON.stringify({
         version: 1,
         id,
-        name: options.name ?? 'untitled',
-        cwd: options.cwd ?? dir,
+        name,
+        cwd,
         socketPath,
         tokenFile,
+        protocolSocketPath: protocolSocket.socketPath,
         ...(options.apiSocketPath === undefined ? {} : { apiSocketPath: options.apiSocketPath }),
         pid: options.pid ?? process.pid,
         createdAt: new Date().toISOString(),
@@ -179,6 +397,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
     tokenFile,
     received,
     emit(frame) {
+      for (const listener of protocolListeners) listener(frame);
       if (client) {
         client.write(encode(frame));
         return;
@@ -221,15 +440,14 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
       await new Promise((resolve) => setTimeout(resolve, 50));
       return () => rival.destroy();
     },
-    close() {
+    async close() {
       client?.destroy();
       if (recordPath !== undefined) fs.rmSync(recordPath, { force: true });
-      return new Promise<void>((resolve) => {
-        server.close(() => {
-          fs.rmSync(dir, { recursive: true, force: true });
-          resolve();
-        });
+      await protocolSocket.close();
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
       });
+      fs.rmSync(dir, { recursive: true, force: true });
     },
   };
 }
