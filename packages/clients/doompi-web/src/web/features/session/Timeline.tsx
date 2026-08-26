@@ -288,7 +288,7 @@ export function Transcript({
       setUnread(false);
       return;
     }
-    const shouldFollow = following.current || atBottom(element, lastHeight.current);
+    const shouldFollow = animatingFollow.current || atBottom(element, lastHeight.current);
     lastHeight.current = element.scrollHeight;
     if (shouldFollow) {
       following.current = true;
