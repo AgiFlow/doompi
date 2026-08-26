@@ -41,6 +41,8 @@ const { registerLeaderContribution, openOverlay, helpState, mergeHelp, disposeHe
   };
 });
 
+// Token pricing has dedicated catalog coverage. Avoid loading its vocabulary in this command integration suite.
+vi.mock('gpt-tokenizer', () => ({ countTokens: (text: string) => text.length }));
 vi.mock('../../src/tui/skillsOverlay.ts', () => ({ openSkillsOverlay: openOverlay }));
 vi.mock('../../src/adapters/helpSkills.ts', () => ({
   createActiveHelpSkillView: () => ({ bind: vi.fn(() => vi.fn()), merge: mergeHelp, dispose: disposeHelp }),

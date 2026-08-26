@@ -7,10 +7,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['tests/support/vitestEnv.ts'],
-    // Every serveWeb starts a sync guard, which may spawn a real `doompi sync`.
-    // Nx already runs package suites in parallel in CI, so bounding this suite's
-    // own workers prevents several sync processes from starving its HTTP fixtures.
-    maxWorkers: 2,
     testTimeout: 15_000,
     bail: 10,
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts', 'tests/contract/**/*.test.ts'],

@@ -3,11 +3,18 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
+vi.mock('../../src/adapters/syncGuard.ts', () => ({
+  createSyncGuard: () => ({
+    ensureSynced: async () => undefined,
+    watch: () => undefined,
+    close: () => undefined,
+  }),
+}));
 let cleanups: Array<() => Promise<void> | void> = [];
 
 afterEach(async () => {
@@ -64,7 +71,11 @@ async function hubWith(apiSocketPath?: string): Promise<{ server: WebServer; ses
     registryDir,
     ...(apiSocketPath === undefined ? {} : { apiSocketPath }),
   });
-  const server = await serveWeb({ registryDir, port: 0, assetsDir: '/nonexistent-assets' });
+  const server = await serveWeb({
+    registryDir,
+    port: 0,
+    assetsDir: '/nonexistent-assets',
+  });
   cleanups.push(async () => {
     await server.close();
     await session.close();

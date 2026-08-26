@@ -4,12 +4,19 @@ import path from 'node:path';
 import { PiClient } from '@earendil-works/pi-client';
 import type { ByteTransport, ByteTransportHandlers } from '@earendil-works/pi-client';
 import { createAgentServerService, type ProtocolSocket, serveProtocolSocket } from '@agimon-ai/doompi-server';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import type { SessionFrame } from '../../src/types/session.ts';
 
+vi.mock('../../src/adapters/syncGuard.ts', () => ({
+  createSyncGuard: () => ({
+    ensureSynced: async () => undefined,
+    watch: () => undefined,
+    close: () => undefined,
+  }),
+}));
 const SESSION_ID = 'hub-session';
 
 /** Stands in for a session's supervised agent. */

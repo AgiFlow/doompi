@@ -1,12 +1,19 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
+vi.mock('../../src/adapters/syncGuard.ts', () => ({
+  createSyncGuard: () => ({
+    ensureSynced: async () => undefined,
+    watch: () => undefined,
+    close: () => undefined,
+  }),
+}));
 type Frame = Record<string, unknown>;
 
 /** The one session these specs register; the routes address it by id. */

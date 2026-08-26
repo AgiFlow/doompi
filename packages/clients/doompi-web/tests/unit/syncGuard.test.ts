@@ -1,5 +1,12 @@
+import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { createSyncGuard } from '../../src/adapters/syncGuard.ts';
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
+  spawn: vi.fn(),
+}));
 
 const REPO = '/workspace/repo';
 const drifted = { fresh: false, reasons: ['configuration-changed'] as const };
@@ -12,6 +19,12 @@ function guard(readDrift: () => { fresh: boolean; reasons: readonly string[] }, 
   };
 }
 
+function fakeChild(): ReturnType<typeof spawn> {
+  const child = new EventEmitter() as unknown as ReturnType<typeof spawn>;
+  Object.assign(child, { stdout: new EventEmitter(), stderr: new EventEmitter() });
+  vi.mocked(spawn).mockReturnValue(child);
+  return child;
+}
 describe('sync guard', () => {
   it('leaves a synced repository alone', async () => {
     const { guard: subject, runSync } = guard(() => fresh);
@@ -73,6 +86,40 @@ describe('sync guard', () => {
 
     subject.close();
     expect(runSync).toHaveBeenCalledOnce();
+  });
+
+  it('runs the packaged sync command when no runner is injected', async () => {
+    const child = fakeChild();
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift: () => drifted });
+
+    const pending = subject.ensureSynced();
+    child.emit('exit', 0);
+    await pending;
+
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      [expect.stringMatching(/cli\.mjs$/), 'sync'],
+      expect.objectContaining({ cwd: REPO }),
+    );
+    subject.close();
+  });
+
+  it('reports output from a failed packaged sync without rejecting the launch', async () => {
+    const notices: string[] = [];
+    const child = fakeChild();
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      onNotice: (message) => notices.push(message),
+    });
+
+    const pending = subject.ensureSynced();
+    child.stderr?.emit('data', Buffer.from('build failed'));
+    child.emit('exit', 1);
+    await pending;
+
+    expect(notices).toContainEqual(expect.stringMatching(/sync exited 1: build failed/));
+    subject.close();
   });
 
   it('stops watching once closed', async () => {
