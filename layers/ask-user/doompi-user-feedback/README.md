@@ -1,12 +1,10 @@
 # @agimon-ai/doompi-user-feedback
 
-Structured user questions that wait for an answer in interactive Pi sessions, with an autonomous
-Voice handoff.
+Ask structured questions in interactive Pi sessions, including sessions using autonomous Voice.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-The `ask_user_question` tool presents concrete options instead of asking the model to continue on a
-guess.
+The `ask_user_question` tool presents concrete options and waits for the user to choose. It does not let the model guess.
 
 > **Alpha:** tool and Voice-handoff contracts may change between releases.
 

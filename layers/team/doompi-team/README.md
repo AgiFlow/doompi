@@ -1,7 +1,6 @@
 # @agimon-ai/doompi-team
 
-An asynchronous subagent runtime for Pi: agent discovery, background runs, membership, intercom,
-and model and tool policy.
+Discover agents, run them in the background, exchange messages, and enforce model and tool policy.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
@@ -55,14 +54,15 @@ Slash commands include:
 /run
 /parallel
 /subagents-doctor
+/subagents-steer <run-id> <message>
 /subagents-stop
 /subagents-list
 /subagents-fleet
 ```
 
-Use `/run` for one agent, `/parallel` for several, `/subagents-doctor` for diagnostics,
-`/subagents-stop` to stop work, `/subagents-list` for available agents, and `/subagents-fleet` for
-current runs.
+Use `/run` for one agent and `/parallel` for several. `/subagents-doctor` reports diagnostics,
+`/subagents-steer` sends guidance to a running agent, and `/subagents-stop` requests a stop.
+`/subagents-list` shows available agents, and `/subagents-fleet` shows current runs.
 
 The `subagent` tool exposes `agents`, `run`, `status`, `steer`, `stop`, `suspended`, and `restore`.
 The `intercom` tool exposes `members`, `send`, `ask`, `pending`, and `reply`.

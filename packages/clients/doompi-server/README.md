@@ -1,21 +1,19 @@
 # @agimon-ai/doompi-server
 
-Headless DoomPi session server: supervises a Pi RPC agent behind an authenticated unix socket so clients can attach and reattach
+Headless DoomPi session server. It supervises a Pi RPC agent behind an authenticated Unix socket so clients can attach and reattach.
 
 This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi) subsystem.
 It is the serving core the web, desktop, and mobile clients attach to. It registers no Pi
 extension and adds nothing to an interactive session.
 
-## Enabling it
+## How it runs
 
-This package is still in development, so `doompi init` does not reference it and there is nothing
-to add to `.doom/modes.yaml`: it registers no Pi extension and is not part of a mode. It is a
-standalone executable you run yourself, as shown under Run below.
+`doompi-server` is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`. `doompi init` does not configure it.
 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- `@agimon-ai/doompi` on PATH, which the server supervises
+- A runnable DoomPi agent. The server checks the working directory's installation, `DOOMPI_AGENT_COMMAND`, then `doompi` on `PATH`.
 
 ## Install
 
@@ -32,18 +30,13 @@ chmod 600 /run/doompi/token
 doompi-server --listen /run/doompi/session.sock --auth-token-file /run/doompi/token -- --major-mode copilot
 ```
 
-The server starts `doompi --mode rpc` with the arguments after `--`, then publishes that session
-on the socket. The socket is created owner-only, under a umask so the mode is atomic rather than
-applied after the fact.
+The server starts `doompi --mode rpc` with the arguments after `--`, then publishes the session on the socket. It creates the socket with owner-only access under a restrictive umask.
 
 The session gets an identity at spawn: the server mints a session id (or takes `--session-id`) and
 passes it to Pi together with the `--name` you gave it, so the cockpit knows the session before its
 first frame.
 
-The agent binary resolves per working directory: a repository that pins its own
-`@agimon-ai/doompi` in node_modules runs that exact version (mirroring how launcher scripts
-resolve the repo-local CLI), `DOOMPI_AGENT_COMMAND` overrides the lookup with a binary or a
-`.mjs` path, and the `doompi` on PATH is the fallback.
+The agent command resolves for each working directory. A repository-local `@agimon-ai/doompi` takes precedence, `DOOMPI_AGENT_COMMAND` can name a binary or `.mjs` file, and `doompi` on `PATH` is the fallback.
 
 ## Major-mode relaunches
 
@@ -105,11 +98,9 @@ the session. The buffer is bounded and reports how many frames it had to drop.
 
 ## Current limits
 
-- The executable itself is not covered end to end; the supervisor, socket, handshake, and replay
-  paths are.
-- Transport is a unix socket only. Remote access means tunnelling it, for example over SSH.
-- One agent per server process. Serving several sessions means several servers, which the registry
-  and the cockpit hub present as one working set.
+- The executable itself is not covered end to end. Tests cover the supervisor, socket, handshake, and replay paths.
+- Transport uses a Unix socket only. Tunnel it, for example over SSH, for remote access.
+- Each server process runs one agent. Run several servers for several sessions; the registry and cockpit hub present them as one set.
 
 ## Public API
 

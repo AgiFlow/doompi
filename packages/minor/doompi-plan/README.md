@@ -1,7 +1,6 @@
 # @agimon-ai/doompi-plan
 
-A reviewable planning lifecycle for Pi with narrowed tools, plan storage, normal, debug, and
-Fable-assisted flows, and explicit completion.
+Create and review stored plans in Pi with narrowed tools, explicit completion, and normal, debug, or Fable-assisted flows.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 

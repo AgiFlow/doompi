@@ -9,11 +9,41 @@ DoomPi reads four configuration files:
 - `domains.yaml` catalogs plugins and sets session access.
 - `profiles.yaml` supplies persona files and environment defaults.
 
-Each matrix file has two optional layers: personal defaults in `~/.pi/.doom/` and repository
-overrides in `<repository>/.doom/`. DoomPi loads both. Unique named entries from either layer
-remain available; a same-named repository entry replaces the complete personal entry. Plugin
-and profile roots from both layers are retained. Relative paths in personal config resolve
-from `~/.pi/.doom/`; relative paths in repository config resolve from the repository root.
+DoomPi reads personal defaults from `~/.pi/.doom/` and repository settings from `<repository>/.doom/`. Relative personal paths resolve from `~/.pi/.doom/`; relative repository paths resolve from the repository root. Merge behavior depends on the file and field, so the sections below state it explicitly.
+
+## `config.yaml`: set runtime policy
+
+`config.yaml` accepts only `projectTrust`, `modes.planning`, `editor`, `voice`, and `selection`. Unknown keys and invalid values stop configuration loading.
+
+```yaml
+projectTrust: ask
+
+modes:
+  planning:
+    main:
+      model: openai/gpt-5.4
+      thinking: high
+    subagents:
+      model: openai/gpt-5.4-mini
+      thinking: medium
+    plansDirectory: .doom/plans
+
+editor:
+  command: code
+
+voice:
+  engine: auto
+  language: en
+
+selection:
+  majorMode: copilot
+  domains: [development]
+  profile: reviewer
+```
+
+`projectTrust` accepts `ask`, `always`, or `never`. It is repository policy: an absent repository value becomes `ask` instead of inheriting the personal value. `editor.command` is personal, so a repository editor value does not replace it. Planning fields and ordinary Voice fields merge, with repository values winning. `voice.autoCapture` is personal-only and is rejected in repository configuration.
+
+Planning `thinking` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. `plansDirectory` may be absolute, use `~`, or be relative to the repository. `selection` supplies default axis values; it does not define modes, domains, or profiles. When repository `selection` exists, include every personal axis that should remain selected because omitted axes are not inherited.
 
 ## `modes.yaml`: choose behavior
 
@@ -75,12 +105,7 @@ majorMode:
     layers: [team, review]
 ```
 
-Order matters: DoomPi assembles `default.packages` first, then the selected layers and their
-packages from left to right. Put settings under the package that consumes them; a layer is
-composition, not a mystery bag of shared configuration. Home and repository `layers` and
-`majorMode` records merge by name, with the repository definition winning a collision. If both
-sources declare `default`, the repository block replaces the personal block as one whole package
-list.
+Order matters. DoomPi activates `default.packages` first, then each selected layer from left to right. Put settings under the package that consumes them. Home and repository `layers` and `majorMode` records merge by name, with the repository definition replacing a collision. If both sources declare `default`, the repository block replaces the complete personal default. A repository entry set to `null` removes the matching layer or major mode.
 
 Configurations created before the hashline tools were split may contain only `doompi-edit`.
 Replace that entry with the ordered `doompi-read`, `doompi-grep`, and `doompi-edit` trio. Init
@@ -174,16 +199,13 @@ catalog empty is valid; no profile remains a first-class choice.
 
 ## Check the matrix before launch
 
-The fastest configuration debugger is the one that does not start a model:
+Resolve configuration before starting a model:
 
 ```bash
 doompi --major-mode copilot --domains work --profile release-writer --explain
+doompi --major-mode copilot --domains work --no-mcp --explain
 dpi sync
 doompi sync --check
 ```
 
-`--explain` prints the resolved mode, domains, profile, plugins, skills, agents, MCP boundary,
-and estimated prompt cost. `dpi sync` resolves the repository configuration and synchronizes
-DPI without registering it in normal Pi settings. `doompi sync --check` turns drift into a
-non-zero exit code for CI. If the explanation is surprising, fix the YAML before paying a model
-to be surprised with you.
+`--explain` prints the resolved mode, domains, profile, plugins, skills, agents, MCP boundary, and estimated prompt cost. It may start configured stdio MCP servers to inspect their tool schemas; add `--no-mcp` to prevent that execution. `dpi sync` synchronizes repository state without persisting a Pi settings overlay. `doompi sync --check` reports drift with a non-zero exit code and does not modify the repository.

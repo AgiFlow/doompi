@@ -1,8 +1,8 @@
 # @agimon-ai/doompi-sandbox
 
-Container sandbox for DoomPi launches: the agent, extensions, and tools run inside Docker or Podman while the terminal stays on the host
+Run the DoomPi agent, extensions, and tools in a container while keeping the terminal on the host.
 
-This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi) subsystem. Use it with the distribution or install it independently in [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
+Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi). You can also install it directly in [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
 
 ## Requirements
 
@@ -18,7 +18,7 @@ pi install npm:@agimon-ai/doompi-sandbox
 
 The package declares its Pi extension entry, so Pi loads it after installation. DoomPi users can include the package through their normal profile and domain composition instead.
 
-## Enabling it
+## Enable the sandbox
 
 This layer is still in development, so `doompi init` does not add it to any mode. Opt in by hand:
 name it as a layer in `.doom/modes.yaml`, then list that layer on the mode you want it in.
@@ -123,7 +123,7 @@ so. A second concurrent sandbox therefore starts normally but cannot complete a 
 that bind an ephemeral callback port instead of a fixed one, OpenRouter among them, cannot be
 published ahead of the flow and are not covered.
 
-## Terminal behaviour
+## Terminal behavior
 
 The session is Pi's own TUI running inside the container, attached straight to your terminal: the
 launch passes `-i`, adds `-t` when the host session has one, and inherits stdio. Nothing proxies or

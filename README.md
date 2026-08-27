@@ -34,19 +34,19 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 
 ## Contents
 
-| Guide                                                          | What it covers                                                               |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [Getting started](docs/getting-started.md)                     | Installation, requirements, DPI, sync storage, and permanent Pi registration |
-| [Concepts](docs/concepts.md)                                   | Major modes, minor modes, domains, profiles, and context costs               |
-| [Automation](docs/automation.md)                               | Autopilot, workflows, native plugin examples, and loops                      |
-| [Features](docs/features.md)                                   | The complete DoomPi package and capability catalog                           |
-| [Configuration](docs/configuration.md)                         | The four YAML files, merge rules, examples, and matrix checks                |
-| [Security model](docs/securities.md)                           | Threat model, remote-access boundaries, containment, and known limits        |
-| [Trust and data boundaries](docs/trust-and-data-boundaries.md) | Executable inputs, credentials, model calls, voice, and telemetry            |
-| [CLI reference](docs/cli-reference.md)                         | Commands, options, troubleshooting, and direct package use                   |
-| [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, and isolation                      |
-| [Development](docs/development.md)                             | Workspace commands and maintainer release order                              |
-| [Contributing](CONTRIBUTING.md)                                | Local setup, repository boundaries, checks, commits, and pull requests       |
+| Guide                                                          | What it covers                                                                     |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)                     | Installation, requirements, DPI, sync storage, and Pi registration                 |
+| [Concepts](docs/concepts.md)                                   | Major modes, minor modes, domains, profiles, and context costs                     |
+| [Automation](docs/automation.md)                               | Workflows, native plugin examples, and loops                                       |
+| [Features](docs/features.md)                                   | Fixed host packages, selectable features, and capability contracts                 |
+| [Configuration](docs/configuration.md)                         | The four YAML files, field-specific merge rules, examples, and matrix checks       |
+| [Security model](docs/securities.md)                           | Threat model, remote-access boundaries, containment, and known limits              |
+| [Trust and data boundaries](docs/trust-and-data-boundaries.md) | Executable inputs, credentials, model calls, voice, native binaries, and telemetry |
+| [CLI reference](docs/cli-reference.md)                         | Commands, options, exact effects, and direct package use                           |
+| [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, transitions, and isolation               |
+| [Development](docs/development.md)                             | Workspace commands and maintainer release flow                                     |
+| [Contributing](CONTRIBUTING.md)                                | Local setup, repository boundaries, checks, commits, and pull requests             |
 
 ## Install
 
@@ -81,9 +81,7 @@ dpi sync
 dpi
 ```
 
-`dpi init` creates this repository's `.doom` configuration, `dpi sync` synchronizes the configured
-package matrix, and `dpi` runs the isolated experiment. Your existing `pi` setup remains available
-for comparison.
+`dpi init` creates this repository's `.doom` configuration. `dpi sync` installs required configured packages and writes synchronized state without persisting a Pi settings overlay. `dpi` runs the pinned Pi version with that in-memory overlay. Your existing `pi` setup remains available for comparison.
 
 See [Getting started](docs/getting-started.md) for worktree storage, permanent registration, and
 per-run matrix flags.
@@ -112,16 +110,9 @@ a perfectly good profile.
 
 See [Concepts](docs/concepts.md) for discovery, caching, merge behavior, and examples.
 
-## What this buys you
+## Why scope the session
 
-Every tool schema and skill name competes for the same context. Loading less has two immediate
-effects:
-
-1. You spend fewer tokens before the work begins.
-2. The model has fewer plausible-but-wrong tools and skills to choose from.
-
-The savings get larger when each workflow job starts with its own config instead of inheriting the
-last job's toolbox.
+Every tool schema and skill name consumes context and gives the model another possible choice. A smaller composition uses fewer tokens before work starts and reduces the number of irrelevant tools the model can select. Workflow jobs can choose their own composition instead of inheriting the previous job's toolbox.
 
 ### Copilot
 
@@ -171,12 +162,15 @@ model calls, voice, and telemetry behavior.
 
 ## CLI reference
 
-| Command                       | What it does                                                                   |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| `dpi init`, `dpi sync`, `dpi` | Creates, synchronizes, and runs the repository-scoped comparison setup         |
-| `doompi init`, `doompi sync`  | Seeds personal config, builds synchronized state, and registers DoomPi with Pi |
-| `doompi sync --check`         | Reports stale synchronized state or a required migration                       |
-| `doompi --explain`            | Prints the resolved matrix and estimated prompt cost without launching Pi      |
+| Command               | Effect                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `dpi init`            | Creates missing repository `.doom` files without changing Pi settings.                                |
+| `dpi sync`            | Installs required packages and builds synchronized DPI state without persisting its settings overlay. |
+| `dpi`                 | Runs the pinned Pi version with the DPI settings overlay.                                             |
+| `doompi init`         | Seeds personal config, writes integration resources, and registers them in Pi user settings.          |
+| `doompi sync`         | Rebuilds synchronized state and refreshes Pi integration.                                             |
+| `doompi sync --check` | Checks drift and exits non-zero without writing when state is stale.                                  |
+| `doompi --explain`    | Prints the resolved matrix and estimated prompt cost without launching Pi.                            |
 
 See the [CLI reference](docs/cli-reference.md) for more commands, options, and direct-use guidance.
 

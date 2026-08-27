@@ -1,7 +1,6 @@
 # @agimon-ai/doompi-workflow
 
-Asynchronous workflow discovery, launch, monitoring, control, and recovery from terminal failures
-for DoomPi.
+Discover, launch, monitor, control, and recover asynchronous DoomPi workflows.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 

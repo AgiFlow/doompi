@@ -1,8 +1,10 @@
 # DoomPi architecture
 
-DoomPi turns configuration into an ordered set of standard Pi extension factories. Pi owns the extension runner, registration API, reload, and module replacement. DoomPi owns configuration resolution, composed factory loading, runtime artifacts, composition identity, and transition coordination.
+[Back to DoomPi](../README.md)
 
-This document describes the current system boundaries and the rules contributors must preserve.
+DoomPi resolves configuration into an ordered set of standard Pi extension factories. Pi owns the extension runner, registration API, reload, and module replacement. DoomPi owns configuration resolution, composed factory loading, runtime artifacts, composition identity, and transition coordination.
+
+This document defines the current boundaries and contributor invariants.
 
 ## System model
 

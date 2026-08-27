@@ -1,22 +1,18 @@
 # @agimon-ai/doompi-web
 
-Web cockpit for DoomPi: a multi-session hub that serves the browser console, discovers every
-running [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server) through the session
-registry, and multiplexes their authenticated sockets behind one page connection
+Web cockpit for DoomPi. It discovers running [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server) sessions, multiplexes their authenticated sockets, and serves them through one browser connection.
 
 This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi) subsystem.
 It registers no Pi extension and adds nothing to an interactive session.
 
-## Enabling it
+## How it runs
 
-This package is still in development, so `doompi init` does not reference it and there is nothing
-to add to `.doom/modes.yaml`. It is a standalone executable you run yourself, as shown under Run
-below, or the process `doompi-server --web` starts for you.
+`doompi-web` is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`. Run it directly, or start it through `doompi-server --web`.
 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Running `doompi-server` processes registering their session sockets
+- `doompi-server` sessions to attach to. The cockpit can start them itself.
 
 ## Install
 
@@ -30,25 +26,17 @@ npm install -g @agimon-ai/doompi-web
 doompi-web
 ```
 
-Then open `http://127.0.0.1:7433`. That is the whole command: no flag is required, and every one
-below is an override. `doompi-web` is the hub. It watches the session registry (`~/.doompi/run` by
-default), attaches to every registered session, shows them all in the rail, and can start new ones
-from the page. Sessions it starts run the `doompi-server` and the agent from this installation, so
-the cockpit and the sessions it creates are always the same build.
+Open `http://127.0.0.1:7433`. With no flags, the hub watches `~/.doompi/run`, attaches to registered sessions, and can start new sessions from the page. Sessions started by the cockpit use the server and agent from the same installation.
 
-Running it twice is not an error. The second one finds the first over the port, prints its URL, and
-exits, because one hub already serves every session.
+If a hub already answers on the port, a second `doompi-web` process prints its URL and exits.
 
-Working on this repository, one command builds what it needs and starts it:
+To run this repository's build:
 
 ```bash
 pnpm cockpit
 ```
 
-Nx caches the build, so a warm run is effectively just the hub. Sessions created from the page run
-this checkout's builds, which matters: a session on some other `doompi` is a different composition,
-and its extensions, commands, and minor modes are not the ones being edited here, so a change looks
-like it did nothing.
+The command builds the required packages and starts the hub on port 7433. Sessions created from the page use this checkout's builds.
 
 | Flag              | Default         | Meaning                                          |
 | ----------------- | --------------- | ------------------------------------------------ |
@@ -60,9 +48,7 @@ like it did nothing.
 | `--state-dir`     | `~/.doompi/web` | Remote-access settings and the tunnel pid file   |
 | `--cloudflared`   | from `PATH`     | Tunnel binary (also `DOOMPI_CLOUDFLARED`)        |
 
-Installing this package gives you `doompi-web` and nothing else. For a session server you run
-yourself, install [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server); the hub
-does not need it on PATH to create sessions.
+Install [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server) when you also want to run a session server directly. The hub does not require `doompi-server` on `PATH` to create sessions.
 
 ## Security
 

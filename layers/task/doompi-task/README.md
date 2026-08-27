@@ -1,13 +1,10 @@
 # @agimon-ai/doompi-task
 
-A persistent, dependency-aware task graph for Pi, with an optional delegation bridge to DoomPi
-Team.
+Track persistent, dependency-aware tasks in Pi and optionally delegate them through DoomPi Team.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-Task owns task records and `tasks.json`. Team owns agents and runs. Loading both lets Task delegate
-pending work through Team's session-bound `doom/delegation` Cordis service; it does not merge their
-persistence.
+Task owns task records and `tasks.json`. Team owns agents and runs. When both are loaded, Task delegates pending work through Team without merging their stored state.
 
 > **Alpha:** task and delegation contracts may change between releases.
 

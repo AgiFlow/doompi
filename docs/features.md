@@ -11,18 +11,23 @@ at a time. Selectable packages are not runtime dependencies of the root package 
 
 ### Configuration and composition
 
-[`@agimon-ai/doompi`][pkg-doompi] is both an extension and the command-line config compiler.
-`dpi init` creates repository config for an isolated experiment, while `doompi init` creates the
-personal config and registers the permanent Pi integration. The sync commands resolve every major
-mode and domain into a distribution Pi can load quickly.
+[`@agimon-ai/doompi`][pkg-doompi] is both a Pi extension and the command-line configuration compiler. `dpi init` creates repository config for an isolated experiment. `doompi init` creates personal config and writes the extension alias, theme, and Pi user settings. Sync installs required configured packages, stages the selected domain resources, and precompiles supported major-mode compositions.
 
-### Supporting packages
+### Fixed host packages
 
-[`@agimon-ai/doompi-config`][pkg-doompi-config] resolves the four YAML files and exposes the
-configuration API. [`@agimon-ai/doompi-domain`][pkg-doompi-domain] owns domain selection, plugin
-materialization, resource staging, and MCP scoping.
-[`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] contains the shared
-Cordis service and event contracts used by extension authors.
+The root package carries the fixed host foundation:
+
+- [`@agimon-ai/doompi-config`][pkg-doompi-config] validates `config.yaml` and publishes selection state.
+- [`@agimon-ai/doompi-domain`][pkg-doompi-domain], [`@agimon-ai/doompi-major-mode`][pkg-doompi-major-mode], and [`@agimon-ai/doompi-profile`][pkg-doompi-profile] own the three selection axes and their transitions.
+- [`@agimon-ai/doompi-skill`][pkg-doompi-skill] builds the session skill catalog and deferred skill browser.
+- [`@agimon-ai/doompi-cache`][pkg-doompi-cache] applies provider prompt-cache policy and deterministic routing.
+- [`@agimon-ai/doompi-autostop`][pkg-doompi-autostop] shuts down an interactive automation session after the agent settles when `--auto-stop` is active.
+- [`@agimon-ai/doompi-notification`][pkg-doompi-notification] owns desktop notifications and the terminal-tab title. `--mute` disables it for one launch.
+- [`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] defines the shared Cordis services, events, lifecycle host, and serialization contracts.
+- [`@agimon-ai/doompi-ui`][pkg-doompi-ui] provides the shared TUI and Leader services.
+- [`@agimon-ai/doompi-telemetry`][pkg-doompi-telemetry] is the library-level telemetry adapter. It sends nothing unless an OTLP endpoint is configured or discovered.
+
+These packages are not selected through `default.packages`. Selectable packages stay outside the root package's private dependency closure.
 [`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] binds edits to the content the model actually
 saw. For writable UTF-8 files, [`@agimon-ai/doompi-read`][pkg-doompi-read] and
 [`@agimon-ai/doompi-grep`][pkg-doompi-grep] attach an eight-character base64url SHA-256 prefix for
@@ -36,9 +41,7 @@ anchors against the current content, rejects stale or overlapping edits, and app
 against the original snapshot. The model receives the protocol metadata, while DoomPi's renderers
 hide it from people and keep the usual syntax-highlighted read, grep, and diff views.
 
-[`@agimon-ai/doompi-file-edit`][pkg-doompi-file-edit] opens files in the configured editor and
-keeps the edit timeline. [`@agimon-ai/doompi-log`][pkg-doompi-log] collects session events, while
-[`@agimon-ai/doompi-telemetry`][pkg-doompi-telemetry] is the library-level telemetry adapter.
+[`@agimon-ai/doompi-file-edit`][pkg-doompi-file-edit] opens files in the configured editor and keeps the edit timeline. [`@agimon-ai/doompi-hook`][pkg-doompi-hook] runs configured repository and plugin hooks with Claude-Code-compatible events; `--no-hooks` disables them for one launch. [`@agimon-ai/doompi-log`][pkg-doompi-log] collects session events.
 
 Runner selects matching RMUX and RTK native artifacts automatically. Do not install them directly.
 The packages cover macOS and Linux on arm64 and x64 for both [RMUX][pkg-rmux-darwin-arm64] and
@@ -75,10 +78,7 @@ generated mode gets it. Short commands still return inline; commands that pass t
 threshold of 60 seconds by default move into the background with durable logs. Use
 `background: true` for an immediate detached run or `interactive: true` when the command needs
 terminal input. Runner IDs and complete raw logs remain available to the current session through
-Runner Space at `SPC r l` or the `doom-runner` CLI. Platform-specific RMUX binaries are selected
-automatically; non-interactive commands use a supervised subprocess fallback when RMUX is absent,
-while interactive commands require RMUX. For conservatively recognized single commands, Runner
-passes the completed raw log through the matching RTK stdin filter before returning bounded output.
+Runner Space at `SPC r l` or the `doom-runner` CLI. Runner tries the bundled RMUX binary, `rmux` on `PATH`, then `tmux` on `PATH`. If none is available, non-interactive commands use a supervised subprocess and interactive commands are rejected. For conservatively recognized single commands, Runner passes the completed raw log through the matching RTK stdin filter before returning bounded output.
 Compound shell commands, pipelines, incompatible formats, and unsupported commands keep bounded raw
 output. Remove Runner from `default.packages` to keep Pi's `bash`, or add it to a named layer when only
 selected modes should replace `bash`.
@@ -200,10 +200,17 @@ progress narration. External task, workflow, and user-feedback narration remains
 available, and the same model continues to provide bounded command correction.
 
 [pkg-doompi]: https://www.npmjs.com/package/@agimon-ai/doompi
-[pkg-doompi-ui]: https://www.npmjs.com/package/@agimon-ai/doompi-ui
+[pkg-doompi-autostop]: https://www.npmjs.com/package/@agimon-ai/doompi-autostop
+[pkg-doompi-cache]: https://www.npmjs.com/package/@agimon-ai/doompi-cache
 [pkg-doompi-config]: https://www.npmjs.com/package/@agimon-ai/doompi-config
 [pkg-doompi-domain]: https://www.npmjs.com/package/@agimon-ai/doompi-domain
+[pkg-doompi-major-mode]: https://www.npmjs.com/package/@agimon-ai/doompi-major-mode
+[pkg-doompi-notification]: https://www.npmjs.com/package/@agimon-ai/doompi-notification
+[pkg-doompi-profile]: https://www.npmjs.com/package/@agimon-ai/doompi-profile
+[pkg-doompi-skill]: https://www.npmjs.com/package/@agimon-ai/doompi-skill
+[pkg-doompi-ui]: https://www.npmjs.com/package/@agimon-ai/doompi-ui
 [pkg-doompi-hashline]: https://www.npmjs.com/package/@agimon-ai/doompi-hashline
+[pkg-doompi-hook]: https://www.npmjs.com/package/@agimon-ai/doompi-hook
 [pkg-doompi-read]: https://www.npmjs.com/package/@agimon-ai/doompi-read
 [pkg-doompi-grep]: https://www.npmjs.com/package/@agimon-ai/doompi-grep
 [pkg-doompi-edit]: https://www.npmjs.com/package/@agimon-ai/doompi-edit

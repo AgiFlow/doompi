@@ -2,19 +2,11 @@
 
 [Back to DoomPi](../README.md)
 
-This is the reasoning: what DoomPi assumes, what each boundary is for, and what is deliberately left
-open. [Trust and data boundaries](trust-and-data-boundaries.md) is the inventory that sits beside it,
-covering what DoomPi does with your credentials, your commands, and your data. Read that one to
-answer "what happens to my key". Read this one to answer "why is that safe, and when is it not".
+This document explains DoomPi's threat model, remote-access controls, containment boundary, and known limits. [Trust and data boundaries](trust-and-data-boundaries.md) inventories what happens to credentials, commands, model traffic, and telemetry.
 
 ## The premise
 
-An agent holds a shell. Every control below exists because that one sentence is true and cannot be
-made false without making DoomPi useless.
-
-So the question is never "can the agent run code". It is "who can ask it to, and how much of this
-machine is in reach when they do". Two answers, and they are independent: authentication decides
-who, containment decides how much. Turning one on does not turn on the other.
+A DoomPi agent has a shell. Security controls therefore answer two separate questions: who may ask the agent to act, and what the agent can reach. Authentication controls the first. Containment controls the second. Enabling either one does not enable the other.
 
 ## Threat model
 
@@ -134,10 +126,7 @@ the browser refuses the cookie unless it is `Secure`, `Path=/`, and `Domain`-les
 subdomain can read or overwrite it. `Secure` is a constant in the code rather than derived, because
 `cloudflared` forwards plaintext and `x-forwarded-proto` is attacker-controllable.
 
-Idle and absolute expiry are a single switch, off by default, with a thirty day ceiling on the
-cookie when it is off so a session cannot outlive the laptop. Devices can be revoked one at a time,
-and switching remote access off revokes all of them, closes every remote socket, and forgets every
-pairing.
+Session expiry is off by default. While it is off, the server accepts a paired session until the device is revoked or remote access is disabled; the browser cookie still has a thirty-day ceiling. When expiry is enabled, the configured idle and absolute limits both apply. Disabling remote access revokes every device, closes remote sockets, and clears pending pairing state.
 
 ### Passkeys
 
@@ -252,16 +241,15 @@ cannot see them. A container that fails to start rolls back to the host cockpit,
 
 ## Defaults
 
-Every switch below is off until someone turns it on, and each was chosen so that an install that
-never opens the settings dialog is the safe one.
+Remote access, tunnel auto-close, session expiry, and containment are opt-in. Host approval is always required for a new pairing.
 
-| Setting           | Default | Why                                                            |
-| ----------------- | ------- | -------------------------------------------------------------- |
-| Remote access     | off     | Nothing is reachable beyond loopback until it is asked for     |
-| Tunnel auto-close | off     | Opt-in, because a forgotten tunnel is the common failure       |
-| Session expiry    | off     | Opt-in, with a thirty day cookie ceiling regardless            |
-| Container         | off     | Requires a container engine and a deliberate workspace list    |
-| Host approval     | always  | Not a setting. Scanning a code never pairs a device on its own |
+| Setting           | Default | Why                                                                                                   |
+| ----------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| Remote access     | off     | Nothing is reachable beyond loopback until it is enabled                                              |
+| Tunnel auto-close | off     | A tunnel remains open until closed or the hub restarts                                                |
+| Session expiry    | off     | Server sessions remain valid until revocation or remote shutdown; the cookie has a thirty-day ceiling |
+| Container         | off     | Containment requires a container engine and an explicit workspace list                                |
+| Host approval     | always  | Scanning a code creates a request; it never pairs a device by itself                                  |
 
 ## What an attacker still gets
 
