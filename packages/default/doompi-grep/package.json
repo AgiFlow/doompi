@@ -72,6 +72,7 @@
     "@types/node": "26.2.0",
     "@types/react": "19.2.7",
     "@vitest/coverage-v8": "4.1.11",
+    "@vscode/ripgrep": "1.18.0",
     "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
