@@ -13,15 +13,9 @@ export {
   normalizeTokenBudget,
   updateGoalUsage,
 } from '../services/accounting.ts';
-export type {
-  GoalArgumentCompletion,
-  GoalCommandFeatures,
-  GoalCommandKind,
-  GoalCommandResult,
-} from '../services/parser.ts';
+export type { GoalArgumentCompletion, GoalCommandKind, GoalCommandResult } from '../services/parser.ts';
 export {
   completeGoalArguments,
-  MAX_OBJECTIVE_LENGTH,
   parseCommand,
   parseGoalCommand,
   parseTokenBudget,
@@ -35,17 +29,6 @@ export {
   buildObjectiveUpdatedPrompt,
   buildResumePrompt,
 } from '../services/prompts.ts';
-export type { QueueState } from '../services/queue.ts';
-export {
-  activateQueuedGoal,
-  clearQueue,
-  dropLastGoal,
-  enqueueGoal,
-  prioritizeGoal,
-  promoteNextGoal,
-  restartGoalFromHistory,
-  skipCurrentGoal,
-} from '../services/queue.ts';
 export type { RuntimeCommitPort } from '../services/runtime.ts';
 export { GoalRuntimeModel } from '../services/runtime.ts';
 export type { SafetyProgress, SafetySettings } from '../services/safety.ts';
@@ -111,9 +94,10 @@ export type {
   GoalStateData,
   GoalStatus,
   LoadedGoalState,
-  PendingQueueAction,
   SafetyPauseCause,
 } from '../types/goal.ts';
-export { GOAL_STATUSES } from '../types/goal.ts';
-export type { GoalClock, GoalIdFactory, GoalQueuePort, GoalStateStore } from '../types/ports.ts';
+export { GOAL_STATUSES, MAX_OBJECTIVE_LENGTH } from '../types/goal.ts';
+export type { GoalStatusView } from '../types/goalView.ts';
+export { formatGoalStatusView, GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../types/goalView.ts';
+export type { GoalClock, GoalIdFactory, GoalStateStore } from '../types/ports.ts';
 export type { GoalToolVisibility, LegacyGoalToolVisibility } from '../types/settings.ts';

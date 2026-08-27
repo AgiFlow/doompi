@@ -4,6 +4,7 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect } from 'react';
 import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx';
+import { ContributedSettings } from '../features/settings/ContributedSettings.tsx';
 import { PluginSettings } from '../features/settings/PluginSettings.tsx';
 import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
 import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
@@ -52,6 +53,7 @@ export function SettingsPage() {
             {current?.id === 'providers' ? <ProviderSettings /> : null}
             {current?.id === 'appearance' ? <AppearanceSettings /> : null}
             {current?.id === 'plugins' ? <PluginSettings /> : null}
+            {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
           </section>
         </div>
       </main>

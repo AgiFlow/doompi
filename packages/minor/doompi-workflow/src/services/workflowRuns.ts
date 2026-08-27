@@ -31,7 +31,7 @@ export const WORKFLOW_STAGES: readonly WorkflowStage[] = ['running', 'completed'
  * Errored runs stay a day, which is how long recovery has to act on them.
  *
  * Finished runs have no retention of their own: a session keeps every run it
- * started, grouped by outcome, for as long as the session lives. A run leaves
+ * launched, grouped by outcome, for as long as the session lives. A run leaves
  * the view when the engine prunes its registry directory, not on a timer here,
  * because "what did this session run today" is a question asked long after the
  * run settled.
@@ -108,8 +108,6 @@ export interface ParsedWorkflowRun {
   view: WorkflowRunView;
   /** env.PI_SESSION_ID from the record, when the launcher stamped one. */
   piSessionId?: string;
-  /** The repository the run was launched from, when recorded. */
-  originalRepoPath?: string;
 }
 
 /**
@@ -167,12 +165,7 @@ export function parseWorkflowRunRecord(raw: string): ParsedWorkflowRun | undefin
     jobs: [],
   };
   const piSessionId = env === undefined ? undefined : asOptionalString(env[PI_SESSION_ENV]);
-  const originalRepoPath = asOptionalString(parsed.originalRepoPath);
-  return {
-    view,
-    ...(piSessionId === undefined ? {} : { piSessionId }),
-    ...(originalRepoPath === undefined ? {} : { originalRepoPath }),
-  };
+  return { view, ...(piSessionId === undefined ? {} : { piSessionId }) };
 }
 
 interface WorkflowProgressEvent {
@@ -309,26 +302,19 @@ export function completeWorkflowRunView(view: WorkflowRunView, jobs: WorkflowJob
   return { ...view, jobs, ...(position === undefined ? {} : { position }) };
 }
 
-export interface WorkflowScopeInput {
-  sessionId: string;
-  /** The session's working directory; repo-local runs belong to it too. */
-  cwd: string;
-}
-
-function pathsOverlap(left: string, right: string): boolean {
-  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
-}
-
 /**
  * Whether a run belongs on a session's workflow tab: launched by that Pi
- * session (the same env test doompi-workflow's isSessionRun applies), or
- * launched from the repository the session works in. Containment goes both
- * ways so a session rooted in a subdirectory still sees its repo's runs.
+ * session, which is the same env test doompi-workflow's isSessionRun applies.
+ *
+ * The registry is one directory under $HOME shared by every repository and
+ * every Pi session on the machine, so repository proximity is not ownership.
+ * Scoping on it as well let two sessions open in one repo read each other's
+ * history, and kept a dead session's runs on the board of every session that
+ * replaced it. Fails closed on an unstamped record, which is what a launch
+ * from the CLI rather than from a session leaves behind.
  */
-export function runBelongsToSession(run: ParsedWorkflowRun, scope: WorkflowScopeInput): boolean {
-  if (run.piSessionId !== undefined && run.piSessionId === scope.sessionId) return true;
-  if (run.originalRepoPath !== undefined && pathsOverlap(run.originalRepoPath, scope.cwd)) return true;
-  return pathsOverlap(run.view.workflowPath, scope.cwd);
+export function runBelongsToSession(run: ParsedWorkflowRun, sessionId: string): boolean {
+  return run.piSessionId !== undefined && run.piSessionId === sessionId;
 }
 
 function parseTime(value: string | undefined): number {

@@ -17,6 +17,8 @@ import { registerPromptInput } from '../../lib/promptFocus.ts';
 import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
 import { activeSessionId, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { openPalette } from '../../stores/paletteStore.ts';
+import { useToolPrompt } from '../../stores/useToolPrompt.ts';
+import { ComposerPrompt } from './ComposerPrompt.tsx';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
 const MAX_INPUT_HEIGHT_PX = 192;
@@ -66,6 +68,7 @@ export function Composer() {
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
   const commands = useActiveSession((state) => state.commands);
+  const prompt = useToolPrompt();
   const [draft, setDraft] = useState('');
   const [caret, setCaret] = useState(0);
   const [dismissedToken, setDismissedToken] = useState<number | null>(null);
@@ -77,8 +80,10 @@ export function Composer() {
   const attached = meta?.attach === 'attached';
   const queued = meta?.summary.pendingMessageCount ?? 0;
 
-  // Overlays hand the keyboard back here when they close.
-  useEffect(() => registerPromptInput(inputRef.current), []);
+  // Overlays hand the keyboard back here when they close. Re-registered when
+  // a tool prompt stands the input down and again when it gives it back:
+  // otherwise the ref stays as it was and every later hand-back goes nowhere.
+  useEffect(() => registerPromptInput(inputRef.current), [prompt]);
 
   // Auto-grow: measure after every draft change so pasted stack traces are
   // actually visible instead of scrolling inside one line.
@@ -193,6 +198,19 @@ export function Composer() {
     : streaming
       ? 'steer the run without stopping it…'
       : 'ask anything · / for commands · @ for files…';
+
+  // A tool waiting on an answer takes the input's place rather than opening
+  // over the conversation: the transcript is what the reader needs in order
+  // to answer, and there is nothing to type here until the agent is unblocked.
+  if (prompt !== null) {
+    return (
+      <div className="shrink-0 border-t border-doom-border bg-doom-rail px-5 pt-3 pb-2.5">
+        <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
+          <ComposerPrompt claim={prompt} sessionId={activeSessionId()} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-5 pt-3 pb-2.5">

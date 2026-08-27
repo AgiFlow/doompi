@@ -64,6 +64,34 @@ describe('createServerSpawner', () => {
     process.kill(record.pid as number);
   }, 15_000);
 
+  it('keeps the given session id and reuses its directory, so a restart resumes in place', async () => {
+    const { registryDir, cwd, binDir } = workspace();
+    const command = writeExecutable(binDir, 'fake-doompi-server', REGISTERING_SERVER);
+    const spawner = createServerSpawner({ registryDir, command });
+
+    const first = await spawner.spawn({ cwd, name: 'live' });
+    if (!first.ok) throw new Error(first.error);
+    const firstRecord = JSON.parse(
+      fs.readFileSync(path.join(registryDir, 'sessions', `${first.sessionId}.json`), 'utf8'),
+    ) as Record<string, unknown>;
+    process.kill(firstRecord.pid as number);
+    const sessionDir = path.dirname(firstRecord.socketPath as string);
+
+    const second = await spawner.spawn({ cwd, name: 'live', sessionId: first.sessionId, sessionDir });
+    if (!second.ok) throw new Error(second.error);
+    const secondRecord = JSON.parse(
+      fs.readFileSync(path.join(registryDir, 'sessions', `${first.sessionId}.json`), 'utf8'),
+    ) as Record<string, unknown>;
+
+    // Same id, so Pi resumes the session rather than starting a new one.
+    expect(second.sessionId).toBe(first.sessionId);
+    // Same directory, so repeated restarts cannot grow the socket path past
+    // the unix limit one prefix extension at a time.
+    expect(path.dirname(secondRecord.socketPath as string)).toBe(sessionDir);
+    expect(secondRecord.pid).not.toBe(firstRecord.pid);
+    process.kill(secondRecord.pid as number);
+  }, 15_000);
+
   it('reports an early exit with the log tail', async () => {
     const { registryDir, cwd, binDir } = workspace();
     const command = writeExecutable(binDir, 'failing-doompi-server', FAILING_SERVER);

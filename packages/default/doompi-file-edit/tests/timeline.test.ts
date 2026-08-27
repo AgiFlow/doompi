@@ -6,8 +6,11 @@ import type { Theme } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileEditPaths } from '../src/adapters/FileEditPaths/FileEditPaths.ts';
 import { EditTracker } from '../src/adapters/EditTracker/EditTracker.ts';
+import { NodeSnapshotStoreAdapter } from '../src/adapters/node/snapshotStore.ts';
+import { NodeTreeManifestAdapter } from '../src/adapters/node/treeManifest.ts';
 import { TimelineStore } from '../src/adapters/TimelineStore/TimelineStore.ts';
 import { FileEditOverlayComponent } from '../src/tui/fileEditOverlay.ts';
+import type { TimelineEvent } from '../src/types/domain.ts';
 
 let directory: string;
 let store: TimelineStore;
@@ -23,34 +26,83 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+/**
+ * A tracker over the real filesystem, with the clock pinned so events order
+ * predictably. Its own storage sits inside the walked tree on purpose: that is
+ * where a git worktree puts it, so the exclusion has to hold there.
+ */
+function createTracker(): EditTracker {
+  const timelinePath = path.join(directory, 'timeline.jsonl');
+  const snapshotsPath = path.join(directory, 'timeline.blobs');
+  const snapshots = new NodeSnapshotStoreAdapter();
+  snapshots.initialize(snapshotsPath);
+  let tick = 0;
+  const tracker = new EditTracker(store, snapshots, new NodeTreeManifestAdapter(), {
+    now: () => {
+      tick += 1;
+      return tick;
+    },
+  });
+  tracker.reset({ exclude: [timelinePath, `${timelinePath}.lock`, snapshotsPath] });
+  return tracker;
+}
+
+function event(overrides: Partial<TimelineEvent> & Pick<TimelineEvent, 'path' | 'tool' | 'at'>): TimelineEvent {
+  return { version: 2, origin: 'tool', ...overrides };
+}
+
 describe('TimelineStore', () => {
   it('deduplicates by path, counts repeats, and orders by the latest edit', async () => {
-    await store.append({ version: 1, path: '/a.ts', tool: 'edit', at: 10 });
-    await store.append({ version: 1, path: '/b.ts', tool: 'write', at: 20 });
-    await store.append({ version: 1, path: '/a.ts', tool: 'bash', at: 30 });
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 10 }));
+    await store.append(event({ path: '/b.ts', tool: 'write', at: 20 }));
+    await store.append(event({ path: '/a.ts', tool: 'bash', at: 30, origin: 'scan' }));
     expect(await store.list()).toEqual([
       { path: '/a.ts', tool: 'bash', at: 30, count: 2 },
       { path: '/b.ts', tool: 'write', at: 20, count: 1 },
     ]);
   });
 
+  it('still reads a version 1 line written before the package learned to snapshot', async () => {
+    // A session already running when the package updates keeps appending to the
+    // file it opened, so dropping its earlier lines would blank a list mid-session.
+    fs.writeFileSync(
+      path.join(directory, 'timeline.jsonl'),
+      `${JSON.stringify({ version: 1, path: '/legacy.ts', tool: 'edit', at: 5 })}\n`,
+    );
+    await store.append(event({ path: '/fresh.ts', tool: 'write', at: 9 }));
+    expect((await store.list()).map((entry) => entry.path)).toEqual(['/fresh.ts', '/legacy.ts']);
+    expect(await store.versions('/legacy.ts')).toEqual([{ index: 1, tool: 'edit', at: 5, origin: 'scan' }]);
+  });
+
+  it('numbers one file’s versions oldest first', async () => {
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 30, before: 'x', after: 'y' }));
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 10, before: 'w', after: 'x' }));
+    await store.append(event({ path: '/b.ts', tool: 'edit', at: 20 }));
+    expect((await store.versions('/a.ts')).map((version) => [version.index, version.at])).toEqual([
+      [1, 10],
+      [2, 30],
+    ]);
+  });
+
   it('keeps different session files isolated', async () => {
-    await store.append({ version: 1, path: '/a.ts', tool: 'edit', at: 10 });
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 10 }));
     const other = new TimelineStore();
     other.initialize(path.join(directory, 'other.jsonl'));
     expect(await other.list()).toEqual([]);
   });
 
   it('records exact edit and write paths only after successful completion', async () => {
-    const tracker = new EditTracker(store);
+    const tracker = createTracker();
     const filePath = path.join(directory, 'edited.ts');
     fs.writeFileSync(filePath, 'before');
     await tracker.start('edit-1', 'edit', { path: filePath }, directory);
-    await tracker.end('edit-1', false);
+    fs.writeFileSync(filePath, 'after');
+    await tracker.end('edit-1', false, directory);
     await tracker.start('write-1', 'write', { path: 'created.ts' }, directory);
-    await tracker.end('write-1', false);
+    fs.writeFileSync(path.join(directory, 'created.ts'), 'new file');
+    await tracker.end('write-1', false, directory);
     await tracker.start('failed', 'edit', { path: filePath }, directory);
-    await tracker.end('failed', true);
+    await tracker.end('failed', true, directory);
     expect((await store.list()).map((entry) => [entry.path, entry.tool])).toEqual(
       expect.arrayContaining([
         [path.join(directory, 'created.ts'), 'write'],
@@ -59,31 +111,92 @@ describe('TimelineStore', () => {
     );
   });
 
-  it('attributes bash only to literal candidates whose fingerprints changed', async () => {
-    const tracker = new EditTracker(store);
-    const changed = path.join(directory, 'changed.txt');
-    const untouched = path.join(directory, 'untouched.txt');
-    fs.writeFileSync(changed, 'before');
-    fs.writeFileSync(untouched, 'same');
-    await tracker.start('bash-1', 'bash', { command: `printf after > ${changed}; cat ${untouched}` }, directory);
-    fs.writeFileSync(changed, 'after value');
-    await tracker.end('bash-1', false);
-    expect((await store.list()).map((entry) => entry.path)).toEqual([changed]);
+  it('captures both sides of an edit so the change can be diffed', async () => {
+    const tracker = createTracker();
+    const filePath = path.join(directory, 'counted.ts');
+    fs.writeFileSync(filePath, 'one\ntwo\n');
+    await tracker.start('edit-1', 'edit', { path: filePath }, directory);
+    fs.writeFileSync(filePath, 'one\ntwo\nthree\n');
+    await tracker.end('edit-1', false, directory);
+    const [version] = await store.versions(filePath);
+    expect(version?.origin).toBe('tool');
+    expect(version?.before).toMatch(/^[0-9a-f]{64}$/u);
+    expect(version?.after).toMatch(/^[0-9a-f]{64}$/u);
+    expect(version?.additions).toBe(1);
+    expect(version?.removals).toBe(0);
   });
 
-  it('ignores an overlong path candidate extracted from inline Python source', async () => {
-    const tracker = new EditTracker(store);
-    const inlineSource = `${'x'.repeat(300)}/generation-request.json`;
-    await expect(
-      tracker.start('bash-python', 'bash', { command: `python3 -c "${inlineSource}"` }, directory),
-    ).resolves.toBeUndefined();
-    await expect(tracker.end('bash-python', false)).resolves.toBeUndefined();
+  it('records nothing when a tool call left the file exactly as it found it', async () => {
+    const tracker = createTracker();
+    const filePath = path.join(directory, 'untouched.ts');
+    fs.writeFileSync(filePath, 'same');
+    await tracker.start('edit-1', 'edit', { path: filePath }, directory);
+    await tracker.end('edit-1', false, directory);
     expect(await store.list()).toEqual([]);
+  });
+
+  it('finds a file a bash script wrote, which the command never names', async () => {
+    // The whole reason the tracker walks the tree: the agent can put the paths
+    // in a script, and reading the command string would see only the script.
+    const tracker = createTracker();
+    const target = path.join(directory, 'rewritten.txt');
+    const untouched = path.join(directory, 'untouched.txt');
+    fs.writeFileSync(target, 'before');
+    fs.writeFileSync(untouched, 'same');
+    await tracker.start('bash-1', 'bash', { command: 'python3 fix.py' }, directory);
+    fs.writeFileSync(target, 'after');
+    await tracker.end('bash-1', false, directory);
+    expect((await store.list()).map((entry) => entry.path)).toEqual([target]);
+    const [version] = await store.versions(target);
+    expect(version?.origin).toBe('scan');
+    // Found after the fact, so there is no baseline and the surfaces must say so.
+    expect(version?.before).toBeUndefined();
+  });
+
+  it('does not re-report an edited file under the next bash call', async () => {
+    const tracker = createTracker();
+    const filePath = path.join(directory, 'edited.ts');
+    fs.writeFileSync(filePath, 'before');
+    await tracker.start('bash-0', 'bash', { command: 'ls' }, directory);
+    await tracker.end('bash-0', false, directory);
+    await tracker.start('edit-1', 'edit', { path: filePath }, directory);
+    fs.writeFileSync(filePath, 'after');
+    await tracker.end('edit-1', false, directory);
+    await tracker.start('bash-1', 'bash', { command: 'ls' }, directory);
+    await tracker.end('bash-1', false, directory);
+    expect((await store.list()).map((entry) => [entry.path, entry.tool, entry.count])).toEqual([[filePath, 'edit', 1]]);
+  });
+
+  it('serialises concurrent appends behind its lock, losing none of them', async () => {
+    // Subagents fold into the parent's timeline, so several writers really do
+    // append at once; the lock is what stops one truncating another's line.
+    await Promise.all(
+      Array.from({ length: 12 }, (_, index) =>
+        store.append(event({ path: `/file-${String(index)}.ts`, tool: 'edit', at: index })),
+      ),
+    );
+    expect(await store.list()).toHaveLength(12);
+  });
+
+  it('refuses to work before it has been told which file it owns', async () => {
+    const uninitialized = new TimelineStore();
+    await expect(uninitialized.list()).rejects.toThrow('not initialized');
+    await expect(uninitialized.append(event({ path: '/a.ts', tool: 'edit', at: 1 }))).rejects.toThrow(
+      'not initialized',
+    );
+  });
+
+  it('answers an empty history for a file in a timeline that was never written', async () => {
+    const fresh = new TimelineStore();
+    fresh.initialize(path.join(directory, 'absent.jsonl'));
+    expect(await fresh.versions('/a.ts')).toEqual([]);
+    // Clearing a timeline that never existed is how a session with no changes ends.
+    await expect(fresh.clear()).resolves.toBeUndefined();
   });
 
   it('clears the root timeline and tolerates one malformed JSONL record', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await store.append({ version: 1, path: '/a.ts', tool: 'edit', at: 10 });
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 10 }));
     fs.appendFileSync(path.join(directory, 'timeline.jsonl'), '{invalid}\n');
     expect(await store.list()).toHaveLength(1);
     expect(warn).toHaveBeenCalledOnce();

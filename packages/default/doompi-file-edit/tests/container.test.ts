@@ -7,7 +7,7 @@ describe('createFileEditContainer', () => {
     const container = createFileEditContainer();
     const dependencies = Object.values(container);
 
-    expect(dependencies).toHaveLength(7);
+    expect(dependencies).toHaveLength(9);
     expect(dependencies.every((dependency) => dependency !== undefined)).toBe(true);
     // The record is the graph, so shared collaborators are shared by construction.
     expect(container.editTracker).toBeDefined();

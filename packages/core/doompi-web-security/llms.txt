@@ -1,0 +1,9 @@
+# @agimon-ai/doompi-web-security
+
+Package-owned guidance for the DoomPi cockpit's shared security primitives.
+
+## Resources
+
+- [Package README](./README.md): Why this is a package rather than a file in the cockpit, what each
+  subpath carries, and the three properties of the sealed channel that are silent when wrong
+  (per-direction keys, nonce construction, and serialized ordering).

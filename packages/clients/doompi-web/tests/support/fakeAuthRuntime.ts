@@ -29,6 +29,13 @@ const PROVIDERS: AuthRuntimeProvider[] = [
   { id: 'bedrock', name: 'Amazon Bedrock', auth: { apiKey: { name: 'AWS credentials' } } },
 ];
 
+/** Two models per provider, so a grouped picker has something to group. */
+const MODELS: readonly { provider: string; id: string }[] = [
+  { provider: 'anthropic', id: 'claude-opus-4-8' },
+  { provider: 'anthropic', id: 'claude-sonnet-5' },
+  { provider: 'zeta', id: 'zeta-large' },
+];
+
 export function createFakeAuthRuntime(): FakeAuthRuntime {
   const runtime: FakeAuthRuntime = {
     stored: new Set(),
@@ -41,6 +48,8 @@ export function createFakeAuthRuntime(): FakeAuthRuntime {
       return { configured: false };
     },
     isUsingOAuth: (providerId) => providerId === 'zeta' && runtime.stored.has(providerId),
+    getAvailableSnapshot: () => MODELS,
+    hasConfiguredAuth: (providerId) => runtime.getProviderAuthStatus(providerId).configured,
     async refresh() {
       runtime.refreshes += 1;
     },

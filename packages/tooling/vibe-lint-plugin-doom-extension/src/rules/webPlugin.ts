@@ -21,6 +21,8 @@ const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const CONTRACTS_PACKAGE = '@agimon-ai/doompi-web-contracts';
 const COMPONENTS_PACKAGE = '@agimon-ai/doompi-web-components';
+/** The shared sealed transport; a plugin calling bare fetch sends plaintext to the tunnel's relay. */
+const SECURITY_BROWSER_PACKAGE = '@agimon-ai/doompi-web-security/browser';
 const ALLOWED_BARE_SPECIFIERS = new Set([
   'react',
   'react/jsx-runtime',
@@ -28,6 +30,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
   '@tanstack/react-store',
   CONTRACTS_PACKAGE,
   COMPONENTS_PACKAGE,
+  SECURITY_BROWSER_PACKAGE,
 ]);
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';

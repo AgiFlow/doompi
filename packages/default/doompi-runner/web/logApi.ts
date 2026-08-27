@@ -1,3 +1,4 @@
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import {
   RUNNER_LOG_STREAM_EVENT,
   type RunnerLogQueryParams,
@@ -30,7 +31,7 @@ export async function fetchRunnerLog(
 ): Promise<RunnerLogResult> {
   let response: Response;
   try {
-    response = await fetch(runnerLogUrl(sessionId, runId, params), { signal });
+    response = await sealedTransport.fetch(runnerLogUrl(sessionId, runId, params), { signal });
   } catch (error) {
     // An aborted request is the caller replacing it, not a failure to report.
     if (error instanceof DOMException && error.name === 'AbortError') return { error: '' };

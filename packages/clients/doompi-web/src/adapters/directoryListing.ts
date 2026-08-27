@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { rankDirectories, searchTermFor } from '../services/directoryMatch.ts';
+import { isInsideDirectory } from '../services/pathScope.ts';
 import { searchDirectoryTree } from './directorySearch.ts';
 
 const PATH_SEPARATOR = '/';
@@ -57,9 +58,12 @@ async function isDirectory(parent: string, entry: fs.Dirent): Promise<boolean> {
  * pattern itself begins with a dot; an unreadable or missing parent yields
  * nothing rather than an error, since the person is still typing.
  */
-export async function listDirectories(typed: string, limit = DEFAULT_LIMIT): Promise<string[]> {
+export async function listDirectories(typed: string, limit = DEFAULT_LIMIT, root?: string): Promise<string[]> {
   const query = splitDirectoryQuery(typed);
   if (query === undefined) return [];
+  // Checked on the parent rather than each child: a parent outside the scope
+  // has no child inside it, and listing it at all would confirm what is there.
+  if (root !== undefined && !isInsideDirectory(query.parent, root)) return [];
   let entries: fs.Dirent[];
   try {
     entries = await fs.promises.readdir(query.parent, { withFileTypes: true });
@@ -80,15 +84,26 @@ export async function listDirectories(typed: string, limit = DEFAULT_LIMIT): Pro
 
 /**
  * Where a fuzzy search starts when the typed value names no place that exists.
- * Home is where projects live; a path outside it is still reachable by typing
- * it out, which is what the completion above is for.
+ *
+ * Home is where projects live, and a path outside it is still reachable by
+ * typing it out, which is what the completion above is for. A scope replaces
+ * home entirely rather than narrowing it, because the point of a scope is that
+ * nothing outside it is searched at all.
  */
-function searchRoots(homeDirectory: string): string[] {
-  return [homeDirectory];
+function searchRoots(homeDirectory: string, root: string | undefined): string[] {
+  return [root ?? homeDirectory];
 }
 
 export interface SuggestDirectoriesOptions {
   limit?: number;
+  /**
+   * The only subtree the answer may name.
+   *
+   * Set while remote access is on and the cockpit is not contained, because a
+   * paired device asking for suggestions would otherwise enumerate the host's
+   * whole home directory, which is a map of the machine it is not entitled to.
+   */
+  root?: string;
   /** Injectable so a test does not search the machine it runs on. */
   homeDirectory?: string;
   /** Injectable seam over the tree search. */
@@ -107,7 +122,7 @@ export interface SuggestDirectoriesOptions {
  */
 export async function suggestDirectories(typed: string, options: SuggestDirectoriesOptions = {}): Promise<string[]> {
   const limit = options.limit ?? DEFAULT_LIMIT;
-  const completions = await listDirectories(typed, limit);
+  const completions = await listDirectories(typed, limit, options.root);
   if (completions.length > 0) return completions;
 
   const query = searchTermFor(typed);
@@ -116,12 +131,14 @@ export async function suggestDirectories(typed: string, options: SuggestDirector
   const search = options.search ?? searchDirectoryTree;
 
   const found: string[] = [];
-  for (const root of searchRoots(home)) {
+  for (const root of searchRoots(home, options.root)) {
     try {
       found.push(...(await search(root, query)));
     } catch {
       // A root that cannot be searched simply contributes nothing.
     }
   }
-  return rankDirectories(found, query, limit);
+  const scope = options.root;
+  const scoped = scope === undefined ? found : found.filter((entry) => isInsideDirectory(entry, scope));
+  return rankDirectories(scoped, query, limit);
 }

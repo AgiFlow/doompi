@@ -15,7 +15,6 @@ import {
   buildObjectiveUpdatedPrompt,
   buildResumePrompt,
 } from '../../services/prompts.ts';
-import { enqueueGoal, promoteNextGoal, skipCurrentGoal } from '../../services/queue.ts';
 import { GoalRuntimeModel } from '../../services/runtime.ts';
 import { nextToolFreeRepeatState, resetGoalSafetyEpoch, safetyLimitReached } from '../../services/safety.ts';
 import { DEFAULT_GOAL_SETTINGS, normalizeGoalSettings } from '../../services/settings.ts';
@@ -32,6 +31,7 @@ import { validateBlockedInput, validateCompletionInput } from '../../services/to
 import { GoalHistoryService } from '../../services/history/historyService.ts';
 import type { GoalExtensionDependencies, GoalExtensionService } from '../../types/extension.ts';
 import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData } from '../../types/goal.ts';
+import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../types/goalView.ts';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../../types/history.ts';
 import { GoalHistoryStore } from '../node/historyStore.ts';
 import { canExecuteGoalTools, reconcileGoalTools, removeGoalTools } from './toolVisibility.ts';
@@ -253,10 +253,7 @@ export class GoalPiManager {
       void this.enqueue(() => this.finishAgentRun(event, ctx));
     });
     this.pi.on('agent_settled', (_event, ctx) => {
-      void this.enqueue(async () => {
-        if (await this.dispatchPendingQueueAction(ctx)) return;
-        await this.continueAfterSettled(ctx);
-      });
+      void this.enqueue(() => this.continueAfterSettled(ctx));
     });
     this.pi.on('session_before_compact', (event, ctx) => this.beforeCompact(event, ctx));
     this.pi.on('session_compact', (event, ctx) => {
@@ -313,21 +310,13 @@ export class GoalPiManager {
     this.settings = await this.loadSettings();
     this.history = this.dependencies?.history ?? this.createHistory(ctx.cwd);
     const loaded = loadGoalStateFromSession({ sessionManager: ctx.sessionManager });
-    this.runtime.load(loaded);
+    this.runtime.load(loaded.goal);
     this.deactivateTools();
-    let goal = this.runtime.snapshot().goal;
-    if (loaded.hasExperimentalQueueState && !this.settings.experimental.goals && goal?.status === 'active') {
-      goal = transitionGoal({ ...goal }, 'paused');
-      this.runtime.replaceState({
-        goal,
-        queue: [...this.runtime.snapshot().queue],
-        pendingAction: this.runtime.snapshot().pendingAction,
-      });
-    }
+    const goal = this.runtime.snapshot().goal;
     if (goal?.status === 'active') {
       const activated = this.activateTools(goal);
       if (!activated) {
-        this.runtime.replaceState({ goal: transitionGoal(goal, 'paused'), queue: [...this.runtime.snapshot().queue] });
+        this.runtime.replaceState(transitionGoal(goal, 'paused'));
         this.notify('Goal paused because host policy does not expose both Goal tools.', 'warning');
       }
     }
@@ -419,7 +408,7 @@ export class GoalPiManager {
     updateGoalUsage(goal, ctx, Date.now(), false);
     this.fenceExecution();
     const paused = transitionGoal({ ...goal }, 'paused');
-    this.runtime.replaceState({ goal: paused, queue: [...this.runtime.snapshot().queue] });
+    this.runtime.replaceState(paused);
     this.deactivateTools();
     this.abortCurrentTurn(ctx);
     this.refreshStatus();
@@ -469,12 +458,23 @@ export class GoalPiManager {
     }
   }
 
+  /**
+   * The two statuses this package publishes.
+   *
+   * STATUS_KEY is the terminal footer's: short enough to sit beside every other
+   * extension's. GOAL_VIEW_STATUS_KEY carries the objective itself for the
+   * cockpit's activity dock, and is published only to a client that is not a
+   * terminal, because a footer already saying `active 4m` gains nothing from
+   * the same goal spelled out again beside it.
+   */
   private refreshStatus(): void {
     const ctx = this.context;
-    const snapshot = this.runtime.snapshot();
     if (!ctx?.hasUI) return;
-    const queueWaiting = snapshot.pendingAction !== undefined || (!snapshot.goal && snapshot.queue.length > 0);
-    ctx.ui.setStatus(STATUS_KEY, queueWaiting ? 'queued' : formatStatus(snapshot.goal));
+    const goal = this.runtime.snapshot().goal;
+    const state = formatStatus(goal);
+    ctx.ui.setStatus(STATUS_KEY, state);
+    if (ctx.mode === 'tui') return;
+    ctx.ui.setStatus(GOAL_VIEW_STATUS_KEY, goal ? formatGoalStatusView(goal.text, state ?? goal.status) : undefined);
   }
 
   private emitState(reason?: string, summary?: string): void {
@@ -513,7 +513,7 @@ export class GoalPiManager {
     if (!this.isCurrent(ctx)) {
       await this.startSession(ctx);
     }
-    const parsed = parseGoalCommand(args, { experimentalGoals: this.settings.experimental.goals });
+    const parsed = parseGoalCommand(args);
     if (typeof parsed === 'string') {
       this.notify(parsed, 'warning');
       return;
@@ -537,30 +537,16 @@ export class GoalPiManager {
       case 'edit':
         await this.editGoal(parsed.objective ?? '', parsed.tokenBudget, ctx);
         return;
-      case 'add':
-        await this.addGoal(parsed.objective ?? '', parsed.tokenBudget, ctx);
-        return;
-      case 'prioritize':
-        await this.prioritizeGoal(parsed.objective ?? '', parsed.tokenBudget, ctx);
-        return;
-      case 'drop-last':
-        this.dropLastGoal(ctx);
-        return;
-      case 'skip':
-        await this.skipGoal(ctx);
-        return;
     }
   }
 
   private showStatus(): void {
-    const snapshot = this.runtime.snapshot();
-    const goal = snapshot.goal;
+    const goal = this.runtime.snapshot().goal;
     if (!goal) {
       this.notify('No active goal.', 'info');
       return;
     }
-    const queue = snapshot.queue.length ? `\nQueued: ${snapshot.queue.map((item) => item.text).join(', ')}` : '';
-    this.notify(`Goal: ${goal.text}\nStatus: ${goal.status}${queue}`, 'info');
+    this.notify(`Goal: ${goal.text}\nStatus: ${goal.status}`, 'info');
   }
 
   private async startGoal(
@@ -579,7 +565,7 @@ export class GoalPiManager {
     if (oldGoal) {
       const accepted = await ctx.ui.confirm('Replace goal?', `Current goal: ${oldGoal.text}\n\nNew goal: ${objective}`);
       if (!accepted) return;
-      if (!(await this.archiveAll([oldGoal, ...previous.queue], 'replaced'))) {
+      if (!(await this.archiveAll([oldGoal], 'replaced'))) {
         this.notify('Goal replacement aborted because history archival failed.', 'error');
         return;
       }
@@ -589,7 +575,7 @@ export class GoalPiManager {
       this.notify('Cannot start /goal: host policy rejected Goal tools.', 'error');
       return;
     }
-    this.runtime.replaceState({ goal: next, queue: [] });
+    this.runtime.replaceState(next);
     this.budgetWrapUpGoalId = undefined;
     this.pendingRunOrigin = 'manual';
     this.refreshStatus();
@@ -597,7 +583,7 @@ export class GoalPiManager {
     try {
       this.pi.sendUserMessage(buildGoalPrompt(next), { deliverAs: 'followUp' });
     } catch (error) {
-      this.runtime.replaceState({ goal: oldGoal, queue: previous.queue });
+      this.runtime.replaceState(oldGoal);
       this.fenceExecution();
       if (!oldGoal) this.deactivateTools();
       this.refreshStatus();
@@ -620,7 +606,7 @@ export class GoalPiManager {
     updateGoalUsage(goal, ctx, Date.now(), false);
     this.fenceExecution();
     const next = transitionGoal({ ...goal }, 'paused');
-    this.runtime.replaceState({ goal: next, queue: [...this.runtime.snapshot().queue] });
+    this.runtime.replaceState(next);
     this.deactivateTools();
     ctx.abort();
     this.refreshStatus();
@@ -648,7 +634,7 @@ export class GoalPiManager {
       this.notify('Cannot resume /goal: host policy rejected Goal tools.', 'error');
       return;
     }
-    this.runtime.replaceState({ goal: next, queue: [...this.runtime.snapshot().queue] });
+    this.runtime.replaceState(next);
     this.budgetWrapUpGoalId = undefined;
     this.pendingRunOrigin = 'manual';
     this.refreshStatus();
@@ -657,7 +643,7 @@ export class GoalPiManager {
       this.pi.sendUserMessage(buildResumePrompt(next, goal.status), { deliverAs: 'followUp' });
     } catch (error) {
       this.fenceExecution();
-      this.runtime.replaceState({ goal, queue: [...this.runtime.snapshot().queue] });
+      this.runtime.replaceState(goal);
       this.deactivateTools();
       this.refreshStatus();
       this.notify(`Goal resume failed: ${errorText(error)}`, 'error');
@@ -666,7 +652,7 @@ export class GoalPiManager {
 
   private async clearGoal(ctx: ExtensionContext): Promise<void> {
     const snapshot = this.runtime.snapshot();
-    if (!(await this.archiveAll([...(snapshot.goal ? [snapshot.goal] : []), ...snapshot.queue], 'cleared'))) {
+    if (!(await this.archiveAll(snapshot.goal ? [snapshot.goal] : [], 'cleared'))) {
       this.notify('Goal clear aborted because history archival failed.', 'error');
       return;
     }
@@ -697,97 +683,12 @@ export class GoalPiManager {
       ...(budget === undefined ? {} : { tokenBudget: budget }),
       updatedAt: Date.now(),
     };
-    this.runtime.replaceState({ goal: next, queue: [...this.runtime.snapshot().queue] });
+    this.runtime.replaceState(next);
     this.refreshStatus();
     this.emitState();
     if (goal.status === 'active') this.pi.sendUserMessage(buildObjectiveUpdatedPrompt(next), { deliverAs: 'followUp' });
     else this.notify(`Goal updated but remains ${goal.status}. Resume explicitly to execute it.`);
     void ctx;
-  }
-
-  private async addGoal(objective: string, budget: number | undefined, _ctx: ExtensionContext): Promise<void> {
-    const validation = validateObjective(objective);
-    if (validation) {
-      this.notify(validation, 'warning');
-      return;
-    }
-    const snapshot = this.runtime.snapshot();
-    if (!snapshot.goal) {
-      await this.startGoal(objective, budget, this.context as ExtensionCommandContext);
-      return;
-    }
-    const state = enqueueGoal(
-      {
-        goal: snapshot.goal,
-        queue: [...snapshot.queue],
-        pendingAction: snapshot.pendingAction,
-        enabled: this.settings.experimental.goals,
-      },
-      objective,
-      budget,
-    );
-    this.runtime.replaceState(state);
-    this.refreshStatus();
-    this.emitState();
-    this.notify(`Goal added at position ${state.queue.length + 1}: ${objective}`);
-  }
-
-  private async prioritizeGoal(objective: string, budget: number | undefined, _ctx: ExtensionContext): Promise<void> {
-    const validation = validateObjective(objective);
-    if (validation) {
-      this.notify(validation, 'warning');
-      return;
-    }
-    const snapshot = this.runtime.snapshot();
-    if (!snapshot.goal) {
-      await this.startGoal(objective, budget, this.context as ExtensionCommandContext);
-      return;
-    }
-    this.runtime.replaceState({
-      goal: snapshot.goal,
-      queue: [...snapshot.queue],
-      pendingAction: { kind: 'prioritize', objective, tokenBudget: budget },
-    });
-    this.notify(`Priority goal queued until the current turn settles: ${objective}`);
-  }
-
-  private dropLastGoal(_ctx: ExtensionContext): void {
-    const snapshot = this.runtime.snapshot();
-    if (!snapshot.queue.length) {
-      this.notify('No queued goals.', 'info');
-      return;
-    }
-    this.runtime.replaceState({
-      goal: snapshot.goal,
-      queue: [...snapshot.queue].slice(0, -1),
-      pendingAction: snapshot.pendingAction,
-    });
-    this.notify('Last queued goal dropped.', 'warning');
-  }
-
-  private async skipGoal(ctx: ExtensionContext): Promise<void> {
-    const snapshot = this.runtime.snapshot();
-    if (!snapshot.goal) {
-      this.notify('No goals to skip.', 'info');
-      return;
-    }
-    if (!(await this.archive(snapshot.goal, 'skipped'))) {
-      this.notify('Goal skip aborted because history archival failed.', 'error');
-      return;
-    }
-    this.fenceExecution();
-    const nextState = skipCurrentGoal({
-      goal: snapshot.goal,
-      queue: [...snapshot.queue],
-      pendingAction: snapshot.pendingAction,
-      enabled: this.settings.experimental.goals,
-    });
-    if (nextState.pendingAction) this.runtime.replaceState(nextState);
-    else this.runtime.clear();
-    this.deactivateTools();
-    ctx.abort();
-    this.refreshStatus();
-    this.emitState('skipped');
   }
 
   private async finishAgentRun(event: AgentEndEventLike, ctx: ExtensionContext): Promise<void> {
@@ -807,14 +708,14 @@ export class GoalPiManager {
       // User-initiated aborts and safety aborts are fenced without inventing a
       // provider failure. A later explicit resume establishes a new execution lease.
       this.fenceExecution();
-      this.runtime.replaceState({ goal, queue: [...snapshot.queue] });
+      this.runtime.replaceState(goal);
       this.refreshStatus();
       return;
     }
     if (failure === 'usage_limited' || failure === 'blocked') {
       this.fenceExecution();
       const stopped = transitionGoal({ ...goal }, failure);
-      this.runtime.replaceState({ goal: stopped, queue: [...snapshot.queue] });
+      this.runtime.replaceState(stopped);
       this.deactivateTools();
       this.abortCurrentTurn(ctx);
       this.refreshStatus();
@@ -841,95 +742,11 @@ export class GoalPiManager {
     }
 
     if (goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget) {
-      this.limitForBudget(ctx, goal, snapshot.queue);
+      this.limitForBudget(ctx, goal);
       return;
     }
-    this.runtime.replaceState({ goal, queue: [...snapshot.queue] });
+    this.runtime.replaceState(goal);
     this.refreshStatus();
-  }
-
-  private async dispatchPendingQueueAction(ctx: ExtensionContext): Promise<boolean> {
-    if (!this.isCurrent(ctx)) return false;
-    const snapshot = this.runtime.snapshot();
-    const pending = snapshot.pendingAction;
-    if (!pending) return false;
-    if (!this.settings.experimental.goals || !ctx.isIdle() || ctx.hasPendingMessages()) return true;
-
-    if (pending.kind === 'prioritize') {
-      const current = snapshot.goal;
-      if (!current) {
-        this.runtime.replaceState({ queue: [...snapshot.queue] });
-        await this.startGoal(pending.objective, pending.tokenBudget, ctx as ExtensionCommandContext);
-        return true;
-      }
-      if (current.status === 'active') updateGoalUsage(current, ctx, Date.now(), false);
-      const prioritized = createGoal(pending.objective, pending.tokenBudget, {
-        baselineTokens: currentTokenTotal(ctx),
-      });
-      const displacedQueue =
-        current.status === 'complete'
-          ? [...snapshot.queue]
-          : [transitionGoal({ ...current, activeStartedAt: undefined }, 'queued'), ...snapshot.queue];
-      this.deactivateTools();
-      if (!this.activateTools(prioritized)) {
-        const paused = transitionGoal(prioritized, 'paused');
-        this.runtime.replaceState({ goal: paused, queue: displacedQueue });
-        this.deactivateTools();
-        this.refreshStatus();
-        this.emitState('queued goal tools unavailable');
-        this.notify('Priority Goal is retained but paused because host policy rejected Goal tools.', 'warning');
-        return true;
-      }
-      this.runtime.replaceState({ goal: prioritized, queue: displacedQueue });
-      this.pendingRunOrigin = 'manual';
-      this.refreshStatus();
-      this.emitState('prioritized');
-      try {
-        this.pi.sendUserMessage(buildGoalPrompt(prioritized), { deliverAs: 'followUp' });
-      } catch (error) {
-        this.pauseForDeliveryFailure(ctx, prioritized, `Priority Goal kickoff failed: ${errorText(error)}`);
-      }
-      return true;
-    }
-
-    const current = snapshot.goal;
-    if (!current || current.id !== pending.goalId || (pending.reason === 'complete' && current.status !== 'complete')) {
-      this.runtime.replaceState({ goal: current, queue: [...snapshot.queue] });
-      this.refreshStatus();
-      return true;
-    }
-    const promoted = promoteNextGoal(
-      { goal: current, queue: [...snapshot.queue], pendingAction: pending, enabled: true },
-      Date.now(),
-      currentTokenTotal(ctx),
-    );
-    const next = promoted.goal;
-    if (!next || next.id === current.id) {
-      this.runtime.clear();
-      this.deactivateTools();
-      this.refreshStatus();
-      this.emitState(pending.reason);
-      return true;
-    }
-    if (!this.activateTools(next)) {
-      const paused = transitionGoal(next, 'paused');
-      this.runtime.replaceState({ goal: paused, queue: [...promoted.queue] });
-      this.deactivateTools();
-      this.refreshStatus();
-      this.emitState('queued goal tools unavailable');
-      this.notify('Next Goal is retained but paused because host policy rejected Goal tools.', 'warning');
-      return true;
-    }
-    this.runtime.replaceState({ goal: next, queue: [...promoted.queue] });
-    this.pendingRunOrigin = 'manual';
-    this.refreshStatus();
-    this.emitState(pending.reason);
-    try {
-      this.pi.sendUserMessage(buildGoalPrompt(next), { deliverAs: 'followUp' });
-    } catch (error) {
-      this.pauseForDeliveryFailure(ctx, next, `Queued Goal kickoff failed: ${errorText(error)}`);
-    }
-    return true;
   }
 
   private async continueAfterSettled(ctx: ExtensionContext): Promise<void> {
@@ -951,7 +768,7 @@ export class GoalPiManager {
       return;
     }
     const next = incrementGoal({ ...goal });
-    this.runtime.replaceState({ goal: next, queue: [...snapshot.queue] });
+    this.runtime.replaceState(next);
     const continuation = buildContinuePrompt(next);
     this.pendingRunOrigin = 'automatic';
     try {
@@ -970,7 +787,7 @@ export class GoalPiManager {
     if (this.runtime.snapshot().goal?.id !== goal.id) return;
     this.fenceExecution();
     const paused = transitionGoal({ ...goal, safetyPauseCause: cause }, 'paused');
-    this.runtime.replaceState({ goal: paused, queue: [...this.runtime.snapshot().queue] });
+    this.runtime.replaceState(paused);
     this.deactivateTools();
     this.abortCurrentTurn(ctx);
     this.refreshStatus();
@@ -979,10 +796,10 @@ export class GoalPiManager {
     this.notify(`Goal paused by safety limit: ${detail}. Run /goal resume to continue.`, 'warning');
   }
 
-  private limitForBudget(ctx: ExtensionContext, goal: ActiveGoal, queue: readonly ActiveGoal[]): void {
+  private limitForBudget(ctx: ExtensionContext, goal: ActiveGoal): void {
     this.fenceExecution();
     const limited = transitionGoal({ ...goal }, 'budget_limited');
-    this.runtime.replaceState({ goal: limited, queue: [...queue] });
+    this.runtime.replaceState(limited);
     this.deactivateTools();
     const canWrap = this.activateTools(limited);
     if (canWrap && this.budgetWrapUpGoalId !== limited.id) {
@@ -1012,7 +829,7 @@ export class GoalPiManager {
   private pauseForDeliveryFailure(ctx: ExtensionContext, goal: ActiveGoal, message: string): void {
     this.fenceExecution();
     const paused = transitionGoal({ ...goal }, 'paused');
-    this.runtime.replaceState({ goal: paused, queue: [...this.runtime.snapshot().queue] });
+    this.runtime.replaceState(paused);
     this.deactivateTools();
     this.abortCurrentTurn(ctx);
     this.refreshStatus();
@@ -1035,16 +852,7 @@ export class GoalPiManager {
     if (!(await this.archive(goal, 'complete', summary)))
       return messageResult('Completion aborted because history archival failed.', true);
     this.fenceExecution();
-    const completed = transitionGoal({ ...goal }, 'complete');
-    if (snapshot.queue.length && this.settings.experimental.goals) {
-      this.runtime.replaceState({
-        goal: completed,
-        queue: [...snapshot.queue],
-        pendingAction: { kind: 'advance', goalId: goal.id, reason: 'complete', completedText: goal.text },
-      });
-    } else {
-      this.runtime.clear();
-    }
+    this.runtime.clear();
     this.deactivateTools();
     ctx.abort();
     this.refreshStatus();
@@ -1067,7 +875,7 @@ export class GoalPiManager {
     const reason = typeof params.reason === 'string' ? params.reason.trim() : 'blocked';
     this.fenceExecution();
     const blocked = transitionGoal({ ...goal }, 'blocked');
-    this.runtime.replaceState({ goal: blocked, queue: [...snapshot.queue] });
+    this.runtime.replaceState(blocked);
     this.deactivateTools();
     ctx.abort();
     this.refreshStatus();

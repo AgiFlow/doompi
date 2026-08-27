@@ -28,6 +28,8 @@
   "files": [
     "dist",
     "web",
+    "src/types/askUserWire.ts",
+    "src/types/questionnaire.ts",
     "README.md",
     "LICENSE",
     "package.json"

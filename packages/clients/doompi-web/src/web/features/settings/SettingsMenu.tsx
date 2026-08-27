@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { SETTINGS_SECTIONS } from '../../lib/settingsSections.ts';
+import { settingsSections } from '../../lib/settingsSections.ts';
 
 export function SettingsMenu({ active }: { active: string | undefined }) {
   return (
@@ -7,7 +7,7 @@ export function SettingsMenu({ active }: { active: string | undefined }) {
       data-testid="settings-menu"
       className="flex w-[220px] shrink-0 flex-col gap-0.5 border-r border-doom-border px-2.5 py-3"
     >
-      {SETTINGS_SECTIONS.map((section) => {
+      {settingsSections().map((section) => {
         const current = section.id === active;
         return (
           <Link

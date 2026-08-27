@@ -284,6 +284,35 @@ describe('activityGroups', () => {
       resetWebPlugins();
     }
   });
+
+  it('drops a hideWhenEmpty group while its session reports nothing, and brings it back after', () => {
+    // A cleared status arrives as an empty string rather than an absent key,
+    // because the same map tells the selection bar which minor modes exist. A
+    // group whose whole content is what the session is doing opts out of that
+    // one-way door; a group that is also a launcher does not.
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'goal',
+        activityGroups: [{ name: 'goal', keys: 'g e', statusKey: 'doom-goal-current', hideWhenEmpty: true }],
+      }),
+      defineWebPlugin({
+        id: 'runner',
+        activityGroups: [{ name: 'runners', keys: 'r l', statusKey: 'doom-runner-runners' }],
+      }),
+    ]);
+    try {
+      const idle = activityGroups({ 'doom-goal-current': '', 'doom-runner-runners': '' }, []);
+      expect(idle.map((group) => group.name)).toEqual(['runners']);
+
+      const working = activityGroups({ 'doom-goal-current': 'active 4m · ship it', 'doom-runner-runners': '' }, []);
+      expect(working.map((group) => group.name)).toEqual(['goal', 'runners']);
+
+      // Whitespace and colour are not content either.
+      expect(activityGroups({ 'doom-goal-current': '  ' }, [])).toEqual([]);
+    } finally {
+      resetWebPlugins();
+    }
+  });
 });
 
 describe('a catalog mode that cannot run here', () => {

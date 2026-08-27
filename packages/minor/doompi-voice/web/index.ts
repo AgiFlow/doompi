@@ -15,7 +15,9 @@ export const webPlugin = defineWebPlugin({
   minorModes: [{ name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
   // A microphone you cannot see is one you cannot trust, so voice earns a
   // group in the dock rather than a word inside a chip.
-  activityGroups: [{ name: 'voice', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
+  // hideWhenEmpty: the group reports a capture in progress, so it belongs in
+  // the dock while one is running and nowhere otherwise.
+  activityGroups: [{ name: 'voice', keys: 'v e', statusKey: 'doom-voice', hideWhenEmpty: true, order: 60 }],
   // Same name as the group: the dock renders this inside it, in place of the
   // raw status line the session publishes for a terminal footer.
   activitySections: [{ id: 'voice', component: VoiceActivitySection }],

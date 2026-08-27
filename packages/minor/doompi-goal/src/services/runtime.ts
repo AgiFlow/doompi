@@ -1,4 +1,4 @@
-import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData, PendingQueueAction } from '../types/goal.ts';
+import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData } from '../types/goal.ts';
 import { serializeGoalState } from './stateCodec.ts';
 import { getExecutionState, transitionGoal } from './stateMachine.ts';
 export interface RuntimeCommitPort {
@@ -6,8 +6,6 @@ export interface RuntimeCommitPort {
 }
 export class GoalRuntimeModel {
   private current?: ActiveGoal;
-  private queue: ActiveGoal[] = [];
-  private pendingAction?: PendingQueueAction;
   private readonly loaded: boolean;
   constructor(port: RuntimeCommitPort, loaded = true) {
     this.port = port;
@@ -17,42 +15,32 @@ export class GoalRuntimeModel {
   snapshot(): GoalRuntimeSnapshot {
     return {
       loaded: this.loaded,
-      execution: getExecutionState({ goal: this.current, queue: this.queue }),
+      execution: getExecutionState({ goal: this.current }),
       goal: this.current,
-      queue: [...this.queue],
-      pendingAction: this.pendingAction,
     };
   }
-  load(state: { goal?: ActiveGoal; queue?: readonly ActiveGoal[]; pendingAction?: PendingQueueAction }): void {
-    this.current = state.goal;
-    this.queue = [...(state.queue ?? [])];
-    this.pendingAction = state.pendingAction;
+  load(goal: ActiveGoal | undefined): void {
+    this.current = goal;
   }
   start(goal: ActiveGoal): GoalRuntimeSnapshot {
-    this.commit({ goal, queue: this.queue, pendingAction: this.pendingAction });
+    this.commit(goal);
     return this.snapshot();
   }
   stop(status: 'paused' | 'blocked' | 'usage_limited' | 'budget_limited'): GoalRuntimeSnapshot {
     if (!this.current) return this.snapshot();
-    this.commit({ goal: transitionGoal(this.current, status), queue: this.queue, pendingAction: this.pendingAction });
+    this.commit(transitionGoal(this.current, status));
     return this.snapshot();
   }
   clear(): GoalRuntimeSnapshot {
-    this.commit({ goal: undefined, queue: [], pendingAction: undefined });
+    this.commit(undefined);
     return this.snapshot();
   }
-  replaceState(state: {
-    goal?: ActiveGoal;
-    queue?: readonly ActiveGoal[];
-    pendingAction?: PendingQueueAction;
-  }): GoalRuntimeSnapshot {
-    this.commit({ goal: state.goal, queue: state.queue ?? [], pendingAction: state.pendingAction });
+  replaceState(goal: ActiveGoal | undefined): GoalRuntimeSnapshot {
+    this.commit(goal);
     return this.snapshot();
   }
-  private commit(state: { goal?: ActiveGoal; queue: readonly ActiveGoal[]; pendingAction?: PendingQueueAction }): void {
-    this.port.persist(serializeGoalState(state.goal, state.queue, state.pendingAction));
-    this.current = state.goal;
-    this.queue = [...state.queue];
-    this.pendingAction = state.pendingAction;
+  private commit(goal: ActiveGoal | undefined): void {
+    this.port.persist(serializeGoalState(goal));
+    this.current = goal;
   }
 }

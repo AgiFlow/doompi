@@ -29,8 +29,31 @@ import path from 'node:path';
 import { parseDocument } from 'yaml';
 import { parseDoomConfig } from '../services/configPolicy.ts';
 
+/**
+ * The global file holds machine-wide credentials-adjacent settings and lives in
+ * the user's home, so it stays private.
+ */
 const PRIVATE_FILE_MODE = 0o600;
 const PRIVATE_DIRECTORY_MODE = 0o700;
+
+/**
+ * The repository file is committed to git and read by everyone who checks the
+ * project out, so it takes the modes `init.ts` already seeds it with. Writing it
+ * private would produce a 0600 file in a working tree, which is both wrong and
+ * invisible until someone else clones.
+ */
+const REPOSITORY_FILE_MODE = 0o644;
+const REPOSITORY_DIRECTORY_MODE = 0o755;
+
+/** Which file a write is aimed at; the modes follow from it. */
+export type DoomConfigScope = 'global' | 'repository';
+
+/** The permissions a scope's file and its parent directory are created with. */
+function modesForScope(scope: DoomConfigScope): { file: number; directory: number } {
+  return scope === 'repository'
+    ? { file: REPOSITORY_FILE_MODE, directory: REPOSITORY_DIRECTORY_MODE }
+    : { file: PRIVATE_FILE_MODE, directory: PRIVATE_DIRECTORY_MODE };
+}
 
 export interface DoomConfigEdit {
   /** Key path into the document, e.g. `['voice', 'adapters', 'mlx-whisper', 'model', 'id']`. */
@@ -52,6 +75,12 @@ export interface WriteDoomConfigOptions {
    * requires a model once the adapter exists at all.
    */
   readonly prune?: boolean;
+  /**
+   * Which file this is, so the write lands with the right permissions.
+   * Defaults to `global`, which is what every caller wrote before the
+   * repository file was writable at all.
+   */
+  readonly scope?: DoomConfigScope;
 }
 
 async function readIfPresent(filePath: string): Promise<string> {
@@ -115,10 +144,11 @@ export async function writeDoomConfigValues(
   const output = document.toString();
   parseDoomConfig(output, filePath);
 
-  await fs.mkdir(path.dirname(filePath), { mode: PRIVATE_DIRECTORY_MODE, recursive: true });
+  const modes = modesForScope(options.scope ?? 'global');
+  await fs.mkdir(path.dirname(filePath), { mode: modes.directory, recursive: true });
   const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    await fs.writeFile(temporaryPath, output, { encoding: 'utf8', mode: PRIVATE_FILE_MODE });
+    await fs.writeFile(temporaryPath, output, { encoding: 'utf8', mode: modes.file });
     await fs.rename(temporaryPath, filePath);
   } catch (error) {
     await fs.rm(temporaryPath, { force: true });
@@ -126,10 +156,19 @@ export async function writeDoomConfigValues(
   }
 }
 
-export async function setDoomConfigValue(filePath: string, keyPath: readonly string[], value: string): Promise<void> {
-  await writeDoomConfigValues(filePath, [{ keyPath, value }]);
+export async function setDoomConfigValue(
+  filePath: string,
+  keyPath: readonly string[],
+  value: string,
+  options: WriteDoomConfigOptions = {},
+): Promise<void> {
+  await writeDoomConfigValues(filePath, [{ keyPath, value }], options);
 }
 
-export async function unsetDoomConfigValue(filePath: string, keyPath: readonly string[]): Promise<void> {
-  await writeDoomConfigValues(filePath, [{ keyPath }]);
+export async function unsetDoomConfigValue(
+  filePath: string,
+  keyPath: readonly string[],
+  options: WriteDoomConfigOptions = {},
+): Promise<void> {
+  await writeDoomConfigValues(filePath, [{ keyPath }], options);
 }

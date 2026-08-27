@@ -2,6 +2,10 @@
 
 [Back to DoomPi](../README.md)
 
+This is the inventory: what DoomPi does with your credentials, your commands, and your data. The
+[Security model](securities.md) is the reasoning beside it, covering the threat model, the boundaries
+that guard a cockpit reachable from a phone, and what is deliberately left open.
+
 ## Executable inputs
 
 DoomPi executes the extensions, remote Git/npm plugins, hooks, MCP stdio commands, workflows, and

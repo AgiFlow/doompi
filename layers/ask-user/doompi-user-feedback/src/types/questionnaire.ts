@@ -20,7 +20,9 @@ export type QuestionnaireError =
   | 'duplicate_option_label'
   | 'reserved_label'
   | 'session_load_failed'
-  | 'stale_module_cache';
+  | 'stale_module_cache'
+  /** A client replied with an answer envelope that did not match the questions asked. */
+  | 'malformed_answers';
 
 export type ExternalEditResult =
   | { readonly status: 'complete'; readonly content: string }

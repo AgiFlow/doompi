@@ -207,6 +207,12 @@ export interface ActivityGroup {
  * package that owns them, so a composition without such a package shows no
  * group, and a session that never published a group's signal shows none
  * either.
+ *
+ * A group that declared `hideWhenEmpty` also goes away again once its session
+ * stops reporting. Clearing a status reaches the page as an empty string
+ * rather than as an absent key, because the same map tells the selection bar
+ * which minor modes exist and an absent key means "not reported" there. So
+ * emptiness is read here instead, where only the dock is looking.
  */
 export function activityGroups(statuses: Record<string, string>, widgets: readonly string[]): ActivityGroup[] {
   const groups: ActivityGroup[] = [];
@@ -214,6 +220,7 @@ export function activityGroups(statuses: Record<string, string>, widgets: readon
     const tab = source.tab === undefined ? {} : { tab: source.tab };
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
+      if (summary.length === 0 && source.hideWhenEmpty === true) continue;
       groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0, ...tab });
       continue;
     }

@@ -12,6 +12,12 @@ const DEDUPED_RUNTIMES = [
   '@tanstack/store',
   '@tanstack/react-store',
   '@agimon-ai/doompi-web-components',
+  // CodeMirror's state and view are singletons in all but name: a document
+  // built against one copy is rejected by an editor from the other, and a
+  // grammar chunk resolved separately from the editor is exactly how a second
+  // copy appears.
+  '@codemirror/state',
+  '@codemirror/view',
 ];
 
 export interface BundleCockpitWebOptions {

@@ -4,11 +4,13 @@ export {
   globalDoomConfigPath,
   loadDoomConfig,
   loadDoomConfigAsync,
+  loadDoomConfigLayers,
   repositoryDoomConfigPath,
   resolvePlanningPlansDirectory,
 } from '../adapters/config.ts';
 export {
   type DoomConfigEdit,
+  type DoomConfigScope,
   setDoomConfigValue,
   unsetDoomConfigValue,
   type WriteDoomConfigOptions,
@@ -116,6 +118,10 @@ export type {
   PiConfigPaths,
 } from '../schemas/config/schema.ts';
 export {
+  type ConfigKeyScope,
+  configLeafKeys,
+  configRootKeys,
+  configScopeOf,
   DOOM_PLANNING_THINKING_LEVELS,
   DOOM_VOICE_ENGINES,
   DOOM_VOICE_TTS_ENGINES,
@@ -123,9 +129,13 @@ export {
   parseDoomConfig,
   parsePlanningModeConfig,
   resolveVoiceConfig,
+  valueAtKeyPath,
 } from '../services/configPolicy.ts';
 export { domainCompletionItems, domainCompletionPrefix, expandDomainNames } from '../services/domains.ts';
 export type {
+  ConfigValueOrigin,
+  DoomConfigLayer,
+  DoomConfigLayers,
   DoomConfigPendingSelection,
   DoomConfigTransitionPhase,
   DoomConfigTransitionRecord,

@@ -60,8 +60,13 @@ describe('sessionSocketUrl', () => {
   });
 });
 
+/** Lets the transport's promise chain drain; it is a pass-through with no channel. */
+async function settled(): Promise<void> {
+  for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+}
+
 describe('createSessionSocket', () => {
-  it('reports frames and swallows anything that is not an object', () => {
+  it('reports frames and swallows anything that is not an object', async () => {
     install();
     const frames: Array<Record<string, unknown>> = [];
     createSessionSocket('ws://x/api/session', { onFrame: (f) => frames.push(f), onOpen: () => {}, onClose: () => {} });
@@ -73,10 +78,13 @@ describe('createSessionSocket', () => {
     socket.emit('message', { data: 'not json' });
     socket.emit('message', { data: 42 });
 
+    // Every frame now goes through the sealed transport, which is a
+    // pass-through with no channel but still resolves on a microtask.
+    await settled();
     expect(frames).toEqual([{ type: 'agent_start' }]);
   });
 
-  it('only writes once the socket is open', () => {
+  it('only writes once the socket is open', async () => {
     install();
     const client = createSessionSocket('ws://x/api/session', {
       onFrame: () => {},
@@ -86,10 +94,12 @@ describe('createSessionSocket', () => {
 
     const socket = FakeWebSocket.instances[0];
     client.send({ type: 'prompt' });
+    await settled();
     expect(socket.sent).toHaveLength(0);
 
     socket.openIt();
     client.send({ type: 'prompt' });
+    await settled();
     expect(socket.sent).toEqual(['{"type":"prompt"}']);
   });
 

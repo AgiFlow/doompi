@@ -60,7 +60,7 @@ function repoKey(repoRoot: string): string {
   return `doompi-sandbox-${createHash('sha256').update(repoRoot).digest('hex').slice(0, REPO_KEY_LENGTH)}`;
 }
 
-async function detectEngine(
+export async function detectEngine(
   runner: EngineProcessRunner,
   environment: Readonly<Record<string, string | undefined>>,
 ): Promise<SandboxEngine> {
@@ -76,21 +76,32 @@ async function detectEngine(
   throw new Error(`No container engine found. Install one of ${ENGINES.join(', ')}, or set ${ENGINE_ENV}.`);
 }
 
-async function ensureImage(
+/**
+ * Builds the image if the engine does not already have it.
+ *
+ * Takes its definition rather than assuming one, because the interactive
+ * sandbox and the cockpit container are two different images built the same
+ * way. The tag already carries a digest of the definition, so a changed
+ * Dockerfile misses the inspect and rebuilds.
+ */
+export async function ensureImage(
   runner: EngineProcessRunner,
   engine: SandboxEngine,
   version: string,
   onProgress: ((message: string) => void) | undefined,
+  definition: { tag: string; dockerfile: string; files?: Readonly<Record<string, string>> },
 ): Promise<string> {
-  const tag = sandboxImageTag(version);
+  const tag = definition.tag;
   const inspected = await runner.capture(engine, ['image', 'inspect', tag]);
   if (inspected?.exitCode === 0) return tag;
 
   onProgress?.(`building ${tag} (first run for this DoomPi version)`);
   const context = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-sandbox-build-'));
   try {
-    fs.writeFileSync(path.join(context, DOCKERFILE_NAME), sandboxDockerfile());
-    fs.writeFileSync(path.join(context, BRIDGE_FILE_NAME), sandboxBridgeSource());
+    fs.writeFileSync(path.join(context, DOCKERFILE_NAME), definition.dockerfile);
+    for (const [name, contents] of Object.entries(definition.files ?? {})) {
+      fs.writeFileSync(path.join(context, name), contents);
+    }
     const exitCode = await runner.run(engine, [
       'build',
       '-t',
@@ -99,7 +110,7 @@ async function ensureImage(
       `DOOMPI_VERSION=${version}`,
       context,
     ]);
-    if (exitCode !== 0) throw new Error(`Building the sandbox image failed with exit code ${exitCode}.`);
+    if (exitCode !== 0) throw new Error(`Building the ${tag} image failed with exit code ${exitCode}.`);
   } finally {
     fs.rmSync(context, { recursive: true, force: true });
   }
@@ -141,7 +152,13 @@ export function createSandboxLauncher(dependencies: SandboxLauncherDependencies 
         request.environment[DEVCONTAINER_DISABLED_ENV] === DISABLED_VALUE
           ? undefined
           : findDevcontainerConfig(request.repoRoot);
-      const imageTag = devcontainer ? undefined : await ensureImage(runner, engine, version, request.onProgress);
+      const imageTag = devcontainer
+        ? undefined
+        : await ensureImage(runner, engine, version, request.onProgress, {
+            tag: sandboxImageTag(version),
+            dockerfile: sandboxDockerfile(),
+            files: { [BRIDGE_FILE_NAME]: sandboxBridgeSource() },
+          });
       if (devcontainer) {
         request.onProgress?.(`using the workspace dev container from ${path.relative(request.repoRoot, devcontainer)}`);
         request.onProgress?.(

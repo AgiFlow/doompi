@@ -28,6 +28,14 @@ export class FileEditPaths implements IFileEditPaths {
     return path.join(directory, `${worktree}-${hash(sessionKey)}.jsonl`);
   }
 
+  /**
+   * Where this session's content snapshots live: beside its timeline and named
+   * after it, so the two are found together and cleared together.
+   */
+  snapshotsPath(cwd: string, sessionKey: string): string {
+    return `${this.timelinePath(cwd, sessionKey).replace(/\.jsonl$/u, '')}.blobs`;
+  }
+
   private gitCommonDirectory(cwd: string): string | undefined {
     try {
       const result = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {

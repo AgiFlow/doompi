@@ -110,6 +110,9 @@ export interface AuthRuntimeProvider {
 export interface AuthRuntime {
   getProviders(): readonly AuthRuntimeProvider[];
   getProviderAuthStatus(providerId: string): { configured: boolean; source?: string; label?: string };
+  /** Models the runtime already knows about, without touching the network. */
+  getAvailableSnapshot(): readonly { provider: string; id: string }[];
+  hasConfiguredAuth(providerId: string): boolean;
   isUsingOAuth(providerId: string): boolean;
   /** Re-reads models.json and every provider's auth state without touching the network. */
   refresh(options: { allowNetwork: boolean }): Promise<unknown>;

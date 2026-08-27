@@ -134,6 +134,13 @@ describe('the hub bridge', () => {
     });
   });
 
+  it('answers a restart for an unknown session with 404 rather than starting anything', async () => {
+    const { server } = await bridge();
+    const response = await fetch(`${server.url}/api/sessions/nope/restart`, { method: 'POST' });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: expect.stringMatching(/Unknown session/) as string });
+  });
+
   it('answers file completion queries scoped to a known session', async () => {
     const { server } = await bridge();
     // The registered session names this package as its cwd: a real repository

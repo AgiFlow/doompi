@@ -3,6 +3,7 @@ import type {
   LeaderBindingContribution,
   MinorModeContribution,
   PaletteCommandContribution,
+  SettingsSectionContribution,
   SelectionAxisContribution,
   SessionChannelContribution,
   SlotDeclaration,
@@ -44,6 +45,7 @@ export type InstallDiagnosticKind =
   | 'duplicate-minor-mode'
   | 'duplicate-selection-axis'
   | 'duplicate-palette-command'
+  | 'duplicate-settings-section'
   | 'leader-leaf-override'
   | 'leader-group-label'
   | 'orphan-fill'
@@ -92,6 +94,7 @@ interface RegistryState {
   selectionAxes: SelectionAxisContribution[];
   minorModes: MinorModeContribution[];
   activityGroups: ActivityGroupContribution[];
+  settingsSections: SettingsSectionContribution[];
   toolRenderers: Map<string, ToolRendererContribution>;
   toolMatchers: ToolRendererContribution[];
   slots: Map<string, SlotDeclaration>;
@@ -109,6 +112,7 @@ function emptyState(): RegistryState {
     selectionAxes: [],
     minorModes: [],
     activityGroups: [],
+    settingsSections: [],
     toolRenderers: new Map(),
     toolMatchers: [],
     slots: new Map(),
@@ -170,7 +174,8 @@ type SharedNamespace =
   | 'activity-group'
   | 'minor-mode'
   | 'selection-axis'
-  | 'palette-command';
+  | 'palette-command'
+  | 'settings-section';
 
 /**
  * Claims `id` in one shared namespace: false, with a diagnostic, when another
@@ -300,6 +305,7 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     'minor-mode': new Map(),
     'selection-axis': new Map(),
     'palette-command': new Map(),
+    'settings-section': new Map(),
   };
   const pendingFills: PendingFill[] = [];
   const pendingSections: PendingSection[] = [];
@@ -323,6 +329,11 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     state.plugins.push(plugin);
     for (const tab of plugin.tabs ?? []) {
       if (claim(owners.tab, 'tab', tab.id, plugin.id)) state.tabs.push(tab);
+    }
+    for (const section of plugin.settingsSections ?? []) {
+      if (claim(owners['settings-section'], 'settings-section', section.id, plugin.id)) {
+        state.settingsSections.push(section);
+      }
     }
     for (const channel of plugin.channels ?? []) {
       if (claim(owners.channel, 'channel', channel.channel, plugin.id)) state.channels.set(channel.channel, channel);
@@ -410,6 +421,14 @@ export function installedWebPlugins(): readonly WebPluginDefinition[] {
 
 export function webTabs(): readonly TabContribution[] {
   return state.tabs;
+}
+
+/**
+ * The settings pages plugins contribute, in menu order. Sorted here rather than
+ * at the reader so the menu and the page agree without either sorting twice.
+ */
+export function pluginSettingsSections(): readonly SettingsSectionContribution[] {
+  return state.settingsSections;
 }
 
 /** The fills placed into one slot, in slot order; empty for a slot nobody declared. */

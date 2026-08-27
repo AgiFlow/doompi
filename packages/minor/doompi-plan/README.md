@@ -60,6 +60,21 @@ it does not activate an omitted feedback layer.
 In autonomous Voice mode, review choices are narrated, the turn terminates, and the next user
 message carries the decision.
 
+## Read and edit the plan in the cockpit
+
+Once `write_plan` succeeds, a `plan` group appears in the cockpit's activity dock and stays for the
+rest of the session, including after Plan mode is exited: that is when the agent starts
+implementing, which is when the plan is most worth having open. The row opens a temporary tab that
+renders the plan as Markdown, with a `source` view that edits it and saves back to the plan file.
+
+The agent reads the plan file at the start of every turn, so a saved edit is what it implements. A
+save carries the hash the reader loaded and is refused if the agent rewrote the plan in the
+meantime, rather than overwriting it.
+
+The cockpit reaches the plan through this package's session API, mounted at `/api/plugin/plans`.
+Because a host imports the built entry, a change here needs `pnpm build` and `doompi sync` before a
+running cockpit sees it.
+
 ## Configure models and storage
 
 Put planning settings in the repository's `.doom/config.yaml` or the global
@@ -85,6 +100,7 @@ calls consume provider quota.
 
 The root exports planning configuration schemas, prompts, Fable flow helpers, and the Plan mode
 service. Focused exports include `/config`, `/planConfig`, `/planMode`, `/fableFlow`, and `/prompts`.
+`/session-api` is the entry a host mounts for the cockpit's plan tab.
 
 ## Development
 

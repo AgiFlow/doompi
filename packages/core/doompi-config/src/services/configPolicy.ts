@@ -573,3 +573,82 @@ export function resolveVoiceConfig(config: VoiceConfig): ResolvedVoiceConfig {
       : {}),
   };
 }
+
+/**
+ * Which files a key may be written to.
+ *
+ * `mergeDoomConfigs` above already decides this per field, but it decides it by
+ * doing it: `editor` reads only from the global side, `projectTrust` only from
+ * the repository side, and a repository `voice.autoCapture` throws outright.
+ * A caller holding a key path has no way to ask. Without an answer, a settings
+ * surface offers writes that throw, or worse, writes that land in a file the
+ * merge will ignore, so the change appears to do nothing.
+ *
+ * Declared here rather than beside the writer because the rule is a property of
+ * the merge, not of the filesystem, and a test asserts the two agree.
+ */
+export type ConfigKeyScope = 'global' | 'repository' | 'both';
+
+/** Root keys the merge reads from one side only. */
+const GLOBAL_ONLY_ROOTS: readonly string[] = ['editor'];
+const REPOSITORY_ONLY_ROOTS: readonly string[] = ['projectTrust'];
+/** The one nested exception; a repository declaration of it throws in the merge. */
+const GLOBAL_ONLY_PATHS: readonly (readonly string[])[] = [['voice', 'autoCapture']];
+
+function startsWith(keyPath: readonly string[], prefix: readonly string[]): boolean {
+  return prefix.length <= keyPath.length && prefix.every((segment, index) => keyPath[index] === segment);
+}
+
+/**
+ * The scopes a key path accepts. An unknown root answers `both` rather than
+ * throwing: the parser is what rejects unsupported keys, and it reports them
+ * far better than a scope lookup could.
+ */
+export function configScopeOf(keyPath: readonly string[]): ConfigKeyScope {
+  if (keyPath.length === 0) return 'both';
+  if (GLOBAL_ONLY_PATHS.some((prefix) => startsWith(keyPath, prefix))) return 'global';
+  const root = keyPath[0]!;
+  if (GLOBAL_ONLY_ROOTS.includes(root)) return 'global';
+  if (REPOSITORY_ONLY_ROOTS.includes(root)) return 'repository';
+  return 'both';
+}
+
+/** Every root key the config accepts, so a caller can enumerate without importing the parser's internals. */
+export function configRootKeys(): readonly string[] {
+  return ROOT_KEYS;
+}
+
+const KEY_SEPARATOR = '.';
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Every key path a parsed document actually sets, as dotted strings.
+ *
+ * A settings surface needs to tell "this file set this key" from "this file is
+ * silent about it", and the parsed `DoomConfig` cannot answer: an absent file
+ * reads as `{ projectTrust: 'ask' }` and `parseDoomConfig` always returns all
+ * five root keys, some undefined. So the question is asked of the raw document
+ * instead, before any defaulting has happened.
+ *
+ * Leaves only. A list is a leaf because it is replaced whole, and an empty
+ * record sets nothing.
+ */
+export function configLeafKeys(value: unknown, prefix: readonly string[] = []): string[] {
+  if (!isPlainRecord(value)) return prefix.length > 0 ? [prefix.join(KEY_SEPARATOR)] : [];
+  const keys = Object.keys(value);
+  if (keys.length === 0) return prefix.length > 0 ? [prefix.join(KEY_SEPARATOR)] : [];
+  return keys.flatMap((key) => configLeafKeys(value[key], [...prefix, key]));
+}
+
+/** The value a key path points at, or undefined when any step is missing. */
+export function valueAtKeyPath(value: unknown, keyPath: readonly string[]): unknown {
+  let current: unknown = value;
+  for (const segment of keyPath) {
+    if (!isPlainRecord(current)) return undefined;
+    current = current[segment];
+  }
+  return current;
+}

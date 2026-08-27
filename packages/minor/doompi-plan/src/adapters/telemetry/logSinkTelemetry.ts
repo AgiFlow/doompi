@@ -12,6 +12,7 @@ export const PLAN_EVENT = {
   modeEnabled: 'doom_plan.mode_enabled',
   modeDisabled: 'doom_plan.mode_disabled',
   planWritten: 'doom_plan.plan_written',
+  planPointerFailed: 'doom_plan.plan_pointer_failed',
   planReviewCompleted: 'doom_plan.plan_review_completed',
 } as const;
 

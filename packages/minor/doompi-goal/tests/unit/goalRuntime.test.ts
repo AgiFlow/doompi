@@ -33,9 +33,7 @@ describe('goal parser and accounting', () => {
       objective: 'ship it',
       tokenBudget: 2_000_000,
     });
-    expect(parseGoalCommand('push queued', { experimentalGoals: true })).toMatchObject({ kind: 'add' });
     expect(parseGoalCommand('status')).toEqual({ kind: 'show' });
-    expect(parseGoalCommand('skip', { experimentalGoals: true })).toEqual({ kind: 'skip' });
     expect(validateObjective('')).toContain('Usage');
     expect(validateObjective('ok')).toBeUndefined();
   });
@@ -68,9 +66,9 @@ describe('goal codec and state machine', () => {
   });
   it('separates dormant, retained, and executing states', () => {
     const goal = createGoal('test', 10, { id: 'g1', now: 10 });
-    expect(getExecutionState({ goal: undefined, queue: [] })).toBe('dormant');
-    expect(getExecutionState({ goal: transitionGoal(goal, 'paused', 20), queue: [] })).toBe('retained');
-    expect(getExecutionState({ goal, queue: [] })).toBe('executing');
+    expect(getExecutionState({ goal: undefined })).toBe('dormant');
+    expect(getExecutionState({ goal: transitionGoal(goal, 'paused', 20) })).toBe('retained');
+    expect(getExecutionState({ goal })).toBe('executing');
     expect(isContradictoryCompletionSummary('tests still fail')).toBe(true);
   });
 });

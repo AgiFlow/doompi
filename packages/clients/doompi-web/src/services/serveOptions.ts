@@ -6,6 +6,17 @@ export interface ServeOptions {
   port: number;
   host: string;
   assetsDir?: string;
+  /** Where remote-access settings and the tunnel pid file live; the caller resolves a default. */
+  stateDir?: string;
+  /** Explicit cloudflared binary, ahead of DOOMPI_CLOUDFLARED and a PATH scan. */
+  cloudflaredPath?: string;
+}
+
+/** Addresses that keep the cockpit off the network; anything else needs saying out loud. */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host.trim().toLowerCase());
 }
 
 const DEFAULT_PORT = 7433;
@@ -29,6 +40,8 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
   let port = DEFAULT_PORT;
   let host = DEFAULT_HOST;
   let assetsDir: string | undefined;
+  let stateDir: string | undefined;
+  let cloudflaredPath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -54,10 +67,16 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
       case '--assets':
         assetsDir = requireValue(flag, argv[++index]);
         break;
+      case '--state-dir':
+        stateDir = requireValue(flag, argv[++index]);
+        break;
+      case '--cloudflared':
+        cloudflaredPath = requireValue(flag, argv[++index]);
+        break;
       default:
         throw new Error(`Unknown option "${flag}".`);
     }
   }
 
-  return { registryDir, spawnCommand, port, host, assetsDir };
+  return { registryDir, spawnCommand, port, host, assetsDir, stateDir, cloudflaredPath };
 }

@@ -138,7 +138,7 @@ describe('createSandboxLauncher', () => {
         forwardArgs: [],
         environment: {},
       }),
-    ).rejects.toThrowError(/Building the sandbox image failed/);
+    ).rejects.toThrowError(/Building the doompi-sandbox:.* image failed/);
     expect(runner.runs).toHaveLength(1);
   });
 

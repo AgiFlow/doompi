@@ -8,7 +8,7 @@ Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doomp
 Completed, cleared, or blocked goals no longer contribute active instructions or tools. Goal history
 is scoped to the repository.
 
-> **Alpha:** Goal behavior and experimental queue commands may change between releases.
+> **Alpha:** Goal behavior may change between releases.
 
 ## Requirements
 
@@ -41,16 +41,18 @@ Budgets accept compact values such as `100k` and `1.5m`. Goal adds `goal_complet
 In DoomPi, `SPC g e` starts a goal and ends and archives the one being worked, `SPC g g` shows
 status, and `SPC g l` opens history. These views require a TUI; slash commands and tools support headless operation.
 
-## Experimental queue
+## In the cockpit
 
-Queue commands are disabled by default. Set `experimental.goals` to `true` in
-`$PI_CODING_AGENT_DIR/pi-goal.json` (default `~/.pi/agent/pi-goal.json`) to enable `/goal add`,
-`/goal prioritize`, `/goal skip`, and `/goal drop-last`. Treat this queue as experimental rather
-than part of the stable single-objective contract.
+Once a session sets a goal, a `goal` group appears in the activity dock carrying the objective and
+how far along it is. Its kebab menu edits the objective and the token budget, or removes the goal,
+both through the same `/goal` verbs the terminal uses, so an edit made in either place is one
+operation. Removing archives to goal history and stops the turn in flight, so it asks first.
 
-Default settings use operational tool visibility, disable the queue, allow unlimited automatic
-turns, and pause after three no-progress turns. Hosts can decode and normalize custom settings
-through the public settings API.
+## Settings
+
+Settings live in `$PI_CODING_AGENT_DIR/pi-goal.json` (default `~/.pi/agent/pi-goal.json`). The
+defaults use operational tool visibility, allow unlimited automatic turns, and pause after three
+no-progress turns. Hosts can decode and normalize custom settings through the public settings API.
 
 ## State and history
 
@@ -76,7 +78,7 @@ import {
 } from '@agimon-ai/doompi-goal';
 ```
 
-The root also exports state-machine, queue, history codec, accounting, safety, prompt, and tool
+The root also exports state-machine, history codec, accounting, safety, prompt, and tool
 types for embedding.
 
 ## Development

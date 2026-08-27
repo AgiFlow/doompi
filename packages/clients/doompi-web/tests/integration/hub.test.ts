@@ -10,7 +10,7 @@ import {
   type SessionHub,
   type SessionHubOptions,
 } from '../../src/adapters/sessionHub.ts';
-import type { SpawnOutcome } from '../../src/adapters/serverSpawner.ts';
+import type { SpawnOutcome, SpawnSessionInput } from '../../src/adapters/serverSpawner.ts';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession, writeStaleRecord } from '../support/fakeSession.ts';
 
@@ -36,7 +36,7 @@ interface HubHarness {
 
 function startHub(
   registryDir: string,
-  spawn?: (input: { cwd: string; name?: string }) => Promise<SpawnOutcome>,
+  spawn?: (input: SpawnSessionInput) => Promise<SpawnOutcome>,
   extraChannels: WebHubChannel[] = [],
   signal?: (pid: number) => void,
   overrides: Partial<SessionHubOptions> = {},
@@ -122,6 +122,77 @@ describe('the session hub over a registry', () => {
     expect(harness.hub.stop('own')).toMatchObject({ ok: false, code: 'self' });
     expect(harness.hub.stop('nope')).toMatchObject({ ok: false, code: 'unknown' });
     expect(signalled).toEqual([process.ppid]);
+  });
+
+  it('restarts a session under the same id, in its own directory, once its record is withdrawn', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'live', name: 'live', pid: process.ppid });
+    const spawned: SpawnSessionInput[] = [];
+    const signalled: number[] = [];
+    const harness = startHub(
+      registryDir,
+      async (input) => {
+        spawned.push(input);
+        return { ok: true, sessionId: input.sessionId ?? 'fresh' };
+      },
+      [],
+      (pid) => {
+        signalled.push(pid);
+        // A real server exits on the signal and withdraws its record; that is
+        // the event the restart waits for before starting the replacement.
+        void session.close();
+      },
+    );
+    await session.waitForAttach();
+    await waitFor(() => harness.latest('live') !== undefined, 'the session listed');
+
+    const outcome = await harness.hub.restart('live');
+
+    expect(signalled).toEqual([process.ppid]);
+    expect(outcome).toEqual({ ok: true, sessionId: 'live' });
+    // The id is kept so Pi resumes the same session, and the directory is
+    // reused so repeated restarts cannot outgrow the unix socket path limit.
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0]?.sessionId).toBe('live');
+    expect(spawned[0]?.name).toBe('live');
+    expect(spawned[0]?.sessionDir).toBe(path.dirname(session.socketPath));
+  });
+
+  it('does not start a replacement when the session refuses to go', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'stuck', pid: process.ppid });
+    const spawned: SpawnSessionInput[] = [];
+    // The signal is swallowed, so the record never leaves.
+    const harness = startHub(
+      registryDir,
+      async (input) => {
+        spawned.push(input);
+        return { ok: true, sessionId: 'unexpected' };
+      },
+      [],
+      () => undefined,
+      { restartWaitMs: 60, restartPollMs: 10 },
+    );
+    await session.waitForAttach();
+    await waitFor(() => harness.latest('stuck') !== undefined, 'the session listed');
+
+    const outcome = await harness.hub.restart('stuck');
+
+    // Two servers on one socket is worse than a failed restart, so it reports.
+    expect(outcome).toMatchObject({ ok: false, code: 'spawn_failed' });
+    expect(spawned).toEqual([]);
+  });
+
+  it('refuses to restart an unknown session, and one it has no spawner for', async () => {
+    const registryDir = freshRegistryDir();
+    const withSpawner = startHub(registryDir, async () => ({ ok: true, sessionId: 'x' }));
+    await expect(withSpawner.hub.restart('nope')).resolves.toMatchObject({ ok: false, code: 'invalid_request' });
+
+    const session = await startRegisteredSession(registryDir, { id: 'fixed' });
+    const noSpawner = startHub(registryDir);
+    await session.waitForAttach();
+    await waitFor(() => noSpawner.latest('fixed') !== undefined, 'the session listed');
+    await expect(noSpawner.hub.restart('fixed')).resolves.toMatchObject({ ok: false, code: 'invalid_request' });
   });
 
   it('picks up a session that registers mid-run and drops one that leaves', async () => {

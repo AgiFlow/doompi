@@ -3,9 +3,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { reattachDelayMs } from '../../src/services/retryPolicy.ts';
-import { parseServeOptions } from '../../src/services/serveOptions.ts';
+import { isLoopbackHost, parseServeOptions } from '../../src/services/serveOptions.ts';
 import { createFrameDecoder, encodeFrame } from '../../src/services/sessionFraming.ts';
 import { contentTypeFor, resolveAssetPath } from '../../src/services/staticAssets.ts';
+
+describe('isLoopbackHost', () => {
+  it('recognises every spelling that keeps the cockpit off the network', () => {
+    for (const host of ['127.0.0.1', 'localhost', 'LocalHost', '::1', '[::1]', ' 127.0.0.1 ']) {
+      expect(isLoopbackHost(host), host).toBe(true);
+    }
+  });
+
+  it('treats a public bind as what it is, so the launcher can say so out loud', () => {
+    for (const host of ['0.0.0.0', '::', '192.168.1.10', 'example.com']) {
+      expect(isLoopbackHost(host), host).toBe(false);
+    }
+  });
+});
 
 describe('parseServeOptions', () => {
   it('needs no arguments at all: bare doompi-web is a loopback hub', () => {
@@ -15,6 +29,8 @@ describe('parseServeOptions', () => {
       port: 7433,
       host: '127.0.0.1',
       assetsDir: undefined,
+      stateDir: undefined,
+      cloudflaredPath: undefined,
     });
   });
 
@@ -33,6 +49,13 @@ describe('parseServeOptions', () => {
     expect(() => parseServeOptions(['--port', '70000'])).toThrow(/expects a port number/);
     expect(() => parseServeOptions(['--registry-dir', '--port'])).toThrow(/needs a value/);
     expect(() => parseServeOptions(['--nonsense'])).toThrow(/Unknown option/);
+  });
+
+  it('takes an override for the remote-access state directory and the tunnel binary', () => {
+    expect(parseServeOptions(['--state-dir', '/srv/state', '--cloudflared', '/opt/cloudflared'])).toMatchObject({
+      stateDir: '/srv/state',
+      cloudflaredPath: '/opt/cloudflared',
+    });
   });
 
   it('no longer accepts the withdrawn single-session flags', () => {

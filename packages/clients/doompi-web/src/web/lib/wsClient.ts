@@ -1,3 +1,5 @@
+import { sealedSession } from './sealedSession.ts';
+
 type Frame = Record<string, unknown>;
 
 export interface SessionSocket {
@@ -38,15 +40,20 @@ export function createSessionSocket(url: string, handlers: SessionSocketHandlers
 
     next.addEventListener('message', (event: MessageEvent<string>) => {
       if (typeof event.data !== 'string') return;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        handlers.onFrame(parsed as Frame);
-      }
+      // Opening is serialized inside the transport, so frames stay in the order
+      // they were sent even though each open is asynchronous.
+      void sealedSession.openText(event.data).then((text) => {
+        if (text === undefined) return;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          return;
+        }
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          handlers.onFrame(parsed as Frame);
+        }
+      });
     });
 
     next.addEventListener('close', () => {
@@ -62,7 +69,13 @@ export function createSessionSocket(url: string, handlers: SessionSocketHandlers
 
   return {
     send(frame) {
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
+      const outgoing = socket;
+      if (outgoing?.readyState !== WebSocket.OPEN) return;
+      // Sealing is asynchronous, so the socket is re-checked once it resolves:
+      // it may have closed while the ciphertext was being produced.
+      void sealedSession.sealText(JSON.stringify(frame)).then((text) => {
+        if (outgoing.readyState === WebSocket.OPEN) outgoing.send(text);
+      });
     },
     close() {
       stopped = true;

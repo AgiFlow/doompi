@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
-import type { FileEditEntry, TimelineEvent } from '../../types/domain';
+import { type AnyTimelineEvent, foldEntries, foldVersions, parseTimeline } from '../../services/fileChanges.ts';
+import type { FileEditEntry, FileEditVersion, TimelineEvent } from '../../types/domain';
 import type { ITimelineStore } from '../../types/timelineStore';
 
 const LOCK_RETRY_MS = 10;
@@ -7,17 +8,6 @@ const LOCK_RETRIES = 100;
 
 function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code;
-}
-
-function isTimelineEvent(value: unknown): value is TimelineEvent {
-  if (!value || typeof value !== 'object') return false;
-  const event = value as Partial<TimelineEvent>;
-  return (
-    event.version === 1 &&
-    typeof event.path === 'string' &&
-    typeof event.at === 'number' &&
-    (event.tool === 'edit' || event.tool === 'write' || event.tool === 'bash')
-  );
 }
 
 export class TimelineStore implements ITimelineStore {
@@ -32,35 +22,11 @@ export class TimelineStore implements ITimelineStore {
   }
 
   async list(): Promise<FileEditEntry[]> {
-    let content: string;
-    try {
-      content = await fs.readFile(this.requirePath(), 'utf8');
-    } catch (error) {
-      if (hasCode(error, 'ENOENT')) return [];
-      throw error;
-    }
-    const folded = new Map<string, FileEditEntry>();
-    for (const line of content.split('\n')) {
-      if (!line) continue;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch (error) {
-        console.warn(
-          `Ignoring malformed file edit timeline line: ${error instanceof Error ? error.message : String(error)}`,
-        );
-        continue;
-      }
-      if (!isTimelineEvent(parsed)) continue;
-      const current = folded.get(parsed.path);
-      folded.set(parsed.path, {
-        path: parsed.path,
-        tool: parsed.at >= (current?.at ?? 0) ? parsed.tool : (current?.tool ?? parsed.tool),
-        at: Math.max(parsed.at, current?.at ?? 0),
-        count: (current?.count ?? 0) + 1,
-      });
-    }
-    return [...folded.values()].sort((left, right) => right.at - left.at);
+    return foldEntries(await this.events());
+  }
+
+  async versions(filePath: string): Promise<FileEditVersion[]> {
+    return foldVersions(await this.events(), filePath);
   }
 
   async clear(): Promise<void> {
@@ -69,6 +35,20 @@ export class TimelineStore implements ITimelineStore {
     } catch (error) {
       if (!hasCode(error, 'ENOENT')) throw error;
     }
+  }
+
+  /** Every recorded change, or none at all when the session has not written yet. */
+  private async events(): Promise<AnyTimelineEvent[]> {
+    let content: string;
+    try {
+      content = await fs.readFile(this.requirePath(), 'utf8');
+    } catch (error) {
+      if (hasCode(error, 'ENOENT')) return [];
+      throw error;
+    }
+    return parseTimeline(content, (line) =>
+      console.warn(`Ignoring malformed file edit timeline line: ${line.slice(0, 200)}`),
+    );
   }
 
   private requirePath(): string {

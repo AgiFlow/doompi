@@ -228,7 +228,6 @@ describe('Goal lifecycle safety and fencing', () => {
   function safetySettings(automaticTurns: number | null, noProgressTurns: number | null) {
     return {
       toolVisibility: 'operational' as const,
-      experimental: { goals: false },
       continuationLimits: { automaticTurns, noProgressTurns },
     };
   }
@@ -382,7 +381,7 @@ describe('Goal lifecycle safety and fencing', () => {
   });
 });
 
-describe('Goal manager command, restore, and queue branches', () => {
+describe('Goal manager command and restore branches', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
     const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
     const activation = runtime.activateGoalRuntime(fixture.pi, {
@@ -392,10 +391,6 @@ describe('Goal manager command, restore, and queue branches', () => {
     await dispatch(fixture, 'session_start');
     await new Promise((resolve) => setTimeout(resolve, 50));
     return activation;
-  }
-
-  function setExperimental(manager: unknown): void {
-    (manager as { settings: { experimental: { goals: boolean } } }).settings.experimental.goals = true;
   }
 
   it('handles status, pause, resume, clear, and invalid command paths without a goal', async () => {
@@ -463,34 +458,6 @@ describe('Goal manager command, restore, and queue branches', () => {
     expect(activation.manager.snapshot().goal).toMatchObject({ text: 'stopped', status: 'paused' });
     await fixture.commands.get('goal')?.handler('resume', fixture.context);
     expect(activation.manager.snapshot().goal?.status).toBe('active');
-    activation.dispose();
-  });
-
-  it('supports experimental queue add, prioritize, drop, skip, and promotion', async () => {
-    const fixture = createFixture();
-    const activation = await activate(fixture);
-    setExperimental(activation.manager);
-    await fixture.commands.get('goal')?.handler('first', fixture.context);
-    await fixture.commands.get('goal')?.handler('add second', fixture.context);
-    await fixture.commands.get('goal')?.handler('prioritize urgent', fixture.context);
-    expect(activation.manager.snapshot().pendingAction).toMatchObject({ kind: 'prioritize', objective: 'urgent' });
-    await dispatch(fixture, 'agent_settled');
-    await vi.waitFor(() => expect(activation.manager.snapshot().goal?.text).toBe('urgent'));
-    expect(activation.manager.snapshot().queue.map((goal) => goal.text)).toEqual(['first', 'second']);
-    await fixture.commands.get('goal')?.handler('drop-last', fixture.context);
-    expect(activation.manager.snapshot().queue.map((goal) => goal.text)).toEqual(['first']);
-    const queuedId = activation.manager.snapshot().queue[0]?.id;
-    fixture.sendUserMessage.mockClear();
-    await fixture.commands.get('goal')?.handler('skip', fixture.context);
-    expect(activation.manager.snapshot()).toMatchObject({
-      goal: { status: 'complete' },
-      pendingAction: { kind: 'advance', reason: 'skip' },
-    });
-    expect(fixture.sendUserMessage).not.toHaveBeenCalled();
-    await dispatch(fixture, 'agent_settled');
-    await vi.waitFor(() => expect(activation.manager.snapshot().goal?.text).toBe('first'));
-    expect(activation.manager.snapshot().goal).toMatchObject({ status: 'active' });
-    expect(activation.manager.snapshot().goal?.id).not.toBe(queuedId);
     activation.dispose();
   });
 
@@ -631,65 +598,22 @@ describe('Goal manager completion and archive branches', () => {
     );
   }
 
-  it('promotes a queued goal after completion and sends one kickoff', async () => {
+  it('clears the goal on completion and archives it, with no follow-up turn', async () => {
     const fixture = createFixture();
+    const archive = vi.spyOn(fixture.history, 'archive');
     const activation = await activate(fixture);
-    (activation.manager as unknown as { settings: { experimental: { goals: boolean } } }).settings.experimental.goals =
-      true;
     await fixture.commands.get('goal')?.handler('first', fixture.context);
-    await fixture.commands.get('goal')?.handler('add second', fixture.context);
     const id = activation.manager.snapshot().goal?.id;
     expect(id).toBeDefined();
     fixture.sendUserMessage.mockClear();
-    const queuedId = activation.manager.snapshot().queue[0]?.id;
+
     await completeCurrent(fixture, id as string);
-    expect(activation.manager.snapshot()).toMatchObject({
-      goal: { text: 'first', status: 'complete' },
-      pendingAction: { kind: 'advance', reason: 'complete' },
-    });
+
+    expect(activation.manager.snapshot()).toMatchObject({ goal: undefined, execution: 'dormant' });
+    expect(archive).toHaveBeenCalledWith(expect.objectContaining({ objective: 'first', status: 'complete' }));
     expect(fixture.sendUserMessage).not.toHaveBeenCalled();
-    await dispatch(fixture, 'agent_settled');
-    await vi.waitFor(() => expect(activation.manager.snapshot().goal?.text).toBe('second'));
-    expect(activation.manager.snapshot().goal?.id).not.toBe(queuedId);
-    expect(fixture.sendUserMessage).toHaveBeenCalledOnce();
+    expect(fixture.context.ui.setStatus).toHaveBeenLastCalledWith('goal', undefined);
     activation.dispose();
-  });
-
-  it('pauses a promoted queue goal when policy or kickoff delivery fails', async () => {
-    const fixture = createFixture();
-    const activation = await activate(fixture);
-    (activation.manager as unknown as { settings: { experimental: { goals: boolean } } }).settings.experimental.goals =
-      true;
-    await fixture.commands.get('goal')?.handler('first', fixture.context);
-    await fixture.commands.get('goal')?.handler('add second', fixture.context);
-    const firstId = activation.manager.snapshot().goal?.id;
-    const pi = fixture.pi as unknown as { setActiveTools: (names: string[]) => void };
-    const realSetter = pi.setActiveTools.bind(fixture.pi);
-    realSetter(['read', 'goal_complete', 'goal_blocked']);
-    pi.setActiveTools = (names) => {
-      if (names.some((name) => name.startsWith('goal_'))) return;
-      realSetter(names);
-    };
-    await completeCurrent(fixture, firstId as string);
-    await dispatch(fixture, 'agent_settled');
-    await vi.waitFor(() => expect(activation.manager.snapshot().goal?.status).toBe('paused'));
-    activation.dispose();
-
-    const secondFixture = createFixture();
-    const secondActivation = await activate(secondFixture);
-    (
-      secondActivation.manager as unknown as { settings: { experimental: { goals: boolean } } }
-    ).settings.experimental.goals = true;
-    await secondFixture.commands.get('goal')?.handler('first', secondFixture.context);
-    await secondFixture.commands.get('goal')?.handler('add second', secondFixture.context);
-    const secondId = secondActivation.manager.snapshot().goal?.id;
-    secondFixture.sendUserMessage.mockImplementationOnce(() => {
-      throw new Error('queued delivery');
-    });
-    await completeCurrent(secondFixture, secondId as string);
-    await dispatch(secondFixture, 'agent_settled');
-    await vi.waitFor(() => expect(secondActivation.manager.snapshot().goal?.status).toBe('paused'));
-    secondActivation.dispose();
   });
 
   it('rejects contradictory and stale completion calls', async () => {

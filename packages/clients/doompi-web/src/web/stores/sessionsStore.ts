@@ -142,6 +142,23 @@ export function useActiveSessionMeta(): SessionMeta | null {
   return useStore(sessionsStore, (state) => (state.activeId !== null ? (state.byId[state.activeId] ?? null) : null));
 }
 
+/**
+ * True once the hub has answered and reported no sessions at all.
+ *
+ * Several surfaces stand down on this, so the rule is named once rather than
+ * spelled out at each of them. The hydration half is what keeps it honest: an
+ * empty order before the first snapshot only means the hub has not answered
+ * yet, and treating that as "no sessions" would flash an onboarding screen at
+ * someone who has ten.
+ */
+export function noSessions(state: SessionsState): boolean {
+  return state.hydrated && state.order.length === 0;
+}
+
+export function useNoSessions(): boolean {
+  return useStore(sessionsStore, noSessions);
+}
+
 export function setActiveSession(sessionId: string | null): void {
   sessionsStore.setState((state) => (state.activeId === sessionId ? state : { ...state, activeId: sessionId }));
 }

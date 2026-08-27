@@ -2,6 +2,12 @@ export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 export { Avatar, AvatarFallback, AvatarImage } from '../components/Avatar.tsx';
 export { Badge, type BadgeProps, type BadgeTone, badgeVariants } from '../components/Badge.tsx';
 export {
+  BREADCRUMB_ELLIPSIS,
+  Breadcrumb,
+  type BreadcrumbProps,
+  breadcrumbSegments,
+} from '../components/Breadcrumb.tsx';
+export {
   Button,
   type ButtonProps,
   type ButtonSize,
@@ -45,6 +51,7 @@ export {
   DropdownMenuTrigger,
 } from '../components/DropdownMenu.tsx';
 export { Checkbox } from '../components/Checkbox.tsx';
+export { CodeEditor } from '../components/CodeEditor.tsx';
 export { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/Collapsible.tsx';
 export {
   CommandDialog,
@@ -64,6 +71,7 @@ export { type FieldSize, type FieldVariant, fieldVariants, Input, type InputProp
 export { Kbd } from '../components/Kbd.tsx';
 export { Label } from '../components/Label.tsx';
 export { Markdown } from '../components/Markdown.tsx';
+export { MediaPreview, type MediaPreviewProps } from '../components/MediaPreview.tsx';
 export {
   MessageItem,
   MessageItemBody,
@@ -159,8 +167,11 @@ export {
 export * from '../icons/icons.ts';
 export { cn } from '../lib/cn.ts';
 export { type CollapsedLines, collapseLines } from '../lib/collapse.ts';
+export { type GrammarKey, grammarKeyOf } from '../lib/editorLanguage.ts';
+export { mediaKindOf } from '../lib/media.ts';
 export { handleOptionListKey, MAX_DIGIT_SHORTCUT, optionListHint, optionMarker } from '../lib/optionList.ts';
 export { CHIP_TO_STATUS, LINE_TONE_TO_STATUS, STATUS_TO_CHIP, STATUS_TO_DOT } from '../lib/tone.ts';
+export { type CodeEditorProps, type EditorSelectionRange, MEDIA_KINDS, type MediaKind } from '../types/editor.ts';
 export {
   ACCENT_TONES,
   type AccentTone,

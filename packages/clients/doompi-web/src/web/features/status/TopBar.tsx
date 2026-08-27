@@ -17,7 +17,7 @@ import { useState } from 'react';
 import { abbreviateCwd, runningCount, type AttachPhase } from '../../lib/sessionSummary.ts';
 import { webTabs } from '../../lib/pluginRegistry.ts';
 import { renameSession, useActiveSession } from '../../stores/sessionStore.ts';
-import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
+import { sessionsStore, useActiveSessionMeta, useNoSessions } from '../../stores/sessionsStore.ts';
 import { closeTransientTab, useTransientTabs } from '../../stores/transientTabsStore.ts';
 
 /**
@@ -102,6 +102,7 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
     runningCount(state.order.map((id) => state.byId[id].summary.phase)),
   );
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const noSessions = useNoSessions();
   const transientTabs = useTransientTabs(activeId);
   const attach: AttachPhase = meta?.attach ?? 'offline';
   const busy = session.streaming || (meta !== null && meta.summary.phase !== 'idle');
@@ -123,7 +124,10 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
       className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-doom-border px-5"
     >
       <div data-testid="session-switcher" className="flex min-w-0 items-center gap-2.5">
-        {renaming && activeId !== null ? (
+        {/* With no session there is no name to show and no state to report, so
+            the bar carries neither rather than reporting 'untitled' and
+            'offline' for something that was never started. */}
+        {noSessions ? null : renaming && activeId !== null ? (
           <Input
             data-testid="session-title-input"
             value={draft}
@@ -185,23 +189,27 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {meta && meta.dropped > 0 ? (
-          <span
-            data-testid="dropped-count"
-            title="frames the hub's ring lost before this page subscribed"
-            className="text-[10px] text-doom-yellow"
-          >
-            {meta.dropped} dropped
-          </span>
-        ) : null}
-        <StatusBadge size="md" tone={state.tone} data-testid="connection-status" className="font-normal">
-          <Dot tone={state.dot} pulse={state.pulse} />
-          {state.text}
-        </StatusBadge>
-        <StatusBadge size="md" tone="running" data-testid="sessions-running" className="font-normal">
-          <ActivityIcon className="h-[10px] w-[10px]" />
-          {running} running
-        </StatusBadge>
+        {noSessions ? null : (
+          <>
+            {meta && meta.dropped > 0 ? (
+              <span
+                data-testid="dropped-count"
+                title="frames the hub's ring lost before this page subscribed"
+                className="text-[10px] text-doom-yellow"
+              >
+                {meta.dropped} dropped
+              </span>
+            ) : null}
+            <StatusBadge size="md" tone={state.tone} data-testid="connection-status" className="font-normal">
+              <Dot tone={state.dot} pulse={state.pulse} />
+              {state.text}
+            </StatusBadge>
+            <StatusBadge size="md" tone="running" data-testid="sessions-running" className="font-normal">
+              <ActivityIcon className="h-[10px] w-[10px]" />
+              {running} running
+            </StatusBadge>
+          </>
+        )}
       </div>
     </header>
   );

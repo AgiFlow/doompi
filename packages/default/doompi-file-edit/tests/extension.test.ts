@@ -30,7 +30,7 @@ describe('FileEditWorkflow', () => {
   it('opens with the required full-screen overlay geometry', async () => {
     const custom = vi.fn().mockResolvedValue({ action: 'close', index: 0 });
     const workflow = new FileEditWorkflow(
-      { initialize: vi.fn(), append: vi.fn(), list: async () => [], clear: vi.fn() },
+      { initialize: vi.fn(), append: vi.fn(), list: async () => [], versions: async () => [], clear: vi.fn() },
       { diff: vi.fn() },
       { path: () => '/tmp/config.yaml', packagePath: () => '/tmp/package-config.yaml', command: async () => undefined },
       { resolve: async () => undefined, launch: vi.fn() },
@@ -77,7 +77,7 @@ describe('FileEditWorkflow', () => {
       suggestedLine: 4,
     };
     const workflow = new FileEditWorkflow(
-      { initialize: vi.fn(), append: vi.fn(), list: async () => [entry], clear: vi.fn() },
+      { initialize: vi.fn(), append: vi.fn(), list: async () => [entry], versions: async () => [], clear: vi.fn() },
       { diff: async () => diff },
       { path: () => '/tmp/config.yaml', packagePath: () => '/tmp/package-config.yaml', command: async () => undefined },
       { resolve: async () => ({ template: 'vi {file}', source: 'fallback' }), launch },

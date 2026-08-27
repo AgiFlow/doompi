@@ -11,10 +11,11 @@ import { CommandPalette } from '../features/leader/CommandPalette.tsx';
 import { SelectionBar } from '../features/selection/SelectionBar.tsx';
 import { Composer } from '../features/session/Composer.tsx';
 import { SessionRail } from '../features/sessions/SessionRail.tsx';
+import { WelcomePanel } from '../features/sessions/WelcomePanel.tsx';
 import { Timeline } from '../features/session/Timeline.tsx';
 import { TopBar } from '../features/status/TopBar.tsx';
 import { HOST_SLOTS, webTabs } from '../lib/pluginRegistry.ts';
-import { sessionsStore, setActiveSession } from '../stores/sessionsStore.ts';
+import { sessionsStore, setActiveSession, useNoSessions } from '../stores/sessionsStore.ts';
 import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore.ts';
 import { setDockOpen, uiStore } from '../stores/uiStore.ts';
 
@@ -25,6 +26,7 @@ export function CockpitPage() {
   const slotProps = usePluginSlotProps(sessionId ?? null);
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
+  const noSessions = useNoSessions();
   // A declared tab first, then one a plugin opened at runtime for this session.
   const transientTab = useStore(transientTabsStore, (state) => findTransientTab(state, sessionId, tabId));
   const tab = (tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId)) ?? transientTab;
@@ -67,6 +69,11 @@ export function CockpitPage() {
             reader is not looking. */}
         {tab ? (
           <tab.panel {...slotProps} />
+        ) : noSessions ? (
+          // Same reasoning as above, taken to its end: with no session there is
+          // no agent to address, so the conversation and everything that talks
+          // to it give way to the one thing there is to do.
+          <WelcomePanel />
         ) : (
           <>
             <Timeline />

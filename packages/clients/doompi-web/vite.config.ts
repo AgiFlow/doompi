@@ -46,7 +46,21 @@ export default defineConfig(({ command }) => {
     resolve: {
       // One instance of each shared runtime even when a plugin package declares
       // its own copies for typechecking.
-      dedupe: ['react', 'react-dom', '@tanstack/store', '@tanstack/react-store', '@agimon-ai/doompi-web-components'],
+      dedupe: [
+        'react',
+        'react-dom',
+        '@tanstack/store',
+        '@tanstack/react-store',
+        '@agimon-ai/doompi-web-components',
+        // The sealed transport is a module singleton whose nonce counters every
+        // plugin shares; a second copy would start counting at zero.
+        '@agimon-ai/doompi-web-security/browser',
+        // CodeMirror's state and view are singletons in all but name: a
+        // document built against one copy is rejected by an editor from the
+        // other.
+        '@codemirror/state',
+        '@codemirror/view',
+      ],
       alias: dev.alias,
     },
     build: {

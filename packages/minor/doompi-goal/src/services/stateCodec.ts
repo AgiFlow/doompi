@@ -1,29 +1,18 @@
-import type {
-  ActiveGoal,
-  GoalStateData,
-  LoadedGoalState,
-  PendingQueueAction,
-  SafetyPauseCause,
-} from '../types/goal.ts';
+import { MAX_OBJECTIVE_LENGTH } from '../types/goal.ts';
+import type { ActiveGoal, GoalStateData, LoadedGoalState, SafetyPauseCause } from '../types/goal.ts';
 import { isNonNegativeFiniteNumber, nonNegativeFiniteNumber, normalizeTokenBudget } from './accounting.ts';
-import { MAX_OBJECTIVE_LENGTH } from './parser.ts';
+
 export const GOAL_STATE_ENTRY_TYPE = 'goal-state';
 export const LEGACY_GOAL_STATE_ENTRY_TYPE = 'goals-state';
+/** The status the removed goal queue used; only ever read, never written. */
+const RETIRED_QUEUED_STATUS = 'queued';
 export interface SessionEntryLike {
   type?: unknown;
   customType?: unknown;
   data?: unknown;
 }
-export function serializeGoalState(
-  goal: ActiveGoal | undefined,
-  queue: readonly ActiveGoal[] = [],
-  pendingAction?: PendingQueueAction,
-): GoalStateData {
-  return {
-    goal: goal ?? null,
-    ...(queue.length ? { queue: queue.map((item) => ({ ...item })) } : {}),
-    ...(pendingAction ? { pendingAction: { ...pendingAction } } : {}),
-  };
+export function serializeGoalState(goal: ActiveGoal | undefined): GoalStateData {
+  return { goal: goal ?? null };
 }
 export function decodeGoalStateEntries(entries: readonly SessionEntryLike[]): LoadedGoalState {
   const canonical = [...entries]
@@ -41,8 +30,10 @@ export function loadGoalStateFromSession(context: {
   return decodeGoalStateEntries(context.sessionManager?.getBranch?.() ?? context.sessionManager?.getEntries?.() ?? []);
 }
 export function normalizeLoadedGoal(goal: ActiveGoal, now = Date.now()): ActiveGoal {
+  const status = normalizePersistedStatus(goal.status);
   return {
     ...goal,
+    status,
     startedAt: timestamp(goal.startedAt) ? goal.startedAt : now,
     updatedAt: timestamp(goal.updatedAt) ? goal.updatedAt : now,
     iteration: counter(goal.iteration),
@@ -50,8 +41,7 @@ export function normalizeLoadedGoal(goal: ActiveGoal, now = Date.now()): ActiveG
     tokensUsed: nonNegativeFiniteNumber(goal.tokensUsed),
     timeUsedSeconds: nonNegativeFiniteNumber(goal.timeUsedSeconds),
     baselineTokens: nonNegativeFiniteNumber(goal.baselineTokens),
-    activeStartedAt:
-      goal.status === 'active' ? (timestamp(goal.activeStartedAt) ? goal.activeStartedAt : now) : undefined,
+    activeStartedAt: status === 'active' ? (timestamp(goal.activeStartedAt) ? goal.activeStartedAt : now) : undefined,
     automaticModelTurns: counter(goal.automaticModelTurns),
     toolFreeRepeatCount: counter(goal.toolFreeRepeatCount),
     lastToolFreeOutputFingerprint: fingerprint(goal.lastToolFreeOutputFingerprint),
@@ -62,87 +52,30 @@ export function normalizeLoadedGoal(goal: ActiveGoal, now = Date.now()): ActiveG
 export function isCanonicalGoalState(value: unknown): value is GoalStateData {
   return !decodeCanonical(value).malformed;
 }
+/**
+ * A canonical entry, which may predate the removal of the goal queue and still
+ * carry `queue` and `pendingAction`. Those keys are read past rather than
+ * rejected: a session upgrading mid-flight keeps the objective it is working,
+ * and the queue it can no longer act on simply stops being persisted on the
+ * next commit.
+ */
 function decodeCanonical(value: unknown): LoadedGoalState {
   if (!record(value) || !Object.hasOwn(value, 'goal')) return empty('canonical', true);
   const rawGoal = value.goal;
   if (rawGoal !== null && !isGoal(rawGoal)) return empty('canonical', true);
-  const queueValue = value.queue;
-  if (queueValue !== undefined && (!Array.isArray(queueValue) || !queueValue.every(isQueueGoal)))
-    return empty('canonical', true);
-  const pendingValue = value.pendingAction;
-  const pending = pendingValue === undefined ? undefined : normalizePending(pendingValue);
-  if (pendingValue !== undefined && !pending) return empty('canonical', true);
   if (rawGoal === null) return empty('canonical');
   const goal = normalizeLoadedGoal(rawGoal);
-  if (goal.status === 'complete' && !pending) return empty('canonical');
-  const queue = (queueValue ?? []).map(normalizeQueued);
-  if (goal.status === 'queued' && !queue.length && !pending) return empty('canonical', true);
-  return {
-    goal,
-    queue,
-    pendingAction: pending,
-    hasExperimentalQueueState: goal.status === 'queued' || queue.length > 0 || pending !== undefined,
-    source: 'canonical',
-    malformed: false,
-  };
+  if (goal.status === 'complete') return empty('canonical');
+  return { goal, source: 'canonical', malformed: false };
 }
 function decodeLegacy(value: unknown): LoadedGoalState {
   if (!record(value)) return empty('legacy-goals', true);
   const rawGoals = Array.isArray(value.goals) ? value.goals : isGoal(value.goal) ? [value.goal] : [];
   if (!rawGoals.every(isGoal)) return empty('legacy-goals', true);
-  const pending = value.pendingUnshift === undefined ? undefined : normalizeLegacyPending(value.pendingUnshift);
-  if (value.pendingUnshift !== undefined && !pending) return empty('legacy-goals', true);
-  const goals = rawGoals.filter((goal) => goal.status !== 'complete');
-  if (!goals.length) return empty('legacy-goals');
-  const normalized = goals.map((goal, index) => (index === 0 ? normalizeLoadedGoal(goal) : normalizeQueued(goal)));
-  return {
-    goal: normalized[0],
-    queue: normalized.slice(1),
-    pendingAction: pending,
-    hasExperimentalQueueState: normalized.length > 1 || normalized[0]?.status === 'queued' || pending !== undefined,
-    source: 'legacy-goals',
-    malformed: false,
-  };
-}
-function normalizeQueued(goal: ActiveGoal): ActiveGoal {
-  const normalized = normalizeLoadedGoal(goal);
-  return {
-    ...normalized,
-    status: normalized.status === 'active' ? 'queued' : normalized.status,
-    activeStartedAt: undefined,
-  };
-}
-function normalizePending(value: unknown): PendingQueueAction | undefined {
-  if (!record(value)) return undefined;
-  if (value.kind === 'prioritize') {
-    if (
-      !validObjective(value.objective) ||
-      (value.tokenBudget !== undefined && !normalizeTokenBudget(value.tokenBudget)) ||
-      (value.displacedUsageFinalized !== undefined && typeof value.displacedUsageFinalized !== 'boolean')
-    )
-      return undefined;
-    return {
-      kind: 'prioritize',
-      objective: value.objective,
-      tokenBudget: normalizeTokenBudget(value.tokenBudget),
-      ...(value.displacedUsageFinalized === true ? { displacedUsageFinalized: true } : {}),
-    };
-  }
-  if (
-    value.kind === 'advance' &&
-    typeof value.goalId === 'string' &&
-    value.goalId.trim() === value.goalId &&
-    value.goalId &&
-    (value.reason === 'complete' || value.reason === 'skip') &&
-    validObjective(value.completedText)
-  )
-    return { kind: 'advance', goalId: value.goalId, reason: value.reason, completedText: value.completedText };
-  return undefined;
-}
-function normalizeLegacyPending(value: unknown): PendingQueueAction | undefined {
-  return record(value) && validObjective(value.objective)
-    ? { kind: 'prioritize', objective: value.objective, tokenBudget: normalizeTokenBudget(value.tokenBudget) }
-    : undefined;
+  // Only the first survives: the rest were the queue.
+  const goal = rawGoals.find((candidate) => candidate.status !== 'complete');
+  if (!goal) return empty('legacy-goals');
+  return { goal: normalizeLoadedGoal(goal), source: 'legacy-goals', malformed: false };
 }
 function isGoal(value: unknown): value is ActiveGoal {
   if (!record(value)) return false;
@@ -163,16 +96,27 @@ function isGoal(value: unknown): value is ActiveGoal {
     (value.activeStartedAt === undefined || timestamp(value.activeStartedAt))
   );
 }
-function isQueueGoal(value: unknown): value is ActiveGoal {
-  return isGoal(value) && value.status !== 'complete';
+/**
+ * A goal the removed queue had parked reads back as paused: it is retained,
+ * carries no active clock, and needs an explicit resume, which is what being
+ * queued behind another goal amounted to.
+ */
+function normalizePersistedStatus(value: ActiveGoal['status']): ActiveGoal['status'] {
+  return (value as string) === RETIRED_QUEUED_STATUS ? 'paused' : value;
 }
 function validObjective(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= MAX_OBJECTIVE_LENGTH;
 }
+/**
+ * A status a session may have written. 'queued' is still accepted because it
+ * exists in state persisted before the queue was removed, and rejecting it
+ * would fail the whole entry closed and lose the objective;
+ * normalizePersistedStatus folds it onto the status it behaves as now.
+ */
 function status(value: unknown): value is ActiveGoal['status'] {
   return (
     value === 'active' ||
-    value === 'queued' ||
+    value === RETIRED_QUEUED_STATUS ||
     value === 'paused' ||
     value === 'blocked' ||
     value === 'usage_limited' ||
@@ -196,5 +140,5 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 function empty(source: LoadedGoalState['source'], malformed = false): LoadedGoalState {
-  return { goal: undefined, queue: [], pendingAction: undefined, hasExperimentalQueueState: false, source, malformed };
+  return { goal: undefined, source, malformed };
 }

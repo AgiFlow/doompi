@@ -67,11 +67,18 @@ import {
   applySessionsSnapshot,
   applySessionUpsert,
   markSocketClosed,
+  noSessions,
   resetSessions,
   sessionsStore,
   setActiveSession,
   waitForSession,
 } from '../../src/web/stores/sessionsStore.ts';
+import {
+  closeNewSession,
+  newSessionStore,
+  openNewSession,
+  resetNewSessionStore,
+} from '../../src/web/stores/newSessionStore.ts';
 
 type Frame = Record<string, unknown>;
 
@@ -99,6 +106,7 @@ beforeEach(() => {
   sent = [];
   resetSessionStores();
   resetSessions();
+  resetNewSessionStore();
   bindTransport((frame) => sent.push(frame as Frame));
 });
 
@@ -267,6 +275,47 @@ describe('promptFocus', () => {
     // Registering null is how a composer that never mounted stays harmless.
     registerPromptInput(null);
     expect(() => focusPrompt()).not.toThrow();
+  });
+});
+
+describe('noSessions', () => {
+  it('stays false before the hub has answered, whatever the order looks like', () => {
+    // An empty order before hydration only means no snapshot has arrived, and
+    // reading it as "no sessions" would flash onboarding at someone with ten.
+    expect(sessionsStore.state.hydrated).toBe(false);
+    expect(noSessions(sessionsStore.state)).toBe(false);
+  });
+
+  it('is true once the hub has answered with nothing', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [] });
+    expect(noSessions(sessionsStore.state)).toBe(true);
+  });
+
+  it('is false while any session exists, and true again once the last one goes', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a')] });
+    expect(noSessions(sessionsStore.state)).toBe(false);
+
+    applySessionRemoved({ type: 'session_removed', sessionId: 'a' });
+    expect(noSessions(sessionsStore.state)).toBe(true);
+  });
+});
+
+describe('newSessionStore', () => {
+  it('opens and closes, so every entry point drives one dialog', () => {
+    expect(newSessionStore.state.open).toBe(false);
+    openNewSession();
+    expect(newSessionStore.state.open).toBe(true);
+
+    // Opening an already-open dialog publishes nothing to re-render.
+    const held = newSessionStore.state;
+    openNewSession();
+    expect(newSessionStore.state).toBe(held);
+
+    closeNewSession();
+    expect(newSessionStore.state.open).toBe(false);
+    const closed = newSessionStore.state;
+    closeNewSession();
+    expect(newSessionStore.state).toBe(closed);
   });
 });
 

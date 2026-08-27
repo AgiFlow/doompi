@@ -96,4 +96,51 @@ describe('the workflows hub channel', () => {
       failedJob: 'build',
     });
   });
+
+  it('gives two sessions in one repository only their own runs', { timeout: 15_000 }, async () => {
+    const home = freshHome();
+    // Both sessions sit on the directory the fixture's workflowPath lives
+    // under, which is the case that used to hand each of them the other's run.
+    const repo = '/workspace';
+    const host = fakeHost([
+      { sessionId: 'first', cwd: repo },
+      { sessionId: 'second', cwd: repo },
+    ]);
+    const channel = createWorkflowsChannel({ watch: (onRuns) => watchWorkflowRuns(onRuns, { homeDir: home }) });
+    const source = channel.start(host);
+    cleanups.push(() => source.close());
+
+    writeWorkflowRun(home, {
+      workspace: 'default',
+      stage: 'running',
+      runKey: 'first-run',
+      record: { env: { PI_SESSION_ID: 'first' } },
+    });
+    writeWorkflowRun(home, {
+      workspace: 'default',
+      stage: 'running',
+      runKey: 'second-run',
+      record: { env: { PI_SESSION_ID: 'second' } },
+    });
+
+    await waitFor(
+      () =>
+        host.published.some((entry) => entry.sessionId === 'first' && runsOf(entry.payload).length > 0) &&
+        host.published.some((entry) => entry.sessionId === 'second' && runsOf(entry.payload).length > 0),
+      'both sessions publishing',
+    );
+
+    expect(runsOf(source.payloadFor({ sessionId: 'first', cwd: repo })).map((run) => run.runKey)).toEqual([
+      'first-run',
+    ]);
+    expect(runsOf(source.payloadFor({ sessionId: 'second', cwd: repo })).map((run) => run.runKey)).toEqual([
+      'second-run',
+    ]);
+    // Nothing a session was told about names another session's run, at any
+    // point in the stream rather than only in the last frame.
+    for (const entry of host.published) {
+      const expected = entry.sessionId === 'first' ? 'first-run' : 'second-run';
+      expect(runsOf(entry.payload).map((run) => run.runKey)).toEqual([expected]);
+    }
+  });
 });

@@ -1,6 +1,7 @@
 import { DOOM_PLANNING_THINKING_LEVELS } from '@agimon-ai/doompi-config';
 import { describe, expect, it } from 'vitest';
 import { PLAN_SETTINGS, planConfigSections, planSettingByFieldId } from '../src/exports/planConfig';
+import { PLAN_THINKING_LEVELS } from '../src/types/planSettings.ts';
 
 describe('planConfigSections', () => {
   it('renders one section holding every planning setting', () => {
@@ -29,6 +30,12 @@ describe('planConfigSections', () => {
     expect(byId.get('subagents.model')).toBe('anthropic/haiku');
     expect(byId.get('subagents.thinking')).toBeUndefined();
     expect(byId.get('plansdirectory')).toBe('~/plans');
+  });
+
+  it('mirrors the parser thinking levels in the browser-safe table', () => {
+    // src/types is bundled into the page, so it cannot import the config
+    // package to read these. The copy is only safe while this holds.
+    expect(PLAN_THINKING_LEVELS).toEqual([...DOOM_PLANNING_THINKING_LEVELS]);
   });
 
   it('offers exactly the thinking levels the parser accepts', () => {

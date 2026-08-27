@@ -1,8 +1,11 @@
 export {
+  type ConfigValueOrigin,
   type DeepReadonly,
   DOOM_CONFIG_SERVICE,
   type DoomConfig,
   type DoomConfigContext,
+  type DoomConfigLayer,
+  type DoomConfigLayers,
   type DoomConfigPendingSelection,
   type DoomConfigSelection,
   type DoomConfigTransitionPhase,

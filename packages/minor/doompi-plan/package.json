@@ -30,6 +30,8 @@
     "web",
     "llms.txt",
     "src/prompts",
+    "src/types/planApi.ts",
+    "src/types/planSettings.ts",
     "README.md",
     "LICENSE",
     "package.json"
@@ -79,6 +81,11 @@
       "import": "./dist/prompts.mjs",
       "require": "./dist/prompts.cjs"
     },
+    "./session-api": {
+      "types": "./dist/sessionApi.d.mts",
+      "import": "./dist/sessionApi.mjs",
+      "require": "./dist/sessionApi.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -98,7 +105,8 @@
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.1"
+    "@deepseek-ai/cordis": "4.0.1",
+    "hono": "4.13.3"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.3",
@@ -118,6 +126,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "plans",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
   },
   "doompiWeb": {
     "pluginId": "plan",
