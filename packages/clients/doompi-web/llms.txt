@@ -5,4 +5,7 @@ Package-owned guidance for the DoomPi web cockpit.
 ## Resources
 
 - [Package README](./README.md): Running the cockpit, the bridge's security stance, what each
-  surface renders, and the limits of what Pi RPC exposes.
+  surface renders, and the limits of what Pi RPC exposes. Its Security section states why loopback
+  binding is not on its own an authorization boundary and what the origin and host guard refuses;
+  its Planned section records why a WebRTC transport is wanted, for realtime voice as much as for
+  keeping a tunnel provider out of the data path.

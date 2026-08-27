@@ -28,6 +28,7 @@
   "files": [
     "dist",
     "web",
+    "src/types/webTasks.ts",
     "package.json"
   ],
   "type": "module",
@@ -130,6 +131,11 @@
       "import": "./dist/tool/taskTool.mjs",
       "require": "./dist/tool/taskTool.cjs"
     },
+    "./web-hub": {
+      "types": "./dist/webHub.d.mts",
+      "import": "./dist/webHub.mjs",
+      "require": "./dist/webHub.cjs"
+    },
     "./tui/format": {
       "types": "./dist/tui/format.d.mts",
       "import": "./dist/tui/format.mjs",
@@ -202,8 +208,14 @@
   },
   "doompiWeb": {
     "pluginId": "task",
-    "channels": [],
-    "client": "./web/index.ts"
+    "channels": [
+      "task_graph"
+    ],
+    "client": "./web/index.ts",
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "dist": "./dist/webHub.mjs"
+    }
   },
   "pi": {
     "extensions": [

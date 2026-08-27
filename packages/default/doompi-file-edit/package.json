@@ -26,7 +26,12 @@
     "directory": "packages/default/doompi-file-edit"
   },
   "files": [
-    "dist"
+    "dist",
+    "web",
+    "src/types/domain.ts",
+    "src/types/webFiles.ts",
+    "src/types/fileEditsApi.ts",
+    "LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -43,6 +48,16 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./session-api": {
+      "types": "./dist/sessionApi.d.mts",
+      "import": "./dist/sessionApi.mjs",
+      "require": "./dist/sessionApi.cjs"
+    },
+    "./web-hub": {
+      "types": "./dist/webHub.d.mts",
+      "import": "./dist/webHub.mjs",
+      "require": "./dist/webHub.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -52,7 +67,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -61,15 +76,25 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
-    "cross-spawn": "7.0.6"
+    "cross-spawn": "7.0.6",
+    "hono": "4.13.3"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.3",
     "@earendil-works/pi-tui": "0.84.3",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
     "@types/cross-spawn": "6.0.6",
     "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
@@ -88,6 +113,24 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "file-edits",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
+  },
+  "doompiWeb": {
+    "pluginId": "files",
+    "channels": [
+      "file_edits"
+    ],
+    "client": "./web/index.ts",
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "dist": "./dist/webHub.mjs"
+    }
   },
   "pi": {
     "extensions": [

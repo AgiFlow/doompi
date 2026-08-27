@@ -79,10 +79,14 @@ export function LaunchAgentDialog({
     >
       <DialogContent width="lg" data-testid="launch-dialog" aria-describedby={undefined}>
         <DialogHeader>
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
             <span className="text-[9px] text-doom-faint">launch subagent</span>
-            <DialogTitle data-testid="launch-agent">{agent.name}</DialogTitle>
-            <Badge size="xs">{agent.packageName ?? agent.source}</Badge>
+            <DialogTitle data-testid="launch-agent" className="max-w-full break-words">
+              {agent.name}
+            </DialogTitle>
+            <Badge size="xs" className="max-w-full truncate">
+              {agent.packageName ?? agent.source}
+            </Badge>
           </div>
         </DialogHeader>
         <DialogBody>
@@ -105,7 +109,7 @@ export function LaunchAgentDialog({
           <div className="flex flex-wrap gap-5">
             <div className="flex flex-col gap-1.5">
               <FieldLabel>CONTEXT</FieldLabel>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <Button
                   variant={fork ? 'outline' : 'primary'}
                   size="xs"
@@ -130,7 +134,7 @@ export function LaunchAgentDialog({
             <div className="flex flex-col gap-1.5">
               <FieldLabel>MODEL</FieldLabel>
               <Select value={model} onValueChange={setModel}>
-                <SelectTrigger data-testid="launch-model" className="h-7 min-w-[200px] text-[10px]">
+                <SelectTrigger data-testid="launch-model" className="h-7 w-full min-w-0 text-[10px] sm:min-w-[200px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -156,8 +160,10 @@ export function LaunchAgentDialog({
               {command}
             </pre>
           </div>
-          <DialogFooter>
-            <span className="text-[9px] text-doom-faint">the run opens in its own tab once it starts</span>
+          <DialogFooter className="flex-wrap sm:flex-nowrap">
+            <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+              the run opens in its own tab once it starts
+            </span>
             <span className="min-w-0 flex-1" />
             <Button variant="outline" size="xs" data-testid="launch-cancel" onClick={onClose}>
               cancel

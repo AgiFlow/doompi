@@ -5,6 +5,7 @@ import {
   cn,
   Dialog,
   DialogBody,
+  CloseIcon,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -27,14 +28,17 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 import { MascotMark } from '../../components/MascotMark.tsx';
+import { RemoteAccessButton } from '../../components/RemoteAccessButton.tsx';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
-import { stopSession } from '../../lib/hubApi.ts';
+import { restartSession, stopSession } from '../../lib/hubApi.ts';
 import { abbreviateCwd, runningCount, sessionStatusLine } from '../../lib/sessionSummary.ts';
 import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections.ts';
+import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore.ts';
 import { paletteStore } from '../../stores/paletteStore.ts';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
 import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
+import { openRemoteDialog, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
 import { NewSessionDialog } from './NewSessionDialog.tsx';
 
 const STATUS_REFRESH_MS = 30_000;
@@ -100,17 +104,22 @@ function SessionCard({
   ordinal,
   active,
   now,
+  onNavigate,
 }: {
   meta: SessionMeta;
   ordinal: number;
   active: boolean;
   now: number;
+  onNavigate?: () => void;
 }) {
   const navigate = useNavigate();
   const summary = meta.summary;
   const [mode, setMode] = useState<CardMode>('view');
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
+  // A restart stops a process and waits for its replacement to register, which
+  // takes seconds; without saying so the card just looks stuck.
+  const [restarting, setRestarting] = useState(false);
   // Read when the menu closes: a choice that moved the card into another
   // mode keeps the focus it took, rather than handing it back to the kebab.
   const modeRef = useRef(mode);
@@ -142,6 +151,21 @@ function SessionCard({
     const result = await stopSession(summary.id);
     if ('error' in result) setError(result.error);
   };
+  const restart = async (): Promise<void> => {
+    setMode('view');
+    setError('');
+    setRestarting(true);
+    const result = await restartSession(summary.id);
+    if ('error' in result) {
+      setRestarting(false);
+      setError(result.error);
+      return;
+    }
+    // The hub synced before the replacement started, so the bundle this page
+    // is running may be a build behind, and its socket has been replaced
+    // underneath it either way. Reloading settles both.
+    globalThis.location.reload();
+  };
 
   const cardClass = active ? 'bg-doom-selected hover:bg-doom-selected' : 'hover:bg-doom-panel';
   const menuOpen = mode === 'menu';
@@ -151,7 +175,7 @@ function SessionCard({
         data-testid="session-status"
         className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
       >
-        {status}
+        {restarting ? 'restarting…' : status}
       </span>
       {summary.git ? (
         <span
@@ -201,7 +225,10 @@ function SessionCard({
           variant="ghost"
           size="card"
           data-testid={`session-open-${summary.id}`}
-          onClick={() => void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } })}
+          onClick={() => {
+            onNavigate?.();
+            void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } });
+          }}
           className={cardClass}
         >
           <div className="flex items-center gap-2">
@@ -259,6 +286,16 @@ function SessionCard({
               <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
                 edit
               </DropdownMenuItem>
+              {/* Syncs, replaces the session's server under the same id, and
+                  reloads the page: the one way a rebuilt extension or a newly
+                  declared package API reaches a session that is already up. */}
+              <DropdownMenuItem
+                data-testid={`session-restart-${summary.id}`}
+                disabled={restarting}
+                onSelect={() => void restart()}
+              >
+                restart
+              </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
                 data-testid={`session-stop-${summary.id}`}
@@ -292,13 +329,16 @@ function insideOverlay(target: EventTarget | null): boolean {
 }
 
 /** The mockup's rail: brand, live session cards, the new-session flow, and nothing else. */
-export function SessionRail() {
+export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
   const navigate = useNavigate();
   const order = useStore(sessionsStore, (state) => state.order);
   const byId = useStore(sessionsStore, (state) => state.byId);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const hasDialog = useStore(sessionStoreFor(activeId), (state) => state.dialog !== null);
-  const [creating, setCreating] = useState(false);
+  const remote = useStore(remoteAccessStore, (state) => state.view);
+  // Shared, because the welcome panel in the other column opens the same
+  // dialog and a feature may not reach into a sibling.
+  const creating = useStore(newSessionStore, (state) => state.open);
   const [now, setNow] = useState(() => Date.now());
 
   // Keeps "running · 12m" honest without any frame arriving.
@@ -311,7 +351,8 @@ export function SessionRail() {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 't') {
         event.preventDefault();
-        setCreating(true);
+        onDismiss?.();
+        openNewSession();
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
@@ -321,22 +362,49 @@ export function SessionRail() {
       const target = order[ordinal - 1];
       if (target === undefined) return;
       event.preventDefault();
+      onDismiss?.();
       void navigate({ to: '/session/$sessionId', params: { sessionId: target } });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [order, hasDialog, navigate]);
+  }, [order, hasDialog, navigate, onDismiss]);
 
   const running = runningCount(order.map((id) => byId[id].summary.phase));
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-[9px] border-b border-doom-border px-4 pt-4 pb-3.5">
+      <div className="flex items-center justify-between border-b border-doom-border px-4 pt-4 pb-3.5">
         <span className="flex items-center gap-[3px]" aria-label="DoomPi">
           <span aria-hidden="true" className="text-[15px] font-bold tracking-[0.16em] text-doom-hi">
             DOOM
           </span>
           <MascotMark size={22} />
+        </span>
+        <span className="flex items-center gap-1">
+          {/* A presentational trigger taking state and one callback, so the rail
+              never imports the remote feature, which no-cross-feature-import
+              forbids. The dialog it opens is mounted once at the app root. */}
+          <RemoteAccessButton
+            status={remote?.status ?? 'off'}
+            deviceCount={remote?.devices.length ?? 0}
+            onOpen={() => {
+              onDismiss?.();
+              openRemoteDialog();
+            }}
+          />
+          {onDismiss ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="mobile-sessions-close"
+              title="hide sessions"
+              aria-label="hide sessions"
+              onClick={onDismiss}
+              className="text-doom-dim md:hidden"
+            >
+              <CloseIcon className="h-3 w-3" />
+            </Button>
+          ) : null}
         </span>
       </div>
 
@@ -355,7 +423,10 @@ export function SessionRail() {
             data-testid="new-session-open"
             title="new session"
             aria-label="new session"
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              onDismiss?.();
+              openNewSession();
+            }}
             className="text-doom-faint hover:text-doom-hi"
           >
             <PlusIcon className="h-3 w-3" />
@@ -364,7 +435,14 @@ export function SessionRail() {
       </div>
       <div className="flex flex-col gap-1 px-2.5">
         {order.map((id, index) => (
-          <SessionCard key={id} meta={byId[id]} ordinal={index + 1} active={id === activeId} now={now} />
+          <SessionCard
+            key={id}
+            meta={byId[id]}
+            ordinal={index + 1}
+            active={id === activeId}
+            now={now}
+            onNavigate={onDismiss}
+          />
         ))}
       </div>
       {/* With no sessions the rail has nothing to show and the plus alone is a
@@ -375,7 +453,10 @@ export function SessionRail() {
             variant="outline"
             size="lg"
             data-testid="new-session-empty"
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              onDismiss?.();
+              openNewSession();
+            }}
             className="w-full justify-start px-[11px] text-[11px]"
           >
             <PlusIcon className="h-3 w-3" />
@@ -395,6 +476,7 @@ export function SessionRail() {
                 params={{ section: DEFAULT_SETTINGS_SECTION }}
                 data-testid="settings-open"
                 aria-label="settings"
+                onClick={onDismiss}
               >
                 <GearIcon className="h-3 w-3" />
               </Link>
@@ -402,10 +484,12 @@ export function SessionRail() {
           </TooltipTrigger>
           <TooltipContent side="top">settings</TooltipContent>
         </Tooltip>
-        <span className="text-[9px] text-doom-faint">ctrl+k commands · ctrl+t new session</span>
+        <span className="text-[9px] text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
       </div>
 
-      {creating ? <NewSessionDialog onClose={() => setCreating(false)} /> : null}
+      {creating ? (
+        <NewSessionDialog onClose={closeNewSession} suggestedCwds={remote?.settings.sandbox.workspaces ?? []} />
+      ) : null}
     </div>
   );
 }

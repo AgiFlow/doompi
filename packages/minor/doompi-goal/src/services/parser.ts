@@ -1,19 +1,6 @@
-export const MAX_OBJECTIVE_LENGTH = 4_000;
+import { MAX_OBJECTIVE_LENGTH } from '../types/goal.ts';
 
-export interface GoalCommandFeatures {
-  experimentalGoals?: boolean;
-}
-export type GoalCommandKind =
-  | 'start'
-  | 'pause'
-  | 'resume'
-  | 'clear'
-  | 'show'
-  | 'edit'
-  | 'add'
-  | 'prioritize'
-  | 'drop-last'
-  | 'skip';
+export type GoalCommandKind = 'start' | 'pause' | 'resume' | 'clear' | 'show' | 'edit';
 export interface GoalCommandResult {
   kind: GoalCommandKind;
   objective?: string;
@@ -32,32 +19,15 @@ const COMMON: readonly GoalArgumentCompletion[] = [
   { value: 'edit', label: 'edit', description: 'Edit the current goal objective' },
   { value: 'status', label: 'status', description: 'Show the current goal' },
 ];
-const QUEUE: readonly GoalArgumentCompletion[] = [
-  { value: 'add', label: 'add', description: 'Add a goal to the queue' },
-  { value: 'prioritize', label: 'prioritize', description: 'Prioritize a goal' },
-  { value: 'drop-last', label: 'drop-last', description: 'Remove the last queued goal' },
-  { value: 'skip', label: 'skip', description: 'Skip the current goal' },
-];
-
-export function completeGoalArguments(
-  prefixInput: string,
-  features: GoalCommandFeatures = {},
-): GoalArgumentCompletion[] | null {
+export function completeGoalArguments(prefixInput: string): GoalArgumentCompletion[] | null {
   const prefix = prefixInput.trimStart();
-  const completions = [
-    ...COMMON,
-    ...(features.experimentalGoals ? QUEUE : []),
-    { value: '--tokens ', label: '--tokens', description: 'Set a token budget' },
-  ];
+  const completions = [...COMMON, { value: '--tokens ', label: '--tokens', description: 'Set a token budget' }];
   if (!prefix) return completions;
-  const match = features.experimentalGoals
-    ? /^(edit|add|prioritize)\s+(\S*)$/u.exec(prefix)
-    : /^edit\s+(\S*)$/u.exec(prefix);
+  const match = /^edit\s+(\S*)$/u.exec(prefix);
   if (match) {
-    const command = features.experimentalGoals ? (match[1] ?? 'edit') : 'edit';
-    const optionPrefix = features.experimentalGoals ? (match[2] ?? '') : (match[1] ?? '');
+    const optionPrefix = match[1] ?? '';
     return optionPrefix === '' || '--tokens'.startsWith(optionPrefix)
-      ? [{ value: `${command} --tokens `, label: '--tokens', description: 'Set a token budget' }]
+      ? [{ value: 'edit --tokens ', label: '--tokens', description: 'Set a token budget' }]
       : null;
   }
   if (/\s/u.test(prefix)) return null;
@@ -65,7 +35,7 @@ export function completeGoalArguments(
   return matches.length > 0 ? matches : null;
 }
 
-export function parseGoalCommand(args: string, features: GoalCommandFeatures = {}): GoalCommandResult | string {
+export function parseGoalCommand(args: string): GoalCommandResult | string {
   const tokens = tokenize(args.trim());
   if (tokens.length === 0) return { kind: 'show' };
   const [first, ...rest] = tokens;
@@ -74,18 +44,11 @@ export function parseGoalCommand(args: string, features: GoalCommandFeatures = {
   if (first === 'clear' || first === 'stop') return rest.length === 0 ? { kind: 'clear' } : 'Usage: /goal clear';
   if (first === 'status') return rest.length === 0 ? { kind: 'show' } : 'Usage: /goal status';
   if (first === 'edit') return parseObjective('edit', rest);
-  if (features.experimentalGoals) {
-    if (first === 'drop-last' || first === 'pop')
-      return rest.length === 0 ? { kind: 'drop-last' } : 'Usage: /goal drop-last';
-    if (first === 'skip' || first === 'shift') return rest.length === 0 ? { kind: 'skip' } : 'Usage: /goal skip';
-    if (first === 'add' || first === 'push') return parseObjective('add', rest);
-    if (first === 'prioritize' || first === 'unshift') return parseObjective('prioritize', rest);
-  }
   return parseObjective('start', tokens);
 }
 export const parseCommand = parseGoalCommand;
 
-function parseObjective(kind: 'start' | 'edit' | 'add' | 'prioritize', tokens: string[]): GoalCommandResult | string {
+function parseObjective(kind: 'start' | 'edit', tokens: string[]): GoalCommandResult | string {
   const objectiveTokens = [...tokens];
   let tokenBudget: number | undefined;
   if (objectiveTokens[0] === '--tokens') {

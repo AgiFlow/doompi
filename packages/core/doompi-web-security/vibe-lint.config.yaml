@@ -1,0 +1,25 @@
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+  # A library, not a Pi extension: it registers nothing with a session and is
+  # imported by the cockpit hub, the browser bundle, and every web plugin.
+  doom-clean-architecture-boundary:
+    - error
+    - infrastructurePackages:
+        - "@agimon-ai/doompi-web-security"
+      foundationPackages:
+        - "@agimon-ai/doompi-web-security"
+      nonPiPackages:
+        - "@agimon-ai/doompi-web-security"
+  package-layer-order:
+    - error
+    - packageLayers:
+        "@agimon-ai/doompi-web-security": contracts

@@ -40,6 +40,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./cockpit-harness": {
+      "types": "./dist/cockpitHarness.d.mts",
+      "import": "./dist/cockpitHarness.mjs",
+      "require": "./dist/cockpitHarness.cjs"
+    },
     "./sandbox-harness": {
       "types": "./dist/sandboxHarness.d.mts",
       "import": "./dist/sandboxHarness.mjs",

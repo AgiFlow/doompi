@@ -105,6 +105,54 @@ export interface TabContribution {
   /** A React hook, fully typed inside the plugin; 0 hides the badge. */
   useBadge?: (sessionId: string | null) => number;
 }
+/**
+ * One field on a settings page, declared as data.
+ *
+ * Settings are data rather than a component because the host owns what a
+ * plugin cannot: which file an edit lands in. A page has one scope switch and
+ * one repository, and every field on it reports where its value came from and
+ * whether the selected scope may hold it. A plugin drawing its own form would
+ * have to reproduce all of that, and each would get it slightly different.
+ */
+export interface SettingsFieldContribution {
+  /** Unique within the section; also the testid suffix. */
+  id: string;
+  label: string;
+  kind: 'text' | 'select' | 'toggle' | 'info';
+  /** The config key this reads and writes, e.g. ['modes','planning','main','model']. */
+  keyPath: readonly string[];
+  /** One line of help under the field. */
+  detail?: string;
+  /** Shown while the field is unset, in place of a value. */
+  placeholder?: string;
+  /** The closed set a 'select' offers, when the plugin knows it. */
+  options?: readonly SettingsFieldOption[];
+  /**
+   * An option set the host supplies instead. A model picker needs the machine's
+   * authenticated models, which no plugin can enumerate from the browser; a
+   * host that cannot answer leaves the field as free text.
+   */
+  optionsFrom?: 'models';
+}
+export interface SettingsFieldOption {
+  value: string;
+  label: string;
+  /** Groups entries under a heading, as providers group their models. */
+  group?: string;
+}
+/**
+ * A page in cockpit settings, contributed by the package that owns the
+ * settings on it. The id is the URL segment (/settings/:id), so it is unique
+ * across plugins; a collision is an install diagnostic and the first wins.
+ */
+export interface SettingsSectionContribution {
+  id: string;
+  label: string;
+  detail: string;
+  /** Sort position in the settings menu; lower first, id breaks ties. */
+  order?: number;
+  fields: readonly SettingsFieldContribution[];
+}
 export interface SurfaceContribution {
   id: string;
   component: ComponentType<WebPluginSlotProps>;
@@ -216,6 +264,19 @@ export interface ActivityGroupContribution {
   widgetKeys?: string[];
   /** The plugin tab the group's key chip opens; without one the chip is a plain label. */
   tab?: string;
+  /**
+   * Drop the group entirely while its status key is present but empty, rather
+   * than showing a header over "idle".
+   *
+   * A session publishes a status key once and clears it by publishing nothing,
+   * which reaches the page as an empty string, so a group that has reported at
+   * all can never stop reporting. For a group whose whole content is the thing
+   * the session is doing (a goal, a recording, the files it changed), the
+   * header alone is a row that says nothing, and a dock of those buries the
+   * groups that do. A group that is also a way in, with a launcher or a tab,
+   * leaves this off: its frame is worth keeping when it is idle.
+   */
+  hideWhenEmpty?: boolean;
   /** Sort position in the dock; lower first, name breaks ties. */
   order?: number;
 }
@@ -291,6 +352,51 @@ export interface ToolMessageRenderProps extends WebPluginSlotProps {
   running: boolean;
   isError: boolean;
 }
+/** The extension UI request a running tool is blocked on, as its prompt sees it. */
+export interface ToolPromptDialog {
+  id: string;
+  method: 'select' | 'confirm' | 'input' | 'editor';
+  title: string;
+  message: string;
+  options: readonly string[];
+  placeholder: string;
+  prefill: string;
+}
+/**
+ * Everything a tool's composer prompt receives: the timeline item's props,
+ * plus the request the tool is waiting on and the two ways to settle it.
+ *
+ * The dialog frame is deliberately thin, because Pi's own is: a select
+ * carries a title and a list of labels and nothing else. A prompt that needs
+ * more renders it from `args`, which is the whole call the tool was made
+ * with, and answers with whatever its session half agreed to read back.
+ */
+export interface ToolPromptRenderProps extends ToolMessageRenderProps {
+  dialog: ToolPromptDialog;
+  /** Answers the request and unblocks the tool. Bound, so a prompt may destructure it. */
+  answer: (value: string) => void;
+  /** The reader declined; the tool sees a cancellation. */
+  cancel: () => void;
+}
+/**
+ * A tool's stand-in for the composer input, shown while the tool is running
+ * and holding an extension UI request.
+ *
+ * A question the agent is blocked on belongs where the reader is already
+ * looking and typing, not behind a modal covering the conversation they need
+ * in order to answer. While a prompt is up the host's own dialog stands down,
+ * so exactly one surface owns the request.
+ */
+export interface ToolPromptContribution {
+  /**
+   * True when this tool owns the open request. Without it the tool claims any
+   * request open while it runs, which is wrong the moment a second extension
+   * asks something during the same turn; a request it refuses falls back to
+   * the host's dialog.
+   */
+  claims?(dialog: ToolPromptDialog, args: Record<string, unknown>): boolean;
+  component: ComponentType<ToolPromptRenderProps>;
+}
 /**
  * The timeline item for the tools a package registers, the web half of the
  * TUI's renderCall/renderResult with Pi's renderShell 'self': one `message`
@@ -308,6 +414,8 @@ export interface ToolRendererContribution {
    */
   matches?(toolName: string, statuses: Readonly<Record<string, string>>): boolean;
   message: ComponentType<ToolMessageRenderProps>;
+  /** Stands in for the composer input while this tool runs and holds a request. */
+  prompt?: ToolPromptContribution;
 }
 /** What a plugin's optional runtime may do; both send on the page's hub socket. */
 export interface WebPluginRuntime {
@@ -326,6 +434,8 @@ export interface WebPluginDefinition {
   leaderBindings?: LeaderBindingContribution[];
   railSections?: SurfaceContribution[];
   selectionBarItems?: SurfaceContribution[];
+  /** Compact controls placed in the mobile composer's action row, immediately before queue. */
+  composerActions?: SurfaceContribution[];
   toolRenderers?: ToolRendererContribution[];
   /**
    * A section whose id names an activity group any plugin declares renders
@@ -333,6 +443,11 @@ export interface WebPluginDefinition {
    * one-line summary; any other section renders after the groups.
    */
   activitySections?: SurfaceContribution[];
+  /**
+   * Pages this plugin adds to cockpit settings. The host renders the fields and
+   * owns the scope switch, the repository picker, and every write.
+   */
+  settingsSections?: SettingsSectionContribution[];
   /** The slots this plugin opens for others, each named '<this plugin id>.<name>'. */
   slots?: SlotDeclaration[];
   /** This plugin's contributions into slots other plugins (or the host) declare. */

@@ -34,6 +34,20 @@ test('shows a queued follow-up as queued, not as sent', async ({ page, cockpit }
   await cockpit.session.waitForCommand('follow_up');
 });
 
+test('places one-shot voice transcription into the browser composer', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'voice-result-1',
+    method: 'set_editor_text',
+    text: 'transcribed on the agent host',
+  });
+
+  await expect(page.getByTestId('composer-input')).toHaveValue('transcribed on the agent host');
+});
+
 test('explains a refused attach instead of sitting blank', async ({ page, cockpit }) => {
   // Hold the session from a second client so the cockpit's attach is refused.
   await page.goto(cockpit.url);

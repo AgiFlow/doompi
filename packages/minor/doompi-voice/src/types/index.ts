@@ -1,5 +1,6 @@
 import type { IDoomConfigLoader } from '@agimon-ai/doompi-config/types';
 import type { ResolvedVoiceConfig, VoiceAdapterConfig, VoiceEngine, VoiceTtsConfig } from '@agimon-ai/doompi-config';
+import type { VoiceMediaPlaybackResult } from './clientMedia.ts';
 
 /** Everything the voice runtime is assembled from. */
 export interface VoiceDependencies {
@@ -88,6 +89,23 @@ export interface LiveRecordingHandle {
 export interface IPcmAudioRecorder {
   preflight(config: ResolvedVoiceConfig): void;
   start(config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle;
+}
+
+export interface VoiceMediaAudioPoll {
+  pcm: Buffer;
+  state: 'active' | 'stopping' | 'stopped';
+}
+
+/** Agent-side half of the client media transport. */
+export interface IVoiceMediaHostConnection {
+  startCapture(captureId: string): Promise<void>;
+  readCapture(captureId: string): Promise<VoiceMediaAudioPoll>;
+  stopCapture(captureId: string): Promise<void>;
+  abortCapture(captureId: string): Promise<void>;
+  startPlayback(request: { playbackId: string; text: string; voice?: string; rate?: number }): Promise<void>;
+  readPlayback(playbackId: string): Promise<VoiceMediaPlaybackResult | undefined>;
+  stopPlayback(playbackId: string): Promise<void>;
+  abortPlayback(playbackId: string): Promise<void>;
 }
 
 export interface ISpeechPresenceDetector {

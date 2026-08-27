@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSession, searchDirectories } from '../../src/web/lib/hubApi.ts';
+import { createSession, restartSession, searchDirectories } from '../../src/web/lib/hubApi.ts';
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -38,13 +38,41 @@ describe('createSession', () => {
   });
 });
 
+describe('restartSession', () => {
+  it('posts to the session’s restart route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respond(202, { sessionId: 'live' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(restartSession('live')).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/live/restart', { method: 'POST' });
+  });
+
+  it('escapes an id that would otherwise change the path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respond(202, {}));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await restartSession('a/../b');
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/a%2F..%2Fb/restart', { method: 'POST' });
+  });
+
+  it('relays the hub error message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(502, { error: 'The session did not stop in time.' })));
+    await expect(restartSession('live')).resolves.toEqual({ error: 'The session did not stop in time.' });
+  });
+
+  it('reports an unreachable hub instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
+    await expect(restartSession('live')).resolves.toEqual({ error: 'The cockpit hub is unreachable.' });
+  });
+});
+
 describe('searchDirectories', () => {
   it('asks the hub for the typed path and keeps only string entries', async () => {
     const fetchMock = vi.fn().mockResolvedValue(respond(200, { directories: ['/work/app', 7, '/work/lib'] }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(searchDirectories('/work/^')).resolves.toEqual(['/work/app', '/work/lib']);
-    expect(fetchMock).toHaveBeenCalledWith('/api/directories?q=%2Fwork%2F%5E');
+    expect(fetchMock).toHaveBeenCalledWith('/api/directories?q=%2Fwork%2F%5E', undefined);
   });
 
   it('shows nothing when the hub declines or is unreachable', async () => {

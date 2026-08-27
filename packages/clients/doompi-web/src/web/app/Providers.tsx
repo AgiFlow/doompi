@@ -1,11 +1,17 @@
 import { TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect } from 'react';
+import { IntegrityBlock } from '../features/remote/IntegrityBlock.tsx';
+import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.tsx';
+import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
+import { RemoteBanner } from '../features/remote/RemoteBanner.tsx';
 import { ThreadView } from '../features/session/ThreadView.tsx';
 import { installWebPlugins, startWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
 import { bindThreadRenderer } from '../lib/threadRenderer.ts';
 import { sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { routeTree } from '../routes/routeTree.tsx';
+import { restoreSealedSession } from '../lib/sealedSession.ts';
+import { refreshRemoteState } from '../stores/remoteAccessStore.ts';
 import { startSessionRuntime } from './sessionRuntime.ts';
 import { webPlugins } from './webPlugins.generated.ts';
 
@@ -30,16 +36,37 @@ declare module '@tanstack/react-router' {
 
 export function Providers() {
   useEffect(() => {
-    const stopRuntime = startSessionRuntime();
-    const stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame });
+    // The channel first: a socket opened before it is established would send
+    // its first frames in the clear, and on loopback this resolves immediately
+    // to no channel at all.
+    let stopRuntime: (() => void) | undefined;
+    let stopPlugins: (() => void) | undefined;
+    let cancelled = false;
+    void restoreSealedSession().then(() => {
+      if (cancelled) return;
+      stopRuntime = startSessionRuntime();
+      stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame });
+      // One read at start; after that the hub pushes state, so nothing polls.
+      void refreshRemoteState();
+    });
     return () => {
-      stopPlugins();
-      stopRuntime();
+      cancelled = true;
+      stopPlugins?.();
+      stopRuntime?.();
     };
   }, []);
 
   return (
     <TooltipProvider>
+      {/* Mounted once at the root rather than per route: a banner that warns
+          the tunnel is open must not be missable by navigating, and the
+          approval prompt has to reach the host wherever they are. */}
+      {/* First, and above everything: if the bundle is not the one this hub
+          signed, nothing rendered under it can be trusted. */}
+      <IntegrityBlock />
+      <RemoteBanner />
+      <RemoteAccessDialog />
+      <PairingApprovalDialog />
       <RouterProvider router={router} />
     </TooltipProvider>
   );

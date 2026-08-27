@@ -23,5 +23,7 @@
     "types": ["node", "vitest/globals"]
   },
   "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  // tests/web renders components and needs JSX, so web/tsconfig.json compiles
+  // it instead; this project has no jsx setting and would reject the imports.
+  "exclude": ["node_modules", "dist", "coverage", "tests/web"]
 }

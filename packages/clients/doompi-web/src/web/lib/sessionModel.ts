@@ -97,8 +97,15 @@ export interface DialogRequest {
   prefill: string;
 }
 
+export interface EditorTextRequest {
+  id: string;
+  text: string;
+}
+
 export interface SessionState {
   entries: TimelineEntry[];
+  /** Running tool frames kept outside the protocol-owned transcript so prompt plugins can claim their dialogs. */
+  activeTools: ToolEntry[];
   /**
    * Footer status entries keyed as the publishing extension named them, raw so
    * the colour survives. A key that is absent means the package is not in this
@@ -117,6 +124,8 @@ export interface SessionState {
   /** Thinking levels the current model accepts, empty until the picker asks. */
   thinkingLevels: string[];
   dialog: DialogRequest | null;
+  /** Latest fire-and-forget editor replacement requested by a session extension. */
+  editorTextRequest: EditorTextRequest | null;
   /** The runtime's minor-mode catalog as last journaled, or null before it reports. */
   minorModes: MinorModeProjection | null;
   /** Tool calls seen since the current run began, reported when it settles. */
@@ -140,6 +149,7 @@ export interface SessionState {
 
 export const initialSessionState: SessionState = {
   entries: [],
+  activeTools: [],
   statuses: {},
   widgets: [],
   streaming: false,
@@ -150,6 +160,7 @@ export const initialSessionState: SessionState = {
   models: [],
   thinkingLevels: [],
   dialog: null,
+  editorTextRequest: null,
   minorModes: null,
   toolsThisRun: 0,
   restoredIds: [],
@@ -243,10 +254,10 @@ function closeAssistant(state: SessionState, message: unknown): SessionState {
   return { ...state, entries };
 }
 
-function applyToolStart(state: SessionState, frame: Frame): SessionState {
-  const entry: ToolEntry = {
+function toolEntryFromStart(frame: Frame, id: string): ToolEntry {
+  return {
     kind: 'tool',
-    id: `t${state.nextId}`,
+    id,
     toolCallId: asString(frame.toolCallId),
     name: asString(frame.toolName, 'tool'),
     args: isRecord(frame.args) ? frame.args : {},
@@ -256,7 +267,10 @@ function applyToolStart(state: SessionState, frame: Frame): SessionState {
     isError: false,
     running: true,
   };
-  const opened = withEntry(closeAssistant(state, undefined), entry);
+}
+
+function applyToolStart(state: SessionState, frame: Frame): SessionState {
+  const opened = withEntry(closeAssistant(state, undefined), toolEntryFromStart(frame, `t${state.nextId}`));
   return { ...opened, toolsThisRun: opened.toolsThisRun + 1 };
 }
 
@@ -382,6 +396,10 @@ function applyDialog(state: SessionState, frame: Frame): SessionState {
   const method = asString(frame.method);
   if (method === 'setStatus') return applyStatus(state, frame);
   if (method === 'setWidget') return applyWidget(state, frame);
+  if (method === 'set_editor_text') {
+    if (typeof frame.text !== 'string') return state;
+    return { ...state, editorTextRequest: { id: asString(frame.id), text: frame.text } };
+  }
   if (method !== 'select' && method !== 'confirm' && method !== 'input' && method !== 'editor') return state;
   const options = Array.isArray(frame.options) ? frame.options.map((option) => asString(option)).filter(Boolean) : [];
   return {
@@ -563,7 +581,16 @@ export interface ReduceSessionOptions {
 export function reduceSession(state: SessionState, frame: Frame, options: ReduceSessionOptions = {}): SessionState {
   const type = asString(frame.type);
   if (options.transcriptFromProtocol && TRANSCRIPT_FRAMES.has(type)) {
-    return type === 'tool_execution_start' ? { ...state, toolsThisRun: state.toolsThisRun + 1 } : state;
+    if (type === 'tool_execution_start') {
+      const active = toolEntryFromStart(frame, `active:${asString(frame.toolCallId)}`);
+      const activeTools = [...state.activeTools.filter((entry) => entry.toolCallId !== active.toolCallId), active];
+      return { ...state, activeTools, toolsThisRun: state.toolsThisRun + 1 };
+    }
+    if (type === 'tool_execution_end') {
+      const toolCallId = asString(frame.toolCallId);
+      return { ...state, activeTools: state.activeTools.filter((entry) => entry.toolCallId !== toolCallId) };
+    }
+    return state;
   }
 
   switch (type) {
@@ -571,7 +598,7 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
       return isRecord(frame.frame) ? reduceSession(state, frame.frame, options) : state;
 
     case 'agent_start':
-      return { ...state, streaming: true, settled: false, toolsThisRun: 0 };
+      return { ...state, activeTools: [], streaming: true, settled: false, toolsThisRun: 0 };
 
     case 'message_update':
       return isRecord(frame.assistantMessageEvent) ? applyAssistantDelta(state, frame.assistantMessageEvent) : state;
@@ -599,7 +626,7 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
     case 'agent_settled': {
       const closed = options.transcriptFromProtocol ? state : closeAssistant(state, undefined);
       const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
-      return { ...marked, streaming: false, settled: true };
+      return { ...marked, activeTools: [], streaming: false, settled: true };
     }
 
     case 'extension_ui_request': {

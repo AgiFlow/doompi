@@ -1,4 +1,6 @@
 import { DIRECTORIES_API_ROUTE, SESSIONS_API_ROUTE } from '../../types/hub.ts';
+import { sealedHttpSession } from './sealedSession.ts';
+import { fetchWithStepUp } from './stepUp.ts';
 
 export type CreateSessionResult = { sessionId: string } | { error: string };
 
@@ -15,7 +17,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function createSession(input: { cwd: string; name?: string }): Promise<CreateSessionResult> {
   let response: Response;
   try {
-    response = await fetch(SESSIONS_API_ROUTE, {
+    // Creating a session picks a directory to run an agent in, which is one
+    // of the two actions a live remote session is not enough for.
+    response = await fetchWithStepUp(SESSIONS_API_ROUTE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
@@ -40,7 +44,38 @@ export type StopSessionResult = { ok: true } | { error: string };
 export async function stopSession(sessionId: string): Promise<StopSessionResult> {
   let response: Response;
   try {
-    response = await fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+    response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+    });
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+  if (response.ok) return { ok: true };
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    body = undefined;
+  }
+  const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
+  return { error };
+}
+
+export type RestartSessionResult = { ok: true } | { error: string };
+
+/**
+ * Asks the hub to replace a session's server, keeping its id.
+ *
+ * A running server reads the composition once, so a rebuilt extension or a new
+ * package API only reaches a session this way. The hub syncs first, so what
+ * comes back is built from the source as it stands now.
+ */
+export async function restartSession(sessionId: string): Promise<RestartSessionResult> {
+  let response: Response;
+  try {
+    response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/restart`, {
+      method: 'POST',
+    });
   } catch {
     return { error: 'The cockpit hub is unreachable.' };
   }
@@ -58,7 +93,9 @@ export async function stopSession(sessionId: string): Promise<StopSessionResult>
 /** File paths under a session's cwd matching the query, for @ completion. */
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {
-    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`);
+    const response = await sealedHttpSession.fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`,
+    );
     if (!response.ok) return [];
     const body = (await response.json()) as { files?: unknown };
     return Array.isArray(body.files) ? body.files.filter((file): file is string => typeof file === 'string') : [];
@@ -74,7 +111,7 @@ export async function searchSessionFiles(sessionId: string, query: string): Prom
  */
 export async function searchDirectories(query: string): Promise<string[]> {
   try {
-    const response = await fetch(`${DIRECTORIES_API_ROUTE}?q=${encodeURIComponent(query)}`);
+    const response = await sealedHttpSession.fetch(`${DIRECTORIES_API_ROUTE}?q=${encodeURIComponent(query)}`);
     if (!response.ok) return [];
     const body = (await response.json()) as { directories?: unknown };
     return Array.isArray(body.directories)

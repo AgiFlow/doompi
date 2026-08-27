@@ -28,6 +28,19 @@ export type SpawnOutcome =
 export interface SpawnSessionInput {
   cwd: string;
   name?: string;
+  /**
+   * The id the replacement must keep, for a restart. Pi resumes the session
+   * under it, so the transcript and everything keyed by the id survive the
+   * server going away and coming back. Absent means a new session.
+   */
+  sessionId?: string;
+  /**
+   * The directory the replacement reuses, for a restart. Without it a restart
+   * would pick a fresh directory each time, and since the socket path is
+   * capped near 104 bytes, a handful of restarts would run the session out of
+   * room. The previous server has exited, so its socket is gone.
+   */
+  sessionDir?: string;
 }
 
 /** Launches doompi-server processes for sessions created from the page. */
@@ -96,15 +109,20 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
       }
       const command = options.command ?? SERVER_LABEL;
 
-      const sessionId = crypto.randomUUID();
+      const sessionId = input.sessionId ?? crypto.randomUUID();
       // The directory borrows only a prefix of the id: sun_path is capped
       // around 104 bytes and every byte of the session dir counts against it.
       const spawnedRoot = path.join(options.registryDir, SPAWNED_SEGMENT);
+      const reusedDir = input.sessionDir;
       let dirName = sessionId.slice(0, DIR_NAME_PREFIX_LENGTH);
-      while (fs.existsSync(path.join(spawnedRoot, dirName)) && dirName.length < sessionId.length) {
+      while (
+        reusedDir === undefined &&
+        fs.existsSync(path.join(spawnedRoot, dirName)) &&
+        dirName.length < sessionId.length
+      ) {
         dirName = sessionId.slice(0, dirName.length + DIR_NAME_PREFIX_LENGTH);
       }
-      const sessionDir = path.join(spawnedRoot, dirName);
+      const sessionDir = reusedDir ?? path.join(spawnedRoot, dirName);
       const socketPath = path.join(sessionDir, SOCKET_FILE);
       if (socketPath.length > MAX_SOCKET_PATH) {
         return Promise.resolve({

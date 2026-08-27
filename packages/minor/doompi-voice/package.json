@@ -1,7 +1,7 @@
 {
   "name": "@agimon-ai/doompi-voice",
   "version": "0.0.1-alpha.39",
-  "description": "macOS voice capture, transcription, text-to-speech, and autonomous narration for Pi agents.",
+  "description": "Client audio capture, host transcription, and autonomous narration for Pi agents.",
   "keywords": [
     "ai",
     "coding-agent",
@@ -31,6 +31,7 @@
     "models",
     "llms.txt",
     "src/prompts",
+    "src/types/clientMedia.ts",
     "README.md",
     "LICENSE",
     "package.json"
@@ -49,6 +50,16 @@
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
+    },
+    "./client-media": {
+      "types": "./dist/clientMedia.d.mts",
+      "import": "./dist/clientMedia.mjs",
+      "require": "./dist/clientMedia.cjs"
+    },
+    "./session-api": {
+      "types": "./dist/sessionApi.d.mts",
+      "import": "./dist/sessionApi.mjs",
+      "require": "./dist/sessionApi.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -70,6 +81,7 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "sherpa-onnx-node": "1.13.6",
     "xstate": "5.32.5"
@@ -91,6 +103,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "voice-media",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
   },
   "doompiWeb": {
     "pluginId": "voice",

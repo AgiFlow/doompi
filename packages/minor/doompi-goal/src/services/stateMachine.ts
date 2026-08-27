@@ -1,10 +1,4 @@
-import type {
-  ActiveGoal,
-  GoalExecutionState,
-  GoalRuntimeSnapshot,
-  GoalStatus,
-  PendingQueueAction,
-} from '../types/goal.ts';
+import type { ActiveGoal, GoalExecutionState, GoalRuntimeSnapshot, GoalStatus } from '../types/goal.ts';
 import { checkpointGoalActiveTime, formatDuration, formatTokenCount, normalizeTokenBudget } from './accounting.ts';
 export interface GoalCreateOptions {
   id?: string;
@@ -76,9 +70,9 @@ export function blocksStaleGoalToolCalls(status: GoalStatus): boolean {
 export function isRetainedGoalStatus(status: GoalStatus): boolean {
   return status !== 'complete';
 }
-export function getExecutionState(snapshot: Pick<GoalRuntimeSnapshot, 'goal' | 'queue'>): GoalExecutionState {
-  if (!snapshot.goal && snapshot.queue.length === 0) return 'dormant';
-  return snapshot.goal?.status === 'active' ? 'executing' : 'retained';
+export function getExecutionState(snapshot: Pick<GoalRuntimeSnapshot, 'goal'>): GoalExecutionState {
+  if (!snapshot.goal) return 'dormant';
+  return snapshot.goal.status === 'active' ? 'executing' : 'retained';
 }
 export function formatBudget(goal: Pick<ActiveGoal, 'tokensUsed' | 'tokenBudget'>): string {
   return `${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget ?? 0)}`;
@@ -86,7 +80,6 @@ export function formatBudget(goal: Pick<ActiveGoal, 'tokensUsed' | 'tokenBudget'
 export function formatStatus(goal: ActiveGoal | undefined): string | undefined {
   if (!goal) return undefined;
   if (goal.status === 'complete') return 'complete';
-  if (goal.status === 'queued') return 'queued';
   if (goal.status === 'paused') return 'paused';
   if (goal.status === 'blocked') return 'blocked';
   if (goal.status === 'usage_limited') return 'usage';
@@ -95,16 +88,10 @@ export function formatStatus(goal: ActiveGoal | undefined): string | undefined {
     ? `active ${formatDuration(goal.timeUsedSeconds)}`
     : `active ${formatBudget(goal)}`;
 }
-export function goalSummary(
-  goal: ActiveGoal,
-  queuedGoals: readonly ActiveGoal[] = [],
-  queueEnabled = false,
-  queueFrozen = false,
-  pendingAction?: PendingQueueAction,
-): string {
+export function goalSummary(goal: ActiveGoal): string {
   const summary = [
     `Goal: ${goal.text}`,
-    `Status: ${queueFrozen ? 'queue off' : goal.status}`,
+    `Status: ${goal.status}`,
     `Iteration: ${goal.iteration}`,
     `Automatic model responses: ${goal.automaticModelTurns}`,
     `Active elapsed: ${formatDuration(goal.timeUsedSeconds)}`,
@@ -114,14 +101,6 @@ export function goalSummary(
     summary.push(
       `Safety pause: ${goal.safetyPauseCause === 'continuation_limit' ? 'automatic response limit' : 'no progress'}`,
     );
-  if (queueEnabled || queuedGoals.length > 0 || queueFrozen || pendingAction) {
-    const ordered = [
-      `[${goal.status}] ${goal.text}`,
-      ...(pendingAction?.kind === 'prioritize' ? [`[pending] ${pendingAction.objective}`] : []),
-      ...queuedGoals.map((queued) => `[${queued.status}] ${queued.text}`),
-    ];
-    summary.push(`Goals (${ordered.length}):`, ...ordered.map((item, index) => `${index + 1}. ${item}`));
-  }
   return summary.join('\n');
 }
 export function goalIdRejectionReason(goal: ActiveGoal, requestedGoalId: string): string | undefined {

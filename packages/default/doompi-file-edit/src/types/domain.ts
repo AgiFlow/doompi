@@ -1,10 +1,42 @@
-export type FileEditTool = 'edit' | 'write' | 'bash';
+export type FileEditTool = 'edit' | 'write' | 'bash' | 'user';
 export type FileEditState = 'modified' | 'added' | 'deleted' | 'unchanged' | 'binary' | 'external';
 
+/**
+ * How a change was discovered, which is what decides whether it can be diffed.
+ *
+ * A `tool` change names its path in the call arguments, so the content is read
+ * before the tool runs and both sides of the change are known. A `scan` change
+ * is found by comparing a tree manifest taken around a bash call: the path is
+ * only known afterwards, so there is no "before" to diff against.
+ */
+export type FileEditOrigin = 'tool' | 'scan';
+
+/**
+ * One recorded change, appended to the session's timeline.
+ *
+ * Version 1 events carried the path alone. Version 2 adds the blob hashes that
+ * make a diff possible; both are still read, because a session already running
+ * when the package updates keeps appending to the file it opened.
+ */
 export interface TimelineEvent {
-  version: 1;
+  version: 2;
   path: string;
   tool: FileEditTool;
+  at: number;
+  origin: FileEditOrigin;
+  /** Snapshot hash of the content before the change; absent for a scan-found path. */
+  before?: string;
+  /** Snapshot hash of the content after the change; absent when it could not be stored. */
+  after?: string;
+  additions?: number;
+  removals?: number;
+}
+
+/** A version 1 event, still accepted from a timeline opened by an older build. */
+export interface LegacyTimelineEvent {
+  version: 1;
+  path: string;
+  tool: 'edit' | 'write' | 'bash';
   at: number;
 }
 
@@ -13,6 +45,19 @@ export interface FileEditEntry {
   tool: FileEditTool;
   at: number;
   count: number;
+}
+
+/** One change in a file's history, as the cockpit lists it. */
+export interface FileEditVersion {
+  /** Position in the file's own history, oldest first, starting at 1. */
+  index: number;
+  tool: FileEditTool;
+  at: number;
+  origin: FileEditOrigin;
+  before?: string;
+  after?: string;
+  additions?: number;
+  removals?: number;
 }
 
 export interface FileDiff {

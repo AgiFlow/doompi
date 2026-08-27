@@ -1,3 +1,4 @@
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import {
   WORKFLOW_SCREEN_EVENT,
   workflowRunPath,
@@ -28,7 +29,11 @@ function errorOf(body: unknown, fallback: string): string {
 
 async function post(path: string, body: unknown): Promise<{ status: number; body: unknown }> {
   try {
-    const response = await fetch(path, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
+    const response = await sealedTransport.fetch(path, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body),
+    });
     const text = await response.text();
     return { status: response.status, body: text === '' ? undefined : (JSON.parse(text) as unknown) };
   } catch {
@@ -106,7 +111,7 @@ export type DeleteWorkflowResult = { result: WorkflowDeleteResponse } | { error:
 /** Permanently removes one settled run and its run directory. */
 export async function deleteWorkflowRun(workspace: string, runKey: string): Promise<DeleteWorkflowResult> {
   try {
-    const response = await fetch(workflowRunPath(workspace, runKey), { method: 'DELETE' });
+    const response = await sealedTransport.fetch(workflowRunPath(workspace, runKey), { method: 'DELETE' });
     const body = (await response.json()) as unknown;
     if (!response.ok) return { error: errorOf(body, 'The workflow could not be deleted.') };
     if (isRecord(body) && body.deleted === true) return { result: { deleted: true } };
@@ -120,7 +125,7 @@ export type ArtifactsResult = { artifacts: WorkflowArtifactsResponse } | { error
 
 export async function fetchArtifacts(workspace: string, runKey: string): Promise<ArtifactsResult> {
   try {
-    const response = await fetch(`${workflowRunPath(workspace, runKey)}/artifacts`);
+    const response = await sealedTransport.fetch(`${workflowRunPath(workspace, runKey)}/artifacts`);
     const body = (await response.json()) as unknown;
     if (!response.ok) return { error: errorOf(body, 'This run has no directory to read.') };
     return { artifacts: body as WorkflowArtifactsResponse };
@@ -139,7 +144,7 @@ export function artifactContentUrl(workspace: string, runKey: string, path: stri
 
 export async function fetchArtifact(workspace: string, runKey: string, path: string): Promise<ArtifactResult> {
   try {
-    const response = await fetch(
+    const response = await sealedTransport.fetch(
       `${workflowRunPath(workspace, runKey)}/artifacts/${path.split('/').map(encodeURIComponent).join('/')}`,
     );
     const body = (await response.json()) as unknown;

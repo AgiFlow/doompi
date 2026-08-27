@@ -91,6 +91,7 @@
           "@agimon-ai/doompi-web",
           "@agimon-ai/doompi-web-components",
           "@agimon-ai/doompi-web-contracts",
+          "@agimon-ai/doompi-web-security",
           "@agimon-ai/doompi-workflow",
           "@agimon-ai/vibe-lint-plugin-doom-extension",
           "@agimon-ai/vibe-lint-plugin-doom-web"

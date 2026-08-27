@@ -19,6 +19,12 @@ export const vitestConfig = defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
         '**/coverage/**',
+        // CodeMirror mounts onto a real element and measures it, so neither
+        // the editor nor the boundary that lazily loads it can be reached by
+        // server rendering. The two modules under them that do hold logic, the
+        // grammar lookup and the palette, are plain data and stay counted.
+        'src/components/CodeEditor.tsx',
+        'src/components/CodeEditorView.tsx',
         // Radix mounts an overlay's content through a portal, which server
         // rendering never runs, and these modules hold no logic of their own:
         // they forward props and name token classes. Their behaviour is the

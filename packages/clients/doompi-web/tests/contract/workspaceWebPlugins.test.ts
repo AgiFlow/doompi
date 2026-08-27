@@ -134,7 +134,13 @@ describe('the workspace web plugin composition', () => {
 
     for (const definition of definitions) {
       for (const tab of definition.tabs ?? []) mount(`${definition.id} tab ${tab.id}`, tab.panel);
-      for (const group of ['activitySections', 'overlays', 'railSections', 'selectionBarItems'] as const) {
+      for (const group of [
+        'activitySections',
+        'composerActions',
+        'overlays',
+        'railSections',
+        'selectionBarItems',
+      ] as const) {
         for (const surface of definition[group] ?? [])
           mount(`${definition.id} ${group} ${surface.id}`, surface.component);
       }

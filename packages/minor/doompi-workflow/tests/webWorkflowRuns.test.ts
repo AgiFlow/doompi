@@ -56,7 +56,6 @@ describe('workflowRuns', () => {
       jobs: [],
     });
     expect(parsed?.piSessionId).toBe('01a00eef-d11a-7a5a-afc6-a3eb14164011');
-    expect(parsed?.originalRepoPath).toBe('/Users/dev/workspace/agirepo');
   });
 
   it('rejects malformed or foreign records', () => {
@@ -141,8 +140,8 @@ describe('workflowRuns', () => {
     expect(workflowPosition(jobs)).toEqual({ job: 'build', step: 'compile', index: 0, total: 1 });
   });
 
-  it('scopes runs by owning session id or repository overlap', () => {
-    const parsed = parseWorkflowRunRecord(
+  it('scopes runs to the session that launched them, never to the repository', () => {
+    const record = (env?: Record<string, string>): string =>
       JSON.stringify({
         runKey: 'r',
         workspace: 'w',
@@ -150,15 +149,24 @@ describe('workflowRuns', () => {
         startedAt: '2026-08-21T09:00:00.000Z',
         stage: 'running',
         originalRepoPath: '/repo',
-        env: { PI_SESSION_ID: 'owner' },
-      }),
-    );
-    expect(parsed).toBeDefined();
-    if (!parsed) return;
-    expect(runBelongsToSession(parsed, { sessionId: 'owner', cwd: '/elsewhere' })).toBe(true);
-    expect(runBelongsToSession(parsed, { sessionId: 'other', cwd: '/repo' })).toBe(true);
-    expect(runBelongsToSession(parsed, { sessionId: 'other', cwd: '/repo/packages/sub' })).toBe(true);
-    expect(runBelongsToSession(parsed, { sessionId: 'other', cwd: '/repo-sibling' })).toBe(false);
+        ...(env === undefined ? {} : { env }),
+      });
+
+    const owned = parseWorkflowRunRecord(record({ PI_SESSION_ID: 'owner' }));
+    expect(owned).toBeDefined();
+    if (!owned) return;
+    expect(runBelongsToSession(owned, 'owner')).toBe(true);
+    // The repository the run came from buys another session nothing: two
+    // sessions open in one repo must not read each other's history.
+    expect(runBelongsToSession(owned, 'other')).toBe(false);
+
+    // An unstamped record is a launch from the CLI rather than from a session,
+    // so it belongs to nobody rather than to everybody in that repo.
+    const unowned = parseWorkflowRunRecord(record());
+    expect(unowned).toBeDefined();
+    if (!unowned) return;
+    expect(unowned.piSessionId).toBeUndefined();
+    expect(runBelongsToSession(unowned, 'owner')).toBe(false);
   });
 
   it('presents running first, keeps errors a day, and keeps finished runs for the session', () => {

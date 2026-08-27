@@ -187,11 +187,12 @@ function register(
 }
 
 describe('registerSlashCommands', () => {
-  it('registers run and parallel', () => {
+  it('registers run, parallel, and web control commands', () => {
     const host = makeHost();
     register(host);
     expect(host.commands.has('run')).toBe(true);
     expect(host.commands.has('parallel')).toBe(true);
+    expect(host.commands.has('subagents-steer')).toBe(true);
   });
 
   it('no longer registers chain, which the package does not implement', () => {
@@ -400,6 +401,70 @@ describe('watchAndFinalize (indirectly, via a poll tick after /run)', () => {
     await scheduler.subscriptions[0]?.run();
 
     expect(host.messages.at(-1)?.content).toContain('disk full');
+  });
+});
+
+describe('/subagents-steer', () => {
+  class FakeManagement {
+    steerCalls: Array<{ id: string; message: string }> = [];
+    steerError: Error | undefined;
+    steerState: 'delivered' | 'failed' | 'pending' = 'delivered';
+
+    async steer(id: string, message: string) {
+      if (this.steerError) throw this.steerError;
+      this.steerCalls.push({ id, message });
+      return {
+        requestPath: `/tmp/${id}/steer.json`,
+        requestId: 'request-1',
+        index: 0,
+        state: this.steerState,
+        message: this.steerState === 'delivered' ? 'Guidance received.' : 'Guidance rejected.',
+      };
+    }
+  }
+
+  function registerWithManagement(host: FakeHost, management: FakeManagement) {
+    const resolved = makeDeps({ management: management as unknown as SlashCommandDeps['management'] });
+    registerSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps);
+  }
+
+  it('passes the run id and full guidance to ManagementActions and reports its acknowledgment', async () => {
+    const host = makeHost();
+    const management = new FakeManagement();
+    registerWithManagement(host, management);
+    const { ctx, notifications } = makeCtx();
+
+    await host.commands.get('subagents-steer')?.handler('run-1 check the edge case first', ctx);
+
+    expect(management.steerCalls).toEqual([{ id: 'run-1', message: 'check the edge case first' }]);
+    expect(notifications.at(-1)).toMatchObject({ kind: 'info', message: expect.stringContaining('delivered') });
+  });
+
+  it('requires both a run id and guidance', async () => {
+    const host = makeHost();
+    const management = new FakeManagement();
+    registerWithManagement(host, management);
+    const { ctx, notifications } = makeCtx();
+
+    await host.commands.get('subagents-steer')?.handler('run-1', ctx);
+
+    expect(management.steerCalls).toHaveLength(0);
+    expect(notifications.at(-1)).toMatchObject({ kind: 'error', message: expect.stringContaining('Usage') });
+  });
+
+  it('surfaces a failed acknowledgment as an error', async () => {
+    const host = makeHost();
+    const management = new FakeManagement();
+    management.steerState = 'failed';
+    registerWithManagement(host, management);
+    const { ctx, notifications } = makeCtx();
+
+    await host.commands.get('subagents-steer')?.handler('run-1 retry', ctx);
+
+    expect(notifications.at(-1)).toMatchObject({
+      kind: 'error',
+      message: expect.stringContaining('Guidance rejected'),
+    });
   });
 });
 

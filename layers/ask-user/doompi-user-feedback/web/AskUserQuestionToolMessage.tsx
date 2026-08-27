@@ -13,7 +13,9 @@ function AskUserQuestionBody({ result, output, running, isError }: ToolMessageRe
   if (running) {
     return (
       <MessageItemBody data-testid="tool-result-ask_user_question">
-        <MessageItemStatus tone="running">waiting for the user</MessageItemStatus>
+        {/* The questionnaire is below, where the input usually is; saying only
+            "waiting" would leave the reader looking for it. */}
+        <MessageItemStatus tone="running">answer below to continue</MessageItemStatus>
       </MessageItemBody>
     );
   }

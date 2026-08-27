@@ -46,6 +46,7 @@ import {
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from '@earendil-works/pi-coding-agent';
+import { NodePlanPointerAdapter } from '../adapters/node/planPointer.ts';
 import { createPlanTelemetry, PLAN_EVENT, type PlanTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
 import {
   getHarnessState,
@@ -57,6 +58,8 @@ import {
   resolvePlanningPlansDirectory,
 } from '../schemas/plan/config.ts';
 import { type PlanModelChoice, planConfigSections, planSettingByFieldId } from '../schemas/plan/planConfig.ts';
+import { formatPlanStatus, PLAN_STATUS_KEY } from '../types/planApi.ts';
+import type { PlanPointerPort } from '../types/planPointer.ts';
 import {
   createFablePlanFlow,
   FABLE_PLAN_PROFILE,
@@ -252,6 +255,8 @@ export interface PlanModeExtensionOptions {
   fableBroker?: FablePlanBroker;
   debugDiagnosticTools?: readonly string[];
   doomIntegrations?: boolean;
+  /** Where the written plan is recorded for the session's API server to find. */
+  planPointers?: PlanPointerPort;
 }
 
 interface PlanVoiceReviewServices {
@@ -270,6 +275,16 @@ export function planTitleSlug(markdown: string): string {
       .replace(/^-+|-+$/g, '')
       .slice(0, PLAN_TITLE_MAX_LENGTH) || DEFAULT_PLAN_TITLE
   );
+}
+
+/**
+ * How the status line words when a plan was written. A malformed timestamp is
+ * shown as it came rather than as an invalid date: the stamp's other job is to
+ * change on a rewrite, and it can still do that.
+ */
+function planStampOf(writtenAt: string): string {
+  const at = new Date(writtenAt);
+  return Number.isNaN(at.getTime()) ? writtenAt : at.toLocaleTimeString();
 }
 
 export function planSessionIdentifier(sessionId: string): string {
@@ -781,6 +796,8 @@ export function planModeExtension(
   let currentPlan: PlanDocument | undefined;
   let activePlanId: string | undefined;
   let planReadyForReview = false;
+  /** Whether this runtime has published the plan status a cockpit keys its group off. */
+  let planAnnounced = false;
   let awaitingVoicePlanDecision = false;
   let voiceReviewServices: PlanVoiceReviewServices | undefined;
   let debugEvidence: DebugEvidencePacket | undefined;
@@ -791,6 +808,7 @@ export function planModeExtension(
   let fableFlow: ReturnType<typeof createFablePlanFlow> | undefined;
   let transitionQueue: Promise<void> = Promise.resolve();
   const doomIntegrations = options.doomIntegrations ?? true;
+  const planPointers: PlanPointerPort = options.planPointers ?? new NodePlanPointerAdapter();
   const diagnosticTools = new Set(options.debugDiagnosticTools ?? DEBUG_DIAGNOSTIC_TOOLS);
   const runtimeAbortController = new AbortController();
   cordis.effect(() => () => shutdownPlanRuntime(), `${PLAN_LEADER_SOURCE}/runtime`);
@@ -1040,6 +1058,7 @@ export function planModeExtension(
       }
 
       const disposers = [
+        () => retirePlanDocument(cleanupContext),
         () => capabilityCeiling?.dispose(),
         () => disposeLeaderActions?.(),
         () => planConfigContribution?.dispose(),
@@ -1108,6 +1127,60 @@ export function planModeExtension(
     const status = enabled && flavor ? `plan:${flavor}` : undefined;
     ctx.ui.setStatus(PLAN_MODE_STATUS_KEY, status ? ctx.ui.theme.fg(WARNING_STYLE, status) : undefined);
     modeOwner?.publish(currentPlanModeState());
+  }
+
+  /**
+   * Announces the written plan: the pointer for the session's API server, and
+   * the status the cockpit's activity group appears on.
+   *
+   * This deliberately outlives plan mode. Exiting is when the agent starts
+   * implementing, which is exactly when the plan is most worth having open, so
+   * the announcement is retired with the session rather than with the mode.
+   * The stamp is what makes the line change on a rewrite, which is how an open
+   * tab learns to re-read.
+   *
+   * A failure here is reported and dropped: the plan is on disk either way,
+   * and losing a cockpit view is not worth failing the write that produced it.
+   */
+  function announcePlanDocument(ctx: ExtensionContext, plan: PlanDocument): void {
+    try {
+      planPointers.write(ctx.sessionManager.getSessionId(), {
+        path: plan.path,
+        title: plan.title,
+        writtenAt: plan.writtenAt,
+        ...(plan.planId === undefined ? {} : { planId: plan.planId }),
+      });
+    } catch (error) {
+      void telemetry.recordWarning(PLAN_EVENT.planPointerFailed, 'The plan pointer was not recorded.', {
+        'plan.reason': error instanceof Error ? error.name : 'unknown',
+      });
+    }
+    if (!ctx.hasUI) return;
+    ctx.ui.setStatus(PLAN_STATUS_KEY, formatPlanStatus(plan.title, planStampOf(plan.writtenAt)));
+    planAnnounced = true;
+  }
+
+  /**
+   * Retires the announcement; a session that wrote no plan has nothing to
+   * retire.
+   *
+   * The status is only cleared when this runtime published one. A cockpit
+   * records a status key the first time it hears of it and never drops it
+   * again, so clearing a key it has not seen is not a no-op there: it puts the
+   * key on the session as an empty string, which is enough to show the plan
+   * group on a session that has written nothing.
+   */
+  function retirePlanDocument(ctx: ExtensionContext | undefined): void {
+    if (!ctx) return;
+    try {
+      planPointers.clear(ctx.sessionManager.getSessionId());
+    } catch {
+      // A pointer that cannot be removed is stale data for a session id that
+      // will not come back, not a reason to fail a shutdown.
+    }
+    if (!planAnnounced) return;
+    planAnnounced = false;
+    if (ctx.hasUI) ctx.ui.setStatus(PLAN_STATUS_KEY, undefined);
   }
 
   function updateCapabilityCeiling(): void {
@@ -1743,6 +1816,7 @@ export function planModeExtension(
         assertRuntimeActive(generation);
         currentPlan = { content, path: planPath, sessionId, planId, title, writtenAt: new Date().toISOString() };
         pi.appendEntry(PLAN_DOCUMENT_ENTRY, currentPlan);
+        announcePlanDocument(ctx, currentPlan);
         planReadyForReview = true;
         awaitingVoicePlanDecision = false;
         void telemetry.recordEvent(PLAN_EVENT.planWritten, {
@@ -1989,7 +2063,18 @@ export function planModeExtension(
       );
     }
     if (currentPlan) {
-      sections.push(`[CURRENT PLAN]\nSource: ${currentPlan.path}\n\n${currentPlan.content}`);
+      // Read from disk rather than from what write_plan remembered. The plan is
+      // editable in the cockpit, and a reader who corrected it expects the
+      // agent to implement the correction, not the draft it wrote. A file that
+      // has since been moved or removed falls back to the remembered text, so
+      // the plan never silently disappears from the prompt.
+      let content = currentPlan.content;
+      try {
+        content = await fs.promises.readFile(currentPlan.path, 'utf8');
+      } catch {
+        content = currentPlan.content;
+      }
+      sections.push(`[CURRENT PLAN]\nSource: ${currentPlan.path}\n\n${content}`);
     }
     if (sections.length === 0) return undefined;
     return { systemPrompt: `${event.systemPrompt}\n\n${sections.join('\n\n')}` };
@@ -2029,6 +2114,11 @@ export function planModeExtension(
     capabilityCeiling?.dispose();
     capabilityCeiling = undefined;
     currentPlan = storedPlan?.sessionId === sessionId ? storedPlan : undefined;
+    // A resumed session keeps its plan, so it keeps the announcement too; one
+    // that restored none clears whatever a previous run left behind under this
+    // session id.
+    if (currentPlan) announcePlanDocument(ctx, currentPlan);
+    else retirePlanDocument(ctx);
     activePlanId = state?.planId ?? currentPlan?.planId;
     planReadyForReview = false;
     awaitingVoicePlanDecision = false;

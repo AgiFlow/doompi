@@ -2,6 +2,8 @@ import { EditorConfigService } from '../adapters/EditorConfigService/EditorConfi
 import { EditorLauncher } from '../adapters/EditorLauncher/EditorLauncher';
 import { EditTracker } from '../adapters/EditTracker/EditTracker';
 import { FileEditPaths } from '../adapters/FileEditPaths/FileEditPaths';
+import { NodeSnapshotStoreAdapter } from '../adapters/node/snapshotStore';
+import { NodeTreeManifestAdapter } from '../adapters/node/treeManifest';
 import { FileEditWorkflow } from '../tui/fileEditWorkflow';
 import { GitDiffService } from '../adapters/GitDiffService/GitDiffService';
 import { TimelineStore } from '../adapters/TimelineStore/TimelineStore';
@@ -17,11 +19,13 @@ import type { FileEditDependencies } from '../types';
 export function createFileEditContainer(overrides: Partial<FileEditDependencies> = {}): FileEditDependencies {
   const paths = overrides.paths ?? new FileEditPaths();
   const timeline = overrides.timeline ?? new TimelineStore();
+  const snapshots = overrides.snapshots ?? new NodeSnapshotStoreAdapter();
+  const manifests = overrides.manifests ?? new NodeTreeManifestAdapter();
   const diffs = overrides.diffs ?? new GitDiffService();
   const editorConfig = overrides.editorConfig ?? new EditorConfigService();
-  const editTracker = overrides.editTracker ?? new EditTracker(timeline);
+  const editTracker = overrides.editTracker ?? new EditTracker(timeline, snapshots, manifests);
   const editorLauncher = overrides.editorLauncher ?? new EditorLauncher(editorConfig);
   const workflow = overrides.workflow ?? new FileEditWorkflow(timeline, diffs, editorConfig, editorLauncher);
 
-  return { paths, timeline, diffs, editorConfig, editTracker, editorLauncher, workflow };
+  return { paths, timeline, snapshots, manifests, diffs, editorConfig, editTracker, editorLauncher, workflow };
 }

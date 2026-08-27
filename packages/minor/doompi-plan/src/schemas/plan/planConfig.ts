@@ -10,7 +10,6 @@
  * row rather than a case.
  */
 
-import { DOOM_PLANNING_THINKING_LEVELS } from '@agimon-ai/doompi-config';
 import {
   CONFIG_ACTION,
   type ConfigChoice,
@@ -18,77 +17,34 @@ import {
   type ConfigSection,
 } from '@agimon-ai/doompi-extension-contracts/config';
 import type { PlanningModeConfig } from './config.ts';
+import { PLAN_CONFIG_SECTION_ID, PLAN_SETTING_SHAPES, type PlanSettingShape } from '../../types/planSettings.ts';
 
-export const PLAN_CONFIG_SECTION_ID = 'planning';
+export { PLAN_CONFIG_SECTION_ID };
 const SECTION_ORDER = 30;
-const PLANNING_PATH = ['modes', PLAN_CONFIG_SECTION_ID] as const;
-const MAIN_KEY = 'main';
-const SUBAGENTS_KEY = 'subagents';
-/** Both agents fall back to the session's own settings when left unset. */
-const INHERIT_MODEL = 'inherit the session model';
-const INHERIT_THINKING = 'inherit';
 /** Selecting this clears the setting, which is how the file spells "inherit". */
 const INHERIT_CHOICE_ID = 'inherit';
 
-interface PlanSettingDescriptor {
-  readonly id: string;
-  readonly label: string;
-  readonly keyPath: readonly string[];
-  readonly placeholder: string;
-  readonly detail: string;
-  /** Present for a closed set; the panel offers these rather than free text. */
-  readonly options?: readonly string[];
-  /** Offers the session's own models rather than free text. See `planConfigSections`. */
-  readonly models?: boolean;
+/**
+ * A planning setting as the terminal panel needs it: the shared shape, plus how
+ * to read the value out of a loaded config. The reader stays here because it
+ * touches the parsed config types, which the browser half never sees.
+ */
+export interface PlanSettingDescriptor extends PlanSettingShape {
   readonly read: (config: PlanningModeConfig | undefined) => string | undefined;
 }
 
-export const PLAN_SETTINGS: readonly PlanSettingDescriptor[] = [
-  {
-    id: 'main.model',
-    label: 'main model',
-    keyPath: [...PLANNING_PATH, MAIN_KEY, 'model'],
-    placeholder: INHERIT_MODEL,
-    detail: 'Model the main agent switches to while plan mode is on.',
-    models: true,
-    read: (config) => config?.main?.model,
-  },
-  {
-    id: 'main.thinking',
-    label: 'main thinking',
-    keyPath: [...PLANNING_PATH, MAIN_KEY, 'thinking'],
-    placeholder: INHERIT_THINKING,
-    detail: 'Thinking level appended to the main model while planning.',
-    options: DOOM_PLANNING_THINKING_LEVELS,
-    read: (config) => config?.main?.thinking,
-  },
-  {
-    id: 'subagents.model',
-    label: 'subagent model',
-    keyPath: [...PLANNING_PATH, SUBAGENTS_KEY, 'model'],
-    placeholder: INHERIT_MODEL,
-    detail: 'Model forced onto delegated planning subagents.',
-    models: true,
-    read: (config) => config?.subagents?.model,
-  },
-  {
-    id: 'subagents.thinking',
-    label: 'subagent thinking',
-    keyPath: [...PLANNING_PATH, SUBAGENTS_KEY, 'thinking'],
-    placeholder: INHERIT_THINKING,
-    detail: 'Thinking level appended to the subagent model.',
-    options: DOOM_PLANNING_THINKING_LEVELS,
-    read: (config) => config?.subagents?.thinking,
-  },
-  {
-    id: 'plansdirectory',
-    label: 'plans directory',
-    keyPath: [...PLANNING_PATH, 'plansDirectory'],
-    placeholder: '~/.pi/plans',
-    detail: 'Absolute, repo-relative, or under ~. Written plans land here.',
-    read: (config) => config?.plansDirectory,
-  },
-];
+const READERS: Readonly<Record<string, (config: PlanningModeConfig | undefined) => string | undefined>> = {
+  'main.model': (config) => config?.main?.model,
+  'main.thinking': (config) => config?.main?.thinking,
+  'subagents.model': (config) => config?.subagents?.model,
+  'subagents.thinking': (config) => config?.subagents?.thinking,
+  plansdirectory: (config) => config?.plansDirectory,
+};
+
+export const PLAN_SETTINGS: readonly PlanSettingDescriptor[] = PLAN_SETTING_SHAPES.map((shape) => ({
+  ...shape,
+  read: READERS[shape.id]!,
+}));
 
 export function planSettingByFieldId(fieldId: string): PlanSettingDescriptor | undefined {
   return PLAN_SETTINGS.find((setting) => setting.id === fieldId);
@@ -111,7 +67,7 @@ export interface PlanModelChoice {
 function modelChoices(models: readonly PlanModelChoice[]): ConfigChoice[] {
   const inherit: ConfigChoice = {
     id: INHERIT_CHOICE_ID,
-    label: INHERIT_MODEL,
+    label: PLAN_SETTING_SHAPES.find((shape) => shape.models === true)?.placeholder ?? INHERIT_CHOICE_ID,
     detail: 'Leaves the setting unset.',
     action: CONFIG_ACTION.clear,
   };

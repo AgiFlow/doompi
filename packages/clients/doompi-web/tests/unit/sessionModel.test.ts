@@ -187,6 +187,26 @@ describe('reduceSession', () => {
     expect(state.entries).toHaveLength(0);
   });
 
+  it('tracks a live protocol tool outside the authoritative transcript until it ends', () => {
+    const started = reduceSession(
+      initialSessionState,
+      { type: 'tool_execution_start', toolCallId: 'live-1', toolName: 'ask_user_question', args: { questions: [] } },
+      { transcriptFromProtocol: true },
+    );
+
+    expect(started.entries).toEqual([]);
+    expect(started.activeTools).toMatchObject([
+      { toolCallId: 'live-1', name: 'ask_user_question', args: { questions: [] }, running: true },
+    ]);
+
+    const ended = reduceSession(
+      started,
+      { type: 'tool_execution_end', toolCallId: 'live-1', result: { content: [] } },
+      { transcriptFromProtocol: true },
+    );
+    expect(ended.activeTools).toEqual([]);
+  });
+
   it('closes the open answer when a tool starts, so output is not appended to it', () => {
     const state = fold([
       { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'calling a tool' } },
@@ -385,6 +405,17 @@ describe('reduceSession', () => {
     const state = reduceSession(initialSessionState, { type: 'extension_ui_request', id: 'r2', method: 'input' });
     expect(state.dialog?.title).toBe('The agent needs an answer');
     expect(state.dialog?.options).toEqual([]);
+  });
+
+  it('keeps the latest extension editor replacement for the composer', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'extension_ui_request',
+      id: 'voice-result-1',
+      method: 'set_editor_text',
+      text: 'transcribed in the browser',
+    });
+
+    expect(state.editorTextRequest).toEqual({ id: 'voice-result-1', text: 'transcribed in the browser' });
   });
 
   it('keeps the minor-mode catalog the runtime journals and ignores other custom entries', () => {

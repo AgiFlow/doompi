@@ -192,3 +192,39 @@ declare module '@deepseek-ai/cordis' {
 
 /** Reads the merged Doom configuration. Supplied by the adapter layer. */
 export type DoomConfigLoader = (repoRoot: string, homeDirectory?: string) => DoomConfig;
+
+/** Which file the effective value for a key came from, or that no file set it. */
+export type ConfigValueOrigin = 'global' | 'repository' | 'default';
+
+/** One of the two config files, as a settings surface needs to see it. */
+export interface DoomConfigLayer {
+  filePath: string;
+  exists: boolean;
+  /**
+   * sha256 of the file's bytes, empty when absent. The token a write proves
+   * itself with: the writer is torn-read safe but not lost-update safe, so a
+   * caller that read a file and then writes it should say which bytes it read.
+   */
+  hash: string;
+  /** Dotted key paths this file actually sets, leaves only. */
+  keys: readonly string[];
+}
+
+/**
+ * The two config files kept apart, alongside the merge every consumer sees.
+ *
+ * `loadDoomConfig` flattens global and repository into one object, which is all
+ * the runtime needs and not enough for a settings surface: a value that is set
+ * in both files looks identical to one set in neither, so an editor cannot say
+ * where a value came from, and offers a write that the merge may then ignore.
+ */
+export interface DoomConfigLayers {
+  /** Named with the suffix because a bare `global` reads as the process global. */
+  globalFile: DoomConfigLayer;
+  repositoryFile: DoomConfigLayer;
+  effective: DoomConfig;
+  /** Where the effective value at this key path came from. */
+  originOf(keyPath: readonly string[]): ConfigValueOrigin;
+  /** The effective value at this key path, or undefined when nothing set it. */
+  valueAt(keyPath: readonly string[]): unknown;
+}

@@ -54,7 +54,7 @@ export function AppearanceSettings() {
       <RadioGroup
         aria-label="theme"
         data-testid="theme-list"
-        className="grid grid-cols-3 gap-3"
+        className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3"
         value={current}
         onValueChange={selectTheme}
       >

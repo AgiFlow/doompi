@@ -1,0 +1,76 @@
+{
+  "name": "@agimon-ai/doompi-web-security",
+  "version": "0.0.1-alpha.1",
+  "description": "Shared security primitives for the DoomPi web cockpit: the sealed-channel envelope, its node and browser halves, and the signed bundle manifest.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "cryptography",
+    "developer-tools",
+    "doompi",
+    "pi-package",
+    "security",
+    "typescript",
+    "web"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-web-security"
+  },
+  "files": [
+    "dist",
+    "llms.txt",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.mts",
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.cjs"
+    },
+    "./node": {
+      "types": "./dist/node.d.mts",
+      "import": "./dist/node.mjs",
+      "require": "./dist/node.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

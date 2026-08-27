@@ -5,6 +5,7 @@ import {
   type LoginFlowSnapshot,
   type ProviderAuthSummary,
 } from '../../types/auth.ts';
+import { fetchWithStepUp } from './stepUp.ts';
 
 export type ProvidersResult = { providers: ProviderAuthSummary[] } | { error: string };
 export type LoginFlowResult = { flow: LoginFlowSnapshot } | { error: string };
@@ -29,7 +30,9 @@ async function request<T>(
 ): Promise<T | { error: string }> {
   let response: Response;
   try {
-    response = await fetch(input, init);
+    // Writing or clearing a provider credential redirects the machine's model
+    // traffic, so a remote caller answers a passkey challenge for it first.
+    response = await fetchWithStepUp(input, init);
   } catch {
     return { error: UNREACHABLE };
   }

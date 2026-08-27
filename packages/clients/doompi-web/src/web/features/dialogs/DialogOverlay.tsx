@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { focusPrompt } from '../../lib/promptFocus.ts';
 import { menuStore } from '../../stores/menuStore.ts';
 import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore.ts';
+import { useToolPrompt } from '../../stores/useToolPrompt.ts';
 
 /**
  * Renders the extension UI sub-protocol as a modal.
@@ -26,12 +27,15 @@ import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession 
  * The agent blocks on this answer, so the surface is modal and always offers a
  * way out: an unanswered request would strand the run. A select the user asked
  * for from the selection bar is that bar's popover instead (the claim is
- * settled when the frame arrives, see stores/menuStore.ts), so this overlay
- * leaves it alone.
+ * settled when the frame arrives, see stores/menuStore.ts), and a request a
+ * running tool owns is that tool's composer prompt, so this overlay leaves
+ * both alone. A prompt that gives its request back is claimed by nobody, and
+ * the modal opens after all rather than leaving the run with no answer.
  */
 export function DialogOverlay() {
   const dialog = useActiveSession((state) => state.dialog);
   const claimed = useStore(menuStore, (state) => state.claimed);
+  const prompt = useToolPrompt();
   const [value, setValue] = useState('');
   const [cursor, setCursor] = useState(0);
 
@@ -42,6 +46,7 @@ export function DialogOverlay() {
 
   if (!dialog) return null;
   if (dialog.method === 'select' && claimed !== null && claimed.dialogId === dialog.id) return null;
+  if (prompt !== null && prompt.dialog.id === dialog.id) return null;
 
   return (
     <Dialog
@@ -129,12 +134,15 @@ export function DialogOverlay() {
           ) : null}
         </DialogBody>
 
-        <DialogFooter variant="bar" className="h-[34px]">
-          <span data-testid="dialog-hints" className="flex items-center gap-1.5 text-[10px] text-doom-faint">
+        <DialogFooter variant="bar" className="h-auto min-h-[34px]">
+          <span
+            data-testid="dialog-hints"
+            className="w-full text-[10px] text-doom-faint sm:flex sm:w-auto sm:items-center sm:gap-1.5"
+          >
             {dialog.method === 'select' ? optionListHint(dialog.options.length) : 'enter confirm'} · <Kbd>esc</Kbd>{' '}
             cancels and tells the agent
           </span>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" data-testid="dialog-cancel" onClick={() => cancelDialog(dialog.id)}>
               cancel
             </Button>

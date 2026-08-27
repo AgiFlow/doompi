@@ -11,11 +11,17 @@ import {
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
 } from '../../types/hub.ts';
+import {
+  REMOTE_PAIRING_REQUEST_TYPE,
+  REMOTE_STATE_TYPE,
+  type RemoteAccessStateView,
+} from '../../types/remoteAccess.ts';
 import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
 import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
+import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
   applyHistoryPage,
   applySessionFrame,
@@ -77,6 +83,12 @@ export function startSessionRuntime(): () => void {
     if (target !== null) sendHubFrame(subscribeFrame(target));
   };
 
+  /** Both remote frames carry the same shape; only who receives them differs. */
+  const applyRemoteFrame = (frame: Record<string, unknown>): void => {
+    const state = frame.state;
+    if (typeof state === 'object' && state !== null) applyRemoteState(state as RemoteAccessStateView);
+  };
+
   const socket = createSessionSocket(sessionSocketUrl(window.location), {
     onFrame(frame) {
       switch (frame.type) {
@@ -84,6 +96,14 @@ export function startSessionRuntime(): () => void {
         // bundle notices its source moved, so the page picks the new one up.
         case HUB_RESYNCED_TYPE:
           window.location.reload();
+          return;
+
+        // Remote-access state is pushed rather than polled. The pairing
+        // frame reaches local pages only, so a paired phone never sees the
+        // approval queue and cannot approve the next device.
+        case REMOTE_STATE_TYPE:
+        case REMOTE_PAIRING_REQUEST_TYPE:
+          applyRemoteFrame(frame);
           return;
 
         case SESSIONS_SNAPSHOT_TYPE:

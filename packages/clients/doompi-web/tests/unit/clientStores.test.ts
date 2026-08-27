@@ -46,6 +46,7 @@ import {
   abortRun,
   answerDialogConfirm,
   answerDialogValue,
+  applyProtocolTranscript,
   applySessionFrame,
   cancelDialog,
   dropSessionStore,
@@ -53,6 +54,7 @@ import {
   queueFollowUp,
   refreshSessionFacts,
   renameSession,
+  releaseProtocolTranscript,
   resetSessionStore,
   resetSessionStores,
   runCommand,
@@ -67,11 +69,18 @@ import {
   applySessionsSnapshot,
   applySessionUpsert,
   markSocketClosed,
+  noSessions,
   resetSessions,
   sessionsStore,
   setActiveSession,
   waitForSession,
 } from '../../src/web/stores/sessionsStore.ts';
+import {
+  closeNewSession,
+  newSessionStore,
+  openNewSession,
+  resetNewSessionStore,
+} from '../../src/web/stores/newSessionStore.ts';
 
 type Frame = Record<string, unknown>;
 
@@ -99,6 +108,7 @@ beforeEach(() => {
   sent = [];
   resetSessionStores();
   resetSessions();
+  resetNewSessionStore();
   bindTransport((frame) => sent.push(frame as Frame));
 });
 
@@ -107,6 +117,10 @@ describe('command builders', () => {
     expect(promptCommand('a')).toEqual({ type: 'prompt', message: 'a' });
     expect(steerCommand('b')).toEqual({ type: 'steer', message: 'b' });
     expect(followUpCommand('c')).toEqual({ type: 'follow_up', message: 'c' });
+    const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
+    expect(promptCommand('look', images)).toEqual({ type: 'prompt', message: 'look', images });
+    expect(steerCommand('look', images)).toEqual({ type: 'steer', message: 'look', images });
+    expect(followUpCommand('look', images)).toEqual({ type: 'follow_up', message: 'look', images });
     expect(abortCommand()).toEqual({ type: 'abort' });
     expect(getStateCommand()).toEqual({ type: 'get_state' });
     expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
@@ -121,6 +135,70 @@ describe('command builders', () => {
   });
 });
 
+describe('transcript ownership', () => {
+  const applyLegacyAssistant = (id: string, text: string) => {
+    applySessionFrame('s1', { type: 'message_start', message: { id, role: 'assistant', content: [] } });
+    applySessionFrame('s1', {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: text },
+    });
+    applySessionFrame('s1', {
+      type: 'message_end',
+      message: { id, role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' },
+    });
+  };
+
+  it('uses legacy frames until the protocol publishes a transcript', () => {
+    applyLegacyAssistant('legacy-1', 'live fallback');
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'assistant', text: 'live fallback' }),
+    ]);
+  });
+
+  it('keeps an optimistic prompt until the protocol publishes it', () => {
+    setActiveSession('s1');
+    submitMessage('stay visible');
+
+    applyProtocolTranscript('s1', [], false);
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'user', text: 'stay visible' }),
+    ]);
+
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'stay visible' }], false);
+    expect(sessionStoreFor('s1').state.entries).toEqual([{ kind: 'user', id: 'protocol-user', text: 'stay visible' }]);
+  });
+  it('preserves a protocol transcript through a legacy backlog reset', () => {
+    applyProtocolTranscript(
+      's1',
+      [{ kind: 'assistant', id: 'protocol-1', text: 'restored history', thinking: '', streaming: false }],
+      false,
+    );
+
+    resetSessionStore('s1');
+    applyLegacyAssistant('legacy-ignored', 'duplicate');
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'assistant', id: 'protocol-1', text: 'restored history', thinking: '', streaming: false },
+    ]);
+  });
+
+  it('returns realtime ownership to legacy frames after protocol failure', () => {
+    applyProtocolTranscript(
+      's1',
+      [{ kind: 'assistant', id: 'protocol-1', text: 'history', thinking: '', streaming: false }],
+      false,
+    );
+
+    releaseProtocolTranscript('s1');
+    applyLegacyAssistant('legacy-2', 'live again');
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'assistant', text: 'history' }),
+      expect.objectContaining({ kind: 'assistant', text: 'live again' }),
+    ]);
+  });
+});
 describe('transport', () => {
   it('envelopes session commands with the session id', () => {
     sendFrame('s1', promptCommand('hello'));
@@ -270,6 +348,47 @@ describe('promptFocus', () => {
   });
 });
 
+describe('noSessions', () => {
+  it('stays false before the hub has answered, whatever the order looks like', () => {
+    // An empty order before hydration only means no snapshot has arrived, and
+    // reading it as "no sessions" would flash onboarding at someone with ten.
+    expect(sessionsStore.state.hydrated).toBe(false);
+    expect(noSessions(sessionsStore.state)).toBe(false);
+  });
+
+  it('is true once the hub has answered with nothing', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [] });
+    expect(noSessions(sessionsStore.state)).toBe(true);
+  });
+
+  it('is false while any session exists, and true again once the last one goes', () => {
+    applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a')] });
+    expect(noSessions(sessionsStore.state)).toBe(false);
+
+    applySessionRemoved({ type: 'session_removed', sessionId: 'a' });
+    expect(noSessions(sessionsStore.state)).toBe(true);
+  });
+});
+
+describe('newSessionStore', () => {
+  it('opens and closes, so every entry point drives one dialog', () => {
+    expect(newSessionStore.state.open).toBe(false);
+    openNewSession();
+    expect(newSessionStore.state.open).toBe(true);
+
+    // Opening an already-open dialog publishes nothing to re-render.
+    const held = newSessionStore.state;
+    openNewSession();
+    expect(newSessionStore.state).toBe(held);
+
+    closeNewSession();
+    expect(newSessionStore.state.open).toBe(false);
+    const closed = newSessionStore.state;
+    closeNewSession();
+    expect(newSessionStore.state).toBe(closed);
+  });
+});
+
 describe('paletteStore', () => {
   it('opens, toggles, and always resets the key path', () => {
     setPalettePath('p');
@@ -343,6 +462,19 @@ describe('session actions', () => {
     expect(sessionStoreFor('s1').state.entries).toHaveLength(2);
   });
 
+  it('send image payloads for prompts, steering, and follow-ups', () => {
+    setActiveSession('s1');
+    const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
+    submitMessage('first', images);
+    applySessionFrame('s1', { type: 'agent_start' });
+    submitMessage('second', images);
+    queueFollowUp('later', images);
+    expect(sent.map((item) => item.frame)).toEqual([
+      { type: 'prompt', message: 'first', images },
+      { type: 'steer', message: 'second', images },
+      { type: 'follow_up', message: 'later', images },
+    ]);
+  });
   it('take an explicit session id past the focus', () => {
     setActiveSession('s1');
     abortRun('s2');

@@ -1,4 +1,5 @@
 export * from '../adapters/audio/infrastructure';
+export * from '../adapters/audio/clientMedia';
 export * from '../adapters/pi/voice';
 export * from '../services/commandCorrection';
 export * from '../services/fallbackNarration';
@@ -9,3 +10,4 @@ export * from '../services/semanticEcho';
 export * from '../services/utterance';
 export * from '../services/vad';
 export * from '../types';
+export * from '../types/clientMedia';

@@ -69,6 +69,17 @@ describe('subagents plugin channel', () => {
     subagents.reset();
   });
 
+  it('sends steering guidance through the dedicated session slash command', async () => {
+    const { requestRunSteer } = await import('../../web/subagentsStore.ts');
+    const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
+
+    requestRunSteer((sessionId, frame) => sent.push({ sessionId, frame }), 's1', 'r1', 'check the edge case');
+
+    expect(sent).toEqual([
+      { sessionId: 's1', frame: { type: 'prompt', message: '/subagents-steer r1 check the edge case' } },
+    ]);
+  });
+
   it('remembers a launch until a new run of that agent arrives, then flags it to open once', async () => {
     const { clearAutoOpen, requestLaunch, subagentRunsChannel, subagents } =
       await import('../../web/subagentsStore.ts');

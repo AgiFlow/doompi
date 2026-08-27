@@ -2,6 +2,7 @@ import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { runRpcQuestionnaire } from '../../src/adapters/pi/rpcQuestionnaireAdapter.js';
 import type { QuestionParams } from '../../src/schemas/questionnaire.js';
+import { ANSWER_ENVELOPE_PREFIX, encodeAnswerEnvelope } from '../../src/types/askUserWire.js';
 
 function context(
   select: (...args: unknown[]) => Promise<string | undefined>,
@@ -181,5 +182,81 @@ describe('RPC questionnaire adapter', () => {
       cancelled: true,
     });
     expect(select).not.toHaveBeenCalled();
+  });
+
+  describe('a client that answers everything at once', () => {
+    const both: QuestionParams = {
+      questions: [single.questions[0]!, { ...multi.questions[0]!, question: 'Second?' }],
+    };
+
+    it('takes the whole set from one response, without asking again', async () => {
+      const select = vi.fn(async () =>
+        encodeAnswerEnvelope([
+          { questionIndex: 1, question: 'Second?', kind: 'multi', answer: null, selected: ['Beta'] },
+          { questionIndex: 0, question: 'Choose one?', kind: 'option', answer: 'Alpha' },
+        ]),
+      );
+      const report = vi.fn();
+
+      const result = await runRpcQuestionnaire(context(select), both, undefined, report);
+
+      expect(select).toHaveBeenCalledOnce();
+      expect(result).toEqual({
+        cancelled: false,
+        answers: [
+          { questionIndex: 0, question: 'Choose one?', kind: 'option', answer: 'Alpha', preview: 'alpha preview' },
+          { questionIndex: 1, question: 'Second?', kind: 'multi', answer: null, selected: ['Beta'] },
+        ],
+      });
+      expect(report).toHaveBeenCalledExactlyOnceWith(result);
+    });
+
+    it('takes one on a multi-select question too, rather than toggling round the loop', async () => {
+      const select = vi.fn(async () =>
+        encodeAnswerEnvelope([
+          { questionIndex: 0, question: 'Choose several?', kind: 'multi', answer: null, selected: ['Alpha', 'Beta'] },
+        ]),
+      );
+
+      const result = await runRpcQuestionnaire(context(select), multi);
+
+      expect(select).toHaveBeenCalledOnce();
+      expect(result.answers[0]).toMatchObject({ kind: 'multi', selected: ['Alpha', 'Beta'] });
+    });
+
+    it('refuses an envelope that does not match the questions asked', async () => {
+      const select = vi.fn(async () =>
+        encodeAnswerEnvelope([{ questionIndex: 0, question: 'Choose one?', kind: 'option', answer: 'Omega' }]),
+      );
+
+      await expect(runRpcQuestionnaire(context(select), single)).resolves.toEqual({
+        answers: [],
+        cancelled: true,
+        error: 'malformed_answers',
+      });
+    });
+
+    it('refuses unreadable JSON behind the prefix rather than passing it on as an answer', async () => {
+      const select = vi.fn(async () => `${ANSWER_ENVELOPE_PREFIX}{not json`);
+
+      await expect(runRpcQuestionnaire(context(select), single)).resolves.toEqual({
+        answers: [],
+        cancelled: true,
+        error: 'malformed_answers',
+      });
+    });
+
+    it('leaves a plain label alone, so a client that knows nothing of it is unchanged', async () => {
+      const select = vi.fn(async () => 'Alpha');
+
+      const result = await runRpcQuestionnaire(context(select), single);
+
+      expect(result).toEqual({
+        cancelled: false,
+        answers: [
+          { questionIndex: 0, question: 'Choose one?', kind: 'option', answer: 'Alpha', preview: 'alpha preview' },
+        ],
+      });
+    });
   });
 });

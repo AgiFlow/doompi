@@ -145,7 +145,11 @@ async function validateMajorMode() {
   if (config.defaultMajorMode !== 'copilot') fail('defaultMajorMode must be "copilot"');
   assertExactNames(Object.keys(config.majorMode ?? {}), ['copilot', 'examples', 'minimal'], 'Major mode names');
   assertArrayEqual(config.majorMode?.minimal?.layers, ['team', 'task'], 'majorMode.minimal.layers');
-  assertArrayEqual(config.majorMode?.copilot?.layers, ['team', 'ask-user', 'task'], 'majorMode.copilot.layers');
+  assertArrayEqual(
+    config.majorMode?.copilot?.layers,
+    ['team', 'ask-user', 'task', 'sandbox'],
+    'majorMode.copilot.layers',
+  );
   assertArrayEqual(config.majorMode?.examples?.layers, [], 'majorMode.examples.layers');
   assertArrayEqual(packageSpecifiers(config.default?.packages), defaultPackagePaths, 'default.packages');
   assertArrayEqual(
@@ -162,6 +166,11 @@ async function validateMajorMode() {
     packageSpecifiers(config.layers?.task?.packages),
     ['./layers/task/doompi-task'],
     'layers.task.packages',
+  );
+  assertArrayEqual(
+    packageSpecifiers(config.layers?.sandbox?.packages),
+    ['./layers/sandbox/doompi-sandbox'],
+    'layers.sandbox.packages',
   );
 }
 

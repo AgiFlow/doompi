@@ -1,8 +1,9 @@
 import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../src/types/webSubagents.ts';
 
-/** The runtime's slash verb that files a stop request for one run. */
+/** Session slash verbs used by the browser controls. */
 const STOP_COMMAND = '/subagents-stop';
+const STEER_COMMAND = '/subagents-steer';
 
 const TERMINAL_STATES: ReadonlySet<SubagentRun['state']> = new Set(['done', 'failed', 'stopped']);
 
@@ -63,6 +64,11 @@ export function requestRunStop(send: SessionFrameSender, sessionId: string, runI
     ...current,
     stopRequested: [...without(current.stopRequested, runId), runId],
   }));
+}
+
+/** Sends guidance to a running agent through the runtime's acknowledged steering command. */
+export function requestRunSteer(send: SessionFrameSender, sessionId: string, runId: string, message: string): void {
+  send(sessionId, { type: 'prompt', message: `${STEER_COMMAND} ${runId} ${message}` });
 }
 
 /** Hides a finished run from this page; nothing is deleted. */

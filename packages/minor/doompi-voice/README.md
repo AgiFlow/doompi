@@ -1,7 +1,7 @@
 # @agimon-ai/doompi-voice
 
-Speech capture, local transcription engines, playback, and autonomous Voice mode for DoomPi on
-macOS.
+Client speech capture, host-side transcription engines, playback, and autonomous Voice mode for
+DoomPi.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
@@ -14,11 +14,11 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 
 - Node.js 22.19.0 or newer
 - Pi 0.84.3
-- macOS recording and `say` playback support
-- FFmpeg for audio capture
+- A browser with microphone capture and speech synthesis when using `doompi-web`
+- For standalone terminal use on macOS, FFmpeg capture and `say` playback
 - One supported local transcription engine: `whisper-cli`, `whisper`, or `mlx_whisper` (Apple
   silicon only)
-- A microphone permitted by macOS privacy settings
+- Microphone permission on the client device
 
 ## Install
 
@@ -69,6 +69,13 @@ transcription is required. Use the `whisper-cpp` engine for `whisper-cli`, `open
 `whisper`, or `mlx-whisper` for `mlx_whisper`. `utteranceIdleMs` accepts 1,500 to 10,000 ms and
 defaults to 3,000.
 
+When the agent is launched by `doompi-server`, capture and narration use the connected browser.
+The browser sends mono 16 kHz PCM16 through the authenticated session media API, while VAD,
+spooling, and Whisper stay on the agent host. Standalone terminal launches retain the macOS
+FFmpeg and `say` adapters. The client media contract is browser-neutral so a native client can
+provide its own microphone and playback adapters later through
+`@agimon-ai/doompi-voice/client-media`.
+
 ## Commands and tools
 
 - `SPC v v` records and transcribes once; it does not enable autonomous Voice tools.
@@ -99,13 +106,15 @@ These optional model calls consume provider quota.
 
 ## Data flow and recovery
 
-Capture, PCM validation, activity detection, spooling, WAV creation, normalization, and configured
-local Whisper execution run in a private supervised worker. Private spool directories use mode
-`0700` and files use `0600`. Unacknowledged turns can be rediscovered after a worker restart.
+The selected client captures audio. PCM validation, activity detection, spooling, WAV creation,
+normalization, and configured local Whisper execution run on the host in a private supervised
+worker. Private spool directories use mode `0700` and files use `0600`. Unacknowledged turns can be
+rediscovered after a worker restart.
 
 This is not a blanket “nothing leaves the machine” guarantee:
 
-- PCM/audio remains in local worker storage and playback paths.
+- Client PCM crosses the authenticated cockpit transport, is queued transiently in memory, and is
+  persisted only in the host worker's private spool.
 - Transcript candidates and bounded state strings cross the worker/process boundary.
 - Pi receives transcript text as user input.
 - Command correction and long-final fallback text can be sent to the configured model provider.

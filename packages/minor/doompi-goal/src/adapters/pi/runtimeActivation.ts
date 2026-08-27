@@ -52,8 +52,6 @@ function conditionForStatus(status: unknown): MinorModeCondition {
     case 'usage_limited':
     case 'budget_limited':
       return 'limited';
-    case 'queued':
-      return 'queued';
     default:
       return 'ready';
   }

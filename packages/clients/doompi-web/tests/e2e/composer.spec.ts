@@ -148,3 +148,37 @@ test('enter still completes a command the draft has only started', async ({ page
   await expect(input).toHaveValue('/profile ');
   await expect(page.getByTestId('composer-completion')).toBeHidden();
 });
+
+test('attaches image payloads and inlines removable text files', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  const picker = page.getByTestId('composer-file-input');
+
+  await picker.setInputFiles({ name: 'huge.txt', mimeType: 'text/plain', buffer: Buffer.alloc(100 * 1024 + 1) });
+  await expect(page.getByTestId('composer-attachment-error')).toContainText('exceeds the 100 KB text file limit');
+  await picker.setInputFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from('image bytes') });
+  await expect(page.getByTestId('composer-attachments')).toContainText('screen.png');
+
+  await picker.setInputFiles({
+    name: 'notes.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('check the retry path'),
+  });
+  await expect(page.getByTestId('composer-attachments')).toContainText('notes.txt');
+  await page.getByRole('button', { name: 'remove notes.txt' }).click();
+  await expect(page.getByTestId('composer-attachments')).not.toContainText('notes.txt');
+
+  await picker.setInputFiles({
+    name: 'details.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from('expected behavior'),
+  });
+  await page.getByTestId('composer-input').fill('Review these');
+  await page.getByTestId('composer-send').click();
+
+  const prompt = await cockpit.session.waitForCommand('prompt');
+  expect(prompt.message).toBe('Review these\n\nAttached file "details.md":\n\nexpected behavior');
+  expect(prompt.images).toEqual([
+    { type: 'image', data: Buffer.from('image bytes').toString('base64'), mimeType: 'image/png' },
+  ]);
+  await expect(page.getByTestId('composer-attachments')).toBeHidden();
+});

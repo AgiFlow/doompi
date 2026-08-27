@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProtocolTransport, protocolSocketUrl } from '../../src/web/lib/piTransport.ts';
+import { sealedProtocolSession } from '../../src/web/lib/sealedSession.ts';
 
 type Listener = (event: unknown) => void;
 
@@ -48,6 +49,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -86,7 +88,7 @@ describe('protocol transport', () => {
 
     socket.fire('message', { data: new Uint8Array([1, 2, 3]).buffer });
 
-    expect(sink.onData).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+    await vi.waitFor(() => expect(sink.onData).toHaveBeenCalledWith(new Uint8Array([1, 2, 3])));
   });
 
   it('drops a text frame rather than handing on bytes the codec never produced', async () => {
@@ -116,6 +118,16 @@ describe('protocol transport', () => {
     expect(new Uint8Array(socket.sent[0] as ArrayBuffer)).toEqual(new Uint8Array([9, 8]));
   });
 
+  it('closes without sending when an active channel cannot seal', async () => {
+    vi.spyOn(sealedProtocolSession, 'sealBinary').mockRejectedValueOnce(new Error('channel exhausted'));
+    const { transport, socket, sink } = await open();
+
+    await expect(transport.send(new Uint8Array([9, 8]))).rejects.toThrow('channel exhausted');
+
+    expect(socket.sent).toEqual([]);
+    expect(socket.closed).toBe(true);
+    expect(sink.onError).toHaveBeenCalledOnce();
+  });
   it('closes the socket when the client lets go', async () => {
     const { transport, socket } = await open();
 

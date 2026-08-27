@@ -8,6 +8,7 @@ import type {
   ProviderAuthMethod,
   ProviderAuthSummary,
 } from '../types/auth.ts';
+import type { SettingsModel } from '../types/settings.ts';
 
 /** Matches the timeout Pi's own /logout gives the credential store. */
 const LOGOUT_TIMEOUT_MS = 15_000;
@@ -30,6 +31,12 @@ export interface ProviderAuth {
   /** Cancels the flow and returns how it stands, or undefined for an unknown flow. */
   cancelLogin(flowId: string): LoginFlowSnapshot | undefined;
   logout(providerId: string): Promise<LogoutOutcome>;
+  /**
+   * Every model the machine can actually use, grouped by provider. Read from
+   * the same runtime the providers page uses, so the settings model pickers
+   * work with no session running.
+   */
+  listModels(): Promise<readonly SettingsModel[]>;
   /** Abandons every running flow; the hub is shutting down. */
   close(): void;
 }
@@ -171,6 +178,19 @@ export function createProviderAuth(options: ProviderAuthOptions = {}): ProviderA
       }
       notice(`signed out of ${provider.name}`);
       return { ok: true };
+    },
+
+    async listModels() {
+      const current = await runtime();
+      const providers = new Map(current.getProviders().map((provider) => [provider.id, provider.name]));
+      return current
+        .getAvailableSnapshot()
+        .filter((model) => current.hasConfiguredAuth(model.provider))
+        .map((model) => ({
+          value: `${model.provider}/${model.id}`,
+          label: model.id,
+          group: providers.get(model.provider) ?? model.provider,
+        }));
     },
 
     close() {

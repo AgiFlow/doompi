@@ -40,7 +40,6 @@ describe('Goal minor-mode state', () => {
     { status: 'blocked', condition: 'blocked', detail: 'blocked', color: 'warning' },
     { status: 'usage_limited', condition: 'limited', detail: 'usage limited', color: 'warning' },
     { status: 'budget_limited', condition: 'limited', detail: 'budget limited', color: 'warning' },
-    { status: 'queued', condition: 'queued', detail: 'queued', color: 'warning' },
     { status: 'future-status', condition: 'ready', detail: 'future-status', color: 'warning' },
   ] as const)('maps $status to an active mode', ({ status, condition, detail, color }) => {
     expect(goalMinorModeState(status, 'goal-stable-1')).toEqual({

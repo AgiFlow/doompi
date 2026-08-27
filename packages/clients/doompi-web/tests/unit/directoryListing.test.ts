@@ -118,3 +118,64 @@ describe('suggestDirectories', () => {
     ).toEqual([]);
   });
 });
+
+describe('pinning suggestions to one subtree', () => {
+  /**
+   * What a paired device is allowed to see.
+   *
+   * Answering from the whole home directory hands it a map of the machine, so
+   * while a tunnel is up the picker is pinned to the directory the cockpit was
+   * started from.
+   */
+  it('lists children of a directory inside the root', async () => {
+    expect(await listDirectories(`${workDir}/alph`, 12, workDir)).toEqual([path.join(workDir, 'alpha')]);
+  });
+
+  it('lists nothing for a parent outside the root, rather than filtering its children', async () => {
+    // Filtering after listing would still confirm what is in there through
+    // timing and through an empty answer meaning something different.
+    expect(await listDirectories('/', 12, workDir)).toEqual([]);
+  });
+
+  it('refuses a parent that only looks like the root', async () => {
+    expect(await listDirectories(`${workDir}-other/`, 12, workDir)).toEqual([]);
+  });
+
+  it('still lists the root itself', async () => {
+    expect(await listDirectories(`${workDir}/`, 12, workDir)).not.toEqual([]);
+  });
+
+  it('searches the root instead of home when one is set', async () => {
+    const roots: string[] = [];
+    await suggestDirectories('alpha', {
+      homeDirectory: '/somewhere/else',
+      root: workDir,
+      search: (root) => {
+        roots.push(root);
+        return Promise.resolve([]);
+      },
+    });
+    expect(roots).toEqual([workDir]);
+  });
+
+  it('drops a search result from outside the root, whatever the search returned', async () => {
+    const suggestions = await suggestDirectories('alpha', {
+      homeDirectory: workDir,
+      root: path.join(workDir, 'beta-app'),
+      search: () => Promise.resolve([path.join(workDir, 'alpha'), path.join(workDir, 'beta-app', 'alpha')]),
+    });
+    expect(suggestions).toEqual([path.join(workDir, 'beta-app', 'alpha')]);
+  });
+
+  it('searches home when no root is set, which is the local case', async () => {
+    const roots: string[] = [];
+    await suggestDirectories('alpha', {
+      homeDirectory: workDir,
+      search: (root) => {
+        roots.push(root);
+        return Promise.resolve([]);
+      },
+    });
+    expect(roots).toEqual([workDir]);
+  });
+});

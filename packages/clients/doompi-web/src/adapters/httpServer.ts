@@ -8,7 +8,8 @@ import { PiServer } from '@earendil-works/pi-server';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
   DOOM_API_ROUTE_PREFIX,
@@ -16,6 +17,7 @@ import {
   type DoomApiHandler,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
+import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
@@ -46,25 +48,120 @@ import { readGitStatus } from './gitStatus.ts';
 import { watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
+import { allowedOriginsFromEnv } from '../services/remoteGuardPolicy.ts';
+import { describeStranded, planSessionMigration } from '../services/sessionMigration.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
+import { registerSettingsRoutes } from './settingsRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
+import { createRemoteGuard } from './remoteGuard.ts';
+import { createRemoteAccess } from './remoteAccess.ts';
+import { createRemoteAccessStore } from './remoteAccessStore.ts';
+import { createBundleSigner } from '@agimon-ai/doompi-web-security/node';
+import { BUNDLE_MANIFEST_ROUTE } from '@agimon-ai/doompi-web-security';
+import { registerRemoteRoutes } from './remoteRoutes.ts';
+import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
+import {
+  DEVICE_COOKIE,
+  PROTOCOL_SOCKET_ROUTE,
+  REMOTE_CHANNEL_ROUTE,
+  REMOTE_HTTP_ROUTE,
+  SESSION_SOCKET_ROUTE,
+  type RemoteAccessSettings,
+} from '../types/remoteAccess.ts';
 import { suggestDirectories } from './directoryListing.ts';
 import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
 import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
-const SESSION_ROUTE = '/api/session';
 // Pi's protocol rides its own socket so the DoomPi channel keeps the
 // vocabulary the protocol has no shape for: dialogs, minor modes, selection.
-const PROTOCOL_ROUTE = '/api/pi';
 /** Directory suggestions per picker query; more than this means "type further". */
 const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
 /** Env override for the assets directory, set by launchers that know a synced bundle. */
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
+/** Comma-separated origins the operator allows past the guard, for dev setups this package cannot guess. */
+const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
 const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
+const SEALED_HTTP_VERSION = 1;
+const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const SEALED_HTTP_FORBIDDEN_HEADERS = new Set([
+  'connection',
+  'content-length',
+  'cookie',
+  'forwarded',
+  'host',
+  'origin',
+  'transfer-encoding',
+  'upgrade',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+]);
+
+interface SealedRequestBindings {
+  incoming?: { socket?: { localPort?: number } };
+  sealedDeviceId?: string;
+}
+
+interface SealedHttpRequest {
+  v: number;
+  method: string;
+  target: string;
+  headers: Array<[string, string]>;
+  body?: string;
+}
+
+function parseSealedHttpRequest(value: unknown): SealedHttpRequest | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const request = value as Partial<SealedHttpRequest>;
+  if (
+    request.v !== SEALED_HTTP_VERSION ||
+    typeof request.method !== 'string' ||
+    !SEALED_HTTP_METHODS.has(request.method) ||
+    typeof request.target !== 'string' ||
+    !request.target.startsWith('/') ||
+    request.target.startsWith('//') ||
+    request.target.includes('#') ||
+    !Array.isArray(request.headers) ||
+    !request.headers.every(
+      (header) => Array.isArray(header) && header.length === 2 && header.every((part) => typeof part === 'string'),
+    ) ||
+    (request.body !== undefined && typeof request.body !== 'string')
+  ) {
+    return undefined;
+  }
+  const target = new URL(request.target, 'http://sealed.doompi.invalid');
+  if (target.pathname === REMOTE_HTTP_ROUTE || target.pathname === REMOTE_CHANNEL_ROUTE) return undefined;
+  return request as SealedHttpRequest;
+}
+
+function sealedRequestHeaders(request: SealedHttpRequest, outer: Context): Headers | undefined {
+  try {
+    const headers = new Headers();
+    for (const [name, value] of request.headers) {
+      const normalized = name.toLowerCase();
+      if (SEALED_HTTP_FORBIDDEN_HEADERS.has(normalized) || normalized.startsWith('sec-')) continue;
+      headers.append(name, value);
+    }
+    for (const name of ['cookie', 'host', 'origin'] as const) {
+      const value = outer.req.header(name);
+      if (value !== undefined) headers.set(name, value);
+    }
+    return headers;
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeSealedHttpBody(value: string | undefined): Buffer | undefined {
+  if (value === undefined) return Buffer.alloc(0);
+  if (!/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/.test(value)) return undefined;
+  const body = Buffer.from(value, 'base64');
+  return body.toString('base64') === value ? body : undefined;
+}
 
 /**
  * Locates the built SPA next to the package that owns this module.
@@ -236,11 +333,172 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // opened the cockpit run sync first. The hub keeps the repository current.
   const syncGuard = createSyncGuard({ repoRoot: process.cwd(), onNotice: notice });
   await syncGuard.ensureSynced();
-  /** Every attached page, so a rebuild can tell them all to pick it up. */
-  const pages = new Set<(frame: object) => void>();
+  /**
+   * Every attached page, tagged with the listener it arrived on.
+   *
+   * The split matters: an approval prompt must reach the host and only the
+   * host, because a paired phone that could approve devices would be able to
+   * make its own access permanent.
+   */
+  const pages = new Set<{ post: (frame: object) => void; local: boolean }>();
+  const broadcast = (frame: object, localOnly: boolean): void => {
+    for (const page of pages) {
+      if (localOnly && !page.local) continue;
+      page.post(frame);
+    }
+  };
 
   const app = new Hono();
   const nodeWs = createNodeWebSocket({ app });
+  /** Known once the listener binds; until then the guard treats every request as remote. */
+  let loopbackPort: number | undefined;
+  const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
+  // Signed so a device can tell this bundle from one the edge substituted.
+  const bundleSigner = createBundleSigner(store.directory, notice);
+  reapStaleTunnel(store.directory, notice);
+  /**
+   * Stands the host's sessions down so the container can take them over.
+   *
+   * Done here rather than in the launcher because this is where the hub is, and
+   * the stop has to happen before the move: a recreated session opens the same
+   * working tree, and two agents in one tree would fight over it.
+   */
+  const handover =
+    options.onHandover === undefined
+      ? undefined
+      : (settings: RemoteAccessSettings): void => {
+          const plan = planSessionMigration(
+            hub.snapshot().map((session) => ({
+              id: session.id,
+              cwd: session.cwd,
+              ...(session.name === undefined ? {} : { name: session.name }),
+            })),
+            settings.sandbox.workspaces,
+          );
+          for (const line of describeStranded(plan.stranded)) notice(line);
+          for (const session of plan.migrate) {
+            const stopped = hub.stop(session.id);
+            if (!stopped.ok) notice(`could not stop ${session.name ?? session.id} before the move: ${stopped.error}`);
+          }
+          options.onHandover?.({ settings, sessions: plan.migrate });
+        };
+
+  const remote = createRemoteAccess({
+    store,
+    launchTunnel:
+      options.remoteAccess?.launchTunnel ??
+      createTunnelLauncher({
+        stateDir: store.directory,
+        ...(options.cloudflaredPath === undefined ? {} : { cloudflaredPath: options.cloudflaredPath }),
+        onNotice: notice,
+        onExit: (message) => {
+          notice(`remote access: ${message}`);
+          void remote.disable();
+        },
+      }),
+    // The tunnel gets its own loopback socket. That is the only reliable way to
+    // tell its traffic from the host's, since cloudflared connects from
+    // 127.0.0.1 and forges nothing a header could reveal.
+    bindListener: async () =>
+      await new Promise((resolve, reject) => {
+        const tunnelServer = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, (info) => {
+          nodeWs.injectWebSocket(tunnelServer);
+          resolve({
+            port: info.port,
+            close: async () =>
+              await new Promise<void>((done) => {
+                (tunnelServer as { closeAllConnections?: () => void }).closeAllConnections?.();
+                tunnelServer.close(() => done());
+              }),
+          });
+        });
+        tunnelServer.once('error', reject);
+      }),
+    onNotice: notice,
+    ...(handover === undefined ? {} : { requestHandover: handover }),
+    contained: insideSandbox(process.env),
+    broadcastLocal: (frame) => broadcast(frame, true),
+    broadcastAll: (frame) => broadcast(frame, false),
+    ...(options.remoteAccess?.now === undefined ? {} : { now: options.remoteAccess.now }),
+  });
+  // First route on the app, because Hono composes matching handlers in
+  // registration order: a guard added after a terminating handler never runs
+  // for that path. It also refuses socket upgrades, which is what closes the
+  // cross-site WebSocket hijack that loopback binding never covered.
+  const guard = createRemoteGuard({
+    loopbackPort: () => loopbackPort,
+    tunnelPolicy: () => remote.tunnelPolicy(),
+    authorize: (context) => remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')),
+    trustedDevice: (context) => (context.env as SealedRequestBindings | undefined)?.sealedDeviceId,
+    channelReady: (deviceId, scope) => remote.channelFor(deviceId, scope) !== undefined,
+    stepUp: {
+      required: (action) => remote.stepUpRequired(action),
+      verify: async (action, assertion) => await remote.passkeys().finishStepUp(action, assertion),
+    },
+    extraOrigins: allowedOriginsFromEnv(process.env[ALLOW_ORIGIN_ENV]),
+  });
+  app.use('*', guard.middleware);
+  registerRemoteRoutes(app, { remote, listenerOf: (context) => guard.listenerOf(context) });
+  app.post(REMOTE_HTTP_ROUTE, async (context) => {
+    const deviceId = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+    if (deviceId === undefined) return context.json({ error: 'This device is not paired.' }, 401);
+    const channel = remote.channelFor(deviceId, 'http');
+    if (channel === undefined) return context.json({ error: 'This device has no sealed HTTP channel.' }, 401);
+
+    let envelope: unknown;
+    try {
+      envelope = await context.req.json();
+    } catch {
+      return context.json({ error: 'The sealed request envelope was malformed.' }, 400);
+    }
+    const opened = channel.open(envelope);
+    if (!opened.ok) return context.json({ error: `The sealed request was refused: ${opened.failure}.` }, 400);
+
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(new TextDecoder().decode(opened.plaintext));
+    } catch {
+      return context.json({ error: 'The sealed HTTP request was malformed.' }, 400);
+    }
+    const request = parseSealedHttpRequest(decoded);
+    const headers = request === undefined ? undefined : sealedRequestHeaders(request, context);
+    const body = request === undefined ? undefined : decodeSealedHttpBody(request.body);
+    if (request === undefined || headers === undefined || body === undefined) {
+      return context.json({ error: 'The sealed HTTP request was invalid.' }, 400);
+    }
+
+    const target = new URL(request.target, new URL(context.req.url).origin);
+    const innerResponse = await app.request(
+      target,
+      {
+        method: request.method,
+        headers,
+        ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: Uint8Array.from(body).buffer }),
+      },
+      { ...(context.env as SealedRequestBindings), sealedDeviceId: deviceId },
+    );
+    const responseBody = Buffer.from(await innerResponse.arrayBuffer());
+    const sealed = channel.seal(
+      new TextEncoder().encode(
+        JSON.stringify({
+          v: SEALED_HTTP_VERSION,
+          status: innerResponse.status,
+          headers: Array.from(innerResponse.headers.entries()),
+          body: responseBody.toString('base64'),
+        }),
+      ),
+    );
+    if (!sealed.ok) return context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
+    return context.json(sealed.envelope);
+  });
+  // The asset list and its signature, so a page can verify what it was served.
+  // Behind the guard like everything else: a device that cannot reach the
+  // cockpit has no use for its manifest.
+  app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
+    const signed = bundleSigner.sign(assetsDir);
+    if (signed === undefined) return context.json({ error: 'No bundle to describe.' }, 404);
+    return context.json(signed);
+  });
   // Every running session already serves Pi's protocol; the hub composes them
   // into one server so a browser sees a single endpoint with many sessions.
   const protocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
@@ -257,6 +515,19 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
   registerAuthRoutes(app, providerAuth);
+  // Settings read and write the machine's Doom config. The page names a
+  // repository rather than a session, so the picker is fed from the working
+  // directories the hub already manages.
+  registerSettingsRoutes(app, {
+    repositories: () => {
+      const seen = new Map<string, { path: string; name: string; active: boolean }>();
+      for (const record of hub.records()) {
+        seen.set(record.cwd, { path: record.cwd, name: path.basename(record.cwd) || record.cwd, active: true });
+      }
+      return [...seen.values()].sort((left, right) => left.path.localeCompare(right.path));
+    },
+    models: () => providerAuth.listModels(),
+  });
   // Package APIs, mounted before the SPA fallback so their routes are reachable
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
@@ -290,6 +561,18 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
   });
 
+  // A running server reads the composition once: its extensions when the agent
+  // starts, its package API routes when the process does. So a rebuild reaches
+  // an existing session only by replacing the process, and the sync has to
+  // finish before the replacement starts or it reads the same stale artifacts.
+  app.post(`${SESSIONS_API_ROUTE}/:sessionId/restart`, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    await syncGuard.ensureSynced();
+    const outcome = await hub.restart(sessionId);
+    if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 202);
+    return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 404 : 502);
+  });
+
   app.delete(`${SESSIONS_API_ROUTE}/:sessionId`, (context) => {
     const sessionId = context.req.param('sessionId');
     const outcome = hub.stop(sessionId);
@@ -311,13 +594,34 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ files });
   });
 
+  /**
+   * The subtree directory suggestions may name, or undefined for all of them.
+   *
+   * A paired device can ask this route, and answering from the whole home
+   * directory hands it a map of the machine: every project, every client name,
+   * every checkout. So a request arriving on the tunnel is pinned to the
+   * directory the cockpit was started from, which is the one the person running
+   * it already chose.
+   *
+   * Only that request. The person at this keyboard already has a shell, so
+   * pinning them would cost the picker its usefulness and buy nothing. A
+   * contained cockpit needs none of it either, because its mounts are the
+   * boundary and nothing outside them is visible to it at all.
+   */
+  const browseRoot = (context: Context): string | undefined => {
+    if (guard.listenerOf(context) === 'local' || insideSandbox(process.env)) return undefined;
+    return options.browseRoot ?? process.cwd();
+  };
+
   // Directory suggestions for the new-session picker: the children of the
   // typed parent while a path is being drilled into, and a ranked search of
   // the home directory for anything else, so a name or a path remembered from
   // another machine still finds the folder.
   app.get(DIRECTORIES_API_ROUTE, async (context) => {
+    const root = browseRoot(context);
     const directories = await suggestDirectories(context.req.query('q') ?? '', {
       limit: DIRECTORY_SUGGESTION_LIMIT,
+      ...(root === undefined ? {} : { root }),
     });
     return context.json({ directories });
   });
@@ -336,15 +640,22 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
 
   app.get(
-    SESSION_ROUTE,
-    nodeWs.upgradeWebSocket(() => {
+    SESSION_SOCKET_ROUTE,
+    nodeWs.upgradeWebSocket((context) => {
+      const local = guard.listenerOf(context) === 'local';
+      // Resolved once at upgrade: the device is fixed for the socket's life, and
+      // looking it up per frame would bump last-seen on every keystroke.
+      const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+      const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'session');
       const subscriptions = new Set<string>();
       /** The threads this page follows; one socket may follow several of one session. */
       const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
       let disconnect: (() => void) | undefined;
       let disconnectThreads: (() => void) | undefined;
       /** Held on the socket, not inside onOpen, so close can withdraw it. */
-      let registered: ((frame: object) => void) | undefined;
+      let registered: { post: (frame: object) => void; local: boolean } | undefined;
+      /** Withdraws this socket from the remote registry, so switch-off can close it. */
+      let untrack: (() => void) | undefined;
       /** Lets go of every followed thread, or only a departed session's. */
       const releaseThreads = (sessionId?: string): void => {
         for (const [key, held] of threadSubscriptions) {
@@ -355,15 +666,35 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       };
       return {
         onOpen(_event, ws) {
+          if (!local && channel === undefined) {
+            ws.close(1008, 'sealed session channel required');
+            return;
+          }
           const post = (frame: SessionFrame | object): void => {
+            const text = JSON.stringify(frame);
+            let outgoing = text;
+            if (!local) {
+              if (channel === undefined) return;
+              const sealed = channel.seal(new TextEncoder().encode(text));
+              if (!sealed.ok) {
+                ws.close(1008, 'sealed session channel failed');
+                return;
+              }
+              outgoing = JSON.stringify(sealed.envelope);
+            }
             try {
-              ws.send(JSON.stringify(frame));
+              ws.send(outgoing);
             } catch {
               // The browser went away mid-write; onClose tears the socket down.
             }
           };
-          registered = post;
-          pages.add(post);
+          registered = { post, local };
+          pages.add(registered);
+          // A socket that has upgraded has left the HTTP server's connection
+          // tracking, so closing the tunnel listener does not reach it.
+          // Without this a paired phone keeps driving the agent after remote
+          // access is switched off.
+          if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
           post(hubHello(hub.channelTypes()));
           post({ type: SESSIONS_SNAPSHOT_TYPE, sessions: hub.snapshot() });
           disconnect = hub.onEvent((event) => {
@@ -387,7 +718,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           });
           notice('browser attached');
         },
-        onMessage(event, ws) {
+        onMessage(event) {
           if (typeof event.data !== 'string') return;
           let parsed: unknown;
           try {
@@ -395,18 +726,26 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           } catch {
             return;
           }
+          if (!local) {
+            if (channel === undefined) return;
+            const opened = channel.open(parsed);
+            // A frame that will not open was altered or replayed. Dropping it
+            // is the only safe answer; there is no plaintext to fall back to.
+            if (!opened.ok) return;
+            try {
+              parsed = JSON.parse(new TextDecoder().decode(opened.plaintext));
+            } catch {
+              return;
+            }
+          }
           if (!isRecord(parsed) || typeof parsed.sessionId !== 'string') return;
           const sessionId = parsed.sessionId;
           if (parsed.type === SUBSCRIBE_TYPE) {
             const backlog = hub.backlog(sessionId);
             if (!backlog) return; // Unknown session; the snapshot said otherwise.
             subscriptions.add(sessionId);
-            try {
-              ws.send(JSON.stringify(backlog));
-              for (const frame of hub.channelFrames(sessionId)) ws.send(JSON.stringify(frame));
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
+            registered?.post(backlog);
+            for (const frame of hub.channelFrames(sessionId)) registered?.post(frame);
             return;
           }
           if (parsed.type === UNSUBSCRIBE_TYPE) {
@@ -422,11 +761,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               ...(typeof parsed.limit === 'number' ? { limit: parsed.limit } : {}),
             });
             if (!page) return;
-            try {
-              ws.send(JSON.stringify(page));
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
+            registered?.post(page);
             return;
           }
           if (parsed.type === SUBSCRIBE_THREAD_TYPE || parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
@@ -439,11 +774,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             }
             if (threadSubscriptions.has(key) || hub.backlog(sessionId) === undefined) return;
             threadSubscriptions.set(key, { sessionId, threadId });
-            try {
-              ws.send(JSON.stringify(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId))));
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
+            registered?.post(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId)));
             return;
           }
           if (parsed.type === SESSION_COMMAND_TYPE && isRecord(parsed.frame)) {
@@ -455,6 +786,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         onClose() {
           if (registered) pages.delete(registered);
           registered = undefined;
+          untrack?.();
+          untrack = undefined;
           disconnect?.();
           disconnect = undefined;
           disconnectThreads?.();
@@ -468,28 +801,67 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   );
 
   app.get(
-    PROTOCOL_ROUTE,
-    nodeWs.upgradeWebSocket(() => {
+    PROTOCOL_SOCKET_ROUTE,
+    nodeWs.upgradeWebSocket((context) => {
+      const local = guard.listenerOf(context) === 'local';
+      const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+      const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'protocol');
       let handler: ReturnType<typeof protocolListener.accept>;
+      let untrack: (() => void) | undefined;
       return {
         onOpen(_event, ws) {
+          if (!local && channel === undefined) {
+            ws.close(1008, 'sealed protocol channel required');
+            return;
+          }
+          if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
           handler = protocolListener.accept({
-            send: (data) => ws.send(data as ArrayBuffer),
+            send: (data) => {
+              if (local) {
+                ws.send(data as ArrayBuffer);
+                return;
+              }
+              if (channel === undefined) return;
+              const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+              const sealed = channel.seal(bytes);
+              if (!sealed.ok) {
+                ws.close(1008, 'sealed protocol channel failed');
+                return;
+              }
+              ws.send(new TextEncoder().encode(JSON.stringify(sealed.envelope)));
+            },
             close: () => ws.close(),
             get readyState() {
               return ws.readyState;
             },
           });
         },
-        onMessage(event) {
+        async onMessage(event) {
           const data = event.data;
           if (typeof data === 'string') return;
-          if (data instanceof ArrayBuffer) handler?.onData(new Uint8Array(data));
-          else if (ArrayBuffer.isView(data)) {
-            handler?.onData(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+          const bytes =
+            data instanceof Blob
+              ? new Uint8Array(await data.arrayBuffer())
+              : data instanceof ArrayBuffer
+                ? new Uint8Array(data)
+                : new Uint8Array(data);
+          if (local) {
+            handler?.onData(bytes);
+            return;
           }
+          if (channel === undefined) return;
+          let envelope: unknown;
+          try {
+            envelope = JSON.parse(new TextDecoder().decode(bytes));
+          } catch {
+            return;
+          }
+          const opened = channel.open(envelope);
+          if (opened.ok) handler?.onData(opened.plaintext);
         },
         onClose() {
+          untrack?.();
+          untrack = undefined;
           handler?.onClose();
           handler = undefined;
         },
@@ -516,19 +888,25 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // A rebuilt bundle only changes on disk, so the page it replaced has to be
   // told; nothing about a loaded bundle notices that its source moved.
   syncGuard.watch(() => {
-    for (const post of pages) post({ type: HUB_RESYNCED_TYPE });
+    broadcast({ type: HUB_RESYNCED_TYPE }, false);
   });
 
   return new Promise<WebServer>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port: options.port, hostname: host }, (info) => {
+      // Before this the guard has no loopback port to compare against and
+      // treats everything as remote, which is the safe direction to be wrong in.
+      loopbackPort = info.port;
       nodeWs.injectWebSocket(server);
       const url = `http://${host}:${info.port}`;
       notice(`cockpit on ${url}`);
       resolve({
         url,
         port: info.port,
-        close: () =>
-          new Promise<void>((done) => {
+        close: async () => {
+          // Remote access first, so the tunnel is down and every paired socket
+          // is closed before the rest of the hub starts letting go.
+          await remote.close();
+          await new Promise<void>((done) => {
             threads.close();
             syncGuard.close();
             void protocolServer.close();
@@ -542,13 +920,15 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             nodeWs.wss.close();
             (server as { closeAllConnections?: () => void }).closeAllConnections?.();
             server.close(() => done());
-          }),
+          });
+        },
       });
     });
     server.once('error', (error) => {
       threads.close();
       hub.close();
       providerAuth.close();
+      void remote.close();
       for (const handler of pluginApis) handler.close();
       reject(error);
     });

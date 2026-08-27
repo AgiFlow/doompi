@@ -1,12 +1,10 @@
 import type { GoalToolVisibility } from '../types/settings.ts';
 export interface GoalSettings {
   toolVisibility: GoalToolVisibility;
-  experimental: { goals: boolean };
   continuationLimits: { automaticTurns: number | null; noProgressTurns: number | null };
 }
 export const DEFAULT_GOAL_SETTINGS: GoalSettings = {
   toolVisibility: 'operational',
-  experimental: { goals: false },
   continuationLimits: { automaticTurns: null, noProgressTurns: 3 },
 };
 export interface GoalSettingsLoadResult {
@@ -18,15 +16,14 @@ export function normalizeGoalSettings(value: unknown): GoalSettings | undefined 
   if (!record(value)) return undefined;
   const toolVisibility = normalizeToolVisibility(value.toolVisibility);
   if (!toolVisibility) return undefined;
-  if (value.experimental !== undefined && !record(value.experimental)) return undefined;
-  const goals = record(value.experimental) ? (value.experimental.goals ?? false) : false;
-  if (typeof goals !== 'boolean') return undefined;
+  // `experimental` opted into the removed goal queue. A file that still carries
+  // it is read as if it did not, rather than refused.
   if (value.continuationLimits !== undefined && !record(value.continuationLimits)) return undefined;
   const limits = record(value.continuationLimits) ? value.continuationLimits : {};
   const automaticTurns = normalizeLimit(limits.automaticTurns, null);
   const noProgressTurns = normalizeLimit(limits.noProgressTurns, 3);
   if (automaticTurns === undefined || noProgressTurns === undefined) return undefined;
-  return { toolVisibility, experimental: { goals }, continuationLimits: { automaticTurns, noProgressTurns } };
+  return { toolVisibility, continuationLimits: { automaticTurns, noProgressTurns } };
 }
 export function normalizeToolVisibility(value: unknown): GoalToolVisibility | undefined {
   return value === undefined || value === 'always' || value === 'after-first-goal' || value === 'operational'

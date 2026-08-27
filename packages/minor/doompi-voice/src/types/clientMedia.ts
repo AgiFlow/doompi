@@ -1,0 +1,113 @@
+export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
+export const VOICE_MEDIA_PROTOCOL_VERSION = 2;
+export const VOICE_MEDIA_SAMPLE_RATE = 16_000;
+export const VOICE_MEDIA_CHANNELS = 1;
+export const VOICE_MEDIA_BITS_PER_SAMPLE = 16;
+export const VOICE_MEDIA_CONTENT_TYPE = 'application/vnd.doompi.pcm-s16le';
+
+export const VOICE_MEDIA_ROUTES = {
+  clientConnect: '/client/connect',
+  clientDisconnect: '/client/disconnect',
+  clientEvents: '/client/events',
+  clientAudio: '/client/audio',
+  clientCaptureStopped: '/client/capture-stopped',
+  clientPlaybackResult: '/client/playback-result',
+  hostCaptureStart: '/host/capture/start',
+  hostCaptureAudio: '/host/capture/audio',
+  hostCaptureStop: '/host/capture/stop',
+  hostCaptureAbort: '/host/capture/abort',
+  hostPlaybackStart: '/host/playback/start',
+  hostPlaybackResult: '/host/playback/result',
+  hostPlaybackStop: '/host/playback/stop',
+  hostPlaybackAbort: '/host/playback/abort',
+} as const;
+
+export type VoiceClientKind = 'browser' | 'native';
+
+export interface VoiceMediaCapabilities {
+  capture: boolean;
+  playback: boolean;
+}
+
+export interface VoiceMediaConnectRequest {
+  version: typeof VOICE_MEDIA_PROTOCOL_VERSION;
+  clientId: string;
+  connectionId: string;
+  clientKind: VoiceClientKind;
+  capabilities: VoiceMediaCapabilities;
+}
+
+export interface VoiceMediaConnectResult {
+  version: typeof VOICE_MEDIA_PROTOCOL_VERSION;
+  cursor: number;
+}
+
+export type VoiceMediaClientEvent =
+  | {
+      sequence: number;
+      type: 'capture-start';
+      captureId: string;
+      sampleRate: typeof VOICE_MEDIA_SAMPLE_RATE;
+      channels: typeof VOICE_MEDIA_CHANNELS;
+      bitsPerSample: typeof VOICE_MEDIA_BITS_PER_SAMPLE;
+    }
+  | { sequence: number; type: 'capture-stop'; captureId: string }
+  | { sequence: number; type: 'capture-abort'; captureId: string }
+  | {
+      sequence: number;
+      type: 'playback-start';
+      playbackId: string;
+      text: string;
+      voice?: string;
+      rate?: number;
+    }
+  | { sequence: number; type: 'playback-stop'; playbackId: string }
+  | { sequence: number; type: 'playback-abort'; playbackId: string };
+
+export type VoiceMediaPlaybackOutcome = 'completed' | 'stopped' | 'aborted' | 'failed';
+
+export interface VoiceMediaPlaybackResult {
+  playbackId: string;
+  outcome: VoiceMediaPlaybackOutcome;
+  error?: string;
+}
+
+export interface VoiceMediaTransport {
+  connect(
+    clientId: string,
+    connectionId: string,
+    capabilities: VoiceMediaCapabilities,
+  ): Promise<VoiceMediaConnectResult>;
+  disconnect(clientId: string, connectionId: string): Promise<void>;
+  nextEvent(
+    clientId: string,
+    connectionId: string,
+    after: number,
+    signal: AbortSignal,
+  ): Promise<VoiceMediaClientEvent | undefined>;
+  sendAudio(clientId: string, connectionId: string, captureId: string, pcm: Uint8Array): Promise<void>;
+  captureStopped(clientId: string, connectionId: string, captureId: string): Promise<void>;
+  playbackFinished(clientId: string, connectionId: string, result: VoiceMediaPlaybackResult): Promise<void>;
+}
+
+export interface VoiceMediaCapture {
+  stop(): Promise<void>;
+}
+
+export interface VoiceMediaPlayback {
+  readonly completion: Promise<VoiceMediaPlaybackResult>;
+  stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void;
+}
+
+/** Client hardware boundary. Browser and future native clients implement the same contract. */
+export interface VoiceMediaDevice {
+  readonly capabilities: VoiceMediaCapabilities;
+  startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture>;
+  speak(request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>): VoiceMediaPlayback;
+  close(): Promise<void>;
+}
+
+export function voiceMediaClientUrl(sessionId: string, route: string, params: Record<string, string> = {}): string {
+  const search = new URLSearchParams({ session: sessionId, ...params });
+  return `/api/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
+}

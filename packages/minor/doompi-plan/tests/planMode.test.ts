@@ -35,6 +35,8 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlanningModeConfig, PlanningThinkingLevel } from '../src/exports/config';
+import type { PlanPointerRecord } from '../src/types/planApi.ts';
+import type { PlanPointerPort } from '../src/types/planPointer.ts';
 import type { FablePlanBroker, FablePlanPacket } from '../src/exports/fableFlow';
 import {
   configurePlanningSubagentInput,
@@ -379,6 +381,7 @@ function createExtensionFixture(
       fableBroker: extensionOptions.fableBroker,
       debugDiagnosticTools: extensionOptions.debugDiagnosticTools,
       doomIntegrations: extensionOptions.doomIntegrations,
+      planPointers: extensionOptions.planPointers,
     },
   );
   pi.on('session_shutdown', () => cordis.fiber.dispose());
@@ -2247,5 +2250,262 @@ describe('plan mode telemetry', () => {
     await fixture.handler('session_shutdown')({}, fixture.ctx);
 
     expect(fixture.telemetryShutdown).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * What the cockpit needs from the session half.
+ *
+ * The browser never talks to this extension. It reads a status line the
+ * session publishes and calls an API server in a different process, and that
+ * server finds the plan only through the record written here. So what these
+ * pin is the handoff: that a written plan is announced, that the announcement
+ * survives the mode it was written in, and that an edit made on the other side
+ * of the handoff is the plan the agent then implements.
+ */
+describe('the plan in the cockpit', () => {
+  const PLAN_STATUS = 'doom-plan-document';
+
+  /** A pointer that keeps its records in memory, standing in for the disk. */
+  function recordingPointers(): PlanPointerPort & { records: Map<string, PlanPointerRecord> } {
+    const records = new Map<string, PlanPointerRecord>();
+    return {
+      records,
+      read: (sessionId) => records.get(sessionId),
+      write: (sessionId, record) => {
+        records.set(sessionId, record);
+      },
+      clear: (sessionId) => {
+        records.delete(sessionId);
+      },
+    };
+  }
+
+  /** The newest value the session published on a status key, or undefined. */
+  function statusFor(fixture: HarnessExtensionFixture, key: string): string | undefined {
+    const call = [...fixture.statuses.mock.calls].reverse().find(([name]) => name === key);
+    return call?.[1] as string | undefined;
+  }
+
+  const recordsFor = (fixture: HarnessExtensionFixture, event: string): RecordedTelemetry[] =>
+    fixture.telemetryRecords.filter((record) => record.event === event);
+
+  it('records where the plan landed, so the session API can find it', async () => {
+    await withPiSession(async (sessionDirectory) => {
+      const pointers = recordingPointers();
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, { planPointers: pointers });
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+
+      await fixture.writePlan('# Cockpit plan\n');
+
+      expect(pointers.records.get('cockpit-session')).toMatchObject({
+        path: expectedPlanPath(sessionDirectory, 'cockpit-plan', fixture),
+        title: 'cockpit-plan',
+        writtenAt: expect.any(String),
+      });
+    });
+  });
+
+  it('publishes the status the activity group appears on, naming the plan', async () => {
+    await withPiSession(async () => {
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, {});
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+
+      await fixture.writePlan('# Cockpit plan\n');
+
+      expect(statusFor(fixture, PLAN_STATUS)).toContain('cockpit-plan');
+    });
+  });
+
+  it('changes the status on a rewrite, which is how an open tab learns to re-read', async () => {
+    await withPiSession(async () => {
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, {});
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.writePlan('# Cockpit plan\n');
+      const first = statusFor(fixture, PLAN_STATUS);
+
+      vi.setSystemTime(new Date('2031-01-01T04:05:06.000Z'));
+      await fixture.writePlan('# Cockpit plan\n\nrevised');
+      vi.useRealTimers();
+
+      expect(statusFor(fixture, PLAN_STATUS)).not.toBe(first);
+    });
+  });
+
+  it('keeps the plan announced after the mode is exited, which is when it is read', async () => {
+    // Exiting is when the agent starts implementing. Retiring the group there
+    // would take the plan away at the moment a reader most wants it open.
+    await withPiSession(async () => {
+      const pointers = recordingPointers();
+      const fixture = createExtensionFixture(
+        [],
+        'Exit plan mode and start implementation',
+        true,
+        'cockpit-session',
+        {},
+        { planPointers: pointers },
+      );
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.writePlan('# Cockpit plan\n');
+
+      await fixture.completePlan();
+
+      expect(statusFor(fixture, 'plan-mode')).toBeUndefined();
+      expect(statusFor(fixture, PLAN_STATUS)).toContain('cockpit-plan');
+      expect(pointers.records.has('cockpit-session')).toBe(true);
+    });
+  });
+
+  it('retires the announcement with the session, not with the mode', async () => {
+    await withPiSession(async () => {
+      const pointers = recordingPointers();
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, { planPointers: pointers });
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.writePlan('# Cockpit plan\n');
+
+      await fixture.handler('session_shutdown')({}, fixture.ctx);
+
+      expect(statusFor(fixture, PLAN_STATUS)).toBeUndefined();
+      expect(pointers.records.has('cockpit-session')).toBe(false);
+    });
+  });
+
+  it('announces the plan a resumed session restores', async () => {
+    await withPiSession(async () => {
+      const pointers = recordingPointers();
+      const stored = {
+        type: 'custom',
+        customType: 'agent-harness-plan-document',
+        data: {
+          content: '# Restored plan',
+          path: '/plans/restored.md',
+          sessionId: planSessionIdentifier('cockpit-session'),
+          title: 'restored-plan',
+          writtenAt: '2026-08-27T00:00:00.000Z',
+        },
+      };
+      const fixture = createExtensionFixture(
+        [stored],
+        undefined,
+        true,
+        'cockpit-session',
+        {},
+        {
+          planPointers: pointers,
+        },
+      );
+
+      await fixture.handler('session_start')({}, fixture.ctx);
+
+      expect(statusFor(fixture, PLAN_STATUS)).toContain('restored-plan');
+      expect(pointers.records.get('cockpit-session')).toMatchObject({ path: '/plans/restored.md' });
+    });
+  });
+
+  it('clears a stale pointer a session restoring no plan would otherwise inherit', async () => {
+    await withPiSession(async () => {
+      const pointers = recordingPointers();
+      pointers.write('cockpit-session', { path: '/plans/gone.md', title: 'gone', writtenAt: 'earlier' });
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, { planPointers: pointers });
+
+      await fixture.handler('session_start')({}, fixture.ctx);
+
+      expect(pointers.records.has('cockpit-session')).toBe(false);
+      expect(statusFor(fixture, PLAN_STATUS)).toBeUndefined();
+    });
+  });
+
+  it('says nothing at all on the plan status until a plan is written', async () => {
+    // A cockpit records a status key the first time it hears of it and never
+    // drops it again, so clearing a key it has not seen is not a no-op: it
+    // publishes the key as an empty string, and the dock shows the plan group
+    // on a session that has written nothing. Silence is the only way to stay
+    // absent.
+    await withPiSession(async () => {
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, {});
+
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.handler('before_agent_start')({ systemPrompt: 'base' }, fixture.ctx);
+
+      expect(fixture.statuses.mock.calls.filter(([key]) => key === PLAN_STATUS)).toEqual([]);
+    });
+  });
+
+  it('still retires a plan it did announce, so a restart does not strand the group', async () => {
+    await withPiSession(async () => {
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, {});
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.writePlan('# Cockpit plan\n');
+
+      await fixture.handler('session_shutdown')({}, fixture.ctx);
+
+      const published = fixture.statuses.mock.calls.filter(([key]) => key === PLAN_STATUS);
+      expect(published.at(-1)?.[1]).toBeUndefined();
+      expect(published.length).toBeGreaterThan(1);
+    });
+  });
+
+  it('does not fail a write when the pointer cannot be recorded', async () => {
+    // The plan is on disk either way; losing a cockpit view is not worth
+    // failing the write that produced it.
+    await withPiSession(async () => {
+      const failing: PlanPointerPort = {
+        read: () => undefined,
+        write: () => {
+          throw new Error('the agent directory is read-only');
+        },
+        clear: () => undefined,
+      };
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, { planPointers: failing });
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+
+      await expect(fixture.writePlan('# Cockpit plan\n')).resolves.toMatchObject({ details: { written: true } });
+      expect(recordsFor(fixture, 'doom_plan.plan_pointer_failed')).toHaveLength(1);
+    });
+  });
+
+  it('gives the agent the plan as edited in the cockpit, not the draft it wrote', async () => {
+    // The save lands on disk from another process, so nothing tells this
+    // extension the plan changed. Reading it back each turn is what makes an
+    // edit take effect rather than sit in a file the agent never rereads.
+    await withPiSession(async (sessionDirectory) => {
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, {});
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.writePlan('# Cockpit plan\n\nthe draft step');
+      const planPath = expectedPlanPath(sessionDirectory, 'cockpit-plan', fixture);
+
+      fs.writeFileSync(planPath, '# Cockpit plan\n\nthe reader corrected this step');
+      const prompt = (await fixture.handler('before_agent_start')({ systemPrompt: 'base' }, fixture.ctx)) as {
+        systemPrompt: string;
+      };
+
+      expect(prompt.systemPrompt).toContain('the reader corrected this step');
+      expect(prompt.systemPrompt).not.toContain('the draft step');
+    });
+  });
+
+  it('falls back to the written plan when the file has gone, rather than dropping it', async () => {
+    await withPiSession(async (sessionDirectory) => {
+      const fixture = createExtensionFixture([], undefined, true, 'cockpit-session', {}, {});
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+      await fixture.writePlan('# Cockpit plan\n\nthe draft step');
+
+      fs.rmSync(expectedPlanPath(sessionDirectory, 'cockpit-plan', fixture));
+      const prompt = (await fixture.handler('before_agent_start')({ systemPrompt: 'base' }, fixture.ctx)) as {
+        systemPrompt: string;
+      };
+
+      expect(prompt.systemPrompt).toContain('the draft step');
+    });
   });
 });

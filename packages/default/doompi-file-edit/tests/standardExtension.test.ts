@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const runtimeMocks = vi.hoisted(() => ({
   clearTimeline: vi.fn(async () => undefined),
+  clearSnapshots: vi.fn(async () => undefined),
   createCordisRoot: vi.fn(),
   createContainer: vi.fn(),
   leaderDispose: vi.fn(),
@@ -96,9 +97,11 @@ beforeEach(() => {
     paths: {
       sessionKey: (sessionId: string) => sessionId,
       timelinePath: (cwd: string, sessionKey: string) => `${cwd}/${sessionKey}.json`,
+      snapshotsPath: (cwd: string, sessionKey: string) => `${cwd}/${sessionKey}.blobs`,
     },
-    timeline: { initialize: vi.fn(), clear: runtimeMocks.clearTimeline },
-    editTracker: { start: runtimeMocks.startTracking, end: runtimeMocks.endTracking },
+    timeline: { initialize: vi.fn(), clear: runtimeMocks.clearTimeline, list: async () => [] },
+    snapshots: { initialize: vi.fn(), clear: runtimeMocks.clearSnapshots },
+    editTracker: { start: runtimeMocks.startTracking, end: runtimeMocks.endTracking, reset: vi.fn() },
     workflow: { open: vi.fn(async () => undefined) },
   }));
   runtimeMocks.registerLeader.mockReturnValue({ update: vi.fn(), dispose: runtimeMocks.leaderDispose });

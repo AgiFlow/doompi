@@ -41,6 +41,7 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 | [Automation](docs/automation.md)                               | Autopilot, workflows, native plugin examples, and loops                      |
 | [Features](docs/features.md)                                   | The complete DoomPi package and capability catalog                           |
 | [Configuration](docs/configuration.md)                         | The four YAML files, merge rules, examples, and matrix checks                |
+| [Security model](docs/securities.md)                           | Threat model, remote-access boundaries, containment, and known limits        |
 | [Trust and data boundaries](docs/trust-and-data-boundaries.md) | Executable inputs, credentials, model calls, voice, and telemetry            |
 | [CLI reference](docs/cli-reference.md)                         | Commands, options, troubleshooting, and direct package use                   |
 | [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, and isolation                      |
@@ -158,13 +159,15 @@ Personal defaults live in `~/.pi/.doom/`; repository overrides live in `<reposit
 See [Configuration](docs/configuration.md) for resolution rules, complete examples, and matrix
 checks.
 
-## Trust and data boundaries
+## Security and trust
 
 DoomPi executes the extensions, remote Git/npm plugins, hooks, MCP stdio commands, workflows, and
 shell commands you configure. Treat them as trusted executable code.
 
-See [Trust and data boundaries](docs/trust-and-data-boundaries.md) for process privileges,
-credentials, model calls, voice, and telemetry behavior.
+See the [Security model](docs/securities.md) for the threat model, what guards the cockpit once it
+is reachable from a phone, and what is deliberately left open. See
+[Trust and data boundaries](docs/trust-and-data-boundaries.md) for process privileges, credentials,
+model calls, voice, and telemetry behavior.
 
 ## CLI reference
 

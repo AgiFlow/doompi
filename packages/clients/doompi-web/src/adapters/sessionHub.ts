@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { ChannelFrame, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { createFrameRing, type FrameRing } from '../services/frameRing.ts';
 import {
@@ -41,6 +42,14 @@ const DEFAULT_RESTORE_LIMIT = 300;
  */
 const DEFAULT_JOURNAL_LIMIT = 5000;
 const ENTRY_APPENDED_TYPE = 'entry_appended';
+/**
+ * How long a restart waits for the stopped server to withdraw its record. A
+ * session flushes its transcript on the way out, so the wait is generous; past
+ * it the restart reports rather than starting a second server on the same
+ * socket.
+ */
+const DEFAULT_RESTART_WAIT_MS = 15_000;
+const DEFAULT_RESTART_POLL_MS = 100;
 
 export type HubEvent =
   | { kind: 'upsert'; session: SessionSummary }
@@ -58,6 +67,9 @@ export interface SessionHubOptions {
   channels?: readonly WebHubChannel[];
   /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
   signal?: (pid: number) => void;
+  /** How long a restart waits for the stopped server to withdraw its record. */
+  restartWaitMs?: number;
+  restartPollMs?: number;
   ringLimit?: number;
   /** Journalled messages restored per session on attach; the rest is kept for paging back through. */
   restoreLimit?: number;
@@ -89,6 +101,16 @@ export interface SessionHub {
   threadJournal(sessionId: string, threadId: string): string | undefined;
   command(sessionId: string, frame: SessionFrame): void;
   create(input: SpawnSessionInput): Promise<SpawnOutcome>;
+  /**
+   * Stops a session's server and brings it back under the same id.
+   *
+   * A running server reads the composition once: its extensions when the agent
+   * starts, and its package API routes when the process does. So a rebuild
+   * reaches an existing session only by replacing the process, which is what
+   * this does, keeping the id so Pi resumes the same session and the transcript
+   * survives.
+   */
+  restart(sessionId: string): Promise<SpawnOutcome>;
   close(): void;
 }
 
@@ -244,6 +266,39 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
 
   const emit = (event: HubEvent): void => {
     for (const listener of listeners) listener(event);
+  };
+
+  const stopSession = (sessionId: string): StopOutcome => {
+    const managed = sessions.get(sessionId);
+    if (!managed) return { ok: false, code: 'unknown', error: 'Unknown session.' };
+    // Single-session mode records this very process; killing it would take
+    // the cockpit down with the session.
+    if (managed.record.pid === process.pid) {
+      return { ok: false, code: 'self', error: 'This session hosts the cockpit; stop it from its own terminal.' };
+    }
+    try {
+      signal(managed.record.pid);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return { ok: false, code: 'signal_failed', error: `Could not signal the session server: ${reason}` };
+    }
+    options.onNotice?.(`asked session ${sessionId} to stop`);
+    return { ok: true };
+  };
+
+  /**
+   * Waits for a stopped session to withdraw its registry record.
+   *
+   * The replacement reuses the socket path, so it must not start until the
+   * previous server has let go of it; the record going is that signal.
+   */
+  const awaitWithdrawal = async (sessionId: string): Promise<boolean> => {
+    const deadline = Date.now() + (options.restartWaitMs ?? DEFAULT_RESTART_WAIT_MS);
+    while (sessions.has(sessionId)) {
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, options.restartPollMs ?? DEFAULT_RESTART_POLL_MS));
+    }
+    return true;
   };
 
   const startedChannels: StartedChannel[] = (options.channels ?? []).map((channel) => ({
@@ -450,23 +505,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         )
         .map(toSummary);
     },
-    stop(sessionId) {
-      const managed = sessions.get(sessionId);
-      if (!managed) return { ok: false, code: 'unknown', error: 'Unknown session.' };
-      // Single-session mode records this very process; killing it would take
-      // the cockpit down with the session.
-      if (managed.record.pid === process.pid) {
-        return { ok: false, code: 'self', error: 'This session hosts the cockpit; stop it from its own terminal.' };
-      }
-      try {
-        signal(managed.record.pid);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        return { ok: false, code: 'signal_failed', error: `Could not signal the session server: ${reason}` };
-      }
-      options.onNotice?.(`asked session ${sessionId} to stop`);
-      return { ok: true };
-    },
+    stop: stopSession,
     onEvent(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -551,6 +590,32 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         });
       }
       return options.spawner.spawn(input);
+    },
+    async restart(sessionId) {
+      const spawner = options.spawner;
+      if (!spawner) {
+        return {
+          ok: false,
+          code: 'invalid_request',
+          error: 'This cockpit serves a fixed session and cannot restart it.',
+        };
+      }
+      const managed = sessions.get(sessionId);
+      if (!managed) return { ok: false, code: 'invalid_request', error: 'Unknown session.' };
+      // Read before the stop: once the record is withdrawn there is nothing
+      // left to say where the replacement should go.
+      const { cwd, name, socketPath } = managed.record;
+      const stopped = stopSession(sessionId);
+      if (!stopped.ok) return { ok: false, code: 'invalid_request', error: stopped.error };
+      if (!(await awaitWithdrawal(sessionId))) {
+        return {
+          ok: false,
+          code: 'spawn_failed',
+          error: 'The session did not stop in time; it was not restarted.',
+        };
+      }
+      options.onNotice?.(`restarting session ${sessionId}`);
+      return spawner.spawn({ cwd, name, sessionId, sessionDir: path.dirname(socketPath) });
     },
     close() {
       closed = true;

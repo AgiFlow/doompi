@@ -23,16 +23,6 @@ import {
   buildObjectiveUpdatedPrompt,
   buildResumePrompt,
 } from '../../src/services/prompts.ts';
-import {
-  activateQueuedGoal,
-  clearQueue,
-  dropLastGoal,
-  enqueueGoal,
-  prioritizeGoal,
-  promoteNextGoal,
-  restartGoalFromHistory,
-  skipCurrentGoal,
-} from '../../src/services/queue.ts';
 import { GoalRuntimeModel } from '../../src/services/runtime.ts';
 import {
   nextToolFreeRepeatState,
@@ -41,7 +31,7 @@ import {
   safetyLimitReached,
   shouldPauseForSafety,
 } from '../../src/services/safety.ts';
-import { decodeGoalSettings, normalizeGoalSettings } from '../../src/services/settings.ts';
+import { DEFAULT_GOAL_SETTINGS, decodeGoalSettings, normalizeGoalSettings } from '../../src/services/settings.ts';
 import {
   decodeGoalStateEntries,
   isCanonicalGoalState,
@@ -74,6 +64,7 @@ import {
   validateGoalId,
 } from '../../src/services/tools.ts';
 import { GoalHistoryService } from '../../src/services/history/historyService.ts';
+import type { ActiveGoal } from '../../src/types/goal.ts';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../../src/types/history.ts';
 
 describe('accounting and parser branches', () => {
@@ -111,7 +102,6 @@ describe('accounting and parser branches', () => {
 
   it('covers completion and parser error paths', () => {
     expect(completeGoalArguments('')).toHaveLength(6);
-    expect(completeGoalArguments('', { experimentalGoals: true })).toHaveLength(10);
     expect(completeGoalArguments('a')).toBeNull();
     expect(completeGoalArguments('edit ')).toEqual([
       { value: 'edit --tokens ', label: '--tokens', description: 'Set a token budget' },
@@ -119,10 +109,6 @@ describe('accounting and parser branches', () => {
     expect(completeGoalArguments('edit --')).toEqual([
       { value: 'edit --tokens ', label: '--tokens', description: 'Set a token budget' },
     ]);
-    expect(completeGoalArguments('add ', { experimentalGoals: true })).toEqual([
-      { value: 'add --tokens ', label: '--tokens', description: 'Set a token budget' },
-    ]);
-    expect(completeGoalArguments('skip', { experimentalGoals: true })).toHaveLength(1);
     expect(completeGoalArguments('status trailing')).toBeNull();
     expect(parseGoalCommand('pause extra')).toContain('Usage');
     expect(parseGoalCommand('resume extra')).toContain('Usage');
@@ -131,12 +117,13 @@ describe('accounting and parser branches', () => {
     expect(parseGoalCommand('edit')).toContain('Usage');
     expect(parseGoalCommand('--tokens')).toContain('Usage');
     expect(parseGoalCommand('--tokens bad task')).toContain('Invalid');
-    expect(parseGoalCommand('drop-last', { experimentalGoals: true })).toEqual({ kind: 'drop-last' });
-    expect(parseGoalCommand('drop-last extra', { experimentalGoals: true })).toContain('Usage');
-    expect(parseGoalCommand('pop', { experimentalGoals: true })).toEqual({ kind: 'drop-last' });
-    expect(parseGoalCommand('shift', { experimentalGoals: true })).toEqual({ kind: 'skip' });
-    expect(parseGoalCommand('skip extra', { experimentalGoals: true })).toContain('Usage');
-    expect(parseGoalCommand('prioritize', { experimentalGoals: true })).toContain('Usage');
+    // The retired queue verbs are no longer recognised, so they read as what
+    // they literally are: the opening words of an objective.
+    expect(parseGoalCommand('add write the changelog')).toEqual({
+      kind: 'start',
+      objective: 'add write the changelog',
+      tokenBudget: undefined,
+    });
     expect(parseTokenBudget('1.2m')).toBe(1200000);
     expect(parseTokenBudget('0')).toBeUndefined();
     expect(parseTokenBudget('9e3')).toBeUndefined();
@@ -167,12 +154,14 @@ describe('prompts, settings, tools, and safety branches', () => {
     expect(
       normalizeGoalSettings({
         toolVisibility: 'operational',
-        experimental: { goals: true },
         continuationLimits: { automaticTurns: 2, noProgressTurns: null },
       }),
-    ).toMatchObject({ experimental: { goals: true } });
-    expect(normalizeGoalSettings({ toolVisibility: 'operational', experimental: [] })).toBeUndefined();
-    expect(normalizeGoalSettings({ toolVisibility: 'operational', experimental: { goals: 'yes' } })).toBeUndefined();
+    ).toMatchObject({ continuationLimits: { automaticTurns: 2, noProgressTurns: null } });
+    // `experimental` opted into the removed queue; a file that still names it
+    // loads as if it did not, rather than being refused.
+    expect(normalizeGoalSettings({ toolVisibility: 'operational', experimental: { goals: true } })).toEqual(
+      DEFAULT_GOAL_SETTINGS,
+    );
     expect(
       normalizeGoalSettings({ toolVisibility: 'operational', continuationLimits: { automaticTurns: 0 } }),
     ).toBeUndefined();
@@ -244,54 +233,10 @@ describe('prompts, settings, tools, and safety branches', () => {
   });
 });
 
-describe('queue and state-machine branches', () => {
-  it('handles disabled, empty, pending, promotion, and restart queue transitions', () => {
-    const active = createGoal('active', undefined, { id: 'active', now: 10 });
-    const state = { goal: active, queue: [], enabled: true };
-    expect(enqueueGoal({ ...state, enabled: false }, 'ignored')).toMatchObject({ enabled: false, queue: [] });
-    const queued = enqueueGoal(state, 'queued', 10, 20);
-    expect(queued.queue[0]).toMatchObject({ text: 'queued', status: 'queued', tokenBudget: 10 });
-    expect(prioritizeGoal({ ...queued, enabled: false }, 'ignored')).toMatchObject({ enabled: false });
-    expect(prioritizeGoal(queued, 'urgent', 20).pendingAction).toMatchObject({ kind: 'prioritize' });
-    expect(dropLastGoal({ ...queued, enabled: false })).toMatchObject({ enabled: false, queue: queued.queue });
-    expect(dropLastGoal(queued).queue).toHaveLength(0);
-    expect(dropLastGoal({ ...state, queue: [] })).toEqual(state);
-    expect(skipCurrentGoal({ ...state, enabled: false })).toMatchObject({ enabled: false, goal: active });
-    expect(skipCurrentGoal(state).goal?.status).toBe('complete');
-    const queuedGoal = queued.queue[0];
-    if (!queuedGoal) throw new Error('queued goal missing');
-    const withQueue = { goal: active, queue: [queuedGoal], enabled: true };
-    expect(skipCurrentGoal(withQueue).pendingAction).toMatchObject({ kind: 'advance', reason: 'skip' });
-    expect(promoteNextGoal({ ...state, enabled: false, queue: [queuedGoal] })).toMatchObject({
-      enabled: false,
-      queue: [queuedGoal],
-    });
-    const promoted = promoteNextGoal(withQueue, 30);
-    expect(promoted.goal).toMatchObject({ text: 'queued', status: 'active', activeStartedAt: 30 });
-    expect(promoted.goal?.id).not.toBe(queuedGoal.id);
-    expect(promoteNextGoal(state)).toEqual(state);
-    expect(activateQueuedGoal({ ...queuedGoal, status: 'queued' }, 40)).toMatchObject({ status: 'active' });
-    expect(clearQueue(withQueue)).toMatchObject({ queue: [], pendingAction: undefined });
-    expect(restartGoalFromHistory({ text: 'restart', tokenBudget: 99, baselineTokens: 4 }, 50)).toMatchObject({
-      text: 'restart',
-      tokenBudget: 99,
-      baselineTokens: 4,
-      status: 'active',
-      iteration: 0,
-    });
-  });
-
+describe('state-machine branches', () => {
   it('covers state status formatting, summaries, and transitions', () => {
     const base = createGoal('state', 100, { id: 'state', now: 10 });
-    for (const status of [
-      'active',
-      'queued',
-      'paused',
-      'blocked',
-      'usage_limited',
-      'budget_limited',
-      'complete',
-    ] as const) {
+    for (const status of ['active', 'paused', 'blocked', 'usage_limited', 'budget_limited', 'complete'] as const) {
       const transitioned = transitionGoal({ ...base, status }, status, 20);
       expect(isRetainedGoalStatus(status)).toBe(status !== 'complete');
       expect(isResumableGoalStatus(status)).toBe(
@@ -305,7 +250,8 @@ describe('queue and state-machine branches', () => {
     expect(editedGoalStatus('paused')).toBe('paused');
     expect(nextGoalInstance(base, 30, 'new')).toMatchObject({ id: 'new', iteration: 0, tokensUsed: 0 });
     expect(incrementGoal(base, 30)).toMatchObject({ iteration: 1, updatedAt: 30 });
-    expect(getExecutionState({ goal: undefined, queue: [base] })).toBe('retained');
+    expect(getExecutionState({ goal: undefined })).toBe('dormant');
+    expect(getExecutionState({ goal: { ...base, status: 'paused' } })).toBe('retained');
     expect(goalIdRejectionReason(base, '')).toContain('missing');
     expect(goalIdRejectionReason(base, 'other')).toContain('does not match');
     expect(goalIdRejectionReason(base, base.id)).toBeUndefined();
@@ -313,65 +259,36 @@ describe('queue and state-machine branches', () => {
     expect(isGoalToolAllowedForState('budget_limited', 'goal_blocked')).toBe(false);
     expect(isContradictoryCompletionSummary('not yet complete')).toBe(true);
     expect(isContradictoryCompletionSummary('could not complete')).toBe(false);
-    expect(
-      goalSummary(
-        { ...base, safetyPauseCause: 'no_progress' },
-        [createGoal('queued', undefined, { id: 'q', now: 10 })],
-        true,
-        false,
-        { kind: 'prioritize', objective: 'urgent' },
-      ),
-    ).toContain('Safety pause: no progress');
-    expect(goalSummary(base, [], false, true)).toContain('queue off');
+    expect(goalSummary({ ...base, safetyPauseCause: 'no_progress' })).toContain('Safety pause: no progress');
+    expect(goalSummary(base)).toContain('Goal: state');
   });
 });
 
 describe('session codec and runtime commits', () => {
-  it('decodes canonical, legacy, pending, queued, malformed, and clear states', () => {
+  it('decodes canonical, legacy, malformed, and clear states', () => {
     const active = createGoal('codec', undefined, { id: 'codec', now: 10 });
-    const queued = transitionGoal(createGoal('queued', undefined, { id: 'queued', now: 10 }), 'queued', 10);
-    const canonical = serializeGoalState(active, [queued], { kind: 'prioritize', objective: 'urgent' });
+    const canonical = serializeGoalState(active);
+    expect(canonical).toEqual({ goal: active });
     expect(isCanonicalGoalState(canonical)).toBe(true);
     expect(decodeGoalStateEntries([{ type: 'custom', customType: 'goal-state', data: canonical }])).toMatchObject({
       source: 'canonical',
-      hasExperimentalQueueState: true,
+      goal: { id: 'codec' },
     });
     expect(
-      decodeGoalStateEntries([
-        {
-          type: 'custom',
-          customType: 'goal-state',
-          data: {
-            goal: active,
-            queue: [queued],
-            pendingAction: { kind: 'advance', goalId: 'codec', reason: 'complete', completedText: 'codec' },
-          },
-        },
-      ]),
-    ).toMatchObject({ source: 'canonical' });
-    expect(
-      decodeGoalStateEntries([
-        {
-          type: 'custom',
-          customType: 'goals-state',
-          data: { goals: [active, queued], pendingUnshift: { objective: 'urgent', tokenBudget: 2 } },
-        },
-      ]),
-    ).toMatchObject({ source: 'legacy-goals', hasExperimentalQueueState: true });
+      decodeGoalStateEntries([{ type: 'custom', customType: 'goals-state', data: { goals: [active] } }]),
+    ).toMatchObject({ source: 'legacy-goals', goal: { id: 'codec' } });
     expect(decodeGoalStateEntries([{ type: 'custom', customType: 'goals-state', data: { goals: [] } }])).toMatchObject({
       source: 'legacy-goals',
       malformed: false,
     });
     expect(
-      decodeGoalStateEntries([
-        { type: 'custom', customType: 'goal-state', data: { goal: active, pendingAction: { kind: 'bad' } } },
-      ]),
+      decodeGoalStateEntries([{ type: 'custom', customType: 'goal-state', data: { goal: { id: '' } } }]),
     ).toMatchObject({ malformed: true });
     expect(
       decodeGoalStateEntries([
-        { type: 'custom', customType: 'goal-state', data: { goal: { ...active, status: 'queued' } } },
+        { type: 'custom', customType: 'goal-state', data: { goal: { ...active, status: 'complete' } } },
       ]),
-    ).toMatchObject({ malformed: true });
+    ).toMatchObject({ source: 'canonical', goal: undefined, malformed: false });
     expect(
       normalizeLoadedGoal({ ...active, iteration: -1, tokensUsed: -1, activeStartedAt: undefined }, 99),
     ).toMatchObject({ iteration: 0, tokensUsed: 0, startedAt: 10 });
@@ -383,6 +300,38 @@ describe('session codec and runtime commits', () => {
     expect(loadGoalStateFromSession({})).toMatchObject({ source: 'none' });
   });
 
+  it('keeps the objective out of state a session persisted before the queue was removed', () => {
+    // The fields the queue wrote are read past, not rejected, and a goal it had
+    // parked comes back paused rather than being lost to a fail-closed decode.
+    const active = createGoal('survivor', undefined, { id: 'survivor', now: 10 });
+    const parked = { ...active, id: 'parked', text: 'parked', status: 'queued' as unknown as ActiveGoal['status'] };
+
+    expect(
+      decodeGoalStateEntries([
+        {
+          type: 'custom',
+          customType: 'goal-state',
+          data: {
+            goal: active,
+            queue: [parked],
+            pendingAction: { kind: 'advance', goalId: 'survivor', reason: 'complete', completedText: 'survivor' },
+          },
+        },
+      ]),
+    ).toMatchObject({ source: 'canonical', malformed: false, goal: { id: 'survivor', status: 'active' } });
+
+    expect(
+      decodeGoalStateEntries([{ type: 'custom', customType: 'goal-state', data: { goal: parked } }]),
+    ).toMatchObject({ source: 'canonical', malformed: false, goal: { id: 'parked', status: 'paused' } });
+
+    // A legacy entry's tail was the queue; only the head is a goal now.
+    expect(
+      decodeGoalStateEntries([
+        { type: 'custom', customType: 'goals-state', data: { goals: [active, parked], pendingUnshift: {} } },
+      ]),
+    ).toMatchObject({ source: 'legacy-goals', goal: { id: 'survivor' } });
+  });
+
   it('persists runtime state before exposing snapshots', () => {
     const persisted: unknown[] = [];
     const model = new GoalRuntimeModel({ persist: (state) => persisted.push(state) });
@@ -392,12 +341,18 @@ describe('session codec and runtime commits', () => {
     expect(persisted.at(-1)).toMatchObject({ goal: { id: 'runtime' } });
     model.stop('paused');
     expect(model.snapshot().execution).toBe('retained');
-    model.replaceState({ goal: active, queue: [active] });
-    expect(model.snapshot().queue).toHaveLength(1);
-    model.load({ goal: active });
+    model.replaceState(active);
+    expect(model.snapshot().goal?.id).toBe('runtime');
+    model.load(undefined);
+    expect(model.snapshot().goal).toBeUndefined();
+    model.load(active);
     expect(model.snapshot().goal?.id).toBe('runtime');
     model.clear();
-    expect(model.snapshot()).toMatchObject({ execution: 'dormant', queue: [] });
+    expect(model.snapshot()).toMatchObject({ execution: 'dormant' });
+    expect(persisted.at(-1)).toEqual({ goal: null });
+    const unloaded = new GoalRuntimeModel({ persist: () => undefined }, false);
+    expect(unloaded.snapshot().loaded).toBe(false);
+    expect(unloaded.stop('paused').goal).toBeUndefined();
   });
 });
 

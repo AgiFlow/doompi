@@ -1,4 +1,5 @@
 import type { ByteTransport, ByteTransportFactory, ByteTransportHandlers } from '@earendil-works/pi-client';
+import { sealedProtocolSession } from './sealedSession.ts';
 
 const PROTOCOL_PATH = '/api/pi';
 const SECURE_PAGE = 'https:';
@@ -38,20 +39,30 @@ export function createProtocolTransport(url: string): ByteTransportFactory {
 
     socket.addEventListener('message', (event: MessageEvent<ArrayBuffer | Blob | string>) => {
       const data = event.data;
-      // A text frame is not protocol traffic; the codec would reject it, so it
-      // is dropped rather than handed on as bytes it never produced.
       if (typeof data === 'string') return;
-      if (data instanceof ArrayBuffer) handlers.onData(new Uint8Array(data));
-      else void data.arrayBuffer().then((buffer) => handlers.onData(new Uint8Array(buffer)));
+      const open = async (bytes: Uint8Array): Promise<void> => {
+        const plaintext = await sealedProtocolSession.openBinary(bytes);
+        if (plaintext !== undefined) handlers.onData(plaintext);
+      };
+      if (data instanceof ArrayBuffer) void open(new Uint8Array(data));
+      else void data.arrayBuffer().then(async (buffer) => await open(new Uint8Array(buffer)));
     });
     socket.addEventListener('close', () => handlers.onClose());
     socket.addEventListener('error', () => handlers.onError(new Error('The cockpit protocol socket failed')));
 
     return {
       async send(chunk) {
-        // Copied into a plain ArrayBuffer: the protocol codec may hand back a
-        // view onto a shared buffer, which send() will not take.
-        socket.send(chunk.slice().buffer as ArrayBuffer);
+        try {
+          const sealed = await sealedProtocolSession.sealBinary(chunk);
+          // Copied into a plain ArrayBuffer: the protocol codec may hand back a
+          // view onto a shared buffer, which send() will not take.
+          socket.send(sealed.slice().buffer as ArrayBuffer);
+        } catch (error) {
+          const failure = error instanceof Error ? error : new Error('The sealed protocol channel failed.');
+          socket.close();
+          handlers.onError(failure);
+          throw failure;
+        }
       },
       close() {
         socket.close();

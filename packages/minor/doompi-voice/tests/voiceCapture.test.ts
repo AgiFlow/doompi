@@ -18,16 +18,16 @@ describe('what a session must be for autonomous voice to run', () => {
     expect(canRunVoice(undefined)).toBe(false);
   });
 
-  it('offers both actions to any session that can show its indicator', () => {
+  it('offers autonomous first and manual second when voice is off', () => {
     const state = voiceModeState('disabled', true);
-    expect(state.actions.find((action) => action.id === 'activate')?.enabled).toBe(true);
-    // Deactivate is off because nothing is running, not because of the session.
+    expect(state.actions.filter((action) => action.enabled).map((action) => action.id)).toEqual(['activate', 'manual']);
     expect(blocked(state)).toEqual([{ id: 'deactivate', reason: 'Autonomous voice is disabled.' }]);
   });
 
   it('refuses a session with nowhere to show itself, and says why on every action', () => {
     expect(blocked(voiceModeState('disabled', false))).toEqual([
       { id: 'activate', reason: 'Autonomous voice needs a session that can show its indicator.' },
+      { id: 'manual', reason: 'Manual voice needs a session that can show its indicator.' },
       { id: 'deactivate', reason: 'Autonomous voice needs a session that can show its indicator.' },
     ]);
   });
@@ -36,6 +36,6 @@ describe('what a session must be for autonomous voice to run', () => {
     // The mode is registered before any session exists, so the default has to
     // be republished per session; leaving it standing is what made a cockpit
     // session report that voice needed a terminal.
-    expect(blocked(voiceModeState('disabled'))).toHaveLength(2);
+    expect(blocked(voiceModeState('disabled'))).toHaveLength(3);
   });
 });

@@ -19,5 +19,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": [".", "../src/types"]
+  "include": [".", "../src/types", "../tests/web"]
 }

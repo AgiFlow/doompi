@@ -2,7 +2,7 @@
 
 ## Resources
 
-- [Package README](./README.md): Commands, token budgets, queue behavior, state, history, and public API.
+- [Package README](./README.md): Commands, token budgets, the cockpit group, state, history, and public API.
 
 ## How to use
 

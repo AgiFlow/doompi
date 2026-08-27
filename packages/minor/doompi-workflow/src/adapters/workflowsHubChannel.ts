@@ -24,9 +24,7 @@ export function createWorkflowsChannel(options: WorkflowsChannelOptions = {}): W
       const lastPublished = new Map<string, string>();
       const runsFor = (scope: HubSessionScope): WorkflowRunView[] =>
         presentWorkflowRuns(
-          parsed
-            .filter((run) => runBelongsToSession(run, { sessionId: scope.sessionId, cwd: scope.cwd }))
-            .map((run) => run.view),
+          parsed.filter((run) => runBelongsToSession(run, scope.sessionId)).map((run) => run.view),
           Date.now(),
         );
       const watcher = (options.watch ?? watchWorkflowRuns)((runs) => {

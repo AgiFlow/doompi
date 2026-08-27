@@ -147,7 +147,7 @@ function WorkflowPicker({
           variant="outline"
           size="sm"
           data-testid="workflow-picker"
-          className="h-8 w-[360px] justify-start border-doom-border bg-doom-deep px-2.5"
+          className="h-8 w-full max-w-[360px] justify-start border-doom-border bg-doom-deep px-2.5"
         >
           <SearchIcon className="h-3 w-3 shrink-0 text-doom-faint" />
           <span className="min-w-0 flex-1 truncate text-left font-bold text-doom-hi">{selected.displayName}</span>
@@ -170,9 +170,11 @@ function WorkflowPicker({
             />
           </span>
         </PopoverHeader>
-        <div className="grid max-h-[360px] grid-cols-2 gap-2 overflow-y-auto p-2">
+        <div className="grid max-h-[360px] grid-cols-1 gap-2 overflow-y-auto p-2 sm:grid-cols-2">
           {sections.length === 0 ? (
-            <span className="col-span-2 px-2 py-5 text-center text-[10px] text-doom-faint">no matching workflows</span>
+            <span className="px-2 py-5 text-center text-[10px] text-doom-faint sm:col-span-2">
+              no matching workflows
+            </span>
           ) : (
             sections.map((section) => (
               <div key={section.label} className="flex min-w-0 flex-col gap-0.5">
@@ -596,10 +598,10 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
               </Button>
             </div>
             <SelectedAttention run={run} />
-            <div className="flex min-h-0 flex-1 gap-3">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row">
               <div
                 data-testid="jobs-pane"
-                className="flex w-[214px] shrink-0 flex-col overflow-y-auto rounded-md border border-doom-border bg-doom-panel p-1.5"
+                className="flex max-h-44 w-full shrink-0 flex-col overflow-y-auto rounded-md border border-doom-border bg-doom-panel p-1.5 sm:max-h-none sm:w-[214px]"
               >
                 <div className="flex items-center px-2 pb-1 pt-1">
                   <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint">JOBS</span>
