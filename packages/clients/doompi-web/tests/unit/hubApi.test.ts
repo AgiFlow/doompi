@@ -72,7 +72,7 @@ describe('searchDirectories', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(searchDirectories('/work/^')).resolves.toEqual(['/work/app', '/work/lib']);
-    expect(fetchMock).toHaveBeenCalledWith('/api/directories?q=%2Fwork%2F%5E');
+    expect(fetchMock).toHaveBeenCalledWith('/api/directories?q=%2Fwork%2F%5E', undefined);
   });
 
   it('shows nothing when the hub declines or is unreachable', async () => {

@@ -29,7 +29,7 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
   return (
     <aside
       data-testid="activity-dock"
-      className="flex w-[300px] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail"
+      className="flex w-[min(300px,calc(100vw-48px))] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail sm:w-[300px]"
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-doom-border px-4">
         <div className="flex items-center gap-2">

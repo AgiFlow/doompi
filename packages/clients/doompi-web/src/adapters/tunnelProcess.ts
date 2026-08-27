@@ -20,6 +20,8 @@ import {
 export const CLOUDFLARED_ENV = 'DOOMPI_CLOUDFLARED';
 const START_TIMEOUT_MS = 45_000;
 const TERMINATE_GRACE_MS = 2000;
+const SELF_TEST_ATTEMPTS = 10;
+const SELF_TEST_RETRY_MS = 500;
 /** Lines of process output kept for a failure report. */
 const LOG_TAIL = 20;
 const UNAUTHORIZED = 401;
@@ -42,7 +44,11 @@ export interface TunnelProcessOptions {
   /** Test seam: stands in for node:child_process.spawn. */
   spawnProcess?: typeof spawn;
   /** Test seam: reaches the tunnel from outside, so the self-test needs no network. */
-  probe?: (url: string) => Promise<ProbeResult>;
+  probe?: (url: string, signal: AbortSignal) => Promise<ProbeResult>;
+  /** Test seam: production waits briefly for a new public hostname to propagate. */
+  selfTestRetryMs?: number;
+  /** Test seam: production bounds the complete startup, including its self-test. */
+  startTimeoutMs?: number;
   /** Called when cloudflared exits on its own, so the host can tear the listener down. */
   onExit?: (message: string) => void;
 }
@@ -70,8 +76,8 @@ export function findCloudflared(env: NodeJS.ProcessEnv = process.env): string | 
   return undefined;
 }
 
-async function defaultProbe(url: string): Promise<ProbeResult> {
-  const response = await fetch(url, { redirect: 'manual' });
+async function defaultProbe(url: string, signal: AbortSignal): Promise<ProbeResult> {
+  const response = await fetch(url, { redirect: 'manual', signal });
   return { status: response.status, body: await response.text() };
 }
 
@@ -131,9 +137,14 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
   const notice = options.onNotice ?? ((): void => {});
   const spawnProcess = options.spawnProcess ?? spawn;
   const probe = options.probe ?? defaultProbe;
+  const selfTestRetryMs = options.selfTestRetryMs ?? SELF_TEST_RETRY_MS;
+  const startTimeoutMs = options.startTimeoutMs ?? START_TIMEOUT_MS;
   const pidPath = path.join(options.stateDir, PID_FILE);
 
   return async function launch(input: TunnelStartInput): Promise<TunnelStartResult> {
+    if (input.signal?.aborted === true) {
+      return { ok: false, failure: 'exited', message: 'Tunnel startup was cancelled.' };
+    }
     const binary = options.cloudflaredPath ?? process.env[CLOUDFLARED_ENV] ?? findCloudflared();
     if (binary === undefined || binary === '') {
       return { ok: false, failure: 'not_installed', message: describeTunnelFailure('not_installed') };
@@ -155,6 +166,8 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
     const lines: string[] = [];
     let stopped = false;
     let settle: ((result: TunnelStartResult) => void) | undefined;
+    let selfTestStarted = false;
+    const selfTestAbort = new AbortController();
 
     const killTree = (): void => {
       try {
@@ -211,28 +224,44 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
     let seenUrl = configuredOrigin;
     let seenConnection = input.config.kind === 'named';
 
+    const waitToRetry = async (): Promise<void> => {
+      await new Promise<void>((resolve) => {
+        const done = (): void => {
+          clearTimeout(timer);
+          selfTestAbort.signal.removeEventListener('abort', done);
+          resolve();
+        };
+        const timer = setTimeout(done, selfTestRetryMs);
+        selfTestAbort.signal.addEventListener('abort', done, { once: true });
+      });
+    };
+
     /** Proves end to end that pairing is reachable and that everything else is not. */
     const runSelfTest = async (origin: string): Promise<TunnelStartResult> => {
-      let pairResponse: ProbeResult;
-      let healthResponse: ProbeResult;
-      try {
-        pairResponse = await probe(`${origin}${PAIRING_PAGE_ROUTE}`);
-        healthResponse = await probe(`${origin}/api/health`);
-      } catch (error) {
-        const cause = error instanceof Error ? error.message : String(error);
-        await stop();
+      let pairResponse: ProbeResult | undefined;
+      let healthResponse: ProbeResult | undefined;
+      let cause = 'fetch failed';
+      for (let attempt = 0; attempt < SELF_TEST_ATTEMPTS && !selfTestAbort.signal.aborted; attempt += 1) {
+        try {
+          pairResponse = await probe(`${origin}${PAIRING_PAGE_ROUTE}`, selfTestAbort.signal);
+          healthResponse = await probe(`${origin}/api/health`, selfTestAbort.signal);
+          break;
+        } catch (error) {
+          cause = error instanceof Error ? error.message : String(error);
+          if (attempt + 1 < SELF_TEST_ATTEMPTS && !selfTestAbort.signal.aborted) await waitToRetry();
+        }
+      }
+      if (pairResponse === undefined || healthResponse === undefined) {
         return { ok: false, failure: 'self_test_failed', message: `The tunnel did not answer: ${cause}` };
       }
       if (healthResponse.status !== UNAUTHORIZED) {
         // The agent would be on the public internet unauthenticated. This is
         // the one failure worth an automatic abort rather than a warning.
-        await stop();
         const message = `${describeTunnelFailure('self_test_failed')} /api/health answered ${String(healthResponse.status)} through the tunnel.`;
         notice(message);
         return { ok: false, failure: 'self_test_failed', message };
       }
       if (pairResponse.status !== OK || !pairResponse.body.includes(PAIRING_PAGE_MARKER)) {
-        await stop();
         const message = `The pairing page answered ${String(pairResponse.status)} through the tunnel.`;
         notice(message);
         return { ok: false, failure: 'self_test_failed', message };
@@ -243,38 +272,47 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
 
     const consider = (chunk: string): void => {
       lines.push(chunk);
-      if (settle === undefined) return;
+      if (settle === undefined || selfTestStarted) return;
       seenUrl ??= extractTunnelUrl(chunk);
       seenConnection ||= mentionsRegisteredConnection(chunk);
       if (seenUrl === undefined || !seenConnection) return;
-      const origin = seenUrl;
-      const finish = settle;
-      settle = undefined;
-      void runSelfTest(origin).then(finish);
+      selfTestStarted = true;
+      input.acceptOrigin?.(seenUrl);
+      void runSelfTest(seenUrl).then((result) => settle?.(result));
     };
 
     child.stdout?.on('data', (data: Buffer) => consider(data.toString()));
     child.stderr?.on('data', (data: Buffer) => consider(data.toString()));
 
     return await new Promise<TunnelStartResult>((resolve) => {
-      settle = resolve;
-      const deadline = setTimeout(() => {
+      let deadline: ReturnType<typeof setTimeout>;
+      const finish = (result: TunnelStartResult, stopProcess = !result.ok): void => {
         if (settle === undefined) return;
         settle = undefined;
-        void stop().then(() => {
-          resolve({
-            ok: false,
-            failure: 'timeout',
-            message: `${describeTunnelFailure('timeout')}\n${tailOf(lines)}`,
-          });
+        clearTimeout(deadline);
+        input.signal?.removeEventListener('abort', cancel);
+        selfTestAbort.abort();
+        if (stopProcess) {
+          void stop().then(() => resolve(result));
+        } else {
+          resolve(result);
+        }
+      };
+      const cancel = (): void => {
+        finish({ ok: false, failure: 'exited', message: 'Tunnel startup was cancelled.' });
+      };
+      settle = (result) => finish(result);
+      deadline = setTimeout(() => {
+        finish({
+          ok: false,
+          failure: 'timeout',
+          message: `${describeTunnelFailure('timeout')}\n${tailOf(lines)}`,
         });
-      }, START_TIMEOUT_MS);
+      }, startTimeoutMs);
+      input.signal?.addEventListener('abort', cancel, { once: true });
 
       child.once('error', (error) => {
-        if (settle === undefined) return;
-        clearTimeout(deadline);
-        settle = undefined;
-        resolve({
+        finish({
           ok: false,
           failure: 'spawn_failed',
           message: `${describeTunnelFailure('spawn_failed')} ${error.message}`,
@@ -282,13 +320,10 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
       });
 
       child.once('exit', (code) => {
-        clearTimeout(deadline);
         process.off('exit', onProcessExit);
         const message = `${describeTunnelFailure('exited')} (code ${String(code)})\n${tailOf(lines)}`;
         if (settle !== undefined) {
-          const finish = settle;
-          settle = undefined;
-          finish({ ok: false, failure: 'exited', message });
+          finish({ ok: false, failure: 'exited', message }, false);
           return;
         }
         // It came up and then died: network loss, an edge rejection, a
@@ -301,6 +336,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
       // its readiness conditions are met the moment it is spawned. Waiting for
       // output it may never print would hang until the deadline.
       if (seenUrl !== undefined && seenConnection) consider('');
+      if (input.signal?.aborted === true) cancel();
     });
   };
 }

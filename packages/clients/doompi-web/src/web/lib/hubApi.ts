@@ -1,4 +1,5 @@
 import { DIRECTORIES_API_ROUTE, SESSIONS_API_ROUTE } from '../../types/hub.ts';
+import { sealedHttpSession } from './sealedSession.ts';
 import { fetchWithStepUp } from './stepUp.ts';
 
 export type CreateSessionResult = { sessionId: string } | { error: string };
@@ -43,7 +44,9 @@ export type StopSessionResult = { ok: true } | { error: string };
 export async function stopSession(sessionId: string): Promise<StopSessionResult> {
   let response: Response;
   try {
-    response = await fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+    response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+    });
   } catch {
     return { error: 'The cockpit hub is unreachable.' };
   }
@@ -70,7 +73,9 @@ export type RestartSessionResult = { ok: true } | { error: string };
 export async function restartSession(sessionId: string): Promise<RestartSessionResult> {
   let response: Response;
   try {
-    response = await fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/restart`, { method: 'POST' });
+    response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/restart`, {
+      method: 'POST',
+    });
   } catch {
     return { error: 'The cockpit hub is unreachable.' };
   }
@@ -88,7 +93,9 @@ export async function restartSession(sessionId: string): Promise<RestartSessionR
 /** File paths under a session's cwd matching the query, for @ completion. */
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {
-    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`);
+    const response = await sealedHttpSession.fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`,
+    );
     if (!response.ok) return [];
     const body = (await response.json()) as { files?: unknown };
     return Array.isArray(body.files) ? body.files.filter((file): file is string => typeof file === 'string') : [];
@@ -104,7 +111,7 @@ export async function searchSessionFiles(sessionId: string, query: string): Prom
  */
 export async function searchDirectories(query: string): Promise<string[]> {
   try {
-    const response = await fetch(`${DIRECTORIES_API_ROUTE}?q=${encodeURIComponent(query)}`);
+    const response = await sealedHttpSession.fetch(`${DIRECTORIES_API_ROUTE}?q=${encodeURIComponent(query)}`);
     if (!response.ok) return [];
     const body = (await response.json()) as { directories?: unknown };
     return Array.isArray(body.directories)

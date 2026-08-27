@@ -52,6 +52,15 @@ export function evaluateDevice(
   return { ok: true, record };
 }
 
+/** Exact deadline at which this device stops authorizing, or undefined while expiry is disabled. */
+export function deviceExpiryAt(record: DeviceRecord, settings: RemoteAccessSettings): number | undefined {
+  if (!settings.sessionExpiryEnabled) return undefined;
+  return Math.min(
+    record.lastSeenAt + settings.idleMinutes * MS_PER_MINUTE,
+    record.createdAt + settings.absoluteHours * MS_PER_HOUR,
+  );
+}
+
 export function touchDevice(record: DeviceRecord, now: number): DeviceRecord {
   return { ...record, lastSeenAt: now };
 }

@@ -1,4 +1,5 @@
 import { REMOTE_API_ROUTE, type RemoteAccessSettings, type RemoteAccessStateView } from '../../types/remoteAccess.ts';
+import { sealedHttpSession } from './sealedSession.ts';
 
 export type StateResult = { state: RemoteAccessStateView } | { error: string };
 /** Enabling a contained cockpit moves the hub, so the answer says the address is about to change. */
@@ -24,7 +25,7 @@ async function request<T>(
 ): Promise<T | { error: string }> {
   let response: Response;
   try {
-    response = await fetch(input, init);
+    response = await sealedHttpSession.fetch(input, init);
   } catch {
     return { error: UNREACHABLE };
   }

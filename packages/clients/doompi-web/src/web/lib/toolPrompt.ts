@@ -37,7 +37,7 @@ function promptDialog(dialog: DialogRequest): ToolPromptDialog {
 }
 
 /** The three facts the verdict rests on, so a caller can memoize on exactly those. */
-export type ToolPromptInput = Pick<SessionState, 'dialog' | 'entries' | 'statuses'>;
+export type ToolPromptInput = Pick<SessionState, 'dialog' | 'entries' | 'activeTools' | 'statuses'>;
 
 /**
  * `spokenFor` is a request some other surface has already taken: the one the
@@ -51,14 +51,18 @@ export function toolPromptClaim(state: ToolPromptInput, spokenFor: string | null
   if (spokenFor === request.id) return null;
 
   const dialog = promptDialog(request);
-  // Newest first: a tool started later is the one the agent is waiting on.
-  for (let index = state.entries.length - 1; index >= 0; index -= 1) {
-    const entry = state.entries[index];
-    if (entry === undefined || entry.kind !== 'tool' || !entry.running) continue;
-    const prompt = pluginToolRenderer(entry.name, state.statuses)?.prompt;
-    if (prompt === undefined) continue;
-    if (prompt.claims?.(dialog, entry.args) === false) continue;
-    return { entry, prompt, dialog };
+  // Live tools are kept outside the protocol-owned transcript. Search those
+  // first, then fall back to timeline tools for threads and direct frame clients.
+  const groups = [state.activeTools, state.entries] as const;
+  for (const entries of groups) {
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (entry === undefined || entry.kind !== 'tool' || !entry.running) continue;
+      const prompt = pluginToolRenderer(entry.name, state.statuses)?.prompt;
+      if (prompt === undefined) continue;
+      if (prompt.claims?.(dialog, entry.args) === false) continue;
+      return { entry, prompt, dialog };
+    }
   }
   return null;
 }

@@ -204,7 +204,7 @@ export function Composer() {
   // to answer, and there is nothing to type here until the agent is unblocked.
   if (prompt !== null) {
     return (
-      <div className="shrink-0 border-t border-doom-border bg-doom-rail px-5 pt-3 pb-2.5">
+      <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
           <ComposerPrompt claim={prompt} sessionId={activeSessionId()} />
         </div>
@@ -213,7 +213,7 @@ export function Composer() {
   }
 
   return (
-    <div className="shrink-0 border-t border-doom-border bg-doom-rail px-5 pt-3 pb-2.5">
+    <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
       <Popover
         open={completion !== null}
         onOpenChange={(next) => {
@@ -336,7 +336,7 @@ export function Composer() {
               />
             </div>
             <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
-              <span data-testid="composer-hint" className="text-[10px] text-doom-faint">
+              <span data-testid="composer-hint" className="text-[10px] text-doom-faint max-sm:hidden">
                 {streaming
                   ? 'enter steers the run · esc aborts'
                   : 'enter sends · shift+enter for a new line · space opens leader'}

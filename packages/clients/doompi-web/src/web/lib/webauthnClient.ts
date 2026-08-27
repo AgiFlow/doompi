@@ -1,5 +1,6 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { REMOTE_API_ROUTE, STEP_UP_HEADER } from '../../types/remoteAccess.ts';
+import { sealedHttpSession } from './sealedSession.ts';
 
 /**
  * The browser half of the passkey ceremonies.
@@ -25,7 +26,7 @@ export function passkeysAvailable(): boolean {
 }
 
 async function postJson(route: string, body: unknown): Promise<Record<string, unknown> | undefined> {
-  const response = await fetch(route, {
+  const response = await sealedHttpSession.fetch(route, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',

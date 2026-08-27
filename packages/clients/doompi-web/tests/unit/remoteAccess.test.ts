@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import { connectSealedChannel } from '@agimon-ai/doompi-web-security/browser';
 import { createRemoteAccess, type TunnelListener } from '../../src/adapters/remoteAccess.ts';
 import { DEFAULT_REMOTE_SETTINGS } from '../../src/services/remoteAccessSettings.ts';
 import type { StoredCredential } from '../../src/services/webauthnPolicy.ts';
-import type { RemoteAccessSettings, TunnelStartResult } from '../../src/types/remoteAccess.ts';
+import type { RemoteAccessSettings, TunnelLauncher } from '../../src/types/remoteAccess.ts';
 
 const START = 1_700_000_000_000;
 const ORIGIN = 'https://doom.example.com';
@@ -10,7 +11,7 @@ const ORIGIN = 'https://doom.example.com';
 function harness(
   overrides: {
     settings?: Partial<RemoteAccessSettings>;
-    launch?: () => Promise<TunnelStartResult>;
+    launch?: TunnelLauncher;
     contained?: boolean;
     onHandover?: (settings: RemoteAccessSettings) => void;
   } = {},
@@ -140,6 +141,35 @@ describe('switching off', () => {
     expect(remote.tunnelPolicy()).toBeUndefined();
   });
 
+  it('cancels a tunnel that is still starting before closing its listener', async () => {
+    let launchStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      launchStarted = resolve;
+    });
+    let startupAborted = false;
+    const { remote, counts } = harness({
+      launch: async (input) =>
+        await new Promise((resolve) => {
+          launchStarted?.();
+          input.signal?.addEventListener(
+            'abort',
+            () => {
+              startupAborted = true;
+              resolve({ ok: false, failure: 'exited', message: 'cancelled' });
+            },
+            { once: true },
+          );
+        }),
+    });
+    const enabling = remote.enable();
+    await started;
+    await remote.close();
+
+    expect(startupAborted).toBe(true);
+    expect(counts().closed).toBe(1);
+    await expect(enabling).resolves.toEqual({ ok: false, error: 'Tunnel startup was cancelled.' });
+    expect(remote.state().status).toBe('off');
+  });
   it('does nothing when already off', async () => {
     const { remote, counts } = harness();
     await remote.disable();
@@ -150,7 +180,7 @@ describe('switching off', () => {
     const { remote } = harness();
     await remote.enable();
     const closes: number[] = [];
-    remote.trackSocket((code) => closes.push(code));
+    remote.trackSocket('device', (code) => closes.push(code));
     await remote.disable();
     expect(closes).toEqual([1008]);
   });
@@ -159,7 +189,7 @@ describe('switching off', () => {
     const { remote } = harness();
     await remote.enable();
     const closes: number[] = [];
-    const untrack = remote.trackSocket((code) => closes.push(code));
+    const untrack = remote.trackSocket('device', (code) => closes.push(code));
     untrack();
     await remote.disable();
     expect(closes).toEqual([]);
@@ -170,24 +200,107 @@ describe('the sealed channel', () => {
   it('is only offered once a tunnel is up', () => {
     const { remote } = harness();
     expect(remote.channelPublicKey()).toBeUndefined();
-    expect(remote.openChannel('device', 'anything')).toBe(false);
+    expect(remote.openChannel('device', 'session', 'anything')).toBe(false);
   });
 
   it('refuses a key that is not a point on the curve', async () => {
     const { remote } = harness();
     await remote.enable();
-    expect(remote.openChannel('device', 'bm90LWEta2V5')).toBe(false);
-    expect(remote.channelFor('device')).toBeUndefined();
+    expect(remote.openChannel('device', 'session', 'bm90LWEta2V5')).toBe(false);
+    expect(remote.channelFor('device', 'session')).toBeUndefined();
   });
 
-  it('drops the channel of a device that is revoked', async () => {
+  it('refuses a peer key that was already accepted for another scope', async () => {
     const { remote } = harness();
     await remote.enable();
-    const enrolled = remote.sessionForPasskey('iPhone');
-    expect(remote.authorize(enrolled.token)).toBe(enrolled.record.id);
-    remote.revokeDevice(enrolled.record.id);
-    expect(remote.channelFor(enrolled.record.id)).toBeUndefined();
-    expect(remote.authorize(enrolled.token)).toBeUndefined();
+    const hostKey = remote.channelPublicKey();
+    if (hostKey === undefined) throw new Error('no host channel key');
+    const connected = await connectSealedChannel(hostKey);
+    if (connected === undefined) throw new Error('browser channel failed');
+    expect(remote.openChannel('device', 'session', connected.clientPublicKey)).toBe(true);
+    expect(remote.openChannel('device', 'protocol', connected.clientPublicKey)).toBe(false);
+  });
+
+  it('drops only the revoked device channels and sockets', async () => {
+    const { remote } = harness();
+    await remote.enable();
+    const revoked = remote.sessionForPasskey('iPhone');
+    const survivor = remote.sessionForPasskey('iPad');
+    const hostKey = remote.channelPublicKey();
+    if (hostKey === undefined) throw new Error('no host channel key');
+    const session = await connectSealedChannel(hostKey);
+    const protocol = await connectSealedChannel(hostKey);
+    const survivorHttp = await connectSealedChannel(hostKey);
+    if (session === undefined || protocol === undefined || survivorHttp === undefined) {
+      throw new Error('browser channel failed');
+    }
+    expect(remote.openChannel(revoked.record.id, 'session', session.clientPublicKey)).toBe(true);
+    expect(remote.openChannel(revoked.record.id, 'protocol', protocol.clientPublicKey)).toBe(true);
+    expect(remote.openChannel(survivor.record.id, 'http', survivorHttp.clientPublicKey)).toBe(true);
+    const closes: string[] = [];
+    remote.trackSocket(revoked.record.id, (_code, reason) => closes.push(`revoked: ${reason}`));
+    remote.trackSocket(survivor.record.id, (_code, reason) => closes.push(`survivor: ${reason}`));
+
+    remote.revokeDevice(revoked.record.id);
+
+    expect(remote.channelFor(revoked.record.id, 'session')).toBeUndefined();
+    expect(remote.channelFor(revoked.record.id, 'protocol')).toBeUndefined();
+    expect(remote.authorize(revoked.token)).toBeUndefined();
+    expect(remote.channelFor(survivor.record.id, 'http')).toBeDefined();
+    expect(remote.authorize(survivor.token)).toBe(survivor.record.id);
+    expect(closes).toEqual(['revoked: device revoked']);
+  });
+
+  it('drops only the expired device channels and sockets', async () => {
+    const { remote, advance } = harness({ settings: { sessionExpiryEnabled: true, idleMinutes: 5 } });
+    await remote.enable();
+    const expired = remote.sessionForPasskey('iPhone');
+    const hostKey = remote.channelPublicKey();
+    if (hostKey === undefined) throw new Error('no host channel key');
+    const expiredChannel = await connectSealedChannel(hostKey);
+    if (expiredChannel === undefined) throw new Error('browser channel failed');
+    expect(remote.openChannel(expired.record.id, 'session', expiredChannel.clientPublicKey)).toBe(true);
+    expect(remote.authorize(expired.token)).toBe(expired.record.id);
+    const closes: string[] = [];
+    remote.trackSocket(expired.record.id, (_code, reason) => closes.push(`expired: ${reason}`));
+
+    advance(6 * 60_000);
+    const survivor = remote.sessionForPasskey('iPad');
+    const survivorChannel = await connectSealedChannel(hostKey);
+    if (survivorChannel === undefined) throw new Error('browser channel failed');
+    expect(remote.openChannel(survivor.record.id, 'http', survivorChannel.clientPublicKey)).toBe(true);
+    remote.trackSocket(survivor.record.id, (_code, reason) => closes.push(`survivor: ${reason}`));
+
+    expect(remote.authorize(expired.token)).toBeUndefined();
+    expect(remote.channelFor(expired.record.id, 'session')).toBeUndefined();
+    expect(remote.channelFor(survivor.record.id, 'http')).toBeDefined();
+    expect(remote.authorize(survivor.token)).toBe(survivor.record.id);
+    expect(closes).toEqual(['expired: device expired']);
+  });
+
+  it('closes a live socket at the exact idle deadline without another request', async () => {
+    vi.useFakeTimers();
+    try {
+      const { remote, advance } = harness({ settings: { sessionExpiryEnabled: true, idleMinutes: 5 } });
+      await remote.enable();
+      const device = remote.sessionForPasskey('iPhone');
+      const hostKey = remote.channelPublicKey();
+      if (hostKey === undefined) throw new Error('no host channel key');
+      const channel = await connectSealedChannel(hostKey);
+      if (channel === undefined) throw new Error('browser channel failed');
+      expect(remote.openChannel(device.record.id, 'session', channel.clientPublicKey)).toBe(true);
+      expect(remote.authorize(device.token)).toBe(device.record.id);
+      const close = vi.fn();
+      remote.trackSocket(device.record.id, close);
+
+      advance(5 * 60_000);
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+      expect(close).toHaveBeenCalledWith(1008, 'device expired');
+      expect(remote.channelFor(device.record.id, 'session')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -214,6 +327,20 @@ describe('settings while running', () => {
     expect(remote.state().closesAt).toBeDefined();
     remote.updateSettings({ autoCloseEnabled: false });
     expect(remote.state().closesAt).toBeUndefined();
+  });
+
+  it('closes an already idle socket when the expiry window is shortened', async () => {
+    const { remote, advance } = harness({ settings: { sessionExpiryEnabled: true, idleMinutes: 30 } });
+    await remote.enable();
+    const device = remote.sessionForPasskey('iPhone');
+    expect(remote.authorize(device.token)).toBe(device.record.id);
+    const close = vi.fn();
+    remote.trackSocket(device.record.id, close);
+    advance(10 * 60_000);
+
+    remote.updateSettings({ idleMinutes: 5 });
+
+    expect(close).toHaveBeenCalledWith(1008, 'device expired');
   });
 });
 

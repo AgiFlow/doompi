@@ -41,7 +41,7 @@ function StepBar({
   onPick: (index: number) => void;
 }) {
   return (
-    <div data-testid="questionnaire-steps" className="flex flex-wrap items-center gap-1.5">
+    <div data-testid="questionnaire-steps" className="flex min-w-0 flex-wrap items-center gap-1.5">
       {questions.map((question, index) => {
         const answered = isAnswered(draftEntry(draft, index));
         const active = index === current;
@@ -91,12 +91,12 @@ function QuestionBody({
   const typing = entry.custom !== null;
   const preview = question.options[cursor]?.preview;
   return (
-    <div className="flex flex-col gap-2">
-      <p data-testid="questionnaire-question" className="text-[13px] leading-relaxed text-doom-hi">
+    <div className="flex min-w-0 flex-col gap-2">
+      <p data-testid="questionnaire-question" className="break-words text-[13px] leading-relaxed text-doom-hi">
         {question.question}
       </p>
 
-      <div role="listbox" aria-label="options" className="flex flex-col">
+      <div role="listbox" aria-label="options" className="flex min-w-0 flex-col">
         {question.options.map((option, optionIndex) => {
           const chosen = entry.selected.includes(option.label);
           return (
@@ -112,15 +112,19 @@ function QuestionBody({
               onClick={() =>
                 onDraft(chooseOption(draft, index, option.label, question.multiSelect), !question.multiSelect)
               }
-              className="items-start gap-2.5 rounded-md px-2.5 py-1.5"
+              className="min-w-0 items-start gap-2.5 rounded-md px-2.5 py-1.5 whitespace-normal"
             >
               <span className={`mt-[2px] shrink-0 text-[11px] ${chosen ? 'text-doom-green' : 'text-doom-faint'}`}>
                 {question.multiSelect ? (chosen ? '[x]' : '[ ]') : chosen ? '●' : '○'}
               </span>
-              <OptionLabel className="flex flex-col gap-0.5">
-                <span className={`text-[12px] ${chosen ? 'text-doom-hi' : 'text-doom-text'}`}>{option.label}</span>
+              <OptionLabel className="min-w-0 flex flex-col gap-0.5 text-left">
+                <span className={`break-words text-[12px] ${chosen ? 'text-doom-hi' : 'text-doom-text'}`}>
+                  {option.label}
+                </span>
                 {option.description ? (
-                  <span className="text-[11px] leading-relaxed text-doom-dim">{option.description}</span>
+                  <span className="break-words text-[11px] leading-relaxed whitespace-normal text-doom-dim">
+                    {option.description}
+                  </span>
                 ) : null}
               </OptionLabel>
             </OptionRow>
@@ -131,10 +135,10 @@ function QuestionBody({
           active={typing}
           data-testid="questionnaire-option-custom"
           onClick={() => onDraft(setCustom(draft, index, entry.custom ?? ''), false)}
-          className="items-center gap-2.5 rounded-md px-2.5 py-1.5"
+          className="min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1.5 whitespace-normal"
         >
           <span className="shrink-0 text-[11px] text-doom-faint">✎</span>
-          <OptionLabel className="text-[12px] text-doom-text">{CUSTOM_LABEL}</OptionLabel>
+          <OptionLabel className="min-w-0 text-[12px] whitespace-normal text-doom-text">{CUSTOM_LABEL}</OptionLabel>
         </OptionRow>
       </div>
 
@@ -251,7 +255,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
       ref={frame}
       tabIndex={-1}
       data-testid="questionnaire"
-      className="flex flex-col outline-none"
+      className="flex min-w-0 flex-col overflow-hidden outline-none"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -283,7 +287,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
         }
       }}
     >
-      <div className="flex items-center gap-3 px-3.5 pt-2.5 pb-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pt-2.5 pb-2 sm:gap-3 sm:px-3.5">
         <StepBar questions={questions} draft={draft} current={current} onPick={show} />
         <span className="min-w-0 flex-1" />
         <Badge size="xs" className="shrink-0 border-transparent bg-doom-panel py-0.5 text-[9px] text-doom-dim">
@@ -293,7 +297,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
 
       <Separator />
 
-      <div className="max-h-[46vh] overflow-y-auto px-3.5 py-3">
+      <div className="max-h-[46vh] min-w-0 overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-3.5">
         <QuestionBody
           question={question}
           index={current}
@@ -306,8 +310,8 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
 
       <Separator />
 
-      <div className="flex items-center gap-2 px-3.5 py-2">
-        <span data-testid="questionnaire-hint" className="min-w-0 truncate text-[10px] text-doom-faint">
+      <div className="flex min-w-0 items-center gap-2 px-3 py-2 sm:px-3.5">
+        <span data-testid="questionnaire-hint" className="min-w-0 truncate text-[10px] text-doom-faint max-sm:hidden">
           <Kbd>←→</Kbd> questions · <Kbd>↑↓</Kbd> options · <Kbd>enter</Kbd>{' '}
           {question.multiSelect ? 'toggles' : 'selects'} · <Kbd>esc</Kbd> cancels
         </span>
@@ -322,7 +326,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
           onClick={submit}
           disabled={!complete}
           title={complete ? 'send every answer to the agent' : 'answer every question first'}
-          className="px-3.5"
+          className="shrink-0 px-3 max-sm:max-w-32 max-sm:truncate sm:px-3.5"
         >
           submit answers
         </Button>

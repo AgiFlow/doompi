@@ -1,6 +1,7 @@
 import { Store } from '@tanstack/store';
 import type { RemoteAccessSettings, RemoteAccessStateView } from '../../types/remoteAccess.ts';
 import { passkeysAvailable, registerPasskey } from '../lib/webauthnClient.ts';
+import { sealedHttpSession } from '../lib/sealedSession.ts';
 import {
   approvePairing,
   denyPairing,
@@ -72,7 +73,7 @@ export function showRemoteOptions(): void {
 /** Whether this tunnel and this browser can carry a passkey at all. */
 export async function refreshPasskeys(): Promise<void> {
   try {
-    const response = await fetch('/api/remote/passkeys', { credentials: 'same-origin' });
+    const response = await sealedHttpSession.fetch('/api/remote/passkeys', { credentials: 'same-origin' });
     if (!response.ok) return;
     const body = (await response.json()) as {
       support: { supported: boolean; reason?: string };

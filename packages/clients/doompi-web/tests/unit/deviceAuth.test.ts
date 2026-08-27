@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeviceAuth } from '../../src/adapters/deviceAuth.ts';
 import { DEFAULT_REMOTE_SETTINGS } from '../../src/services/remoteAccessSettings.ts';
 import type { RemoteAccessSettings } from '../../src/types/remoteAccess.ts';
@@ -10,15 +10,24 @@ const AGENT = 'Mozilla/5.0 (iPhone) Safari/604.1';
 function auth(overrides: Partial<RemoteAccessSettings> = {}) {
   let now = START;
   const notices: string[] = [];
+  const dropped: Array<{ id: string; reason: 'revoked' | 'expired' }> = [];
   const settings: RemoteAccessSettings = { ...DEFAULT_REMOTE_SETTINGS, ...overrides };
   const devices = createDeviceAuth({
     settings: () => settings,
     now: () => now,
     onNotice: (message) => notices.push(message),
+    onDrop: (record, reason) => dropped.push({ id: record.id, reason }),
   });
-  return { devices, notices, advance: (ms: number) => (now += ms) };
+  return {
+    devices,
+    notices,
+    dropped,
+    advance: (ms: number) => (now += ms),
+    update: (patch: Partial<RemoteAccessSettings>) => Object.assign(settings, patch),
+  };
 }
 
+afterEach(() => vi.useRealTimers());
 describe('createDeviceAuth', () => {
   it('hands back a token once and keeps only its digest', () => {
     const { devices } = auth();
@@ -55,15 +64,39 @@ describe('createDeviceAuth', () => {
   });
 
   it('drops an expired device on the way past rather than leaving it listed', () => {
-    const { devices, advance } = auth({ sessionExpiryEnabled: true, idleMinutes: 5 });
-    const { token } = devices.enrol({ userAgent: AGENT });
+    const { devices, dropped, advance } = auth({ sessionExpiryEnabled: true, idleMinutes: 5 });
+    const { token, record } = devices.enrol({ userAgent: AGENT });
     advance(6 * MINUTE);
     expect(devices.verify(token)).toBeUndefined();
     expect(devices.list()).toHaveLength(0);
+    expect(dropped).toEqual([{ id: record.id, reason: 'expired' }]);
   });
 
+  it('drops a device at its exact idle deadline without another request', () => {
+    vi.useFakeTimers();
+    const { devices, dropped, advance } = auth({ sessionExpiryEnabled: true, idleMinutes: 5 });
+    const { record } = devices.enrol({ userAgent: AGENT });
+
+    advance(5 * MINUTE);
+    vi.advanceTimersByTime(5 * MINUTE);
+
+    expect(devices.list()).toEqual([]);
+    expect(dropped).toEqual([{ id: record.id, reason: 'expired' }]);
+  });
+
+  it('applies a shortened expiry setting immediately', () => {
+    const { devices, dropped, advance, update } = auth({ sessionExpiryEnabled: true, idleMinutes: 30 });
+    const { record } = devices.enrol({ userAgent: AGENT });
+    advance(10 * MINUTE);
+
+    update({ idleMinutes: 5 });
+    devices.reschedule();
+
+    expect(devices.list()).toEqual([]);
+    expect(dropped).toEqual([{ id: record.id, reason: 'expired' }]);
+  });
   it('revokes one device by id and leaves the rest', () => {
-    const { devices, notices } = auth();
+    const { devices, notices, dropped } = auth();
     const first = devices.enrol({ userAgent: AGENT });
     const second = devices.enrol({ userAgent: AGENT });
     expect(devices.revoke(first.record.id)).toBe(true);
@@ -71,6 +104,7 @@ describe('createDeviceAuth', () => {
     expect(devices.verify(first.token)).toBeUndefined();
     expect(devices.verify(second.token)).toBeDefined();
     expect(notices.some((message) => message.startsWith('revoked'))).toBe(true);
+    expect(dropped).toEqual([{ id: first.record.id, reason: 'revoked' }]);
   });
 
   it('revokes everything when remote access is switched off', () => {

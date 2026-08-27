@@ -69,21 +69,73 @@ describe('findCloudflared', () => {
 describe('starting a tunnel', () => {
   it('reports the URL it announced once the self-test passes', async () => {
     const binary = script('cloudflared', `cat <<'EOF'\n${BANNER}\nEOF\nsleep 30`);
+    const events: string[] = [];
     const launch = createTunnelLauncher({
       cloudflaredPath: binary,
       stateDir,
-      probe: goodProbe,
+      probe: async (url) => {
+        events.push('probe');
+        return await goodProbe(url);
+      },
       onNotice: (message) => notices.push(message),
     });
-    const result = await launch({ port: 7999, config: { kind: 'quick' } });
+    const result = await launch({
+      port: 7999,
+      config: { kind: 'quick' },
+      acceptOrigin: (origin) => events.push(`accept ${origin}`),
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.publicOrigin).toBe(PUBLIC_ORIGIN);
+    expect(events).toEqual([`accept ${PUBLIC_ORIGIN}`, 'probe', 'probe']);
     expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(true);
     await result.stop();
     expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(false);
   });
 
+  it('retries while a new public hostname is still propagating', async () => {
+    const binary = script('cloudflared', `cat <<'EOF'\n${BANNER}\nEOF\nsleep 30`);
+    let attempts = 0;
+    const launch = createTunnelLauncher({
+      cloudflaredPath: binary,
+      stateDir,
+      selfTestRetryMs: 0,
+      probe: async (url) => {
+        attempts += 1;
+        if (attempts === 1) throw new TypeError('fetch failed');
+        return await goodProbe(url);
+      },
+    });
+    const result = await launch({ port: 7999, config: { kind: 'quick' } });
+    expect(result.ok).toBe(true);
+    expect(attempts).toBe(3);
+    if (result.ok) await result.stop();
+  });
+
+  it('keeps the startup deadline active through an in-progress self-test', async () => {
+    const binary = script('cloudflared', `cat <<'EOF'\n${BANNER}\nEOF\nsleep 30`);
+    let probeAborted = false;
+    const launch = createTunnelLauncher({
+      cloudflaredPath: binary,
+      stateDir,
+      startTimeoutMs: 25,
+      probe: async (_url, signal) =>
+        await new Promise<ProbeResult>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              probeAborted = true;
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        }),
+    });
+    const result = await launch({ port: 7999, config: { kind: 'quick' } });
+    expect(result).toMatchObject({ ok: false, failure: 'timeout' });
+    expect(probeAborted).toBe(true);
+    expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(false);
+  });
   it('kills the tunnel when the guard is not armed', async () => {
     // The one failure worth aborting on rather than warning about: the agent
     // would be reachable from the public internet with no credential.

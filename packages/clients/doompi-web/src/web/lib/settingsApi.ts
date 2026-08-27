@@ -8,6 +8,7 @@ import {
   type SettingsRepository,
   type SettingsWriteRequest,
 } from '../../types/settings.ts';
+import { sealedHttpSession } from './sealedSession.ts';
 import { fetchWithStepUp } from './stepUp.ts';
 
 /**
@@ -47,7 +48,7 @@ export async function readSettingsConfig(repoRoot: string, keys: readonly string
   for (const key of keys) search.append('key', key);
   let response: Response;
   try {
-    response = await fetch(`${SETTINGS_CONFIG_API_ROUTE}?${search.toString()}`);
+    response = await sealedHttpSession.fetch(`${SETTINGS_CONFIG_API_ROUTE}?${search.toString()}`);
   } catch {
     return { ok: false, error: UNREACHABLE };
   }
@@ -94,7 +95,7 @@ export async function writeSettingsValue(request: SettingsWriteRequest): Promise
 /** The repositories the picker offers; an empty list is a machine with no sessions. */
 export async function listSettingsRepositories(): Promise<readonly SettingsRepository[]> {
   try {
-    const response = await fetch(SETTINGS_REPOSITORIES_API_ROUTE);
+    const response = await sealedHttpSession.fetch(SETTINGS_REPOSITORIES_API_ROUTE);
     const body = await readBody(response);
     if (!response.ok || !isRecord(body) || !Array.isArray(body.repositories)) return [];
     return body.repositories as SettingsRepository[];
@@ -109,7 +110,7 @@ export async function listSettingsRepositories(): Promise<readonly SettingsRepos
  */
 export async function listSettingsModels(): Promise<readonly SettingsModel[]> {
   try {
-    const response = await fetch(SETTINGS_MODELS_API_ROUTE);
+    const response = await sealedHttpSession.fetch(SETTINGS_MODELS_API_ROUTE);
     const body = await readBody(response);
     if (!response.ok || !isRecord(body) || !Array.isArray(body.models)) return [];
     return body.models as SettingsModel[];

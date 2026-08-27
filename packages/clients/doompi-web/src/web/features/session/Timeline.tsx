@@ -309,7 +309,7 @@ export function Transcript({
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         data-testid={testId}
-        className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-[26px] py-[22px]"
+        className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 py-4 sm:px-[26px] sm:py-[22px]"
       >
         {entries.map((entry, index) => (
           // Entries above the live tail are skipped for layout and paint until

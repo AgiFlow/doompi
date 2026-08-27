@@ -5,6 +5,7 @@ import {
   cn,
   Dialog,
   DialogBody,
+  CloseIcon,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -103,11 +104,13 @@ function SessionCard({
   ordinal,
   active,
   now,
+  onNavigate,
 }: {
   meta: SessionMeta;
   ordinal: number;
   active: boolean;
   now: number;
+  onNavigate?: () => void;
 }) {
   const navigate = useNavigate();
   const summary = meta.summary;
@@ -222,7 +225,10 @@ function SessionCard({
           variant="ghost"
           size="card"
           data-testid={`session-open-${summary.id}`}
-          onClick={() => void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } })}
+          onClick={() => {
+            onNavigate?.();
+            void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } });
+          }}
           className={cardClass}
         >
           <div className="flex items-center gap-2">
@@ -323,7 +329,7 @@ function insideOverlay(target: EventTarget | null): boolean {
 }
 
 /** The mockup's rail: brand, live session cards, the new-session flow, and nothing else. */
-export function SessionRail() {
+export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
   const navigate = useNavigate();
   const order = useStore(sessionsStore, (state) => state.order);
   const byId = useStore(sessionsStore, (state) => state.byId);
@@ -372,14 +378,29 @@ export function SessionRail() {
           </span>
           <MascotMark size={22} />
         </span>
-        {/* A presentational trigger taking state and one callback, so the rail
-            never imports the remote feature, which no-cross-feature-import
-            forbids. The dialog it opens is mounted once at the app root. */}
-        <RemoteAccessButton
-          status={remote?.status ?? 'off'}
-          deviceCount={remote?.devices.length ?? 0}
-          onOpen={openRemoteDialog}
-        />
+        <span className="flex items-center gap-1">
+          {/* A presentational trigger taking state and one callback, so the rail
+              never imports the remote feature, which no-cross-feature-import
+              forbids. The dialog it opens is mounted once at the app root. */}
+          <RemoteAccessButton
+            status={remote?.status ?? 'off'}
+            deviceCount={remote?.devices.length ?? 0}
+            onOpen={openRemoteDialog}
+          />
+          {onDismiss ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="mobile-sessions-close"
+              title="hide sessions"
+              aria-label="hide sessions"
+              onClick={onDismiss}
+              className="text-doom-dim md:hidden"
+            >
+              <CloseIcon className="h-3 w-3" />
+            </Button>
+          ) : null}
+        </span>
       </div>
 
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
@@ -406,7 +427,14 @@ export function SessionRail() {
       </div>
       <div className="flex flex-col gap-1 px-2.5">
         {order.map((id, index) => (
-          <SessionCard key={id} meta={byId[id]} ordinal={index + 1} active={id === activeId} now={now} />
+          <SessionCard
+            key={id}
+            meta={byId[id]}
+            ordinal={index + 1}
+            active={id === activeId}
+            now={now}
+            onNavigate={onDismiss}
+          />
         ))}
       </div>
       {/* With no sessions the rail has nothing to show and the plus alone is a
@@ -437,6 +465,7 @@ export function SessionRail() {
                 params={{ section: DEFAULT_SETTINGS_SECTION }}
                 data-testid="settings-open"
                 aria-label="settings"
+                onClick={onDismiss}
               >
                 <GearIcon className="h-3 w-3" />
               </Link>
@@ -444,7 +473,7 @@ export function SessionRail() {
           </TooltipTrigger>
           <TooltipContent side="top">settings</TooltipContent>
         </Tooltip>
-        <span className="text-[9px] text-doom-faint">ctrl+k commands · ctrl+t new session</span>
+        <span className="text-[9px] text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
       </div>
 
       {creating ? <NewSessionDialog onClose={closeNewSession} /> : null}

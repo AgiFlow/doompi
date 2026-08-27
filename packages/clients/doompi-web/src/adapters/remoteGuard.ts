@@ -1,6 +1,13 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { stepUpActionFor, type StepUpAction } from '../services/webauthnPolicy.ts';
-import { STEP_UP_HEADER } from '../types/remoteAccess.ts';
+import {
+  PROTOCOL_SOCKET_ROUTE,
+  REMOTE_CHANNEL_ROUTE,
+  REMOTE_HTTP_ROUTE,
+  SESSION_SOCKET_ROUTE,
+  STEP_UP_HEADER,
+  type RemoteChannelScope,
+} from '../types/remoteAccess.ts';
 import {
   type GuardListener,
   type OriginPolicy,
@@ -25,8 +32,8 @@ const REFUSAL: Readonly<Record<string, string>> = {
   'not-ready': 'Remote access is not accepting requests yet.',
 };
 
-/** Decides whether a request on the tunnel listener carries a live session. */
-export type RemoteAuthorizer = (context: Context) => boolean;
+/** Resolves the paired device carried by a tunnel request. */
+export type RemoteAuthorizer = (context: Context) => string | undefined;
 
 export interface RemoteGuardOptions {
   /** The loopback listener's bound port. Undefined until it binds, which fails closed. */
@@ -35,6 +42,10 @@ export interface RemoteGuardOptions {
   tunnelPolicy: () => OriginPolicy | undefined;
   /** Absent while remote access is off, in which case nothing on the tunnel listener is served. */
   authorize?: RemoteAuthorizer;
+  /** Identifies an already authenticated request created inside the sealed HTTP gateway. */
+  trustedDevice?: RemoteAuthorizer;
+  /** A remote socket is admitted only after its purpose-bound channel exists. */
+  channelReady?: (deviceId: string, scope: RemoteChannelScope) => boolean;
   /** Additional origins the operator has allowed, from DOOMPI_WEB_ALLOW_ORIGIN. */
   extraOrigins?: readonly string[];
   /**
@@ -73,6 +84,19 @@ function isUpgradeRequest(context: Context): boolean {
   return context.req.header('upgrade')?.toLowerCase() === WEBSOCKET_UPGRADE;
 }
 
+function socketChannelScope(path: string, isUpgrade: boolean): RemoteChannelScope | undefined {
+  if (!isUpgrade) return undefined;
+  if (path === SESSION_SOCKET_ROUTE) return 'session';
+  if (path === PROTOCOL_SOCKET_ROUTE) return 'protocol';
+  return undefined;
+}
+
+function isDirectTunnelRoute(method: string, path: string, isUpgrade: boolean): boolean {
+  if (isUpgrade) return path === SESSION_SOCKET_ROUTE || path === PROTOCOL_SOCKET_ROUTE;
+  const normalizedMethod = method.toUpperCase();
+  if ((normalizedMethod === 'GET' || normalizedMethod === 'HEAD') && !path.startsWith('/api/')) return true;
+  return normalizedMethod === 'POST' && (path === REMOTE_CHANNEL_ROUTE || path === REMOTE_HTTP_ROUTE);
+}
 /**
  * The first middleware every request meets, on both listeners.
  *
@@ -121,8 +145,21 @@ export function createRemoteGuard(options: RemoteGuardOptions): RemoteGuard {
     // handler a request reaches.
     if (isPublicPairingRoute(context.req.method, context.req.path)) return next();
 
-    if (options.authorize?.(context) !== true) {
+    const trustedDeviceId = options.trustedDevice?.(context);
+    if (
+      trustedDeviceId === undefined &&
+      !isDirectTunnelRoute(context.req.method, context.req.path, isUpgradeRequest(context))
+    ) {
+      return context.json({ error: 'Remote HTTP requests must use the sealed gateway.' }, UNAUTHORIZED);
+    }
+
+    const deviceId = trustedDeviceId ?? options.authorize?.(context);
+    if (deviceId === undefined) {
       return context.json({ error: 'This device is not paired.' }, UNAUTHORIZED);
+    }
+    const channelScope = socketChannelScope(context.req.path, isUpgradeRequest(context));
+    if (channelScope !== undefined && options.channelReady?.(deviceId, channelScope) !== true) {
+      return context.json({ error: 'This device has no sealed channel for that socket.' }, UNAUTHORIZED);
     }
 
     // A live session is not enough to redirect the machine's model traffic or

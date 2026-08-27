@@ -46,9 +46,9 @@ export function Providers() {
       if (cancelled) return;
       stopRuntime = startSessionRuntime();
       stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame });
+      // One read at start; after that the hub pushes state, so nothing polls.
+      void refreshRemoteState();
     });
-    // One read at start; after that the hub pushes state, so nothing polls.
-    void refreshRemoteState();
     return () => {
       cancelled = true;
       stopPlugins?.();

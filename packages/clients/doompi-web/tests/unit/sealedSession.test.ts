@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   rememberHostChannelKey,
   rememberedHostChannelKey,
+  resetSealedSessions,
   restoreSealedSession,
+  sealedHttpSession,
+  sealedProtocolSession,
+  sealedSession,
 } from '../../src/web/lib/sealedSession.ts';
-import { sealedSession } from '../../src/web/lib/sealedSession.ts';
 import { createHostHandshake } from '@agimon-ai/doompi-web-security/node';
 
 const originalFetch = globalThis.fetch;
@@ -25,7 +28,7 @@ Object.defineProperty(globalThis, 'window', {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   store.clear();
-  sealedSession.reset();
+  resetSealedSessions();
 });
 
 describe('the remembered host key', () => {
@@ -42,19 +45,52 @@ describe('restoreSealedSession', () => {
     expect(sealedSession.active()).toBe(false);
   });
 
-  it('completes the exchange and reports the channel live', async () => {
+  it('completes all three purpose-bound exchanges and reports every channel live', async () => {
     const host = createHostHandshake();
     rememberHostChannelKey(host.publicKey);
-    let sentKey: string | undefined;
+    const registrations: Array<{ scope: string; clientPublicKey: string }> = [];
     globalThis.fetch = vi.fn(async (_input: unknown, init?: RequestInit) => {
-      sentKey = (JSON.parse(typeof init?.body === 'string' ? init.body : '') as { clientPublicKey: string })
-        .clientPublicKey;
+      registrations.push(JSON.parse(typeof init?.body === 'string' ? init.body : '') as (typeof registrations)[number]);
       return new Response('{"ok":true}');
     }) as unknown as typeof fetch;
 
     await expect(restoreSealedSession()).resolves.toBe(true);
+    expect(registrations.map(({ scope }) => scope)).toEqual(['session', 'protocol', 'http']);
+    expect(new Set(registrations.map(({ clientPublicKey }) => clientPublicKey)).size).toBe(3);
     expect(sealedSession.active()).toBe(true);
-    expect(host.accept(sentKey ?? '')).toBeDefined();
+    expect(sealedProtocolSession.active()).toBe(true);
+    expect(sealedHttpSession.active()).toBe(true);
+    for (const { clientPublicKey } of registrations) expect(host.accept(clientPublicKey)).toBeDefined();
+  });
+
+  it('seals Pi bytes and complete HTTP requests before they reach the relay', async () => {
+    const host = createHostHandshake();
+    rememberHostChannelKey(host.publicKey);
+    const serverChannels = new Map<string, NonNullable<ReturnType<typeof host.accept>>>();
+    globalThis.fetch = vi.fn(async (_input: unknown, init?: RequestInit) => {
+      const registration = JSON.parse(typeof init?.body === 'string' ? init.body : '') as {
+        scope: string;
+        clientPublicKey: string;
+      };
+      const channel = host.accept(registration.clientPublicKey);
+      if (channel === undefined) return new Response('{"error":"bad key"}', { status: 400 });
+      serverChannels.set(registration.scope, channel);
+      return new Response('{"ok":true}');
+    }) as unknown as typeof fetch;
+    await expect(restoreSealedSession()).resolves.toBe(true);
+
+    const piPlaintext = new Uint8Array([0, 1, 2, 128, 255]);
+    const piWire = await sealedProtocolSession.sealBinary(piPlaintext);
+    expect(Array.from(piWire)).not.toEqual(Array.from(piPlaintext));
+    const piOpened = serverChannels.get('protocol')?.open(JSON.parse(new TextDecoder().decode(piWire)));
+    expect(piOpened?.ok && Array.from(piOpened.plaintext)).toEqual(Array.from(piPlaintext));
+
+    const httpPlaintext = '{"v":1,"method":"POST","target":"/api/private","body":"c2VjcmV0"}';
+    const httpWire = await sealedHttpSession.sealText(httpPlaintext);
+    expect(httpWire).not.toContain('/api/private');
+    expect(httpWire).not.toContain('c2VjcmV0');
+    const httpOpened = serverChannels.get('http')?.open(JSON.parse(httpWire));
+    expect(httpOpened?.ok && new TextDecoder().decode(httpOpened.plaintext)).toBe(httpPlaintext);
   });
 
   it('falls back to plaintext when the host never completes its half', async () => {

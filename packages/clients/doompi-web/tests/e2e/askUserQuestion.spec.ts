@@ -164,6 +164,23 @@ test('the reader can decline, and the input comes back either way', async ({ pag
   await expect(page.getByTestId('composer-input')).toBeVisible();
 });
 
+test('the questionnaire stays inside a phone viewport', async ({ page, cockpit }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  ask(cockpit.session);
+
+  const questionnaire = page.getByTestId('questionnaire');
+  await expect(questionnaire).toBeVisible();
+  await expect(page.getByTestId('questionnaire-question')).toHaveText('Which styling approach?');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  const box = await questionnaire.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+});
+
 test('a request from anything but this tool still opens the host dialog', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

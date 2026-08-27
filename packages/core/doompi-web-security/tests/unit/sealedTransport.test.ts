@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHostHandshake } from '../../src/adapters/nodeSealedChannel.ts';
 import { createSealedTransport } from '../../src/adapters/sealedTransport.ts';
 import { createSerialQueue } from '../../src/services/serialQueue.ts';
@@ -106,6 +106,70 @@ describe('createSealedTransport', () => {
     expect(transport.lastFailure()).toContain('shaped');
   });
 
+  it('never returns plaintext after an active channel fails to seal', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/adapters/browserSealedChannel.ts', () => ({
+      connectSealedChannel: async () => ({
+        clientPublicKey: 'client-key',
+        channel: {
+          seal: async () => ({ ok: false as const, failure: 'exhausted' as const }),
+          open: async () => ({ ok: false as const, failure: 'auth' as const }),
+        },
+      }),
+    }));
+    try {
+      const { createSealedTransport: createFailingTransport } = await import('../../src/adapters/sealedTransport.ts');
+      const transport = createFailingTransport();
+      await expect(transport.connect('host-key')).resolves.toBe('client-key');
+      await expect(transport.sealText('private prompt')).rejects.toThrow('message limit');
+      await expect(transport.sealBinary(new Uint8Array([1, 2, 3]))).rejects.toThrow('message limit');
+    } finally {
+      vi.doUnmock('../../src/adapters/browserSealedChannel.ts');
+      vi.resetModules();
+    }
+  });
+  it('hides the complete HTTP request and response inside one relay exchange', async () => {
+    const { transport, server } = await pair();
+    transport.relayRequestsThrough('/api/remote/request');
+    const relay = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(input).toBe('/api/remote/request');
+      const wire = typeof init?.body === 'string' ? init.body : '';
+      expect(wire).not.toContain('private prompt');
+      expect(wire).not.toContain('/api/private');
+      const opened = server.open(JSON.parse(wire));
+      if (!opened.ok) throw new Error(opened.failure);
+      expect(JSON.parse(new TextDecoder().decode(opened.plaintext))).toMatchObject({
+        v: 1,
+        method: 'POST',
+        target: '/api/private?view=full',
+      });
+      const sealed = server.seal(
+        new TextEncoder().encode(
+          JSON.stringify({
+            v: 1,
+            status: 201,
+            headers: [['content-type', 'application/json']],
+            body: btoa('{"result":"private answer"}'),
+          }),
+        ),
+      );
+      if (!sealed.ok) throw new Error(sealed.failure);
+      return new Response(JSON.stringify(sealed.envelope));
+    });
+    vi.stubGlobal('fetch', relay);
+    try {
+      const response = await transport.fetch('/api/private?view=full', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"prompt":"private prompt"}',
+      });
+      expect(response.status).toBe(201);
+      await expect(response.json()).resolves.toEqual({ result: 'private answer' });
+      expect(relay).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('falls back to pass-through once reset', async () => {
     const { transport } = await pair();
     transport.reset();

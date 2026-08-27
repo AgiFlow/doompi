@@ -404,16 +404,19 @@ export function SelectionBar() {
 
   const modeClass = cn(
     buttonVariants({ variant: 'primary', size: 'sm' }),
-    'h-[21px] rounded-[3px] px-2 text-doom-rail',
+    'h-[21px] min-w-0 rounded-[3px] px-2 text-doom-rail max-sm:max-w-24 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
     selection.pending && 'bg-doom-yellow',
   );
-  const axisClass = cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-[21px] min-w-0 rounded-[3px] px-2');
+  const axisClass = cn(
+    buttonVariants({ variant: 'outline', size: 'sm' }),
+    'h-[21px] min-w-0 rounded-[3px] px-2 max-sm:max-w-28 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
+  );
 
   return (
     <footer
       data-testid="selection-bar"
       data-pending={selection.pending}
-      className="relative flex h-[34px] shrink-0 items-center gap-2 border-t border-doom-border bg-doom-rail px-3.5"
+      className="relative flex h-[34px] shrink-0 items-center gap-1 overflow-x-auto border-t border-doom-border bg-doom-rail px-2 [scrollbar-width:none] sm:gap-2 sm:px-3.5 [&::-webkit-scrollbar]:hidden"
     >
       <AxisButton
         name="mode"
@@ -422,7 +425,7 @@ export function SelectionBar() {
         claimedDialog={dialogFor('mode')}
         className={modeClass}
       >
-        <span data-testid="selection-mode" className="text-[10px] font-bold tracking-[0.08em]">
+        <span data-testid="selection-mode" className="truncate text-[10px] font-bold tracking-[0.08em]">
           {(selection.majorMode || 'mode').toUpperCase()}
         </span>
       </AxisButton>
@@ -465,13 +468,13 @@ export function SelectionBar() {
             variant={activeMinors.length > 0 ? 'subtle' : 'outline'}
             size="sm"
             className={cn(
-              'h-[21px] rounded-[3px] px-2',
+              'h-[21px] min-w-0 rounded-[3px] px-2 max-sm:max-w-24 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
               activeMinors.length > 0
                 ? 'bg-doom-tint-magenta text-doom-magenta hover:bg-doom-tint-magenta hover:brightness-125'
                 : 'text-doom-faint',
             )}
           >
-            <span data-testid="minor-summary" className="text-[10px] font-bold">
+            <span data-testid="minor-summary" className="truncate text-[10px] font-bold">
               {activeMinors[0]?.name ?? 'minor'}
             </span>
             {activeMinors.length > 1 ? <span className="text-[9px]">+{activeMinors.length - 1}</span> : null}
@@ -487,15 +490,15 @@ export function SelectionBar() {
 
       <PluginSurface slot={HOST_SLOTS.selectionBar} sessionId={activeId} />
 
-      <div className="min-w-0 flex-1" />
+      <div className="min-w-0 flex-1 max-sm:hidden" />
 
       <Popover open={modelOpen} onOpenChange={setModelOpen}>
         <PopoverTrigger asChild>
           <Button data-testid="axis-model" title="model and thinking level" className={axisClass}>
-            <span data-testid="agent-model" className="text-[10px] text-doom-hi">
+            <span data-testid="agent-model" className="min-w-0 truncate text-[10px] text-doom-hi">
               {agent?.model ?? '—'}
             </span>
-            <span data-testid="agent-thinking" className="text-[10px] text-doom-yellow">
+            <span data-testid="agent-thinking" className="text-[10px] text-doom-yellow max-sm:hidden">
               {agent?.thinkingLevel ?? ''}
             </span>
             <ChevronDownIcon className="h-[10px] w-[10px] text-doom-faint" />
@@ -513,14 +516,14 @@ export function SelectionBar() {
             ? `${stats.contextTokens.toLocaleString()} of ${stats.contextWindow.toLocaleString()} tokens`
             : 'context usage, once the session reports it'
         }
-        className="text-[10px] text-doom-dim"
+        className="shrink-0 text-[10px] text-doom-dim max-sm:hidden"
       >
         {stats?.contextPercent == null ? 'ctx —' : `ctx ${Math.round(stats.contextPercent)}%`}
       </span>
       <span
         data-testid="top-cost"
         title={stats ? `${stats.totalTokens.toLocaleString()} tokens this session` : ''}
-        className="text-[10px] text-doom-dim"
+        className="shrink-0 text-[10px] text-doom-dim max-sm:hidden"
       >
         {stats ? `$${stats.cost.toFixed(2)}` : ''}
       </span>

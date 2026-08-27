@@ -14,6 +14,8 @@ import {
   PASSKEY_AUTH_BEGIN_ROUTE,
   PASSKEY_AUTH_FINISH_ROUTE,
   REMOTE_API_ROUTE,
+  REMOTE_CHANNEL_ROUTE,
+  type RemoteChannelScope,
 } from '../types/remoteAccess.ts';
 import type { RemoteAccess } from './remoteAccess.ts';
 
@@ -32,6 +34,11 @@ const CREATED = 201;
 const EDGE_IP_HEADER = 'cf-connecting-ip';
 /** Fallback wait before a remote-initiated shutdown, when the raw response is not reachable. */
 const RESPONSE_FLUSH_GRACE_MS = 250;
+const CHANNEL_SCOPES: ReadonlySet<RemoteChannelScope> = new Set(['session', 'protocol', 'http']);
+
+function isChannelScope(value: unknown): value is RemoteChannelScope {
+  return typeof value === 'string' && CHANNEL_SCOPES.has(value as RemoteChannelScope);
+}
 
 export interface RemoteRoutesOptions {
   remote: RemoteAccess;
@@ -287,15 +294,15 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
    * carries only a public key, which is safe for the relay to see, and it is
    * useless without the host key the device read off the QR.
    */
-  app.post(`${REMOTE_API_ROUTE}/channel`, async (context) => {
+  app.post(REMOTE_CHANNEL_ROUTE, async (context) => {
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, UNAUTHORIZED);
     const body = await readJson(context);
-    if (body === undefined || typeof body.clientPublicKey !== 'string') {
-      return context.json({ error: 'A clientPublicKey string is required.' }, BAD_REQUEST);
+    if (body === undefined || typeof body.clientPublicKey !== 'string' || !isChannelScope(body.scope)) {
+      return context.json({ error: 'A clientPublicKey and known scope are required.' }, BAD_REQUEST);
     }
-    if (!remote.openChannel(device, body.clientPublicKey)) {
-      return context.json({ error: 'That key did not complete a channel.' }, BAD_REQUEST);
+    if (!remote.openChannel(device, body.scope, body.clientPublicKey)) {
+      return context.json({ error: 'That key did not complete a fresh channel.' }, BAD_REQUEST);
     }
     return context.json({ ok: true });
   });

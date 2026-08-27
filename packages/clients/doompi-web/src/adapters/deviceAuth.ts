@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   type DeviceRecord,
+  deviceExpiryAt,
   deviceLabelFor,
   evaluateDevice,
   sanitizeUserAgent,
@@ -17,6 +18,7 @@ export interface DeviceAuthOptions {
   settings: () => RemoteAccessSettings;
   now?: () => number;
   onNotice?: (message: string) => void;
+  onDrop?: (record: DeviceRecord, reason: 'revoked' | 'expired') => void;
 }
 
 export interface EnrolledDevice {
@@ -32,6 +34,8 @@ export interface DeviceAuth {
   revoke(id: string): boolean;
   revokeAll(): number;
   list(): readonly DeviceRecord[];
+  /** Re-arms exact deadlines after expiry settings change. */
+  reschedule(): void;
   /** Drops what has expired under the current settings. Returns how many went. */
   sweep(): number;
 }
@@ -56,7 +60,44 @@ export function createDeviceAuth(options: DeviceAuthOptions): DeviceAuth {
   const notice = options.onNotice ?? ((): void => {});
   /** Digest to record. The raw token exists only in flight. */
   const devices = new Map<string, DeviceRecord>();
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
+  const clearDeadline = (hash: string): void => {
+    const timer = timers.get(hash);
+    if (timer !== undefined) clearTimeout(timer);
+    timers.delete(hash);
+  };
+
+  const drop = (hash: string, reason: 'revoked' | 'expired'): DeviceRecord | undefined => {
+    const record = devices.get(hash);
+    if (record === undefined) return undefined;
+    devices.delete(hash);
+    clearDeadline(hash);
+    options.onDrop?.(record, reason);
+    return record;
+  };
+
+  const schedule = (hash: string, record: DeviceRecord): void => {
+    clearDeadline(hash);
+    const deadline = deviceExpiryAt(record, options.settings());
+    if (deadline === undefined) return;
+    const remaining = deadline - now();
+    if (remaining <= 0) {
+      drop(hash, 'expired');
+      return;
+    }
+    const timer = setTimeout(
+      () => {
+        const current = devices.get(hash);
+        if (current === undefined) return;
+        if (evaluateDevice(current, now(), options.settings()).ok) schedule(hash, current);
+        else drop(hash, 'expired');
+      },
+      Math.min(remaining, 2_147_483_647),
+    );
+    timer.unref();
+    timers.set(hash, timer);
+  };
   return {
     enrol(input) {
       const token = randomBytes(TOKEN_BYTES).toString('base64url');
@@ -71,6 +112,7 @@ export function createDeviceAuth(options: DeviceAuthOptions): DeviceAuth {
         lastSeenAt: at,
       };
       devices.set(record.tokenHash, record);
+      schedule(record.tokenHash, record);
       notice(`paired ${record.label} (${record.id})`);
       return { token, record };
     },
@@ -83,18 +125,19 @@ export function createDeviceAuth(options: DeviceAuthOptions): DeviceAuth {
       if (!verdict.ok) {
         // An expired record is dropped on the way past rather than left to the
         // sweeper, so a revoked-by-time device stops appearing in the list.
-        if (verdict.reason !== 'unknown') devices.delete(hash);
+        if (verdict.reason !== 'unknown') drop(hash, 'expired');
         return undefined;
       }
       const seen = touchDevice(verdict.record, at);
       devices.set(hash, seen);
+      schedule(hash, seen);
       return seen;
     },
 
     revoke(id) {
       for (const [hash, record] of devices) {
         if (record.id !== id) continue;
-        devices.delete(hash);
+        drop(hash, 'revoked');
         notice(`revoked ${record.label} (${record.id})`);
         return true;
       }
@@ -102,21 +145,24 @@ export function createDeviceAuth(options: DeviceAuthOptions): DeviceAuth {
     },
 
     revokeAll() {
-      const count = devices.size;
-      devices.clear();
-      if (count > 0) notice(`revoked ${String(count)} paired device(s)`);
-      return count;
+      const records = [...devices.values()];
+      for (const [hash] of devices) drop(hash, 'revoked');
+      if (records.length > 0) notice(`revoked ${String(records.length)} paired device(s)`);
+      return records.length;
     },
 
     list: () => [...devices.values()],
 
+    reschedule() {
+      for (const [hash, record] of devices) schedule(hash, record);
+    },
     sweep() {
       const at = now();
       const settings = options.settings();
       let dropped = 0;
       for (const [hash, record] of devices) {
         if (evaluateDevice(record, at, settings).ok) continue;
-        devices.delete(hash);
+        drop(hash, 'expired');
         dropped += 1;
       }
       return dropped;

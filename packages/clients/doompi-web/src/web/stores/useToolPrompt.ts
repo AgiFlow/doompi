@@ -17,6 +17,7 @@ import { toolPromptStore } from './toolPromptStore.ts';
 export function useToolPrompt(): ToolPromptClaim | null {
   const dialog = useActiveSession((state) => state.dialog);
   const entries = useActiveSession((state) => state.entries);
+  const activeTools = useActiveSession((state) => state.activeTools);
   const statuses = useActiveSession((state) => state.statuses);
   const claimedMenu = useStore(menuStore, (state) => state.claimed?.dialogId ?? null);
   const failed = useStore(toolPromptStore, (state) => state.failedDialogId);
@@ -25,7 +26,7 @@ export function useToolPrompt(): ToolPromptClaim | null {
   const open = dialog?.id ?? null;
   const spokenFor = open !== null && (open === claimedMenu || open === failed) ? open : null;
   return useMemo(
-    () => toolPromptClaim({ dialog, entries, statuses }, spokenFor),
-    [dialog, entries, statuses, spokenFor],
+    () => toolPromptClaim({ dialog, entries, activeTools, statuses }, spokenFor),
+    [dialog, entries, activeTools, statuses, spokenFor],
   );
 }

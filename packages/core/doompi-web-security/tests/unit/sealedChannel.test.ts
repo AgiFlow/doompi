@@ -1,4 +1,4 @@
-import { createECDH } from 'node:crypto';
+import { ECDH, createECDH } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createHostHandshake, type SealedChannel as ServerChannel } from '../../src/adapters/nodeSealedChannel.ts';
 import {
@@ -180,6 +180,22 @@ describe('the handshake', () => {
     if (!sealed.ok) throw new Error(sealed.failure);
     const opened = await connected.channel.open(sealed.envelope);
     expect(opened.ok && decode(opened.plaintext)).toBe('hello phone');
+  });
+
+  it('refuses a peer key already accepted in any point encoding', async () => {
+    const host = createHostHandshake();
+    const connected = await connectSealedChannel(host.publicKey);
+    if (connected === undefined) throw new Error('the browser refused the handshake');
+    expect(host.accept(connected.clientPublicKey)).toBeDefined();
+    expect(host.accept(connected.clientPublicKey)).toBeUndefined();
+    const compressed = ECDH.convertKey(
+      Buffer.from(connected.clientPublicKey, 'base64url'),
+      'prime256v1',
+      undefined,
+      undefined,
+      'compressed',
+    ).toString('base64url');
+    expect(host.accept(compressed)).toBeUndefined();
   });
 
   it('gives a different secret to every tunnel', () => {

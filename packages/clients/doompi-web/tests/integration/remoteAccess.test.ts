@@ -92,6 +92,61 @@ function cookieValue(setCookie: string): string {
   return setCookie.split(';')[0] ?? '';
 }
 
+/** Completes one scoped exchange the cockpit bundle would, and returns the client half. */
+async function openChannel(cookie: string, scope: 'session' | 'protocol' | 'http' = 'session') {
+  const minted = await fetch(localUrl('/api/remote/codes'), { method: 'POST' });
+  const { pairUrl } = (await minted.json()) as { pairUrl: string };
+  const hostKey = new URLSearchParams(new URL(pairUrl).hash.slice(1)).get('k');
+  if (hostKey === null) throw new Error('the pairing URL had no host key');
+  const connected = await connectSealedChannel(hostKey);
+  if (connected === undefined) throw new Error('the browser half refused the handshake');
+  const accepted = await fetch(tunnelUrl('/api/remote/channel'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
+    body: JSON.stringify({ scope, clientPublicKey: connected.clientPublicKey }),
+  });
+  expect(accepted.status).toBe(200);
+  return connected.channel;
+}
+
+async function sealedFetch(cookie: string, target: string, init: RequestInit = {}): Promise<Response> {
+  const channel = await openChannel(cookie, 'http');
+  const body = typeof init.body === 'string' ? Buffer.from(init.body).toString('base64') : undefined;
+  const sealed = await channel.seal(
+    new TextEncoder().encode(
+      JSON.stringify({
+        v: 1,
+        method: (init.method ?? 'GET').toUpperCase(),
+        target,
+        headers: Array.from(new Headers(init.headers).entries()),
+        ...(body === undefined ? {} : { body }),
+      }),
+    ),
+  );
+  if (!sealed.ok) throw new Error(sealed.failure);
+  const outer = await fetch(tunnelUrl('/api/remote/request'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
+    body: JSON.stringify(sealed.envelope),
+  });
+  if (!outer.ok) throw new Error(`sealed HTTP gateway answered ${String(outer.status)}: ${await outer.text()}`);
+  const opened = await channel.open(await outer.json());
+  if (!opened.ok) throw new Error(opened.failure);
+  const response = JSON.parse(new TextDecoder().decode(opened.plaintext)) as {
+    status: number;
+    headers: Array<[string, string]>;
+    body: string;
+  };
+  const responseBody = Buffer.from(response.body, 'base64');
+  return new Response(
+    response.status === 204 || response.status === 205 || response.status === 304 ? null : responseBody,
+    {
+      status: response.status,
+      headers: response.headers,
+    },
+  );
+}
+
 beforeEach(async () => {
   tunnelPort = undefined;
   stopped = 0;
@@ -242,17 +297,11 @@ describe('pairing', () => {
     });
     const { requestId } = (await claimed.json()) as { requestId: string };
 
-    const byPhone = await fetch(tunnelUrl(`/api/remote/pairing/${requestId}/approve`), {
-      method: 'POST',
-      headers: { cookie, origin: tunnelOrigin() },
-    });
+    const byPhone = await sealedFetch(cookie, `/api/remote/pairing/${requestId}/approve`, { method: 'POST' });
     expect(byPhone.status).toBe(403);
 
     // And it cannot mint a code to start one either.
-    const minting = await fetch(tunnelUrl('/api/remote/codes'), {
-      method: 'POST',
-      headers: { cookie, origin: tunnelOrigin() },
-    });
+    const minting = await sealedFetch(cookie, '/api/remote/codes', { method: 'POST' });
     expect(minting.status).toBe(403);
   });
 
@@ -260,10 +309,7 @@ describe('pairing', () => {
     // Deliberately the one control-plane action a phone keeps: turning remote
     // access off is worth more from the couch than from the desk.
     const cookie = cookieValue(await pair());
-    const response = await fetch(tunnelUrl('/api/remote/disable'), {
-      method: 'POST',
-      headers: { cookie, origin: tunnelOrigin() },
-    });
+    const response = await sealedFetch(cookie, '/api/remote/disable', { method: 'POST' });
     // Answered before the teardown, so the caller learns it worked rather than
     // seeing the socket vanish under the response.
     expect(response.status).toBe(202);
@@ -285,14 +331,44 @@ describe('pairing', () => {
     expect(setCookie).not.toContain('Domain');
   });
 
-  it('opens every route once paired', async () => {
+  it('opens every route once paired through a sealed HTTP channel', async () => {
     const cookie = cookieValue(await pair());
-    const response = await fetch(tunnelUrl('/api/health'), { headers: { cookie, origin: tunnelOrigin() } });
+    const response = await sealedFetch(cookie, '/api/health');
     expect(response.status).toBe(200);
+  });
+
+  it('gives a stolen session cookie no API or socket access without the host key', async () => {
+    const cookie = cookieValue(await pair());
+    const direct = await fetch(tunnelUrl('/api/health'), {
+      headers: { cookie, origin: tunnelOrigin() },
+    });
+    expect(direct.status).toBe(UNAUTHORIZED);
+
+    for (const route of ['/api/session', '/api/pi']) {
+      const socket = new WebSocket(`${tunnelOrigin().replace('http', 'ws')}${route}`, {
+        headers: { cookie, origin: tunnelOrigin() },
+      });
+      const status = await new Promise<number | 'open'>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`no answer for ${route}`)), 5000);
+        socket.on('unexpected-response', (_request, response) => {
+          clearTimeout(timer);
+          socket.terminate();
+          resolve(response.statusCode ?? 0);
+        });
+        socket.on('open', () => {
+          clearTimeout(timer);
+          socket.close();
+          resolve('open');
+        });
+        socket.on('error', () => undefined);
+      });
+      expect(status, route).toBe(UNAUTHORIZED);
+    }
   });
 
   it('opens the session socket once paired', async () => {
     const cookie = cookieValue(await pair());
+    await openChannel(cookie);
     const socket = new WebSocket(`${tunnelOrigin().replace('http', 'ws')}/api/session`, {
       headers: { cookie, origin: tunnelOrigin() },
     });
@@ -348,9 +424,9 @@ describe('step-up on the escalation paths', () => {
     // A rotating hostname cannot carry a passkey, so there is no second factor
     // to demand and pretending otherwise would just lock the phone out.
     const cookie = cookieValue(await pair());
-    const response = await fetch(tunnelUrl('/api/sessions'), {
+    const response = await sealedFetch(cookie, '/api/sessions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
     // 400 for the empty body: the guard let it reach the handler.
@@ -359,35 +435,13 @@ describe('step-up on the escalation paths', () => {
 
   it('leaves ordinary agent work ungated', async () => {
     const cookie = cookieValue(await pair());
-    const response = await fetch(tunnelUrl('/api/health'), { headers: { cookie, origin: tunnelOrigin() } });
+    const response = await sealedFetch(cookie, '/api/health');
     expect(response.status).toBe(200);
   });
 });
 
 describe('the sealed channel', () => {
   beforeEach(enable);
-
-  /** Completes the exchange the cockpit bundle would, and returns the client half. */
-  async function openChannel(cookie: string) {
-    const state = await fetch(localUrl('/api/remote'));
-    const body = (await state.json()) as { state: { publicUrl?: string } };
-    expect(body.state.publicUrl).toBeDefined();
-    const minted = await fetch(localUrl('/api/remote/codes'), { method: 'POST' });
-    const { pairUrl } = (await minted.json()) as { pairUrl: string };
-    // The host key rides in the fragment, which is what keeps it off the relay.
-    const hostKey = new URLSearchParams(new URL(pairUrl).hash.slice(1)).get('k');
-    expect(hostKey).toBeTruthy();
-
-    const connected = await connectSealedChannel(hostKey ?? '');
-    if (connected === undefined) throw new Error('the browser half refused the handshake');
-    const accepted = await fetch(tunnelUrl('/api/remote/channel'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
-      body: JSON.stringify({ clientPublicKey: connected.clientPublicKey }),
-    });
-    expect(accepted.status).toBe(200);
-    return connected.channel;
-  }
 
   it('puts the host key in the QR fragment, never in the query', async () => {
     const minted = await fetch(localUrl('/api/remote/codes'), { method: 'POST' });
@@ -441,7 +495,7 @@ describe('the sealed channel', () => {
     const response = await fetch(tunnelUrl('/api/remote/channel'), {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
-      body: JSON.stringify({ clientPublicKey: 'anything' }),
+      body: JSON.stringify({ scope: 'session', clientPublicKey: 'anything' }),
     });
     expect(response.status).toBe(UNAUTHORIZED);
   });
@@ -451,7 +505,7 @@ describe('the sealed channel', () => {
     const response = await fetch(tunnelUrl('/api/remote/channel'), {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
-      body: JSON.stringify({ clientPublicKey: 'bm90LWEta2V5' }),
+      body: JSON.stringify({ scope: 'session', clientPublicKey: 'bm90LWEta2V5' }),
     });
     expect(response.status).toBe(400);
   });
@@ -476,6 +530,7 @@ describe('switching remote access off', () => {
 
   it('closes a live remote socket rather than leaving it driving the agent', async () => {
     const cookie = cookieValue(await pair());
+    await openChannel(cookie);
     const socket = new WebSocket(`${tunnelOrigin().replace('http', 'ws')}/api/session`, {
       headers: { cookie, origin: tunnelOrigin() },
     });
@@ -562,9 +617,9 @@ describe('passkeys', () => {
   it('keeps enrolment on the host, because enrolling is granting access', async () => {
     const cookie = cookieValue(await pair());
     for (const route of ['/api/remote/passkeys/register/begin', '/api/remote/passkeys/register/finish']) {
-      const response = await fetch(tunnelUrl(route), {
+      const response = await sealedFetch(cookie, route, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
+        headers: { 'content-type': 'application/json' },
         body: '{}',
       });
       expect(response.status, route).toBe(403);
@@ -808,8 +863,8 @@ describe('what the picker will name for a paired device', () => {
    */
   let cookie: string;
 
-  async function browse(url: string, headers: Record<string, string> = {}): Promise<string[]> {
-    const response = await fetch(url, { headers });
+  async function browse(url: string, remote = false): Promise<string[]> {
+    const response = remote ? await sealedFetch(cookie, new URL(url).pathname + new URL(url).search) : await fetch(url);
     expect(response.status).toBe(200);
     return ((await response.json()) as { directories: string[] }).directories;
   }
@@ -826,19 +881,17 @@ describe('what the picker will name for a paired device', () => {
       browseRoot: registryDir,
     });
     await enable();
-    cookie = await pair();
+    cookie = cookieValue(await pair());
   });
 
   it('names nothing outside the root on the tunnel', async () => {
-    expect(await browse(tunnelUrl('/api/directories?q=/'), { cookie, origin: tunnelOrigin() })).toEqual([]);
+    expect(await browse(tunnelUrl('/api/directories?q=/'), true)).toEqual([]);
   });
 
   it('still names what is inside the root', async () => {
     fs.mkdirSync(path.join(registryDir, 'visible'), { recursive: true });
     const query = `/api/directories?q=${encodeURIComponent(`${registryDir}/`)}`;
-    expect(await browse(tunnelUrl(query), { cookie, origin: tunnelOrigin() })).toContain(
-      path.join(registryDir, 'visible'),
-    );
+    expect(await browse(tunnelUrl(query), true)).toContain(path.join(registryDir, 'visible'));
   });
 
   it('leaves the local picker alone, since a shell is already on this side of it', async () => {

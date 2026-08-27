@@ -73,9 +73,16 @@ export function createSessionSocket(url: string, handlers: SessionSocketHandlers
       if (outgoing?.readyState !== WebSocket.OPEN) return;
       // Sealing is asynchronous, so the socket is re-checked once it resolves:
       // it may have closed while the ciphertext was being produced.
-      void sealedSession.sealText(JSON.stringify(frame)).then((text) => {
-        if (outgoing.readyState === WebSocket.OPEN) outgoing.send(text);
-      });
+      void sealedSession
+        .sealText(JSON.stringify(frame))
+        .then((text) => {
+          if (outgoing.readyState === WebSocket.OPEN) outgoing.send(text);
+        })
+        .catch(() => {
+          stopped = true;
+          if (timer) clearTimeout(timer);
+          socket?.close();
+        });
     },
     close() {
       stopped = true;

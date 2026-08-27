@@ -1,5 +1,5 @@
 import { createSerialQueue } from '../services/serialQueue.ts';
-import { SEALED_BODY_HEADER, describeSealedFailure, type SealedFailure } from '../types/sealedChannel.ts';
+import { describeSealedFailure, type SealedFailure } from '../types/sealedChannel.ts';
 import { connectSealedChannel, type SealedChannel } from './browserSealedChannel.ts';
 
 /**
@@ -27,7 +27,7 @@ export interface SealedTransport {
   openText(text: string): Promise<string | undefined>;
   sealBinary(bytes: Uint8Array): Promise<Uint8Array>;
   openBinary(bytes: Uint8Array): Promise<Uint8Array | undefined>;
-  /** Drop-in for `fetch`, sealing the request body and opening the response. */
+  /** Drop-in for `fetch`, relaying the complete request through the sealed channel when configured. */
   fetch(input: string, init?: RequestInit): Promise<Response>;
   lastFailure(): string | undefined;
 }
@@ -35,17 +35,74 @@ export interface SealedTransport {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+interface SealedHttpRequest {
+  v: 1;
+  method: string;
+  target: string;
+  headers: Array<[string, string]>;
+  body?: string;
+}
+
+interface SealedHttpResponse {
+  v: 1;
+  status: number;
+  headers: Array<[string, string]>;
+  body: string;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function bodyBytes(body: RequestInit['body']): Promise<Uint8Array | undefined> {
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === 'string') return encoder.encode(body);
+  if (body instanceof URLSearchParams) return encoder.encode(body.toString());
+  if (body instanceof Blob) return new Uint8Array(await body.arrayBuffer());
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (ArrayBuffer.isView(body)) return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+  throw new Error('The sealed HTTP transport does not support this request body type.');
+}
+
+function requestTarget(input: string): string {
+  if (!input.startsWith('/')) throw new Error('A sealed HTTP request must use a root-relative URL.');
+  return input;
+}
+
+function isSealedHttpResponse(value: unknown): value is SealedHttpResponse {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<SealedHttpResponse>;
+  return (
+    candidate.v === 1 &&
+    typeof candidate.status === 'number' &&
+    Array.isArray(candidate.headers) &&
+    candidate.headers.every(
+      (header) => Array.isArray(header) && header.length === 2 && header.every((part) => typeof part === 'string'),
+    ) &&
+    typeof candidate.body === 'string'
+  );
+}
 export function createSealedTransport(): SealedTransport & {
   /** Completes the handshake against the host key from the QR. */
   connect: (hostPublicKey: string) => Promise<string | undefined>;
   /** Drops the channel, so everything falls back to pass-through. */
   reset: () => void;
+  /** Selects the same-origin endpoint that carries sealed HTTP exchanges. */
+  relayRequestsThrough: (path: string) => void;
 } {
   let channel: SealedChannel | undefined;
   let failure: string | undefined;
   const outbound = createSerialQueue();
   const inbound = createSerialQueue();
-
+  const exchange = createSerialQueue();
+  let relayPath: string | undefined;
   const note = (reason: SealedFailure): undefined => {
     // A decryption failure otherwise shows up as a blank page with no cause, so
     // every one of them names itself.
@@ -88,6 +145,10 @@ export function createSealedTransport(): SealedTransport & {
       return connected.clientPublicKey;
     },
 
+    relayRequestsThrough(path) {
+      relayPath = path;
+    },
+
     reset() {
       channel = undefined;
       failure = undefined;
@@ -95,7 +156,11 @@ export function createSealedTransport(): SealedTransport & {
 
     async sealText(text) {
       if (channel === undefined) return text;
-      return await outbound.run(async () => (await sealBytes(encoder.encode(text))) ?? text);
+      return await outbound.run(async () => {
+        const sealed = await sealBytes(encoder.encode(text));
+        if (sealed === undefined) throw new Error(failure ?? 'The active sealed channel could not encrypt a message.');
+        return sealed;
+      });
     },
 
     async openText(text) {
@@ -110,7 +175,8 @@ export function createSealedTransport(): SealedTransport & {
       if (channel === undefined) return bytes;
       return await outbound.run(async () => {
         const sealed = await sealBytes(bytes);
-        return sealed === undefined ? bytes : encoder.encode(sealed);
+        if (sealed === undefined) throw new Error(failure ?? 'The active sealed channel could not encrypt a message.');
+        return encoder.encode(sealed);
       });
     },
 
@@ -120,26 +186,47 @@ export function createSealedTransport(): SealedTransport & {
     },
 
     async fetch(input, init) {
-      if (channel === undefined) return await fetch(input, init);
-      const headers = new Headers(init?.headers);
-      let body = init?.body;
-      if (typeof body === 'string') {
-        const sealed = await outbound.run(async () => await sealBytes(encoder.encode(body as string)));
-        if (sealed !== undefined) {
-          body = sealed;
-          // Named in a header rather than guessed at from the shape, so a
-          // handler never has to decide whether a body is an envelope.
-          headers.set(SEALED_BODY_HEADER, '1');
-          headers.set('Content-Type', JSON_CONTENT_TYPE);
+      const gateway = relayPath;
+      if (channel === undefined || gateway === undefined) return await fetch(input, init);
+      return await exchange.run(async () => {
+        const bytes = await bodyBytes(init?.body);
+        const request: SealedHttpRequest = {
+          v: 1,
+          method: (init?.method ?? 'GET').toUpperCase(),
+          target: requestTarget(input),
+          headers: Array.from(new Headers(init?.headers).entries()),
+          ...(bytes === undefined ? {} : { body: encodeBase64(bytes) }),
+        };
+        const sealed = await sealBytes(encoder.encode(JSON.stringify(request)));
+        if (sealed === undefined) {
+          return new Response(JSON.stringify({ error: failure }), { status: 502 });
         }
-      }
-      const response = await fetch(input, { ...init, headers, ...(body === undefined ? {} : { body }) });
-      if (response.headers.get(SEALED_BODY_HEADER) !== '1') return response;
-      const opened = await inbound.run(async () => await openBytes(await response.text()));
-      if (opened === undefined) {
-        return new Response(JSON.stringify({ error: failure }), { status: 502, headers: response.headers });
-      }
-      return new Response(opened, { status: response.status, headers: response.headers });
+        const relayResponse = await fetch(gateway, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': JSON_CONTENT_TYPE },
+          body: sealed,
+        });
+        const opened = await openBytes(await relayResponse.text());
+        if (opened === undefined) {
+          return new Response(JSON.stringify({ error: failure }), { status: 502 });
+        }
+        let decoded: unknown;
+        try {
+          decoded = JSON.parse(decoder.decode(opened));
+        } catch {
+          decoded = undefined;
+        }
+        if (!isSealedHttpResponse(decoded)) {
+          failure = 'The sealed HTTP response was malformed.';
+          return new Response(JSON.stringify({ error: failure }), { status: 502 });
+        }
+        const body = decodeBase64(decoded.body);
+        return new Response(decoded.status === 204 || decoded.status === 205 || decoded.status === 304 ? null : body, {
+          status: decoded.status,
+          headers: decoded.headers,
+        });
+      });
     },
   };
 }

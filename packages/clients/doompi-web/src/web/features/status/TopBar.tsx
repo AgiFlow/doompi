@@ -95,7 +95,15 @@ function TransientTabChip({ tab, sessionId, active }: { tab: TransientTab; sessi
   );
 }
 
-export function TopBar({ view = 'conversation' }: { view?: string }) {
+export function TopBar({
+  view = 'conversation',
+  onShowSessions,
+  onShowActivity,
+}: {
+  view?: string;
+  onShowSessions?: () => void;
+  onShowActivity?: () => void;
+}) {
   const meta = useActiveSessionMeta();
   const session = useActiveSession((state) => state);
   const running = useStore(sessionsStore, (state) =>
@@ -121,9 +129,22 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
   return (
     <header
       data-testid="top-bar"
-      className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-doom-border px-5"
+      className="flex h-12 shrink-0 items-center justify-between gap-1.5 border-b border-doom-border px-2 sm:gap-3 sm:px-5"
     >
-      <div data-testid="session-switcher" className="flex min-w-0 items-center gap-2.5">
+      <div data-testid="session-switcher" className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2.5">
+        {onShowSessions ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            data-testid="mobile-sessions-open"
+            title="show sessions"
+            aria-label="show sessions"
+            onClick={onShowSessions}
+            className="shrink-0 text-[16px] text-doom-dim md:hidden"
+          >
+            <span aria-hidden>☰</span>
+          </Button>
+        ) : null}
         {/* With no session there is no name to show and no state to report, so
             the bar carries neither rather than reporting 'untitled' and
             'offline' for something that was never started. */}
@@ -151,15 +172,15 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
               setDraft(title);
               setRenaming(true);
             }}
-            className="h-6 shrink-0 px-1 text-[13px] font-bold text-doom-hi"
+            className="h-6 max-w-24 shrink-0 truncate px-1 text-[13px] font-bold text-doom-hi max-sm:hidden sm:max-w-44"
           >
             {title}
           </Button>
         )}
         {meta ? (
           <>
-            <span className="text-[12px] text-doom-faint">·</span>
-            <span data-testid="top-cwd" className="truncate text-[11px] text-doom-dim">
+            <span className="text-[12px] text-doom-faint max-sm:hidden">·</span>
+            <span data-testid="top-cwd" className="truncate text-[11px] text-doom-dim max-sm:hidden">
               {abbreviateCwd(meta.summary.cwd)}
             </span>
           </>
@@ -167,7 +188,7 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
         {activeId !== null ? (
           // Tabs never shrink; past the width the badges leave them, the strip
           // scrolls sideways (scrollbar hidden) instead of running under them.
-          <div className="ml-1.5 flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="ml-0 flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] sm:ml-1.5 sm:gap-1.5 [&::-webkit-scrollbar]:hidden">
             <NavTab asChild active={view === 'conversation'}>
               <Link
                 to="/session/$sessionId"
@@ -188,7 +209,7 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
         ) : null}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         {noSessions ? null : (
           <>
             {meta && meta.dropped > 0 ? (
@@ -200,16 +221,34 @@ export function TopBar({ view = 'conversation' }: { view?: string }) {
                 {meta.dropped} dropped
               </span>
             ) : null}
-            <StatusBadge size="md" tone={state.tone} data-testid="connection-status" className="font-normal">
+            <StatusBadge
+              size="md"
+              tone={state.tone}
+              data-testid="connection-status"
+              className="font-normal max-sm:hidden"
+            >
               <Dot tone={state.dot} pulse={state.pulse} />
               {state.text}
             </StatusBadge>
-            <StatusBadge size="md" tone="running" data-testid="sessions-running" className="font-normal">
+            <StatusBadge size="md" tone="running" data-testid="sessions-running" className="font-normal max-lg:hidden">
               <ActivityIcon className="h-[10px] w-[10px]" />
               {running} running
             </StatusBadge>
           </>
         )}
+        {onShowActivity ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            data-testid="mobile-activity-open"
+            title="show activity"
+            aria-label="show activity"
+            onClick={onShowActivity}
+            className="shrink-0 text-doom-dim lg:hidden"
+          >
+            <ActivityIcon className="h-3 w-3" />
+          </Button>
+        ) : null}
       </div>
     </header>
   );

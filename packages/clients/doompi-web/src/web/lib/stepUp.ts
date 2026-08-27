@@ -1,4 +1,5 @@
 import { STEP_UP_HEADER } from '../../types/remoteAccess.ts';
+import { sealedHttpSession } from './sealedSession.ts';
 import { assertionFor } from './webauthnClient.ts';
 
 const UNAUTHORIZED = 401;
@@ -21,7 +22,7 @@ export async function fetchWithStepUp(
   /** Test seam, in the house style: the real one runs a WebAuthn ceremony. */
   requestAssertion: (action: string) => Promise<string | undefined> = assertionFor,
 ): Promise<Response> {
-  const first = await fetch(input, init);
+  const first = await sealedHttpSession.fetch(input, init);
   if (first.status !== UNAUTHORIZED) return first;
 
   let action: unknown;
@@ -35,7 +36,7 @@ export async function fetchWithStepUp(
   const assertion = await requestAssertion(action);
   if (assertion === undefined) return first;
 
-  return await fetch(input, {
+  return await sealedHttpSession.fetch(input, {
     ...init,
     headers: { ...(init?.headers as Record<string, string> | undefined), [STEP_UP_HEADER]: assertion },
   });

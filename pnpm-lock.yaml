@@ -170,6 +170,9 @@ importers:
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-extension-contracts
+      '@agimon-ai/doompi-user-feedback':
+        specifier: workspace:*
+        version: link:../../ask-user/doompi-user-feedback
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1

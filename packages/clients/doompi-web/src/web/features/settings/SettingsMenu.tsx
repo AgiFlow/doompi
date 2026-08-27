@@ -5,7 +5,7 @@ export function SettingsMenu({ active }: { active: string | undefined }) {
   return (
     <nav
       data-testid="settings-menu"
-      className="flex w-[220px] shrink-0 flex-col gap-0.5 border-r border-doom-border px-2.5 py-3"
+      className="flex w-full shrink-0 gap-0.5 overflow-x-auto border-b border-doom-border px-2.5 py-2 [scrollbar-width:none] sm:w-[220px] sm:flex-col sm:overflow-x-visible sm:border-r sm:border-b-0 sm:py-3 [&::-webkit-scrollbar]:hidden"
     >
       {settingsSections().map((section) => {
         const current = section.id === active;
@@ -16,7 +16,7 @@ export function SettingsMenu({ active }: { active: string | undefined }) {
             params={{ section: section.id }}
             data-testid={`settings-section-${section.id}`}
             data-active={current}
-            className={`flex flex-col gap-0.5 rounded-md px-[11px] py-2 transition-colors ${
+            className={`flex min-w-32 shrink-0 flex-col gap-0.5 rounded-md px-[11px] py-2 transition-colors sm:min-w-0 sm:shrink ${
               current ? 'bg-doom-tint-blue' : 'hover:bg-doom-panel'
             }`}
           >

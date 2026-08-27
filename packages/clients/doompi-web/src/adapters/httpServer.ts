@@ -60,17 +60,22 @@ import { createBundleSigner } from '@agimon-ai/doompi-web-security/node';
 import { BUNDLE_MANIFEST_ROUTE } from '@agimon-ai/doompi-web-security';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
 import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
-import { DEVICE_COOKIE, type RemoteAccessSettings } from '../types/remoteAccess.ts';
+import {
+  DEVICE_COOKIE,
+  PROTOCOL_SOCKET_ROUTE,
+  REMOTE_CHANNEL_ROUTE,
+  REMOTE_HTTP_ROUTE,
+  SESSION_SOCKET_ROUTE,
+  type RemoteAccessSettings,
+} from '../types/remoteAccess.ts';
 import { suggestDirectories } from './directoryListing.ts';
 import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
 import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 
-const SESSION_ROUTE = '/api/session';
 // Pi's protocol rides its own socket so the DoomPi channel keeps the
 // vocabulary the protocol has no shape for: dialogs, minor modes, selection.
-const PROTOCOL_ROUTE = '/api/pi';
 /** Directory suggestions per picker query; more than this means "type further". */
 const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
@@ -80,6 +85,83 @@ const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
 const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
+const SEALED_HTTP_VERSION = 1;
+const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const SEALED_HTTP_FORBIDDEN_HEADERS = new Set([
+  'connection',
+  'content-length',
+  'cookie',
+  'forwarded',
+  'host',
+  'origin',
+  'transfer-encoding',
+  'upgrade',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+]);
+
+interface SealedRequestBindings {
+  incoming?: { socket?: { localPort?: number } };
+  sealedDeviceId?: string;
+}
+
+interface SealedHttpRequest {
+  v: number;
+  method: string;
+  target: string;
+  headers: Array<[string, string]>;
+  body?: string;
+}
+
+function parseSealedHttpRequest(value: unknown): SealedHttpRequest | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const request = value as Partial<SealedHttpRequest>;
+  if (
+    request.v !== SEALED_HTTP_VERSION ||
+    typeof request.method !== 'string' ||
+    !SEALED_HTTP_METHODS.has(request.method) ||
+    typeof request.target !== 'string' ||
+    !request.target.startsWith('/') ||
+    request.target.startsWith('//') ||
+    request.target.includes('#') ||
+    !Array.isArray(request.headers) ||
+    !request.headers.every(
+      (header) => Array.isArray(header) && header.length === 2 && header.every((part) => typeof part === 'string'),
+    ) ||
+    (request.body !== undefined && typeof request.body !== 'string')
+  ) {
+    return undefined;
+  }
+  const target = new URL(request.target, 'http://sealed.doompi.invalid');
+  if (target.pathname === REMOTE_HTTP_ROUTE || target.pathname === REMOTE_CHANNEL_ROUTE) return undefined;
+  return request as SealedHttpRequest;
+}
+
+function sealedRequestHeaders(request: SealedHttpRequest, outer: Context): Headers | undefined {
+  try {
+    const headers = new Headers();
+    for (const [name, value] of request.headers) {
+      const normalized = name.toLowerCase();
+      if (SEALED_HTTP_FORBIDDEN_HEADERS.has(normalized) || normalized.startsWith('sec-')) continue;
+      headers.append(name, value);
+    }
+    for (const name of ['cookie', 'host', 'origin'] as const) {
+      const value = outer.req.header(name);
+      if (value !== undefined) headers.set(name, value);
+    }
+    return headers;
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeSealedHttpBody(value: string | undefined): Buffer | undefined {
+  if (value === undefined) return Buffer.alloc(0);
+  if (!/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/.test(value)) return undefined;
+  const body = Buffer.from(value, 'base64');
+  return body.toString('base64') === value ? body : undefined;
+}
 
 /**
  * Locates the built SPA next to the package that owns this module.
@@ -346,7 +428,9 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const guard = createRemoteGuard({
     loopbackPort: () => loopbackPort,
     tunnelPolicy: () => remote.tunnelPolicy(),
-    authorize: (context) => remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')) !== undefined,
+    authorize: (context) => remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')),
+    trustedDevice: (context) => (context.env as SealedRequestBindings | undefined)?.sealedDeviceId,
+    channelReady: (deviceId, scope) => remote.channelFor(deviceId, scope) !== undefined,
     stepUp: {
       required: (action) => remote.stepUpRequired(action),
       verify: async (action, assertion) => await remote.passkeys().finishStepUp(action, assertion),
@@ -355,7 +439,58 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
   app.use('*', guard.middleware);
   registerRemoteRoutes(app, { remote, listenerOf: (context) => guard.listenerOf(context) });
+  app.post(REMOTE_HTTP_ROUTE, async (context) => {
+    const deviceId = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+    if (deviceId === undefined) return context.json({ error: 'This device is not paired.' }, 401);
+    const channel = remote.channelFor(deviceId, 'http');
+    if (channel === undefined) return context.json({ error: 'This device has no sealed HTTP channel.' }, 401);
 
+    let envelope: unknown;
+    try {
+      envelope = await context.req.json();
+    } catch {
+      return context.json({ error: 'The sealed request envelope was malformed.' }, 400);
+    }
+    const opened = channel.open(envelope);
+    if (!opened.ok) return context.json({ error: `The sealed request was refused: ${opened.failure}.` }, 400);
+
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(new TextDecoder().decode(opened.plaintext));
+    } catch {
+      return context.json({ error: 'The sealed HTTP request was malformed.' }, 400);
+    }
+    const request = parseSealedHttpRequest(decoded);
+    const headers = request === undefined ? undefined : sealedRequestHeaders(request, context);
+    const body = request === undefined ? undefined : decodeSealedHttpBody(request.body);
+    if (request === undefined || headers === undefined || body === undefined) {
+      return context.json({ error: 'The sealed HTTP request was invalid.' }, 400);
+    }
+
+    const target = new URL(request.target, new URL(context.req.url).origin);
+    const innerResponse = await app.request(
+      target,
+      {
+        method: request.method,
+        headers,
+        ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: Uint8Array.from(body).buffer }),
+      },
+      { ...(context.env as SealedRequestBindings), sealedDeviceId: deviceId },
+    );
+    const responseBody = Buffer.from(await innerResponse.arrayBuffer());
+    const sealed = channel.seal(
+      new TextEncoder().encode(
+        JSON.stringify({
+          v: SEALED_HTTP_VERSION,
+          status: innerResponse.status,
+          headers: Array.from(innerResponse.headers.entries()),
+          body: responseBody.toString('base64'),
+        }),
+      ),
+    );
+    if (!sealed.ok) return context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
+    return context.json(sealed.envelope);
+  });
   // The asset list and its signature, so a page can verify what it was served.
   // Behind the guard like everything else: a device that cannot reach the
   // cockpit has no use for its manifest.
@@ -505,12 +640,13 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
 
   app.get(
-    SESSION_ROUTE,
+    SESSION_SOCKET_ROUTE,
     nodeWs.upgradeWebSocket((context) => {
       const local = guard.listenerOf(context) === 'local';
       // Resolved once at upgrade: the device is fixed for the socket's life, and
       // looking it up per frame would bump last-seen on every keystroke.
       const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+      const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'session');
       const subscriptions = new Set<string>();
       /** The threads this page follows; one socket may follow several of one session. */
       const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
@@ -530,22 +666,24 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       };
       return {
         onOpen(_event, ws) {
+          if (!local && channel === undefined) {
+            ws.close(1008, 'sealed session channel required');
+            return;
+          }
           const post = (frame: SessionFrame | object): void => {
             const text = JSON.stringify(frame);
-            const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId);
-            if (channel === undefined) {
-              try {
-                ws.send(text);
-              } catch {
-                // The browser went away mid-write; onClose tears the socket down.
+            let outgoing = text;
+            if (!local) {
+              if (channel === undefined) return;
+              const sealed = channel.seal(new TextEncoder().encode(text));
+              if (!sealed.ok) {
+                ws.close(1008, 'sealed session channel failed');
+                return;
               }
-              return;
+              outgoing = JSON.stringify(sealed.envelope);
             }
-            // Sealing is synchronous on this side, so frame order is the order
-            // the hub produced them in and the counter cannot race.
-            const sealed = channel.seal(new TextEncoder().encode(text));
             try {
-              ws.send(sealed.ok ? JSON.stringify(sealed.envelope) : text);
+              ws.send(outgoing);
             } catch {
               // The browser went away mid-write; onClose tears the socket down.
             }
@@ -556,7 +694,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           // tracking, so closing the tunnel listener does not reach it.
           // Without this a paired phone keeps driving the agent after remote
           // access is switched off.
-          if (!local) untrack = remote.trackSocket((code, reason) => ws.close(code, reason));
+          if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
           post(hubHello(hub.channelTypes()));
           post({ type: SESSIONS_SNAPSHOT_TYPE, sessions: hub.snapshot() });
           disconnect = hub.onEvent((event) => {
@@ -580,7 +718,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           });
           notice('browser attached');
         },
-        onMessage(event, ws) {
+        onMessage(event) {
           if (typeof event.data !== 'string') return;
           let parsed: unknown;
           try {
@@ -588,8 +726,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           } catch {
             return;
           }
-          const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId);
-          if (channel !== undefined) {
+          if (!local) {
+            if (channel === undefined) return;
             const opened = channel.open(parsed);
             // A frame that will not open was altered or replayed. Dropping it
             // is the only safe answer; there is no plaintext to fall back to.
@@ -606,12 +744,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             const backlog = hub.backlog(sessionId);
             if (!backlog) return; // Unknown session; the snapshot said otherwise.
             subscriptions.add(sessionId);
-            try {
-              ws.send(JSON.stringify(backlog));
-              for (const frame of hub.channelFrames(sessionId)) ws.send(JSON.stringify(frame));
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
+            registered?.post(backlog);
+            for (const frame of hub.channelFrames(sessionId)) registered?.post(frame);
             return;
           }
           if (parsed.type === UNSUBSCRIBE_TYPE) {
@@ -627,11 +761,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               ...(typeof parsed.limit === 'number' ? { limit: parsed.limit } : {}),
             });
             if (!page) return;
-            try {
-              ws.send(JSON.stringify(page));
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
+            registered?.post(page);
             return;
           }
           if (parsed.type === SUBSCRIBE_THREAD_TYPE || parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
@@ -644,11 +774,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             }
             if (threadSubscriptions.has(key) || hub.backlog(sessionId) === undefined) return;
             threadSubscriptions.set(key, { sessionId, threadId });
-            try {
-              ws.send(JSON.stringify(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId))));
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
+            registered?.post(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId)));
             return;
           }
           if (parsed.type === SESSION_COMMAND_TYPE && isRecord(parsed.frame)) {
@@ -675,28 +801,67 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   );
 
   app.get(
-    PROTOCOL_ROUTE,
-    nodeWs.upgradeWebSocket(() => {
+    PROTOCOL_SOCKET_ROUTE,
+    nodeWs.upgradeWebSocket((context) => {
+      const local = guard.listenerOf(context) === 'local';
+      const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+      const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'protocol');
       let handler: ReturnType<typeof protocolListener.accept>;
+      let untrack: (() => void) | undefined;
       return {
         onOpen(_event, ws) {
+          if (!local && channel === undefined) {
+            ws.close(1008, 'sealed protocol channel required');
+            return;
+          }
+          if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
           handler = protocolListener.accept({
-            send: (data) => ws.send(data as ArrayBuffer),
+            send: (data) => {
+              if (local) {
+                ws.send(data as ArrayBuffer);
+                return;
+              }
+              if (channel === undefined) return;
+              const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+              const sealed = channel.seal(bytes);
+              if (!sealed.ok) {
+                ws.close(1008, 'sealed protocol channel failed');
+                return;
+              }
+              ws.send(new TextEncoder().encode(JSON.stringify(sealed.envelope)));
+            },
             close: () => ws.close(),
             get readyState() {
               return ws.readyState;
             },
           });
         },
-        onMessage(event) {
+        async onMessage(event) {
           const data = event.data;
           if (typeof data === 'string') return;
-          if (data instanceof ArrayBuffer) handler?.onData(new Uint8Array(data));
-          else if (ArrayBuffer.isView(data)) {
-            handler?.onData(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+          const bytes =
+            data instanceof Blob
+              ? new Uint8Array(await data.arrayBuffer())
+              : data instanceof ArrayBuffer
+                ? new Uint8Array(data)
+                : new Uint8Array(data);
+          if (local) {
+            handler?.onData(bytes);
+            return;
           }
+          if (channel === undefined) return;
+          let envelope: unknown;
+          try {
+            envelope = JSON.parse(new TextDecoder().decode(bytes));
+          } catch {
+            return;
+          }
+          const opened = channel.open(envelope);
+          if (opened.ok) handler?.onData(opened.plaintext);
         },
         onClose() {
+          untrack?.();
+          untrack = undefined;
           handler?.onClose();
           handler = undefined;
         },

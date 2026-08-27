@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSessionSocket, sessionSocketUrl } from '../../src/web/lib/wsClient.ts';
+import { sealedSession } from '../../src/web/lib/sealedSession.ts';
 
 type Listener = (event: unknown) => void;
 
@@ -49,6 +50,7 @@ const install = (): void => {
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -103,6 +105,23 @@ describe('createSessionSocket', () => {
     expect(socket.sent).toEqual(['{"type":"prompt"}']);
   });
 
+  it('closes without sending when an active channel cannot seal', async () => {
+    install();
+    vi.spyOn(sealedSession, 'sealText').mockRejectedValueOnce(new Error('channel exhausted'));
+    const client = createSessionSocket('ws://x/api/session', {
+      onFrame: () => {},
+      onOpen: () => {},
+      onClose: () => {},
+    });
+    const socket = FakeWebSocket.instances[0];
+    socket.openIt();
+
+    client.send({ type: 'private prompt' });
+    await settled();
+
+    expect(socket.sent).toEqual([]);
+    expect(socket.closed).toBe(true);
+  });
   it('reopens after an unexpected close', () => {
     vi.useFakeTimers();
     install();

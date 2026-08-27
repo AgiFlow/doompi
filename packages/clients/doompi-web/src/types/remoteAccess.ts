@@ -10,6 +10,12 @@
 
 /** REST surface for the remote-access control plane; local callers only, except turn-off and revoke. */
 export const REMOTE_API_ROUTE = '/api/remote';
+/** Direct endpoint that establishes one scoped end-to-end channel. */
+export const REMOTE_CHANNEL_ROUTE = `${REMOTE_API_ROUTE}/channel`;
+/** The only authenticated HTTP gateway exposed on the tunnel listener. */
+export const REMOTE_HTTP_ROUTE = `${REMOTE_API_ROUTE}/request`;
+export const SESSION_SOCKET_ROUTE = '/api/session';
+export const PROTOCOL_SOCKET_ROUTE = '/api/pi';
 /** The pairing page a scanned QR opens. Unauthenticated on the tunnel listener. */
 export const PAIRING_PAGE_ROUTE = '/pair';
 /** Where the pairing page posts the scanned code. Unauthenticated on the tunnel listener. */
@@ -50,6 +56,7 @@ export const PAIRING_REQUEST_TTL_MS = 180_000;
 export const COOKIE_CEILING_SECONDS = 30 * 24 * 60 * 60;
 
 export type TunnelKind = 'quick' | 'named';
+export type RemoteChannelScope = 'session' | 'protocol' | 'http';
 
 /**
  * How the tunnel is established.
@@ -159,6 +166,10 @@ export interface TunnelStartInput {
   /** The loopback port the tunnel should publish. */
   port: number;
   config: TunnelConfig;
+  /** Arms the exact public origin before the launcher probes through it. */
+  acceptOrigin?: (origin: string) => void;
+  /** Cancels startup and asks the launcher to stop any process it has spawned. */
+  signal?: AbortSignal;
 }
 
 export type TunnelStartResult =

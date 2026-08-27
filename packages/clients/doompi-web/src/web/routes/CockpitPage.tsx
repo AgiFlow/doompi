@@ -1,7 +1,7 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { PluginSurface } from '../components/PluginSurface.tsx';
 import { usePluginSlotProps } from '../stores/usePluginSlotProps.ts';
 import { ActivityDock } from '../features/activity/ActivityDock.tsx';
@@ -21,6 +21,8 @@ import { setDockOpen, uiStore } from '../stores/uiStore.ts';
 
 export function CockpitPage() {
   const dockOpen = useStore(uiStore, (state) => state.dockOpen);
+  const [railOpen, setRailOpen] = useState(false);
+  const [mobileActivityOpen, setMobileActivityOpen] = useState(false);
   const { sessionId, tabId } = useParams({ strict: false });
   const navigate = useNavigate();
   const slotProps = usePluginSlotProps(sessionId ?? null);
@@ -56,13 +58,47 @@ export function CockpitPage() {
     }
   }, [hydrated, sessionId, tabId, tab, order, navigate]);
 
+  const activityDockClass = mobileActivityOpen
+    ? dockOpen
+      ? 'fixed inset-y-0 right-0 z-40 flex lg:static lg:z-auto'
+      : 'fixed inset-y-0 right-0 z-40 flex lg:hidden'
+    : dockOpen
+      ? 'hidden lg:flex'
+      : 'hidden';
+
+  const closeActivity = (): void => {
+    if (window.matchMedia('(min-width: 1024px)').matches) setDockOpen(false);
+    else setMobileActivityOpen(false);
+  };
   return (
-    <div data-testid="cockpit" className="relative flex h-full overflow-hidden">
-      <aside className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-r border-doom-border bg-doom-rail">
-        <SessionRail />
+    <div data-testid="cockpit" className="relative flex h-full min-w-0 overflow-hidden">
+      <aside
+        data-testid="session-rail-panel"
+        className={`fixed inset-y-0 left-0 z-40 flex w-[min(300px,calc(100vw-48px))] shrink-0 flex-col overflow-y-auto border-r border-doom-border bg-doom-rail transition-transform md:visible md:static md:z-auto md:w-[300px] md:translate-x-0 ${railOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}
+      >
+        <SessionRail onDismiss={() => setRailOpen(false)} />
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar view={tab?.id ?? 'conversation'} />
+      {railOpen ? (
+        <Button
+          variant="ghost"
+          data-testid="mobile-drawer-backdrop"
+          aria-label="hide sessions"
+          className="fixed inset-0 z-30 h-auto w-auto rounded-none bg-black/55 p-0 hover:bg-black/55 md:hidden"
+          onClick={() => setRailOpen(false)}
+        />
+      ) : null}
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <TopBar
+          view={tab?.id ?? 'conversation'}
+          onShowSessions={() => {
+            setMobileActivityOpen(false);
+            setRailOpen(true);
+          }}
+          onShowActivity={() => {
+            setRailOpen(false);
+            setMobileActivityOpen(true);
+          }}
+        />
         {/* The composer and the selection bar address the session's agent, so
             they belong to the conversation alone. A plugin panel is a view of
             something else, and a prompt box under it would send somewhere the
@@ -82,20 +118,31 @@ export function CockpitPage() {
           </>
         )}
       </main>
-      {dockOpen ? (
-        <ActivityDock onClose={() => setDockOpen(false)} />
+      {dockOpen || mobileActivityOpen ? (
+        <div className={activityDockClass}>
+          <ActivityDock onClose={closeActivity} />
+        </div>
       ) : (
         <Button
           variant="ghost"
           data-testid="activity-show"
           title="show the activity dock"
           onClick={() => setDockOpen(true)}
-          className="h-auto shrink-0 rounded-none border-l border-doom-border bg-doom-rail px-2 py-3 text-[9px] tracking-widest text-doom-dim hover:bg-doom-rail"
+          className="hidden h-auto shrink-0 rounded-none border-l border-doom-border bg-doom-rail px-2 py-3 text-[9px] tracking-widest text-doom-dim hover:bg-doom-rail lg:flex"
           style={{ writingMode: 'vertical-rl' }}
         >
           ACTIVITY
         </Button>
       )}
+      {mobileActivityOpen ? (
+        <Button
+          variant="ghost"
+          data-testid="mobile-activity-backdrop"
+          aria-label="hide activity"
+          className="fixed inset-0 z-30 h-auto w-auto rounded-none bg-black/55 p-0 hover:bg-black/55 lg:hidden"
+          onClick={() => setMobileActivityOpen(false)}
+        />
+      ) : null}
       <DialogOverlay />
       <RefusedCard />
       <CommandPalette />

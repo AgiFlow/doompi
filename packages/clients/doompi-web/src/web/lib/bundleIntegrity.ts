@@ -4,6 +4,7 @@ import {
   canonicalManifest,
   isBundleManifest,
 } from '@agimon-ai/doompi-web-security';
+import { restoreSealedSession, sealedHttpSession } from './sealedSession.ts';
 
 /**
  * Checking that the page came from this hub and not from the edge in front of it.
@@ -73,7 +74,11 @@ export async function verifyBundle(): Promise<IntegrityVerdict> {
   }
   let signed: SignedBundleManifest;
   try {
-    const response = await fetch(BUNDLE_MANIFEST_ROUTE, { credentials: 'same-origin', cache: 'no-store' });
+    await restoreSealedSession();
+    const response = await sealedHttpSession.fetch(BUNDLE_MANIFEST_ROUTE, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
     if (!response.ok) return { state: 'unavailable', reason: `The manifest answered ${String(response.status)}.` };
     signed = (await response.json()) as SignedBundleManifest;
   } catch {

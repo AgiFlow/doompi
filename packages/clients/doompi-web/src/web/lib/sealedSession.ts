@@ -1,20 +1,25 @@
-import { REMOTE_API_ROUTE } from '../../types/remoteAccess.ts';
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import { REMOTE_CHANNEL_ROUTE, REMOTE_HTTP_ROUTE, type RemoteChannelScope } from '../../types/remoteAccess.ts';
+import { createSealedTransport, sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
-/**
- * The page's one sealed channel, shared with every installed plugin.
- *
- * Re-exported from the security package rather than created here, because the
- * cockpit and the plugins are bundled into the same page and all of them must
- * share one pair of nonce counters. A second instance would start its counter
- * at zero and the receiver would reject everything it sent as a replay.
- */
-export const sealedSession = sealedTransport;
+/** Each concurrent transport owns independent nonce counters and a purpose-bound server channel. */
+export const sealedSession = createSealedTransport();
+export const sealedProtocolSession = createSealedTransport();
+/** Plugins import this singleton directly, so it remains the HTTP channel. */
+export const sealedHttpSession = sealedTransport;
+sealedHttpSession.relayRequestsThrough(REMOTE_HTTP_ROUTE);
+
+const SCOPED_TRANSPORTS = [
+  ['session', sealedSession],
+  ['protocol', sealedProtocolSession],
+  ['http', sealedHttpSession],
+] as const;
 
 /** Stored by the pairing page so a reload can re-establish without another scan. */
 const HOST_KEY_STORAGE = 'doompi.channelKey';
 
+let restoration: Promise<boolean> | undefined;
 export function rememberHostChannelKey(hostPublicKey: string): void {
+  restoration = undefined;
   try {
     window.sessionStorage.setItem(HOST_KEY_STORAGE, hostPublicKey);
   } catch {
@@ -36,26 +41,40 @@ export function rememberedHostChannelKey(): string | undefined {
  * Session storage rather than local: the channel is ephemeral by design, and a
  * key that outlived the tab would suggest a channel that no longer exists.
  */
-export async function restoreSealedSession(): Promise<boolean> {
+async function establishSealedSession(): Promise<boolean> {
   const hostKey = rememberedHostChannelKey();
   if (hostKey === undefined) return false;
-  const clientPublicKey = await sealedSession.connect(hostKey);
-  if (clientPublicKey === undefined) return false;
-  // Deliberately an unsealed request: this is what establishes sealing. It
-  // carries only a public key, which the relay may see and cannot use.
+
+  for (const [scope, transport] of SCOPED_TRANSPORTS) {
+    const clientPublicKey = await transport.connect(hostKey);
+    if (clientPublicKey === undefined || !(await registerChannel(scope, clientPublicKey))) {
+      resetSealedSessions();
+      return false;
+    }
+  }
+  return true;
+}
+
+export function restoreSealedSession(): Promise<boolean> {
+  restoration ??= establishSealedSession();
+  return restoration;
+}
+
+export function resetSealedSessions(): void {
+  for (const [, transport] of SCOPED_TRANSPORTS) transport.reset();
+  restoration = undefined;
+}
+
+async function registerChannel(scope: RemoteChannelScope, clientPublicKey: string): Promise<boolean> {
   try {
-    const response = await fetch(`${REMOTE_API_ROUTE}/channel`, {
+    const response = await fetch(REMOTE_CHANNEL_ROUTE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ clientPublicKey }),
+      body: JSON.stringify({ scope, clientPublicKey }),
     });
-    if (response.ok) return true;
+    return response.ok;
   } catch {
-    // The hub is unreachable; the socket's own retry reports that.
+    return false;
   }
-  // The host never completed its half, so sealing here would produce messages
-  // nobody can open. Falling back to plaintext beats a silent blackout.
-  sealedSession.reset();
-  return false;
 }

@@ -38,65 +38,95 @@ describe('sealed fetch', () => {
     expect(new Headers(seen[0]?.headers).get(SEALED_BODY_HEADER)).toBeNull();
   });
 
-  it('seals the request body and marks it, so a handler never has to guess', async () => {
+  it('seals the complete request, so the relay sees neither target nor body', async () => {
     const { transport, server } = await connected();
+    transport.relayRequestsThrough('/api/remote/request');
     let sentBody = '';
-    let sentHeaders = new Headers();
-    globalThis.fetch = vi.fn(async (_input: unknown, init?: RequestInit) => {
+    let sentTarget: unknown;
+    globalThis.fetch = vi.fn(async (input: unknown, init?: RequestInit) => {
+      sentTarget = input;
       sentBody = typeof init?.body === 'string' ? init.body : '';
-      sentHeaders = new Headers(init?.headers);
-      return new Response('{"ok":true}');
+      const opened = server.open(JSON.parse(sentBody));
+      if (!opened.ok) throw new Error(opened.failure);
+      expect(JSON.parse(new TextDecoder().decode(opened.plaintext))).toMatchObject({
+        method: 'POST',
+        target: '/api/thing',
+      });
+      const response = server.seal(
+        new TextEncoder().encode(JSON.stringify({ v: 1, status: 200, headers: [], body: btoa('{}') })),
+      );
+      if (!response.ok) throw new Error(response.failure);
+      return new Response(JSON.stringify(response.envelope));
     }) as unknown as typeof fetch;
 
     await transport.fetch('/api/thing', { method: 'POST', body: '{"secret":"prompt text"}' });
+    expect(sentTarget).toBe('/api/remote/request');
     expect(sentBody).not.toContain('prompt text');
-    expect(sentHeaders.get(SEALED_BODY_HEADER)).toBe('1');
+    expect(sentBody).not.toContain('/api/thing');
     expect(isSealedEnvelope(JSON.parse(sentBody))).toBe(true);
-    const opened = server.open(JSON.parse(sentBody));
-    expect(opened.ok && new TextDecoder().decode(opened.plaintext)).toBe('{"secret":"prompt text"}');
   });
 
   it('opens a sealed response', async () => {
     const { transport, server } = await connected();
+    transport.relayRequestsThrough('/api/remote/request');
     globalThis.fetch = vi.fn(async () => {
-      const sealed = server.seal(new TextEncoder().encode('{"answer":42}'));
+      const sealed = server.seal(
+        new TextEncoder().encode(
+          JSON.stringify({
+            v: 1,
+            status: 200,
+            headers: [['content-type', 'application/json']],
+            body: btoa('{"answer":42}'),
+          }),
+        ),
+      );
       if (!sealed.ok) throw new Error(sealed.failure);
-      return new Response(JSON.stringify(sealed.envelope), { headers: { [SEALED_BODY_HEADER]: '1' } });
+      return new Response(JSON.stringify(sealed.envelope));
     }) as unknown as typeof fetch;
 
     const response = await transport.fetch('/api/thing');
     await expect(response.json()).resolves.toEqual({ answer: 42 });
   });
 
-  it('leaves an unsealed response alone, so plaintext routes still work', async () => {
+  it('refuses an unsealed response once the HTTP channel is active', async () => {
     const { transport } = await connected();
+    transport.relayRequestsThrough('/api/remote/request');
     globalThis.fetch = vi.fn(async () => new Response('{"plain":true}')) as unknown as typeof fetch;
-    await expect((await transport.fetch('/api/thing')).json()).resolves.toEqual({ plain: true });
-  });
-
-  it('reports a response it cannot open rather than handing back ciphertext', async () => {
-    const { transport } = await connected();
-    globalThis.fetch = vi.fn(
-      async () => new Response('{"v":1,"n":"AAAA","c":"AAAA"}', { headers: { [SEALED_BODY_HEADER]: '1' } }),
-    ) as unknown as typeof fetch;
 
     const response = await transport.fetch('/api/thing');
     expect(response.status).toBe(502);
     expect(((await response.json()) as { error: string }).error).toContain('shaped');
   });
 
-  it('passes a body it cannot seal through untouched rather than dropping the call', async () => {
-    // A FormData or stream body is not a string; sealing it is out of scope and
-    // silently dropping the request would be worse than sending it as it was.
+  it('reports a response it cannot open rather than handing back ciphertext', async () => {
     const { transport } = await connected();
-    let sentHeaders = new Headers();
+    transport.relayRequestsThrough('/api/remote/request');
+    globalThis.fetch = vi.fn(async () => new Response('{"v":1,"n":"AAAA","c":"AAAA"}')) as unknown as typeof fetch;
+
+    const response = await transport.fetch('/api/thing');
+    expect(response.status).toBe(502);
+    expect(((await response.json()) as { error: string }).error).toContain('shaped');
+  });
+
+  it('seals URL-encoded bodies instead of falling back to plaintext', async () => {
+    const { transport, server } = await connected();
+    transport.relayRequestsThrough('/api/remote/request');
+    let sentBody = '';
     globalThis.fetch = vi.fn(async (_input: unknown, init?: RequestInit) => {
-      sentHeaders = new Headers(init?.headers);
-      return new Response('{}');
+      sentBody = typeof init?.body === 'string' ? init.body : '';
+      const opened = server.open(JSON.parse(sentBody));
+      if (!opened.ok) throw new Error(opened.failure);
+      const request = JSON.parse(new TextDecoder().decode(opened.plaintext)) as { body: string };
+      expect(atob(request.body)).toBe('a=1');
+      const response = server.seal(
+        new TextEncoder().encode(JSON.stringify({ v: 1, status: 200, headers: [], body: btoa('{}') })),
+      );
+      if (!response.ok) throw new Error(response.failure);
+      return new Response(JSON.stringify(response.envelope));
     }) as unknown as typeof fetch;
 
     await transport.fetch('/api/thing', { method: 'POST', body: new URLSearchParams({ a: '1' }) });
-    expect(sentHeaders.get(SEALED_BODY_HEADER)).toBeNull();
+    expect(sentBody).not.toContain('a=1');
   });
 });
 

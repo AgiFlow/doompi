@@ -8,10 +8,12 @@ import {
   REMOTE_PAIRING_REQUEST_TYPE,
   REMOTE_STATE_TYPE,
   type PairingStatus,
+  type RemoteChannelScope,
   type RemoteAccessSettings,
   type RemoteAccessStateView,
   type RemoteAccessStatus,
   type TunnelLauncher,
+  type TunnelStartResult,
 } from '../types/remoteAccess.ts';
 import { COOKIE_CEILING_SECONDS } from '../types/remoteAccess.ts';
 import type { StepUpAction, StoredCredential } from '../services/webauthnPolicy.ts';
@@ -101,12 +103,12 @@ export interface RemoteAccess {
   stepUpRequired(action: StepUpAction): boolean;
   /** The host's ephemeral public key for this tunnel, printed in the QR. */
   channelPublicKey(): string | undefined;
-  /** Completes a sealed channel against a device's key, keyed by its session. */
-  openChannel(deviceId: string, clientPublicKey: string): boolean;
-  channelFor(deviceId: string): SealedChannel | undefined;
+  /** Completes one purpose-bound sealed channel against a fresh device key. */
+  openChannel(deviceId: string, scope: RemoteChannelScope, clientPublicKey: string): boolean;
+  channelFor(deviceId: string, scope: RemoteChannelScope): SealedChannel | undefined;
   revokeDevice(id: string): boolean;
-  /** Registers a remote socket so switching off can close it; returns an unregister. */
-  trackSocket(close: (code: number, reason: string) => void): () => void;
+  /** Registers a remote socket against its device so revocation closes it immediately. */
+  trackSocket(deviceId: string, close: (code: number, reason: string) => void): () => void;
   close(): Promise<void>;
 }
 
@@ -120,6 +122,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
   let status: RemoteAccessStatus = 'off';
   let listener: TunnelListener | undefined;
   let stopTunnel: (() => Promise<void>) | undefined;
+  let tunnelStartup: { controller: AbortController; outcome: Promise<TunnelStartResult> } | undefined;
   let publicOrigin: string | undefined;
   let policy: OriginPolicy | undefined;
   let startedAt: number | undefined;
@@ -130,11 +133,29 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
   let autoCloseTimer: ReturnType<typeof setTimeout> | undefined;
   /** One handshake per tunnel; its public half goes in every QR while the tunnel lives. */
   let handshake: HostHandshake | undefined;
-  /** One channel per paired device, so nonce counters never collide across devices. */
   const channels = new Map<string, SealedChannel>();
-  const sockets = new Set<(code: number, reason: string) => void>();
+  const sockets = new Map<string, Set<(code: number, reason: string) => void>>();
 
-  const devices: DeviceAuth = createDeviceAuth({ settings: () => settings, now, onNotice: notice });
+  const channelKey = (deviceId: string, scope: RemoteChannelScope): string => `${deviceId}:${scope}`;
+  const dropDeviceAccess = (deviceId: string, reason: 'revoked' | 'expired'): void => {
+    for (const scope of ['session', 'protocol', 'http'] as const) channels.delete(channelKey(deviceId, scope));
+    const held = sockets.get(deviceId);
+    sockets.delete(deviceId);
+    for (const close of held ?? []) {
+      try {
+        close(1008, `device ${reason}`);
+      } catch {
+        // The socket is already gone.
+      }
+    }
+  };
+
+  const devices: DeviceAuth = createDeviceAuth({
+    settings: () => settings,
+    now,
+    onNotice: notice,
+    onDrop: (record, reason) => dropDeviceAccess(record.id, reason),
+  });
 
   const webauthn: WebAuthn = createWebAuthn({
     publicOrigin: () => publicOrigin,
@@ -218,14 +239,21 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
     // Sockets first. An upgraded socket has left the HTTP server's connection
     // tracking, so closing the listener does not touch it: without this a
     // paired phone keeps driving the agent after remote access is switched off.
-    for (const close of sockets) {
-      try {
-        close(1008, 'remote access revoked');
-      } catch {
-        // The socket is already gone, which is the outcome we wanted.
+    for (const held of sockets.values()) {
+      for (const close of held) {
+        try {
+          close(1008, 'remote access revoked');
+        } catch {
+          // The socket is already gone, which is the outcome we wanted.
+        }
       }
     }
     sockets.clear();
+    const starting = tunnelStartup;
+    tunnelStartup = undefined;
+    starting?.controller.abort();
+    const startingOutcome = await starting?.outcome.catch(() => undefined);
+    if (startingOutcome?.ok === true) await startingOutcome.stop().catch(() => undefined);
     await stopTunnel?.().catch(() => undefined);
     stopTunnel = undefined;
     await listener?.close().catch(() => undefined);
@@ -266,6 +294,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
       options.store.save(settings);
       // Re-arm rather than leave the old deadline: shortening the window has to
       // take effect now, and lengthening it should not close early.
+      devices.reschedule();
       armAutoClose();
       publish();
       return settings;
@@ -329,7 +358,22 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
         return { ok: false, error: failure };
       }
       listener = bound;
-      const outcome = await options.launchTunnel({ port: bound.port, config: settings.tunnel });
+      const controller = new AbortController();
+      const launching = options.launchTunnel({
+        port: bound.port,
+        config: settings.tunnel,
+        signal: controller.signal,
+        acceptOrigin: (origin) => {
+          policy = tunnelOriginPolicy(origin);
+        },
+      });
+      const startup = { controller, outcome: launching };
+      tunnelStartup = startup;
+      const outcome = await launching;
+      if (tunnelStartup !== startup || controller.signal.aborted) {
+        return { ok: false, error: 'Tunnel startup was cancelled.' };
+      }
+      tunnelStartup = undefined;
       if (!outcome.ok) {
         await teardown();
         status = 'failed';
@@ -431,25 +475,29 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
     channelPublicKey: () => handshake?.publicKey,
 
-    openChannel(deviceId, clientPublicKey) {
+    openChannel(deviceId, scope, clientPublicKey) {
       const channel = handshake?.accept(clientPublicKey);
       if (channel === undefined) return false;
-      channels.set(deviceId, channel);
+      channels.set(channelKey(deviceId, scope), channel);
       return true;
     },
 
-    channelFor: (deviceId) => channels.get(deviceId),
+    channelFor: (deviceId, scope) => channels.get(channelKey(deviceId, scope)),
 
     revokeDevice(id) {
-      channels.delete(id);
       const revoked = devices.revoke(id);
       if (revoked) publish();
       return revoked;
     },
 
-    trackSocket(close) {
-      sockets.add(close);
-      return () => sockets.delete(close);
+    trackSocket(deviceId, close) {
+      const held = sockets.get(deviceId) ?? new Set();
+      held.add(close);
+      sockets.set(deviceId, held);
+      return () => {
+        held.delete(close);
+        if (held.size === 0) sockets.delete(deviceId);
+      };
     },
 
     async close() {

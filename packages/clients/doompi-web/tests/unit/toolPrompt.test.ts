@@ -1,7 +1,12 @@
 import { defineWebPlugin, type ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
-import { initialSessionState, type SessionState, type ToolEntry } from '../../src/web/lib/sessionModel.ts';
+import {
+  initialSessionState,
+  reduceSession,
+  type SessionState,
+  type ToolEntry,
+} from '../../src/web/lib/sessionModel.ts';
 import { toolPromptClaim } from '../../src/web/lib/toolPrompt.ts';
 
 function Component(): null {
@@ -60,6 +65,24 @@ describe('which running tool owns the open request', () => {
   it('claims it for the running tool whose plugin declared a prompt', () => {
     install({});
     const claim = toolPromptClaim(state(), null);
+
+    expect(claim?.entry.toolCallId).toBe('call-1');
+    expect(claim?.dialog).toEqual(REQUEST);
+  });
+
+  it('claims a live tool even when the protocol owns the visible transcript', () => {
+    install({});
+    const live = reduceSession(
+      state({ entries: [] }),
+      {
+        type: 'tool_execution_start',
+        toolCallId: 'call-1',
+        toolName: 'ask_user_question',
+        args: { questions: [{ question: 'Which one?' }] },
+      },
+      { transcriptFromProtocol: true },
+    );
+    const claim = toolPromptClaim(live, null);
 
     expect(claim?.entry.toolCallId).toBe('call-1');
     expect(claim?.dialog).toEqual(REQUEST);

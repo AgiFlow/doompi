@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createECDH, hkdfSync, randomBytes } from 'node:crypto';
+import { ECDH, createCipheriv, createDecipheriv, createECDH, hkdfSync, randomBytes } from 'node:crypto';
 import {
   MAX_MESSAGES_PER_KEY,
   NONCE_BYTES,
@@ -123,16 +123,21 @@ function createChannel(secret: Buffer, sendDirection: SealedDirection, noncePref
 export function createHostHandshake(): HostHandshake {
   const exchange = createECDH(CURVE);
   exchange.generateKeys();
+  const acceptedPeers = new Set<string>();
   return {
     publicKey: exchange.getPublicKey().toString('base64url'),
     accept(peerPublicKey) {
+      let peer: Buffer;
       let secret: Buffer;
       try {
-        secret = exchange.computeSecret(Buffer.from(peerPublicKey, 'base64url'));
+        peer = ECDH.convertKey(Buffer.from(peerPublicKey, 'base64url'), CURVE, undefined, undefined, 'uncompressed');
+        if (acceptedPeers.has(peer.toString('base64url'))) return undefined;
+        secret = exchange.computeSecret(peer);
       } catch {
         // A key that is not a point on the curve; there is no channel to make.
         return undefined;
       }
+      acceptedPeers.add(peer.toString('base64url'));
       // The prefix is the host's to choose and travels in every nonce, so the
       // client reads it off the wire rather than needing it up front.
       return createChannel(secret, 's2c', randomBytes(NONCE_PREFIX_BYTES));
