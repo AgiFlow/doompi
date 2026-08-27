@@ -1,9 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { rgPath } from '@vscode/ripgrep';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { registerHashlineGrepTool } from '../src/adapters/pi/grepTool.ts';
 
 interface CapturedTool {
@@ -21,6 +22,16 @@ interface CapturedTool {
 let directory = '';
 let tool: CapturedTool | undefined;
 
+const originalPath = process.env.PATH;
+
+beforeAll(() => {
+  process.env.PATH = `${dirname(rgPath)}${delimiter}${originalPath ?? ''}`;
+});
+
+afterAll(() => {
+  if (originalPath === undefined) delete process.env.PATH;
+  else process.env.PATH = originalPath;
+});
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'doompi-grep-'));
   tool = undefined;
