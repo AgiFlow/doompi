@@ -81,23 +81,12 @@ Repository discoveries replace same-named home discoveries. Explicit entries ove
 discovery and can add string environment defaults; repository entries replace matching home
 entries. Select one at launch with `--profile editor` or switch with `/profile`.
 
-## What this buys you
+## Why scope the session
 
-Every tool schema and skill name competes for the same context. Loading less has two
-immediate effects:
-
-1. You spend fewer tokens before the work begins.
-2. The model has fewer plausible-but-wrong tools and skills to choose from.
-
-The savings get larger when each workflow job starts with its own config instead of
-inheriting the last job's toolbox.
+Every tool schema and skill name consumes context and gives the model another possible choice. A smaller composition uses fewer tokens before work starts and reduces the number of irrelevant tools the model can select. Workflow jobs can choose their own composition instead of inheriting the previous job's toolbox.
 
 ### Copilot
 
-I got tired of remembering slash commands, so `SPC` is the map. It opens only when the
-draft is empty; a space in the middle of a prompt remains a space. Press it, read the
-choices, then press the next key.
+Press `SPC` on an empty draft to open the Leader map. A space typed inside a prompt remains a space. The map shows only commands contributed by the active composition.
 
-When the keyboard is the wrong tool, autonomous Voice mode keeps the conversation going.
-You can talk to the agent while doing the chores instead of carrying a laptop around the
-house, and the primary agent can speak its own opening, milestone, and final updates.
+Autonomous Voice mode keeps the session available when typing is impractical. The primary agent can narrate its opening, meaningful milestones, and final answer, subject to the configured capture, transcription, model, and speech engines.

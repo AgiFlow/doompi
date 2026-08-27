@@ -1,11 +1,10 @@
 # @agimon-ai/doompi-help
 
-Activation-gated, package-owned guidance for DoomPi.
+Load package-owned DoomPi guidance only when Help mode is active.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-Help keeps extension documentation out of the default model context. Packages contribute concise
-`llms.txt` indexes; the Help host resolves and exposes them only while Help mode is active.
+Packages contribute concise `llms.txt` indexes. Help keeps them out of the default model context and exposes them only while Help mode is active.
 
 > **Alpha:** Help contribution contracts may change between releases.
 

@@ -2,9 +2,7 @@
 
 [Back to DoomPi](../README.md)
 
-This is the inventory: what DoomPi does with your credentials, your commands, and your data. The
-[Security model](securities.md) is the reasoning beside it, covering the threat model, the boundaries
-that guard a cockpit reachable from a phone, and what is deliberately left open.
+This document inventories what DoomPi does with executable configuration, credentials, commands, model traffic, native binaries, voice data, and telemetry. The [Security model](securities.md) explains the threat model and the boundaries around a cockpit reachable from another device.
 
 ## Executable inputs
 
@@ -127,9 +125,7 @@ command that can expose panes over a public tunnel with pairing codes; **DoomPi 
 and no DoomPi code path passes `web-share`, `--web-port`, or `--frontend-url`. DoomPi Runner uses
 RMUX for session and pane supervision and RTK for log processing, nothing else.
 
-Where no compatible RMUX binary exists, the runner supervises panes with `tmux` from PATH instead.
-That is the host's own tmux rather than a bundled binary, so it runs with the same privileges as
-any other command the runner starts.
+Runner tries the bundled RMUX binary, `rmux` on `PATH`, then `tmux` on `PATH`. PATH binaries run with the same privileges as every other command Runner starts. If no multiplexer is available, non-interactive commands can use the supervised subprocess fallback; interactive commands cannot start.
 
 RTK has its own upstream telemetry, documented at
 [rtk-ai/rtk TELEMETRY.md](https://github.com/rtk-ai/rtk/blob/master/docs/TELEMETRY.md). It is

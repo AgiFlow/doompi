@@ -1,22 +1,18 @@
 # DoomPi Development Plugin
 
-This example packages a portable development workflow for Codex, Claude Code, and DoomPi. It
-demonstrates how native plugin manifests can share one skills directory instead of maintaining
-vendor-specific prompt copies.
+This example plugin provides one portable implementation workflow for Codex, Claude Code, and DoomPi. Both native plugin manifests load the same skill instead of maintaining host-specific prompt copies.
 
-## Components
+## What it includes
 
-- [`doompi-development`](skills/doompi-development/SKILL.md) guides scoped implementation and verification.
-- [`doompi-developer`](agents/doompi-developer.md) is the corresponding implementation agent for
-  hosts that support Markdown agents.
-- `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` expose the same `skills/` directory.
+- [`doompi-development`](skills/doompi-development/SKILL.md) scopes a requested code change, implements the smallest coherent solution, and verifies it with the target repository's own checks.
+- [`doompi-developer`](agents/doompi-developer.md) provides the corresponding implementation agent on hosts that support Markdown agents.
+- `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` expose the shared `skills/` directory to their respective hosts.
 
-The plugin does not pin a model, framework, package manager, or test runner. It discovers and
-follows the target repository's own instructions.
+The plugin does not choose a model, framework, package manager, or test runner. It reads and follows the target repository's instructions and existing conventions.
 
-## Install directly
+## Install the plugin directly
 
-Register the repository marketplace once from the repository root, then install the plugin.
+Run these commands from the DoomPi repository root. The first command registers the repository's `doompi-examples` marketplace. The second installs `development` from that marketplace.
 
 Codex:
 
@@ -32,16 +28,21 @@ claude plugin marketplace add ./ --scope user
 claude plugin install development@doompi-examples --scope user
 ```
 
-## Compose with DoomPi
+The Claude Code commands register and install the plugin for the current user.
 
-The repository's DoomPi domain configuration selects this plugin as `development`:
+## Load it with DoomPi
+
+The repository maps the `development` domain to this plugin:
 
 ```bash
 doompi --major-mode copilot --domains development --explain
 doompi --major-mode copilot --domains development
 ```
 
-Try a request such as: `Implement the smallest safe version of this feature and verify it.`
+The first command prints the resolved composition and estimated prompt cost without launching Pi. The second launches the Copilot composition with the `development` domain.
 
-The plugin never creates a branch, commit, release, or pull request unless the user asks for that
-action.
+Try: `Implement the smallest safe version of this feature and verify it.`
+
+## Operational boundaries
+
+The workflow preserves unrelated worktree changes and avoids new dependencies or abstractions unless the task requires them. It does not create a branch, commit, release, or pull request unless the user explicitly requests that action.

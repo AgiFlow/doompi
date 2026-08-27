@@ -1,6 +1,6 @@
 # @agimon-ai/doompi-loop
 
-A session-scoped scheduler that sends a prompt immediately and repeats it at a bounded interval.
+Send a prompt now, then repeat it at a bounded interval for the current session.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 

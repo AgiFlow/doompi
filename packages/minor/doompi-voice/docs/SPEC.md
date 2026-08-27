@@ -51,7 +51,7 @@ turn identities and MUST NOT attach an unrelated previous spool.
 
 ## 2. User contract
 
-### AV-USER-001 — Enable
+### AV-USER-001: Enable
 
 When autonomous voice is off, pressing `SPC v e` MUST:
 
@@ -63,7 +63,7 @@ When autonomous voice is off, pressing `SPC v e` MUST:
 
 If any step fails, the mode MUST return to `off`, stop acquired resources, and show an actionable error.
 
-### AV-USER-002 — Automatic turn processing
+### AV-USER-002: Automatic turn processing
 
 While enabled, a normal user turn MUST complete without another key press:
 
@@ -80,7 +80,7 @@ listening
 
 `SPC v e` MUST NOT be required to trigger endpointing, transcription, submission, acknowledgement, or the next capture.
 
-### AV-USER-003 — Toggle off
+### AV-USER-003: Toggle off
 
 Pressing `SPC v e` while autonomous voice is enabled MUST request a graceful stop and MUST be idempotent.
 
@@ -93,17 +93,17 @@ Pressing `SPC v e` while autonomous voice is enabled MUST request a graceful sto
 
 Extension disposal and session shutdown are hard stops: they MUST abort outstanding work rather than deliver a new user turn.
 
-### AV-USER-004 — Continuous operation
+### AV-USER-004: Continuous operation
 
 After any committed, empty, or deliberately discarded turn, the machine MUST either start exactly one next capture or enter a visible terminal state. It MUST never report `listening` without a live worker capture.
 
-### AV-USER-005 — Exact delivery
+### AV-USER-005: Exact delivery
 
 The submitted prompt MUST be the deterministic transcript-policy result, with only documented control-phrase removal and an optional validated ASR-wording correction. A correction MUST consist solely of bounded, non-overlapping exact-source replacements whose replacement text is an exact phrase in the bounded runtime reference context. It MUST preserve intent, content, constraints, ordering, specificity, negation, and every number.
 
 A language model MUST NOT return or submit a free-form rewritten prompt. Runtime context is untrusted quoted reference vocabulary, never an instruction or a source of additional user content. Missing or ambiguous context, invalid output, timeout, cancellation, or model failure MUST deliver the unchanged transcript-policy result.
 
-### AV-USER-006 — Responsiveness
+### AV-USER-006: Responsiveness
 
 With a healthy recorder and local model:
 
@@ -577,7 +577,7 @@ Impact on result: makes real failures diagnosable rather than represented by gen
 
 ## 5. Audio and VAD requirements
 
-### AV-AUDIO-001 — Format
+### AV-AUDIO-001: Format
 
 - sample rate: 16,000 Hz;
 - channels: mono;
@@ -602,7 +602,7 @@ Default behavior:
 - adaptive threshold: noise floor +10 dB, clamped from -50 to -25 dBFS;
 - Silero threshold: 0.5 over 512-sample windows.
 
-### AV-VAD-002 — Endpoint timing
+### AV-VAD-002: Endpoint timing
 
 `utteranceIdleMs` is measured from the last accepted voiced frame. The default is 3000 ms and the supported configuration range is 1500–10000 ms.
 
@@ -610,51 +610,51 @@ The VAD trailing-silence window is part of that total, not additional to it. Exa
 
 While a composition draft is collecting, the endpoint MUST instead use `composeUtteranceIdleMs`, default 1200 ms with a supported range of 800 to 3000 ms. A turn produces exactly one transcript, so at the ordinary window a short command spoken after a brief pause arrives appended to the sentence before it and cannot be adjudicated as a command. Over-splitting is acceptable in this mode because draft segments are rejoined.
 
-### AV-VAD-003 — No acoustic TTS cancellation
+### AV-VAD-003: No acoustic TTS cancellation
 
 Neither provisional nor confirmed VAD speech may directly abort TTS. Playback cancellation requires priority supersession, hard stop, or future Section 10 barge-in evidence.
 
 ## 6. Capture, spool, and worker requirements
 
-### AV-CAP-001 — Readiness and recovery
+### AV-CAP-001: Readiness and recovery
 
 First-frame readiness, liveness checks, recorder exits, and recovery exhaustion MUST return typed events to the lifecycle machine.
 
 Total recorder startup/recovery before a terminal outcome MUST be bounded. Repeating four independent 8-second first-frame attempts while showing `listening` is prohibited.
 
-### AV-CAP-002 — Frame callback performance
+### AV-CAP-002: Frame callback performance
 
 The 20 ms recorder callback MUST NOT perform an `fsync`, manifest rewrite, WAV conversion, ASR invocation, model invocation, or other unbounded synchronous operation per frame.
 
 Durability MAY be batched with a documented maximum loss window. Finalization MUST flush committed audio before snapshot creation.
 
-### AV-CAP-003 — Bounded capture windows
+### AV-CAP-003: Bounded capture windows
 
 A manual capture finalizes when its configured duration limit expires. An autonomous duration limit is a recoverable lifecycle boundary, not worker exhaustion: XState cancels and replaces a still-listening capture with a new turn identity, or finalizes the current capture with reason `duration-limit` when speech is confirmed. Idle rotation removes the old private spool and MUST NOT disable autonomous voice or run ASR over an idle five-minute window.
 
-### AV-WORKER-001 — Supervision
+### AV-WORKER-001: Supervision
 
 Worker supervision MUST cover functional health, not heartbeat delivery alone. A heartbeat from a worker with hung ASR does not satisfy health. ASR has its own timeout and cancellation path.
 
-### AV-WORKER-002 — Recovery
+### AV-WORKER-002: Recovery
 
 After worker restart, only the machine's current capture may resume. Recovered spools from unrelated prior extension sessions MUST be surfaced for explicit recovery/discard policy and MUST NOT silently attach to a new turn.
 
 ## 7. Transcription and delivery requirements
 
-### AV-ASR-001 — Single final pass
+### AV-ASR-001: Single final pass
 
 A normal autonomous turn performs one final ASR request. The worker MUST freeze capture before creating its final snapshot, and no later PCM may enter that revision.
 
-### AV-ASR-002 — Timeout
+### AV-ASR-002: Timeout
 
 ASR defaults to a 15-second deadline. Timeout aborts the adapter process and returns `TRANSCRIPTION_TIMED_OUT`. The lifecycle then discards/retries according to a bounded policy or enters `failed`; it never remains indefinitely in `transcribing`.
 
-### AV-ASR-003 — Empty transcript
+### AV-ASR-003: Empty transcript
 
 Digital silence is discarded without a normalization retry. Nonzero PCM that produces an empty transcript MAY receive one bounded gain-normalized retry within the same ASR deadline. A final empty result is acknowledged as discarded and leads to exactly one next capture unless stopping.
 
-### AV-CORRECTION-001 — Context-bounded wording repair
+### AV-CORRECTION-001: Context-bounded wording repair
 
 Command correction runs only after deterministic transcript policy has accepted a deliverable prompt. The request MAY contain the accepted prompt plus the bounded context defined by Section 4.9; it MUST NOT contain other branch messages or tool payloads. Model output is an untrusted patch proposal, not a rewritten prompt.
 
@@ -662,7 +662,7 @@ Every accepted replacement MUST use an exact whole-phrase source from the prompt
 
 An absent context skips the model call. Invalid JSON, an unsafe patch, model failure, or timeout falls back to the unchanged transcript-policy result. Toggle-off aborts the request and may use that fallback for the already-confirmed turn; hard shutdown aborts it and MUST NOT deliver a new turn.
 
-### AV-DELIVERY-001 — Exact once
+### AV-DELIVERY-001: Exact once
 
 Delivery and acknowledgement are separate effects coordinated by the machine:
 
@@ -676,7 +676,7 @@ A failed model call or undefined branch MUST NOT acknowledge a spool and then sk
 
 ## 8. Narration, playback gating, and barge-in requirements
 
-### AV-TTS-001 — Playback gate
+### AV-TTS-001: Playback gate
 
 Before or immediately when TTS starts, the worker receives `playback-state(active: true, generation: N)` with the exact narration reference when ranked barge-in was capability-negotiated. When `intentional-barge-in` is also negotiated, the message includes configured start phrases; older protocol-v1 workers receive no unsupported field and can authorize only command-only discard. The worker keeps the recorder alive for liveness and excludes unconfirmed playback frames from user-turn persistence, ordinary VAD, activity, and endpointing. A bounded overlap monitor may inspect private copies under Section 10.
 
@@ -684,7 +684,7 @@ After playback completes, fails, or is explicitly aborted, the worker receives `
 
 Older generations cannot shorten newer suppression.
 
-### AV-TTS-002 — Priority
+### AV-TTS-002: Priority
 
 Narration priority remains:
 
@@ -694,7 +694,7 @@ intent < plan < final < clarification < question
 
 The coordinator retains this ordering for shared playback. The direct `narrate` tool and zero-call final fallback enter as `final`; external narration requests enter as `clarification`. No automatic lifecycle source produces `intent`, `plan`, milestone, or tool-progress speech. Higher-priority narration may supersede lower-priority narration. Toggle-off, hard stop, and extension disposal abort playback and pending fallback generation.
 
-### AV-TTS-003 — Failure isolation
+### AV-TTS-003: Failure isolation
 
 A thrown or nonzero TTS outcome settles the request as `failed`, disables narration for the activation, and emits an actionable warning. It MUST NOT disable, restart, or strand microphone capture. A later activation MAY re-enable narration after a successful preflight.
 

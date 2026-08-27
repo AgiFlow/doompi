@@ -2,7 +2,7 @@
 
 [Back to DoomPi](../README.md)
 
-Run these commands from the repository root.
+Run these commands from the repository root:
 
 ```bash
 pnpm install
@@ -14,21 +14,21 @@ pnpm nx typecheck @agimon-ai/doompi
 pnpm nx lint @agimon-ai/doompi
 ```
 
+`pnpm build` builds every workspace project through Nx. The four targeted commands then build, test, type-check, and lint the root runtime package.
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for repository boundaries, required checks, commit rules, and pull-request guidance.
+
+## Maintainer release flow
+
+DoomPi uses the independent `alpha` release group in `nx.json`. Do not hand-publish a short package subset: the group includes the root runtime, fixed core, selectable features, clients, native Runner payloads, web packages, and repository-owned lint plugins. Workspace dependencies determine the build graph, and the release workflow publishes the selected versions under the `alpha` tag.
+
+The release-cut workflow selects affected release projects, runs the full candidate validation, and previews or writes the prerelease versions. After the release pull request merges, the publish workflow:
+
+1. verifies Runner payloads;
+2. runs the workspace audit, build, examples check, lint, architecture preflight, typecheck, tests, and packed-install system tests;
+3. publishes versions missing from npm with `pnpm nx release publish`; and
+4. waits for every version before creating tags.
+
+Generated changelogs remain owned by Nx release tooling. See `.github/workflows/release-cut.yml` and `.github/workflows/release-publish.yml` for the executable contract.
+
 DoomPi is maintained by [Agimon](https://agimon.ai/about).
-
-## Maintainer release order
-
-Publish [`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] and
-[`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] first, then
-[`@agimon-ai/doompi-help`][pkg-doompi-help], and only then the
-[`@agimon-ai/doompi`][pkg-doompi] runtime that consumes them. Generated changelogs remain owned
-by the release tooling.
-
-The deploy workflow blocks publishing unless the deterministic DoomPi architecture sweep and the
-packed-install system tests both pass. This keeps the shared Cordis host contract and independently
-loaded extension graph inside the same release boundary as the packages that consume them.
-
-[pkg-doompi]: https://www.npmjs.com/package/@agimon-ai/doompi
-[pkg-doompi-hashline]: https://www.npmjs.com/package/@agimon-ai/doompi-hashline
-[pkg-doompi-help]: https://www.npmjs.com/package/@agimon-ai/doompi-help
-[pkg-doompi-extension-contracts]: https://www.npmjs.com/package/@agimon-ai/doompi-extension-contracts

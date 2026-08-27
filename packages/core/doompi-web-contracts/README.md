@@ -1,27 +1,46 @@
 # @agimon-ai/doompi-web-contracts
 
-Web cockpit plugin contracts for DoomPi.
+Typed plugin, slot, session-channel, and hub-channel contracts for the DoomPi web cockpit.
 
-Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
+This is a library, not a Pi extension. It starts no process and does not belong in `.doom/modes.yaml`.
 
-A DoomPi web plugin has two halves that share these types:
+> **Alpha:** web plugin contracts may change between releases.
 
-- A client entry exporting `webPlugin: WebPluginDefinition`, compiled into the cockpit bundle by
-  the host package's build. It can contribute tabs with panels and badges, session data channels,
-  overlays, Leader Space key bindings, command palette commands, rail, selection bar, and
-  activity dock sections, and tool renderers: one `message` component per claimed tool (by name,
-  or by a `matches` predicate for tools named at runtime) that owns the tool call's whole timeline
-  item, composed from the shared components package's `MessageItem` so it looks like every other
-  item; `toolResultText` and `toolResultTextLines` read a result's text blocks the same way.
-- An optional hub entry exporting `webHubChannels: readonly WebHubChannel[]`, loaded by the cockpit
-  server at startup. A channel watches some data source and answers per-session payloads that reach
-  the page as `ChannelFrame` messages whose frame type is the channel name.
+## Install
 
-Plugin packages declare both entries in a `doompiWeb` block in their package.json; the cockpit's
-build scans the workspace and generates its registration modules from those blocks.
+```bash
+npm install @agimon-ai/doompi-web-contracts
+```
 
-Use `defineWebPlugin` and `defineSessionChannel` for checked literals. Server code should import
-these contracts type-only.
+Web plugin clients also require the package's React, React DOM, and TanStack Store peers when they use
+those surfaces.
+
+## Plugin shape
+
+A web plugin can have two entries:
+
+- A client entry exports `webPlugin: WebPluginDefinition`. It can contribute tabs, slots, Leader
+  bindings, commands, session channels, activity surfaces, and tool renderers.
+- An optional hub entry exports `webHubChannels: readonly WebHubChannel[]`. Each channel watches a
+  data source and emits per-session `ChannelFrame` payloads to the page.
+
+Declare both entries in the plugin package's `doompiWeb` manifest block. The DoomPi cockpit bundler
+reads those declarations and generates the registration modules.
+
+Use the definition helpers for checked literals:
+
+```ts
+import {
+  defineSessionChannel,
+  defineSessionStore,
+  defineSlot,
+  defineWebPlugin,
+  toolResultText,
+} from '@agimon-ai/doompi-web-contracts';
+```
+
+Import contracts type-only from server code. The `/testing` subpath provides channel, render, slot,
+and tool-message fixtures for plugin tests.
 
 ## License
 

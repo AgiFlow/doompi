@@ -7,9 +7,6 @@ question of what the system _must_ do; this one explains what the code _is_. Whe
 disagreed, the disagreements are listed in [Known divergences](#known-divergences) rather than
 quietly reconciled.
 
-Line references are accurate as of the commit that introduced this file. They are navigation aids,
-not guarantees.
-
 ## Contents
 
 - [1. What runs where](#1-what-runs-where)
@@ -63,8 +60,8 @@ flowchart TB
   play --> say
 ```
 
-The boundary is constructed in exactly two places: `voiceWorkerClient.ts:59`
-(`new Worker(workerUrl, { name: 'doompi-voice' })`) and `voiceWorker.ts:167`
+The boundary is constructed in exactly two places: `voiceWorkerClient.ts`
+(`new Worker(workerUrl, { name: 'doompi-voice' })`) and `voiceWorker.ts`
 (`if (!isMainThread) startVoiceWorker()`). Every subprocess is spawned from one file,
 `adapters/audio/infrastructure.ts`, which is the only module in `src/` that imports
 `node:child_process`.
@@ -74,7 +71,7 @@ Two consequences worth holding onto:
 - **`say` runs on the main thread while `ffmpeg` runs in the worker.** The two halves of the
   half-duplex problem are therefore in different threads, which is why playback gating is a
   protocol message (`playback-state`) rather than a local boolean.
-- **No audio crosses the protocol.** `assertNoRawAudio` (`voiceWorkerProtocol.ts:185`) rejects any
+- **No audio crosses the protocol.** `assertNoRawAudio` (`voiceWorkerProtocol.ts`) rejects any
   `ArrayBuffer`, typed array, or key named `audio` / `pcm` / `wav` / `buffer` / `rawAudio` on any
   message. PCM lives and dies in the worker and its private spool.
 
@@ -125,19 +122,19 @@ sequenceDiagram
 Two facts this diagram exists to make unmissable, because both routinely surprise people and both
 drove recent design work:
 
-- **A turn produces exactly one transcript.** `transcribe()` (`voiceWorkerPipeline.ts:524`) reads
+- **A turn produces exactly one transcript.** `transcribe()` (`voiceWorkerPipeline.ts`) reads
   the whole committed spool in a single pass. There is no interim or streaming ASR, so the
   transcript policy never sees a partial hypothesis. A command spoken after a brief pause arrives
   glued to the sentence before it unless the endpoint window is short enough to split the turn.
 - **The VAD's 600 ms trailing window is inside `utteranceIdleMs`, not additional to it.**
-  `speechEnded` (`autonomousEndpoint.ts:40-56`) arms a timer for
+  `speechEnded` (`autonomousEndpoint.ts`) arms a timer for
   `utteranceIdleMs - observedSilence`, so the default 3000 ms means roughly 3 s of true silence in
   total, not 3.6 s.
 
 **The composing branch.** While a composition draft is collecting, `effect.beginCapture` carries
-`composing: true` (`autonomousVoiceMachine.ts:287`) and the session substitutes
+`composing: true` (`autonomousVoiceMachine.ts`) and the session substitutes
 `composeUtteranceIdleMs` (default 1200 ms) for `utteranceIdleMs`
-(`autonomousVoiceSession.ts:381`). That is what lets a short command such as `that's it` finalize
+(`autonomousVoiceSession.ts`). That is what lets a short command such as `that's it` finalize
 as its own turn. Over-splitting is harmless in that mode and only that mode, because draft
 segments are rejoined with a space.
 
@@ -262,7 +259,7 @@ cannot mutate a turn that has already moved on.
 
 ### What the UI shows
 
-`autonomousVoiceState()` (`autonomousVoiceMachine.ts:773`) collapses the tree into
+`autonomousVoiceState()` (`autonomousVoiceMachine.ts`) collapses the tree into
 `off | starting | listening | speech | processing | stopping | failed`. Everything from
 `finalizing` onward, six distinct states, projects to the single value `processing`. The modeline
 is therefore deliberately coarser than the machine, and a user watching the indicator cannot tell
@@ -319,20 +316,20 @@ sequenceDiagram
 
 ### Pi into Voice
 
-| Hook                   | Site               | What it does                                                                   |
-| ---------------------- | ------------------ | ------------------------------------------------------------------------------ |
-| `session_start`        | `extension.ts:162` | Refreshes config readiness, gates `waitUntilConfigured`                        |
-| `session_start`        | `voice.ts:978`     | Deactivates capture, rebinds the voice-tool session, consumes a reload handoff |
-| `before_agent_start`   | `voice.ts:1024`    | Refreshes `activeContext`, reconciles the tool set                             |
-| `before_agent_start`   | `voice.ts:406`     | Captures fallback-narration ownership for the run                              |
-| `tool_execution_start` | `voice.ts:420`     | Notes that `narrate` was attempted, which suppresses the fallback              |
-| `turn_end`             | `voice.ts:426`     | Stores the terminal assistant text                                             |
-| `agent_settled`        | `voice.ts:431`     | Fires the zero-call fallback if `narrate` was never attempted                  |
-| `session_shutdown`     | `extension.ts:212` | Disposes the cordis fiber and the host connection                              |
+| Hook                   | Site           | What it does                                                                   |
+| ---------------------- | -------------- | ------------------------------------------------------------------------------ |
+| `session_start`        | `extension.ts` | Refreshes config readiness, gates `waitUntilConfigured`                        |
+| `session_start`        | `voice.ts`     | Deactivates capture, rebinds the voice-tool session, consumes a reload handoff |
+| `before_agent_start`   | `voice.ts`     | Refreshes `activeContext`, reconciles the tool set                             |
+| `before_agent_start`   | `voice.ts`     | Captures fallback-narration ownership for the run                              |
+| `tool_execution_start` | `voice.ts`     | Notes that `narrate` was attempted, which suppresses the fallback              |
+| `turn_end`             | `voice.ts`     | Stores the terminal assistant text                                             |
+| `agent_settled`        | `voice.ts`     | Fires the zero-call fallback if `narrate` was never attempted                  |
+| `session_shutdown`     | `extension.ts` | Disposes the cordis fiber and the host connection                              |
 
 ### Voice into Pi
 
-Delivery is nine lines and is the whole contract (`voice.ts:321-336`):
+The delivery branch is the whole contract (`voice.ts`):
 
 ```ts
 if (intent === 'queuedFollowUp') {
@@ -347,12 +344,12 @@ pi.sendUserMessage(text, { deliverAs: 'steer' });
 ```
 
 **Delivery success is weaker than it looks.** `sendUserMessage` exposes no downstream receipt, so
-`DELIVERY_SUCCEEDED` means only that the call did not throw (`voiceDelivery.ts:50-68`). Voice must
+`DELIVERY_SUCCEEDED` means only that the call did not throw (`voiceDelivery.ts`). Voice must
 not claim confirmed host delivery, retry automatically, or clear a composed draft on the strength
 of it.
 
 Three tools are registered, and all three are removed from the active set unless autonomous voice
-is exactly `active` with a matching TUI session (`voice.ts:846-850`):
+is exactly `active` with a matching TUI session (`voice.ts`):
 
 | Tool                   | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
@@ -403,14 +400,14 @@ flowchart TB
 
 ### Cordis services
 
-| Direction | Service                           | Site                                                  |
-| --------- | --------------------------------- | ----------------------------------------------------- |
-| provides  | `DOOM_VOICE_TOOLS_SERVICE`        | `voice.ts:816`                                        |
-| provides  | `DOOM_NARRATION_SERVICE`          | `voice.ts:897`                                        |
-| injects   | `DOOM_HELP_SERVICE`               | `extension.ts:46`                                     |
-| injects   | `DOOM_UI_HUB_SERVICE`             | `extension.ts:128`                                    |
-| injects   | `DOOM_MINOR_MODE_CATALOG_SERVICE` | `voice.ts:901`                                        |
-| listens   | `DOOM_ASK_USER_BLOCKED_EVENT`     | `voice.ts:363`, blocks delivery while a modal is open |
+| Direction | Service                           | Site                                              |
+| --------- | --------------------------------- | ------------------------------------------------- |
+| provides  | `DOOM_VOICE_TOOLS_SERVICE`        | `voice.ts`                                        |
+| provides  | `DOOM_NARRATION_SERVICE`          | `voice.ts`                                        |
+| injects   | `DOOM_HELP_SERVICE`               | `extension.ts`                                    |
+| injects   | `DOOM_UI_HUB_SERVICE`             | `extension.ts`                                    |
+| injects   | `DOOM_MINOR_MODE_CATALOG_SERVICE` | `voice.ts`                                        |
+| listens   | `DOOM_ASK_USER_BLOCKED_EVENT`     | `voice.ts`, blocks delivery while a modal is open |
 
 ### Worker protocol
 
@@ -491,7 +488,7 @@ sequenceDiagram
   Note over GT: 800 ms echo tail, then reopen
 ```
 
-Evidence is ranked deterministically (`narrationBargeIn.ts:144-157`):
+Evidence is ranked deterministically (`narrationBargeIn.ts`):
 
 | Guard                                              | Weight |
 | -------------------------------------------------- | ------ |
@@ -527,10 +524,10 @@ Recorded rather than fixed, because each is a design decision rather than a typo
 | Divergence                                      | Detail                                                                                                                                                                                                                                                    |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ACTIVITY_OBSERVED` and `SPEECH_ENDED` are dead | Declared in the event union, never sent, never handled. The worker publishes `activity` at 8 Hz carrying `levelDbfs` and `speechProbability`, and the session has no branch for it, so AV-USER-006's responsiveness clause is unobservable from the host. |
-| `recovered` events are dropped                  | The worker publishes them (`voiceWorkerPipeline.ts:573`), nothing consumes them, so AV-WORKER-002's requirement to surface recovered spools has no mechanism.                                                                                             |
-| `narrationFailed` has no implementation         | SPEC lists it as a playback state. TTS failure is handled outside XState, in `narrationPlayback.ts:137-146`, by flipping a private flag. The playback region has exactly three nodes.                                                                     |
+| `recovered` events are dropped                  | The worker publishes them (`voiceWorkerPipeline.ts`), nothing consumes them, so AV-WORKER-002's requirement to surface recovered spools has no mechanism.                                                                                                 |
+| `narrationFailed` has no implementation         | SPEC lists it as a playback state. TTS failure is handled outside XState, in `narrationPlayback.ts`, by flipping a private flag. The playback region has exactly three nodes.                                                                             |
 | UI indicator list is wrong in SPEC §4.12        | It names `composing`, `sending`, `starting`, `stopping` and `error`, none of which exist in `AutoCaptureIndicatorState`, and omits `confirming` and `waiting`, which do. Composition appears only in the status string.                                   |
-| `confirming` is unreachable                     | `confirmationPending` is hard-coded `false` at its only call site (`autonomousVoiceSession.ts:762`).                                                                                                                                                      |
-| Guard `stopWasRequested` is unused              | Declared at `autonomousVoiceMachine.ts:211`; the equivalent check is written inline in `acknowledging` instead.                                                                                                                                           |
+| `confirming` is unreachable                     | `confirmationPending` is hard-coded `false` at its only call site (`autonomousVoiceSession.ts`).                                                                                                                                                          |
+| Guard `stopWasRequested` is unused              | Declared at `autonomousVoiceMachine.ts`; the equivalent check is written inline in `acknowledging` instead.                                                                                                                                               |
 | No `invoke:` anywhere                           | SPEC §3.5 permits "invoked actors or explicit effects". The machine uses only emitted effects, so the follow-on requirement that exiting a state cancels its invoked actor has no machine-level implementation; cancellation is manual in the session.    |
 | Duration limit arrives as a failure             | A recoverable lifecycle boundary is transported as `failure` with code `capture_duration_limit`.                                                                                                                                                          |

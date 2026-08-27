@@ -1,7 +1,6 @@
 # @agimon-ai/doompi-goal
 
-A Pi minor mode that keeps one objective, an optional token budget, and completion tools active
-across turns.
+Keep one objective, an optional token budget, and completion tools active across Pi turns.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
@@ -38,8 +37,7 @@ pi install npm:@agimon-ai/doompi-goal
 Budgets accept compact values such as `100k` and `1.5m`. Goal adds `goal_complete` and
 `goal_blocked` only while host policy permits and the objective is operational.
 
-In DoomPi, `SPC g e` starts a goal and ends and archives the one being worked, `SPC g g` shows
-status, and `SPC g l` opens history. These views require a TUI; slash commands and tools support headless operation.
+In DoomPi, `SPC g e` starts a goal. If another goal is active, it ends and archives that goal first. `SPC g g` shows status, and `SPC g l` opens history. These views require a TUI; slash commands and tools support headless operation.
 
 ## In the cockpit
 
