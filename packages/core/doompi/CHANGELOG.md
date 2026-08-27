@@ -1,3 +1,28 @@
+## 0.0.1-alpha.40 (2026-08-27)
+
+### 🚀 Features
+
+- expand cockpit controls and browser voice media ([7eba367](https://github.com/AgiFlow/doompi/commit/7eba367))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.40
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features

@@ -1,3 +1,31 @@
+## 0.0.1-alpha.40 (2026-08-27)
+
+### 🚀 Features
+
+- expand cockpit controls and browser voice media ([7eba367](https://github.com/AgiFlow/doompi/commit/7eba367))
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.3
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.2
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features

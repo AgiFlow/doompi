@@ -1,3 +1,20 @@
+## 0.0.1-alpha.30 (2026-08-27)
+
+### 🚀 Features
+
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.3
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.29 (2026-08-26)
 
 ### 🚀 Features

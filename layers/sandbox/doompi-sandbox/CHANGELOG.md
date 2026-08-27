@@ -1,3 +1,20 @@
+## 0.0.1-alpha.40 (2026-08-27)
+
+### 🚀 Features
+
+- improve web session recovery and sandbox setup ([e26a980](https://github.com/AgiFlow/doompi/commit/e26a980))
+- **doompi-web:** harden remote access and responsive cockpit ([2cfa7a7](https://github.com/AgiFlow/doompi/commit/2cfa7a7))
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features
