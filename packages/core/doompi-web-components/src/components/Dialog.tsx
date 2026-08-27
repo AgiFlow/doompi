@@ -49,7 +49,7 @@ export function DialogContent({ className, children, width = 'md', ...props }: D
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-doom-border bg-doom-panel font-mono shadow-2xl outline-none data-[state=open]:animate-doom-pop',
+          'fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-doom-border bg-doom-panel font-mono shadow-2xl outline-none data-[state=open]:animate-doom-pop',
           CONTENT_WIDTH[width],
           className,
         )}
@@ -83,7 +83,10 @@ export function DialogHeader({
   return (
     <div
       data-slot="dialog-header"
-      className={cn('flex items-center justify-between gap-3 border-b border-doom-border px-4 py-3', className)}
+      className={cn(
+        'flex min-w-0 items-center justify-between gap-3 border-b border-doom-border px-3 py-3 sm:px-4',
+        className,
+      )}
       {...props}
     >
       {children}
@@ -122,7 +125,7 @@ export function DialogBody({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-body"
-      className={cn('flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-4', className)}
+      className={cn('flex min-h-0 flex-col gap-3 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4', className)}
       {...props}
     />
   );
@@ -138,7 +141,7 @@ export const dialogFooterVariants = cva('flex shrink-0 items-center gap-2', {
        * recessed and ruled off from the body. The same shape PopoverFooter
        * draws, because a dialog and a popover promise their keys the same way.
        */
-      bar: 'min-h-[34px] justify-between border-t border-doom-border-soft bg-doom-deep px-4',
+      bar: 'min-h-[34px] flex-wrap justify-between border-t border-doom-border-soft bg-doom-deep px-3 py-1.5 sm:flex-nowrap sm:px-4 sm:py-0',
     },
   },
   defaultVariants: { variant: 'plain' },

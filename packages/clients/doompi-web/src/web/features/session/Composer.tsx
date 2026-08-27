@@ -15,11 +15,13 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
+import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { registerPromptInput } from '../../lib/promptFocus.ts';
 import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
 import { activeSessionId, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { openPalette } from '../../stores/paletteStore.ts';
 import { useToolPrompt } from '../../stores/useToolPrompt.ts';
+import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { ComposerPrompt } from './ComposerPrompt.tsx';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
@@ -160,6 +162,7 @@ export function Composer() {
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
   const commands = useActiveSession((state) => state.commands);
+  const editorTextRequest = useActiveSession((state) => state.editorTextRequest);
   const prompt = useToolPrompt();
   const [draft, setDraft] = useState('');
   const [caret, setCaret] = useState(0);
@@ -181,6 +184,17 @@ export function Composer() {
   // a tool prompt stands the input down and again when it gives it back:
   // otherwise the ref stays as it was and every later hand-back goes nowhere.
   useEffect(() => registerPromptInput(inputRef.current), [prompt]);
+
+  useEffect(() => {
+    if (editorTextRequest === null) return;
+    setDraft(editorTextRequest.text);
+    setCaret(editorTextRequest.text.length);
+    setDismissedToken(null);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(editorTextRequest.text.length, editorTextRequest.text.length);
+    });
+  }, [editorTextRequest]);
 
   // Auto-grow: measure after every draft change so pasted stack traces are
   // actually visible instead of scrolling inside one line.
@@ -476,7 +490,7 @@ export function Composer() {
                 </PopoverFooter>
               </PopoverContent>
             ) : null}
-            <div className="flex items-start gap-2.5 px-3.5 pt-3">
+            <div className="flex min-w-0 items-start gap-2 px-2.5 pt-3 sm:gap-2.5 sm:px-3.5">
               <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
               <Textarea
                 variant="bare"
@@ -543,7 +557,7 @@ export function Composer() {
                 }}
                 rows={1}
                 placeholder={placeholder}
-                className="min-h-[20px] flex-1 text-[13px] leading-relaxed"
+                className="min-h-[20px] min-w-0 flex-1 text-[13px] leading-relaxed"
               />
             </div>
             {attachments.length > 0 ? (
@@ -585,7 +599,7 @@ export function Composer() {
                 {attachmentError}
               </p>
             ) : null}
-            <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
+            <div className="flex flex-wrap items-center gap-2 px-2.5 pt-2 pb-2.5 sm:flex-nowrap sm:px-3.5">
               <span data-testid="composer-hint" className="text-[10px] text-doom-faint max-sm:hidden">
                 {streaming
                   ? 'enter steers the run · esc aborts'
@@ -619,6 +633,9 @@ export function Composer() {
                   abort
                 </Button>
               ) : null}
+              <span className="contents sm:hidden" data-testid="composer-mobile-actions">
+                <PluginSurface slot={HOST_SLOTS.composerActions} sessionId={activeSessionId()} />
+              </span>
               <Button
                 variant="outline"
                 size="md"
@@ -635,7 +652,7 @@ export function Composer() {
                 data-testid="composer-send"
                 onClick={submit}
                 disabled={!attached || (!draft.trim() && attachments.length === 0)}
-                className="px-3.5"
+                className="px-2.5 sm:px-3.5"
               >
                 {streaming ? 'steer' : 'send'}
               </Button>

@@ -77,12 +77,18 @@ describe('serving a session package APIs', () => {
       socketDir: socketDir(),
       sessionId: 's1',
       cwd: '/repo',
+      internalToken: 'agent-only-token',
       apis: [echoApi('runner', seen)],
       onNotice: () => undefined,
     });
     cleanups.push(() => server.close());
 
-    expect(seen.context).toMatchObject({ scope: 'session', sessionId: 's1', cwd: '/repo' });
+    expect(seen.context).toMatchObject({
+      scope: 'session',
+      sessionId: 's1',
+      cwd: '/repo',
+      internalToken: 'agent-only-token',
+    });
   });
 
   it('opens no socket at all when no package declares an API', async () => {

@@ -46,6 +46,7 @@ import {
   SystemClock,
   writePrivatePcm16Wav,
 } from '../audio/infrastructure.ts';
+import { ClientPcmAudioRecorder, voiceMediaHostConnection } from '../audio/clientMedia.ts';
 import { SileroSpeechPresenceDetector } from '../audio/silero.ts';
 import {
   MlxWhisperAdapter,
@@ -141,8 +142,12 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     }
     const executables = new ExecutableResolver();
     const processSpawner = new NodeProcessSpawner();
+    const clientMedia = voiceMediaHostConnection();
     this.recorder =
-      dependencies.recorder ?? new FfmpegPcmAudioRecorder(executables, new NodeBinaryProcessSpawner(), this.clock);
+      dependencies.recorder ??
+      (clientMedia
+        ? new ClientPcmAudioRecorder(clientMedia)
+        : new FfmpegPcmAudioRecorder(executables, new NodeBinaryProcessSpawner(), this.clock));
     this.registry =
       dependencies.registry ??
       new TranscriberRegistry(

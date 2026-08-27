@@ -1934,6 +1934,9 @@ importers:
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1

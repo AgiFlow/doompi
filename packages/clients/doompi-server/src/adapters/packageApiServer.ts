@@ -10,13 +10,14 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 
 /** The socket name beside the session's own, so one directory holds the pair. */
-const API_SOCKET_NAME = 'api.sock';
+export const API_SOCKET_NAME = 'api.sock';
 
 export interface PackageApiServerOptions {
   /** Directory the session's sockets live in; the API socket joins them there. */
   socketDir: string;
   sessionId: string;
   cwd: string;
+  internalToken?: string;
   apis: readonly DoomApi[];
   onNotice: (message: string) => void;
 }
@@ -50,6 +51,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     scope: 'session',
     sessionId: options.sessionId,
     cwd: options.cwd,
+    ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     onNotice: options.onNotice,
   };
   const handlers = new Map<string, DoomApiHandler>();

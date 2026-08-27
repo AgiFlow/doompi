@@ -1,4 +1,4 @@
-import { Dot, type DotTone } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { type VoiceTone, voiceActivityView } from './voiceActivityView.ts';
 
@@ -39,8 +39,11 @@ function Meter({ tone }: { tone: VoiceTone }) {
  * it out, so listening, hearing, transcribing and narrating each read as
  * themselves rather than as a word tucked inside a chip.
  */
-export function VoiceActivitySection({ statuses }: WebPluginSlotProps) {
+export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
+  const stopManualRecording = (): void => {
+    if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message: '/voice' });
+  };
   return (
     <div data-testid="voice-activity" data-voice-phase={view.phase} className="flex flex-col gap-1.5 px-1">
       <span className="flex min-w-0 items-center gap-2">
@@ -52,6 +55,17 @@ export function VoiceActivitySection({ statuses }: WebPluginSlotProps) {
           <span data-testid="voice-elapsed" className="shrink-0 text-[10px] tabular-nums text-doom-yellow">
             {view.elapsed}
           </span>
+        ) : null}
+        {view.mode === 'manual' && view.phase === 'recording' ? (
+          <Button
+            variant="danger-outline"
+            size="xs"
+            data-testid="voice-recording-stop"
+            title="stop recording and fill the prompt"
+            onClick={stopManualRecording}
+          >
+            stop
+          </Button>
         ) : null}
         {view.active ? <Meter tone={view.tone} /> : null}
       </span>

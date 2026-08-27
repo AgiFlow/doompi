@@ -5,12 +5,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
+import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { superviseAgentRelaunches } from '../adapters/agentSupervisor.ts';
 import { createDoomAgentLauncher } from '../adapters/doomAgentLauncher.ts';
 import { createAgentServerService } from '../adapters/piSessionRuntime.ts';
 import { serveProtocolSocket } from '../adapters/protocolSocket.ts';
-import { serveSessionApis } from '../adapters/packageApiServer.ts';
+import { API_SOCKET_NAME, serveSessionApis } from '../adapters/packageApiServer.ts';
 import { removeSessionRecord, writeSessionRecord } from '../adapters/sessionRegistry.ts';
 import { removeStaleSocket, serveSessionSocket } from '../adapters/socketServer.ts';
 import { startWebCockpit } from '../adapters/webCockpit.ts';
@@ -36,13 +37,20 @@ async function main(): Promise<number> {
   });
 
   const relaunchFile = `${path.resolve(options.socketPath)}.relaunch.json`;
+  const apiSocketPath = path.resolve(path.dirname(path.resolve(options.socketPath)), API_SOCKET_NAME);
+  const apiInternalToken = crypto.randomBytes(32).toString('base64url');
   const notice = (message: string): void => void process.stderr.write(`[doompi-server] ${message}\n`);
   // The composition runs here rather than inside a launcher child: the only
   // work that child had left was to compose and then wait for Pi to exit.
   const launcher = createDoomAgentLauncher({
     agentArgs: [...agentArgs, ...RPC_MODE_ARGS],
     cwd: process.cwd(),
-    environment: { ...process.env, [DOOM_RELAUNCH_FILE_ENV]: relaunchFile },
+    environment: {
+      ...process.env,
+      [DOOM_API_INTERNAL_TOKEN_ENV]: apiInternalToken,
+      [DOOM_API_SOCKET_ENV]: apiSocketPath,
+      [DOOM_RELAUNCH_FILE_ENV]: relaunchFile,
+    },
     // Recording the composition lets a mode switch reload the session in place
     // instead of taking the whole agent down and bringing it back.
     compositionRecordPath: `${path.resolve(options.socketPath)}.composition.json`,
@@ -69,6 +77,7 @@ async function main(): Promise<number> {
     socketDir: path.dirname(path.resolve(options.socketPath)),
     sessionId: identity.sessionId,
     cwd: process.cwd(),
+    internalToken: apiInternalToken,
     apis: await loadPackageApis('session', { onNotice: notice }),
     onNotice: notice,
   });

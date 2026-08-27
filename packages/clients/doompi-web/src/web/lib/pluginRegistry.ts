@@ -74,6 +74,7 @@ export const HOST_SLOTS = {
   rail: 'rail',
   selectionBar: 'selection-bar',
   activity: 'activity',
+  composerActions: 'composer-actions',
 } as const;
 
 const SLOT_SEPARATOR = '.';
@@ -378,6 +379,9 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     }
     for (const surface of plugin.selectionBarItems ?? []) {
       pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.selectionBar, surface) });
+    }
+    for (const surface of plugin.composerActions ?? []) {
+      pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.composerActions, surface) });
     }
     for (const section of plugin.activitySections ?? []) pendingSections.push({ pluginId: plugin.id, section });
   }

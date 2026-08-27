@@ -284,13 +284,11 @@ front of them, which puts the tunnel provider in the path of everything. A WebRT
 replace that, with the tunnel demoted to carrying signaling only. Two independent reasons want it,
 and the first is the stronger.
 
-**Realtime voice.** `@agimon-ai/doompi-voice` captures with FFmpeg on the host, transcribes locally
-with whisper, and plays back through macOS `say`. It is host-side and macOS-only, so the cockpit has
-no voice path at all and a phone certainly does not. WebRTC carries Opus media tracks natively, with
-echo cancellation, noise suppression, gain control, a jitter buffer, and packet loss concealment
-already solved; hand-rolling those over a WebSocket is a project in itself. A peer-to-peer path also
-drops the relay round trip, and for a conversational loop that latency is the difference between
-usable and not.
+**Realtime voice.** `@agimon-ai/doompi-voice` now captures on the selected browser client, sends
+mono PCM16 through its authenticated session media transport, keeps VAD and Whisper on the agent
+host, and plays narration with browser speech synthesis. Voice activation is when the page asks for
+microphone permission, never on load. A future WebRTC implementation can replace the HTTP media
+adapter with Opus tracks while preserving the same client device and transport contracts.
 
 **Confidentiality.** A QR shown on the host can carry the DTLS fingerprint, which authenticates the
 peer connection out-of-band. The data path is then peer-to-peer DTLS: the tunnel provider usually
@@ -374,7 +372,8 @@ Plugins are independent. A manifest names no other plugin and `registrationOrder
 optional tiebreak (default 1000, then plugin id): every relation between two plugins resolves by
 name once all of them are installed. A plugin opens slots named `<pluginId>.<name>` and renders
 them with the `renderSlot` and `slotData` props its components receive; any plugin fills them, and
-the host's `overlay`, `rail`, `selection-bar`, `activity`, and `activity.<group>` slots, without
+the host's `overlay`, `rail`, `selection-bar`, `composer-actions`, `activity`, and
+`activity.<group>` slots, without
 knowing whether the owner is installed. A fill into a slot nobody declares, or two plugins wanting
 one tab id, tool name, group name, or Leader Space leaf, never fails the page: the install resolves
 it (the first plugin keeps a shared name, a later binding takes a leaf over as the TUI documents)

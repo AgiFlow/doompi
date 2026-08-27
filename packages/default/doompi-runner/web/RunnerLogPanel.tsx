@@ -135,7 +135,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
 
   return (
     <div data-testid="runner-log-panel" className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border-soft px-[26px]">
+      <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-doom-border-soft px-3 py-2 sm:h-11 sm:flex-nowrap sm:gap-2.5 sm:px-[26px] sm:py-0">
         <span data-testid="runner-log-name" className="shrink-0 truncate text-[12px] font-bold text-doom-hi">
           {run?.name ?? runId}
         </span>
@@ -171,14 +171,14 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
       </div>
 
       {run ? (
-        <div className="flex shrink-0 flex-col gap-1.5 border-b border-doom-border-soft px-[26px] py-2.5">
+        <div className="flex shrink-0 flex-col gap-1.5 border-b border-doom-border-soft px-3 py-2.5 sm:px-[26px]">
           <MetaRow label="command" value={run.command} />
           <MetaRow label="cwd" value={run.cwd} />
         </div>
       ) : null}
 
-      <div className="flex h-10 shrink-0 items-center gap-2.5 border-b border-doom-border-soft px-[26px]">
-        <span className="relative flex w-[300px] shrink-0 items-center">
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-doom-border-soft px-3 py-2 sm:h-10 sm:flex-nowrap sm:gap-2.5 sm:px-[26px] sm:py-0">
+        <span className="relative flex min-w-0 flex-1 items-center sm:w-[300px] sm:flex-none">
           <SearchIcon className="pointer-events-none absolute left-2.5 h-3 w-3 text-doom-faint" />
           <Input
             size="sm"
@@ -212,7 +212,10 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           {`± ${String(context)} lines`}
         </Button>
         <span className="min-w-0 flex-1" />
-        <span data-testid="runner-log-stats" className="shrink-0 text-[10px] text-doom-faint">
+        <span
+          data-testid="runner-log-stats"
+          className="min-w-0 basis-full truncate text-[10px] text-doom-faint sm:basis-auto"
+        >
           {slice === undefined
             ? 'reading…'
             : filtering
@@ -233,7 +236,10 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
         </Button>
       </div>
 
-      <div data-testid="runner-log-body" className="min-h-0 flex-1 overflow-auto bg-doom-panel-deep px-[26px] py-3">
+      <div
+        data-testid="runner-log-body"
+        className="min-h-0 flex-1 overflow-auto bg-doom-panel-deep px-3 py-3 sm:px-[26px]"
+      >
         {error !== undefined ? (
           <p data-testid="runner-log-error" className="text-[10px] text-doom-red">
             {error}
@@ -250,7 +256,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
         <div ref={bottom} />
       </div>
 
-      <div className="flex h-8 shrink-0 items-center gap-2.5 border-t border-doom-border-soft px-[26px]">
+      <div className="flex h-8 shrink-0 items-center gap-2.5 border-t border-doom-border-soft px-3 sm:px-[26px]">
         <span data-testid="runner-log-path" className="min-w-0 flex-1 truncate text-[9px] text-doom-faint">
           {run?.logPath ?? slice?.path ?? ''}
         </span>

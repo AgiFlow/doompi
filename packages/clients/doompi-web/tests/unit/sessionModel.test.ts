@@ -407,6 +407,17 @@ describe('reduceSession', () => {
     expect(state.dialog?.options).toEqual([]);
   });
 
+  it('keeps the latest extension editor replacement for the composer', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'extension_ui_request',
+      id: 'voice-result-1',
+      method: 'set_editor_text',
+      text: 'transcribed in the browser',
+    });
+
+    expect(state.editorTextRequest).toEqual({ id: 'voice-result-1', text: 'transcribed in the browser' });
+  });
+
   it('keeps the minor-mode catalog the runtime journals and ignores other custom entries', () => {
     const projection = { version: 1, revision: 2, modes: [{ id: 'help', label: 'Help', activation: 'active' }] };
     const reported = reduceSession(initialSessionState, {

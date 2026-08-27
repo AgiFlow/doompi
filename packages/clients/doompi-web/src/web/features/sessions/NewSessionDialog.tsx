@@ -27,14 +27,23 @@ const TRAILING_SEPARATORS = /\/+$/;
  * The directory box completes as it is typed: the hub lists the children of
  * the parent directory whose names match the trailing segment as a regex,
  * and picking one appends a slash so the next level narrows the same way.
- * The recent-cwd chips are just the distinct directories of live sessions;
- * nothing is persisted, because the rail already is the user's working set.
+ * The quick-select chips combine live-session directories with paths configured
+ * for the remote sandbox. The first available path also seeds an otherwise empty
+ * form, which keeps a contained cockpit usable after its host sessions moved.
  */
-export function NewSessionDialog({ onClose }: { onClose: () => void }) {
+export function NewSessionDialog({
+  onClose,
+  suggestedCwds = [],
+}: {
+  onClose: () => void;
+  suggestedCwds?: readonly string[];
+}) {
   const navigate = useNavigate();
   const byId = useStore(sessionsStore, (state) => state.byId);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
-  const [cwd, setCwd] = useState(() => (activeId !== null ? (byId[activeId]?.summary.cwd ?? '') : ''));
+  const [cwd, setCwd] = useState(() =>
+    activeId !== null ? (byId[activeId]?.summary.cwd ?? suggestedCwds[0] ?? '') : (suggestedCwds[0] ?? ''),
+  );
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,7 +51,10 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
   const [highlight, setHighlight] = useState(NO_HIGHLIGHT);
   const cwdInput = useRef<HTMLInputElement>(null);
 
-  const recentCwds = [...new Set(Object.values(byId).map((meta) => meta.summary.cwd))].slice(0, 4);
+  const recentCwds = [...new Set([...Object.values(byId).map((meta) => meta.summary.cwd), ...suggestedCwds])].slice(
+    0,
+    4,
+  );
 
   useEffect(() => {
     const typed = cwd.trim();

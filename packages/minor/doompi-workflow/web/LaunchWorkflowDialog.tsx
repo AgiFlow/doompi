@@ -54,8 +54,11 @@ function InputField({
     .filter((part): part is string => part !== undefined && part !== '')
     .join(' · ');
   return (
-    <div className="flex items-center gap-2.5" data-testid={`launch-input-${input.name}`}>
-      <span className="w-28 shrink-0 truncate text-[10px] font-bold text-doom-text">
+    <div
+      className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5"
+      data-testid={`launch-input-${input.name}`}
+    >
+      <span className="min-w-0 truncate text-[10px] font-bold text-doom-text sm:w-28 sm:shrink-0">
         {input.name}
         {input.required === true ? <span className="text-doom-yellow"> *</span> : null}
       </span>
@@ -68,7 +71,7 @@ function InputField({
         />
       ) : (
         <Select value={value === '' ? undefined : value} onValueChange={onChange}>
-          <SelectTrigger className="h-7 min-w-[160px] text-[10px]">
+          <SelectTrigger className="h-7 w-full min-w-0 text-[10px] sm:min-w-[160px]">
             <SelectValue placeholder="choose…" />
           </SelectTrigger>
           <SelectContent>
@@ -80,7 +83,7 @@ function InputField({
           </SelectContent>
         </Select>
       )}
-      <span className="w-40 shrink-0 truncate text-[9px] text-doom-faint">{hint}</span>
+      <span className="min-w-0 truncate text-[9px] text-doom-faint sm:w-40 sm:shrink-0">{hint}</span>
     </div>
   );
 }
@@ -138,10 +141,14 @@ export function LaunchWorkflowDialog({
     >
       <DialogContent width="lg" data-testid="launch-workflow-dialog" aria-describedby={undefined}>
         <DialogHeader>
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
             <span className="text-[9px] text-doom-faint">launch workflow</span>
-            <DialogTitle data-testid="launch-workflow-name">{workflow.name}</DialogTitle>
-            <Badge size="xs">{workflow.relativePath}</Badge>
+            <DialogTitle data-testid="launch-workflow-name" className="max-w-full break-words">
+              {workflow.name}
+            </DialogTitle>
+            <Badge size="xs" className="max-w-full truncate">
+              {workflow.relativePath}
+            </Badge>
           </div>
         </DialogHeader>
         <DialogBody>
@@ -186,7 +193,10 @@ export function LaunchWorkflowDialog({
                 <span className="flex h-7 items-center text-[10px] text-doom-dim">whatever the workflow resolves</span>
               ) : (
                 <Select value={runner} onValueChange={setRunner}>
-                  <SelectTrigger data-testid="launch-runner" className="h-7 min-w-[160px] text-[10px]">
+                  <SelectTrigger
+                    data-testid="launch-runner"
+                    className="h-7 w-full min-w-0 text-[10px] sm:min-w-[160px]"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -226,8 +236,10 @@ export function LaunchWorkflowDialog({
               {problems.join(' ')}
             </p>
           )}
-          <DialogFooter>
-            <span className="text-[9px] text-doom-faint">the run appears on the board as soon as it starts</span>
+          <DialogFooter className="flex-wrap sm:flex-nowrap">
+            <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+              the run appears on the board as soon as it starts
+            </span>
             <span className="min-w-0 flex-1" />
             <Button variant="outline" size="xs" data-testid="launch-cancel" onClick={onClose}>
               cancel

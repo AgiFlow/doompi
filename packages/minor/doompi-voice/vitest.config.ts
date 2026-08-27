@@ -45,6 +45,10 @@ export default defineConfig({
         replacement: source('../../core/doompi-extension-contracts/src/exports/askUser.ts'),
       },
       {
+        find: '@agimon-ai/doompi-extension-contracts/package-api',
+        replacement: source('../../core/doompi-extension-contracts/src/exports/packageApi.ts'),
+      },
+      {
         find: '@agimon-ai/doompi-extension-contracts/leader',
         replacement: source('../../core/doompi-extension-contracts/src/exports/leader.ts'),
       },

@@ -251,8 +251,11 @@ export function CommandPalette() {
           </span>
         </CommandHeader>
 
-        <div className="flex min-h-[260px]">
-          <CommandList data-testid="palette-keys" className="w-[280px] shrink-0 gap-0 border-r border-doom-border p-1">
+        <div className="flex min-h-[260px] flex-col sm:flex-row">
+          <CommandList
+            data-testid="palette-keys"
+            className="w-full shrink-0 gap-0 border-b border-doom-border p-1 sm:w-[280px] sm:border-r sm:border-b-0"
+          >
             {searching ? (
               matches.length === 0 ? (
                 <CommandEmpty data-testid="palette-no-match">no command matches</CommandEmpty>
@@ -325,7 +328,7 @@ export function CommandPalette() {
             ) : null}
           </CommandList>
 
-          <div data-testid="palette-detail" className="flex min-w-0 flex-1 flex-col gap-2 px-4 py-3">
+          <div data-testid="palette-detail" className="hidden min-w-0 flex-1 flex-col gap-2 px-4 py-3 sm:flex">
             {currentMatch ? (
               <>
                 <span className="text-[12px] font-bold text-doom-blue">/{currentMatch.name}</span>

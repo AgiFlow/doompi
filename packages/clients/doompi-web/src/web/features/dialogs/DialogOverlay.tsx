@@ -134,12 +134,15 @@ export function DialogOverlay() {
           ) : null}
         </DialogBody>
 
-        <DialogFooter variant="bar" className="h-[34px]">
-          <span data-testid="dialog-hints" className="flex items-center gap-1.5 text-[10px] text-doom-faint">
+        <DialogFooter variant="bar" className="h-auto min-h-[34px]">
+          <span
+            data-testid="dialog-hints"
+            className="w-full text-[10px] text-doom-faint sm:flex sm:w-auto sm:items-center sm:gap-1.5"
+          >
             {dialog.method === 'select' ? optionListHint(dialog.options.length) : 'enter confirm'} · <Kbd>esc</Kbd>{' '}
             cancels and tells the agent
           </span>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" data-testid="dialog-cancel" onClick={() => cancelDialog(dialog.id)}>
               cancel
             </Button>

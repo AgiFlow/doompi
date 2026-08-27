@@ -1,5 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { VoiceActivitySection } from './VoiceActivitySection.tsx';
+import { VoiceComposerAction } from './VoiceComposerAction.tsx';
+import { VoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
 import { VoiceToolMessage } from './VoiceToolMessage.tsx';
 import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
 
@@ -21,13 +23,20 @@ export const webPlugin = defineWebPlugin({
   // Same name as the group: the dock renders this inside it, in place of the
   // raw status line the session publishes for a terminal footer.
   activitySections: [{ id: 'voice', component: VoiceActivitySection }],
+  composerActions: [{ id: 'voice', component: VoiceComposerAction }],
+  overlays: [{ id: 'voice-media-runtime', component: VoiceMediaRuntime }],
   // The voice tools' timeline cards, the web half of src/adapters/pi/voiceToolRender.ts.
   toolRenderers: [{ tools: [...VOICE_TOOL_NAMES], message: VoiceToolMessage }],
-  // The TUI's SPC v e through /minor; one-shot dictation (v v) needs the TUI's
-  // microphone. The TUI binds this key to the voice-auto command directly, but
-  // that handler is TUI-only, so the cockpit reaches the same mode through the
-  // catalog, which offers the actions a headless session can actually run.
+  // The TUI's SPC v bindings, backed by the browser media runtime here.
   leaderBindings: [
+    {
+      id: 'voice.capture',
+      path: [
+        { key: 'v', label: 'voice', detail: 'client voice capture' },
+        { key: 'v', label: 'capture', detail: 'start or stop one-shot dictation' },
+      ],
+      command: 'voice',
+    },
     {
       id: 'voice.toggle',
       path: [

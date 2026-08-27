@@ -1,10 +1,10 @@
-import { StatusBadge } from '@agimon-ai/doompi-web-components';
+import { Button, Input, StatusBadge } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import type { SubagentRun } from '../src/types/webSubagents.ts';
 import { elapsedRun, RUN_BADGE, RunControl } from './RunControl.tsx';
-import { isTerminalRun, subagents } from './subagentsStore.ts';
+import { isTerminalRun, requestRunSteer, subagents } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
 /** The tab id doubles as the URL segment, so it stays plain and unique across plugins. */
@@ -35,6 +35,7 @@ export function AgentThreadPanel({
   const { runs, stopRequested } = useStore(subagents.store, (state) => subagents.select(state, sessionId));
   const run = runs.find((candidate) => candidate.runId === runId);
   const [now, setNow] = useState(() => Date.now());
+  const [guidance, setGuidance] = useState('');
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -42,6 +43,14 @@ export function AgentThreadPanel({
   }, []);
 
   const firstLine = run?.task.split('\n').find((line) => line.trim() !== '') ?? '';
+  const canSteer = sessionId !== null && run !== undefined && !isTerminalRun(run);
+  const submitGuidance = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const message = guidance.trim();
+    if (!canSteer || !message) return;
+    requestRunSteer(sendSessionFrame, sessionId, runId, message);
+    setGuidance('');
+  };
 
   return (
     <div data-testid="agent-thread-panel" className="flex min-h-0 flex-1 flex-col">
@@ -80,6 +89,24 @@ export function AgentThreadPanel({
         )}
       </div>
       {renderThread(runId)}
+      {canSteer ? (
+        <form
+          data-testid="agent-steer-composer"
+          className="flex shrink-0 items-center gap-2 border-t border-doom-border-soft px-[26px] py-2"
+          onSubmit={submitGuidance}
+        >
+          <Input
+            data-testid="agent-steer-input"
+            aria-label="Steering guidance"
+            value={guidance}
+            placeholder="Guide this agent…"
+            onChange={(event) => setGuidance(event.target.value)}
+          />
+          <Button data-testid="agent-steer-submit" type="submit" size="xs" disabled={guidance.trim() === ''}>
+            send
+          </Button>
+        </form>
+      ) : null}
     </div>
   );
 }

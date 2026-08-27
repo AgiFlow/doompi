@@ -4,6 +4,7 @@
  */
 export {
   Activity as ActivityIcon,
+  AudioLines as AudioLinesIcon,
   Check as CheckIcon,
   ChevronDown as ChevronDownIcon,
   ChevronRight as ChevronRightIcon,
@@ -14,13 +15,17 @@ export {
   FileText as FileIcon,
   GitBranch as BranchIcon,
   Loader2 as LoaderIcon,
+  MessageCircle as MessageIcon,
+  Mic as MicIcon,
   MoreVertical as KebabIcon,
   Palette as PaletteIcon,
   Plus as PlusIcon,
   RefreshCw as RefreshIcon,
   Search as SearchIcon,
+  Send as SendIcon,
   Settings as GearIcon,
   ShieldCheck as ShieldIcon,
   Square as StopIcon,
+  Volume2 as VolumeIcon,
   X as CloseIcon,
 } from 'lucide-react';

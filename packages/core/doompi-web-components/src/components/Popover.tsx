@@ -36,7 +36,7 @@ export function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'z-50 flex flex-col overflow-hidden rounded-lg border border-doom-border bg-doom-panel font-mono shadow-2xl outline-none data-[state=open]:animate-doom-rise',
+          'z-50 flex max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-doom-border bg-doom-panel font-mono shadow-2xl outline-none data-[state=open]:animate-doom-rise',
           className,
         )}
         {...props}

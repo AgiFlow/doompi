@@ -97,6 +97,11 @@ export interface DialogRequest {
   prefill: string;
 }
 
+export interface EditorTextRequest {
+  id: string;
+  text: string;
+}
+
 export interface SessionState {
   entries: TimelineEntry[];
   /** Running tool frames kept outside the protocol-owned transcript so prompt plugins can claim their dialogs. */
@@ -119,6 +124,8 @@ export interface SessionState {
   /** Thinking levels the current model accepts, empty until the picker asks. */
   thinkingLevels: string[];
   dialog: DialogRequest | null;
+  /** Latest fire-and-forget editor replacement requested by a session extension. */
+  editorTextRequest: EditorTextRequest | null;
   /** The runtime's minor-mode catalog as last journaled, or null before it reports. */
   minorModes: MinorModeProjection | null;
   /** Tool calls seen since the current run began, reported when it settles. */
@@ -153,6 +160,7 @@ export const initialSessionState: SessionState = {
   models: [],
   thinkingLevels: [],
   dialog: null,
+  editorTextRequest: null,
   minorModes: null,
   toolsThisRun: 0,
   restoredIds: [],
@@ -388,6 +396,10 @@ function applyDialog(state: SessionState, frame: Frame): SessionState {
   const method = asString(frame.method);
   if (method === 'setStatus') return applyStatus(state, frame);
   if (method === 'setWidget') return applyWidget(state, frame);
+  if (method === 'set_editor_text') {
+    if (typeof frame.text !== 'string') return state;
+    return { ...state, editorTextRequest: { id: asString(frame.id), text: frame.text } };
+  }
   if (method !== 'select' && method !== 'confirm' && method !== 'input' && method !== 'editor') return state;
   const options = Array.isArray(frame.options) ? frame.options.map((option) => asString(option)).filter(Boolean) : [];
   return {

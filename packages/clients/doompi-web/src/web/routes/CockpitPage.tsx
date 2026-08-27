@@ -33,11 +33,17 @@ export function CockpitPage() {
   const transientTab = useStore(transientTabsStore, (state) => findTransientTab(state, sessionId, tabId));
   const tab = (tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId)) ?? transientTab;
 
+  // The rail is a temporary drawer on mobile. Route changes can also come from
+  // session removal or plugin navigation, so they dismiss it even when no rail
+  // item produced the navigation event directly.
+  useEffect(() => {
+    setRailOpen(false);
+  }, [sessionId, tabId]);
+
   // The route is the source of focus; the store follows it.
   useEffect(() => {
     setActiveSession(sessionId ?? null);
   }, [sessionId]);
-
   // Landing on / focuses the first session; a focused session that
   // disappeared falls back the same way, and an unknown tab id falls back to
   // the conversation. Before hydration the URL is left alone so a deep link

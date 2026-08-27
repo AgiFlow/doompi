@@ -176,7 +176,7 @@ function RunDrawer({
   return (
     <aside
       data-testid="run-drawer"
-      className="flex w-[440px] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail"
+      className="flex w-[min(440px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail"
     >
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border px-4">
         <span data-testid="drawer-agent" className="truncate text-[13px] font-bold text-doom-hi">

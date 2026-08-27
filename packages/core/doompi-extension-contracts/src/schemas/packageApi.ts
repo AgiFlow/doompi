@@ -18,6 +18,11 @@ export const DOOM_API_SCOPES: readonly DoomApiScope[] = ['session', 'hub'];
 /** The segment an API is mounted under, below this prefix. */
 export const DOOM_API_ROUTE_PREFIX = '/api/plugin';
 
+/** Absolute unix socket path exposed to processes inside a session server. */
+export const DOOM_API_SOCKET_ENV = 'DOOMPI_SESSION_API_SOCKET';
+/** Bearer token for agent-only routes on a session API socket. */
+export const DOOM_API_INTERNAL_TOKEN_ENV = 'DOOMPI_SESSION_API_INTERNAL_TOKEN';
+
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
@@ -25,6 +30,8 @@ export interface DoomApiContext {
   sessionId?: string;
   /** The session's working directory; absent for a hub-scoped API. */
   cwd?: string;
+  /** Shared only with child processes in this session, never with remote API clients. */
+  internalToken?: string;
   onNotice(message: string): void;
 }
 

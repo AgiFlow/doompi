@@ -62,7 +62,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       // What the reader said sits inboard of what the session said, on its own
       // surface: the transcript is a conversation, and two lanes tell the two
       // voices apart faster than a gutter label alone.
-      <div data-testid="entry-user" className="flex items-center gap-3 pl-10">
+      <div data-testid="entry-user" className="flex items-center gap-3 pl-4 sm:pl-10">
         <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
           <Markdown text={entry.text} />
           {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}

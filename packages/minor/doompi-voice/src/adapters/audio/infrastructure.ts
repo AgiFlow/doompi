@@ -43,8 +43,33 @@ const TERMINATE_SIGNAL = 'SIGTERM';
 const KILL_SIGNAL = 'SIGKILL';
 const ASCII_ENCODING = 'ascii';
 const FFMPEG_INPUT_OPTIONS = ['-hide_banner', '-loglevel', 'error', '-f', 'avfoundation', '-i'] as const;
-const FFMPEG_PCM_OPTIONS = ['-ac', '1', '-ar', SAMPLE_RATE, '-c:a', 'pcm_s16le', '-y'] as const;
-const FFMPEG_RAW_PCM_OPTIONS = ['-ac', '1', '-ar', SAMPLE_RATE, '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:1'] as const;
+// Browser capture requests speech cleanup from getUserMedia. Apply conservative conditioning here so
+// standalone macOS capture does not feed raw room rumble, steady noise, and low gain into ASR.
+const FFMPEG_SPEECH_FILTER = 'highpass=f=80,afftdn=nr=10:nf=-40:tn=1,speechnorm';
+const FFMPEG_PCM_OPTIONS = [
+  '-af',
+  FFMPEG_SPEECH_FILTER,
+  '-ac',
+  '1',
+  '-ar',
+  SAMPLE_RATE,
+  '-c:a',
+  'pcm_s16le',
+  '-y',
+] as const;
+const FFMPEG_RAW_PCM_OPTIONS = [
+  '-af',
+  FFMPEG_SPEECH_FILTER,
+  '-ac',
+  '1',
+  '-ar',
+  SAMPLE_RATE,
+  '-c:a',
+  'pcm_s16le',
+  '-f',
+  's16le',
+  'pipe:1',
+] as const;
 const PCM_CHANNELS = 1;
 const PCM_BITS_PER_SAMPLE = 16;
 const PCM_VALUE_LIMIT = 32_768;

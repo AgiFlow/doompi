@@ -432,6 +432,28 @@ export function registerSlashCommands(pi: ExtensionAPI, state: SlashCommandState
     },
   });
 
+  pi.registerCommand('subagents-steer', {
+    description: 'Send guidance to a running subagent: /subagents-steer <run-id> <message>',
+    handler: async (args, ctx) => {
+      const input = args.trim();
+      const separator = input.search(/\s/);
+      if (separator === -1 || !input.slice(separator + 1).trim()) {
+        notifyError(ctx, 'Usage: /subagents-steer <run-id> <message>');
+        return;
+      }
+      const id = input.slice(0, separator);
+      const message = input.slice(separator + 1).trim();
+      try {
+        const result = await deps.management.steer(id, message);
+        const summary = `Steering ${result.state} for ${id}: ${result.message}`;
+        if (result.state === 'failed') notifyError(ctx, summary);
+        else notifyInfo(ctx, summary);
+      } catch (error) {
+        notifyError(ctx, error instanceof Error ? error.message : `Could not steer '${id}'.`);
+      }
+    },
+  });
+
   pi.registerCommand('subagents-stop', {
     description: 'Stop a running subagent: /subagents-stop [run-id]',
     handler: async (args, ctx) => {

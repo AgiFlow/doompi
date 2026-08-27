@@ -143,6 +143,8 @@ describe('voice infrastructure', () => {
         'avfoundation',
         '-i',
         'none:default',
+        '-af',
+        'highpass=f=80,afftdn=nr=10:nf=-40:tn=1,speechnorm',
         '-ac',
         '1',
         '-ar',

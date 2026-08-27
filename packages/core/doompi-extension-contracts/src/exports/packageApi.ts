@@ -1,8 +1,10 @@
 export {
   declaredApisOf,
   DOOM_API_EXPORT,
+  DOOM_API_INTERNAL_TOKEN_ENV,
   DOOM_API_MANIFEST_FIELD,
   DOOM_API_ROUTE_PREFIX,
+  DOOM_API_SOCKET_ENV,
   DOOM_API_SCOPES,
   type DeclaredPackageApi,
   type DoomApi,

@@ -351,6 +351,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === 't') {
         event.preventDefault();
+        onDismiss?.();
         openNewSession();
         return;
       }
@@ -361,11 +362,12 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
       const target = order[ordinal - 1];
       if (target === undefined) return;
       event.preventDefault();
+      onDismiss?.();
       void navigate({ to: '/session/$sessionId', params: { sessionId: target } });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [order, hasDialog, navigate]);
+  }, [order, hasDialog, navigate, onDismiss]);
 
   const running = runningCount(order.map((id) => byId[id].summary.phase));
 
@@ -385,7 +387,10 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
           <RemoteAccessButton
             status={remote?.status ?? 'off'}
             deviceCount={remote?.devices.length ?? 0}
-            onOpen={openRemoteDialog}
+            onOpen={() => {
+              onDismiss?.();
+              openRemoteDialog();
+            }}
           />
           {onDismiss ? (
             <Button
@@ -418,7 +423,10 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
             data-testid="new-session-open"
             title="new session"
             aria-label="new session"
-            onClick={() => openNewSession()}
+            onClick={() => {
+              onDismiss?.();
+              openNewSession();
+            }}
             className="text-doom-faint hover:text-doom-hi"
           >
             <PlusIcon className="h-3 w-3" />
@@ -445,7 +453,10 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
             variant="outline"
             size="lg"
             data-testid="new-session-empty"
-            onClick={() => openNewSession()}
+            onClick={() => {
+              onDismiss?.();
+              openNewSession();
+            }}
             className="w-full justify-start px-[11px] text-[11px]"
           >
             <PlusIcon className="h-3 w-3" />
@@ -476,7 +487,9 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
         <span className="text-[9px] text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
       </div>
 
-      {creating ? <NewSessionDialog onClose={closeNewSession} /> : null}
+      {creating ? (
+        <NewSessionDialog onClose={closeNewSession} suggestedCwds={remote?.settings.sandbox.workspaces ?? []} />
+      ) : null}
     </div>
   );
 }

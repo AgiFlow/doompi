@@ -2070,6 +2070,8 @@
     "exports": {
       ".": "tir",
       "./extensions/pi": "tir",
+      "./client-media": "tir",
+      "./session-api": "tir",
       "./package.json": "esm"
     },
     "exportTargets": {
@@ -2083,6 +2085,16 @@
         "import": "./dist/extensions/pi.mjs",
         "require": "./dist/extensions/pi.cjs"
       },
+      "./client-media": {
+        "types": "./dist/clientMedia.d.mts",
+        "import": "./dist/clientMedia.mjs",
+        "require": "./dist/clientMedia.cjs"
+      },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
@@ -2093,7 +2105,17 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-voice/SKILL.md"],
-    "files": ["dist", "web", "models", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "models",
+      "llms.txt",
+      "src/prompts",
+      "src/types/clientMedia.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },

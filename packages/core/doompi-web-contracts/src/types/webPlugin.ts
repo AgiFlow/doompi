@@ -434,6 +434,8 @@ export interface WebPluginDefinition {
   leaderBindings?: LeaderBindingContribution[];
   railSections?: SurfaceContribution[];
   selectionBarItems?: SurfaceContribution[];
+  /** Compact controls placed in the mobile composer's action row, immediately before queue. */
+  composerActions?: SurfaceContribution[];
   toolRenderers?: ToolRendererContribution[];
   /**
    * A section whose id names an activity group any plugin declares renders

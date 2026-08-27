@@ -79,6 +79,7 @@ import {
   PcmWavAnalyzer,
   SystemClock,
 } from '../audio/infrastructure.ts';
+import { ClientPcmAudioRecorder, ClientTtsAdapter, voiceMediaHostConnection } from '../audio/clientMedia.ts';
 import { VoiceWorkerAutoCaptureController } from '../process/voiceWorkerAutoCaptureController.ts';
 import {
   type VoiceWorkerSessionClientFactory,
@@ -153,6 +154,11 @@ export function voiceModeState(state: AutoCaptureActivationState, canRun = false
             disabledReason: 'Autonomous voice needs a session that can show its indicator.',
           },
           {
+            id: 'manual',
+            enabled: false,
+            disabledReason: 'Manual voice needs a session that can show its indicator.',
+          },
+          {
             id: 'deactivate',
             enabled: false,
             disabledReason: 'Autonomous voice needs a session that can show its indicator.',
@@ -161,12 +167,22 @@ export function voiceModeState(state: AutoCaptureActivationState, canRun = false
       : transitioning
         ? [
             { id: 'activate', enabled: false, disabledReason: 'Autonomous voice is transitioning.' },
+            { id: 'manual', enabled: false, disabledReason: 'Autonomous voice is transitioning.' },
             { id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice is transitioning.' },
           ]
         : [
             ...(active
               ? [{ id: 'activate', enabled: false, disabledReason: 'Autonomous voice is already enabled.' } as const]
               : [{ id: 'activate', enabled: true } as const]),
+            ...(active
+              ? [
+                  {
+                    id: 'manual',
+                    enabled: false,
+                    disabledReason: 'Disable autonomous voice before using manual voice.',
+                  } as const,
+                ]
+              : [{ id: 'manual', enabled: true } as const]),
             ...(active
               ? [{ id: 'deactivate', enabled: true } as const]
               : [{ id: 'deactivate', enabled: false, disabledReason: 'Autonomous voice is disabled.' } as const]),
@@ -751,6 +767,7 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
   const executables = overrides.executables ?? new ExecutableResolver();
   const spawner = overrides.spawner ?? new NodeProcessSpawner();
   const binarySpawner = overrides.binarySpawner ?? new NodeBinaryProcessSpawner();
+  const clientMedia = voiceMediaHostConnection();
 
   const configs = overrides.configs ?? new PiVoiceConfigService();
   const whisperCpp = overrides.whisperCpp ?? new WhisperCppAdapter(executables, spawner);
@@ -765,8 +782,16 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
     binarySpawner,
     configs,
     recorder: overrides.recorder ?? new FfmpegAudioRecorder(executables, spawner, clock),
-    pcmRecorder: overrides.pcmRecorder ?? new FfmpegPcmAudioRecorder(executables, binarySpawner, clock),
-    tts: overrides.tts ?? new MacOsSayTtsAdapter(executables, binarySpawner, clock),
+    pcmRecorder:
+      overrides.pcmRecorder ??
+      (clientMedia
+        ? new ClientPcmAudioRecorder(clientMedia)
+        : new FfmpegPcmAudioRecorder(executables, binarySpawner, clock)),
+    tts:
+      overrides.tts ??
+      (clientMedia
+        ? new ClientTtsAdapter(clientMedia, clock)
+        : new MacOsSayTtsAdapter(executables, binarySpawner, clock)),
     analyzer: overrides.analyzer ?? new PcmWavAnalyzer(),
     whisperCpp,
     openAiWhisper,
@@ -909,14 +934,21 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
           actions: [
             {
               id: 'activate',
-              label: 'Activate',
-              description: 'Start autonomous capture with primary-agent narration.',
+              label: 'Autonomous voice',
+              description: 'Start continuous capture with command correction and primary-agent narration.',
+              contexts: ['tui', 'headless'],
+              parameters: [],
+            },
+            {
+              id: 'manual',
+              label: 'Manual voice',
+              description: 'Start one-shot dictation, then stop it to fill the current prompt.',
               contexts: ['tui', 'headless'],
               parameters: [],
             },
             {
               id: 'deactivate',
-              label: 'Deactivate',
+              label: 'Stop autonomous voice',
               description: 'Stop autonomous voice capture.',
               contexts: ['tui', 'headless'],
               parameters: [],
@@ -934,6 +966,11 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
           if (actionId === 'activate') {
             await autoController.activate(ui);
             return { message: 'Autonomous voice activation requested.' };
+          }
+          if (actionId === 'manual') {
+            lastUi = createVoiceUi(execution.context, footer);
+            await controller.toggle(lastUi);
+            return { message: 'Manual voice recording started. Stop it to fill the current prompt.' };
           }
           if (actionId === 'deactivate') {
             await autoController.deactivate(ui);

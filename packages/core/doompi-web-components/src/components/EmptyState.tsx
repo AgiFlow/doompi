@@ -18,7 +18,11 @@ export interface EmptyStateProps extends Omit<ComponentProps<'div'>, 'title'> {
 export function EmptyState({ title, description, children, className, asChild = false, ...props }: EmptyStateProps) {
   const Component = asChild ? Slot.Root : 'div';
   return (
-    <Component data-slot="empty-state" className={cn('flex flex-1 items-center justify-center', className)} {...props}>
+    <Component
+      data-slot="empty-state"
+      className={cn('flex flex-1 items-center justify-center px-3 py-4 sm:px-4', className)}
+      {...props}
+    >
       <div className="flex w-[520px] max-w-full flex-col items-center gap-3 text-center">
         <span className="text-[14px] font-bold text-doom-hi">{title}</span>
         {description ? <span className="text-[11px] leading-relaxed text-doom-dim">{description}</span> : null}
