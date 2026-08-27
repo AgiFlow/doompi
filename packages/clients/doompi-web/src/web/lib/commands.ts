@@ -1,15 +1,21 @@
 type Frame = Record<string, unknown>;
 
-export function promptCommand(message: string): Frame {
-  return { type: 'prompt', message };
+export interface RpcImage {
+  type: 'image';
+  data: string;
+  mimeType: string;
 }
 
-export function steerCommand(message: string): Frame {
-  return { type: 'steer', message };
+export function promptCommand(message: string, images: RpcImage[] = []): Frame {
+  return { type: 'prompt', message, ...(images.length > 0 ? { images } : {}) };
 }
 
-export function followUpCommand(message: string): Frame {
-  return { type: 'follow_up', message };
+export function steerCommand(message: string, images: RpcImage[] = []): Frame {
+  return { type: 'steer', message, ...(images.length > 0 ? { images } : {}) };
+}
+
+export function followUpCommand(message: string, images: RpcImage[] = []): Frame {
+  return { type: 'follow_up', message, ...(images.length > 0 ? { images } : {}) };
 }
 
 export function abortCommand(): Frame {

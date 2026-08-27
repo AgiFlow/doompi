@@ -115,6 +115,10 @@ describe('command builders', () => {
     expect(promptCommand('a')).toEqual({ type: 'prompt', message: 'a' });
     expect(steerCommand('b')).toEqual({ type: 'steer', message: 'b' });
     expect(followUpCommand('c')).toEqual({ type: 'follow_up', message: 'c' });
+    const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
+    expect(promptCommand('look', images)).toEqual({ type: 'prompt', message: 'look', images });
+    expect(steerCommand('look', images)).toEqual({ type: 'steer', message: 'look', images });
+    expect(followUpCommand('look', images)).toEqual({ type: 'follow_up', message: 'look', images });
     expect(abortCommand()).toEqual({ type: 'abort' });
     expect(getStateCommand()).toEqual({ type: 'get_state' });
     expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
@@ -392,6 +396,19 @@ describe('session actions', () => {
     expect(sessionStoreFor('s1').state.entries).toHaveLength(2);
   });
 
+  it('send image payloads for prompts, steering, and follow-ups', () => {
+    setActiveSession('s1');
+    const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
+    submitMessage('first', images);
+    applySessionFrame('s1', { type: 'agent_start' });
+    submitMessage('second', images);
+    queueFollowUp('later', images);
+    expect(sent.map((item) => item.frame)).toEqual([
+      { type: 'prompt', message: 'first', images },
+      { type: 'steer', message: 'second', images },
+      { type: 'follow_up', message: 'later', images },
+    ]);
+  });
   it('take an explicit session id past the focus', () => {
     setActiveSession('s1');
     abortRun('s2');

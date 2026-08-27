@@ -12,6 +12,7 @@ import {
   getSessionStatsCommand,
   getStateCommand,
   promptCommand,
+  type RpcImage,
   setModelCommand,
   setSessionNameCommand,
   setThinkingLevelCommand,
@@ -240,20 +241,28 @@ export function selectThinkingLevel(level: string, sessionId: string | null = ac
  * legal. Every action defaults to the focused session and is a no-op when
  * nothing is focused.
  */
-export function submitMessage(text: string, sessionId: string | null = activeSessionId()): void {
+export function submitMessage(
+  text: string,
+  images: RpcImage[] = [],
+  sessionId: string | null = activeSessionId(),
+): void {
   const trimmed = text.trim();
   if (!trimmed || sessionId === null) return;
   const store = sessionStoreFor(sessionId);
   const streaming = store.state.streaming;
   store.setState((state) => appendUserPrompt(state, trimmed));
-  sendFrame(sessionId, streaming ? steerCommand(trimmed) : promptCommand(trimmed));
+  sendFrame(sessionId, streaming ? steerCommand(trimmed, images) : promptCommand(trimmed, images));
 }
 
-export function queueFollowUp(text: string, sessionId: string | null = activeSessionId()): void {
+export function queueFollowUp(
+  text: string,
+  images: RpcImage[] = [],
+  sessionId: string | null = activeSessionId(),
+): void {
   const trimmed = text.trim();
   if (!trimmed || sessionId === null) return;
   sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed));
-  sendFrame(sessionId, followUpCommand(trimmed));
+  sendFrame(sessionId, followUpCommand(trimmed, images));
 }
 
 /**
