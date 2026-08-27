@@ -46,6 +46,7 @@ import {
   abortRun,
   answerDialogConfirm,
   answerDialogValue,
+  applyProtocolTranscript,
   applySessionFrame,
   cancelDialog,
   dropSessionStore,
@@ -53,6 +54,7 @@ import {
   queueFollowUp,
   refreshSessionFacts,
   renameSession,
+  releaseProtocolTranscript,
   resetSessionStore,
   resetSessionStores,
   runCommand,
@@ -133,6 +135,70 @@ describe('command builders', () => {
   });
 });
 
+describe('transcript ownership', () => {
+  const applyLegacyAssistant = (id: string, text: string) => {
+    applySessionFrame('s1', { type: 'message_start', message: { id, role: 'assistant', content: [] } });
+    applySessionFrame('s1', {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: text },
+    });
+    applySessionFrame('s1', {
+      type: 'message_end',
+      message: { id, role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' },
+    });
+  };
+
+  it('uses legacy frames until the protocol publishes a transcript', () => {
+    applyLegacyAssistant('legacy-1', 'live fallback');
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'assistant', text: 'live fallback' }),
+    ]);
+  });
+
+  it('keeps an optimistic prompt until the protocol publishes it', () => {
+    setActiveSession('s1');
+    submitMessage('stay visible');
+
+    applyProtocolTranscript('s1', [], false);
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'user', text: 'stay visible' }),
+    ]);
+
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'stay visible' }], false);
+    expect(sessionStoreFor('s1').state.entries).toEqual([{ kind: 'user', id: 'protocol-user', text: 'stay visible' }]);
+  });
+  it('preserves a protocol transcript through a legacy backlog reset', () => {
+    applyProtocolTranscript(
+      's1',
+      [{ kind: 'assistant', id: 'protocol-1', text: 'restored history', thinking: '', streaming: false }],
+      false,
+    );
+
+    resetSessionStore('s1');
+    applyLegacyAssistant('legacy-ignored', 'duplicate');
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'assistant', id: 'protocol-1', text: 'restored history', thinking: '', streaming: false },
+    ]);
+  });
+
+  it('returns realtime ownership to legacy frames after protocol failure', () => {
+    applyProtocolTranscript(
+      's1',
+      [{ kind: 'assistant', id: 'protocol-1', text: 'history', thinking: '', streaming: false }],
+      false,
+    );
+
+    releaseProtocolTranscript('s1');
+    applyLegacyAssistant('legacy-2', 'live again');
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'assistant', text: 'history' }),
+      expect.objectContaining({ kind: 'assistant', text: 'live again' }),
+    ]);
+  });
+});
 describe('transport', () => {
   it('envelopes session commands with the session id', () => {
     sendFrame('s1', promptCommand('hello'));

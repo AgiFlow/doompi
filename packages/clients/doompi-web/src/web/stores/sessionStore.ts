@@ -39,7 +39,9 @@ import { activeSessionId, sessionsStore } from './sessionsStore.ts';
  * subscribed to; the rail runs on hub summaries alone.
  */
 const stores = new Map<string, Store<SessionState>>();
-
+/** Sessions whose visible transcript is currently supplied by Pi's protocol. */
+const protocolTranscripts = new Set<string>();
+const PROTOCOL_ENTRY_KINDS = new Set<TimelineEntry['kind']>(['user', 'assistant', 'tool']);
 /** Read-only stand-in while no session is focused, so hooks stay unconditional. */
 const detachedStore = new Store<SessionState>(initialSessionState);
 
@@ -59,9 +61,15 @@ export function useActiveSession<T>(selector: (state: SessionState) => T): T {
 }
 
 export function applySessionFrame(sessionId: string, frame: Record<string, unknown>): void {
-  // The transcript arrives over Pi's protocol; this wire carries what the
-  // protocol has no shape for.
-  sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame, { transcriptFromProtocol: true }));
+  // The legacy wire is the realtime and recovery fallback until Pi's protocol
+  // publishes a snapshot. Once it does, only DoomPi-specific frames reduce here.
+  const transcriptFromProtocol = protocolTranscripts.has(sessionId);
+  sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame, { transcriptFromProtocol }));
+}
+
+/** Lets the legacy stream resume transcript ownership after a protocol failure. */
+export function releaseProtocolTranscript(sessionId: string): void {
+  protocolTranscripts.delete(sessionId);
 }
 
 /** A thread has no protocol session, so its journal remains its authoritative transcript. */
@@ -139,11 +147,10 @@ export function seedHistoryCursor(sessionId: string, cursor: string | null): voi
 
 /** Keeps DoomPi-only timeline entries beside the protocol items that preceded them. */
 function mergeProtocolEntries(previous: TimelineEntry[], protocol: TimelineEntry[]): TimelineEntry[] {
-  const protocolKinds = new Set(['user', 'assistant', 'tool']);
   const localByAnchor = new Map<string | null, TimelineEntry[]>();
   let anchor: string | null = null;
   for (const entry of previous) {
-    if (protocolKinds.has(entry.kind)) {
+    if (PROTOCOL_ENTRY_KINDS.has(entry.kind)) {
       anchor = entry.id;
       continue;
     }
@@ -172,18 +179,39 @@ function mergeProtocolEntries(previous: TimelineEntry[], protocol: TimelineEntry
  * the protocol item that preceded them.
  */
 export function applyProtocolTranscript(sessionId: string, entries: TimelineEntry[], streaming: boolean): void {
-  sessionStoreFor(sessionId).setState((state) => ({
-    ...state,
-    entries: mergeProtocolEntries(state.entries, entries),
-    streaming,
-    settled: !streaming,
-    pendingUserId: null,
-    pendingUserText: '',
-  }));
+  protocolTranscripts.add(sessionId);
+  sessionStoreFor(sessionId).setState((state) => {
+    const publishedUserText = new Set(entries.filter((entry) => entry.kind === 'user').map((entry) => entry.text));
+    const pendingUserEntries = state.pendingUserEntries.filter((pending) => !publishedUserText.has(pending.text));
+    const pendingTimeline: TimelineEntry[] = pendingUserEntries.map((pending) => ({
+      kind: 'user',
+      id: pending.id,
+      text: pending.text,
+    }));
+    return {
+      ...state,
+      entries: mergeProtocolEntries(state.entries, [...entries, ...pendingTimeline]),
+      streaming,
+      settled: !streaming,
+      pendingUserEntries,
+    };
+  });
 }
 
 export function resetSessionStore(sessionId: string): void {
-  sessionStoreFor(sessionId).setState(() => initialSessionState);
+  sessionStoreFor(sessionId).setState((state) => {
+    if (!protocolTranscripts.has(sessionId)) return initialSessionState;
+    // A legacy socket reconnect replays its backlog. Keep the protocol snapshot
+    // visible while that replay rebuilds DoomPi-only state around it.
+    const entries = state.entries.filter((entry) => PROTOCOL_ENTRY_KINDS.has(entry.kind));
+    return {
+      ...initialSessionState,
+      entries,
+      streaming: state.streaming,
+      settled: state.settled,
+      pendingUserEntries: state.pendingUserEntries,
+    };
+  });
   history.delete(sessionId);
   historyStore.setState((state) => {
     const { [sessionId]: _dropped, ...rest } = state;
@@ -193,10 +221,12 @@ export function resetSessionStore(sessionId: string): void {
 
 export function dropSessionStore(sessionId: string): void {
   stores.delete(sessionId);
+  protocolTranscripts.delete(sessionId);
 }
 
 export function resetSessionStores(): void {
   stores.clear();
+  protocolTranscripts.clear();
   detachedStore.setState(() => initialSessionState);
 }
 

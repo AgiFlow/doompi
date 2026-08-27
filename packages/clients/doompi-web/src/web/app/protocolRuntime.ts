@@ -2,7 +2,7 @@ import { PiClient } from '@earendil-works/pi-client';
 import { RemoteSession } from '@earendil-works/pi-coding-agent/client';
 import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
 import { toTimelineEntries } from '../lib/protocolTimeline.ts';
-import { applyProtocolTranscript } from '../stores/sessionStore.ts';
+import { applyProtocolTranscript, releaseProtocolTranscript } from '../stores/sessionStore.ts';
 
 /** How long to wait before dialling again after the protocol socket drops. */
 const RECONNECT_MS = 700;
@@ -36,6 +36,7 @@ export function startProtocolRuntime(location: Location = window.location): Prot
     unsubscribe = undefined;
     const previous = session;
     session = undefined;
+    if (previous?.id) releaseProtocolTranscript(previous.id);
     await previous?.dispose().catch(() => undefined);
   };
 
@@ -58,8 +59,9 @@ export function startProtocolRuntime(location: Location = window.location): Prot
       unsubscribe = remote.subscribe(() => publish(sessionId, remote));
       publish(sessionId, remote);
     } catch {
+      releaseProtocolTranscript(sessionId);
       // A session the hub has not caught up with yet is normal right after a
-      // page creates one; the next focus or reconnect tries again.
+      // page creates one; legacy frames remain the realtime fallback.
     }
   };
 
@@ -69,12 +71,14 @@ export function startProtocolRuntime(location: Location = window.location): Prot
       await client.connect();
       if (focused !== null) await open(focused);
     } catch {
+      if (focused !== null) releaseProtocolTranscript(focused);
       if (!stopped) retry = setTimeout(() => void connect(), RECONNECT_MS);
     }
   };
 
   client.onConnectionStateChange((change) => {
     if (stopped || change.state !== 'disconnected') return;
+    if (focused !== null) releaseProtocolTranscript(focused);
     retry = setTimeout(() => void reconnect(), RECONNECT_MS);
   });
 
@@ -84,6 +88,7 @@ export function startProtocolRuntime(location: Location = window.location): Prot
       await client.reconnect();
       if (focused !== null) await open(focused);
     } catch {
+      if (focused !== null) releaseProtocolTranscript(focused);
       if (!stopped) retry = setTimeout(() => void reconnect(), RECONNECT_MS);
     }
   };
