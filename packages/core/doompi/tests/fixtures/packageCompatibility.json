@@ -327,6 +327,7 @@
       "./ask-user": "tir",
       "./background-work": "tir",
       "./child-process": "tir",
+      "./cockpit-container": "tir",
       "./config": "tir",
       "./context-contributions": "tir",
       "./cordis-host": "tir",
@@ -351,13 +352,13 @@
       "./skills": "tir",
       "./subagent-policy": "tir",
       "./subagent-tool": "tir",
-      "./transition": "tir",
+      "./testing": "tir",
       "./tool-overrides": "tir",
+      "./transition": "tir",
       "./ui-hub": "tir",
-      "./voice-tools": "tir",
       "./voice-reload-handoff": "tir",
-      "./package.json": "esm",
-      "./testing": "tir"
+      "./voice-tools": "tir",
+      "./package.json": "esm"
     },
     "exportTargets": {
       ".": {
@@ -379,6 +380,11 @@
         "types": "./dist/childProcess.d.mts",
         "import": "./dist/childProcess.mjs",
         "require": "./dist/childProcess.cjs"
+      },
+      "./cockpit-container": {
+        "types": "./dist/cockpitContainer.d.mts",
+        "import": "./dist/cockpitContainer.mjs",
+        "require": "./dist/cockpitContainer.cjs"
       },
       "./config": {
         "types": "./dist/config.d.mts",
@@ -500,37 +506,37 @@
         "import": "./dist/subagentTool.mjs",
         "require": "./dist/subagentTool.cjs"
       },
-      "./transition": {
-        "types": "./dist/transition.d.mts",
-        "import": "./dist/transition.mjs",
-        "require": "./dist/transition.cjs"
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "import": "./dist/testing.mjs",
+        "require": "./dist/testing.cjs"
       },
       "./tool-overrides": {
         "types": "./dist/toolOverrides.d.mts",
         "import": "./dist/toolOverrides.mjs",
         "require": "./dist/toolOverrides.cjs"
       },
+      "./transition": {
+        "types": "./dist/transition.d.mts",
+        "import": "./dist/transition.mjs",
+        "require": "./dist/transition.cjs"
+      },
       "./ui-hub": {
         "types": "./dist/uiHub.d.mts",
         "import": "./dist/uiHub.mjs",
         "require": "./dist/uiHub.cjs"
-      },
-      "./voice-tools": {
-        "types": "./dist/voiceTools.d.mts",
-        "import": "./dist/voiceTools.mjs",
-        "require": "./dist/voiceTools.cjs"
       },
       "./voice-reload-handoff": {
         "types": "./dist/voiceReloadHandoff.d.mts",
         "import": "./dist/voiceReloadHandoff.mjs",
         "require": "./dist/voiceReloadHandoff.cjs"
       },
-      "./package.json": "./package.json",
-      "./testing": {
-        "types": "./dist/testing.d.mts",
-        "import": "./dist/testing.mjs",
-        "require": "./dist/testing.cjs"
-      }
+      "./voice-tools": {
+        "types": "./dist/voiceTools.d.mts",
+        "import": "./dist/voiceTools.mjs",
+        "require": "./dist/voiceTools.cjs"
+      },
+      "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
@@ -546,6 +552,8 @@
     "exports": {
       ".": "tir",
       "./extensions/pi": "tir",
+      "./session-api": "tir",
+      "./web-hub": "tir",
       "./package.json": "esm"
     },
     "exportTargets": {
@@ -559,6 +567,16 @@
         "import": "./dist/extensions/pi.mjs",
         "require": "./dist/extensions/pi.cjs"
       },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      },
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
@@ -569,7 +587,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "web", "src/types/domain.ts", "src/types/webFiles.ts", "src/types/fileEditsApi.ts", "LICENSE"],
     "os": [],
     "cpu": []
   },
@@ -600,7 +618,17 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-goal/SKILL.md"],
-    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "llms.txt",
+      "src/prompts",
+      "src/types/goalView.ts",
+      "src/types/goal.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -920,6 +948,7 @@
       "./planConfig": "tir",
       "./planMode": "tir",
       "./prompts": "tir",
+      "./session-api": "tir",
       "./package.json": "esm"
     },
     "exportTargets": {
@@ -963,6 +992,11 @@
         "import": "./dist/prompts.mjs",
         "require": "./dist/prompts.cjs"
       },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
       "./package.json": "./package.json"
     },
     "main": "./dist/index.cjs",
@@ -973,7 +1007,17 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-plan/SKILL.md"],
-    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "llms.txt",
+      "src/prompts",
+      "src/types/planApi.ts",
+      "src/types/planSettings.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -1604,6 +1648,7 @@
       "./tool/responseEnvelope": "tir",
       "./tool/schema": "tir",
       "./tool/taskTool": "tir",
+      "./web-hub": "tir",
       "./tui/format": "tir",
       "./tui/selectors": "tir",
       "./tui/taskOverlay": "tir",
@@ -1706,6 +1751,11 @@
         "import": "./dist/tool/taskTool.mjs",
         "require": "./dist/tool/taskTool.cjs"
       },
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      },
       "./tui/format": {
         "types": "./dist/tui/format.d.mts",
         "import": "./dist/tui/format.mjs",
@@ -1736,7 +1786,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web", "package.json"],
+    "files": ["dist", "web", "src/types/webTasks.ts", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1833,7 +1883,15 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "src/types/askUserWire.ts",
+      "src/types/questionnaire.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -2036,6 +2094,41 @@
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-voice/SKILL.md"],
     "files": ["dist", "web", "models", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-web-security": {
+    "exports": {
+      ".": "tir",
+      "./browser": "tir",
+      "./node": "tir",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./browser": {
+        "types": "./dist/browser.d.mts",
+        "import": "./dist/browser.mjs",
+        "require": "./dist/browser.cjs"
+      },
+      "./node": {
+        "types": "./dist/node.d.mts",
+        "import": "./dist/node.mjs",
+        "require": "./dist/node.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {},
+    "assets": ["./llms.txt", "./README.md"],
+    "files": ["dist", "llms.txt", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   },

@@ -64,6 +64,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-voice': 'packages/minor/doompi-voice',
   '@agimon-ai/doompi-web-components': 'packages/core/doompi-web-components',
   '@agimon-ai/doompi-web-contracts': 'packages/core/doompi-web-contracts',
+  '@agimon-ai/doompi-web-security': 'packages/core/doompi-web-security',
   '@agimon-ai/doompi-workflow': 'packages/minor/doompi-workflow',
 };
 
@@ -150,6 +151,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
   ],
   '@agimon-ai/doompi-ui': ['./themes/doom-pi-dark.json'],
   '@agimon-ai/doompi-voice': ['./llms.txt', './README.md', './src/prompts/doompi-use-voice/SKILL.md'],
+  '@agimon-ai/doompi-web-security': ['./llms.txt', './README.md'],
   '@agimon-ai/doompi-workflow': [
     './llms.txt',
     './README.md',
