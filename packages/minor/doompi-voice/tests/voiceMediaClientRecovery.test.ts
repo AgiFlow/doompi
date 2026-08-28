@@ -3,18 +3,22 @@ import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../src/types/
 import type {
   VoiceMediaCapabilities,
   VoiceMediaCapture,
+  VoiceMediaCaptureActivity,
   VoiceMediaClientEvent,
   VoiceMediaDevice,
   VoiceMediaPlayback,
+  VoiceMediaPlaybackOutcome,
+  VoiceMediaPlaybackResult,
   VoiceMediaTransport,
 } from '../src/types/clientMedia.ts';
 import { VoiceMediaClient } from '../web/voiceMediaClient.ts';
 
 const capabilities: VoiceMediaCapabilities = {
   capture: true,
-  playback: false,
+  playback: true,
   captureActivity: true,
   autonomousOrchestration: true,
+  playbackDucking: true,
 };
 
 function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(error: Error): void } {
@@ -44,14 +48,21 @@ class FakeDetector implements SpeechPresenceDetector {
   public push(): Promise<readonly SpeechPresenceWindow[]> {
     return this.pushResult();
   }
-  public async reset(): Promise<void> {}
-  public async close(): Promise<void> {}
+  public readonly reset = vi.fn(async () => undefined);
+  public readonly close = vi.fn(async () => undefined);
+}
+
+interface FakePlayback extends VoiceMediaPlayback {
+  duck(targetGain: number, fadeMs: number, holdMs: number): void;
+  stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void;
+  finish(outcome: VoiceMediaPlaybackOutcome): void;
 }
 
 class FakeDevice implements VoiceMediaDevice {
   public readonly capabilities = capabilities;
   public readonly callbacks: Array<(pcm: Uint8Array) => void> = [];
   public readonly captures: Array<VoiceMediaCapture & { stop: ReturnType<typeof vi.fn> }> = [];
+  public readonly playbacks: FakePlayback[] = [];
   public close = vi.fn(async () => undefined);
   public detectors: SpeechPresenceDetector[] = [];
 
@@ -64,8 +75,22 @@ class FakeDevice implements VoiceMediaDevice {
     this.captures.push(capture);
     return capture;
   }
-  public speak(): VoiceMediaPlayback {
-    throw new Error('not used');
+  public speak(request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>): VoiceMediaPlayback {
+    const completion = deferred<VoiceMediaPlaybackResult>();
+    let settled = false;
+    const finish = (outcome: VoiceMediaPlaybackOutcome): void => {
+      if (settled) return;
+      settled = true;
+      completion.resolve({ playbackId: request.playbackId, outcome });
+    };
+    const playback: FakePlayback = {
+      completion: completion.promise,
+      duck: vi.fn(),
+      stop: vi.fn((outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>) => finish(outcome)),
+      finish,
+    };
+    this.playbacks.push(playback);
+    return playback;
   }
 }
 
@@ -74,8 +99,16 @@ class FakeTransport implements VoiceMediaTransport {
   public readonly disconnect = vi.fn(async () => undefined);
   public readonly captureStopped = vi.fn(async () => undefined);
   public readonly playbackFinished = vi.fn(async () => undefined);
-  public readonly audioSends: Array<{ connectionId: string; pcm: Uint8Array }> = [];
-  public readonly longPolls: Array<{ reject(error: Error): void; aborted: boolean }> = [];
+  public readonly audioSends: Array<{
+    connectionId: string;
+    pcm: Uint8Array;
+    activity?: VoiceMediaCaptureActivity;
+  }> = [];
+  public readonly longPolls: Array<{
+    resolve(event: VoiceMediaClientEvent | undefined): void;
+    reject(error: Error): void;
+    aborted: boolean;
+  }> = [];
   public startsEveryConnection = true;
   public sendFailure: Error | undefined;
 
@@ -101,7 +134,7 @@ class FakeTransport implements VoiceMediaTransport {
       });
     }
     const poll = deferred<VoiceMediaClientEvent | undefined>();
-    const record = { reject: poll.reject, aborted: false };
+    const record = { resolve: poll.resolve, reject: poll.reject, aborted: false };
     this.longPolls.push(record);
     signal.addEventListener(
       'abort',
@@ -113,8 +146,14 @@ class FakeTransport implements VoiceMediaTransport {
     );
     return poll.promise;
   }
-  public async sendAudio(_clientId: string, connectionId: string, _captureId: string, pcm: Uint8Array): Promise<void> {
-    this.audioSends.push({ connectionId, pcm });
+  public async sendAudio(
+    _clientId: string,
+    connectionId: string,
+    _captureId: string,
+    pcm: Uint8Array,
+    activity?: VoiceMediaCaptureActivity,
+  ): Promise<void> {
+    this.audioSends.push({ connectionId, pcm, ...(activity ? { activity: { ...activity } } : {}) });
     const failure = this.sendFailure;
     this.sendFailure = undefined;
     if (failure !== undefined) throw failure;
@@ -232,5 +271,51 @@ describe('voice media client browser recovery', () => {
     expect(transport.longPolls[0]?.aborted).toBe(true);
     expect(transport.disconnect).toHaveBeenCalledOnce();
     expect(device.close).toHaveBeenCalledOnce();
+  });
+
+  it('uses only a shallow provisional duck for sustained classifier cues and resets activity epochs', async () => {
+    const transport = new FakeTransport();
+    const device = new FakeDevice();
+    const windows: SpeechPresenceWindow[][] = [
+      [],
+      [{ speech: true, sampleCount: 1_600 }],
+      [{ speech: true, sampleCount: 1_600 }],
+      [{ speech: true, sampleCount: 1_600 }],
+      [{ speech: true, sampleCount: 1_600 }],
+      [{ speech: false, sampleCount: 1_600 }],
+    ];
+    const detector = new FakeDetector(async () => windows.shift() ?? []);
+    device.detectors.push(detector);
+    const client = new VoiceMediaClient('client', 'connection', transport, device);
+    client.start();
+    await eventually(() => expect(device.callbacks).toHaveLength(1));
+
+    const pcm = new Uint8Array(3_200);
+    device.callbacks[0]!(pcm);
+    await eventually(() => expect(transport.audioSends).toHaveLength(1));
+    expect(transport.audioSends[0]?.activity).toMatchObject({ epoch: 0, classifiedSpeechMs: 0 });
+    await eventually(() => expect(transport.longPolls).toHaveLength(1));
+    transport.longPolls[0]!.resolve({
+      sequence: 2,
+      type: 'playback-start',
+      playbackId: 'playback-1',
+      text: 'Narration in progress',
+    });
+    await eventually(() => expect(device.playbacks).toHaveLength(1));
+
+    for (let index = 0; index < 4; index += 1) device.callbacks[0]!(pcm);
+    await eventually(() => expect(transport.audioSends).toHaveLength(5));
+    expect(device.playbacks[0]?.duck).toHaveBeenCalledWith(0.7, 200, 800);
+    expect(device.playbacks[0]?.stop).not.toHaveBeenCalled();
+    expect(transport.audioSends[4]?.activity).toMatchObject({ epoch: 1, classifiedSpeechMs: 400 });
+
+    device.playbacks[0]!.finish('completed');
+    await eventually(() => expect(transport.playbackFinished).toHaveBeenCalledOnce());
+    await eventually(() => expect(detector.reset).toHaveBeenCalledTimes(2));
+    device.callbacks[0]!(pcm);
+    await eventually(() => expect(transport.audioSends).toHaveLength(6));
+    expect(transport.audioSends[5]?.activity).toMatchObject({ epoch: 2, classifiedSpeechMs: 0 });
+
+    await client.stop();
   });
 });

@@ -71,19 +71,15 @@ export class ClientCaptureActivityLifecycle {
       if (this.endpointReached) continue;
       if (window.speech) {
         this.classifiedSpeechSamples += window.sampleCount;
-        if (this.speechStarted) {
+        this.consecutiveSpeechSamples += window.sampleCount;
+        if (this.consecutiveSpeechSamples >= MINIMUM_SPEECH_SAMPLES) {
+          this.speechStarted = true;
+          this.consecutiveSpeechSamples = 0;
           this.trailingSilenceSamples = 0;
-        } else {
-          this.consecutiveSpeechSamples += window.sampleCount;
-          if (this.consecutiveSpeechSamples >= MINIMUM_SPEECH_SAMPLES) {
-            this.speechStarted = true;
-            this.consecutiveSpeechSamples = 0;
-            this.trailingSilenceSamples = 0;
-          }
         }
       } else {
+        if (this.speechStarted) this.trailingSilenceSamples += this.consecutiveSpeechSamples + window.sampleCount;
         this.consecutiveSpeechSamples = 0;
-        if (this.speechStarted) this.trailingSilenceSamples += window.sampleCount;
       }
       const trailingSilenceMs = (this.trailingSilenceSamples / VOICE_MEDIA_SAMPLE_RATE) * 1_000;
       if (this.speechStarted && trailingSilenceMs >= this.endpointSilenceMs) this.endpointReached = true;

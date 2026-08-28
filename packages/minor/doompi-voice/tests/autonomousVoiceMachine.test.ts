@@ -274,6 +274,76 @@ describe('autonomous voice XState lifecycle', () => {
     });
   });
 
+  it('does not abort narration for classifier-confirmed imperfect self-echo', () => {
+    const h = harness();
+    enable(h);
+    h.actor.send({
+      type: 'PLAYBACK_STARTED',
+      sessionId: firstTurn.sessionId,
+      playbackGeneration: 4,
+      referenceText: 'The plan is ready for review',
+    });
+    h.actor.send({
+      type: 'BARGE_IN_EVIDENCE',
+      ...firstTurn,
+      playbackGeneration: 4,
+      evidence: {
+        exactStopCommand: false,
+        intentionalAddress: false,
+        classifierConfirmed: true,
+        classifierSpeechMs: 640,
+        residualTokenCount: 2,
+        residualRatio: 0.33,
+        voicedMs: 1_200,
+        peakDbAboveNoise: 20,
+        signalVariationDb: 8,
+        narrationSimilarity: 0.67,
+      },
+    });
+
+    expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('listening');
+    expect(h.effects.some((effect) => effect.type === 'effect.confirmBargeIn')).toBe(false);
+    expect(h.effects.some((effect) => effect.type === 'effect.abortPlayback')).toBe(false);
+  });
+
+  it('prioritizes classifier-confirmed user speech without requiring an address phrase', () => {
+    const h = harness();
+    enable(h);
+    h.actor.send({
+      type: 'PLAYBACK_STARTED',
+      sessionId: firstTurn.sessionId,
+      playbackGeneration: 4,
+      referenceText: 'The plan is ready',
+    });
+    h.actor.send({
+      type: 'BARGE_IN_EVIDENCE',
+      ...firstTurn,
+      playbackGeneration: 4,
+      evidence: {
+        exactStopCommand: false,
+        intentionalAddress: false,
+        classifierConfirmed: true,
+        classifierSpeechMs: 160,
+        residualTokenCount: 3,
+        residualRatio: 0.5,
+        voicedMs: 500,
+        peakDbAboveNoise: 8,
+        signalVariationDb: 4,
+        narrationSimilarity: 0.2,
+      },
+    });
+
+    expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('speech');
+    expect(h.actor.getSnapshot().context.narrationOverlapPromoted).toBe(true);
+    expect(h.effects).toContainEqual({
+      type: 'effect.confirmBargeIn',
+      ...firstTurn,
+      playbackGeneration: 4,
+      outcome: 'promote',
+    });
+    expect(h.effects).toContainEqual({ type: 'effect.abortPlayback' });
+  });
+
   it('discards command-only stop overlap instead of promoting narration tail audio', () => {
     const h = harness();
     enable(h);

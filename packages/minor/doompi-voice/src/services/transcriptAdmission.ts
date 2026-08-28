@@ -1,3 +1,4 @@
+import type { IClock } from '../types/index.ts';
 import type { VoiceCommandContext } from './commandCorrection.ts';
 import { alignNarrationSpan, extractNovelNarrationResidual, normalizeEchoText } from './semanticEcho.ts';
 
@@ -237,13 +238,14 @@ function completeWithTimeout(
   model: IVoiceTranscriptAdmissionModelClient,
   request: Omit<VoiceTranscriptAdmissionModelRequest, 'signal'>,
   parentSignal: AbortSignal,
+  clock: Pick<IClock, 'setTimeout' | 'clear'>,
   timeoutMs: number,
 ): Promise<string> {
   const controller = new AbortController();
   return new Promise((resolve, reject) => {
     let settled = false;
     const cleanup = (): void => {
-      clearTimeout(timer);
+      clock.clear(timer);
       parentSignal.removeEventListener('abort', abort);
     };
     const settle = (operation: () => void): void => {
@@ -257,7 +259,7 @@ function completeWithTimeout(
       controller.abort(error);
       settle(() => reject(error));
     };
-    const timer = setTimeout(() => {
+    const timer = clock.setTimeout(() => {
       const error = new Error('Voice transcript admission timed out');
       controller.abort(error);
       settle(() => reject(error));
@@ -300,7 +302,7 @@ function parseDecision(output: string, input: VoiceTranscriptAdjudicationInput):
     if (!value.admit || typeof value.summary !== 'string' || !input.assessment.narrationOverlap || !input.narrationText)
       throw new Error('Voice transcript admission returned an unexpected narration summary');
     const summary = boundedText(value.summary.normalize('NFKC').replace(/\s+/gu, ' ').trim(), MAX_SUMMARY_CHARACTERS);
-    if (!summary || /[`\[\]{}<>]|(?:https?:\/\/|\b\S+@\S+\b|(?:^|\s)(?:~\/|\/\w))/iu.test(summary))
+    if (!summary || /[`[\]{}<>]|(?:https?:\/\/|\b\S+@\S+\b|(?:^|\s)(?:~\/|\/\w))/iu.test(summary))
       throw new Error('Voice transcript admission returned unsafe summary text');
     if (!summaryIsGrounded(summary, input.narrationText))
       throw new Error('Voice transcript admission summary is not grounded in narration');
@@ -316,6 +318,7 @@ function parseDecision(output: string, input: VoiceTranscriptAdjudicationInput):
 export class VoiceTranscriptAdjudicator implements IVoiceTranscriptAdjudicator {
   public constructor(
     private readonly model: IVoiceTranscriptAdmissionModelClient,
+    private readonly clock: Pick<IClock, 'setTimeout' | 'clear'>,
     private readonly timeoutMs = MODEL_TIMEOUT_MS,
   ) {}
 
@@ -345,6 +348,7 @@ export class VoiceTranscriptAdjudicator implements IVoiceTranscriptAdjudicator {
         cacheRetention: 'none',
       },
       signal,
+      this.clock,
       this.timeoutMs,
     );
     return parseDecision(output, { ...input, ...(narrationText ? { narrationText } : {}) });

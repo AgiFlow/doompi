@@ -270,9 +270,12 @@ function parseBargeInEvidence(value: unknown): NarrationBargeInEvidence {
   return {
     exactStopCommand: requireBoolean(value, 'exactStopCommand'),
     intentionalAddress: value.intentionalAddress === undefined ? false : requireBoolean(value, 'intentionalAddress'),
-    classifierConfirmed: value.classifierConfirmed === undefined ? false : requireBoolean(value, 'classifierConfirmed'),
-    classifierSpeechMs:
-      value.classifierSpeechMs === undefined ? 0 : requireNonNegativeInteger(value, 'classifierSpeechMs'),
+    ...(value.classifierConfirmed === undefined
+      ? {}
+      : { classifierConfirmed: requireBoolean(value, 'classifierConfirmed') }),
+    ...(value.classifierSpeechMs === undefined
+      ? {}
+      : { classifierSpeechMs: requireNonNegativeInteger(value, 'classifierSpeechMs') }),
     residualTokenCount: requireNonNegativeInteger(value, 'residualTokenCount'),
     residualRatio: requireNumber(value, 'residualRatio'),
     voicedMs: requireNonNegativeInteger(value, 'voicedMs'),

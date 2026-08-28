@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
 import {
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
   VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_STATE_HEADER,
   VOICE_MEDIA_CONTENT_TYPE,
   type VoiceMediaClientEvent,
@@ -41,7 +43,13 @@ async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId
         connectionId,
         clientKind: 'browser',
         controlLocation: 'local',
-        capabilities: { capture: true, playback: true, captureActivity: true, autonomousOrchestration: true },
+        capabilities: {
+          capture: true,
+          playback: true,
+          captureActivity: true,
+          autonomousOrchestration: true,
+          playbackDucking: true,
+        },
       }),
     ),
   );
@@ -399,6 +407,8 @@ describe('voice client media session API', () => {
             [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: 'speech',
             [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: '-41.5',
             [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: '700',
+            [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: '2',
+            [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: '640',
           },
           body: pcm,
         },
@@ -412,6 +422,8 @@ describe('voice client media session API', () => {
     expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
     expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_LEVEL_HEADER)).toBe('-41.5');
     expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER)).toBe('700');
+    expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER)).toBe('2');
+    expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER)).toBe('640');
 
     expect(
       (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStop, json({ captureId: 'capture-1' }), true))).status,
@@ -644,7 +656,12 @@ describe('voice client media session API', () => {
     expect(started.status).toBe(201);
 
     const audioRoute = `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&captureId=capture-ordered`;
-    const send = (state: 'listening' | 'speech' | 'endpoint', elapsedMs: number): Promise<Response> =>
+    const send = (
+      state: 'listening' | 'speech' | 'endpoint',
+      elapsedMs: number,
+      epoch = 0,
+      classifiedSpeechMs = 0,
+    ): Promise<Response> =>
       Promise.resolve(
         api.fetch(
           request(audioRoute, {
@@ -654,24 +671,36 @@ describe('voice client media session API', () => {
               [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: state,
               [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: '-41',
               [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(elapsedMs),
+              [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: String(epoch),
+              [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(classifiedSpeechMs),
             },
             body: new Uint8Array([1, 2]),
           }),
         ),
       );
 
-    expect((await send('speech', 500)).status).toBe(204);
+    expect((await send('speech', 500, 0, 160)).status).toBe(204);
     const speech = await api.fetch(
       request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
     );
     expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
+    expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER)).toBe('0');
+    expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER)).toBe('160');
 
-    expect((await send('endpoint', 400)).status).toBe(204);
+    expect((await send('endpoint', 400, 0, 160)).status).toBe(204);
     const reordered = await api.fetch(
       request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
     );
     expect(new Uint8Array(await reordered.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
     expect(reordered.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBeNull();
+
+    expect((await send('listening', 600, 1)).status).toBe(204);
+    const reset = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
+    );
+    expect(reset.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('listening');
+    expect(reset.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER)).toBe('1');
+    expect(reset.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER)).toBe('0');
     api.close();
   });
 

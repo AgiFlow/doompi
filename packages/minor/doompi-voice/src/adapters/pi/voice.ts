@@ -507,6 +507,7 @@ export function resolveVoiceCommandCorrector(reference: string, context: Extensi
 export function resolveVoiceTranscriptAdjudicator(
   reference: string,
   context: ExtensionContext,
+  clock: IClock,
 ): IVoiceTranscriptAdjudicator {
   const separator = reference.indexOf('/');
   if (separator <= 0 || separator === reference.length - 1)
@@ -545,7 +546,7 @@ export function resolveVoiceTranscriptAdjudicator(
         .trim();
     },
   };
-  return new VoiceTranscriptAdjudicator(modelClient);
+  return new VoiceTranscriptAdjudicator(modelClient, clock);
 }
 export function resolveVoiceFallbackNarrator(reference: string, context: ExtensionContext): IVoiceTurnFallbackNarrator {
   const separator = reference.indexOf('/');
@@ -943,7 +944,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       },
       resolveTranscriptAdjudicator: async (reference) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');
-        return resolveVoiceTranscriptAdjudicator(reference, activeContext);
+        return resolveVoiceTranscriptAdjudicator(reference, activeContext, container.clock);
       },
       resolveFallbackNarrator: async (reference) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');

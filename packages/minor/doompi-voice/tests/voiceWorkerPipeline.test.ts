@@ -1208,6 +1208,195 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     await pipeline.shutdown();
   });
 
+  it('keeps imperfect self-narration private even when the speech classifier hears it', async () => {
+    const recorder = new WorkerRecorder();
+    const clock = new ScheduledWorkerClock();
+    const transcribe = vi.fn(async (_request: TranscriptionRequest) => 'The plan was ready for revue');
+    const pipeline = new VoiceWorkerPipeline({
+      clock,
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+      speechDetectorFactory,
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    const root = temporaryRoot();
+    const publish = (published: VoiceWorkerEventPayload): void => {
+      events.push(published);
+    };
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: root,
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, publish);
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    recorder.emit(pcmFrame(0));
+    await beginning;
+    await pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 2,
+        kind: 'playback-state',
+        sessionId: 'session-1',
+        playbackGeneration: 5,
+        active: true,
+        referenceText: 'The plan is ready for review',
+        startPhrases: ['hey doom'],
+        stopPhrases: ['stop speaking'],
+      },
+      publish,
+    );
+    recorder.emitActivity({
+      state: 'speech',
+      levelDbfs: -34,
+      elapsedMs: 200,
+      epoch: 1,
+      classifiedSpeechMs: 640,
+    });
+    for (let index = 0; index < 90; index += 1) {
+      clock.advance(20);
+      recorder.emit(pcmFrame(9_000));
+    }
+
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
+
+    expect(events).not.toContainEqual(expect.objectContaining({ kind: 'barge-in-evidence' }));
+    const turnDirectory = path.join(root, fs.readdirSync(root)[0]!);
+    expect(JSON.parse(fs.readFileSync(path.join(turnDirectory, 'manifest.json'), 'utf8')).committedBytes).toBe(
+      PCM_FRAME_BYTES,
+    );
+    await pipeline.shutdown();
+  });
+  it('promotes client-classified unaddressed overlap and honors its queued endpoint', async () => {
+    const recorder = new WorkerRecorder();
+    const clock = new ScheduledWorkerClock();
+    let transcription = 0;
+    const transcribe = vi.fn(async (_request: TranscriptionRequest) => {
+      transcription += 1;
+      return transcription === 1 ? 'The plan is ready please run all tests' : 'please run all tests';
+    });
+    const pipeline = new VoiceWorkerPipeline({
+      clock,
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+      speechDetectorFactory,
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    const root = temporaryRoot();
+    const publish = (published: VoiceWorkerEventPayload): void => {
+      events.push(published);
+    };
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: root,
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, publish);
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    recorder.emit(pcmFrame(0));
+    await beginning;
+    await pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 2,
+        kind: 'playback-state',
+        sessionId: 'session-1',
+        playbackGeneration: 5,
+        active: true,
+        referenceText: 'The plan is ready',
+        startPhrases: ['hey doom'],
+        stopPhrases: ['stop speaking'],
+      },
+      publish,
+    );
+    recorder.emitActivity({
+      state: 'speech',
+      levelDbfs: -34,
+      elapsedMs: 200,
+      epoch: 1,
+      classifiedSpeechMs: 160,
+    });
+    for (let index = 0; index < 85; index += 1) {
+      clock.advance(20);
+      recorder.emit(pcmFrame(9_000));
+    }
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
+    recorder.emitActivity({
+      state: 'endpoint',
+      levelDbfs: -75,
+      elapsedMs: 1_800,
+      epoch: 1,
+      classifiedSpeechMs: 160,
+    });
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          kind: 'barge-in-evidence',
+          playbackGeneration: 5,
+          evidence: expect.objectContaining({
+            intentionalAddress: false,
+            classifierConfirmed: true,
+            classifierSpeechMs: 160,
+          }),
+        }),
+      ),
+    );
+
+    const turnDirectory = path.join(root, fs.readdirSync(root)[0]!);
+    expect(JSON.parse(fs.readFileSync(path.join(turnDirectory, 'manifest.json'), 'utf8')).committedBytes).toBe(
+      PCM_FRAME_BYTES,
+    );
+    await pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 3,
+        kind: 'confirm-barge-in',
+        sessionId: 'session-1',
+        captureId: 'capture-1',
+        turnId: 'turn-1',
+        playbackGeneration: 5,
+        outcome: 'promote',
+      },
+      publish,
+    );
+
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'capture-state', state: 'speech' }));
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'endpoint-reached', turnId: 'turn-1' }));
+    expect(JSON.parse(fs.readFileSync(path.join(turnDirectory, 'manifest.json'), 'utf8'))).toMatchObject({
+      committedBytes: 86 * PCM_FRAME_BYTES,
+      utteranceStartByte: PCM_FRAME_BYTES,
+    });
+
+    await pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 4,
+        kind: 'finalize-capture',
+        sessionId: 'session-1',
+        captureId: 'capture-1',
+        reason: 'soft-endpoint',
+      },
+      publish,
+    );
+    expect(transcribe).toHaveBeenCalledTimes(3);
+    const finalRequest = transcribe.mock.calls[2]![0] as TranscriptionRequest;
+    expect(fs.readFileSync(finalRequest.audioPath).subarray(44)).toEqual(
+      Buffer.concat(Array.from({ length: 85 }, () => pcmFrame(9_000))),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'transcript-candidate',
+        transcript: 'please run all tests',
+        evidence: expect.objectContaining({ classifier: 'client', classifierSpeechMs: 160, playbackOverlapMs: 1_700 }),
+      }),
+    );
+    await pipeline.shutdown();
+  });
+
   it('discards command-only narration interruption audio instead of carrying tail words into input', async () => {
     const recorder = new WorkerRecorder();
     const clock = new ScheduledWorkerClock();

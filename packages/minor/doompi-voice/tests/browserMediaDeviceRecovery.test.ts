@@ -29,7 +29,17 @@ class FakeAudioContext {
   public async close(): Promise<void> {}
 }
 
+class FakeSpeechUtterance {
+  public rate = 1;
+  public volume = 1;
+  public voice: SpeechSynthesisVoice | null = null;
+  public onend: (() => void) | null = null;
+  public onerror: ((event: { error: string }) => void) | null = null;
+
+  public constructor(public readonly text: string) {}
+}
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -101,5 +111,41 @@ describe('browser media device recovery guards', () => {
       'cannot play',
     );
     await expect(device.close()).resolves.toBeUndefined();
+  });
+
+  it('fades browser narration down, holds it, and restores it after a classifier cue', async () => {
+    vi.useFakeTimers();
+    let utterance: FakeSpeechUtterance | undefined;
+    const synthesis = {
+      cancel: vi.fn(),
+      getVoices: vi.fn(() => []),
+      speak: vi.fn((value: FakeSpeechUtterance) => {
+        utterance = value;
+      }),
+    };
+    vi.stubGlobal('window', { speechSynthesis: synthesis, SpeechSynthesisUtterance: FakeSpeechUtterance });
+    vi.stubGlobal('SpeechSynthesisUtterance', FakeSpeechUtterance);
+    const device = new BrowserVoiceMediaDevice();
+
+    expect(device.capabilities.playbackDucking).toBe(true);
+    const playback = device.speak({
+      sequence: 1,
+      type: 'playback-start',
+      playbackId: 'playback-1',
+      text: 'Narration in progress',
+    });
+    playback.duck?.(0.2, 300, 8_000);
+
+    await vi.advanceTimersByTimeAsync(150);
+    expect(utterance?.volume).toBeLessThan(1);
+    expect(utterance?.volume).toBeGreaterThan(0.2);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(utterance?.volume).toBeCloseTo(0.2);
+    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(utterance?.volume).toBeCloseTo(1);
+
+    utterance?.onend?.();
+    await expect(playback.completion).resolves.toEqual({ playbackId: 'playback-1', outcome: 'completed' });
   });
 });

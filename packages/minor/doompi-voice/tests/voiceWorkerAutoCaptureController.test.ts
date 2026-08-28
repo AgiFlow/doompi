@@ -8,6 +8,10 @@ import type { VoiceWorkerClientOptions } from '../src/adapters/process/voiceWork
 import type { VoiceWorkerSessionClient } from '../src/adapters/process/voiceWorkerSessionController.ts';
 import type { IVoiceCommandCorrector, VoiceCommandContext } from '../src/services/commandCorrection.ts';
 import type { IVoiceTurnFallbackNarrator } from '../src/services/fallbackNarration.ts';
+import type {
+  IVoiceTranscriptAdjudicator,
+  VoiceTranscriptSignalEvidence,
+} from '../src/services/transcriptAdmission.ts';
 import {
   VOICE_WORKER_PROTOCOL_VERSION,
   type VoiceCandidateOutcome,
@@ -39,6 +43,29 @@ const config: ResolvedVoiceConfig = {
 
 type Identity = { sessionId: string; captureId: string; turnId: string };
 
+const strongEvidence: VoiceTranscriptSignalEvidence = {
+  durationMs: 1_200,
+  voicedMs: 800,
+  classifierSpeechMs: 640,
+  rmsDbfs: -34,
+  peakDbfs: -18,
+  signalVariationDb: 9,
+  nonZeroRatio: 0.8,
+  gapCount: 0,
+  playbackOverlapMs: 0,
+  classifier: 'client',
+};
+
+const ambiguousEvidence: VoiceTranscriptSignalEvidence = {
+  ...strongEvidence,
+  voicedMs: 200,
+  classifierSpeechMs: 100,
+  rmsDbfs: -62,
+  peakDbfs: -55,
+  signalVariationDb: 0,
+  nonZeroRatio: 0.3,
+};
+
 function clock(): IClock {
   return {
     now: () => Date.now(),
@@ -56,6 +83,7 @@ function harness(
     shutdown?: () => Promise<void>;
     telemetrySink?: VoiceWorkerAutoCaptureTelemetrySink;
     corrector?: IVoiceCommandCorrector;
+    adjudicator?: IVoiceTranscriptAdjudicator;
     fallbackNarrator?: IVoiceTurnFallbackNarrator;
     commandContext?: () => VoiceCommandContext | undefined;
   } = {},
@@ -114,6 +142,7 @@ function harness(
     }),
   };
   const resolveCommandCorrector = vi.fn(async () => overrides.corrector);
+  const resolveTranscriptAdjudicator = vi.fn(async () => overrides.adjudicator);
   const fallbackNarrator: IVoiceTurnFallbackNarrator =
     overrides.fallbackNarrator ??
     ({
@@ -123,6 +152,7 @@ function harness(
   const controller = new VoiceWorkerAutoCaptureController({
     loadConfig: () => overrides.loadedConfig ?? config,
     resolveCommandCorrector,
+    resolveTranscriptAdjudicator,
     resolveFallbackNarrator,
     tts,
     clock: clock(),
@@ -154,8 +184,20 @@ function harness(
     emit({ kind: 'capture-state', sessionId: identity.sessionId, captureId: identity.captureId, state: 'speech' });
   const endpoint = (identity = current()): void => emit({ kind: 'endpoint-reached', ...identity });
   const drained = (identity = current(), revision = 1): void => emit({ kind: 'drained', ...identity, revision });
-  const candidate = (identity: Identity, transcript: string, revision = 1): void =>
-    emit({ kind: 'transcript-candidate', ...identity, revision, transcript, final: true });
+  const candidate = (
+    identity: Identity,
+    transcript: string,
+    revision = 1,
+    evidence?: VoiceTranscriptSignalEvidence,
+  ): void =>
+    emit({
+      kind: 'transcript-candidate',
+      ...identity,
+      revision,
+      transcript,
+      final: true,
+      ...(evidence ? { evidence } : {}),
+    });
   const acknowledge = (identity: Identity, revision: number, outcome: Exclude<VoiceCandidateOutcome, 'retry'>): void =>
     emit({ kind: 'candidate-acknowledged', ...identity, revision, outcome });
   const durationLimit = (identity = current()): void =>
@@ -176,6 +218,7 @@ function harness(
     ui,
     tts,
     resolveCommandCorrector,
+    resolveTranscriptAdjudicator,
     resolveFallbackNarrator,
     fallbackNarrator,
     captures,
@@ -208,12 +251,13 @@ async function finishTurn(
   h: ReturnType<typeof harness>,
   transcript: string,
   revision = 1,
+  evidence?: VoiceTranscriptSignalEvidence,
 ): Promise<{ identity: Identity; outcome: Exclude<VoiceCandidateOutcome, 'retry'> }> {
   const identity = h.current();
   h.speech(identity);
   h.endpoint(identity);
   h.drained(identity, revision);
-  h.candidate(identity, transcript, revision);
+  h.candidate(identity, transcript, revision, evidence);
   await flush();
   const acknowledgement = vi.mocked(h.client.acknowledgeCandidate).mock.calls.at(-1);
   if (!acknowledgement) throw new Error('acknowledgement unavailable');
@@ -358,6 +402,113 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.client.finalizeCapture).toHaveBeenCalledTimes(20);
     expect(h.client.acknowledgeCandidate).toHaveBeenCalledTimes(20);
     expect(h.client.beginCapture).toHaveBeenCalledTimes(21);
+  });
+
+  it('rejects a repeated admitted transcript inside the duplicate window', async () => {
+    const h = harness();
+    await enable(h);
+
+    const first = await finishTurn(h, 'computer run focused tests', 1, strongEvidence);
+    expect(first.outcome).toBe('committed');
+    expect(h.deliver).toHaveBeenCalledWith('run focused tests');
+    h.acknowledge(first.identity, 1, first.outcome);
+    await flush();
+    h.ready();
+
+    const repeated = await finishTurn(h, 'computer run focused tests', 2, strongEvidence);
+    expect(repeated.outcome).toBe('discarded');
+    expect(h.deliver).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the safe local rejection fallback when ambiguous model review fails', async () => {
+    const decide = vi.fn(async () => {
+      throw new Error('invalid model output');
+    });
+    const h = harness({ adjudicator: { decide } });
+    await enable(h);
+
+    const result = await finishTurn(h, 'uncertain request', 1, ambiguousEvidence);
+
+    expect(decide).toHaveBeenCalledOnce();
+    expect(result.outcome).toBe('discarded');
+    expect(h.deliver).not.toHaveBeenCalled();
+  });
+
+  it('ignores stale adjudication after shutdown and aborts its model signal', async () => {
+    let decideSignal: AbortSignal | undefined;
+    let resolveDecision!: (decision: { admit: boolean; reason: 'user_speech' }) => void;
+    const decide = vi.fn(
+      (_input, signal: AbortSignal) =>
+        new Promise<{ admit: boolean; reason: 'user_speech' }>((resolve) => {
+          decideSignal = signal;
+          resolveDecision = resolve;
+        }),
+    );
+    const h = harness({ adjudicator: { decide } });
+    await enable(h);
+    const identity = h.current();
+    h.speech(identity);
+    h.endpoint(identity);
+    h.drained(identity, 1);
+    h.candidate(identity, 'uncertain request', 1, ambiguousEvidence);
+    await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
+
+    await h.controller.shutdown(h.ui);
+    resolveDecision({ admit: true, reason: 'user_speech' });
+    await flush();
+
+    expect(decideSignal?.aborted).toBe(true);
+    expect(h.deliver).not.toHaveBeenCalled();
+  });
+
+  it('plays a grounded overlap summary before delivering classifier-confirmed user speech', async () => {
+    const decide = vi.fn(async () => ({
+      admit: true,
+      continuationSummary: 'The plan was ready.',
+      reason: 'user_speech' as const,
+    }));
+    const h = harness({ adjudicator: { decide } });
+    await enable(h);
+    const identity = h.current();
+    const narration = h.controller.narrateAgent('The plan is ready');
+    await flush();
+    h.emit({
+      kind: 'barge-in-evidence',
+      ...identity,
+      playbackGeneration: 1,
+      evidence: {
+        exactStopCommand: false,
+        intentionalAddress: false,
+        classifierConfirmed: true,
+        classifierSpeechMs: 160,
+        residualTokenCount: 4,
+        residualRatio: 0.5,
+        voicedMs: 800,
+        peakDbAboveNoise: 12,
+        signalVariationDb: 5,
+        narrationSimilarity: 0.2,
+      },
+    });
+    await flush();
+    await expect(narration).resolves.toBe('interrupted');
+
+    h.speech(identity);
+    h.endpoint(identity);
+    h.drained(identity, 1);
+    h.candidate(identity, 'The plan is ready please run all tests', 1, { ...strongEvidence, playbackOverlapMs: 1_200 });
+    await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(h.tts.speak).toHaveBeenCalledTimes(2));
+    expect(h.tts.speak).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'clarification', text: 'The plan was ready.' }),
+    );
+    expect(h.deliver).not.toHaveBeenCalled();
+
+    h.finishPlayback();
+    h.finishPlayback();
+    await flush();
+
+    expect(h.deliver).toHaveBeenCalledOnce();
+    expect(h.deliver).toHaveBeenCalledWith('please run all tests');
   });
 
   it('shortens the endpoint window for the turns that follow an opened draft', async () => {

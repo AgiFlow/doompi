@@ -63,6 +63,7 @@ export class CaptureSession {
 
   public constructor(options: CaptureSessionOptions) {
     this.options = options;
+    this.captureGeneration = options.spool.snapshotManifest().captureGeneration;
   }
 
   public get state(): CaptureSessionState {

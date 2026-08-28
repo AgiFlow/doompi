@@ -106,6 +106,10 @@ class FakeRecorder implements IPcmAudioRecorder {
     this.listeners[generation - 1]?.(frame);
   }
 
+  public emitLatest(frame: Buffer): void {
+    this.listeners.at(-1)?.(frame);
+  }
+
   public emitActivity(generation: number, activity: VoiceMediaCaptureActivity): void {
     this.activityListeners[generation - 1]?.(activity);
   }
@@ -237,6 +241,22 @@ describe('CaptureSession', () => {
     const snapshot = await session.drain();
     expect(snapshot.pcmBytes).toBe(PCM_FRAME_BYTES + 22);
     expect(spool.readCommittedPcm()).toEqual(Buffer.concat([Buffer.alloc(PCM_FRAME_BYTES, 1), Buffer.alloc(22, 2)]));
+  });
+
+  it('continues capture generations from a recovered turn spool', async () => {
+    const recorder = new FakeRecorder();
+    const spool = createSpool();
+    spool.setCaptureGeneration(7);
+    const recovered = NodeTurnSpool.recover(spool.directory);
+    const session = new CaptureSession({ recorder, config, spool: recovered, clock: new FakeClock() });
+
+    const starting = session.start();
+    expect(recovered.snapshotManifest().captureGeneration).toBe(8);
+    recorder.emitLatest(Buffer.alloc(PCM_FRAME_BYTES, 1));
+    await starting;
+
+    expect(session.state).toBe('capturing');
+    await session.abort();
   });
 
   it('recovers a first-frame timeout before starting liveness', async () => {

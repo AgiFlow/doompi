@@ -693,7 +693,7 @@ export class AutonomousVoiceSession {
     const narrate = this.dependencies.narrateContinuation;
     if (!summary || !narrate || !controller) {
       if (controller) this.transcriptAdmissionAbort = undefined;
-      this.applyAdmittedTranscript(effect, assessment.transcript);
+      this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
       return;
     }
     void Promise.resolve()
@@ -703,7 +703,7 @@ export class AutonomousVoiceSession {
         if (this.transcriptAdmissionAbort !== controller || controller.signal.aborted || !this.effectIsCurrent(effect))
           return;
         this.transcriptAdmissionAbort = undefined;
-        this.applyAdmittedTranscript(effect, assessment.transcript);
+        this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
       });
   }
 

@@ -14,10 +14,10 @@ import {
 
 const RECONNECT_DELAY_MS = 2_000;
 const MAX_CONNECTION_ID_LENGTH = 200;
-const DUCK_CUE_SAMPLES = (VOICE_MEDIA_SAMPLE_RATE * 64) / 1_000;
-const DUCK_TARGET_GAIN = 0.2;
-const DUCK_FADE_MS = 300;
-const DUCK_HOLD_MS = 5_000;
+const DUCK_CUE_SAMPLES = (VOICE_MEDIA_SAMPLE_RATE * 320) / 1_000;
+const DUCK_TARGET_GAIN = 0.7;
+const DUCK_FADE_MS = 200;
+const DUCK_HOLD_MS = 800;
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {

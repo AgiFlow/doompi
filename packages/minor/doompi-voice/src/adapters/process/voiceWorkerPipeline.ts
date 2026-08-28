@@ -84,6 +84,8 @@ interface ActiveWorkerCapture {
   clientActivitySpeechMs: number;
   clientClassifierSpeechMs: number;
   hostClassifierSpeechMs: number;
+  bargeInClientClassifierBaselineMs: number;
+  bargeInHostClassifierBaselineMs: number;
   playbackOverlapMs: number;
   clientSpeechStarted: boolean;
   finalized: boolean;
@@ -359,6 +361,8 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       clientActivitySpeechMs: 0,
       clientClassifierSpeechMs: 0,
       hostClassifierSpeechMs: 0,
+      bargeInClientClassifierBaselineMs: 0,
+      bargeInHostClassifierBaselineMs: 0,
       playbackOverlapMs: 0,
       clientSpeechStarted: false,
       finalized: false,
@@ -497,7 +501,11 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
           frame,
           this.clock.now(),
           active.vad?.noiseProfile,
-          Math.max(active.clientClassifierSpeechMs, active.hostClassifierSpeechMs),
+          Math.max(
+            0,
+            active.clientClassifierSpeechMs - active.bargeInClientClassifierBaselineMs,
+            active.hostClassifierSpeechMs - active.bargeInHostClassifierBaselineMs,
+          ),
         );
       }
       return;
@@ -539,7 +547,6 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       active.clientActivityState = undefined;
       active.clientActivityObserved = false;
       active.clientActivitySpeechMs = 0;
-      active.clientClassifierSpeechMs = 0;
       active.clientSpeechStarted = false;
     }
     const activityEpoch = activity.epoch ?? 0;
@@ -908,6 +915,8 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     const active = this.active;
     if (!active?.vad || active.command.sessionId !== command.sessionId) return;
     if (command.active) {
+      active.bargeInClientClassifierBaselineMs = active.clientClassifierSpeechMs;
+      active.bargeInHostClassifierBaselineMs = active.hostClassifierSpeechMs;
       this.resetVoiceActivity(active);
       active.endpoint.invalidate();
       if (command.referenceText)

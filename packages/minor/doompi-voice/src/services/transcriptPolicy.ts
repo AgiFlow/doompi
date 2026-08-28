@@ -210,6 +210,7 @@ export function applyTranscriptPolicy(input: TranscriptPolicyInput): TranscriptP
       (accepted === residual ? undefined : compositionCommand(accepted, compositionState, compositionPhrases));
     if (composition) return composition;
     if (input.stopPhrases.some((phrase) => exactPhrase(residual, phrase))) return { action: 'stop' };
+    if (addressedText === undefined) return { action: 'discard', reason: 'narration-echo' };
     if (!accepted) return { action: 'discard', reason: 'empty' };
     if (input.stopPhrases.some((phrase) => exactPhrase(accepted, phrase))) return { action: 'stop' };
     return acceptedText(accepted, compositionState);
