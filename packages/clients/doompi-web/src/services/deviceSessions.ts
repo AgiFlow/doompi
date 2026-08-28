@@ -97,11 +97,11 @@ export function sanitizeUserAgent(raw: string | undefined): string {
 }
 
 /**
- * The address Cloudflare's edge reported, made safe to display.
+ * The address Cloudflare's edge reported, reduced to a safe display and key value.
  *
- * Display only, and deliberately so: the tunnel listener is a loopback port, so
- * any local process can reach it directly and set this header to anything. It
- * never gates a decision, is never compared, and is never a rate-limit key.
+ * It never authorizes a request. The tunnel route may use it only for abuse
+ * throttling when Cloudflare is the trusted proxy. A local process can forge it,
+ * but local processes are outside that public-internet boundary.
  */
 export function sanitizeEdgeIp(raw: string | undefined): string {
   if (raw === undefined) return 'unknown';

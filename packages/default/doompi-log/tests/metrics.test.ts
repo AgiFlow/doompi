@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LogMetricsAggregator, MAX_RETAINED_STATE_PER_TOOL } from '../src/services/metrics.ts';
+import {
+  LogMetricsAggregator,
+  MAX_RETAINED_METRIC_NAMES,
+  MAX_RETAINED_STATE_PER_TOOL,
+  METRIC_OVERFLOW_NAME,
+} from '../src/services/metrics.ts';
 
 /**
  * The aggregator consumes the same log records the telemetry extension already
@@ -219,6 +224,103 @@ describe('LogMetricsAggregator', () => {
     ]);
     expect(snapshot.recentErrors[0]?.message).toContain('bash');
     expect(JSON.stringify(snapshot.recentErrors)).not.toContain('private failure');
+  });
+
+  it('bounds event, package, and operation cardinality with counted overflow rows', () => {
+    const aggregator = new LogMetricsAggregator({ maxMetricNames: 3 });
+
+    for (const name of ['one', 'two', 'three', 'four', 'four']) {
+      aggregator.record(`custom.${name}`, {
+        'telemetry.package': `@example/${name}`,
+        'operation.name': `operation.${name}`,
+        duration_ms: 10,
+      });
+    }
+    const snapshot = aggregator.snapshot();
+
+    expect(snapshot.eventVolume).toEqual([
+      { name: METRIC_OVERFLOW_NAME, count: 3 },
+      { name: 'custom.one', count: 1 },
+      { name: 'custom.two', count: 1 },
+    ]);
+    expect(snapshot.packageEvents).toEqual([
+      { name: METRIC_OVERFLOW_NAME, count: 3 },
+      { name: '@example/one', count: 1 },
+      { name: '@example/two', count: 1 },
+    ]);
+    expect(snapshot.operationDuration).toHaveLength(3);
+    expect(snapshot.operationDuration.find((entry) => entry.name === METRIC_OVERFLOW_NAME)).toMatchObject({ calls: 3 });
+  });
+
+  it('caps configured cardinality at the hard maximum', () => {
+    const aggregator = new LogMetricsAggregator({ maxMetricNames: Number.POSITIVE_INFINITY });
+
+    for (let index = 0; index < MAX_RETAINED_METRIC_NAMES + 2; index++) {
+      aggregator.record(`custom.${index}`, {});
+    }
+    const eventVolume = aggregator.snapshot().eventVolume;
+
+    expect(eventVolume).toHaveLength(MAX_RETAINED_METRIC_NAMES);
+    expect(eventVolume.find((entry) => entry.name === METRIC_OVERFLOW_NAME)).toEqual({
+      name: METRIC_OVERFLOW_NAME,
+      count: 3,
+    });
+  });
+
+  it('bounds per-tool state and preserves overflow calls, failures, and token samples', () => {
+    const aggregator = new LogMetricsAggregator({ maxMetricNames: 3 });
+
+    for (const toolName of ['one', 'two', 'three', 'four']) {
+      feed(aggregator, [
+        toolResult(toolName, { durationMs: 10, isError: true }),
+        ['pi.tool_token_sample', { 'tool.name': toolName, 'gen_ai.usage.total_tokens': 100 }],
+      ]);
+    }
+    const snapshot = aggregator.snapshot();
+    const overflowLatency = snapshot.toolLatency.find((entry) => entry.name === METRIC_OVERFLOW_NAME);
+    const overflowCost = snapshot.toolCost.find((entry) => entry.name === METRIC_OVERFLOW_NAME);
+
+    expect(snapshot.toolLatency).toHaveLength(3);
+    expect(snapshot.toolCost).toHaveLength(3);
+    expect(overflowLatency).toMatchObject({ calls: 2 });
+    expect(overflowCost).toMatchObject({ calls: 2, failed: 2, samples: 2 });
+  });
+
+  it('shares one bounded tool-name registry across latency, failure, and token maps', () => {
+    const aggregator = new LogMetricsAggregator({ maxMetricNames: 3 });
+
+    feed(aggregator, [
+      toolResult('latency-one', { durationMs: 10, isError: true }),
+      toolResult('latency-two', { durationMs: 20 }),
+      ['pi.tool_token_sample', { 'tool.name': 'tokens-three', 'gen_ai.usage.total_tokens': 100 }],
+      ['pi.tool_token_sample', { 'tool.name': 'tokens-four', 'gen_ai.usage.total_tokens': 200 }],
+    ]);
+    const snapshot = aggregator.snapshot();
+
+    expect(snapshot.toolCost).toHaveLength(3);
+    expect(snapshot.toolCost.map((entry) => entry.name).sort()).toEqual([
+      METRIC_OVERFLOW_NAME,
+      'latency-one',
+      'latency-two',
+    ]);
+    expect(snapshot.toolCost.find((entry) => entry.name === METRIC_OVERFLOW_NAME)).toMatchObject({ samples: 2 });
+  });
+
+  it('bounds failure categories with explicit overflow accounting', () => {
+    const aggregator = new LogMetricsAggregator({ maxMetricNames: 3 });
+
+    feed(aggregator, [
+      toolResult('bash', { isError: true }),
+      [API_ERROR, { 'http.response.status_code': 429 }],
+      [API_ERROR, { 'http.response.status_code': 503 }],
+      [API_ERROR, { 'http.response.status_code': 503 }],
+    ]);
+
+    expect(aggregator.snapshot().failureCategories).toEqual([
+      { name: METRIC_OVERFLOW_NAME, count: 2 },
+      { name: 'tool_failure', count: 1 },
+      { name: 'rate_limited', count: 1 },
+    ]);
   });
 
   it('keeps a bounded, newest-first list of recent errors', () => {

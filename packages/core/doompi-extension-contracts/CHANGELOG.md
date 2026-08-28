@@ -2,6 +2,7 @@
 
 ### 🚀 Features
 
+- add a versioned Cordis notification service and session entry-data contract
 - serve sessions over Pi's protocol and share test harnesses ([6f22b41](https://github.com/AgiFlow/doompi/commit/6f22b41))
 - expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
 - **doompi:** journal the minor-mode catalog so clients see real state ([e20ce91](https://github.com/AgiFlow/doompi/commit/e20ce91))

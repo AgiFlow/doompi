@@ -139,7 +139,8 @@ choices, and accepts the next spoken response as an ordinary user message.
 DoomPi logging records operational metadata such as counters, spans, session IDs, tool names, and
 errors. Callers remain responsible for values they attach to telemetry. `SPC h l` opens current-session
 metrics, and [`@agimon-ai/log-sink-mcp`][pkg-log-sink-mcp] provides historical lookup when a sink is
-configured.
+configured. See [Observability](observability.md) for repository-local lifecycle, query, smoke-test, and
+privacy guidance.
 
 ## Modes and automation
 

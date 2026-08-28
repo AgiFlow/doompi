@@ -32,6 +32,13 @@ function rendered(component: { render(width: number): string[] }, width = 120): 
   return component.render(width).map((line) => line.trimEnd());
 }
 
+function stripKnownThemeMarkers(line: string): string {
+  let plain = line;
+  for (const marker of ['borderMuted', 'typescript', 'dim', 'muted']) {
+    plain = plain.replaceAll(`<${marker}>`, '').replaceAll(`</${marker}>`, '');
+  }
+  return plain;
+}
 describe('hashline tool rendering', () => {
   it('uses standard Doom badges and compact details', () => {
     const theme = plainTheme();
@@ -72,7 +79,7 @@ describe('hashline tool rendering', () => {
     expect(lines.join('\n')).toContain('<dim>… 10 more lines · ctrl+o expand</dim>');
     expect(lines.join('\n')).toContain('<muted>[10 more lines in file. Use offset=21 to continue.]</muted>');
     expect(lines.at(-1)).toBe('');
-    expect(lines.every((line) => visibleWidth(line.replaceAll(/<\/?[^>]+>/gu, '')) <= 80)).toBe(true);
+    expect(lines.every((line) => visibleWidth(stripKnownThemeMarkers(line)) <= 80)).toBe(true);
   });
 
   it('keeps grep grouping and match context while hiding hashes', () => {

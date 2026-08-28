@@ -56,6 +56,30 @@ export class VoiceWorkerSupervisor {
   }
 
   public async stop(): Promise<void> {
+    const worker = this.beginStop();
+    if (worker) await worker.terminate();
+  }
+
+  public async stopGracefully(timeoutMs: number): Promise<void> {
+    const worker = this.beginStop();
+    if (!worker) return;
+    if (timeoutMs <= 0) {
+      await worker.terminate();
+      return;
+    }
+
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const exited = new Promise<boolean>((resolve) => worker.on('exit', () => resolve(true)));
+    const expired = new Promise<boolean>((resolve) => {
+      timeout = setTimeout(() => resolve(false), timeoutMs);
+      timeout.unref();
+    });
+    const exitedGracefully = await Promise.race([exited, expired]);
+    if (timeout) clearTimeout(timeout);
+    if (!exitedGracefully) await worker.terminate();
+  }
+
+  private beginStop(): VoiceWorkerHandle | undefined {
     this.stopping = true;
     this.generation += 1;
     if (this.heartbeatTimer) {
@@ -64,7 +88,7 @@ export class VoiceWorkerSupervisor {
     }
     const worker = this.worker;
     this.worker = undefined;
-    if (worker) await worker.terminate();
+    return worker;
   }
 
   private spawn(): void {

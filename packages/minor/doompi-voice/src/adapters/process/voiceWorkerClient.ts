@@ -20,6 +20,7 @@ import { type VoiceWorkerHandle, VoiceWorkerSupervisor } from '../../services/vo
 export interface VoiceWorkerClientOptions {
   spoolDirectory: string;
   activityHz?: number;
+  shutdownTimeoutMs?: number;
   onEvent: (event: VoiceWorkerEvent) => void;
   onRestart?: (reason: 'error' | 'exit' | 'heartbeat') => void;
   onExhausted?: (reason: 'error' | 'exit' | 'heartbeat') => void;
@@ -36,6 +37,14 @@ export interface BeginVoiceCaptureInput {
   maxDurationMs: number;
   utteranceIdleMs: number;
   transcriptionTimeoutMs?: number;
+}
+
+interface ActiveVoiceCapture {
+  input: BeginVoiceCaptureInput;
+  phase: 'capturing' | 'finalization-requested' | 'frozen' | 'candidate-observed' | 'acknowledgement-pending';
+  finalizeReason?: VoiceFinalizeReason;
+  revision?: number;
+  pendingAcknowledgement?: { revision: number; outcome: Exclude<VoiceCandidateOutcome, 'retry'> };
 }
 
 export function findVoiceWorkerUrl(importFileUrl: string | URL): URL {
@@ -67,7 +76,7 @@ export class VoiceWorkerClient {
   private ready: Promise<void> | undefined;
   private resolveReady: (() => void) | undefined;
   private rejectReady: ((error: Error) => void) | undefined;
-  private activeCapture: { input: BeginVoiceCaptureInput; finalizeReason?: VoiceFinalizeReason } | undefined;
+  private activeCapture: ActiveVoiceCapture | undefined;
   private activePlayback:
     | {
         sessionId: string;
@@ -106,13 +115,15 @@ export class VoiceWorkerClient {
   }
 
   public beginCapture(input: BeginVoiceCaptureInput): void {
-    this.activeCapture = { input };
+    this.activeCapture = { input, phase: 'capturing' };
     this.sendBeginCapture(input);
   }
 
   public finalizeCapture(sessionId: string, captureId: string, reason: VoiceFinalizeReason): void {
-    if (this.activeCapture?.input.sessionId === sessionId && this.activeCapture.input.captureId === captureId)
+    if (this.activeCapture?.input.sessionId === sessionId && this.activeCapture.input.captureId === captureId) {
       this.activeCapture.finalizeReason = reason;
+      if (this.activeCapture.phase === 'capturing') this.activeCapture.phase = 'finalization-requested';
+    }
     this.send({ kind: 'finalize-capture', sessionId, captureId, reason });
   }
 
@@ -128,12 +139,17 @@ export class VoiceWorkerClient {
     revision: number,
     outcome: VoiceCandidateOutcome,
   ): void {
+    const active = this.activeCapture;
     if (
       outcome !== 'retry' &&
-      this.activeCapture?.input.sessionId === sessionId &&
-      this.activeCapture.input.turnId === turnId
-    )
-      this.activeCapture = undefined;
+      active?.input.sessionId === sessionId &&
+      active.input.turnId === turnId &&
+      active.revision === revision &&
+      (active.phase === 'candidate-observed' || active.phase === 'acknowledgement-pending')
+    ) {
+      active.phase = 'acknowledgement-pending';
+      active.pendingAcknowledgement = { revision, outcome };
+    }
     this.send({ kind: 'acknowledge-candidate', sessionId, turnId, revision, outcome });
   }
 
@@ -190,7 +206,7 @@ export class VoiceWorkerClient {
       this.workerCapabilities.clear();
       this.readyCount = 0;
       rejectPendingStartup?.(new Error(`Voice worker startup was cancelled by ${reason}.`));
-      await this.supervisor.stop();
+      await this.supervisor.stopGracefully(this.options.shutdownTimeoutMs ?? 2_000);
     }
   }
 
@@ -205,21 +221,32 @@ export class VoiceWorkerClient {
       if (restarted) this.resumeActiveCapture();
     } else if (event.kind === 'failure' && event.code === 'initialization_failed') {
       this.rejectReady?.(new Error('Voice worker initialization failed.'));
+    } else {
+      this.observeCaptureProgress(event);
     }
     this.options.onEvent(event);
   }
 
   private resumeActiveCapture(): void {
     const active = this.activeCapture;
-    if (!active) return;
-    this.sendBeginCapture(active.input);
-    if (active.finalizeReason)
-      this.send({
-        kind: 'finalize-capture',
-        sessionId: active.input.sessionId,
-        captureId: active.input.captureId,
-        reason: active.finalizeReason,
-      });
+    if (active) {
+      if (active.phase === 'capturing' || active.phase === 'finalization-requested' || active.phase === 'frozen')
+        this.sendBeginCapture(active.input);
+      if (active.phase === 'finalization-requested' && active.finalizeReason)
+        this.send({
+          kind: 'finalize-capture',
+          sessionId: active.input.sessionId,
+          captureId: active.input.captureId,
+          reason: active.finalizeReason,
+        });
+      if (active.phase === 'acknowledgement-pending' && active.pendingAcknowledgement)
+        this.send({
+          kind: 'acknowledge-candidate',
+          sessionId: active.input.sessionId,
+          turnId: active.input.turnId,
+          ...active.pendingAcknowledgement,
+        });
+    }
     const playback = this.activePlayback;
     if (playback)
       this.sendPlaybackState(
@@ -234,6 +261,32 @@ export class VoiceWorkerClient {
             }
           : undefined,
       );
+  }
+
+  private observeCaptureProgress(event: VoiceWorkerEvent): void {
+    const active = this.activeCapture;
+    if (!active || !('sessionId' in event) || event.sessionId !== active.input.sessionId) return;
+    if ('captureId' in event && event.captureId !== active.input.captureId) return;
+    if ('turnId' in event && event.turnId !== active.input.turnId) return;
+    if (event.kind === 'drained' && event.revision !== undefined && event.revision > 0) {
+      active.phase = 'frozen';
+      active.revision = event.revision;
+      return;
+    }
+    if (
+      (event.kind === 'transcript-candidate' || (event.kind === 'failure' && event.revision !== undefined)) &&
+      active.revision === event.revision
+    ) {
+      active.phase = 'candidate-observed';
+      return;
+    }
+    if (
+      event.kind === 'candidate-acknowledged' &&
+      active.phase === 'acknowledgement-pending' &&
+      active.pendingAcknowledgement?.revision === event.revision &&
+      active.pendingAcknowledgement.outcome === event.outcome
+    )
+      this.activeCapture = undefined;
   }
 
   private sendPlaybackState(

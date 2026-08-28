@@ -19,6 +19,10 @@ const UNKNOWN_TOOL = 'unknown';
 const TOOL_ERROR_CODE = 'tool';
 const RECORD_PREFIX = 'pi.';
 const DEFAULT_MAX_RECENT_ERRORS = 8;
+/** Maximum entries retained in each cardinality-bearing metrics map, including overflow. */
+export const MAX_RETAINED_METRIC_NAMES = 128;
+/** Snapshot row used to account for names that arrive after a metrics map reaches its bound. */
+export const METRIC_OVERFLOW_NAME = '__overflow__';
 const P95_QUANTILE = 0.95;
 const P90_QUANTILE = 0.9;
 const ABORTED_OUTCOME = 'aborted';
@@ -141,6 +145,8 @@ export interface LogMetricsSnapshot {
 export interface LogMetricsAggregatorOptions {
   now?: () => number;
   maxRecentErrors?: number;
+  /** Per-map cardinality bound for tests, capped at MAX_RETAINED_METRIC_NAMES. */
+  maxMetricNames?: number;
 }
 
 /** The slice of the aggregator the telemetry extension needs. */
@@ -174,6 +180,24 @@ function readString(value: unknown): string | undefined {
 function safeMetricName(value: string): string {
   const normalized = value.replace(/[^a-zA-Z0-9@/._:-]/g, '_').slice(0, 128);
   return normalized || 'unknown';
+}
+
+/** Keeps an existing key, admits a new one when space remains, or selects the overflow row. */
+function boundedMetricName<T>(map: Map<string, T>, name: string, maxNames: number): string {
+  if (map.has(name)) return name;
+  return map.size < maxNames - 1 ? name : METRIC_OVERFLOW_NAME;
+}
+
+function incrementBounded(map: Map<string, number>, name: string, maxNames: number): void {
+  const boundedName = boundedMetricName(map, name, maxNames);
+  map.set(boundedName, (map.get(boundedName) ?? 0) + 1);
+}
+
+function boundedState<T>(map: Map<string, T>, name: string, maxNames: number, create: () => T): T {
+  const boundedName = boundedMetricName(map, name, maxNames);
+  const state = map.get(boundedName) ?? create();
+  map.set(boundedName, state);
+  return state;
 }
 
 function bucketIndex(value: number, cap: number): number {
@@ -239,6 +263,8 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
   private readonly tokens: LogMetricsTokenTotals = { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 };
   private readonly eventCounts = new Map<string, number>();
   private readonly packageCounts = new Map<string, number>();
+  /** Shared admission registry keeps the union of every tool-related map within one bound. */
+  private readonly toolNames = new Map<string, true>();
   private readonly tools = new Map<string, ToolLatencyState>();
   private readonly toolTokens = new Map<string, SampleState>();
   private readonly toolFailures = new Map<string, number>();
@@ -248,20 +274,24 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
   private readonly errorLog: LogMetricsError[] = [];
   private readonly now: () => number;
   private readonly maxRecentErrors: number;
+  private readonly maxMetricNames: number;
 
   constructor(options: LogMetricsAggregatorOptions = {}) {
     this.now = options.now ?? Date.now;
     this.maxRecentErrors = options.maxRecentErrors ?? DEFAULT_MAX_RECENT_ERRORS;
+    const requestedMaxNames = options.maxMetricNames ?? MAX_RETAINED_METRIC_NAMES;
+    this.maxMetricNames = Number.isFinite(requestedMaxNames)
+      ? Math.min(MAX_RETAINED_METRIC_NAMES, Math.max(1, Math.floor(requestedMaxNames)))
+      : MAX_RETAINED_METRIC_NAMES;
   }
 
   record(name: string, attributes: Record<string, unknown>): void {
     const metricName = safeMetricName(name);
     this.events += 1;
-    this.eventCounts.set(metricName, (this.eventCounts.get(metricName) ?? 0) + 1);
+    incrementBounded(this.eventCounts, metricName, this.maxMetricNames);
     const packageName = readString(attributes['telemetry.package']);
     if (packageName && !packageName.startsWith('/') && !packageName.includes('\\')) {
-      const safePackageName = safeMetricName(packageName);
-      this.packageCounts.set(safePackageName, (this.packageCounts.get(safePackageName) ?? 0) + 1);
+      incrementBounded(this.packageCounts, safeMetricName(packageName), this.maxMetricNames);
     }
     this.recordOperationDuration(metricName, attributes);
     this.recordSanitizedFailure(metricName, attributes);
@@ -349,8 +379,14 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
       .sort((left, right) => (right.p90Tokens ?? -1) - (left.p90Tokens ?? -1));
   }
 
+  private boundedToolName(name: string): string {
+    const boundedName = boundedMetricName(this.toolNames, name, this.maxMetricNames);
+    this.toolNames.set(boundedName, true);
+    return boundedName;
+  }
+
   private countCategory(category: string): void {
-    this.failureCategories.set(category, (this.failureCategories.get(category) ?? 0) + 1);
+    incrementBounded(this.failureCategories, category, this.maxMetricNames);
   }
 
   private recordOperationDuration(recordName: string, attributes: Record<string, unknown>): void {
@@ -362,8 +398,11 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
     );
     if (!duration) return;
     const operationName = safeMetricName(readString(attributes['operation.name']) ?? recordName);
-    const state = this.operations.get(operationName) ?? { calls: 0, samples: 0, buckets: new Map<number, number>() };
-    this.operations.set(operationName, state);
+    const state = boundedState(this.operations, operationName, this.maxMetricNames, () => ({
+      calls: 0,
+      samples: 0,
+      buckets: new Map<number, number>(),
+    }));
     state.calls += 1;
     const durationMs = readNumber(duration[1]);
     if (durationMs === undefined) return;
@@ -389,8 +428,12 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
 
   private recordToolResult(recordName: string, attributes: Record<string, unknown>): void {
     const toolName = readString(attributes['tool.name']) ?? UNKNOWN_TOOL;
-    const state = this.tools.get(toolName) ?? { calls: 0, samples: 0, buckets: new Map<number, number>() };
-    this.tools.set(toolName, state);
+    const boundedToolName = this.boundedToolName(toolName);
+    const state = boundedState(this.tools, boundedToolName, this.maxMetricNames, () => ({
+      calls: 0,
+      samples: 0,
+      buckets: new Map<number, number>(),
+    }));
     state.calls += 1;
     this.toolCalls += 1;
 
@@ -401,11 +444,11 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
 
     if (attributes['tool.result.error'] === true) {
       this.failedToolCalls += 1;
-      this.toolFailures.set(toolName, (this.toolFailures.get(toolName) ?? 0) + 1);
+      incrementBounded(this.toolFailures, boundedToolName, this.maxMetricNames);
       this.countCategory(CATEGORY_TOOL_FAILURE);
       // Redaction is on by default, so the tool's own output is unavailable and
       // the tool name is the only detail this entry can carry.
-      this.pushError(recordName, `${toolName}: tool call failed`, TOOL_ERROR_CODE);
+      this.pushError(recordName, `${boundedToolName}: tool call failed`, TOOL_ERROR_CODE);
     }
   }
 
@@ -420,8 +463,8 @@ export class LogMetricsAggregator implements LogMetricsRecorder {
     const totalTokens = readNumber(attributes['gen_ai.usage.total_tokens']);
     if (totalTokens === undefined || totalTokens <= 0) return;
     const toolName = readString(attributes['tool.name']) ?? UNKNOWN_TOOL;
-    const state = this.toolTokens.get(toolName) ?? emptySampleState();
-    this.toolTokens.set(toolName, state);
+    const boundedToolName = this.boundedToolName(toolName);
+    const state = boundedState(this.toolTokens, boundedToolName, this.maxMetricNames, emptySampleState);
     observe(state, totalTokens, MAX_RETAINED_TOKEN_BUCKETS);
   }
 

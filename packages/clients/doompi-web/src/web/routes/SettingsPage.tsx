@@ -5,8 +5,10 @@ import { useEffect, useState } from 'react';
 import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx';
 import { ContributedSettings } from '../features/settings/ContributedSettings.tsx';
+import { NotificationSettings } from '../features/settings/NotificationSettings.tsx';
 import { PluginSettings } from '../features/settings/PluginSettings.tsx';
 import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
+import { RemoteControlSettings } from '../features/settings/RemoteControlSettings.tsx';
 import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
 import { DEFAULT_SETTINGS_SECTION, settingsSection } from '../lib/settingsSections.ts';
 import { sessionsStore } from '../stores/sessionsStore.ts';
@@ -78,6 +80,8 @@ export function SettingsPage() {
           <section data-testid="settings-content" className="min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
             {current?.id === 'providers' ? <ProviderSettings /> : null}
             {current?.id === 'appearance' ? <AppearanceSettings /> : null}
+            {current?.id === 'notifications' ? <NotificationSettings /> : null}
+            {current?.id === 'remote' ? <RemoteControlSettings /> : null}
             {current?.id === 'plugins' ? <PluginSettings /> : null}
             {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
           </section>

@@ -219,7 +219,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
         outcome: 'empty',
       });
     } else {
-      ui.notify('Voice processing failed', 'error');
+      ui.notify(`Voice processing failed: ${event.code}`, 'error');
     }
     this.reset(ui);
   }

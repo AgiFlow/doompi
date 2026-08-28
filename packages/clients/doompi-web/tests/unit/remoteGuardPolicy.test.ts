@@ -49,21 +49,20 @@ describe('listenerOf', () => {
 });
 
 describe('isPublicPairingRoute', () => {
-  it('allows exactly the five unauthenticated routes and no more', () => {
-    // Pinned on purpose: an addition here widens the public surface of a
-    // cockpit that can run shell commands, and should not pass unnoticed.
-    expect(PUBLIC_PAIRING_ROUTES).toHaveLength(5);
+  it('allows exactly the seven direct pairing-surface routes and no more', () => {
+    // Pinned on purpose: an addition here widens the direct surface of a cockpit
+    // that can run shell commands, and should not pass unnoticed.
+    expect(PUBLIC_PAIRING_ROUTES).toHaveLength(7);
     expect(isPublicPairingRoute('GET', '/pair')).toBe(true);
     expect(isPublicPairingRoute('POST', '/api/remote/pair')).toBe(true);
     expect(isPublicPairingRoute('GET', '/api/remote/pair/status')).toBe(true);
     // Sign-in must be reachable without a session; that is what signing in is.
     expect(isPublicPairingRoute('POST', '/api/remote/passkeys/authenticate/begin')).toBe(true);
     expect(isPublicPairingRoute('POST', '/api/remote/passkeys/authenticate/finish')).toBe(true);
-  });
-
-  it('does not expose passkey enrolment, which is granting access rather than proving it', () => {
-    expect(isPublicPairingRoute('POST', '/api/remote/passkeys/register/begin')).toBe(false);
-    expect(isPublicPairingRoute('POST', '/api/remote/passkeys/register/finish')).toBe(false);
+    // Registration is direct for the self-contained page, but its handler still
+    // requires the paired cookie issued after host approval.
+    expect(isPublicPairingRoute('POST', '/api/remote/passkeys/register/begin')).toBe(true);
+    expect(isPublicPairingRoute('POST', '/api/remote/passkeys/register/finish')).toBe(true);
     expect(isPublicPairingRoute('GET', '/api/remote/passkeys')).toBe(false);
   });
 

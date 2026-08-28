@@ -12,7 +12,8 @@ import {
 } from '../../services/narrationBargeIn.ts';
 import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../../services/pcm.ts';
 import { PlaybackGate } from '../../services/playbackGate.ts';
-import { normalizePcm16, summarizePcm16 } from '../../services/transcriptionCoordinator.ts';
+import { analyzePcm16, normalizePcm16 } from '../../services/transcriptionCoordinator.ts';
+import type { VoiceTranscriptSignalEvidence } from '../../services/transcriptAdmission.ts';
 import {
   DEFAULT_TRANSCRIPTION_TIMEOUT_MS,
   TurnTranscriber,
@@ -38,6 +39,7 @@ import type {
   SelectedTranscriber,
   TimerHandle,
 } from '../../types/index.ts';
+import type { VoiceMediaCaptureActivity } from '../../types/clientMedia.ts';
 import {
   ExecutableResolver,
   FfmpegPcmAudioRecorder,
@@ -74,6 +76,19 @@ interface ActiveWorkerCapture {
   limitTimer?: TimerHandle;
   endpoint: AutonomousEndpoint;
   endpointReported: boolean;
+  endpointGeneration?: number;
+  clientActivityState?: VoiceMediaCaptureActivity['state'];
+  clientActivityElapsedMs: number;
+  clientActivityEpoch: number;
+  clientActivityGeneration: number;
+  clientActivityObserved: boolean;
+  clientActivitySpeechMs: number;
+  clientClassifierSpeechMs: number;
+  hostClassifierSpeechMs: number;
+  bargeInClientClassifierBaselineMs: number;
+  bargeInHostClassifierBaselineMs: number;
+  playbackOverlapMs: number;
+  clientSpeechStarted: boolean;
   finalized: boolean;
   startedAt: number;
   nextActivityAt: number;
@@ -107,6 +122,10 @@ function matchesCapture(active: ActiveWorkerCapture, command: { sessionId: strin
   );
 }
 
+function clientActivityOrder(state: VoiceMediaCaptureActivity['state']): number {
+  return state === 'listening' ? 0 : state === 'speech' ? 1 : 2;
+}
+
 export interface VoiceWorkerPipelineDependencies {
   clock?: IClock;
   recorder?: IPcmAudioRecorder;
@@ -130,6 +149,8 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
   private speechDetector: ISpeechPresenceDetector | undefined;
   private speechDetectorUnavailable = false;
   private operations: Promise<void> = Promise.resolve();
+  private closing = false;
+  private shutdownPromise: Promise<void> | undefined;
 
   public constructor(dependencies: VoiceWorkerPipelineDependencies = {}) {
     this.clock = dependencies.clock ?? new SystemClock();
@@ -186,19 +207,33 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     command: Exclude<VoiceWorkerCommand, { kind: 'initialize' | 'shutdown' }>,
     publish: VoiceWorkerPublish,
   ): Promise<void> {
+    if (this.closing) return Promise.reject(new Error('voice_worker_pipeline_closed'));
     const operation = this.operations.then(() => this.handleOrdered(command, publish));
     this.operations = operation.catch(() => undefined);
     return operation;
   }
 
-  public async shutdown(): Promise<void> {
-    await this.cancelActive();
+  public shutdown(): Promise<void> {
+    this.shutdownPromise ??= this.performShutdown();
+    return this.shutdownPromise;
+  }
+
+  private async performShutdown(): Promise<void> {
+    this.closing = true;
+    const cancellation = this.cancelActive();
+    await Promise.all([this.operations, cancellation]);
+    for (const spool of this.recovered.values()) {
+      if (spool.snapshotManifest().acknowledgedRevision !== undefined) spool.remove();
+      else spool.close();
+    }
+    this.recovered.clear();
   }
 
   private async handleOrdered(
     command: Exclude<VoiceWorkerCommand, { kind: 'initialize' | 'shutdown' }>,
     publish: VoiceWorkerPublish,
   ): Promise<void> {
+    if (this.closing) return;
     switch (command.kind) {
       case 'begin-capture':
         await this.begin(command, publish);
@@ -211,10 +246,10 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
         return;
       case 'acknowledge-candidate': {
         if (command.outcome === 'retry') return;
-        if (this.active && matchesCapture(this.active, command)) {
+        if (this.active && matchesCapture(this.active, command) && this.active.command.turnId === command.turnId) {
           const { command: activeCommand, spool } = this.active;
           spool.acknowledge(command.revision, command.outcome);
-          spool.remove();
+          this.recovered.set(spoolKey(activeCommand), spool);
           this.active = undefined;
           publish({
             kind: 'candidate-acknowledged',
@@ -230,8 +265,6 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
         if (!recovered) return;
         const manifest = recovered.snapshotManifest();
         recovered.acknowledge(command.revision, command.outcome);
-        recovered.remove();
-        this.recovered.delete(spoolKey(command));
         publish({
           kind: 'candidate-acknowledged',
           sessionId: manifest.sessionId,
@@ -261,10 +294,13 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     this.recorder.preflight(config);
     const selected = this.registry.select(config);
     const speechDetector = command.mode === 'autonomous' ? this.prepareSpeechDetector() : undefined;
+    this.pruneAcknowledgedSpools(command.sessionId, command.turnId);
     const recoveredKey = spoolKey(command);
     const recovered = this.recovered.get(recoveredKey);
-    if (recovered && recovered.snapshotManifest().captureId !== command.captureId)
+    const recoveredManifest = recovered?.snapshotManifest();
+    if (recoveredManifest?.captureId !== undefined && recoveredManifest.captureId !== command.captureId)
       throw new Error('recovered_capture_identity_mismatch');
+    if (recoveredManifest?.acknowledgedRevision !== undefined) throw new Error('recovered_turn_already_acknowledged');
     const spool =
       recovered ??
       NodeTurnSpool.create(this.spoolDirectory, {
@@ -272,9 +308,11 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
         captureId: command.captureId,
         turnId: command.turnId,
       });
+    const frozenSnapshot =
+      recoveredManifest && recoveredManifest.revision > 0 ? spool.getSnapshot(recoveredManifest.revision) : undefined;
     if (recovered) {
       this.recovered.delete(recoveredKey);
-      spool.recordGap();
+      if (!frozenSnapshot) spool.recordGap();
     }
     let activeReference: ActiveWorkerCapture | undefined;
     const bargeIn =
@@ -298,8 +336,36 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       onFrame: (frame) => {
         if (activeReference) this.observeFrame(activeReference, frame, publish);
       },
+      capture: {
+        mode: command.mode,
+        activityControl: command.mode === 'autonomous' ? 'client' : 'host',
+        ...(command.mode === 'autonomous' ? { endpointSilenceMs: command.utteranceIdleMs } : {}),
+      },
+      onClientActivity: (activity, captureGeneration) => {
+        if (activeReference) this.observeClientActivity(activeReference, activity, captureGeneration, publish);
+      },
       shouldPersistPcm: () =>
         !this.isPlaybackSuppressed(command.sessionId) || activeReference?.bargeIn?.confirmed === true,
+      onRecoveryExhausted: (_error, captureGeneration) => {
+        const current = activeReference;
+        if (
+          !current ||
+          this.active !== current ||
+          current.spool.snapshotManifest().captureGeneration !== captureGeneration
+        )
+          return;
+        current.finalized = true;
+        current.endpoint.cancel();
+        current.bargeIn?.stop();
+        publish({
+          kind: 'failure',
+          code: 'recorder_recovery_exhausted',
+          recoverable: false,
+          sessionId: command.sessionId,
+          captureId: command.captureId,
+          turnId: command.turnId,
+        });
+      },
       onStateChange: (state) => {
         if (state === 'starting' || state === 'recovering')
           publish({
@@ -324,16 +390,45 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
             bargeIn,
           }
         : {}),
-      endpoint: new AutonomousEndpoint(this.clock, () => {
-        if (activeReference) this.requestEndpoint(activeReference, publish);
+      endpoint: new AutonomousEndpoint(this.clock, (speechGeneration) => {
+        if (activeReference) this.requestEndpoint(activeReference, publish, speechGeneration);
       }),
       endpointReported: false,
+      clientActivityElapsedMs: -1,
+      clientActivityEpoch: -1,
+      clientActivityGeneration: 0,
+      clientActivityObserved: false,
+      clientActivitySpeechMs: 0,
+      clientClassifierSpeechMs: 0,
+      hostClassifierSpeechMs: 0,
+      bargeInClientClassifierBaselineMs: 0,
+      bargeInHostClassifierBaselineMs: 0,
+      playbackOverlapMs: 0,
+      clientSpeechStarted: false,
       finalized: false,
       startedAt: this.clock.now(),
       nextActivityAt: this.clock.now(),
     };
     activeReference = active;
     this.active = active;
+    if (frozenSnapshot) {
+      active.finalized = true;
+      publish({
+        kind: 'drained',
+        sessionId: command.sessionId,
+        captureId: command.captureId,
+        turnId: command.turnId,
+        revision: frozenSnapshot.revision,
+      });
+      publish({
+        kind: 'capture-state',
+        sessionId: command.sessionId,
+        captureId: command.captureId,
+        state: 'processing',
+      });
+      await this.processSnapshot(active, frozenSnapshot, publish);
+      return;
+    }
     const playbackReference = this.activePlaybackReference;
     if (bargeIn && playbackReference?.active && playbackReference.referenceText) {
       bargeIn.begin(
@@ -392,6 +487,11 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
   ): Promise<void> {
     const active = this.active;
     if (!active || !matchesCapture(active, command) || active.finalized) return;
+    if (
+      command.reason === 'soft-endpoint' &&
+      (!active.endpointReported || active.endpointGeneration !== active.endpoint.speechGeneration)
+    )
+      return;
     active.finalized = true;
     if (active.limitTimer) this.clock.clear(active.limitTimer);
     active.endpoint.cancel();
@@ -416,16 +516,28 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       captureId: command.captureId,
       state: 'processing',
     });
-    const outcome = await this.transcribe(active, snapshot.wavPath, snapshot.revision);
+    await this.processSnapshot(active, snapshot, publish);
+  }
+
+  private async processSnapshot(
+    active: ActiveWorkerCapture,
+    snapshot: { revision: number; wavPath: string },
+    publish: VoiceWorkerPublish,
+  ): Promise<void> {
+    if (this.active !== active || active.transcriptionAbort.signal.aborted) return;
+    const transcription = await this.transcribe(active, snapshot.wavPath, snapshot.revision);
+    const { outcome } = transcription;
+    if (this.active !== active || active.transcriptionAbort.signal.aborted) return;
     if (outcome.kind === 'success') {
       publish({
         kind: 'transcript-candidate',
-        sessionId: command.sessionId,
-        captureId: command.captureId,
+        sessionId: active.command.sessionId,
+        captureId: active.command.captureId,
         turnId: active.command.turnId,
         revision: snapshot.revision,
         transcript: outcome.transcript,
         final: true,
+        evidence: transcription.evidence,
       });
       return;
     }
@@ -438,8 +550,8 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
             ? 'transcription_timed_out'
             : outcome.code,
       recoverable: outcome.kind === 'empty',
-      sessionId: command.sessionId,
-      captureId: command.captureId,
+      sessionId: active.command.sessionId,
+      captureId: active.command.captureId,
       turnId: active.command.turnId,
       revision: snapshot.revision,
     });
@@ -448,17 +560,31 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
   private observeFrame(active: ActiveWorkerCapture, frame: Buffer, publish: VoiceWorkerPublish): void {
     if (this.isPlaybackSuppressed(active.command.sessionId)) {
       if (active.bargeIn?.confirmed) {
-        this.observeAutonomousFrame(active, frame, publish, {
-          playbackOverlapMs: PCM_FRAME_MS,
-          narrationHandoff: true,
-        });
+        if (active.clientActivityState === undefined)
+          this.observeAutonomousFrame(active, frame, publish, {
+            playbackOverlapMs: PCM_FRAME_MS,
+            narrationHandoff: true,
+          });
       } else {
-        active.bargeIn?.observe(frame, this.clock.now(), active.vad?.noiseProfile);
+        if (active.clientActivityState === undefined) {
+          const speechDetected = this.detectSpeech(active, frame);
+          if (speechDetected === true) active.hostClassifierSpeechMs += PCM_FRAME_MS;
+        }
+        active.bargeIn?.observe(
+          frame,
+          this.clock.now(),
+          active.vad?.noiseProfile,
+          Math.max(
+            0,
+            active.clientClassifierSpeechMs - active.bargeInClientClassifierBaselineMs,
+            active.hostClassifierSpeechMs - active.bargeInHostClassifierBaselineMs,
+          ),
+        );
       }
       return;
     }
     active.bargeIn?.reopenCleanLane();
-    this.observeAutonomousFrame(active, frame, publish);
+    if (active.clientActivityState === undefined) this.observeAutonomousFrame(active, frame, publish);
     const now = this.clock.now();
     if (now < active.nextActivityAt) return;
     active.nextActivityAt = now + this.activityIntervalMs;
@@ -468,11 +594,93 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       kind: 'activity',
       sessionId: active.command.sessionId,
       captureId: active.command.captureId,
-      state: active.vad?.hasPendingSpeech ? 'speech' : 'listening',
+      state:
+        active.clientActivityState === 'speech'
+          ? 'speech'
+          : active.clientActivityState === undefined && active.vad?.hasPendingSpeech
+            ? 'speech'
+            : 'listening',
       elapsedMs: Math.max(0, now - active.startedAt),
       levelDbfs,
       speechProbability: Math.max(0, Math.min(1, (levelDbfs + 60) / 35)),
     });
+  }
+
+  private observeClientActivity(
+    active: ActiveWorkerCapture,
+    activity: VoiceMediaCaptureActivity,
+    captureGeneration: number,
+    publish: VoiceWorkerPublish,
+  ): void {
+    if (active.command.mode !== 'autonomous' || active.finalized) return;
+    if (captureGeneration !== active.clientActivityGeneration) {
+      this.invalidateEndpoint(active);
+      active.clientActivityGeneration = captureGeneration;
+      active.clientActivityElapsedMs = -1;
+      active.clientActivityEpoch = -1;
+      active.clientActivityState = undefined;
+      active.clientActivityObserved = false;
+      active.clientActivitySpeechMs = 0;
+      active.clientSpeechStarted = false;
+    }
+    const activityEpoch = activity.epoch ?? 0;
+    if (activityEpoch < active.clientActivityEpoch) return;
+    if (activityEpoch > active.clientActivityEpoch) {
+      this.invalidateEndpoint(active);
+      active.clientActivityEpoch = activityEpoch;
+      active.clientActivityElapsedMs = -1;
+      active.clientActivityState = undefined;
+      active.clientActivitySpeechMs = 0;
+      if (!active.bargeIn?.confirmed) active.clientSpeechStarted = false;
+    }
+    if (
+      activity.elapsedMs < active.clientActivityElapsedMs ||
+      (active.clientActivityState !== undefined &&
+        clientActivityOrder(activity.state) < clientActivityOrder(active.clientActivityState))
+    )
+      return;
+    const previousElapsedMs = active.clientActivityElapsedMs;
+    const previousSpeechMs = active.clientActivitySpeechMs;
+    active.clientActivityElapsedMs = activity.elapsedMs;
+    active.clientActivityState = activity.state;
+    active.clientActivityObserved = true;
+    const epochSpeechMs =
+      activity.classifiedSpeechMs ??
+      (activity.state === 'speech'
+        ? previousSpeechMs +
+          (previousElapsedMs < 0 ? 120 : Math.max(PCM_FRAME_MS, activity.elapsedMs - previousElapsedMs))
+        : previousSpeechMs);
+    if (epochSpeechMs >= previousSpeechMs) {
+      active.clientClassifierSpeechMs += epochSpeechMs - previousSpeechMs;
+      active.clientActivitySpeechMs = epochSpeechMs;
+    }
+    publish({
+      kind: 'activity',
+      sessionId: active.command.sessionId,
+      captureId: active.command.captureId,
+      state: activity.state === 'speech' ? 'speech' : 'listening',
+      elapsedMs: activity.elapsedMs,
+      levelDbfs: activity.levelDbfs,
+      speechProbability: Math.max(0, Math.min(1, (activity.levelDbfs + 60) / 35)),
+    });
+    if (this.isPlaybackSuppressed(active.command.sessionId) && !active.bargeIn?.confirmed) return;
+    if (activity.state === 'speech') {
+      if (active.clientSpeechStarted) return;
+      active.clientSpeechStarted = true;
+      const manifest = active.spool.snapshotManifest();
+      if (manifest.utteranceStartByte === undefined)
+        active.spool.markUtteranceStart(Math.max(0, manifest.committedBytes - AUTONOMOUS_PRE_ROLL_BYTES));
+      this.startSpeechGeneration(active);
+      publish({
+        kind: 'capture-state',
+        sessionId: active.command.sessionId,
+        captureId: active.command.captureId,
+        state: 'speech',
+      });
+      return;
+    }
+    if (activity.state !== 'endpoint' || !active.clientSpeechStarted || active.endpointReported) return;
+    this.requestEndpoint(active, publish);
   }
 
   private observeAutonomousFrame(
@@ -484,6 +692,7 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
   ): void {
     if (!active.vad) return;
     const speechDetected = this.detectSpeech(active, frame);
+    if (speechDetected === true) active.hostClassifierSpeechMs += PCM_FRAME_MS;
     const result = active.vad.push(frame, {
       ...metadata,
       ...(speechDetected === undefined ? {} : { speechDetected }),
@@ -493,7 +702,7 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       const manifest = active.spool.snapshotManifest();
       if (manifest.utteranceStartByte === undefined)
         active.spool.markUtteranceStart(Math.max(0, persistedFrameEndByte - AUTONOMOUS_PRE_ROLL_BYTES));
-      active.endpoint.speechStarted();
+      this.startSpeechGeneration(active);
       publish({
         kind: 'capture-state',
         sessionId: active.command.sessionId,
@@ -515,9 +724,33 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     });
   }
 
-  private requestEndpoint(active: ActiveWorkerCapture, publish: VoiceWorkerPublish): void {
-    if (this.active !== active || active.command.mode !== 'autonomous' || active.endpointReported) return;
+  private startSpeechGeneration(active: ActiveWorkerCapture): number {
+    const speechGeneration = active.endpoint.speechStarted();
+    active.endpointReported = false;
+    delete active.endpointGeneration;
+    return speechGeneration;
+  }
+
+  private invalidateEndpoint(active: ActiveWorkerCapture): void {
+    active.endpoint.invalidate();
+    active.endpointReported = false;
+    delete active.endpointGeneration;
+  }
+
+  private requestEndpoint(
+    active: ActiveWorkerCapture,
+    publish: VoiceWorkerPublish,
+    speechGeneration = active.endpoint.speechGeneration,
+  ): void {
+    if (
+      this.active !== active ||
+      active.command.mode !== 'autonomous' ||
+      active.endpointReported ||
+      speechGeneration !== active.endpoint.speechGeneration
+    )
+      return;
     active.endpointReported = true;
+    active.endpointGeneration = speechGeneration;
     publish({
       kind: 'endpoint-reached',
       sessionId: active.command.sessionId,
@@ -526,14 +759,14 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     });
   }
 
-  private transcribe(
+  private async transcribe(
     active: ActiveWorkerCapture,
     audioPath: string,
     revision: number,
-  ): Promise<TurnTranscriptionOutcome> {
+  ): Promise<{ outcome: TurnTranscriptionOutcome; evidence: VoiceTranscriptSignalEvidence }> {
     const manifest = active.spool.snapshotManifest();
     const pcm = active.spool.readCommittedPcm().subarray(manifest.utteranceStartByte ?? 0);
-    const summary = summarizePcm16(pcm);
+    const summary = analyzePcm16(pcm);
     const transcribePath = (targetPath: string, signal: AbortSignal): Promise<string> =>
       active.selected.adapter.transcribe({
         audioPath: targetPath,
@@ -542,7 +775,7 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
         language: active.config.language,
         signal,
       });
-    return this.turnTranscriber.transcribe({
+    const outcome = await this.turnTranscriber.transcribe({
       signal: active.transcriptionAbort.signal,
       timeoutMs: active.command.transcriptionTimeoutMs ?? DEFAULT_TRANSCRIPTION_TIMEOUT_MS,
       transcribe: (signal) => transcribePath(audioPath, signal),
@@ -556,6 +789,35 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
             },
           }),
     });
+    return {
+      outcome,
+      evidence: {
+        durationMs: summary.durationMs,
+        voicedMs: summary.voicedMs,
+        classifierSpeechMs: Math.max(active.clientClassifierSpeechMs, active.hostClassifierSpeechMs),
+        rmsDbfs: summary.rmsDbfs,
+        peakDbfs: summary.peakDbfs,
+        signalVariationDb: summary.signalVariationDb,
+        nonZeroRatio: summary.nonZeroRatio,
+        gapCount: manifest.gapCount,
+        playbackOverlapMs: active.playbackOverlapMs,
+        classifier: active.clientActivityObserved ? 'client' : active.speechDetector ? 'host' : 'energy',
+      },
+    };
+  }
+
+  private pruneAcknowledgedSpools(sessionId: string, currentTurnId: string): void {
+    for (const [key, spool] of this.recovered) {
+      const manifest = spool.snapshotManifest();
+      if (
+        manifest.sessionId === sessionId &&
+        manifest.turnId !== currentTurnId &&
+        manifest.acknowledgedRevision !== undefined
+      ) {
+        spool.remove();
+        this.recovered.delete(key);
+      }
+    }
   }
 
   private recoverSpools(rootDirectory: string, publish: VoiceWorkerPublish): void {
@@ -570,11 +832,18 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
         continue;
       }
       const manifest = spool.snapshotManifest();
-      if (manifest.acknowledgedRevision !== undefined) {
-        spool.remove();
+      this.recovered.set(spoolKey(manifest), spool);
+      if (manifest.acknowledgedRevision !== undefined && manifest.acknowledgedOutcome !== undefined) {
+        publish({
+          kind: 'candidate-acknowledged',
+          sessionId: manifest.sessionId,
+          captureId: manifest.captureId,
+          turnId: manifest.turnId,
+          revision: manifest.acknowledgedRevision,
+          outcome: manifest.acknowledgedOutcome,
+        });
         continue;
       }
-      this.recovered.set(spoolKey(manifest), spool);
       publish({
         kind: 'recovered',
         sessionId: manifest.sessionId,
@@ -695,8 +964,24 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     const pcm = active.bargeIn?.promote(command.playbackGeneration);
     if (!pcm || pcm.length === 0) return;
     const committedBeforePromotion = active.spool.snapshotManifest().committedBytes;
+    active.playbackOverlapMs += (pcm.length / PCM_FRAME_BYTES) * PCM_FRAME_MS;
     active.spool.append(pcm);
     this.resetVoiceActivity(active);
+    if (active.clientActivityObserved) {
+      const manifest = active.spool.snapshotManifest();
+      if (manifest.utteranceStartByte === undefined) active.spool.markUtteranceStart(committedBeforePromotion);
+      active.clientSpeechStarted = true;
+      this.startSpeechGeneration(active);
+      publish({
+        kind: 'capture-state',
+        sessionId: active.command.sessionId,
+        captureId: active.command.captureId,
+        state: 'speech',
+      });
+      if (active.clientActivityState === 'endpoint') this.requestEndpoint(active, publish);
+      return;
+    }
+    active.hostClassifierSpeechMs = 0;
     for (let offset = 0; offset + PCM_FRAME_BYTES <= pcm.length; offset += PCM_FRAME_BYTES) {
       this.observeAutonomousFrame(
         active,
@@ -750,8 +1035,10 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     const active = this.active;
     if (!active?.vad || active.command.sessionId !== command.sessionId) return;
     if (command.active) {
+      active.bargeInClientClassifierBaselineMs = active.clientClassifierSpeechMs;
+      active.bargeInHostClassifierBaselineMs = active.hostClassifierSpeechMs;
       this.resetVoiceActivity(active);
-      active.endpoint.invalidate();
+      this.invalidateEndpoint(active);
       if (command.referenceText)
         active.bargeIn?.begin(
           {
@@ -768,7 +1055,7 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     active.bargeIn?.finish(command.playbackGeneration);
     if (active.bargeIn?.confirmed) return;
     this.resetVoiceActivity(active);
-    active.endpoint.invalidate();
+    this.invalidateEndpoint(active);
   }
 
   private isPlaybackSuppressed(sessionId: string): boolean {
@@ -785,5 +1072,6 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     active.transcriptionAbort.abort();
     await active.session.abort();
     if (!active.finalized) active.spool.remove();
+    else active.spool.close();
   }
 }

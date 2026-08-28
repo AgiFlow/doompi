@@ -57,6 +57,7 @@
   "dependencies": {
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "@earendil-works/pi-protocol": "0.84.3",
     "@earendil-works/pi-server": "0.84.3",

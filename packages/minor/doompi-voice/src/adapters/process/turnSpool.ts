@@ -44,10 +44,16 @@ function parseManifest(value: unknown): TurnSpoolManifest {
   const revision = nonNegativeInteger(record.revision, 'revision');
   const gapCount = nonNegativeInteger(record.gapCount, 'gapCount');
   const acknowledgedRevision = record.acknowledgedRevision;
-  if (acknowledgedRevision !== undefined) nonNegativeInteger(acknowledgedRevision, 'acknowledgedRevision');
+  if (
+    acknowledgedRevision !== undefined &&
+    nonNegativeInteger(acknowledgedRevision, 'acknowledgedRevision') !== revision
+  )
+    throw new Error('Voice spool acknowledged revision must match the frozen revision.');
   const acknowledgedOutcome = record.acknowledgedOutcome;
   if (acknowledgedOutcome !== undefined && acknowledgedOutcome !== 'committed' && acknowledgedOutcome !== 'discarded')
     throw new Error('Voice spool acknowledged outcome is invalid.');
+  if ((acknowledgedRevision === undefined) !== (acknowledgedOutcome === undefined))
+    throw new Error('Voice spool acknowledgement state is incomplete.');
   return {
     version: MANIFEST_VERSION,
     sessionId: record.sessionId as string,
@@ -178,12 +184,28 @@ export class NodeTurnSpool implements ITurnSpool {
     return { revision: this.manifest.revision, wavPath, pcmBytes: utterancePcm.length };
   }
 
+  public getSnapshot(revision: number): TurnSnapshot {
+    this.assertOpen();
+    if (!Number.isSafeInteger(revision) || revision <= 0 || revision !== this.manifest.revision)
+      throw new Error('Voice spool snapshot revision is invalid.');
+    const wavPath = path.join(this.directory, SNAPSHOT_DIRECTORY, `revision-${revision}.wav`);
+    if (!fs.statSync(wavPath).isFile()) throw new Error('Voice spool snapshot is unavailable.');
+    return {
+      revision,
+      wavPath,
+      pcmBytes: this.manifest.committedBytes - (this.manifest.utteranceStartByte ?? 0),
+    };
+  }
+
   public acknowledge(revision: number, outcome: 'committed' | 'discarded'): void {
     this.assertOpen();
-    if (!Number.isSafeInteger(revision) || revision <= 0 || revision > this.manifest.revision)
+    if (!Number.isSafeInteger(revision) || revision <= 0 || revision !== this.manifest.revision)
       throw new Error('Voice spool acknowledgement revision is invalid.');
-    if (this.manifest.acknowledgedRevision !== undefined && revision < this.manifest.acknowledgedRevision)
-      throw new Error('Voice spool acknowledgement must be monotonic.');
+    if (this.manifest.acknowledgedRevision !== undefined) {
+      if (this.manifest.acknowledgedRevision !== revision || this.manifest.acknowledgedOutcome !== outcome)
+        throw new Error('Voice spool acknowledgement conflicts with the durable outcome.');
+      return;
+    }
     this.manifest.acknowledgedRevision = revision;
     this.manifest.acknowledgedOutcome = outcome;
     this.publishManifest();

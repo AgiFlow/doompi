@@ -1,6 +1,7 @@
 import { PiClient } from '@earendil-works/pi-client';
 import { RemoteSession } from '@earendil-works/pi-coding-agent/client';
 import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
+import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
 import { toTimelineEntries } from '../lib/protocolTimeline.ts';
 import { applyProtocolTranscript, releaseProtocolTranscript } from '../stores/sessionStore.ts';
 
@@ -67,8 +68,10 @@ export function startProtocolRuntime(location: Location = window.location): Prot
 
   const connect = async (): Promise<void> => {
     if (stopped) return;
+    const started = performance.now();
     try {
       await client.connect();
+      recordBrowserPerformance({ name: 'web.browser.protocol_ready', duration_ms: performance.now() - started });
       if (focused !== null) await open(focused);
     } catch {
       if (focused !== null) releaseProtocolTranscript(focused);
@@ -84,8 +87,10 @@ export function startProtocolRuntime(location: Location = window.location): Prot
 
   const reconnect = async (): Promise<void> => {
     if (stopped) return;
+    const started = performance.now();
     try {
       await client.reconnect();
+      recordBrowserPerformance({ name: 'web.browser.protocol_ready', duration_ms: performance.now() - started });
       if (focused !== null) await open(focused);
     } catch {
       if (focused !== null) releaseProtocolTranscript(focused);

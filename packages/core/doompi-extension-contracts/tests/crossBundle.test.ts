@@ -46,6 +46,17 @@ interface VoiceToolsService {
   dispose(): void;
 }
 
+interface DoomNotificationService {
+  readonly generation: string;
+  request(request: { body: string; level?: 'info' | 'warning' | 'error' }): void | Promise<void>;
+}
+
+interface NotificationRuntimeModule {
+  readonly DOOM_NOTIFICATION_SERVICE: 'doom/notification';
+  readDoomNotificationService(context: Context): DoomNotificationService | undefined;
+  requireDoomNotificationService(context: Context): DoomNotificationService;
+}
+
 interface VoiceRuntimeModule {
   readonly DOOM_VOICE_TOOLS_SERVICE: 'doom/voice-tools';
   createDoomVoiceToolsService(generation: string): VoiceToolsService;
@@ -108,6 +119,21 @@ async function loadBuiltRuntimes(): Promise<{ esm: RuntimeModule; cjs: RuntimeMo
   await access(cjsPath);
   const esm = (await import(pathToFileURL(esmPath).href)) as unknown as RuntimeModule;
   const cjs = requireFromTest(cjsPath) as RuntimeModule;
+  return { esm, cjs };
+}
+
+async function loadBuiltNotificationRuntimes(): Promise<{
+  esm: NotificationRuntimeModule;
+  cjs: NotificationRuntimeModule;
+}> {
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;
+  const exportsMap = manifest.exports ?? {};
+  const esmPath = conditionPath(exportsMap, './notification', 'import');
+  const cjsPath = conditionPath(exportsMap, './notification', 'require');
+  await access(esmPath);
+  await access(cjsPath);
+  const esm = (await import(pathToFileURL(esmPath).href)) as unknown as NotificationRuntimeModule;
+  const cjs = requireFromTest(cjsPath) as NotificationRuntimeModule;
   return { esm, cjs };
 }
 
@@ -220,6 +246,23 @@ describe('separately built contract bundles', () => {
     expect(connection.root).toBe(controller.root);
     await connection.dispose();
     await controller.shutdown();
+  });
+
+  it('shares a notification service across ESM and CJS copies through Cordis', async () => {
+    const { esm, cjs } = await loadBuiltNotificationRuntimes();
+    const root = new Context();
+    const request = vi.fn();
+    const service: DoomNotificationService = { generation: 'esm-notification-provider', request };
+    const fiber = root.plugin((context) => context.provide(esm.DOOM_NOTIFICATION_SERVICE, service));
+    await fiber.await();
+
+    expect(cjs.readDoomNotificationService(root)).toBe(service);
+    await cjs.requireDoomNotificationService(root).request({ body: 'Cross bundle ready.', level: 'info' });
+    expect(request).toHaveBeenCalledWith({ body: 'Cross bundle ready.', level: 'info' });
+
+    await fiber.dispose();
+    expect(cjs.readDoomNotificationService(root)).toBeUndefined();
+    await root.fiber.dispose();
   });
 });
 

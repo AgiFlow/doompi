@@ -14,6 +14,8 @@ import {
   PAIRING_STATUS_ROUTE,
   PASSKEY_AUTH_BEGIN_ROUTE,
   PASSKEY_AUTH_FINISH_ROUTE,
+  PASSKEY_REGISTER_BEGIN_ROUTE,
+  PASSKEY_REGISTER_FINISH_ROUTE,
   WEB_DEV_SERVER_PORT,
 } from '../types/remoteAccess.ts';
 
@@ -57,7 +59,7 @@ export function listenerOf(socketLocalPort: number | undefined, loopbackPort: nu
 }
 
 /**
- * The exact routes the tunnel listener answers without a session.
+ * The exact pairing-surface routes the tunnel listener answers directly.
  *
  * Matched by string equality, because an allowlist is only as good as its
  * narrowest form. No prefix, no wildcard, no path parameter: the pairing status
@@ -65,13 +67,9 @@ export function listenerOf(socketLocalPort: number | undefined, loopbackPort: nu
  * one. A contract test pins the length, so an addition cannot arrive without a
  * reviewer noticing.
  *
- * The two passkey sign-in routes are here of necessity: proving a registered
- * passkey is how a returning device obtains a session, so requiring a session
- * to reach them would mean a device could never use its passkey and would need
- * a fresh QR every time. Neither is a hole. The first hands out a challenge,
- * which is public by design, and the second only succeeds for a caller holding
- * a registered credential's private key, which is the definition of
- * authenticating rather than a way around it.
+ * Passkey sign-in is public because it creates a session by proving a credential.
+ * Registration is also direct so the self-contained pairing page can run it, but
+ * its handlers require the paired device cookie issued only after host approval.
  */
 export const PUBLIC_PAIRING_ROUTES: readonly { method: string; path: string }[] = [
   { method: METHOD_GET, path: PAIRING_PAGE_ROUTE },
@@ -79,11 +77,14 @@ export const PUBLIC_PAIRING_ROUTES: readonly { method: string; path: string }[] 
   { method: METHOD_GET, path: PAIRING_STATUS_ROUTE },
   { method: METHOD_POST, path: PASSKEY_AUTH_BEGIN_ROUTE },
   { method: METHOD_POST, path: PASSKEY_AUTH_FINISH_ROUTE },
+  { method: METHOD_POST, path: PASSKEY_REGISTER_BEGIN_ROUTE },
+  { method: METHOD_POST, path: PASSKEY_REGISTER_FINISH_ROUTE },
 ];
 
 /**
- * Whether the tunnel listener may answer this request unauthenticated.
+ * Whether the tunnel listener may answer this request directly.
  *
+ * Session requirements for direct routes are enforced by their exact handlers.
  * `path` must be the value the router matched on, which for Hono is
  * `c.req.path`. That value is percent-decoded, so `/%70air` reaches the `/pair`
  * handler; comparing against a separately parsed pathname would let the guard

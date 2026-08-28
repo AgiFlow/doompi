@@ -53,7 +53,12 @@ async function fakeSessionApi(): Promise<string> {
         });
         return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
       }
-      return Response.json({ path: url.pathname, query: url.search, method: request.method });
+      return Response.json({
+        path: url.pathname,
+        query: url.search,
+        method: request.method,
+        traceparent: request.headers.get('traceparent'),
+      });
     }),
   );
   await new Promise<void>((resolve) => server.listen(socketPath, resolve));
@@ -100,6 +105,7 @@ describe('a package API reached through the hub', () => {
       path: '/api/plugin/demo/runners/r1/log',
       query: '?grep=needle',
       method: 'GET',
+      traceparent: null,
     });
   });
 
@@ -115,6 +121,26 @@ describe('a package API reached through the hub', () => {
     // proof that nothing waited for the upstream to finish.
     expect(first.value).toContain('"lines":["one"]');
     await reader.cancel();
+  });
+
+  it('preserves a validated incoming trace when no child span context is available', async () => {
+    const socketPath = await fakeSessionApi();
+    const { server } = await hubWith(socketPath);
+    const traceparent = '00-11111111111111111111111111111111-2222222222222222-01';
+
+    const response = await fetch(`${server.url}/api/plugin/demo/trace?session=session-a`, {
+      headers: { traceparent },
+    });
+
+    expect(await response.json()).toMatchObject({ traceparent });
+  });
+
+  it('closes idempotently for concurrent and repeated callers', async () => {
+    const socketPath = await fakeSessionApi();
+    const { server } = await hubWith(socketPath);
+
+    await Promise.all([server.close(), server.close()]);
+    await expect(server.close()).resolves.toBeUndefined();
   });
 
   it('says so when the session serves no package API, instead of leaving the page waiting', async () => {

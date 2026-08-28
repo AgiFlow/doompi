@@ -1,11 +1,15 @@
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import type { SessionFrame } from '../types/session.ts';
+import { validatedTraceContext } from './traceContext.ts';
 
 export const HANDSHAKE_TYPE = 'attach';
 export const HANDSHAKE_OK_TYPE = 'attached';
 export const HANDSHAKE_ERROR_TYPE = 'attach_error';
 export const REPLAY_TYPE = 'replay';
 
-export type HandshakeOutcome = { accepted: true } | { accepted: false; reason: string };
+export type HandshakeOutcome =
+  | { accepted: true; traceContext?: DoomTraceContext }
+  | { accepted: false; reason: string };
 
 /**
  * Decides whether a connecting client may take over the session.
@@ -26,7 +30,8 @@ export function evaluateHandshake(
   if (typeof presented !== 'string' || !compare(presented, token)) {
     return { accepted: false, reason: 'The attach token was rejected.' };
   }
-  return { accepted: true };
+  const traceContext = validatedTraceContext(frame.traceparent);
+  return { accepted: true, ...(traceContext === undefined ? {} : { traceContext }) };
 }
 
 export function handshakeAccepted(replayed: number, dropped: number): SessionFrame {

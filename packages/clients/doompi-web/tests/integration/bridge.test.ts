@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { DOOM_NOTIFICATION_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/notification';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
@@ -229,6 +230,34 @@ describe('the hub bridge', () => {
     await waitFor(() => sessionFrames(frames).some((frame) => frame.type === 'agent_start'), 'the agent_start event');
   });
 
+  it('fans valid live notification entries out once to every page', async () => {
+    const { server, session } = await bridge();
+    const subscribed = await openSocket(server.url);
+    const unsubscribed = await openSocket(server.url);
+    await session.waitForAttach();
+    subscribe(subscribed.socket, SESSION);
+    await waitFor(() => subscribed.frames.some((frame) => frame.type === 'session_backlog'), 'the subscription');
+
+    const notification = {
+      type: 'entry_appended',
+      entry: {
+        id: 'notify-1',
+        type: 'custom',
+        customType: DOOM_NOTIFICATION_ENTRY_TYPE,
+        data: { version: 1, title: 'Done', subtitle: '', body: 'Checks passed.', level: 'info' },
+      },
+    };
+    session.emit(notification);
+    await waitFor(() => sessionFrames(subscribed.frames).length === 1, 'the subscribed notification');
+    await waitFor(() => sessionFrames(unsubscribed.frames).length === 1, 'the unsubscribed notification');
+    expect(sessionFrames(subscribed.frames)).toEqual([notification]);
+    expect(sessionFrames(unsubscribed.frames)).toEqual([notification]);
+
+    session.emit({ ...notification, entry: { ...notification.entry, id: '' } });
+    await waitFor(() => sessionFrames(subscribed.frames).length === 2, 'the invalid frame for the subscriber');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(sessionFrames(unsubscribed.frames)).toHaveLength(1);
+  });
   it('keeps frames from a page that did not subscribe', async () => {
     const { server, session } = await bridge();
     const { frames } = await openSocket(server.url);

@@ -19,6 +19,9 @@ class MediaConnection implements IVoiceMediaHostConnection {
   public readonly stoppedPlaybacks: string[] = [];
   public capturePolls: VoiceMediaAudioPoll[] = [];
   public playbackResult: VoiceMediaPlaybackResult | undefined;
+  public playbackDelivery: 'client' | 'streamed' = 'client';
+  public readonly playbackAudio: Buffer[] = [];
+  public playbackAudioError: string | undefined;
 
   public async startCapture(captureId: string): Promise<void> {
     this.startedCaptures.push(captureId);
@@ -35,8 +38,15 @@ class MediaConnection implements IVoiceMediaHostConnection {
     text: string;
     voice?: string;
     rate?: number;
-  }): Promise<void> {
+  }): Promise<'client' | 'streamed'> {
     this.playbacks.push(request);
+    return this.playbackDelivery;
+  }
+  public async sendPlaybackAudio(_playbackId: string, pcm: Buffer): Promise<void> {
+    this.playbackAudio.push(pcm);
+  }
+  public async sealPlaybackAudio(_playbackId: string, error?: string): Promise<void> {
+    this.playbackAudioError = error;
   }
   public async readPlayback(): Promise<VoiceMediaPlaybackResult | undefined> {
     return this.playbackResult;
@@ -85,5 +95,25 @@ describe('agent-side client media adapters', () => {
     expect(connection.playbacks[0]).toMatchObject({ text: 'Browser narration.', voice: 'Samantha', rate: 190 });
     expect(result.outcome).toBe('completed');
     expect(result.process.code).toBe(0);
+  });
+
+  it('synthesizes and uploads PCM before awaiting remote physical playback settlement', async () => {
+    const connection = new MediaConnection();
+    connection.playbackDelivery = 'streamed';
+    connection.playbackResult = { playbackId: 'placeholder', outcome: 'completed' };
+    const pcm = Buffer.alloc(70_000, 0x4a);
+    const synthesizer = { synthesize: vi.fn(async () => pcm) };
+    const playback = new ClientTtsAdapter(connection, clock, synthesizer).speak({
+      id: 5,
+      kind: 'final',
+      text: 'Remote narration.',
+      config: { engine: 'macos-say' },
+    });
+
+    await expect(playback.completion).resolves.toMatchObject({ outcome: 'completed' });
+    expect(synthesizer.synthesize).toHaveBeenCalledOnce();
+    expect(connection.playbackAudio.map((chunk) => chunk.byteLength)).toEqual([65_536, 4_464]);
+    expect(Buffer.concat(connection.playbackAudio)).toEqual(pcm);
+    expect(connection.playbackAudioError).toBeUndefined();
   });
 });

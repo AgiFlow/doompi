@@ -22,6 +22,12 @@ function writeModule(directory: string, name: string, source: string): string {
   return target;
 }
 
+function javascriptStringLiteral(value: string): string {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029');
+}
 async function loadFactory(target: string): Promise<(api: unknown) => Promise<void>> {
   const module = (await import(`${pathToFileURL(target).href}?test=${Date.now()}`)) as { default: unknown };
   return module.default as (api: unknown) => Promise<void>;
@@ -108,8 +114,8 @@ describe('compiled extension sets', () => {
       'first',
       [
         "import fs from 'node:fs';",
-        `fs.appendFileSync(${JSON.stringify(events)}, 'import:first\\n');`,
-        `export default () => fs.appendFileSync(${JSON.stringify(events)}, 'factory:first\\n');`,
+        `fs.appendFileSync(${javascriptStringLiteral(events)}, 'import:first\\n');`,
+        `export default () => fs.appendFileSync(${javascriptStringLiteral(events)}, 'factory:first\\n');`,
       ].join('\n'),
     );
     const second = writeModule(
@@ -117,8 +123,8 @@ describe('compiled extension sets', () => {
       'second',
       [
         "import fs from 'node:fs';",
-        `fs.appendFileSync(${JSON.stringify(events)}, 'import:second\\n');`,
-        `export default () => fs.appendFileSync(${JSON.stringify(events)}, 'factory:second\\n');`,
+        `fs.appendFileSync(${javascriptStringLiteral(events)}, 'import:second\\n');`,
+        `export default () => fs.appendFileSync(${javascriptStringLiteral(events)}, 'factory:second\\n');`,
       ].join('\n'),
     );
 
@@ -207,22 +213,22 @@ describe('compiled extension sets', () => {
       'first',
       [
         "import fs from 'node:fs';",
-        `fs.appendFileSync(${JSON.stringify(events)}, 'import:first:start\\n');`,
-        `fs.writeFileSync(${JSON.stringify(firstStarted)}, 'yes');`,
+        `fs.appendFileSync(${javascriptStringLiteral(events)}, 'import:first:start\\n');`,
+        `fs.writeFileSync(${javascriptStringLiteral(firstStarted)}, 'yes');`,
         'await new Promise((resolve, reject) => {',
         '  const deadline = Date.now() + 1000;',
         '  const poll = () => {',
-        `    if (fs.existsSync(${JSON.stringify(secondStarted)})) return resolve();`,
+        `    if (fs.existsSync(${javascriptStringLiteral(secondStarted)})) return resolve();`,
         "    if (Date.now() >= deadline) return reject(new Error('second module did not start concurrently'));",
         '    setTimeout(poll, 1);',
         '  };',
         '  poll();',
         '});',
-        `fs.appendFileSync(${JSON.stringify(events)}, 'import:first:end\\n');`,
+        `fs.appendFileSync(${javascriptStringLiteral(events)}, 'import:first:end\\n');`,
         'export default async () => {',
-        `  fs.appendFileSync(${JSON.stringify(events)}, 'factory:first:start\\n');`,
+        `  fs.appendFileSync(${javascriptStringLiteral(events)}, 'factory:first:start\\n');`,
         '  await new Promise((resolve) => setTimeout(resolve, 10));',
-        `  fs.appendFileSync(${JSON.stringify(events)}, 'factory:first:end\\n');`,
+        `  fs.appendFileSync(${javascriptStringLiteral(events)}, 'factory:first:end\\n');`,
         '};',
       ].join('\n'),
     );
@@ -234,15 +240,15 @@ describe('compiled extension sets', () => {
         'await new Promise((resolve, reject) => {',
         '  const deadline = Date.now() + 1000;',
         '  const poll = () => {',
-        `    if (fs.existsSync(${JSON.stringify(firstStarted)})) return resolve();`,
+        `    if (fs.existsSync(${javascriptStringLiteral(firstStarted)})) return resolve();`,
         "    if (Date.now() >= deadline) return reject(new Error('first module did not start concurrently'));",
         '    setTimeout(poll, 1);',
         '  };',
         '  poll();',
         '});',
-        `fs.writeFileSync(${JSON.stringify(secondStarted)}, 'yes');`,
-        `fs.appendFileSync(${JSON.stringify(events)}, 'import:second\\n');`,
-        `export default () => fs.appendFileSync(${JSON.stringify(events)}, 'factory:second\\n');`,
+        `fs.writeFileSync(${javascriptStringLiteral(secondStarted)}, 'yes');`,
+        `fs.appendFileSync(${javascriptStringLiteral(events)}, 'import:second\\n');`,
+        `export default () => fs.appendFileSync(${javascriptStringLiteral(events)}, 'factory:second\\n');`,
       ].join('\n'),
     );
 
@@ -347,7 +353,7 @@ describe('compiled extension sets', () => {
     const entry = writeModule(
       directory,
       'entry',
-      `export default async (api) => api.push((await import(${JSON.stringify(lazy)})).value);`,
+      `export default async (api) => api.push((await import(${javascriptStringLiteral(lazy)})).value);`,
     );
     const cache = path.join(directory, 'cache');
     const output = await compileExtensionSet([entry], cache);
@@ -488,7 +494,7 @@ describe('compiled extension sets', () => {
       directory,
       'external-runtime',
       [
-        `import { parse } from ${JSON.stringify(yamlEntry)};`,
+        `import { parse } from ${javascriptStringLiteral(yamlEntry)};`,
         'export default (api) => api.push(parse("ready: true").ready);',
       ].join('\n'),
     );
@@ -508,9 +514,10 @@ describe('compiled extension sets', () => {
     const entry = writeModule(
       directory,
       'typescript-runtime',
-      [`import ts from ${JSON.stringify(typescriptEntry)};`, 'export default (api) => api.push(ts.version);'].join(
-        '\n',
-      ),
+      [
+        `import ts from ${javascriptStringLiteral(typescriptEntry)};`,
+        'export default (api) => api.push(ts.version);',
+      ].join('\n'),
     );
     const values: string[] = [];
 
@@ -542,7 +549,7 @@ describe('compiled extension sets', () => {
       directory,
       'commonjs-runtime',
       [
-        `import openDirectory from ${JSON.stringify(openEntry)};`,
+        `import openDirectory from ${javascriptStringLiteral(openEntry)};`,
         'export default (api) => api.push(openDirectory());',
       ].join('\n'),
     );

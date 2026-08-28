@@ -1,0 +1,30 @@
+FROM node:22.22.1-bookworm
+
+ARG PNPM_VERSION=11.1.3
+
+ENV CI=1 \
+    NX_DAEMON=false \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    npm_config_enable_global_virtual_store=false
+
+WORKDIR /workspace
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends nano \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install --global --no-audit --no-fund "pnpm@${PNPM_VERSION}"
+
+COPY --chown=node:node . .
+
+RUN pnpm install \
+      --frozen-lockfile \
+      --config.store-dir=/workspace/node_modules/.pnpm-store \
+      --config.enableGlobalVirtualStore=false \
+      --config.enable-global-virtual-store=false \
+    && pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium \
+    && pnpm nx reset \
+    && chown -R node:node /workspace /ms-playwright
+
+USER node
+
+CMD ["bash", "-lc", "set -euo pipefail; pnpm audit --prod --audit-level high; pnpm audit signatures || true; pnpm runner:check; pnpm audit:workspace; pnpm fmt:check; pnpm hooks:check; pnpm nx run-many -t build --parallel=3; pnpm examples:check; pnpm nx run-many -t lint --parallel=3; pnpm lint:vibe --preflight-only; pnpm nx run-many -t typecheck --parallel=3; pnpm nx run-many -t test --parallel=3; pnpm cockpit:build; pnpm nx run @agimon-ai/doompi-web:test:e2e; pnpm build; pnpm nx run-many -t test-system --parallel=1; RELEASE_PROJECTS=\"$(node scripts/filter-release-projects.mjs --all)\"; if [[ -n \"${RELEASE_PROJECTS}\" ]]; then pnpm nx release prerelease --preid alpha --projects \"${RELEASE_PROJECTS}\" --dry-run --skip-publish; fi"]

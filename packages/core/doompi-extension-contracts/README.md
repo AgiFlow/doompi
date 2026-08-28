@@ -34,6 +34,7 @@ boundaries; same-runner extensions collaborate through the named Cordis services
 | `/help`                                 | `doom/help` contributions and active-skill snapshots                                |
 | `/skills`, `/loop-launchers`            | Provider-owned registries for skill directories and recurring-loop launchers        |
 | `/voice-tools`, `/narration`            | `doom/voice-tools` registration and `doom/narration` requests                       |
+| `/notification`                         | Versioned `doom/notification` requests and `doom-notification` session entry data   |
 | `/ask-user`                             | Typed `doom/ask-user/*` fan-out events                                              |
 | `/voice-reload-handoff`                 | Generation- and TTL-fenced Voice reload handoff state                               |
 | `/background-work`, `/delegation`       | Team-owned Cordis services and events for background/delegated work                 |
@@ -47,9 +48,11 @@ boundaries; same-runner extensions collaborate through the named Cordis services
 | `/mcp-session`                          | Validated MCP session documents for child-process boundaries                        |
 | `/mcp-tool-resolver`                    | Session-scoped resolution of MCP selectors to registered Pi tools                   |
 
-Schemas validate data at package boundaries. Live collaboration providers are mounted in Cordis
-plugin fibers; consumers use `ctx.inject(...)`, so provider unload and replacement automatically
-retract and rebind their handles.
+Schemas validate data at package boundaries. Notification callers submit bounded `body` text with
+optional `title`, `subtitle`, and `info`, `warning`, or `error` level. Providers publish normalized
+version 1 entry data with every field present under the `doom-notification` entry type. Live
+collaboration providers are mounted in Cordis plugin fibers; consumers use `ctx.inject(...)`, so
+provider unload and replacement automatically retract and rebind their handles.
 
 ## Example: contribute a Leader binding
 

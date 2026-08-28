@@ -11,6 +11,7 @@ import {
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
 } from '../../types/hub.ts';
+import { parseDoomNotificationEntry } from '../../types/notification.ts';
 import {
   REMOTE_PAIRING_REQUEST_TYPE,
   REMOTE_STATE_TYPE,
@@ -20,6 +21,8 @@ import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegist
 import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
+import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
+import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
@@ -107,6 +110,7 @@ export function startSessionRuntime(): () => void {
           return;
 
         case SESSIONS_SNAPSHOT_TYPE:
+          recordBrowserPerformance({ name: 'web.browser.ready', duration_ms: browserReadyDuration() });
           applySessionsSnapshot(frame);
           // A snapshot means a fresh socket; any prior subscription died with
           // the old one.
@@ -132,6 +136,7 @@ export function startSessionRuntime(): () => void {
           const sessionId = frame.sessionId;
           const frames = frame.frames.filter(isRecord);
           const dropped = typeof frame.dropped === 'number' ? frame.dropped : 0;
+          recordBrowserPerformance({ name: 'web.browser.backlog', count: Math.min(10_000, frames.length + dropped) });
           applySessionBacklog(sessionId, frames.length, dropped);
           resetSessionStore(sessionId);
           for (const replayed of frames) applySessionFrame(sessionId, replayed);
@@ -151,6 +156,10 @@ export function startSessionRuntime(): () => void {
         }
         case SESSION_FRAME_TYPE: {
           if (typeof frame.sessionId !== 'string' || !isRecord(frame.frame)) return;
+          const notification = parseDoomNotificationEntry(frame.frame);
+          if (notification !== undefined) {
+            void deliverBrowserNotification(frame.sessionId, notification.entryId, notification.data);
+          }
           applySessionFrame(frame.sessionId, frame.frame);
           // A select the bar asked for becomes the bar's popover; the claim is
           // settled here, at frame time, so no surface renders it twice.

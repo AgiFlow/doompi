@@ -4,6 +4,7 @@ import {
   execFileSync,
   spawn,
 } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -452,7 +453,7 @@ export async function startPtyRuntime(
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-packed-rmux-'));
   const logDirectory = path.join(runtimeRoot, 'logs');
   const stateDirectory = path.join(runtimeRoot, 'state');
-  const id = `packed-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `packed-${process.pid}-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
   const name = id;
   const paths: IRunnerPaths = {
     repositoryPath: () => cwd,

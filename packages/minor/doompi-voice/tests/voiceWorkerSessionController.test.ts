@@ -184,6 +184,6 @@ describe('VoiceWorkerSessionController', () => {
       recoverable: true,
     });
     expect(ui.text).toBe('safe');
-    expect(ui.notify).toHaveBeenCalledWith('Voice processing failed', 'error');
+    expect(ui.notify).toHaveBeenCalledWith('Voice processing failed: capture_failed', 'error');
   });
 });

@@ -109,6 +109,20 @@ describe('harness telemetry', () => {
     expect(logger.info).toHaveBeenCalledOnce();
   });
 
+  it('caps deferred lifecycle events and warns once when later events are dropped', async () => {
+    const { logger, telemetryFactory } = createTelemetryDouble();
+    const warn = vi.fn();
+    const reporter = createHarnessTelemetry({ telemetryFactory, deferSpans: true, warn });
+
+    for (let index = 0; index < 70; index += 1) {
+      await reporter.recordEvent(HARNESS_EVENT.launchCompleted, { 'harness.index': index });
+    }
+    await reporter.flush();
+
+    expect(logger.info).toHaveBeenCalledTimes(64);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
   it('keeps telemetry failures out of the launcher', async () => {
     const warn = vi.fn();
     const reporter = createHarnessTelemetry({

@@ -20,6 +20,7 @@ release-artifacts/
 logs/
 tmp/
 .claude/settings.local.json
+/-.wav
 
 # Runner native payloads. Fetched from upstream releases by
 # scripts/fetch-runner-binaries.mjs and verified against pinned checksums,

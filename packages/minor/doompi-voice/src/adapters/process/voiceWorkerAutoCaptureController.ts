@@ -13,6 +13,7 @@ import type { IVoiceCommandCorrector, VoiceCommandContext } from '../../services
 import type { IVoiceTurnFallbackNarrator } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
 import { VoiceNarrationPlayback, type VoiceNarrationPlaybackLogger } from '../../services/narrationPlayback.ts';
+import type { IVoiceTranscriptAdjudicator } from '../../services/transcriptAdmission.ts';
 import type { VoiceDeliveryIntent } from '../../services/voiceDelivery.ts';
 import type { AutoCaptureActivationState, AutoCaptureUi, IClock, ITtsAdapter } from '../../types/index.ts';
 import { VoiceWorkerClient, type VoiceWorkerClientOptions } from './voiceWorkerClient.ts';
@@ -33,6 +34,7 @@ export interface VoiceWorkerAutoCaptureTelemetrySink extends AutonomousVoiceTele
 export interface VoiceWorkerAutoCaptureDependencies {
   loadConfig(): ResolvedVoiceConfig;
   resolveCommandCorrector(reference: string): Promise<IVoiceCommandCorrector | undefined>;
+  resolveTranscriptAdjudicator?(reference: string): Promise<IVoiceTranscriptAdjudicator | undefined>;
   resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator>;
   tts: ITtsAdapter;
   clock: IClock;
@@ -216,8 +218,9 @@ export class VoiceWorkerAutoCaptureController {
       const autoConfig = config.autoCapture;
       if (!autoConfig) throw new Error('Autonomous voice is not configured in ~/.pi/.doom/config.yaml');
       this.dependencies.tts.preflight(autoConfig.tts);
-      const [corrector, fallbackNarrator] = await Promise.all([
+      const [corrector, adjudicator, fallbackNarrator] = await Promise.all([
         this.dependencies.resolveCommandCorrector(autoConfig.model),
+        this.dependencies.resolveTranscriptAdjudicator?.(autoConfig.model),
         this.dependencies.resolveFallbackNarrator(autoConfig.model),
       ]);
       if (revision !== this.activationRevision || this.activationState !== 'starting') return;
@@ -238,6 +241,13 @@ export class VoiceWorkerAutoCaptureController {
         deliver: (text, intent) => (intent ? this.dependencies.deliver(text, intent) : this.dependencies.deliver(text)),
         narrationReferences: () => this.narration.references(),
         abortPlayback: () => this.narration.abortPlayback(),
+        narrateContinuation: (text, signal) => this.narration.narrate(text, 'clarification', signal),
+        ...(adjudicator
+          ? {
+              adjudicateTranscript: (input, signal) =>
+                adjudicator.decide({ ...input, context: this.dependencies.commandContext?.() }, signal),
+            }
+          : {}),
         ...(corrector
           ? {
               correctTranscript: (transcript: string, signal: AbortSignal) =>

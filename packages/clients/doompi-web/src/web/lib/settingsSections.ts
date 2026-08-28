@@ -5,7 +5,7 @@ import { pluginSettingsSections } from './pluginRegistry.ts';
  * The settings menu, as data: the rail's gear and the settings page both
  * need to name a section, and neither feature may import the other.
  *
- * The host's own three pages come first and keep fixed positions, because they
+ * The host's own pages come first and keep fixed positions, because they
  * are about the cockpit itself rather than about a package. Contributed pages
  * sort after them, by their declared order and then their id, so the menu is
  * stable across syncs whatever order plugins install in.
@@ -21,6 +21,8 @@ export interface SettingsSection {
 const HOST_SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'providers', label: 'providers', detail: 'sign in to the model providers Pi can use' },
   { id: 'appearance', label: 'appearance', detail: 'pick the theme the cockpit renders with' },
+  { id: 'notifications', label: 'notifications', detail: 'allow live session notifications in this browser' },
+  { id: 'remote', label: 'remote control', detail: 'save a named tunnel for remote access' },
   { id: 'plugins', label: 'plugins', detail: 'the web plugins this bundle carries and what their install resolved' },
 ];
 

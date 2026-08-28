@@ -29,6 +29,7 @@ import {
   type TtsPlaybackResult,
   type TtsSpeakRequest,
 } from '../../types/index.ts';
+import type { ClientNarrationSynthesizer } from './clientMedia.ts';
 
 const SAMPLE_RATE = '16000';
 const STOP_GRACE_MS = 1_500;
@@ -37,6 +38,8 @@ const RECORDING_FILE = 'recording.wav';
 const MACOS_SAY_BINARY = '/usr/bin/say';
 const MACOS_SAY_FALLBACK = 'say';
 const MACOS_PLATFORM = 'darwin';
+const MACOS_SAY_AUDIO_FILE = 'narration.wav';
+const MACOS_SAY_PCM_FORMAT = 'LEI16@16000';
 const MACOS_RECORDING_ONLY_ERROR = 'Voice recording is supported on macOS only';
 const INTERRUPT_SIGNAL = 'SIGINT';
 const TERMINATE_SIGNAL = 'SIGTERM';
@@ -391,6 +394,62 @@ export class MacOsSayTtsAdapter implements ITtsAdapter {
     processHandle.closeStdin();
     return new MacOsSayPlayback({ ...request, text }, processHandle, this.clock);
   }
+}
+
+export class MacOsSayPcmSynthesizer implements ClientNarrationSynthesizer {
+  public constructor(
+    private readonly executables: IExecutableResolver,
+    private readonly spawner: IBinaryProcessSpawner,
+  ) {}
+
+  public async synthesize(request: TtsSpeakRequest, signal: AbortSignal): Promise<Buffer> {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-voice-narration-'));
+    fs.chmodSync(directory, 0o700);
+    const filePath = path.join(directory, MACOS_SAY_AUDIO_FILE);
+    try {
+      const args = ['-o', filePath, '--file-format=WAVE', `--data-format=${MACOS_SAY_PCM_FORMAT}`];
+      if (request.config.voice) args.push('-v', request.config.voice);
+      if (request.config.rate !== undefined) args.push('-r', String(request.config.rate));
+      const executable = this.executables.resolve(MACOS_SAY_BINARY, MACOS_SAY_FALLBACK);
+      const processHandle = this.spawner.start(executable, args, { signal, stdin: 'pipe' });
+      processHandle.writeStdin(request.text);
+      processHandle.closeStdin();
+      const result = await processHandle.completion;
+      if (result.code !== 0) throw new Error(result.stderr || `macOS say exited with code ${String(result.code)}.`);
+      fs.chmodSync(filePath, 0o600);
+      return pcm16FromWav(fs.readFileSync(filePath));
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  }
+}
+
+function pcm16FromWav(buffer: Buffer): Buffer {
+  if (
+    buffer.length < 12 ||
+    buffer.toString(ASCII_ENCODING, 0, 4) !== 'RIFF' ||
+    buffer.toString(ASCII_ENCODING, 8, 12) !== 'WAVE'
+  )
+    throw new Error('Narration synthesis did not produce a PCM WAV file.');
+  let offset = 12;
+  let validFormat = false;
+  let audio: Buffer | undefined;
+  while (offset + 8 <= buffer.length) {
+    const id = buffer.toString(ASCII_ENCODING, offset, offset + 4);
+    const size = buffer.readUInt32LE(offset + 4);
+    const start = offset + 8;
+    if (id === 'fmt ' && size >= 16) {
+      validFormat =
+        buffer.readUInt16LE(start) === 1 &&
+        buffer.readUInt16LE(start + 2) === PCM_CHANNELS &&
+        buffer.readUInt32LE(start + 4) === Number(SAMPLE_RATE) &&
+        buffer.readUInt16LE(start + 14) === PCM_BITS_PER_SAMPLE;
+    } else if (id === 'data') audio = buffer.subarray(start, Math.min(start + size, buffer.length));
+    offset = start + size + (size % 2);
+  }
+  if (!validFormat || audio === undefined || audio.byteLength % 2 !== 0)
+    throw new Error('Narration synthesis must produce PCM16 16 kHz mono audio.');
+  return Buffer.from(audio);
 }
 
 export function writePrivatePcm16Wav(filePath: string, pcm: Buffer): void {

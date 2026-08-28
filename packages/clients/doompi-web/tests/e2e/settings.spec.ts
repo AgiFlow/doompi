@@ -36,6 +36,53 @@ test('opens the settings pages from the rail and lists providers', async ({ page
   await expect(page).toHaveURL(/\/session\/s1$/);
 });
 
+test('saves a named tunnel on the remote control settings page and reuses it after reload', async ({
+  page,
+  cockpit,
+}) => {
+  let tunnel: Record<string, unknown> = { kind: 'quick' };
+  const settings = () => ({
+    autoCloseEnabled: false,
+    autoCloseMinutes: 60,
+    sessionExpiryEnabled: false,
+    idleMinutes: 30,
+    absoluteHours: 12,
+    tunnel,
+    sandbox: { enabled: false, workspaces: [] },
+  });
+  await page.route('**/api/remote', async (route) => {
+    await route.fulfill({ json: { state: { status: 'off', devices: [], pending: [], settings: settings() } } });
+  });
+  await page.route('**/api/remote/settings', async (route) => {
+    const patch = route.request().postDataJSON() as { tunnel?: Record<string, unknown> };
+    if (patch.tunnel !== undefined) tunnel = patch.tunnel;
+    await route.fulfill({ json: { settings: settings() } });
+  });
+
+  await page.goto(`${cockpit.url}/settings/remote`);
+  await expect(page.getByTestId('settings-section-remote')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('remote-tunnel-quick')).toHaveAttribute('data-state', 'checked');
+
+  await page.getByTestId('remote-tunnel-named').click();
+  await page.getByTestId('remote-tunnel-hostname').fill('https://doom.example.com');
+  await expect(page.getByTestId('remote-tunnel-save')).toBeDisabled();
+  await expect(page.getByTestId('remote-tunnel-settings')).toContainText('without https://');
+
+  await page.getByTestId('remote-tunnel-hostname').fill('doom.example.com');
+  await page.getByTestId('remote-tunnel-token-file').fill('/Users/me/.cloudflared/doompi.token');
+  await page.getByText('locally managed tunnel options').click();
+  await page.getByTestId('remote-tunnel-name').fill('doompi');
+  await page.getByTestId('remote-tunnel-save').click();
+  await expect(page.getByTestId('remote-tunnel-save')).toBeDisabled();
+
+  await page.reload();
+  await expect(page.getByTestId('remote-tunnel-named')).toHaveAttribute('data-state', 'checked');
+  await expect(page.getByTestId('remote-tunnel-hostname')).toHaveValue('doom.example.com');
+  await expect(page.getByTestId('remote-tunnel-token-file')).toHaveValue('/Users/me/.cloudflared/doompi.token');
+  await page.getByText('locally managed tunnel options').click();
+  await expect(page.getByTestId('remote-tunnel-name')).toHaveValue('doompi');
+});
+
 test('shows a provider as authenticated from auth.json and signs it out', async ({ page, cockpit }) => {
   fs.writeFileSync(authPath(cockpit.agentDir), JSON.stringify({ anthropic: { type: 'api_key', key: 'sk-ant-test' } }));
 
@@ -84,6 +131,32 @@ test('cancels a login flow and stays signed out', async ({ page, cockpit }) => {
 
   await expect(page.getByTestId('provider-anthropic')).toHaveAttribute('data-authenticated', 'false');
   expect(fs.existsSync(authPath(cockpit.agentDir)) ? readAuth(cockpit.agentDir).anthropic : undefined).toBeUndefined();
+});
+
+test('requests browser notification permission from the settings button', async ({ page, cockpit }) => {
+  await page.addInitScript(() => {
+    class NotificationStub {
+      static permission = 'default';
+      static requestPermission(): Promise<'granted'> {
+        (window as typeof window & { notificationPermissionRequested?: boolean }).notificationPermissionRequested =
+          true;
+        NotificationStub.permission = 'granted';
+        return Promise.resolve('granted');
+      }
+    }
+    Object.defineProperty(window, 'Notification', { configurable: true, value: NotificationStub });
+  });
+
+  await page.goto(`${cockpit.url}/settings/notifications`);
+  await expect(page.getByTestId('settings-section-notifications')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('notification-permission-status')).toContainText('has not been decided');
+  await page.getByTestId('notification-permission-request').click();
+  await expect(page.getByTestId('notification-permission-status')).toContainText('are allowed');
+  expect(
+    await page.evaluate(
+      () => (window as typeof window & { notificationPermissionRequested?: boolean }).notificationPermissionRequested,
+    ),
+  ).toBe(true);
 });
 
 test('lists no plugins for the packaged bundle and nothing to resolve', async ({ page, cockpit }) => {

@@ -4,12 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { PiServer } from '@earendil-works/pi-server';
+import { PiServer, PiServerError } from '@earendil-works/pi-server';
+import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
 import { type Context, Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
+import { bodyLimit } from 'hono/body-limit';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
   DOOM_API_ROUTE_PREFIX,
@@ -43,6 +45,7 @@ import {
   threadBacklog,
   threadFrameEnvelope,
 } from '../types/hub.ts';
+import { parseDoomNotificationEntry } from '../types/notification.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
 import { watchRegistry } from './registryWatcher.ts';
@@ -56,8 +59,6 @@ import { createProviderAuth } from './providerAuth.ts';
 import { createRemoteGuard } from './remoteGuard.ts';
 import { createRemoteAccess } from './remoteAccess.ts';
 import { createRemoteAccessStore } from './remoteAccessStore.ts';
-import { createBundleSigner } from '@agimon-ai/doompi-web-security/node';
-import { BUNDLE_MANIFEST_ROUTE } from '@agimon-ai/doompi-web-security';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
 import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
 import {
@@ -73,6 +74,16 @@ import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
 import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
+import {
+  createBrowserTelemetryRateLimit,
+  createWebTelemetry,
+  forwardedTraceContext,
+  parseBrowserPerformanceBatch,
+  readTraceContext,
+  requestOperation,
+  shutdownWebTelemetry,
+  WEB_TELEMETRY_ROUTE,
+} from './webTelemetry.ts';
 
 // Pi's protocol rides its own socket so the DoomPi channel keeps the
 // vocabulary the protocol has no shape for: dialogs, minor modes, selection.
@@ -86,6 +97,13 @@ const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
 const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
 const SEALED_HTTP_VERSION = 1;
+/** Upper bound for any body accepted from the tunnel before route-specific limits. */
+const TUNNEL_BODY_BYTES = 8 * 1024 * 1024;
+const TUNNEL_HEADER_BYTES = 16 * 1024;
+const TUNNEL_HEADERS_TIMEOUT_MS = 5000;
+const TUNNEL_REQUEST_TIMEOUT_MS = 10_000;
+const TUNNEL_CONNECTION_LIMIT = 64;
+const TUNNEL_REQUESTS_PER_SOCKET = 100;
 const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const SEALED_HTTP_FORBIDDEN_HEADERS = new Set([
   'connection',
@@ -225,6 +243,7 @@ function buildHub(
   options: WebServerOptions,
   notice: (message: string) => void,
   channels: readonly WebHubChannel[],
+  telemetry: DoomTelemetry,
 ): SessionHub {
   return createSessionHub({
     source: watchRegistry(options.registryDir, notice),
@@ -235,6 +254,7 @@ function buildHub(
     }),
     readGit: readGitStatus,
     channels,
+    telemetry,
     onNotice: notice,
   });
 }
@@ -284,7 +304,12 @@ function mountHubApis(app: Hono, apis: readonly DoomApi[], notice: (message: str
  * it. A session that never mounted an API answers 404 with the reason rather
  * than leaving the page waiting.
  */
-function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: string) => void): void {
+function mountSessionApiProxy(
+  app: Hono,
+  hub: SessionHub,
+  notice: (message: string) => void,
+  telemetry: DoomTelemetry,
+): void {
   app.all(`${DOOM_API_ROUTE_PREFIX}/*`, async (context) => {
     const sessionId = context.req.query(API_SESSION_QUERY_PARAM);
     if (sessionId === undefined) return context.notFound();
@@ -295,14 +320,22 @@ function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: stri
     }
     const url = new URL(context.req.url);
     url.searchParams.delete(API_SESSION_QUERY_PARAM);
+    const parent = readTraceContext(context.req.raw.headers);
     try {
-      return await proxyToSocket({
-        socketPath: summary.apiSocketPath,
-        path: `${url.pathname}${url.search}`,
-        method: context.req.method,
-        headers: context.req.raw.headers,
-        body: context.req.raw.body,
-      });
+      return await telemetry.runInSpan(
+        'web.package_proxy',
+        { 'operation.name': 'web.package_proxy', 'http.method': context.req.method },
+        async (trace) =>
+          await proxyToSocket({
+            socketPath: summary.apiSocketPath as string,
+            path: `${url.pathname}${url.search}`,
+            method: context.req.method,
+            headers: context.req.raw.headers,
+            body: context.req.raw.body,
+            trace: forwardedTraceContext(trace, parent),
+          }),
+        parent,
+      );
     } catch (error) {
       notice(`session ${sessionId} API is unreachable (${describeError(error)})`);
       return context.json({ error: `Session ${sessionId} is not answering.` }, 502);
@@ -321,8 +354,9 @@ function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: stri
 export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const host = options.host ?? '127.0.0.1';
   const notice = options.onNotice ?? ((): void => {});
+  const telemetry = createWebTelemetry();
   const assetsDir = resolveAssetsDir(options.assetsDir, notice);
-  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice));
+  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice), telemetry);
   // Threads are journals the data channels can name (a subagent run's own
   // session file); the hub tails one only while a page follows it.
   const threads = createThreadJournals({
@@ -353,8 +387,6 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   /** Known once the listener binds; until then the guard treats every request as remote. */
   let loopbackPort: number | undefined;
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
-  // Signed so a device can tell this bundle from one the edge substituted.
-  const bundleSigner = createBundleSigner(store.directory, notice);
   reapStaleTunnel(store.directory, notice);
   /**
    * Stands the host's sessions down so the container can take them over.
@@ -401,17 +433,32 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     // 127.0.0.1 and forges nothing a header could reveal.
     bindListener: async () =>
       await new Promise((resolve, reject) => {
-        const tunnelServer = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, (info) => {
-          nodeWs.injectWebSocket(tunnelServer);
-          resolve({
-            port: info.port,
-            close: async () =>
-              await new Promise<void>((done) => {
-                (tunnelServer as { closeAllConnections?: () => void }).closeAllConnections?.();
-                tunnelServer.close(() => done());
-              }),
-          });
-        });
+        const tunnelServer = serve(
+          {
+            fetch: app.fetch,
+            port: 0,
+            hostname: '127.0.0.1',
+            serverOptions: {
+              maxHeaderSize: TUNNEL_HEADER_BYTES,
+              headersTimeout: TUNNEL_HEADERS_TIMEOUT_MS,
+              requestTimeout: TUNNEL_REQUEST_TIMEOUT_MS,
+            },
+          },
+          (info) => {
+            nodeWs.injectWebSocket(tunnelServer);
+            resolve({
+              port: info.port,
+              close: async () =>
+                await new Promise<void>((done) => {
+                  (tunnelServer as { closeAllConnections?: () => void }).closeAllConnections?.();
+                  tunnelServer.close(() => done());
+                }),
+            });
+          },
+        );
+        const bounded = tunnelServer as typeof tunnelServer & { maxConnections: number; maxRequestsPerSocket: number };
+        bounded.maxConnections = TUNNEL_CONNECTION_LIMIT;
+        bounded.maxRequestsPerSocket = TUNNEL_REQUESTS_PER_SOCKET;
         tunnelServer.once('error', reject);
       }),
     onNotice: notice,
@@ -433,12 +480,83 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     channelReady: (deviceId, scope) => remote.channelFor(deviceId, scope) !== undefined,
     stepUp: {
       required: (action) => remote.stepUpRequired(action),
-      verify: async (action, assertion) => await remote.passkeys().finishStepUp(action, assertion),
+      verify: async (context, action, assertion) => {
+        if (typeof assertion !== 'object' || assertion === null) return false;
+        const ceremonyId = (assertion as { ceremonyId?: unknown }).ceremonyId;
+        const response = (assertion as { response?: unknown }).response;
+        if (typeof ceremonyId !== 'string') return false;
+        const trusted = (context.env as SealedRequestBindings | undefined)?.sealedDeviceId;
+        const deviceId = trusted ?? remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+        const caller = deviceId === undefined ? 'local' : `device:${deviceId}`;
+        return await remote.passkeys().finishStepUp(ceremonyId, caller, action, response);
+      },
     },
     extraOrigins: allowedOriginsFromEnv(process.env[ALLOW_ORIGIN_ENV]),
   });
   app.use('*', guard.middleware);
+  app.use('*', async (context, next) => {
+    const pathname = new URL(context.req.url).pathname;
+    if (pathname === REMOTE_HTTP_ROUTE) return next();
+    const operation = requestOperation(pathname);
+    if (operation === undefined) return next();
+    const started = performance.now();
+    return await telemetry.runInSpan(
+      operation,
+      { 'operation.name': operation, 'http.method': context.req.method },
+      async () => {
+        await next();
+        await telemetry.recordEvent('web.api.request', {
+          'operation.name': operation,
+          'http.method': context.req.method,
+          'http.status_code': context.res.status,
+          duration_ms: Math.max(0, Math.round(performance.now() - started)),
+        });
+      },
+      readTraceContext(context.req.raw.headers),
+    );
+  });
+  // Reject a declared oversized body before any public route reads it. Chunked
+  // bodies are bounded by the route-specific or downstream streaming limiter.
+  app.use('*', async (context, next) => {
+    if (guard.listenerOf(context) === 'local') return next();
+    const declared = Number(context.req.header('content-length'));
+    if (Number.isFinite(declared) && declared > TUNNEL_BODY_BYTES) {
+      return context.json({ error: 'The tunnel request body is too large.' }, 413);
+    }
+    return next();
+  });
   registerRemoteRoutes(app, { remote, listenerOf: (context) => guard.listenerOf(context) });
+  const tunnelBodyLimit = bodyLimit({
+    maxSize: TUNNEL_BODY_BYTES,
+    onError: (context) => context.json({ error: 'The tunnel request body is too large.' }, 413),
+  });
+  app.use('*', async (context, next) => {
+    if (guard.listenerOf(context) === 'local') return next();
+    return await tunnelBodyLimit(context, next);
+  });
+  const browserTelemetryBodyLimit = bodyLimit({
+    maxSize: 8 * 1024,
+    onError: (context) => context.json({ error: 'The telemetry batch is too large.' }, 413),
+  });
+  const acceptBrowserTelemetryRequest = createBrowserTelemetryRateLimit();
+  app.post(WEB_TELEMETRY_ROUTE, browserTelemetryBodyLimit, async (context) => {
+    if (!acceptBrowserTelemetryRequest()) return context.json({ error: 'Too many telemetry batches.' }, 429);
+    let body: unknown;
+    try {
+      body = await context.req.json();
+    } catch {
+      return context.json({ error: 'The telemetry batch must be JSON.' }, 400);
+    }
+    const events = parseBrowserPerformanceBatch(body);
+    if (events === undefined) return context.json({ error: 'The telemetry batch is invalid.' }, 400);
+    for (const event of events) {
+      await telemetry.recordEvent(event.name, {
+        ...(event.duration_ms === undefined ? {} : { duration_ms: event.duration_ms }),
+        ...(event.count === undefined ? {} : { count: event.count }),
+      });
+    }
+    return context.body(null, 204);
+  });
   app.post(REMOTE_HTTP_ROUTE, async (context) => {
     const deviceId = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (deviceId === undefined) return context.json({ error: 'This device is not paired.' }, 401);
@@ -491,26 +609,34 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     if (!sealed.ok) return context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
     return context.json(sealed.envelope);
   });
-  // The asset list and its signature, so a page can verify what it was served.
-  // Behind the guard like everything else: a device that cannot reach the
-  // cockpit has no use for its manifest.
-  app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
-    const signed = bundleSigner.sign(assetsDir);
-    if (signed === undefined) return context.json({ error: 'No bundle to describe.' }, 404);
-    return context.json(signed);
-  });
   // Every running session already serves Pi's protocol; the hub composes them
   // into one server so a browser sees a single endpoint with many sessions.
-  const protocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
-  const protocolServer = new PiServer(
-    createPiHubService({
-      records: () => hub.records(),
-      spawn: (input) => hub.create(input),
-      onNotice: notice,
-    }),
-    { listeners: [protocolListener], onError: (error) => notice(`protocol: ${error.message}`) },
-  );
-  await protocolServer.start();
+  // Remote clients get a distinct protocol service that can attach to existing
+  // sessions but cannot bypass HTTP step-up by creating one directly.
+  const localProtocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
+  const remoteProtocolListener = createPiWebSocketListener({
+    onError: (error) => notice(`protocol: ${error.message}`),
+  });
+  const protocolService = createPiHubService({
+    records: () => hub.records(),
+    spawn: (input) => hub.create(input),
+    onNotice: notice,
+  });
+  const remoteProtocolService = {
+    ...protocolService,
+    createSession: async () => {
+      throw new PiServerError('not_implemented', 'Remote protocol clients cannot create sessions');
+    },
+  };
+  const localProtocolServer = new PiServer(protocolService, {
+    listeners: [localProtocolListener],
+    onError: (error) => notice(`protocol: ${error.message}`),
+  });
+  const remoteProtocolServer = new PiServer(remoteProtocolService, {
+    listeners: [remoteProtocolListener],
+    onError: (error) => notice(`protocol: ${error.message}`),
+  });
+  await Promise.all([localProtocolServer.start(), remoteProtocolServer.start()]);
   // Provider credentials belong to the machine, not to a session: the hub
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
@@ -532,7 +658,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
   const pluginApis = mountHubApis(app, await loadPackageApis('hub', { onNotice: notice }), notice);
-  mountSessionApiProxy(app, hub, notice);
+  mountSessionApiProxy(app, hub, notice, telemetry);
 
   app.get('/api/health', (context) =>
     context.json({
@@ -556,7 +682,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
     await syncGuard.ensureSynced();
-    const outcome = await hub.create({ cwd: body.cwd, name });
+    const outcome = await hub.create({ cwd: body.cwd, name, trace: readTraceContext(context.req.raw.headers) });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
   });
@@ -568,7 +694,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   app.post(`${SESSIONS_API_ROUTE}/:sessionId/restart`, async (context) => {
     const sessionId = context.req.param('sessionId');
     await syncGuard.ensureSynced();
-    const outcome = await hub.restart(sessionId);
+    const outcome = await hub.restart(sessionId, readTraceContext(context.req.raw.headers));
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 202);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 404 : 502);
   });
@@ -707,8 +833,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               if (subscriptions.has(event.sessionId)) {
                 post({ type: event.frameType, sessionId: event.sessionId, payload: event.payload });
               }
-            } else if (subscriptions.has(event.sessionId)) {
-              post(sessionFrameEnvelope(event.sessionId, event.frame));
+            } else {
+              const notification = parseDoomNotificationEntry(event.frame);
+              if (notification !== undefined || subscriptions.has(event.sessionId)) {
+                post(sessionFrameEnvelope(event.sessionId, event.frame));
+              }
             }
           });
           disconnectThreads = threads.onFrame((event) => {
@@ -806,7 +935,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       const local = guard.listenerOf(context) === 'local';
       const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
       const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'protocol');
-      let handler: ReturnType<typeof protocolListener.accept>;
+      let handler: ReturnType<typeof localProtocolListener.accept>;
       let untrack: (() => void) | undefined;
       return {
         onOpen(_event, ws) {
@@ -815,7 +944,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             return;
           }
           if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
-          handler = protocolListener.accept({
+          handler = (local ? localProtocolListener : remoteProtocolListener).accept({
             send: (data) => {
               if (local) {
                 ws.send(data as ArrayBuffer);
@@ -899,29 +1028,33 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       nodeWs.injectWebSocket(server);
       const url = `http://${host}:${info.port}`;
       notice(`cockpit on ${url}`);
+      let closePromise: Promise<void> | undefined;
+      const close = async (): Promise<void> => {
+        // Remote access first, so the tunnel is down and every paired socket
+        // is closed before the rest of the hub starts letting go.
+        await remote.close();
+        await new Promise<void>((done) => {
+          threads.close();
+          syncGuard.close();
+          void localProtocolServer.close();
+          void remoteProtocolServer.close();
+          hub.close();
+          providerAuth.close();
+          for (const handler of pluginApis) handler.close();
+          // An upgraded socket leaves the HTTP server's connection tracking,
+          // so only the WebSocket server can let go of it. Without this the
+          // close callback waits on a browser that has no reason to leave.
+          for (const client of nodeWs.wss.clients) client.terminate();
+          nodeWs.wss.close();
+          (server as { closeAllConnections?: () => void }).closeAllConnections?.();
+          server.close(() => done());
+        });
+        await shutdownWebTelemetry(telemetry);
+      };
       resolve({
         url,
         port: info.port,
-        close: async () => {
-          // Remote access first, so the tunnel is down and every paired socket
-          // is closed before the rest of the hub starts letting go.
-          await remote.close();
-          await new Promise<void>((done) => {
-            threads.close();
-            syncGuard.close();
-            void protocolServer.close();
-            hub.close();
-            providerAuth.close();
-            for (const handler of pluginApis) handler.close();
-            // An upgraded socket leaves the HTTP server's connection tracking,
-            // so only the WebSocket server can let go of it. Without this the
-            // close callback waits on a browser that has no reason to leave.
-            for (const client of nodeWs.wss.clients) client.terminate();
-            nodeWs.wss.close();
-            (server as { closeAllConnections?: () => void }).closeAllConnections?.();
-            server.close(() => done());
-          });
-        },
+        close: () => (closePromise ??= close()),
       });
     });
     server.once('error', (error) => {
@@ -930,6 +1063,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       providerAuth.close();
       void remote.close();
       for (const handler of pluginApis) handler.close();
+      void telemetry.shutdown();
       reject(error);
     });
   });

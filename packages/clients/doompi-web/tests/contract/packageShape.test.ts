@@ -75,6 +75,7 @@ describe('doompi-web package contract', () => {
       '@agimon-ai/doompi-config',
       '@agimon-ai/doompi-extension-contracts',
       '@agimon-ai/doompi-server',
+      '@agimon-ai/doompi-telemetry',
       '@agimon-ai/doompi-web-components',
       '@agimon-ai/doompi-web-contracts',
       '@agimon-ai/doompi-web-security',
@@ -102,6 +103,7 @@ describe('doompi-web package contract', () => {
     ]);
     expect(manifest.dependencies?.['@agimon-ai/doompi']).toBe('workspace:*');
     expect(manifest.dependencies?.['@agimon-ai/doompi-server']).toBe('workspace:*');
+    expect(manifest.dependencies?.['@agimon-ai/doompi-telemetry']).toBe('workspace:*');
     // The bundler compiles src/web from the installed package, so the source
     // has to ship with it.
     expect(manifest.files).toEqual(expect.arrayContaining(['src']));

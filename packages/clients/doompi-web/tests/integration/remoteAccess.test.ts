@@ -1,12 +1,16 @@
 import fs from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
+import { PiClient } from '@earendil-works/pi-client';
+import type { ByteTransport, ByteTransportHandlers } from '@earendil-works/pi-client';
+import { verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { connectSealedChannel } from '@agimon-ai/doompi-web-security/browser';
-import type { TunnelStartResult } from '../../src/types/remoteAccess.ts';
+import type { TunnelConfig, TunnelStartResult } from '../../src/types/remoteAccess.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
 vi.mock('../../src/adapters/syncGuard.ts', () => ({
@@ -16,6 +20,15 @@ vi.mock('../../src/adapters/syncGuard.ts', () => ({
     close: () => undefined,
   }),
 }));
+
+vi.mock('@simplewebauthn/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@simplewebauthn/server')>();
+  return {
+    ...actual,
+    verifyAuthenticationResponse: vi.fn(actual.verifyAuthenticationResponse),
+    verifyRegistrationResponse: vi.fn(actual.verifyRegistrationResponse),
+  };
+});
 
 const SESSION = 'remote';
 const UNAUTHORIZED = 401;
@@ -34,11 +47,12 @@ let stopped: number;
  * Origin line up when a test connects directly, so the guard runs its real
  * comparisons rather than a relaxed variant written for the test.
  */
-async function fakeTunnel(input: { port: number }): Promise<TunnelStartResult> {
+async function fakeTunnel(input: { port: number; config: TunnelConfig }): Promise<TunnelStartResult> {
   tunnelPort = input.port;
   return {
     ok: true,
-    publicOrigin: `http://127.0.0.1:${String(input.port)}`,
+    publicOrigin:
+      input.config.kind === 'named' ? `https://${input.config.hostname}` : `http://127.0.0.1:${String(input.port)}`,
     stop: async () => {
       stopped += 1;
     },
@@ -55,6 +69,32 @@ function tunnelOrigin(): string {
 
 function tunnelUrl(route: string): string {
   return `${tunnelOrigin()}${route}`;
+}
+
+function rawTunnelFetch(
+  route: string,
+  input: { method: string; headers: Record<string, string>; body: string },
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(tunnelUrl(route), { method: input.method, headers: input.headers }, (incoming) => {
+      const chunks: Buffer[] = [];
+      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+      incoming.once('end', () => {
+        const headers = new Headers();
+        for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
+          headers.append(incoming.rawHeaders[index] ?? '', incoming.rawHeaders[index + 1] ?? '');
+        }
+        resolve(
+          new Response(Buffer.concat(chunks), {
+            status: incoming.statusCode ?? 500,
+            headers,
+          }),
+        );
+      });
+    });
+    request.once('error', reject);
+    request.end(input.body);
+  });
 }
 
 async function enable(): Promise<void> {
@@ -109,6 +149,49 @@ async function openChannel(cookie: string, scope: 'session' | 'protocol' | 'http
   return connected.channel;
 }
 
+/** Runs Pi's binary protocol through the same sealed tunnel transport as the browser. */
+function sealedProtocolTransport(
+  url: string,
+  headers: Record<string, string>,
+  channel: Awaited<ReturnType<typeof openChannel>>,
+) {
+  return async (handlers: ByteTransportHandlers): Promise<ByteTransport> => {
+    const socket = new WebSocket(url, { headers });
+    socket.binaryType = 'arraybuffer';
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', resolve);
+      socket.once('error', (error: unknown) => reject(error instanceof Error ? error : new Error(String(error))));
+      socket.once('unexpected-response', (_request, response) => {
+        reject(new Error(`The protocol upgrade answered ${String(response.statusCode)}.`));
+      });
+    });
+    let incoming = Promise.resolve();
+    socket.on('message', (data: ArrayBuffer | Buffer) => {
+      incoming = incoming
+        .then(async () => {
+          const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data);
+          const envelope: unknown = JSON.parse(new TextDecoder().decode(bytes));
+          const opened = await channel.open(envelope);
+          if (!opened.ok) throw new Error(opened.failure);
+          handlers.onData(opened.plaintext);
+        })
+        .catch((error: unknown) => handlers.onError(error instanceof Error ? error : new Error(String(error))));
+    });
+    socket.on('close', () => handlers.onClose());
+    socket.on('error', (error: Error) => handlers.onError(error));
+    return {
+      async send(chunk) {
+        const sealed = await channel.seal(chunk);
+        if (!sealed.ok) throw new Error(sealed.failure);
+        const bytes = new TextEncoder().encode(JSON.stringify(sealed.envelope));
+        await new Promise<void>((resolve, reject) => {
+          socket.send(bytes, (error) => (error ? reject(error) : resolve()));
+        });
+      },
+      close: () => socket.close(),
+    };
+  };
+}
 async function sealedFetch(cookie: string, target: string, init: RequestInit = {}): Promise<Response> {
   const channel = await openChannel(cookie, 'http');
   const body = typeof init.body === 'string' ? Buffer.from(init.body).toString('base64') : undefined;
@@ -415,6 +498,81 @@ describe('pairing', () => {
     const replay = await fetch(tunnelUrl('/api/remote/pair'), { method: 'POST', headers, body });
     expect(replay.status).toBe(410);
   });
+
+  it.each([
+    ['/api/remote/pair', `${'{"code":"'}${'x'.repeat(2048)}"}`],
+    ['/api/remote/passkeys/authenticate/begin', JSON.stringify({ padding: 'x'.repeat(256) })],
+    ['/api/remote/passkeys/authenticate/finish', JSON.stringify({ response: { padding: 'x'.repeat(64 * 1024) } })],
+  ])('rejects an oversized public JSON body on %s', async (route, body) => {
+    const response = await fetch(tunnelUrl(route), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
+      body,
+    });
+    expect(response.status).toBe(413);
+  });
+
+  it('bounds concurrent public request bodies', async () => {
+    const encoder = new TextEncoder();
+    const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const held = Array.from({ length: 8 }, () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controllers.push(controller);
+          controller.enqueue(encoder.encode('{"code":"'));
+        },
+      });
+      return fetch(tunnelUrl('/api/remote/pair'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
+        body,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' }).catch(() => undefined);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const overflow = await fetch(tunnelUrl('/api/remote/pair'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
+      body: JSON.stringify({ code: 'wrong' }),
+    });
+    expect(overflow.status).toBe(429);
+    expect(overflow.headers.get('retry-after')).toBe('1');
+
+    for (const controller of controllers) controller.close();
+    await Promise.all(held);
+  });
+  it('uses Cloudflare client addresses independently and ignores generic forwarding headers', async () => {
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await fetch(tunnelUrl('/api/remote/pair'), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: tunnelOrigin(),
+          'cf-connecting-ip': '198.51.100.1',
+          'x-forwarded-for': `198.51.100.${String(attempt + 10)}`,
+        },
+        body: JSON.stringify({ code: 'wrong' }),
+      });
+      statuses.push(response.status);
+    }
+
+    expect(statuses.slice(0, 10)).toEqual(Array.from({ length: 10 }, () => 410));
+    expect(statuses[10]).toBe(429);
+    const otherSource = await fetch(tunnelUrl('/api/remote/pair'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: tunnelOrigin(),
+        'cf-connecting-ip': '198.51.100.2',
+      },
+      body: JSON.stringify({ code: 'wrong' }),
+    });
+    expect(otherSource.status).toBe(410);
+    expect(stopped).toBe(0);
+    expect((await fetch(tunnelUrl('/pair'))).status).toBe(200);
+  });
 });
 
 describe('step-up on the escalation paths', () => {
@@ -614,16 +772,30 @@ describe('passkeys', () => {
     expect(response.status).toBe(409);
   });
 
-  it('keeps enrolment on the host, because enrolling is granting access', async () => {
+  it('lets only a host-approved device reach direct registration', async () => {
+    const headers = { 'content-type': 'application/json', origin: tunnelOrigin() };
+    const unpaired = await fetch(tunnelUrl('/api/remote/passkeys/register/begin'), {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+    expect(unpaired.status).toBe(401);
+
     const cookie = cookieValue(await pair());
-    for (const route of ['/api/remote/passkeys/register/begin', '/api/remote/passkeys/register/finish']) {
-      const response = await sealedFetch(cookie, route, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      expect(response.status, route).toBe(403);
-    }
+    const begun = await fetch(tunnelUrl('/api/remote/passkeys/register/begin'), {
+      method: 'POST',
+      headers: { ...headers, cookie },
+      body: '{}',
+    });
+    // The quick tunnel cannot finish a passkey ceremony, but authorization passed.
+    expect(begun.status).toBe(409);
+
+    const malformedFinish = await fetch(tunnelUrl('/api/remote/passkeys/register/finish'), {
+      method: 'POST',
+      headers: { ...headers, cookie },
+      body: '{}',
+    });
+    expect(malformedFinish.status).toBe(400);
   });
 
   it('refuses to forget a passkey that is not registered', async () => {
@@ -653,13 +825,133 @@ describe('passkey sign-in', () => {
       body: '{}',
     });
     expect(response.status).toBe(409);
+    const cookie = response.headers.get('set-cookie')?.split(';')[0];
+    expect(cookie).toContain('__Host-doompi_ceremony_caller=');
+
+    const refreshed = await fetch(tunnelUrl('/api/remote/passkeys/authenticate/begin'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie: cookie ?? '' },
+      body: '{}',
+    });
+    expect(refreshed.status).toBe(409);
+    expect(refreshed.headers.get('set-cookie')).toContain(cookie);
+  });
+
+  it('returns the fresh tunnel key after passkey sign-in and blocks protocol session creation', async () => {
+    await fetch(localUrl('/api/remote/disable'), { method: 'POST' });
+    const configured = await fetch(localUrl('/api/remote/settings'), {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tunnel: { kind: 'named', hostname: 'doom.example.com' } }),
+    });
+    expect(configured.status).toBe(200);
+    await enable();
+
+    const registration = await fetch(localUrl('/api/remote/passkeys/register/begin'), { method: 'POST' });
+    expect(registration.status).toBe(200);
+    const registrationBody = (await registration.json()) as { ceremonyId: string };
+    vi.mocked(verifyRegistrationResponse).mockResolvedValueOnce({
+      verified: true,
+      registrationInfo: {
+        credential: {
+          id: 'passkey-credential',
+          publicKey: new Uint8Array([1, 2, 3]),
+          counter: 0,
+          transports: [],
+        },
+      },
+    } as never);
+    const registered = await fetch(localUrl('/api/remote/passkeys/register/finish'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'user-agent': 'Test phone' },
+      body: JSON.stringify({ ceremonyId: registrationBody.ceremonyId, response: { id: 'passkey-credential' } }),
+    });
+    expect(registered.status).toBe(200);
+
+    const namedHeaders = {
+      'content-type': 'application/json',
+      host: 'doom.example.com',
+      origin: 'https://doom.example.com',
+    };
+    const begun = await rawTunnelFetch('/api/remote/passkeys/authenticate/begin', {
+      method: 'POST',
+      headers: namedHeaders,
+      body: '{}',
+    });
+    expect(begun.status).toBe(200);
+    const callerCookie = begun.headers.get('set-cookie')?.split(';')[0];
+    const begunBody = (await begun.json()) as { ceremonyId: string };
+    expect(callerCookie).toContain('__Host-doompi_ceremony_caller=');
+
+    vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
+      verified: true,
+      authenticationInfo: { newCounter: 1 },
+    } as never);
+    const finished = await rawTunnelFetch('/api/remote/passkeys/authenticate/finish', {
+      method: 'POST',
+      headers: { ...namedHeaders, cookie: callerCookie ?? '' },
+      body: JSON.stringify({ ceremonyId: begunBody.ceremonyId, response: { id: 'passkey-credential' } }),
+    });
+    expect(finished.status).toBe(200);
+    const finishBody = (await finished.json()) as { hostPublicKey: string };
+    expect(finishBody.hostPublicKey).toBeTruthy();
+    const deviceCookie = finished.headers.get('set-cookie');
+    if (deviceCookie === null) throw new Error('Passkey sign-in did not set a device cookie.');
+
+    const connected = await connectSealedChannel(finishBody.hostPublicKey);
+    if (connected === undefined) throw new Error('The returned host key could not establish a channel.');
+    const deviceSession = cookieValue(deviceCookie);
+    const accepted = await rawTunnelFetch('/api/remote/channel', {
+      method: 'POST',
+      headers: { ...namedHeaders, cookie: deviceSession },
+      body: JSON.stringify({ scope: 'protocol', clientPublicKey: connected.clientPublicKey }),
+    });
+    expect(accepted.status).toBe(200);
+
+    const protocol = new PiClient({
+      transportFactory: sealedProtocolTransport(
+        `${tunnelOrigin().replace('http', 'ws')}/api/pi`,
+        { host: namedHeaders.host, origin: namedHeaders.origin, cookie: deviceSession },
+        connected.channel,
+      ),
+    });
+    await protocol.connect();
+    try {
+      await expect(protocol.createSession({ cwd: process.cwd() })).rejects.toThrow(/Operation is not implemented/);
+    } finally {
+      await protocol.dispose();
+    }
+  });
+
+  it('rate-limits public ceremony starts per Cloudflare source', async () => {
+    const request = (source: string) =>
+      fetch(tunnelUrl('/api/remote/passkeys/authenticate/begin'), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: tunnelOrigin(),
+          'cf-connecting-ip': source,
+        },
+        body: '{}',
+      });
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await request('203.0.113.40')).status).toBe(409);
+    }
+    const limited = await request('203.0.113.40');
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('60');
+    expect((await request('203.0.113.41')).status).toBe(409);
   });
 
   it('refuses an assertion that verifies against nothing', async () => {
     const response = await fetch(tunnelUrl('/api/remote/passkeys/authenticate/finish'), {
       method: 'POST',
-      headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
-      body: JSON.stringify({ response: { id: 'nope' } }),
+      headers: {
+        'content-type': 'application/json',
+        origin: tunnelOrigin(),
+        cookie: '__Host-doompi_ceremony_caller=AAAAAAAAAAAAAAAAAAAAAA',
+      },
+      body: JSON.stringify({ ceremonyId: 'missing', response: { id: 'nope' } }),
     });
     expect(response.status).toBe(UNAUTHORIZED);
   });
@@ -681,6 +973,24 @@ describe('passkey sign-in', () => {
       body: JSON.stringify({}),
     });
     expect(response.status).toBe(400);
+  });
+
+  it('bounds a chunked channel request before parsing it', async () => {
+    const cookie = cookieValue(await pair());
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(JSON.stringify({ padding: 'x'.repeat(5 * 1024) })));
+        controller.close();
+      },
+    });
+    const response = await fetch(tunnelUrl('/api/remote/channel'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: tunnelOrigin(), cookie },
+      body,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    expect(response.status).toBe(413);
   });
 });
 

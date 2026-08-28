@@ -47,6 +47,26 @@ describe('the pairing page', () => {
     expect(html).not.toContain('location.search');
   });
 
+  it('stores the fresh host key returned by a passkey sign-in', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('rememberChannelKey(result.hostPublicKey)');
+    expect(html).toContain("sessionStorage.setItem('doompi.channelKey', value)");
+  });
+
+  it('offers approved phones a passkey before opening the cockpit', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('Add a passkey to use Face ID, Touch ID, or your device PIN next time.');
+    expect(html).toContain('id="add-passkey"');
+    expect(html).toContain('id="skip-passkey"');
+    expect(html).toContain("fetch('/api/remote/passkeys/register/begin'");
+    expect(html).toContain("fetch('/api/remote/passkeys/register/finish'");
+  });
+
+  it('claims a scanned code before trying passkey sign-in', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain("if (code !== '') { await claim(code); return; }");
+  });
+
   it('warns rather than silently failing without JavaScript', () => {
     expect(pairingPageHtml({ nonce: NONCE })).toContain('<noscript>');
   });

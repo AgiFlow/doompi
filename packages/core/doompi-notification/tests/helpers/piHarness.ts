@@ -5,12 +5,14 @@ export type EventHandler = (event: unknown, context: ExtensionContext) => unknow
 export type BusHandler = (payload: unknown) => void;
 
 export interface PiHarness {
+  appendEntry: Mock;
   busDisposers: Mock[];
   busHandlers: Map<string, BusHandler>;
   context: ExtensionContext;
   exec: Mock;
   getSessionName: Mock;
   handlers: Map<string, EventHandler>;
+  notify: Mock;
   pi: ExtensionAPI;
   setTitle: Mock;
   ui: ExtensionUIContext;
@@ -30,8 +32,10 @@ export function createPiHarness(): PiHarness {
   const busDisposers: Mock[] = [];
   const busHandlers = new Map<string, BusHandler>();
   const handlers = new Map<string, EventHandler>();
+  const appendEntry = vi.fn();
   const exec = vi.fn().mockResolvedValue(execResult());
   const getSessionName = vi.fn().mockReturnValue(undefined);
+  const notify = vi.fn();
   const setTitle = vi.fn();
 
   const ui = {
@@ -39,10 +43,12 @@ export function createPiHarness(): PiHarness {
     select: vi.fn().mockResolvedValue('Approve'),
     input: vi.fn().mockResolvedValue('feedback'),
     editor: vi.fn().mockResolvedValue('feedback'),
+    notify,
     setTitle,
   } as unknown as ExtensionUIContext;
 
   const pi = {
+    appendEntry,
     exec,
     getSessionName,
     events: {
@@ -67,8 +73,9 @@ export function createPiHarness(): PiHarness {
     cwd: '/repo/example',
     hasPendingMessages: () => false,
     hasUI: true,
+    mode: 'tui',
     ui,
   } as unknown as ExtensionContext;
 
-  return { busDisposers, busHandlers, context, exec, getSessionName, handlers, pi, setTitle, ui };
+  return { appendEntry, busDisposers, busHandlers, context, exec, getSessionName, handlers, notify, pi, setTitle, ui };
 }

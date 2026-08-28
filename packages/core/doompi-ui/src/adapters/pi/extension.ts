@@ -2,6 +2,10 @@ import path from 'node:path';
 import { connectDoomCordisHost, type DoomCordisHostMode } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { readDoomMcpStatus } from '@agimon-ai/doompi-extension-contracts/mcp-status';
 import {
+  type DoomNotificationLevel,
+  readDoomNotificationService,
+} from '@agimon-ai/doompi-extension-contracts/notification';
+import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   createMinorModeCatalogClient,
   requireMinorModeCatalog,
@@ -46,6 +50,19 @@ const TITLE_MESSAGE_MAX_LENGTH = 64;
 const TITLE_PREFIX = 'doom-pi';
 const BUILTIN_LEADER_COMMANDS = new Set([HOTKEYS_COMMAND]);
 const PACKAGE_SOURCE = '@agimon-ai/doompi-ui';
+
+function notify(cordis: Context, context: ExtensionContext, body: string, level: DoomNotificationLevel): void {
+  const service = readDoomNotificationService(cordis);
+  if (service) {
+    try {
+      void Promise.resolve(service.request({ body, level })).catch(() => undefined);
+    } catch {
+      // Notification delivery is best effort and does not fall back after routing.
+    }
+    return;
+  }
+  context.ui.notify(body, level);
+}
 
 function createMessageTitle(message: string, cwd: string): string | undefined {
   const normalizedMessage = message.trim().replace(/\s+/g, ' ');
@@ -135,7 +152,7 @@ function doomPiUiPlugin(cordis: Context, { pi, telemetry, hostMode }: UiPluginOp
         'leader.source': diagnostic.source,
         ...(diagnostic.bindingId ? { 'leader.binding.id': diagnostic.bindingId } : {}),
       });
-      if (activeContext?.mode === TUI_MODE) activeContext.ui.notify(message, WARNING_STYLE);
+      if (activeContext?.mode === TUI_MODE) notify(cordis, activeContext, message, WARNING_STYLE);
     }
   };
 
@@ -159,12 +176,12 @@ function doomPiUiPlugin(cordis: Context, { pi, telemetry, hostMode }: UiPluginOp
     reportDiagnostics(leaderRegistry.flush());
     hasSessionMessage = ctx.sessionManager.getEntries().some((entry) => entry.type === SESSION_MESSAGE_ENTRY);
     if (ctx.mode !== TUI_MODE) return;
-    for (const message of pendingDiagnostics) ctx.ui.notify(message, WARNING_STYLE);
+    for (const message of pendingDiagnostics) notify(cordis, ctx, message, WARNING_STYLE);
 
     const themeName = process.env[THEME_ENVIRONMENT_KEY] || DEFAULT_THEME_NAME;
     const themeResult = ctx.ui.setTheme(themeName);
     if (!themeResult.success) {
-      ctx.ui.notify(`Could not apply Doom Pi theme: ${themeResult.error}`, WARNING_STYLE);
+      notify(cordis, ctx, `Could not apply Doom Pi theme: ${themeResult.error}`, WARNING_STYLE);
       void telemetry.recordWarning(UI_EVENT.themeApplyFailed, themeResult.error ?? 'Unknown theme error', {
         'ui.theme': themeName,
       });
@@ -203,7 +220,7 @@ function doomPiUiPlugin(cordis: Context, { pi, telemetry, hostMode }: UiPluginOp
               pi.getCommands().some((command) => command.name === commandName),
             onLeaderAction: (source, action) => {
               if (activeContext !== ctx || sessionGeneration !== activeGeneration) {
-                ctx.ui.notify(`Leader action ${action} is unavailable.`, WARNING_STYLE);
+                notify(cordis, ctx, `Leader action ${action} is unavailable.`, WARNING_STYLE);
                 return;
               }
               hub.invokeLeaderAction(source, action);
@@ -214,7 +231,7 @@ function doomPiUiPlugin(cordis: Context, { pi, telemetry, hostMode }: UiPluginOp
                 `Leader command /${commandName} is unavailable.`,
                 { 'ui.kind': 'command' },
               );
-              ctx.ui.notify(`Leader command /${commandName} is unavailable.`, WARNING_STYLE);
+              notify(cordis, ctx, `Leader command /${commandName} is unavailable.`, WARNING_STYLE);
             },
             onUnavailableAction: (action) => {
               void telemetry.recordWarning(
@@ -224,7 +241,7 @@ function doomPiUiPlugin(cordis: Context, { pi, telemetry, hostMode }: UiPluginOp
                   'ui.kind': 'action',
                 },
               );
-              ctx.ui.notify(`Leader action ${action} is unavailable.`, WARNING_STYLE);
+              notify(cordis, ctx, `Leader action ${action} is unavailable.`, WARNING_STYLE);
             },
           },
         ),

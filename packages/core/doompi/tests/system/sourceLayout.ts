@@ -152,7 +152,7 @@ function globToRegExp(pattern: string): RegExp {
     } else if (character === '*') {
       expression += '[^/]*';
     } else {
-      expression += character.replace(/[\^$+?.()|[\]{}]/gu, '\\$&');
+      expression += character.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
     }
   }
   return new RegExp(`${expression}$`, 'u');

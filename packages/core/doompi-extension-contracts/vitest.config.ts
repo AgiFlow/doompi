@@ -33,6 +33,7 @@ export const vitestConfig = defineConfig({
       '@agimon-ai/doompi-extension-contracts/footer': source('footer'),
       '@agimon-ai/doompi-extension-contracts/leader': source('leader'),
       '@agimon-ai/doompi-extension-contracts/mode': source('mode'),
+      '@agimon-ai/doompi-extension-contracts/notification': source('notification'),
       '@agimon-ai/doompi-extension-contracts/protocol': source('protocol'),
       '@agimon-ai/doompi-extension-contracts/skills': source('skills'),
       '@agimon-ai/doompi-extension-contracts/voice-tools': source('voiceTools'),

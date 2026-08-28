@@ -27,8 +27,26 @@ describe('ranked narration barge-in', () => {
       pcm: speechWindow(),
     });
 
-    expect(decision.actionable).toBe(false);
+    expect(decision).toMatchObject({ actionable: false, speechSource: 'narration' });
     expect(decision.evidence.residualTokenCount).toBe(0);
+  });
+
+  it('classifies an imperfect transcription of the spoken narration as narration, not user input', () => {
+    const decision = analyzeNarrationBargeIn({
+      transcript: 'The plan was ready for revue',
+      referenceText: 'The plan is ready for review',
+      startPhrases: ['hey doom'],
+      stopPhrases: ['stop speaking'],
+      pcm: speechWindow(),
+      classifierSpeechMs: 640,
+    });
+
+    expect(decision.evidence).toMatchObject({
+      classifierConfirmed: true,
+      residualTokenCount: 2,
+    });
+    expect(decision.score).toBeGreaterThanOrEqual(80);
+    expect(decision).toMatchObject({ actionable: false, speechSource: 'narration' });
   });
 
   it('rejects high-scoring narration residuals without intentional address', () => {
@@ -46,7 +64,27 @@ describe('ranked narration barge-in', () => {
       residualTokenCount: 5,
     });
     expect(decision.score).toBeGreaterThanOrEqual(80);
-    expect(decision.actionable).toBe(false);
+    expect(decision).toMatchObject({ actionable: false, speechSource: 'ambiguous' });
+  });
+
+  it('classifies novel unaddressed speech but does not let the classifier alone interrupt narration', () => {
+    const decision = analyzeNarrationBargeIn({
+      transcript: 'The plan is ready please handle my new request',
+      referenceText: 'The plan is ready',
+      startPhrases: ['hey doom'],
+      stopPhrases: ['stop speaking'],
+      pcm: speechWindow(),
+      classifierSpeechMs: 160,
+    });
+
+    expect(decision.evidence).toMatchObject({
+      exactStopCommand: false,
+      intentionalAddress: false,
+      classifierConfirmed: true,
+      classifierSpeechMs: 160,
+      residualTokenCount: 5,
+    });
+    expect(decision).toMatchObject({ actionable: false, speechSource: 'user' });
   });
 
   it('combines intentional address with semantic and acoustic guards for novel user speech', () => {
@@ -155,6 +193,21 @@ describe('ranked narration barge-in', () => {
     expect(monitor.confirmed).toBe(true);
     monitor.reopenCleanLane();
     expect(monitor.confirmed).toBe(false);
+  });
+
+  it('never elevates unaddressed classifier speech to a narration interruption', async () => {
+    const onEvidence = vi.fn();
+    const transcribe = vi.fn(async () => 'The plan is ready please handle my new request');
+    const monitor = new NarrationBargeInMonitor({ transcribe, onEvidence });
+    monitor.begin(
+      { generation: 4, text: 'The plan is ready', startPhrases: ['hey doom'], stopPhrases: ['stop speaking'] },
+      0,
+    );
+
+    for (let index = 0; index < 85; index += 1) monitor.observe(pcmFrame(7_000), index * 20, undefined, 160);
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
+
+    expect(onEvidence).not.toHaveBeenCalled();
   });
 
   it('discards command-only overlap without exposing narration tail PCM', async () => {

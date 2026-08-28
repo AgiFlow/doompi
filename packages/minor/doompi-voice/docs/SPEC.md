@@ -87,9 +87,9 @@ Pressing `SPC v e` while autonomous voice is enabled MUST request a graceful sto
 - If no confirmed user speech is pending, the active capture MUST be cancelled and the mode MUST reach `off` promptly.
 - If confirmed speech is already being finalized or transcribed, that one turn MAY finish, but no new capture may start.
 - A stop request MUST NOT start a second transcription.
-- A stop request MUST abort any outstanding command-correction or fallback-narration model request. A confirmed capture turn that is allowed to finish MUST fall back to its unchanged transcript-policy result.
+- A stop request MUST abort any outstanding transcript admission, command-correction, or fallback-narration model request. A confirmed capture turn that is allowed to finish MUST fall back to its deterministic unchanged-policy result.
 - A stop request MUST NOT leave the UI in `listening`, `processing`, `transcribing`, or `stopping` indefinitely.
-- The graceful-stop deadline is 20 seconds. At the deadline, outstanding capture, ASR, model, and playback work MUST be aborted and the mode MUST enter `off` with an error notification.
+- The graceful-stop deadline is 20 seconds. At the deadline, outstanding capture, ASR, admission, model, and playback work MUST be aborted, shared cleanup MUST settle or report its bounded forced-cleanup outcome, and the mode MUST enter `off` with an error notification.
 
 Extension disposal and session shutdown are hard stops: they MUST abort outstanding work rather than deliver a new user turn.
 
@@ -169,10 +169,12 @@ stateDiagram-v2
     speech --> finalizing: CAPTURE_DURATION_LIMIT_REACHED
     speech --> finalizing: TOGGLE_OFF_REQUESTED
 
-    finalizing --> transcribing: CAPTURE_DRAINED or CAPTURE_PROCESSING
+    finalizing --> speech: SPEECH_CONFIRMED after a revocable soft endpoint
+    finalizing --> transcribing: CAPTURE_DRAINED(revision > 0)
+    note right of finalizing: CAPTURE_PROCESSING is informational only
 
-    transcribing --> applyingPolicy: TRANSCRIPTION_SUCCEEDED
-    transcribing --> acknowledging: TRANSCRIPTION_EMPTY
+    transcribing --> applyingPolicy: TRANSCRIPTION_SUCCEEDED(exact revision)
+    transcribing --> acknowledging: TRANSCRIPTION_EMPTY(exact revision)
 
     applyingPolicy --> delivering: TRANSCRIPT_ACCEPTED
     applyingPolicy --> delivering: TRANSCRIPT_COMPOSITION_SEND_REQUESTED
@@ -182,7 +184,7 @@ stateDiagram-v2
     delivering --> acknowledging: DELIVERY_SUCCEEDED
     delivering --> acknowledging: DELIVERY_FAILED
 
-    acknowledging --> startingNextTurn: CANDIDATE_ACKNOWLEDGED
+    acknowledging --> startingNextTurn: CANDIDATE_ACKNOWLEDGED(exact revision and outcome)
     startingNextTurn --> startingCapture: NEXT_TURN_READY
     --
     [*] --> silent
@@ -241,11 +243,11 @@ The machine context MUST contain only bounded control data:
 
 - activation/session identity;
 - current capture and turn identity;
-- current accepted revision;
-- whether confirmed speech exists;
+- current frozen revision, assigned only by `CAPTURE_DRAINED`;
+- finalization reason and whether confirmed speech exists;
 - whether stop was requested;
 - current playback generation and phase;
-- pending transcript/delivery metadata;
+- pending transcript/delivery outcome metadata;
 - bounded composition control state, never composition text;
 - bounded failure information;
 - timestamps required for latency telemetry.
@@ -298,7 +300,7 @@ expiry is a delayed transition rather than a typed event, so neither has a membe
 currently have no producer and no handler. They do not satisfy the exhaustive-handling requirement
 above and MUST be either wired or removed.
 
-Worker events MUST be rejected unless session, capture, turn, revision, and playback generation match the current machine context where applicable.
+Worker events MUST be rejected unless session, capture, turn, frozen revision, acknowledgement outcome, and playback generation match the current machine context where applicable. `CAPTURE_PROCESSING` is informational and MUST NOT establish a revision or enter transcription.
 
 ### 3.5 Invoked actors and effects
 
@@ -321,15 +323,17 @@ At all times:
 
 1. At most one capture identity is current.
 2. `listening` or `speech` implies one live recorder producing current-generation PCM.
-3. `transcribing` implies the current capture has been frozen and cannot accept more PCM.
-4. A turn has at most one final ASR invocation.
-5. A final revision is acknowledged exactly once as committed or discarded.
-6. `startingNextTurn` cannot run after a stop request.
-7. `off` owns no recorder, ASR process, worker, TTS playback, timer, pending delivery, or composition draft.
-8. Every state has defined behavior for toggle-off, hard stop, worker exhaustion, and stale events.
-9. Buffered composition segments are acknowledged before the next capture begins.
-10. Only a command-only send or cancel can leave collecting state.
-11. Stale correction or delivery completion cannot mutate or clear the current draft.
+3. A soft endpoint is revocable until drain commits. A fresh confirmed 120 ms speech run returns `finalizing` to `speech`; duration-limit and toggle-off finalization are not revocable.
+4. `transcribing` implies `CAPTURE_DRAINED` established one positive frozen revision that cannot accept more PCM.
+5. Processing, policy, delivery, and acknowledgement require that exact frozen revision.
+6. A turn has at most one final ASR invocation and one delivery.
+7. A final revision is acknowledged as exactly one committed or discarded outcome. An identical duplicate is idempotent; a stale revision or conflicting outcome cannot remove the spool.
+8. `startingNextTurn` cannot run after a stop request.
+9. `off` owns no recorder, ASR process, worker, TTS playback, timer, pending delivery, admission request, or composition draft, except after an explicitly reported bounded forced-cleanup deadline.
+10. Every state has defined behavior for toggle-off, hard stop, worker exhaustion, and stale events.
+11. Buffered composition segments are acknowledged before the next capture begins.
+12. Only a command-only send or cancel can leave collecting state.
+13. Stale correction or delivery completion cannot mutate or clear the current draft.
 
 ## 4. Voice aspects and module boundaries
 
@@ -435,9 +439,11 @@ Responsibilities:
 
 - persist only eligible user PCM;
 - preserve private permissions;
-- create one immutable final snapshot;
-- record capture gaps and acknowledgement;
-- recover only identity-compatible unacknowledged turns;
+- create one immutable final snapshot and return that exact validated snapshot without incrementing its revision;
+- record capture gaps and exact acknowledgement revision/outcome;
+- retain an acknowledgement tombstone until parent progress or clean shutdown proves confirmation was consumed;
+- recover identity-compatible turns by phase: resume an unfrozen capture with one gap, resume ASR from an existing frozen WAV, avoid retranscribing an observed candidate, or replay an exact pending acknowledgement;
+- reject stale revisions and conflicting outcomes without deleting the spool;
 - batch writes so synchronous persistence cannot block 20 ms frame handling.
 
 Impact on result: determines transcript completeness, crash recovery, and worker responsiveness.
@@ -500,10 +506,12 @@ Impact on result: improves spelling of contextual names and technical terms with
 
 Responsibilities:
 
-- submit a prompt exactly once;
+- reject normalized blank text before invoking the underlying delivery callback;
+- submit a nonblank prompt exactly once;
 - carry immediate or queued-follow-up delivery intent without changing ordinary busy steering;
 - return a typed delivery result for synchronous request acceptance or failure;
-- acknowledge the final revision only after the delivery/discard decision is known;
+- acknowledge the exact frozen revision only after the delivery/discard decision is known;
+- require acknowledgement confirmation to match the expected outcome;
 - ensure acknowledgement and next-turn transition are coordinated by the lifecycle machine;
 - retain a bounded explicit pending delivery if Pi is temporarily blocked.
 
@@ -618,9 +626,9 @@ Neither provisional nor confirmed VAD speech may directly abort TTS. Playback ca
 
 ### AV-CAP-001: Readiness and recovery
 
-First-frame readiness, liveness checks, recorder exits, and recovery exhaustion MUST return typed events to the lifecycle machine.
+First-frame readiness, liveness checks, recorder exits, and recovery exhaustion MUST return typed events to the lifecycle machine. Abort during startup MUST reject pending readiness. Drain and abort MUST share one terminal-operation gate so only the winning operation touches the recorder and spool.
 
-Total recorder startup/recovery before a terminal outcome MUST be bounded. Repeating four independent 8-second first-frame attempts while showing `listening` is prohibited.
+Total recorder startup/recovery before a terminal outcome MUST be bounded. Repeating four independent 8-second first-frame attempts while showing `listening` is prohibited. Recovery exhaustion MUST publish one current-identity terminal failure and MUST NOT leave XState in a false listening state.
 
 ### AV-CAP-002: Frame callback performance
 
@@ -638,7 +646,9 @@ Worker supervision MUST cover functional health, not heartbeat delivery alone. A
 
 ### AV-WORKER-002: Recovery
 
-After worker restart, only the machine's current capture may resume. Recovered spools from unrelated prior extension sessions MUST be surfaced for explicit recovery/discard policy and MUST NOT silently attach to a new turn.
+After worker restart, only the machine's current capture may resume. An unfrozen capture resumes once and records one gap. A frozen unacknowledged revision reuses its existing validated WAV without recorder start, gap, snapshot increment, or duplicate ASR. A candidate already observed by the parent is not retranscribed or redelivered. A pending acknowledgement is replayed with its exact revision and outcome.
+
+Recovered spools from unrelated prior extension sessions MUST be surfaced for explicit recovery/discard policy and MUST NOT silently attach to a new turn. Shutdown MUST close its port only after the shared ordered pipeline barrier settles, and late ASR or capture publications after closure MUST be suppressed. The parent MUST then wait for graceful worker exit up to a bounded deadline before forced termination.
 
 ## 7. Transcription and delivery requirements
 
@@ -664,13 +674,17 @@ An absent context skips the model call. Invalid JSON, an unsafe patch, model fai
 
 ### AV-DELIVERY-001: Exact once
 
+Only confirmed speech with usable signal evidence is eligible for admission. Missing or invalid evidence, unauthorized playback overlap, a stale revision, and normalized blank text MUST fail closed as discarded without invoking prompt delivery.
+
 Delivery and acknowledgement are separate effects coordinated by the machine:
 
-1. decide transcript policy;
-2. apply a validated correction or the exact fallback;
-3. deliver or discard;
-4. acknowledge the final revision;
-5. if not stopping, create one next turn.
+1. accept only the positive revision established by `CAPTURE_DRAINED`;
+2. decide transcript policy;
+3. apply a validated correction or the exact fallback;
+4. deliver nonblank text or discard;
+5. acknowledge that exact revision and expected outcome;
+6. retain the durable acknowledgement until exact confirmation;
+7. if not stopping, create one next turn.
 
 A failed model call or undefined branch MUST NOT acknowledge a spool and then skip the next capture.
 
@@ -700,25 +714,25 @@ A thrown or nonzero TTS outcome settles the request as `failed`, disables narrat
 
 ## 9. Failure semantics
 
-| Failure                         | Required lifecycle result                                       |
-| ------------------------------- | --------------------------------------------------------------- |
-| Configuration/preflight failure | `enabling -> failed -> off`                                     |
-| No first PCM frame              | bounded retry or `failed -> off`; never `listening`             |
-| Recorder stale/exit             | bounded recovery with recorded gap or `failed -> off`           |
-| Endpoint deadline               | `speech -> finalizing` without a key press                      |
-| Autonomous capture duration     | rotate idle capture or finalize confirmed speech; remain active |
-| Capture drain failure           | acknowledge/discard if possible, then next turn or `failed`     |
-| ASR empty                       | discard + acknowledge + next turn, or `off` when stopping       |
-| ASR error/timeout               | bounded fallback or `failed`; never indefinite `transcribing`   |
-| Stale async completion          | ignore with no lifecycle mutation                               |
-| Transcript policy failure       | deterministic exact-transcript fallback or explicit `failed`    |
-| Command-correction failure      | abort/ignore patch and deliver exact policy result              |
-| Delivery failure                | bounded pending delivery or discard; lifecycle still terminates |
-| Acknowledgement failure         | retain spool, report failure, do not pretend completion         |
-| Worker exhaustion               | hard stop resources, show error, enter `off`                    |
-| Fallback generation failure     | deterministic bounded excerpt; capture remains active           |
-| TTS failure                     | narration region fails; capture region continues                |
-| Graceful stop timeout           | hard abort, show error, enter `off`                             |
+| Failure                         | Required lifecycle result                                                   |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| Configuration/preflight failure | `enabling -> failed -> off`                                                 |
+| No first PCM frame              | bounded retry or `failed -> off`; never `listening`                         |
+| Recorder stale/exit             | bounded recovery with recorded gap or `failed -> off`                       |
+| Endpoint deadline               | `speech -> finalizing` without a key press                                  |
+| Autonomous capture duration     | rotate idle capture or finalize confirmed speech; remain active             |
+| Capture drain failure           | acknowledge/discard if possible, then next turn or `failed`                 |
+| ASR empty                       | discard + acknowledge + next turn, or `off` when stopping                   |
+| ASR error/timeout               | discard + exact acknowledge, then `failed`; never indefinite `transcribing` |
+| Stale async completion          | ignore with no lifecycle mutation                                           |
+| Transcript policy failure       | deterministic exact-transcript fallback or explicit `failed`                |
+| Command-correction failure      | abort/ignore patch and deliver exact policy result                          |
+| Delivery failure                | bounded pending delivery or discard; lifecycle still terminates             |
+| Acknowledgement failure         | retain spool, report failure, do not pretend completion                     |
+| Worker exhaustion               | hard stop resources, show error, enter `off`                                |
+| Fallback generation failure     | deterministic bounded excerpt; capture remains active                       |
+| TTS failure                     | narration region fails; capture region continues                            |
+| Graceful stop timeout           | hard abort, show error, enter `off` after cleanup or bounded forced cleanup |
 
 Warnings MUST describe the actual outcome. The system MUST NOT claim audio will be retried unless a retry is scheduled in machine state.
 

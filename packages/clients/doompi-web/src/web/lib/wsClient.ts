@@ -1,4 +1,5 @@
 import { sealedSession } from './sealedSession.ts';
+import { recordBrowserPerformance } from './browserTelemetry.ts';
 
 type Frame = Record<string, unknown>;
 
@@ -30,13 +31,23 @@ export function createSessionSocket(url: string, handlers: SessionSocketHandlers
   let socket: WebSocket | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
+  let opened = false;
+  let connectingAt = performance.now();
 
   const open = (): void => {
     if (stopped) return;
+    connectingAt = performance.now();
     const next = new WebSocket(url);
     socket = next;
 
-    next.addEventListener('open', () => handlers.onOpen());
+    next.addEventListener('open', () => {
+      opened = true;
+      recordBrowserPerformance({
+        name: 'web.browser.session_socket_ready',
+        duration_ms: performance.now() - connectingAt,
+      });
+      handlers.onOpen();
+    });
 
     next.addEventListener('message', (event: MessageEvent<string>) => {
       if (typeof event.data !== 'string') return;
@@ -59,6 +70,7 @@ export function createSessionSocket(url: string, handlers: SessionSocketHandlers
     next.addEventListener('close', () => {
       handlers.onClose();
       if (stopped) return;
+      if (opened) recordBrowserPerformance({ name: 'web.browser.reconnect', count: 1 });
       timer = setTimeout(open, RECONNECT_MS);
     });
 

@@ -1,1 +1,2 @@
-export * from '../types/clientMedia';
+export * from '../types/clientCaptureActivity.ts';
+export * from '../types/clientMedia.ts';

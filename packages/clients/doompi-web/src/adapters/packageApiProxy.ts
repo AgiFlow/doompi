@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { Readable } from 'node:stream';
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 
 /** Headers that describe one hop and must not be copied onto the next. */
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade']);
@@ -11,16 +12,19 @@ export interface ProxyToSocketInput {
   method: string;
   headers: Headers;
   body: BodyInit | null;
+  trace?: DoomTraceContext;
 }
 
-function outgoingHeaders(headers: Headers): Record<string, string> {
+function outgoingHeaders(headers: Headers, trace?: DoomTraceContext): Record<string, string> {
   const out: Record<string, string> = {};
   headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) out[key] = value;
+    const normalized = key.toLowerCase();
+    if (!HOP_BY_HOP.has(normalized) && normalized !== 'traceparent') out[key] = value;
   });
   // The upstream is a unix socket with no meaningful authority; a stable value
   // keeps its own URL parsing predictable.
   out.host = 'session.local';
+  if (trace !== undefined) out.traceparent = trace.traceparent;
   return out;
 }
 
@@ -34,7 +38,12 @@ function outgoingHeaders(headers: Headers): Record<string, string> {
 export async function proxyToSocket(input: ProxyToSocketInput): Promise<Response> {
   return new Promise<Response>((resolve, reject) => {
     const request = http.request(
-      { socketPath: input.socketPath, path: input.path, method: input.method, headers: outgoingHeaders(input.headers) },
+      {
+        socketPath: input.socketPath,
+        path: input.path,
+        method: input.method,
+        headers: outgoingHeaders(input.headers, input.trace),
+      },
       (incoming) => {
         const headers = new Headers();
         for (const [key, value] of Object.entries(incoming.headers)) {

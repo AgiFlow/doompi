@@ -10,6 +10,13 @@ import {
 } from './autonomousVoiceMachine.ts';
 import { AutonomousVoiceTelemetry } from './autonomousVoiceTelemetry.ts';
 import { projectAutonomousVoiceUi } from './autonomousVoiceUi.ts';
+import {
+  assessVoiceTranscript,
+  type RecentVoiceTranscript,
+  type VoiceTranscriptAdjudicationDecision,
+  type VoiceTranscriptAdjudicationInput,
+  type VoiceTranscriptAdmissionAssessment,
+} from './transcriptAdmission.ts';
 import { applyTranscriptPolicy } from './transcriptPolicy.ts';
 import { VoiceDelivery, type VoiceDeliveryIntent, type VoiceDeliveryResult } from './voiceDelivery.ts';
 import type {
@@ -21,6 +28,8 @@ import type {
 
 const MAX_CAPTURE_DURATION_MS = 300_000;
 const MAX_COMPOSITION_CHARACTERS = 32_768;
+const MAX_RECENT_TRANSCRIPTS = 16;
+const RECENT_TRANSCRIPT_TTL_MS = 60_000;
 const WORKER_FINALIZE_REASON = {
   endpoint: 'soft-endpoint',
   'duration-limit': 'duration-limit',
@@ -75,6 +84,12 @@ export interface AutonomousVoiceSessionDependencies {
   deliver(this: void, text: string, intent?: VoiceDeliveryIntent): void;
   narrationReferences(): readonly string[];
   correctTranscript?(this: void, transcript: string, signal: AbortSignal): Promise<string>;
+  adjudicateTranscript?(
+    this: void,
+    input: VoiceTranscriptAdjudicationInput,
+    signal: AbortSignal,
+  ): Promise<VoiceTranscriptAdjudicationDecision>;
+  narrateContinuation?(this: void, text: string, signal: AbortSignal): Promise<unknown>;
   abortPlayback(): Promise<void>;
   telemetry?: AutonomousVoiceTelemetry;
   onActivationStateChange(state: AutoCaptureActivationState): void;
@@ -106,13 +121,21 @@ export class AutonomousVoiceSession {
   private readonly delivery: VoiceDelivery;
   private modalBlocked = false;
   private transcriptCorrectionAbort: AbortController | undefined;
+  private transcriptAdmissionAbort: AbortController | undefined;
+  private pendingTranscriptAdmission:
+    | {
+        effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>;
+        assessment: VoiceTranscriptAdmissionAssessment;
+      }
+    | undefined;
   private playbackAbortInFlight: Promise<void> | undefined;
   private stopInFlight: Promise<void> | undefined;
-  private hardStopStarted = false;
   private started = false;
   private lastActivationState: AutoCaptureActivationState = 'disabled';
   private compositionDraft: string[] = [];
   private pendingCompositionSubmission: (AutonomousTurnIdentity & { revision: number }) | undefined;
+  private recentTranscripts: RecentVoiceTranscript[] = [];
+  private readonly playbackReferences = new Map<number, string>();
 
   public constructor(private readonly dependencies: AutonomousVoiceSessionDependencies) {
     this.identities = new AutonomousTurnIdentityFactory(dependencies.clock, dependencies.identityNonceFactory);
@@ -151,13 +174,15 @@ export class AutonomousVoiceSession {
 
   public toggleOff(): void {
     if (!this.started) return;
-    this.abortTranscriptCorrection();
     this.actor.send({ type: 'TOGGLE_OFF_REQUESTED' });
+    this.abortTranscriptCorrection();
+    this.abortTranscriptAdmission(true);
   }
 
   public async shutdown(): Promise<void> {
     if (!this.started || this.actor.getSnapshot().matches('off')) return;
     this.abortTranscriptCorrection();
+    this.abortTranscriptAdmission();
     this.actor.send({ type: 'HARD_STOP_REQUESTED' });
     await waitFor(this.actor, (snapshot) => snapshot.matches('off'), { timeout: SESSION_STOP_WAIT_MS });
   }
@@ -189,12 +214,18 @@ export class AutonomousVoiceSession {
         ...identity,
         revision: event.revision,
         transcript: event.transcript,
+        ...(event.evidence ? { evidence: event.evidence } : {}),
       });
       return;
     }
     if (event.kind === 'candidate-acknowledged') {
       if (event.turnId === identity.turnId)
-        this.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...identity, revision: event.revision });
+        this.actor.send({
+          type: 'CANDIDATE_ACKNOWLEDGED',
+          ...identity,
+          revision: event.revision,
+          outcome: event.outcome,
+        });
       return;
     }
     if (event.kind === 'barge-in-evidence') {
@@ -245,6 +276,14 @@ export class AutonomousVoiceSession {
 
   public playbackStarted(playbackGeneration: number, referenceText?: string): void {
     if (!this.started) return;
+    if (referenceText) {
+      this.playbackReferences.set(playbackGeneration, referenceText);
+      while (this.playbackReferences.size > MAX_RECENT_TRANSCRIPTS) {
+        const oldest = this.playbackReferences.keys().next().value;
+        if (oldest === undefined) break;
+        this.playbackReferences.delete(oldest);
+      }
+    }
     this.actor.send({
       type: 'PLAYBACK_STARTED',
       sessionId: this.sessionId,
@@ -581,11 +620,137 @@ export class AutonomousVoiceSession {
     this.transcriptCorrectionAbort?.abort(new Error('Voice command correction stopped.'));
   }
 
+  private abortTranscriptAdmission(applyGracefulFallback = false): void {
+    const pending = this.pendingTranscriptAdmission;
+    this.transcriptAdmissionAbort?.abort(new Error('Voice transcript admission stopped.'));
+    this.transcriptAdmissionAbort = undefined;
+    this.pendingTranscriptAdmission = undefined;
+    if (applyGracefulFallback && pending && this.effectIsCurrent(pending.effect))
+      this.applyAdmittedTranscript(
+        { ...pending.effect, narrationOverlapPromoted: false },
+        pending.assessment.residualText,
+      );
+  }
+
   private applyPolicy(effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>): void {
+    if (!effect.evidence) {
+      this.discardTranscript(effect, 'missing-evidence');
+      return;
+    }
+    if (effect.evidence.playbackOverlapMs > 0 && !effect.narrationOverlapPromoted) {
+      this.discardTranscript(effect, 'unauthorized-playback-overlap');
+      return;
+    }
+    const references = this.dependencies.narrationReferences();
+    const now = this.dependencies.clock.now();
+    this.recentTranscripts = this.recentTranscripts.filter(
+      (entry) => now - entry.acceptedAt <= RECENT_TRANSCRIPT_TTL_MS,
+    );
+    const assessment = assessVoiceTranscript({
+      transcript: effect.transcript,
+      evidence: effect.evidence,
+      observedAt: now,
+      narrationOverlap: effect.narrationOverlapPromoted,
+      narrationReferences: references,
+      recentTranscripts: this.recentTranscripts,
+    });
+    if (assessment.action === 'reject') {
+      this.discardTranscript(effect, assessment.reason);
+      return;
+    }
+    if (assessment.action === 'accept') {
+      this.applyAdmittedTranscript(effect, assessment.transcript);
+      return;
+    }
+    this.reviewTranscript(effect, assessment, references);
+  }
+
+  private reviewTranscript(
+    effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    assessment: VoiceTranscriptAdmissionAssessment,
+    references: readonly string[],
+  ): void {
+    const adjudicate = this.dependencies.adjudicateTranscript;
+    if (!adjudicate) {
+      this.finishTranscriptAdmission(effect, assessment, this.fallbackAdmission(assessment));
+      return;
+    }
+    this.abortTranscriptAdmission();
+    const controller = new AbortController();
+    this.transcriptAdmissionAbort = controller;
+    this.pendingTranscriptAdmission = { effect, assessment };
+    const playbackGeneration = this.snapshot.context.playbackGeneration;
+    const narrationText = this.playbackReferences.get(playbackGeneration) ?? references[0];
+    const input: VoiceTranscriptAdjudicationInput = {
+      assessment,
+      ...(narrationText ? { narrationText } : {}),
+    };
+    void Promise.resolve()
+      .then(() => adjudicate(input, controller.signal))
+      .then(
+        (decision) => this.finishTranscriptAdmission(effect, assessment, decision, controller),
+        () => this.finishTranscriptAdmission(effect, assessment, this.fallbackAdmission(assessment), controller),
+      );
+  }
+
+  private fallbackAdmission(assessment: VoiceTranscriptAdmissionAssessment): VoiceTranscriptAdjudicationDecision {
+    const admit = assessment.score >= 85 && assessment.residualText.length > 0 && assessment.narrationSimilarity < 0.75;
+    return { admit, reason: admit ? 'user_speech' : 'uncertain' };
+  }
+
+  private finishTranscriptAdmission(
+    effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    assessment: VoiceTranscriptAdmissionAssessment,
+    decision: VoiceTranscriptAdjudicationDecision,
+    controller?: AbortController,
+  ): void {
+    if (controller && this.transcriptAdmissionAbort !== controller) return;
+    if (controller) this.pendingTranscriptAdmission = undefined;
+    if (!this.effectIsCurrent(effect) || controller?.signal.aborted) return;
+    if (!decision.admit) {
+      if (controller) this.transcriptAdmissionAbort = undefined;
+      this.discardTranscript(effect, decision.reason);
+      return;
+    }
+    const summary = decision.continuationSummary;
+    const narrate = this.dependencies.narrateContinuation;
+    if (!summary || !narrate || !controller) {
+      if (controller) this.transcriptAdmissionAbort = undefined;
+      this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
+      return;
+    }
+    void Promise.resolve()
+      .then(() => narrate(summary, controller.signal))
+      .catch(() => undefined)
+      .then(() => {
+        if (this.transcriptAdmissionAbort !== controller || controller.signal.aborted || !this.effectIsCurrent(effect))
+          return;
+        this.transcriptAdmissionAbort = undefined;
+        this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
+      });
+  }
+
+  private effectIsCurrent(effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>): boolean {
+    const snapshot = this.snapshot;
+    const context = snapshot.context;
+    return (
+      snapshot.matches({ active: { capture: 'applyingPolicy' } }) &&
+      context.sessionId === effect.sessionId &&
+      context.captureId === effect.captureId &&
+      context.turnId === effect.turnId &&
+      context.revision === effect.revision
+    );
+  }
+
+  private applyAdmittedTranscript(
+    effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    transcript: string,
+  ): void {
     const autoConfig = this.dependencies.config.autoCapture;
     if (!autoConfig) return;
+    const acceptedAt = this.dependencies.clock.now();
     const result = applyTranscriptPolicy({
-      transcript: effect.transcript,
+      transcript,
       narrationOverlapPromoted: effect.narrationOverlapPromoted,
       compositionState: effect.compositionState,
       startPhrases: autoConfig.startPhrases,
@@ -597,8 +762,17 @@ export class AutonomousVoiceSession {
       },
       narrationReferences: this.dependencies.narrationReferences(),
     });
+    if (
+      result.action === 'deliver' ||
+      result.action === 'compose-open' ||
+      result.action === 'compose-append' ||
+      (result.action === 'compose-send' && result.text)
+    ) {
+      this.recentTranscripts.push({ text: transcript, acceptedAt });
+      while (this.recentTranscripts.length > MAX_RECENT_TRANSCRIPTS) this.recentTranscripts.shift();
+    }
     if (result.action === 'deliver') {
-      this.correctAndHandleTranscript(effect, result.text, (transcript) => this.acceptTranscript(effect, transcript));
+      this.correctAndHandleTranscript(effect, result.text, (corrected) => this.acceptTranscript(effect, corrected));
       return;
     }
     if (result.action === 'compose-open' || result.action === 'compose-append') {
@@ -607,8 +781,8 @@ export class AutonomousVoiceSession {
         this.bufferCompositionSegment(effect, operation, result.text);
         return;
       }
-      this.correctAndHandleTranscript(effect, result.text, (transcript) =>
-        this.bufferCompositionSegment(effect, operation, transcript),
+      this.correctAndHandleTranscript(effect, result.text, (corrected) =>
+        this.bufferCompositionSegment(effect, operation, corrected),
       );
       return;
     }
@@ -619,8 +793,8 @@ export class AutonomousVoiceSession {
         this.requestCompositionSend(effect);
         return;
       }
-      this.correctAndHandleTranscript(effect, result.text, (transcript) =>
-        this.requestCompositionSend(effect, transcript),
+      this.correctAndHandleTranscript(effect, result.text, (corrected) =>
+        this.requestCompositionSend(effect, corrected),
       );
       return;
     }
@@ -638,12 +812,19 @@ export class AutonomousVoiceSession {
       });
       return;
     }
+    this.discardTranscript(effect, result.reason);
+  }
+
+  private discardTranscript(
+    effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>,
+    reason: string,
+  ): void {
     this.actor.send({
       sessionId: effect.sessionId,
       captureId: effect.captureId,
       turnId: effect.turnId,
       revision: effect.revision,
-      reason: result.reason,
+      reason,
       type: 'TRANSCRIPT_DISCARDED',
     });
   }
@@ -673,38 +854,27 @@ export class AutonomousVoiceSession {
   }
 
   private stop(mode: 'graceful' | 'hard'): Promise<void> {
-    if (mode === 'hard') {
-      this.performHardStop();
-      return Promise.resolve();
+    if (this.stopInFlight) {
+      if (mode === 'hard') this.actor.send({ type: 'STOP_COMPLETED' });
+      return this.stopInFlight;
     }
-    this.stopInFlight ??= this.performGracefulStop().finally(() => {
-      this.stopInFlight = undefined;
-    });
+    this.stopInFlight = this.performStop(mode);
     return this.stopInFlight;
   }
 
-  private async performGracefulStop(): Promise<void> {
+  private async performStop(_mode: 'graceful' | 'hard'): Promise<void> {
     this.prepareStop();
+    const playbackCleanup = this.playbackAbortInFlight ?? Promise.resolve();
+    let workerCleanup: Promise<void>;
     try {
-      await this.dependencies.client.shutdown(SESSION_SHUTDOWN_REASON);
-    } catch (error) {
-      this.reportCleanupFailure('worker_shutdown', error);
-    } finally {
-      this.actor.send({ type: 'STOP_COMPLETED' });
-    }
-  }
-
-  private performHardStop(): void {
-    if (this.hardStopStarted) return;
-    this.hardStopStarted = true;
-    this.prepareStop();
-    try {
-      void this.dependencies.client
+      workerCleanup = this.dependencies.client
         .shutdown(SESSION_SHUTDOWN_REASON)
         .catch((error: unknown) => this.reportCleanupFailure('worker_shutdown', error));
     } catch (error) {
       this.reportCleanupFailure('worker_shutdown', error);
+      workerCleanup = Promise.resolve();
     }
+    await Promise.all([playbackCleanup, workerCleanup]);
     this.actor.send({ type: 'STOP_COMPLETED' });
   }
 
@@ -728,7 +898,10 @@ export class AutonomousVoiceSession {
 
   private prepareStop(): void {
     this.abortTranscriptCorrection();
+    this.abortTranscriptAdmission();
     this.delivery.clear();
+    this.playbackReferences.clear();
+    this.recentTranscripts = [];
     if (this.compositionDraft.length > 0)
       this.dependencies.ui.notify('Voice composition draft discarded while stopping autonomous voice.', 'warning');
     this.clearCompositionDraft();

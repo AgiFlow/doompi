@@ -66,21 +66,6 @@ describe('static assets', () => {
   });
 });
 
-describe('the signed bundle manifest', () => {
-  it('describes and signs whatever is being served', async () => {
-    const response = await fetch(url('/bundle-manifest.json'));
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      manifest: { assets: { path: string }[] };
-      signature: string;
-      publicKey: string;
-    };
-    expect(body.manifest.assets.map((asset) => asset.path).sort()).toEqual(['/assets/app.js', '/index.html']);
-    expect(body.signature).toBeTruthy();
-    expect(body.publicKey).toBeTruthy();
-  });
-});
-
 describe('session-scoped routes', () => {
   it('lists files in the session directory', async () => {
     const response = await fetch(url(`/api/sessions/${SESSION}/files?q=package`));
@@ -153,5 +138,32 @@ describe('plugin APIs', () => {
 
   it('reports an unknown session on a proxied call', async () => {
     expect((await fetch(url('/api/plugin/anything?session=nope'))).status).toBe(404);
+  });
+});
+
+describe('browser telemetry ingestion', () => {
+  it('accepts the fixed bounded batch', async () => {
+    const response = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, events: [{ name: 'web.browser.ready', duration_ms: 12 }] }),
+    });
+    expect(response.status).toBe(204);
+  });
+
+  it('rejects unknown fields and oversized bodies', async () => {
+    const unknown = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, events: [{ name: 'web.browser.ready', path: '/private' }] }),
+    });
+    expect(unknown.status).toBe(400);
+
+    const oversized = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, events: [], padding: 'x'.repeat(9 * 1024) }),
+    });
+    expect(oversized.status).toBe(413);
   });
 });

@@ -78,12 +78,12 @@ describe('tunnel output corners', () => {
     expect(extractTunnelUrl('https://CALM-River.trycloudflare.com')).toBe('https://calm-river.trycloudflare.com');
   });
 
-  it('omits the token flag when the file is missing', () => {
-    expect(tunnelArgs({ kind: 'named', hostname: 'doom.example.com' }, 80)).not.toContain('--token');
+  it('omits the token-file flag when the file is missing', () => {
+    expect(tunnelArgs({ kind: 'named', hostname: 'doom.example.com' }, 80)).not.toContain('--token-file');
   });
 
-  it('omits an empty token rather than passing a blank flag', () => {
-    expect(tunnelArgs({ kind: 'named', hostname: 'doom.example.com' }, 80, '')).not.toContain('--token');
+  it('omits an empty token file rather than passing a blank flag', () => {
+    expect(tunnelArgs({ kind: 'named', hostname: 'doom.example.com' }, 80, '')).not.toContain('--token-file');
   });
 
   it('describes a spawn failure and a timeout differently', () => {

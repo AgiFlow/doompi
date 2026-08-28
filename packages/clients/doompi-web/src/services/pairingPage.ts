@@ -15,6 +15,8 @@ import {
   PAIRING_CLAIM_ROUTE,
   PAIRING_STATUS_QUERY,
   PAIRING_STATUS_ROUTE,
+  PASSKEY_REGISTER_BEGIN_ROUTE,
+  PASSKEY_REGISTER_FINISH_ROUTE,
   REMOTE_API_ROUTE,
 } from '../types/remoteAccess.ts';
 
@@ -69,13 +71,15 @@ const STYLE = `
   .state { font-weight: 600; color: #e6e8ec; }
   .bad { color: #ff6b6b; }
   .ok { color: #6bd68a; }
-  form { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
+  form, .actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
   input, button {
     font: inherit; padding: 0.6rem 0.8rem; border-radius: 0.5rem;
     border: 1px solid #2c313a; background: #1b1e24; color: inherit;
   }
   input { flex: 1; min-width: 0; }
-  button { background: #2f6feb; border-color: #2f6feb; font-weight: 600; }
+  button { flex: 1; background: #2f6feb; border-color: #2f6feb; font-weight: 600; }
+  button.secondary { background: #1b1e24; border-color: #2c313a; }
+  button:disabled { opacity: 0.6; }
 `;
 
 /**
@@ -89,19 +93,31 @@ const STYLE = `
 const SCRIPT = `
   const params = new URLSearchParams(location.hash.slice(1));
   const code = params.get('c') ?? '';
-  // Read off the screen, never through the relay, which is what makes the
-  // channel authenticated rather than merely encrypted. Handed to the bundle
-  // rather than used here: doing the exchange inline would grow the one
-  // document whose smallness keeps the public allowlist to three exact paths.
-  const channelKey = params.get('k') ?? '';
-  if (channelKey !== '') {
-    try { sessionStorage.setItem('doompi.channelKey', channelKey); } catch { /* storage denied */ }
+  // A QR supplies the key out of band. A successful passkey sign-in receives the
+  // current public key from the trusted host after proving the credential.
+  function rememberChannelKey(value) {
+    if (typeof value !== 'string' || value === '') return false;
+    try { sessionStorage.setItem('doompi.channelKey', value); return true; } catch { return false; }
   }
+  rememberChannelKey(params.get('k'));
   history.replaceState(null, '', location.pathname);
   const state = document.getElementById('state');
   const manual = document.getElementById('manual');
+  const actions = document.getElementById('actions');
+  const addPasskey = document.getElementById('add-passkey');
+  const skipPasskey = document.getElementById('skip-passkey');
   const say = (text, tone) => { state.textContent = text; state.className = 'state ' + (tone ?? ''); };
+  const openCockpit = () => location.replace('/');
 
+  function offerPasskey() {
+    if (!window.PublicKeyCredential) {
+      say('Paired. This browser does not support passkeys. Opening the cockpit.', 'ok');
+      setTimeout(openCockpit, ${String(POLL_INTERVAL_MS)});
+      return;
+    }
+    say('Paired. Add a passkey to use Face ID, Touch ID, or your device PIN next time.', 'ok');
+    actions.hidden = false;
+  }
   async function poll(requestId) {
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, ${String(POLL_INTERVAL_MS)}));
@@ -110,7 +126,7 @@ const SCRIPT = `
       });
       if (!response.ok) { say('This pairing request is no longer valid. Scan again.', 'bad'); return; }
       const body = await response.json();
-      if (body.status === 'approved') { say('Paired. Opening the cockpit.', 'ok'); location.replace('/'); return; }
+      if (body.status === 'approved') { offerPasskey(); return; }
       if (body.status === 'denied') { say('The host denied this device.', 'bad'); return; }
       if (body.status === 'expired') { say('The request timed out. Scan again.', 'bad'); return; }
     }
@@ -135,10 +151,8 @@ const SCRIPT = `
     await poll(body.requestId);
   }
 
-  // A device that has enrolled a passkey should never need another code, so
-  // this is offered before the scanned one is even read. The ceremony runs in
-  // the page rather than through a bundle, because the bundle is behind the
-  // guard this is trying to get past.
+  // A returning device without a scanned code may sign in with its passkey. The
+  // ceremony runs in this page because the cockpit bundle is still guarded.
   async function passkeySignIn() {
     if (!window.PublicKeyCredential) return false;
     try {
@@ -149,16 +163,19 @@ const SCRIPT = `
         body: '{}',
       });
       if (!begun.ok) return false;
-      const { options } = await begun.json();
-      const credential = await navigator.credentials.get({ publicKey: decodeOptions(options) });
+      const { ceremonyId, options } = await begun.json();
+      if (typeof ceremonyId !== 'string') return false;
+      const credential = await navigator.credentials.get({ publicKey: decodeAuthenticationOptions(options) });
       if (!credential) return false;
       const finished = await fetch('${REMOTE_API_ROUTE}/passkeys/authenticate/finish', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ response: encodeCredential(credential) }),
+        body: JSON.stringify({ ceremonyId, response: encodeCredential(credential) }),
       });
-      return finished.ok;
+      if (!finished.ok) return false;
+      const result = await finished.json();
+      return rememberChannelKey(result.hostPublicKey);
     } catch {
       return false;
     }
@@ -169,11 +186,23 @@ const SCRIPT = `
   const toBase64Url = (buffer) =>
     btoa(String.fromCharCode(...new Uint8Array(buffer))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 
-  function decodeOptions(options) {
+  function decodeAuthenticationOptions(options) {
     return {
       ...options,
       challenge: fromBase64Url(options.challenge),
       allowCredentials: (options.allowCredentials ?? []).map((entry) => ({
+        ...entry,
+        id: fromBase64Url(entry.id),
+      })),
+    };
+  }
+
+  function decodeRegistrationOptions(options) {
+    return {
+      ...options,
+      challenge: fromBase64Url(options.challenge),
+      user: { ...options.user, id: fromBase64Url(options.user.id) },
+      excludeCredentials: (options.excludeCredentials ?? []).map((entry) => ({
         ...entry,
         id: fromBase64Url(entry.id),
       })),
@@ -196,16 +225,67 @@ const SCRIPT = `
     };
   }
 
+  function encodeRegistrationCredential(credential) {
+    const attestation = credential.response;
+    return {
+      id: credential.id,
+      rawId: toBase64Url(credential.rawId),
+      type: credential.type,
+      authenticatorAttachment: credential.authenticatorAttachment,
+      clientExtensionResults: credential.getClientExtensionResults(),
+      response: {
+        clientDataJSON: toBase64Url(attestation.clientDataJSON),
+        attestationObject: toBase64Url(attestation.attestationObject),
+        transports: typeof attestation.getTransports === 'function' ? attestation.getTransports() : [],
+      },
+    };
+  }
+
+  async function registerPasskey() {
+    addPasskey.disabled = true;
+    skipPasskey.disabled = true;
+    say('Confirm passkey setup on this device.');
+    try {
+      const begun = await fetch('${PASSKEY_REGISTER_BEGIN_ROUTE}', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: '{}',
+      });
+      if (!begun.ok) throw new Error('Passkey setup is unavailable.');
+      const { ceremonyId, options } = await begun.json();
+      if (typeof ceremonyId !== 'string') throw new Error('Passkey setup is unavailable.');
+      const credential = await navigator.credentials.create({ publicKey: decodeRegistrationOptions(options) });
+      if (!credential) throw new Error('Passkey setup was cancelled.');
+      const finished = await fetch('${PASSKEY_REGISTER_FINISH_ROUTE}', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ ceremonyId, response: encodeRegistrationCredential(credential) }),
+      });
+      if (!finished.ok) throw new Error('That passkey was not accepted.');
+      say('Passkey added. Opening the cockpit.', 'ok');
+      setTimeout(openCockpit, ${String(POLL_INTERVAL_MS)});
+    } catch (error) {
+      say(error?.name === 'NotAllowedError' ? 'Passkey setup was cancelled.' : (error?.message ?? 'Passkey setup failed.'), 'bad');
+      addPasskey.disabled = false;
+      skipPasskey.disabled = false;
+    }
+  }
+
   manual.addEventListener('submit', (event) => {
     event.preventDefault();
     manual.hidden = true;
     void claim(new FormData(manual).get('code')?.toString().trim() ?? '');
   });
+  addPasskey.addEventListener('click', () => void registerPasskey());
+  skipPasskey.addEventListener('click', openCockpit);
 
   void (async () => {
+    if (code !== '') { await claim(code); return; }
     say('Checking for a passkey on this device...');
-    if (await passkeySignIn()) { say('Signed in. Opening the cockpit.', 'ok'); location.replace('/'); return; }
-    await claim(code);
+    if (await passkeySignIn()) { say('Signed in. Opening the cockpit.', 'ok'); openCockpit(); return; }
+    await claim('');
   })();
 `;
 
@@ -228,6 +308,10 @@ export function pairingPageHtml(input: PairingPageInput): string {
     <input name="code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pairing code">
     <button type="submit">Pair</button>
   </form>
+  <div id="actions" class="actions" hidden>
+    <button id="add-passkey" type="button">Add passkey</button>
+    <button id="skip-passkey" class="secondary" type="button">Not now</button>
+  </div>
   <noscript><p class="bad">Pairing needs JavaScript, because the code never leaves your browser.</p></noscript>
 </main>
 <script nonce="${input.nonce}">${SCRIPT}</script>

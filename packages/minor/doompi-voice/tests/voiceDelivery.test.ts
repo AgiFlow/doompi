@@ -217,6 +217,26 @@ describe('VoiceDelivery', () => {
     expect(deliver).toHaveBeenCalledWith(request.text, 'queuedFollowUp');
   });
 
+  it('rejects blank text without invoking delivery', () => {
+    const deliver = vi.fn();
+    const results: VoiceDeliveryResult[] = [];
+    const delivery = new VoiceDelivery({ deliver, onResult: (result) => results.push(result) });
+
+    delivery.submit({ ...request, text: '  \n ' });
+
+    expect(deliver).not.toHaveBeenCalled();
+    expect(results).toEqual([
+      {
+        kind: 'failed',
+        sessionId: 'session-1',
+        captureId: 'capture-1',
+        turnId: 'turn-1',
+        revision: 1,
+        code: 'blank transcript',
+      },
+    ]);
+  });
+
   it('reports failure without claiming delivery', () => {
     const results: VoiceDeliveryResult[] = [];
     const delivery = new VoiceDelivery({

@@ -6,7 +6,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NodeTurnSpool } from '../src/adapters/process/turnSpool.ts';
 import { CaptureSession } from '../src/services/captureSession.ts';
 import { PCM_FRAME_BYTES } from '../src/services/pcm.ts';
-import type { IClock, IPcmAudioRecorder, LiveRecordingHandle, ProcessResult, TimerHandle } from '../src/types/index.ts';
+import type {
+  IClock,
+  IPcmAudioRecorder,
+  LiveRecordingHandle,
+  PcmAudioRecorderStartOptions,
+  ProcessResult,
+  TimerHandle,
+} from '../src/types/index.ts';
+import type { VoiceMediaCaptureActivity } from '../src/types/clientMedia.ts';
 
 const directories: string[] = [];
 const config: ResolvedVoiceConfig = {
@@ -52,6 +60,8 @@ class FakeRecording implements LiveRecordingHandle {
   public readonly completion: Promise<ProcessResult>;
   public stopRemainder = Buffer.alloc(0);
   public abortRemainder = Buffer.alloc(0);
+  public stopCalls = 0;
+  public abortCalls = 0;
   private resolveCompletion!: (result: ProcessResult) => void;
 
   public constructor() {
@@ -61,11 +71,13 @@ class FakeRecording implements LiveRecordingHandle {
   }
 
   public async stop(): Promise<Buffer> {
+    this.stopCalls += 1;
     this.finish();
     return this.stopRemainder;
   }
 
   public async abort(): Promise<Buffer> {
+    this.abortCalls += 1;
     this.finish({ code: 1, stdout: '', stderr: 'aborted' });
     return this.abortRemainder;
   }
@@ -78,18 +90,32 @@ class FakeRecording implements LiveRecordingHandle {
 class FakeRecorder implements IPcmAudioRecorder {
   public readonly handles: FakeRecording[] = [];
   private readonly listeners: Array<(frame: Buffer) => void> = [];
+  private readonly activityListeners: Array<((activity: VoiceMediaCaptureActivity) => void) | undefined> = [];
 
   public preflight(): void {}
 
-  public start(_config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle {
+  public start(
+    _config: ResolvedVoiceConfig,
+    onFrame: (frame: Buffer) => void,
+    options?: PcmAudioRecorderStartOptions,
+  ): LiveRecordingHandle {
     const handle = new FakeRecording();
     this.handles.push(handle);
     this.listeners.push(onFrame);
+    this.activityListeners.push(options?.onClientActivity);
     return handle;
   }
 
   public emit(generation: number, frame: Buffer): void {
     this.listeners[generation - 1]?.(frame);
+  }
+
+  public emitLatest(frame: Buffer): void {
+    this.listeners.at(-1)?.(frame);
+  }
+
+  public emitActivity(generation: number, activity: VoiceMediaCaptureActivity): void {
+    this.activityListeners[generation - 1]?.(activity);
   }
 }
 
@@ -152,7 +178,7 @@ describe('NodeTurnSpool', () => {
     const first = spool.createSnapshot();
     const second = spool.createSnapshot();
     spool.acknowledge(second.revision, 'committed');
-    expect(() => spool.acknowledge(first.revision, 'discarded')).toThrow('monotonic');
+    expect(() => spool.acknowledge(first.revision, 'discarded')).toThrow('revision');
     spool.close();
     expect(() => spool.readCommittedPcm()).toThrow('closed');
   });
@@ -201,6 +227,55 @@ describe('CaptureSession', () => {
     await session.abort();
   });
 
+  it('aborts pending startup readiness and performs one recorder terminal operation', async () => {
+    const recorder = new FakeRecorder();
+    const session = new CaptureSession({ recorder, config, spool: createSpool(), clock: new FakeClock() });
+    const starting = session.start();
+
+    await session.abort();
+
+    await expect(starting).rejects.toThrow('startup was aborted');
+    expect(recorder.handles[0]?.abortCalls).toBe(1);
+    expect(recorder.handles[0]?.stopCalls).toBe(0);
+    expect(session.state).toBe('closed');
+  });
+
+  it('serializes drain and abort with the first terminal operation winning', async () => {
+    const drainingRecorder = new FakeRecorder();
+    const draining = new CaptureSession({
+      recorder: drainingRecorder,
+      config,
+      spool: createSpool(),
+      clock: new FakeClock(),
+    });
+    const drainingStart = draining.start();
+    drainingRecorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await drainingStart;
+    const drain = draining.drain();
+    const abortAfterDrain = draining.abort();
+    await expect(drain).resolves.toMatchObject({ revision: 1 });
+    await expect(abortAfterDrain).resolves.toBeUndefined();
+    expect(drainingRecorder.handles[0]?.stopCalls).toBe(1);
+    expect(drainingRecorder.handles[0]?.abortCalls).toBe(0);
+
+    const abortingRecorder = new FakeRecorder();
+    const aborting = new CaptureSession({
+      recorder: abortingRecorder,
+      config,
+      spool: createSpool(),
+      clock: new FakeClock(),
+    });
+    const abortingStart = aborting.start();
+    abortingRecorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await abortingStart;
+    const abort = aborting.abort();
+    const drainAfterAbort = aborting.drain();
+    await expect(abort).resolves.toBeUndefined();
+    await expect(drainAfterAbort).rejects.toThrow('was aborted');
+    expect(abortingRecorder.handles[0]?.abortCalls).toBe(1);
+    expect(abortingRecorder.handles[0]?.stopCalls).toBe(0);
+  });
+
   it('starts liveness only after the first frame and drains the final remainder', async () => {
     const recorder = new FakeRecorder();
     const clock = new FakeClock();
@@ -219,6 +294,22 @@ describe('CaptureSession', () => {
     const snapshot = await session.drain();
     expect(snapshot.pcmBytes).toBe(PCM_FRAME_BYTES + 22);
     expect(spool.readCommittedPcm()).toEqual(Buffer.concat([Buffer.alloc(PCM_FRAME_BYTES, 1), Buffer.alloc(22, 2)]));
+  });
+
+  it('continues capture generations from a recovered turn spool', async () => {
+    const recorder = new FakeRecorder();
+    const spool = createSpool();
+    spool.setCaptureGeneration(7);
+    const recovered = NodeTurnSpool.recover(spool.directory);
+    const session = new CaptureSession({ recorder, config, spool: recovered, clock: new FakeClock() });
+
+    const starting = session.start();
+    expect(recovered.snapshotManifest().captureGeneration).toBe(8);
+    recorder.emitLatest(Buffer.alloc(PCM_FRAME_BYTES, 1));
+    await starting;
+
+    expect(session.state).toBe('capturing');
+    await session.abort();
   });
 
   it('recovers a first-frame timeout before starting liveness', async () => {
@@ -281,5 +372,59 @@ describe('CaptureSession', () => {
         Buffer.alloc(12, 7),
       ]),
     );
+  });
+
+  it('reports recorder recovery exhaustion once and closes the false capture state', async () => {
+    const recorder = new FakeRecorder();
+    const exhausted = vi.fn();
+    const session = new CaptureSession({
+      recorder,
+      config,
+      spool: createSpool(),
+      clock: new FakeClock(),
+      maxRecoveryAttempts: 0,
+      onRecoveryExhausted: exhausted,
+    });
+    const starting = session.start();
+    recorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await starting;
+
+    recorder.handles[0]?.finish({ code: 1, stdout: '', stderr: 'device lost' });
+    await vi.waitFor(() => expect(exhausted).toHaveBeenCalledOnce());
+
+    expect(exhausted).toHaveBeenCalledWith(expect.any(Error), 1);
+    expect(session.state).toBe('closed');
+  });
+
+  it('scopes client activity to the active recovery generation', async () => {
+    const recorder = new FakeRecorder();
+    const spool = createSpool();
+    const activities: Array<{ activity: VoiceMediaCaptureActivity; generation: number }> = [];
+    const session = new CaptureSession({
+      recorder,
+      config,
+      spool,
+      clock: new FakeClock(),
+      onClientActivity: (activity, generation) => activities.push({ activity, generation }),
+    });
+
+    const starting = session.start();
+    recorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await starting;
+    recorder.emitActivity(1, { state: 'speech', levelDbfs: -35, elapsedMs: 500 });
+    recorder.handles[0]!.finish({ code: 1, stdout: '', stderr: 'upload interrupted' });
+    await vi.waitFor(() => expect(spool.snapshotManifest().captureGeneration).toBe(2));
+    recorder.emit(2, Buffer.alloc(PCM_FRAME_BYTES));
+    await vi.waitFor(() => expect(session.state).toBe('capturing'));
+
+    recorder.emitActivity(1, { state: 'endpoint', levelDbfs: -80, elapsedMs: 1_100 });
+    recorder.emitActivity(2, { state: 'listening', levelDbfs: -70, elapsedMs: 100 });
+
+    expect(activities).toEqual([
+      { activity: { state: 'speech', levelDbfs: -35, elapsedMs: 500 }, generation: 1 },
+      { activity: { state: 'listening', levelDbfs: -70, elapsedMs: 100 }, generation: 2 },
+    ]);
+    expect(spool.snapshotManifest()).toMatchObject({ captureGeneration: 2, gapCount: 1 });
+    await session.abort();
   });
 });

@@ -47,6 +47,13 @@ const REPOSITORY_INPUT_PREFIX = 'repo/';
 const EXTERNAL_INPUT_PREFIX = 'external/';
 const DEFAULT_SET_OUTPUT_NAME = 'doom-set';
 
+/** Serializes data embedded in generated JavaScript without leaving HTML or line-separator code boundaries. */
+function javascriptStringLiteral(value: string): string {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029');
+}
 /** Pi's former npm scope. The packages are the same, published under a new name. */
 const PI_SCOPE_RENAMES: Readonly<Record<string, string>> = {
   '@mariozechner/pi-coding-agent': '@earendil-works/pi-coding-agent',
@@ -484,10 +491,10 @@ export function extensionSetKey(entries: readonly string[]): string {
 function extensionSetSource(entries: readonly string[]): string {
   const helper = optionalPackageEntry(EXTENSION_SOURCE_HELPER);
   if (!helper) throw new Error(`Cannot resolve ${EXTENSION_SOURCE_HELPER}`);
-  const loaders = entries.map((entry) => `() => import(${JSON.stringify(pathToImportSpecifier(entry))})`);
-  const names = entries.map((entry) => JSON.stringify(entry));
+  const loaders = entries.map((entry) => `() => import(${javascriptStringLiteral(pathToImportSpecifier(entry))})`);
+  const names = entries.map((entry) => javascriptStringLiteral(entry));
   return [
-    `import { withExtensionSource } from ${JSON.stringify(pathToImportSpecifier(helper))};`,
+    `import { withExtensionSource } from ${javascriptStringLiteral(pathToImportSpecifier(helper))};`,
     `const loaders = [${loaders.join(',')}];`,
     `const names = [${names.join(',')}];`,
     'function report(index, phase, startedAt, error) {',
@@ -655,7 +662,7 @@ function preserveImportMetaUrl() {
       const ranges: SourceRange[] = [];
       collectImportMetaUrlRanges(this.parse(source, { lang }), ranges);
       if (ranges.length === 0) return null;
-      const replacement = JSON.stringify(pathToFileURL(id).href);
+      const replacement = javascriptStringLiteral(pathToFileURL(id).href);
       let transformed = source;
       for (const range of ranges.sort((left, right) => right.start - left.start)) {
         transformed = `${transformed.slice(0, range.start)}${replacement}${transformed.slice(range.end)}`;

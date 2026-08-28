@@ -8,6 +8,7 @@ interface PackageManifest {
   version: string;
   private: boolean;
   type: string;
+  dependencies?: Record<string, string>;
   exports?: Record<string, unknown>;
   files?: string[];
 }
@@ -50,6 +51,13 @@ describe('doom telemetry package boundary', () => {
     expect(manifest.version).toMatch(SEMVER_PATTERN);
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
+  });
+
+  it('pins the OTEL API without adding a metrics exporter', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.dependencies?.['@opentelemetry/api']).toBe('1.9.1');
+    expect(Object.keys(manifest.dependencies ?? {})).not.toContain('@opentelemetry/exporter-metrics-otlp-proto');
   });
 
   it('does not depend on private rig packages from package-local configuration', async () => {

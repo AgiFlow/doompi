@@ -85,6 +85,18 @@ describe('turning remote access on', () => {
     expect(counts().closed).toBe(0);
   });
 
+  it('keeps remote access on when unauthenticated pairing claims are abusive', async () => {
+    const { remote, counts, notices } = harness();
+    await remote.enable();
+
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      remote.claim({ code: 'wrong', userAgent: 'attacker', edgeIp: '198.51.100.1', sourceAddress: '127.0.0.1' });
+    }
+
+    expect(remote.state().status).toBe('on');
+    expect(counts()).toEqual({ stopped: 0, closed: 0 });
+    expect(notices.some((message) => message.includes('pairing claim abuse detected'))).toBe(true);
+  });
   it('tears everything down when the tunnel refuses', async () => {
     const { remote, counts } = harness({
       launch: async () => ({ ok: false, failure: 'not_installed', message: 'no cloudflared' }),
@@ -350,7 +362,7 @@ describe('what each side is told', () => {
     await remote.enable();
     const minted = remote.mintPairing();
     if (minted === undefined) throw new Error('no code');
-    remote.claim({ code: minted.code, userAgent: 'iPhone', edgeIp: '203.0.113.7' });
+    remote.claim({ code: minted.code, userAgent: 'iPhone', edgeIp: '203.0.113.7', sourceAddress: '127.0.0.1' });
     expect(remote.state(undefined, true).pending).toHaveLength(1);
     expect(remote.state(undefined, false).pending).toHaveLength(0);
   });
@@ -361,7 +373,7 @@ describe('what each side is told', () => {
     const before = allFrames.length;
     const minted = remote.mintPairing();
     if (minted === undefined) throw new Error('no code');
-    remote.claim({ code: minted.code, userAgent: 'iPhone', edgeIp: '203.0.113.7' });
+    remote.claim({ code: minted.code, userAgent: 'iPhone', edgeIp: '203.0.113.7', sourceAddress: '127.0.0.1' });
     expect(localFrames).toHaveLength(1);
     expect(allFrames).toHaveLength(before);
   });
@@ -387,7 +399,12 @@ describe('what each side is told', () => {
     await remote.enable();
     const minted = remote.mintPairing();
     if (minted === undefined) throw new Error('no code');
-    const claimed = remote.claim({ code: minted.code, userAgent: 'iPhone', edgeIp: '203.0.113.7' });
+    const claimed = remote.claim({
+      code: minted.code,
+      userAgent: 'iPhone',
+      edgeIp: '203.0.113.7',
+      sourceAddress: '127.0.0.1',
+    });
     if (!claimed.ok) throw new Error('claim failed');
     expect(remote.deny(claimed.requestId)).toBe('denied');
     expect(remote.state(undefined, true).pending).toHaveLength(0);

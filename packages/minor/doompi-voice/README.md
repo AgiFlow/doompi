@@ -68,13 +68,20 @@ transcription is required. Use the `whisper-cpp` engine for `whisper-cli`, `open
 `whisper`, or `mlx-whisper` for `mlx_whisper`. `utteranceIdleMs` accepts 1,500 to 10,000 ms and
 defaults to 3,000.
 
-When the agent is launched by `doompi-server`, capture and narration use the connected browser.
-The browser sends mono 16 kHz PCM16 through the authenticated session media API, while VAD,
-spooling, and Whisper stay on the agent host. Standalone terminal launches retain the macOS FFmpeg and `say` adapters. In the browser,
-`tts.voice` selects an exact SpeechSynthesis voice name or URI. If it does not match, the browser
-uses its default voice. The client media contract is browser-neutral so a native client can
-provide its own microphone and playback adapters later through
-`@agimon-ai/doompi-voice/client-media`.
+When the agent is launched by `doompi-server`, capture and narration use the connected media client.
+The protocol is capability-driven rather than browser-specific. A client can own microphone capture,
+adaptive activity detection, endpoint decisions, autonomous capture phases, and playback while streaming
+mono 16 kHz PCM16 through the authenticated session media API. The host supplies capabilities the client
+does not advertise and remains responsible for durable spooling, configured transcription, and Pi or
+model actions. This boundary supports terminal, web, React Native, and future watch adapters without
+putting platform APIs in the shared client runtime.
+
+A browser using the sealed remote-control channel takes the session media lease from a local client, so
+narration and capture follow the user to the remote device. Local clients cannot take that lease back
+while the remote client remains connected. Standalone terminal launches retain the macOS FFmpeg and
+`say` adapters as a host-owned fallback. In the browser, `tts.voice` selects an exact
+SpeechSynthesis voice name or URI. If it does not match, the browser uses its default voice. Portable
+clients implement the declared ports through `@agimon-ai/doompi-voice/client-media`.
 
 ## Commands and tools
 
@@ -106,10 +113,12 @@ These optional model calls consume provider quota.
 
 ## Data flow and recovery
 
-The selected client captures audio. PCM validation, activity detection, spooling, WAV creation,
-normalization, and configured local Whisper execution run on the host in a private supervised
-worker. Private spool directories use mode `0700` and files use `0600`. Unacknowledged turns can be
-rediscovered after a worker restart.
+The selected client captures audio. When it advertises client orchestration, its portable PCM state
+machine performs activity detection and endpointing, then sends phase metadata with the streamed audio.
+Clients without those capabilities use host adaptive and neural VAD as a fallback. PCM validation,
+spooling, WAV creation, normalization, and configured local Whisper execution run on the host in a
+private supervised worker. Private spool directories use mode `0700` and files use `0600`.
+Unacknowledged turns can be rediscovered after a worker restart.
 
 This is not a blanket “nothing leaves the machine” guarantee:
 

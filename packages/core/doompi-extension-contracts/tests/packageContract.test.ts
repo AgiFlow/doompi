@@ -112,6 +112,11 @@ describe('doom extension contracts package boundary', () => {
       import: './dist/cordisHost.mjs',
       require: './dist/cordisHost.cjs',
     });
+    expect(exportsMap['./notification']).toEqual({
+      types: './dist/notification.d.mts',
+      import: './dist/notification.mjs',
+      require: './dist/notification.cjs',
+    });
     expect(exportsMap['./readiness']).toEqual({
       types: './dist/readiness.d.mts',
       import: './dist/readiness.mjs',

@@ -31,14 +31,14 @@ function reachTranscribing(h: ReturnType<typeof harness>): void {
   enable(h);
   h.actor.send({ type: 'SPEECH_CONFIRMED', ...firstTurn });
   h.actor.send({ type: 'ENDPOINT_REACHED', ...firstTurn });
-  h.actor.send({ type: 'CAPTURE_PROCESSING', ...firstTurn });
+  h.actor.send({ type: 'CAPTURE_DRAINED', ...firstTurn, revision: 1 });
 }
 
 function completeAcceptedTurn(h: ReturnType<typeof harness>): void {
   h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...firstTurn, revision: 1, transcript: 'run tests' });
   h.actor.send({ type: 'TRANSCRIPT_ACCEPTED', ...firstTurn, revision: 1, text: 'run tests' });
   h.actor.send({ type: 'DELIVERY_SUCCEEDED', ...firstTurn, revision: 1 });
-  h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1 });
+  h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1, outcome: 'committed' });
 }
 
 afterEach(() => vi.useRealTimers());
@@ -74,6 +74,94 @@ describe('autonomous voice XState lifecycle', () => {
     h.actor.send({ type: 'CAPTURE_READY', ...secondTurn });
     expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('listening');
     expect(h.effects.filter((effect) => effect.type === 'effect.beginCapture')).toHaveLength(2);
+  });
+
+  it('returns to speech when current speech revokes a soft endpoint but not a forced finalization', () => {
+    const soft = harness();
+    enable(soft);
+    soft.actor.send({ type: 'SPEECH_CONFIRMED', ...firstTurn });
+    soft.actor.send({ type: 'ENDPOINT_REACHED', ...firstTurn });
+    expect(soft.actor.getSnapshot().matches({ active: { capture: 'finalizing' } })).toBe(true);
+
+    soft.actor.send({ type: 'SPEECH_CONFIRMED', ...firstTurn });
+    expect(autonomousVoiceState(soft.actor.getSnapshot())).toBe('speech');
+    soft.actor.send({ type: 'ENDPOINT_REACHED', ...firstTurn });
+    expect(soft.effects.filter((effect) => effect.type === 'effect.finalizeCapture')).toHaveLength(2);
+
+    const forced = harness();
+    enable(forced);
+    forced.actor.send({ type: 'SPEECH_CONFIRMED', ...firstTurn });
+    forced.actor.send({ type: 'CAPTURE_DURATION_LIMIT_REACHED', ...firstTurn });
+    forced.actor.send({ type: 'SPEECH_CONFIRMED', ...firstTurn });
+    expect(forced.actor.getSnapshot().matches({ active: { capture: 'finalizing' } })).toBe(true);
+  });
+
+  it('requires a positive drained revision before accepting transcription outcomes', () => {
+    const h = harness();
+    enable(h);
+    h.actor.send({ type: 'SPEECH_CONFIRMED', ...firstTurn });
+    h.actor.send({ type: 'ENDPOINT_REACHED', ...firstTurn });
+
+    h.actor.send({ type: 'CAPTURE_PROCESSING', ...firstTurn });
+    h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...firstTurn, revision: 1, transcript: 'too early' });
+    h.actor.send({ type: 'CAPTURE_DRAINED', ...firstTurn, revision: 0 });
+    expect(h.actor.getSnapshot().matches({ active: { capture: 'finalizing' } })).toBe(true);
+    expect(h.effects.some((effect) => effect.type === 'effect.applyTranscriptPolicy')).toBe(false);
+
+    h.actor.send({ type: 'CAPTURE_DRAINED', ...firstTurn, revision: 1 });
+    h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...firstTurn, revision: 2, transcript: 'stale' });
+    expect(h.actor.getSnapshot().matches({ active: { capture: 'transcribing' } })).toBe(true);
+    expect(h.effects.some((effect) => effect.type === 'effect.applyTranscriptPolicy')).toBe(false);
+
+    h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...firstTurn, revision: 1, transcript: 'current' });
+    expect(h.actor.getSnapshot().matches({ active: { capture: 'applyingPolicy' } })).toBe(true);
+    expect(h.effects).toContainEqual(
+      expect.objectContaining({
+        type: 'effect.applyTranscriptPolicy',
+        ...firstTurn,
+        revision: 1,
+        transcript: 'current',
+      }),
+    );
+  });
+
+  it.each([
+    { type: 'TRANSCRIPTION_FAILED' as const, code: 'asr_failed', recoverable: false },
+    { type: 'TRANSCRIPTION_TIMED_OUT' as const },
+  ])('acknowledges a terminal $type revision before hard cleanup', (failure) => {
+    const h = harness();
+    reachTranscribing(h);
+
+    h.actor.send({ ...failure, ...firstTurn, revision: 1 });
+
+    expect(h.actor.getSnapshot().matches({ active: { capture: 'acknowledging' } })).toBe(true);
+    expect(h.effects).toContainEqual({
+      type: 'effect.acknowledge',
+      ...firstTurn,
+      revision: 1,
+      outcome: 'discarded',
+    });
+    expect(h.effects.some((effect) => effect.type === 'effect.stop')).toBe(false);
+
+    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1, outcome: 'discarded' });
+
+    expect(h.actor.getSnapshot().matches('failed')).toBe(true);
+    expect(h.effects).toContainEqual(expect.objectContaining({ type: 'effect.stop', mode: 'hard' }));
+  });
+  it('discards a blank accepted transcript without delivery', () => {
+    const h = harness();
+    reachTranscribing(h);
+    h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...firstTurn, revision: 1, transcript: 'candidate' });
+    h.actor.send({ type: 'TRANSCRIPT_ACCEPTED', ...firstTurn, revision: 1, text: '   ' });
+
+    expect(h.actor.getSnapshot().matches({ active: { capture: 'acknowledging' } })).toBe(true);
+    expect(h.effects.some((effect) => effect.type === 'effect.deliver')).toBe(false);
+    expect(h.effects).toContainEqual({
+      type: 'effect.acknowledge',
+      ...firstTurn,
+      revision: 1,
+      outcome: 'discarded',
+    });
   });
 
   it('rotates an idle capture at its duration boundary without failing or transcribing', () => {
@@ -163,14 +251,16 @@ describe('autonomous voice XState lifecycle', () => {
       revision: 1,
       outcome: 'discarded',
     });
-    active.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1 });
+    active.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1, outcome: 'committed' });
+    expect(active.actor.getSnapshot().matches({ active: { capture: 'acknowledging' } })).toBe(true);
+    active.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1, outcome: 'discarded' });
     expect(active.actor.getSnapshot().matches({ active: { capture: 'startingNextTurn' } })).toBe(true);
 
     const stopping = harness();
     reachTranscribing(stopping);
     stopping.actor.send({ type: 'TOGGLE_OFF_REQUESTED' });
     stopping.actor.send({ type: 'TRANSCRIPTION_EMPTY', ...firstTurn, revision: 1 });
-    stopping.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1 });
+    stopping.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1, outcome: 'discarded' });
     expect(autonomousVoiceState(stopping.actor.getSnapshot())).toBe('stopping');
   });
 
@@ -274,6 +364,71 @@ describe('autonomous voice XState lifecycle', () => {
     });
   });
 
+  it('does not abort narration for classifier-confirmed imperfect self-echo', () => {
+    const h = harness();
+    enable(h);
+    h.actor.send({
+      type: 'PLAYBACK_STARTED',
+      sessionId: firstTurn.sessionId,
+      playbackGeneration: 4,
+      referenceText: 'The plan is ready for review',
+    });
+    h.actor.send({
+      type: 'BARGE_IN_EVIDENCE',
+      ...firstTurn,
+      playbackGeneration: 4,
+      evidence: {
+        exactStopCommand: false,
+        intentionalAddress: false,
+        classifierConfirmed: true,
+        classifierSpeechMs: 640,
+        residualTokenCount: 2,
+        residualRatio: 0.33,
+        voicedMs: 1_200,
+        peakDbAboveNoise: 20,
+        signalVariationDb: 8,
+        narrationSimilarity: 0.67,
+      },
+    });
+
+    expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('listening');
+    expect(h.effects.some((effect) => effect.type === 'effect.confirmBargeIn')).toBe(false);
+    expect(h.effects.some((effect) => effect.type === 'effect.abortPlayback')).toBe(false);
+  });
+
+  it('does not prioritize classifier-confirmed speech without an address phrase during narration', () => {
+    const h = harness();
+    enable(h);
+    h.actor.send({
+      type: 'PLAYBACK_STARTED',
+      sessionId: firstTurn.sessionId,
+      playbackGeneration: 4,
+      referenceText: 'The plan is ready',
+    });
+    h.actor.send({
+      type: 'BARGE_IN_EVIDENCE',
+      ...firstTurn,
+      playbackGeneration: 4,
+      evidence: {
+        exactStopCommand: false,
+        intentionalAddress: false,
+        classifierConfirmed: true,
+        classifierSpeechMs: 160,
+        residualTokenCount: 3,
+        residualRatio: 0.5,
+        voicedMs: 500,
+        peakDbAboveNoise: 8,
+        signalVariationDb: 4,
+        narrationSimilarity: 0.2,
+      },
+    });
+
+    expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('listening');
+    expect(h.actor.getSnapshot().context.narrationOverlapPromoted).toBe(false);
+    expect(h.effects.some((effect) => effect.type === 'effect.confirmBargeIn')).toBe(false);
+    expect(h.effects.some((effect) => effect.type === 'effect.abortPlayback')).toBe(false);
+  });
+
   it('discards command-only stop overlap instead of promoting narration tail audio', () => {
     const h = harness();
     enable(h);
@@ -362,7 +517,7 @@ describe('autonomous voice XState lifecycle', () => {
     const transcribe = (identity: AutonomousTurnIdentity, revision: number, transcript: string): void => {
       h.actor.send({ type: 'SPEECH_CONFIRMED', ...identity });
       h.actor.send({ type: 'ENDPOINT_REACHED', ...identity });
-      h.actor.send({ type: 'CAPTURE_PROCESSING', ...identity });
+      h.actor.send({ type: 'CAPTURE_DRAINED', ...identity, revision });
       h.actor.send({ type: 'TRANSCRIPTION_SUCCEEDED', ...identity, revision, transcript });
     };
 
@@ -385,13 +540,13 @@ describe('autonomous voice XState lifecycle', () => {
     });
     expect(h.effects.filter((effect) => effect.type === 'effect.acknowledge')).toHaveLength(1);
 
-    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1 });
+    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...firstTurn, revision: 1, outcome: 'committed' });
     const secondTurn = { sessionId: firstTurn.sessionId, captureId: 'capture-2', turnId: 'turn-2' };
     h.actor.send({ type: 'NEXT_TURN_READY', ...secondTurn });
     h.actor.send({ type: 'CAPTURE_READY', ...secondTurn });
     transcribe(secondTurn, 2, 'second segment');
     h.actor.send({ type: 'TRANSCRIPT_COMPOSITION_BUFFERED', ...secondTurn, revision: 2, operation: 'append' });
-    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...secondTurn, revision: 2 });
+    h.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...secondTurn, revision: 2, outcome: 'committed' });
 
     const sendTurn = { sessionId: firstTurn.sessionId, captureId: 'capture-3', turnId: 'turn-3' };
     h.actor.send({ type: 'NEXT_TURN_READY', ...sendTurn });

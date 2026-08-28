@@ -134,6 +134,11 @@
       "import": "./dist/narration.mjs",
       "require": "./dist/narration.cjs"
     },
+    "./notification": {
+      "types": "./dist/notification.d.mts",
+      "import": "./dist/notification.mjs",
+      "require": "./dist/notification.cjs"
+    },
     "./package-api": {
       "types": "./dist/packageApi.d.mts",
       "import": "./dist/packageApi.mjs",

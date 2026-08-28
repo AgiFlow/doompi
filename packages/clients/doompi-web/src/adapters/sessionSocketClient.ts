@@ -36,7 +36,9 @@ export function attachToSession(options: AttachOptions): SessionAttachment {
     connection.setEncoding('utf8');
 
     connection.on('connect', () => {
-      connection.write(encodeFrame({ type: ATTACH_TYPE, token: options.token }));
+      connection.write(
+        encodeFrame({ type: ATTACH_TYPE, token: options.token, ...(options.trace === undefined ? {} : options.trace) }),
+      );
     });
 
     connection.on('data', (chunk: string) => {

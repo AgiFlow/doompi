@@ -112,13 +112,33 @@ describe('starting a tunnel', () => {
     if (result.ok) await result.stop();
   });
 
+  it('retries a named tunnel while Cloudflare has no connector registered yet', async () => {
+    const binary = script('cloudflared', 'echo "Registered tunnel connection"\nsleep 30');
+    let probes = 0;
+    const launch = createTunnelLauncher({
+      cloudflaredPath: binary,
+      stateDir,
+      selfTestRetryMs: 0,
+      probe: async (url) => {
+        probes += 1;
+        if (probes <= 2) return { status: 530, body: '' };
+        return await goodProbe(url);
+      },
+    });
+
+    const result = await launch({ port: 7999, config: { kind: 'named', hostname: 'doom.example.com' } });
+    expect(result.ok).toBe(true);
+    expect(probes).toBe(4);
+    if (result.ok) await result.stop();
+  });
+
   it('keeps the startup deadline active through an in-progress self-test', async () => {
     const binary = script('cloudflared', `cat <<'EOF'\n${BANNER}\nEOF\nsleep 30`);
     let probeAborted = false;
     const launch = createTunnelLauncher({
       cloudflaredPath: binary,
       stateDir,
-      startTimeoutMs: 25,
+      startTimeoutMs: 1000,
       probe: async (_url, signal) =>
         await new Promise<ProbeResult>((_resolve, reject) => {
           signal.addEventListener(
@@ -212,8 +232,8 @@ describe('starting a tunnel', () => {
     ).resolves.toBe('pending');
   });
 
-  it('skips parsing entirely for a named tunnel', async () => {
-    const binary = script('cloudflared', 'echo "starting"\nsleep 30');
+  it('uses a named tunnel configured hostname after its edge connection registers', async () => {
+    const binary = script('cloudflared', 'echo "Registered tunnel connection"\nsleep 30');
     const launch = createTunnelLauncher({ cloudflaredPath: binary, stateDir, probe: goodProbe });
     const result = await launch({ port: 7999, config: { kind: 'named', hostname: 'doom.example.com' } });
     expect(result.ok).toBe(true);
@@ -236,6 +256,12 @@ describe('reapStaleTunnel', () => {
     expect(fs.existsSync(pidPath)).toBe(false);
   });
 
+  it('removes a stale runtime token file even without a pid file', () => {
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(runtimeTokenFile, 'secret-token');
+    reapStaleTunnel(stateDir, (message) => notices.push(message));
+    expect(fs.existsSync(runtimeTokenFile)).toBe(false);
+  });
   it('ignores a pid recorded too long ago to trust', () => {
     // Past the window a recycled pid could belong to anything, so leaving it
     // alone beats killing an unrelated process.
@@ -285,24 +311,43 @@ describe('stopping a tunnel', () => {
     expect(exits[0]).toContain('stopped on its own');
   });
 
-  it('reads a named tunnel token from the file rather than the settings', async () => {
-    // The token is a Cloudflare account credential; inlining it in settings
-    // would put it in the first bug report that quotes them.
+  it('passes a protected runtime token file and removes it on stop', async () => {
+    // The token is a Cloudflare account credential, so neither settings nor
+    // the process argument list should contain its value.
     const tokenFile = path.join(stateDir, 'token');
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
     fs.writeFileSync(tokenFile, '  secret-token\n');
-    const binary = script('cloudflared', 'echo "$@" > "$0.args"\nsleep 30');
+    const binary = script('cloudflared', 'echo "$@" > "$0.args"\necho "Registered tunnel connection"\nsleep 30');
     const launch = createTunnelLauncher({ cloudflaredPath: binary, stateDir, probe: goodProbe });
     const result = await launch({
       port: 7999,
       config: { kind: 'named', hostname: 'doom.example.com', tokenFile },
     });
     if (!result.ok) throw new Error(result.message);
-    // A named tunnel is ready the moment it spawns, so give the stub a beat to
-    // record what it was actually called with.
+    // The process records its arguments before announcing the edge connection.
     await vi.waitFor(() => {
       expect(fs.existsSync(`${binary}.args`)).toBe(true);
     });
+    const args = fs.readFileSync(`${binary}.args`, 'utf8');
+    expect(args).toContain(`--token-file ${runtimeTokenFile}`);
+    expect(args).not.toContain('secret-token');
+    expect(fs.readFileSync(runtimeTokenFile, 'utf8')).toBe('secret-token');
+    if (process.platform !== 'win32') expect(fs.statSync(runtimeTokenFile).mode & 0o777).toBe(0o600);
     await result.stop();
-    expect(fs.readFileSync(`${binary}.args`, 'utf8')).toContain('--token secret-token');
+    expect(fs.existsSync(runtimeTokenFile)).toBe(false);
+  });
+
+  it('refuses a runtime-path token source without deleting the operator credential', async () => {
+    const tokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(tokenFile, 'operator-token');
+    const binary = script('cloudflared', 'echo spawned > "$0.spawned"\nsleep 30');
+    const launch = createTunnelLauncher({ cloudflaredPath: binary, stateDir, probe: goodProbe });
+    const result = await launch({
+      port: 7999,
+      config: { kind: 'named', hostname: 'doom.example.com', tokenFile },
+    });
+    expect(result).toMatchObject({ ok: false, failure: 'spawn_failed' });
+    expect(fs.readFileSync(tokenFile, 'utf8')).toBe('operator-token');
+    expect(fs.existsSync(`${binary}.spawned`)).toBe(false);
   });
 });

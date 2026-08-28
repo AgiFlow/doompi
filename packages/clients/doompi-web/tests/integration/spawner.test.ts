@@ -71,24 +71,24 @@ describe('createServerSpawner', () => {
 
     const first = await spawner.spawn({ cwd, name: 'live' });
     if (!first.ok) throw new Error(first.error);
-    const firstRecord = JSON.parse(
-      fs.readFileSync(path.join(registryDir, 'sessions', `${first.sessionId}.json`), 'utf8'),
-    ) as Record<string, unknown>;
+    const recordFile = path.join(registryDir, 'sessions', `${first.sessionId}.json`);
+    const firstRecord = JSON.parse(fs.readFileSync(recordFile, 'utf8')) as Record<string, unknown>;
     process.kill(firstRecord.pid as number);
+    fs.rmSync(recordFile);
     const sessionDir = path.dirname(firstRecord.socketPath as string);
 
-    const second = await spawner.spawn({ cwd, name: 'live', sessionId: first.sessionId, sessionDir });
+    const second = await spawner.spawn({ cwd, name: 'restarted', sessionId: first.sessionId, sessionDir });
     if (!second.ok) throw new Error(second.error);
-    const secondRecord = JSON.parse(
-      fs.readFileSync(path.join(registryDir, 'sessions', `${first.sessionId}.json`), 'utf8'),
-    ) as Record<string, unknown>;
+    const secondRecord = JSON.parse(fs.readFileSync(recordFile, 'utf8')) as Record<string, unknown>;
 
     // Same id, so Pi resumes the session rather than starting a new one.
     expect(second.sessionId).toBe(first.sessionId);
     // Same directory, so repeated restarts cannot grow the socket path past
     // the unix limit one prefix extension at a time.
     expect(path.dirname(secondRecord.socketPath as string)).toBe(sessionDir);
-    expect(secondRecord.pid).not.toBe(firstRecord.pid);
+    // A distinct name proves this is the replacement's record, not stale data
+    // left by the terminated fixture process.
+    expect(secondRecord.name).toBe('restarted');
     process.kill(secondRecord.pid as number);
   }, 15_000);
 

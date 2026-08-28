@@ -12,4 +12,5 @@ export type {
   DoomTelemetryOptions,
   DoomTelemetryRecord,
   DoomTelemetryStatus,
+  DoomTraceContext,
 } from '../types/telemetry.js';

@@ -24,14 +24,14 @@ bundle, is what makes that impossible.
 
 ## The sealed channel
 
-A hosted tunnel terminates TLS at its provider's edge, so everything the cockpit carries is plaintext
-to them. Sealing the payload underneath their TLS leaves them a relay that sees timing and sizes but
-not content.
+A hosted tunnel terminates TLS at its provider's edge, so without application sealing everything the
+cockpit carries is plaintext to them. Sealing the payload underneath their TLS leaves them a relay that
+sees timing and sizes but not content.
 
-The key exchange is anchored out of band rather than negotiated in band. The host's ephemeral P-256
-public key is printed in a QR on a screen the user is holding, so there is no moment at which a relay
-could substitute its own. That is the job Telegram's emoji comparison does for a secret chat, done
-automatically instead of by eye.
+The QR pairing path anchors key exchange out of band. The host's ephemeral P-256 public key is printed on
+the screen the user is holding, so the relay cannot substitute its own. A returning device instead receives
+the current public key after proving a passkey. That path depends on the trusted code-delivery edge described
+above, and the key itself is public rather than secret.
 
 Three properties worth knowing, because getting any of them wrong is silent:
 
@@ -48,15 +48,19 @@ Three properties worth knowing, because getting any of them wrong is silent:
 Every failure names itself. A decryption failure otherwise shows up as a blank page with nothing to
 go on.
 
-## The signed bundle manifest
+## The signed bundle-manifest primitive
 
-A provider that can serve the page can serve a page that leaks the session cookie and drives the
-socket, which would defeat every other guarantee. The hub signs a manifest of every asset with a
-long-lived ECDSA P-256 key; the page verifies it and pins the key it first saw.
+The signer can support a separately distributed verifier whose bootstrap and public key are already
+trusted. It hashes every asset and signs a canonical manifest with ECDSA P-256.
 
-`canonicalManifest` is hand-rolled rather than `JSON.stringify` of the whole object, because a
-signature is only worth something if both sides agree byte for byte on what was signed, and key order
-in a JSON object is an implementation detail.
+It is not a self-protection mechanism for a browser SPA. A server or TLS edge that can replace the page
+can also remove an in-page verifier or replace the key it trusts. DoomPi's Cloudflare transport treats
+Cloudflare as a trusted code-delivery boundary, so the cockpit does not use this primitive to claim
+protection from a malicious edge.
+
+`canonicalManifest` is hand-rolled rather than `JSON.stringify` of the whole object, because a signature
+is only worth anything if signer and verifier agree byte for byte, and key order in a JSON object is an
+implementation detail.
 
 ## Public API
 

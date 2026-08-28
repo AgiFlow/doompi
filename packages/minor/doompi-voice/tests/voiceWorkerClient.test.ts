@@ -50,6 +50,7 @@ describe('VoiceWorkerClient', () => {
     const events: string[] = [];
     const client = new VoiceWorkerClient({
       spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
       workerFactory: () => worker as unknown as VoiceWorkerHandle,
       onEvent: (event) => events.push(event.kind),
     });
@@ -118,6 +119,7 @@ describe('VoiceWorkerClient', () => {
     let workerIndex = 0;
     const client = new VoiceWorkerClient({
       spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
       workerFactory: () => workers[workerIndex++] as unknown as VoiceWorkerHandle,
       onEvent: vi.fn(),
     });
@@ -185,10 +187,221 @@ describe('VoiceWorkerClient', () => {
     await client.shutdown('session-shutdown');
   });
 
+  it('resumes a frozen revision once and replays a pending acknowledgement without recapture', async () => {
+    const workers = [new ClientWorker(), new ClientWorker(), new ClientWorker(), new ClientWorker()];
+    let workerIndex = 0;
+    const client = new VoiceWorkerClient({
+      spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
+      workerFactory: () => workers[workerIndex++] as unknown as VoiceWorkerHandle,
+      onEvent: vi.fn(),
+    });
+    const starting = client.start();
+    workers[0]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    await starting;
+    client.beginCapture({
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      mode: 'autonomous',
+      config: {
+        engine: 'mlx-whisper',
+        language: 'auto',
+        recorder: { device: 'none:default' },
+        adapters: { 'mlx-whisper': { model: { id: 'local-model' } } },
+      },
+      maxDurationMs: 300_000,
+      utteranceIdleMs: 3_000,
+    });
+    client.finalizeCapture('session-1', 'capture-1', 'soft-endpoint');
+    workers[0]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 1,
+      kind: 'drained',
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      revision: 1,
+    });
+
+    workers[0]?.emit('error', new Error('after drain'));
+    workers[1]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    expect(workers[1]?.posted.map((message) => (message as { kind: string }).kind)).toEqual([
+      'initialize',
+      'begin-capture',
+    ]);
+
+    workers[1]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 1,
+      kind: 'transcript-candidate',
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      revision: 1,
+      transcript: 'run tests',
+      final: true,
+    });
+    workers[1]?.emit('error', new Error('after candidate'));
+    workers[2]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    expect(workers[2]?.posted.map((message) => (message as { kind: string }).kind)).toEqual(['initialize']);
+
+    client.acknowledgeCandidate('session-1', 'turn-1', 1, 'committed');
+    workers[2]?.emit('error', new Error('after acknowledgement send'));
+    workers[3]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    expect(workers[3]?.posted.map((message) => (message as { kind: string }).kind)).toEqual([
+      'initialize',
+      'acknowledge-candidate',
+    ]);
+    expect(workers[3]?.posted[1]).toMatchObject({ revision: 1, outcome: 'committed' });
+
+    workers[3]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 1,
+      kind: 'candidate-acknowledged',
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      revision: 1,
+      outcome: 'committed',
+    });
+    await client.shutdown('session-shutdown');
+  });
+
+  it('keeps restart ownership across stale progress and conflicting acknowledgements', async () => {
+    const workers = [new ClientWorker(), new ClientWorker(), new ClientWorker()];
+    let workerIndex = 0;
+    const client = new VoiceWorkerClient({
+      spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
+      workerFactory: () => workers[workerIndex++] as unknown as VoiceWorkerHandle,
+      onEvent: vi.fn(),
+    });
+    const starting = client.start();
+    workers[0]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    await starting;
+    client.beginCapture({
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      mode: 'autonomous',
+      config: {
+        engine: 'mlx-whisper',
+        language: 'auto',
+        recorder: { device: 'none:default' },
+        adapters: { 'mlx-whisper': { model: { id: 'local-model' } } },
+      },
+      maxDurationMs: 300_000,
+      utteranceIdleMs: 3_000,
+    });
+    client.setPlaybackState('session-1', 4, true);
+    client.setPlaybackState('session-1', 3, false);
+
+    const emitDrained = (sequence: number, sessionId: string, captureId: string, turnId: string, revision: number) =>
+      workers[0]?.emit('message', {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence,
+        kind: 'drained',
+        sessionId,
+        captureId,
+        turnId,
+        revision,
+      });
+    emitDrained(1, 'stale-session', 'capture-1', 'turn-1', 1);
+    emitDrained(2, 'session-1', 'stale-capture', 'turn-1', 1);
+    emitDrained(3, 'session-1', 'capture-1', 'stale-turn', 1);
+    emitDrained(4, 'session-1', 'capture-1', 'turn-1', 0);
+    emitDrained(5, 'session-1', 'capture-1', 'turn-1', 1);
+    workers[0]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 6,
+      kind: 'failure',
+      code: 'transcription_failed',
+      recoverable: false,
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      revision: 1,
+    });
+
+    client.acknowledgeCandidate('session-1', 'turn-1', 1, 'retry');
+    client.acknowledgeCandidate('session-1', 'turn-1', 2, 'committed');
+    client.acknowledgeCandidate('session-1', 'turn-1', 1, 'committed');
+    workers[0]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 7,
+      kind: 'candidate-acknowledged',
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      revision: 1,
+      outcome: 'discarded',
+    });
+
+    workers[0]?.emit('error', new Error('before acknowledgement confirmation'));
+    workers[1]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    expect(workers[1]?.posted).toEqual([
+      expect.objectContaining({ kind: 'initialize' }),
+      expect.objectContaining({ kind: 'acknowledge-candidate', revision: 1, outcome: 'committed' }),
+      expect.objectContaining({ kind: 'playback-state', playbackGeneration: 4, active: true }),
+    ]);
+    client.setPlaybackState('session-1', 4, false);
+    workers[1]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 1,
+      kind: 'candidate-acknowledged',
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      revision: 1,
+      outcome: 'committed',
+    });
+
+    workers[1]?.emit('error', new Error('after acknowledgement confirmation'));
+    workers[2]?.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    expect(workers[2]?.posted.map((message) => (message as { kind: string }).kind)).toEqual(['initialize']);
+    await client.shutdown('session-shutdown');
+  });
   it('rejects use before start and reports initialization failure', async () => {
     const worker = new ClientWorker();
     const client = new VoiceWorkerClient({
       spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
       workerFactory: () => worker as unknown as VoiceWorkerHandle,
       onEvent: vi.fn(),
     });
@@ -205,6 +418,35 @@ describe('VoiceWorkerClient', () => {
     await client.shutdown('extension-dispose');
   });
 
+  it('waits for worker exit after posting graceful shutdown', async () => {
+    const worker = new ClientWorker();
+    const client = new VoiceWorkerClient({
+      spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 1_000,
+      workerFactory: () => worker as unknown as VoiceWorkerHandle,
+      onEvent: vi.fn(),
+    });
+    const starting = client.start();
+    worker.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture'],
+    });
+    await starting;
+
+    let settled = false;
+    const shutdown = client.shutdown('session-shutdown').then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(worker.posted.at(-1)).toMatchObject({ kind: 'shutdown' });
+    expect(settled).toBe(false);
+
+    worker.emit('exit', 0);
+    await shutdown;
+    expect(worker.terminated).toBe(false);
+  });
   it('settles pending readiness and starts cleanly after shutdown before ready', async () => {
     const first = new ClientWorker();
     const second = new ClientWorker();
@@ -212,6 +454,7 @@ describe('VoiceWorkerClient', () => {
     let workerIndex = 0;
     const client = new VoiceWorkerClient({
       spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
       workerFactory: () => workers[workerIndex++] as unknown as VoiceWorkerHandle,
       onEvent: vi.fn(),
     });

@@ -19,7 +19,7 @@ const SIGN_ALGORITHM = 'sha256';
 const SKIPPED = new Set(['.map']);
 
 export interface BundleSigner {
-  /** Base64url SPKI, handed to a device over the pairing exchange. */
+  /** Base64url SPKI for an independently trusted verifier to pin. */
   publicKey(): string;
   /** Hashes the asset tree and signs the result. Undefined when there is no bundle to sign. */
   sign(assetsDir: string): SignedBundleManifest | undefined;
@@ -33,10 +33,8 @@ interface StoredKey {
 /**
  * Loads the hub's signing key, generating one on first run.
  *
- * Long-lived on purpose: the public half is pinned by every device that has
- * paired, so rotating it means every device re-pairs. Losing the file has the
- * same effect, which is why it is written before it is first used rather than
- * held only in memory.
+ * Long-lived so an external verifier can pin it. Rotating the key invalidates
+ * those pins, and losing the file has the same effect.
  */
 function loadKey(stateDir: string, onNotice: (message: string) => void): StoredKey {
   const keyPath = path.join(stateDir, SIGNING_FILE);
@@ -50,7 +48,9 @@ function loadKey(stateDir: string, onNotice: (message: string) => void): StoredK
     ) {
       return parsed as StoredKey;
     }
-    onNotice(`the bundle signing key at ${keyPath} is unreadable; generating a new one, so devices will re-pair`);
+    onNotice(
+      `the bundle signing key at ${keyPath} is unreadable; generating a new one, so existing pins must be updated`,
+    );
   } catch {
     // First run, which is the normal path and not worth a notice.
   }
