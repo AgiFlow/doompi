@@ -10,6 +10,7 @@ const GRACEFUL_STOP_TIMER_ID = 'autonomous-voice-graceful-stop';
 const PLAYBACK_ECHO_TAIL_MS = 800;
 
 export type AutonomousCandidateOutcome = 'committed' | 'discarded';
+export type AutonomousFinalizationReason = 'endpoint' | 'duration-limit' | 'toggle-off';
 
 export interface AutonomousTurnIdentity {
   sessionId: string;
@@ -28,10 +29,12 @@ export interface AutonomousVoiceContext {
   turnId?: string;
   revision?: number;
   candidateOutcome?: AutonomousCandidateOutcome;
+  finalizationReason?: AutonomousFinalizationReason;
   confirmedSpeech: boolean;
   narrationOverlapPromoted: boolean;
   stopRequested: boolean;
   hardStopRequested: boolean;
+  terminalFailurePending: boolean;
   playbackGeneration: number;
   compositionState: VoiceCompositionState;
   failure?: AutonomousVoiceFailure;
@@ -80,7 +83,7 @@ export type AutonomousVoiceEvent =
   | ({ type: 'TRANSCRIPT_COMPOSITION_SEND_REQUESTED'; revision: number; text: string } & AutonomousTurnIdentity)
   | ({ type: 'DELIVERY_SUCCEEDED'; revision: number } & AutonomousTurnIdentity)
   | ({ type: 'DELIVERY_FAILED'; revision: number; code: string } & AutonomousTurnIdentity)
-  | ({ type: 'CANDIDATE_ACKNOWLEDGED'; revision: number } & AutonomousTurnIdentity)
+  | ({ type: 'CANDIDATE_ACKNOWLEDGED'; revision: number; outcome: AutonomousCandidateOutcome } & AutonomousTurnIdentity)
   | ({ type: 'NEXT_TURN_READY'; captureId: string; turnId: string } & Pick<AutonomousTurnIdentity, 'sessionId'>)
   | { type: 'PLAYBACK_STARTED'; sessionId: string; playbackGeneration: number; referenceText?: string }
   | { type: 'PLAYBACK_ENDED'; sessionId: string; playbackGeneration: number }
@@ -143,6 +146,7 @@ function initialContext(): AutonomousVoiceContext {
     narrationOverlapPromoted: false,
     stopRequested: false,
     hardStopRequested: false,
+    terminalFailurePending: false,
     playbackGeneration: 0,
     compositionState: 'inactive',
   };
@@ -183,15 +187,51 @@ export const autonomousVoiceMachine = setup({
         event.turnId === context.turnId
       );
     },
+    isRevocableEndpointSpeech: ({ context, event }) =>
+      event.type === 'SPEECH_CONFIRMED' &&
+      event.sessionId === context.sessionId &&
+      event.captureId === context.captureId &&
+      event.turnId === context.turnId &&
+      context.finalizationReason === 'endpoint' &&
+      !context.stopRequested,
+    isCurrentDrainedRevision: ({ context, event }) =>
+      event.type === 'CAPTURE_DRAINED' &&
+      Number.isSafeInteger(event.revision) &&
+      event.revision > 0 &&
+      event.sessionId === context.sessionId &&
+      event.captureId === context.captureId &&
+      event.turnId === context.turnId,
     isCurrentRevision: ({ context, event }) => {
-      if (!hasRevision(event)) return false;
+      if (!hasRevision(event) || context.revision === undefined) return false;
       return (
         event.sessionId === context.sessionId &&
         event.captureId === context.captureId &&
         event.turnId === context.turnId &&
-        (context.revision === undefined || event.revision === context.revision)
+        event.revision === context.revision
       );
     },
+    isCurrentAcknowledgement: ({ context, event }) =>
+      event.type === 'CANDIDATE_ACKNOWLEDGED' &&
+      event.sessionId === context.sessionId &&
+      event.captureId === context.captureId &&
+      event.turnId === context.turnId &&
+      event.revision === context.revision &&
+      event.outcome === context.candidateOutcome,
+    isCurrentTerminalFailureAcknowledgement: ({ context, event }) =>
+      event.type === 'CANDIDATE_ACKNOWLEDGED' &&
+      event.sessionId === context.sessionId &&
+      event.captureId === context.captureId &&
+      event.turnId === context.turnId &&
+      event.revision === context.revision &&
+      event.outcome === context.candidateOutcome &&
+      context.terminalFailurePending,
+    isCurrentNonBlankTranscript: ({ context, event }) =>
+      event.type === 'TRANSCRIPT_ACCEPTED' &&
+      event.text.trim().length > 0 &&
+      event.sessionId === context.sessionId &&
+      event.captureId === context.captureId &&
+      event.turnId === context.turnId &&
+      event.revision === context.revision,
     isCurrentPlayback: ({ context, event }) =>
       (event.type === 'PLAYBACK_STARTED' || event.type === 'PLAYBACK_ENDED') &&
       event.sessionId === context.sessionId &&
@@ -236,8 +276,10 @@ export const autonomousVoiceMachine = setup({
         turnId: event.turnId,
         revision: undefined,
         candidateOutcome: undefined,
+        finalizationReason: undefined,
         confirmedSpeech: false,
         narrationOverlapPromoted: false,
+        terminalFailurePending: false,
         failure: undefined,
       };
     }),
@@ -248,12 +290,18 @@ export const autonomousVoiceMachine = setup({
         turnId: event.turnId,
         revision: undefined,
         candidateOutcome: undefined,
+        finalizationReason: undefined,
         confirmedSpeech: false,
         narrationOverlapPromoted: false,
+        terminalFailurePending: false,
         failure: undefined,
       };
     }),
     markSpeech: assign({ confirmedSpeech: true }),
+    markEndpointFinalization: assign({ finalizationReason: 'endpoint' as const }),
+    markDurationFinalization: assign({ finalizationReason: 'duration-limit' as const }),
+    markStopFinalization: assign({ finalizationReason: 'toggle-off' as const }),
+    clearFinalization: assign({ finalizationReason: undefined }),
     markNarrationOverlapPromoted: assign({ narrationOverlapPromoted: true }),
     assignRevision: assign(({ event }) => (hasRevision(event) ? { revision: event.revision } : {})),
     markCommitted: assign({ candidateOutcome: 'committed' as const }),
@@ -266,6 +314,7 @@ export const autonomousVoiceMachine = setup({
     ),
     markStopRequested: assign({ stopRequested: true }),
     markHardStopRequested: assign({ stopRequested: true, hardStopRequested: true }),
+    markTerminalFailurePending: assign({ terminalFailurePending: true }),
     assignFailure: assign(({ event }) => {
       if ('code' in event && typeof event.code === 'string') {
         return {
@@ -530,17 +579,18 @@ export const autonomousVoiceMachine = setup({
                 ENDPOINT_REACHED: {
                   guard: 'isCurrentCapture',
                   target: 'finalizing',
-                  actions: 'requestEndpointFinalize',
+                  actions: ['markEndpointFinalization', 'requestEndpointFinalize'],
                 },
                 CAPTURE_DURATION_LIMIT_REACHED: {
                   guard: 'isCurrentCapture',
                   target: 'finalizing',
-                  actions: 'requestDurationFinalize',
+                  actions: ['markDurationFinalization', 'requestDurationFinalize'],
                 },
                 TOGGLE_OFF_REQUESTED: {
                   target: 'finalizing',
                   actions: [
                     'markStopRequested',
+                    'markStopFinalization',
                     'scheduleGracefulStopDeadline',
                     'requestPlaybackAbort',
                     'requestStopFinalize',
@@ -550,15 +600,17 @@ export const autonomousVoiceMachine = setup({
             },
             finalizing: {
               on: {
+                SPEECH_CONFIRMED: {
+                  guard: 'isRevocableEndpointSpeech',
+                  target: 'speech',
+                  actions: ['clearFinalization', 'markSpeech'],
+                },
                 CAPTURE_DRAINED: {
-                  guard: 'isCurrentCapture',
+                  guard: 'isCurrentDrainedRevision',
                   target: 'transcribing',
                   actions: 'assignRevision',
                 },
-                CAPTURE_PROCESSING: {
-                  guard: 'isCurrentCapture',
-                  target: 'transcribing',
-                },
+                CAPTURE_PROCESSING: { guard: 'isCurrentCapture' },
                 TOGGLE_OFF_REQUESTED: [
                   {
                     guard: 'stopWasNotRequested',
@@ -571,24 +623,24 @@ export const autonomousVoiceMachine = setup({
             transcribing: {
               on: {
                 TRANSCRIPTION_SUCCEEDED: {
-                  guard: 'isCurrentCapture',
+                  guard: 'isCurrentRevision',
                   target: 'applyingPolicy',
-                  actions: ['assignRevision', 'requestTranscriptPolicy'],
+                  actions: 'requestTranscriptPolicy',
                 },
                 TRANSCRIPTION_EMPTY: {
                   guard: 'isCurrentRevision',
                   target: 'acknowledging',
-                  actions: ['assignRevision', 'markDiscarded'],
+                  actions: 'markDiscarded',
                 },
                 TRANSCRIPTION_FAILED: {
-                  guard: 'isCurrentCapture',
-                  target: '#autonomousVoice.failed',
-                  actions: 'assignFailure',
+                  guard: 'isCurrentRevision',
+                  target: 'acknowledging',
+                  actions: ['assignFailure', 'markTerminalFailurePending', 'markDiscarded'],
                 },
                 TRANSCRIPTION_TIMED_OUT: {
-                  guard: 'isCurrentCapture',
-                  target: '#autonomousVoice.failed',
-                  actions: 'assignFailure',
+                  guard: 'isCurrentRevision',
+                  target: 'acknowledging',
+                  actions: ['assignFailure', 'markTerminalFailurePending', 'markDiscarded'],
                 },
                 TOGGLE_OFF_REQUESTED: [
                   {
@@ -601,11 +653,18 @@ export const autonomousVoiceMachine = setup({
             },
             applyingPolicy: {
               on: {
-                TRANSCRIPT_ACCEPTED: {
-                  guard: 'isCurrentRevision',
-                  target: 'delivering',
-                  actions: ['markCommitted', 'requestDelivery'],
-                },
+                TRANSCRIPT_ACCEPTED: [
+                  {
+                    guard: 'isCurrentNonBlankTranscript',
+                    target: 'delivering',
+                    actions: ['markCommitted', 'requestDelivery'],
+                  },
+                  {
+                    guard: 'isCurrentRevision',
+                    target: 'acknowledging',
+                    actions: 'markDiscarded',
+                  },
+                ],
                 TRANSCRIPT_DISCARDED: {
                   guard: 'isCurrentRevision',
                   target: 'acknowledging',
@@ -676,16 +735,21 @@ export const autonomousVoiceMachine = setup({
               on: {
                 CANDIDATE_ACKNOWLEDGED: [
                   {
+                    guard: 'isCurrentTerminalFailureAcknowledgement',
+                    target: '#autonomousVoice.failed',
+                  },
+                  {
                     guard: ({ context, event }) =>
                       event.sessionId === context.sessionId &&
                       event.captureId === context.captureId &&
                       event.turnId === context.turnId &&
                       event.revision === context.revision &&
+                      event.outcome === context.candidateOutcome &&
                       context.stopRequested,
                     target: '#autonomousVoice.stopping',
                   },
                   {
-                    guard: 'isCurrentRevision',
+                    guard: 'isCurrentAcknowledgement',
                     target: 'startingNextTurn',
                   },
                 ],

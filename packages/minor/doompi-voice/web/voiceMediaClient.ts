@@ -4,11 +4,17 @@ import {
   type VoiceMediaClientEvent,
   type VoiceMediaDevice,
   type VoiceMediaPlayback,
+  type VoiceMediaPlaybackResult,
   type VoiceMediaTransport,
 } from '../src/types/clientMedia.ts';
 
 const RECONNECT_DELAY_MS = 2_000;
 const MAX_CONNECTION_ID_LENGTH = 200;
+
+function playbackFailure(playbackId: string, error: unknown): VoiceMediaPlaybackResult {
+  const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return { playbackId, outcome: 'failed', error: failure };
+}
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -34,6 +40,7 @@ export class VoiceMediaClient {
   private speechDetector: SpeechPresenceDetector | undefined;
   private activityLifecycle: ClientCaptureActivityLifecycle | undefined;
   private playback: VoiceMediaPlayback | undefined;
+  private playbackAudioController: AbortController | undefined;
   private audioUploads: Promise<void> = Promise.resolve();
   private audioUploadError: Error | undefined;
   private activeConnectionId: string | undefined;
@@ -115,12 +122,14 @@ export class VoiceMediaClient {
         if (this.captureId === event.captureId) await this.finishCapture(event.captureId, connectionId, false);
         return;
       case 'playback-start':
-        this.startPlayback(event, connectionId);
+        await this.startPlayback(event, connectionId);
         return;
       case 'playback-stop':
+        this.playbackAudioController?.abort();
         this.playback?.stop('stopped');
         return;
       case 'playback-abort':
+        this.playbackAudioController?.abort();
         this.playback?.stop('aborted');
         return;
     }
@@ -217,16 +226,39 @@ export class VoiceMediaClient {
     if (acknowledge) await this.transport.captureStopped(this.clientId, connectionId, captureId);
   }
 
-  private startPlayback(event: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>, connectionId: string): void {
+  private async startPlayback(
+    event: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>,
+    connectionId: string,
+  ): Promise<void> {
+    this.playbackAudioController?.abort();
     this.playback?.stop('aborted');
     this.scheduleActivityReset();
-    const playback = this.device.speak(event);
+    const audioController = event.delivery === 'streamed' ? new AbortController() : undefined;
+    this.playbackAudioController = audioController;
+    const audio = audioController
+      ? this.transport.receivePlaybackAudio?.(this.clientId, connectionId, event.playbackId, audioController.signal)
+      : undefined;
+    let playback: VoiceMediaPlayback;
+    try {
+      playback = this.device.speak(event, audio);
+    } catch (error) {
+      audioController?.abort();
+      await this.transport.playbackFinished(this.clientId, connectionId, playbackFailure(event.playbackId, error));
+      this.scheduleActivityReset();
+      return;
+    }
     this.playback = playback;
     void playback.completion
-      .then((result) => this.transport.playbackFinished(this.clientId, connectionId, result))
+      .then(
+        (result) => this.transport.playbackFinished(this.clientId, connectionId, result),
+        (error: unknown) =>
+          this.transport.playbackFinished(this.clientId, connectionId, playbackFailure(event.playbackId, error)),
+      )
       .catch(() => undefined)
       .finally(() => {
         if (this.playback !== playback) return;
+        audioController?.abort();
+        if (this.playbackAudioController === audioController) this.playbackAudioController = undefined;
         this.playback = undefined;
         this.scheduleActivityReset();
       });
@@ -263,6 +295,8 @@ export class VoiceMediaClient {
     await capture?.stop().catch(() => undefined);
     void uploads.catch(() => undefined);
     void speechDetector?.reset().catch(() => undefined);
+    this.playbackAudioController?.abort();
+    this.playbackAudioController = undefined;
     this.playback?.stop('aborted');
     this.playback = undefined;
     await this.device.close().catch(() => undefined);

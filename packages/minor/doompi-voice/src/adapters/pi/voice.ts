@@ -79,6 +79,7 @@ import {
   ExecutableResolver,
   FfmpegAudioRecorder,
   FfmpegPcmAudioRecorder,
+  MacOsSayPcmSynthesizer,
   MacOsSayTtsAdapter,
   NodeBinaryProcessSpawner,
   NodeProcessSpawner,
@@ -840,7 +841,7 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
     tts:
       overrides.tts ??
       (clientMedia
-        ? new ClientTtsAdapter(clientMedia, clock)
+        ? new ClientTtsAdapter(clientMedia, clock, new MacOsSayPcmSynthesizer(executables, binarySpawner))
         : new MacOsSayTtsAdapter(executables, binarySpawner, clock)),
     analyzer: overrides.analyzer ?? new PcmWavAnalyzer(),
     whisperCpp,

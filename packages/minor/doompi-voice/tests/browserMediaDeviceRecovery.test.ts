@@ -10,11 +10,19 @@ class FakeScriptProcessor extends FakeNode {
     null;
 }
 
+class FakeBufferSource extends FakeNode {
+  public buffer: unknown;
+  public onended: (() => void) | null = null;
+  public start = vi.fn();
+  public stop = vi.fn(() => this.onended?.());
+}
 class FakeAudioContext {
   public readonly sampleRate = 16_000;
   public readonly destination = new FakeNode();
   public readonly processor = new FakeScriptProcessor();
-  public readonly state = 'running';
+  public readonly bufferSource = new FakeBufferSource();
+  public readonly copiedSamples: Float32Array[] = [];
+  public state: 'running' | 'suspended' | 'closed' = 'running';
 
   public async resume(): Promise<void> {}
   public createMediaStreamSource(): FakeNode {
@@ -26,13 +34,22 @@ class FakeAudioContext {
   public createScriptProcessor(): FakeScriptProcessor {
     return this.processor;
   }
-  public async close(): Promise<void> {}
+  public createBuffer(): { copyToChannel: (samples: Float32Array) => void } {
+    return { copyToChannel: (samples) => this.copiedSamples.push(samples) };
+  }
+  public createBufferSource(): FakeBufferSource {
+    return this.bufferSource;
+  }
+  public async close(): Promise<void> {
+    this.state = 'closed';
+  }
 }
 
 class FakeSpeechUtterance {
   public rate = 1;
   public volume = 1;
   public voice: SpeechSynthesisVoice | null = null;
+  public onstart: (() => void) | null = null;
   public onend: (() => void) | null = null;
   public onerror: ((event: { error: string }) => void) | null = null;
 
@@ -53,6 +70,16 @@ describe('browser media device recovery guards', () => {
     expect(new Pcm16Resampler(32_000).push(new Float32Array([0, 0]))).toHaveLength(2);
   });
 
+  it('advertises iPhone playback when speech synthesis exists before the utterance constructor', () => {
+    const synthesis = { speak: vi.fn() };
+    vi.stubGlobal('window', { speechSynthesis: synthesis });
+    vi.stubGlobal('SpeechSynthesisUtterance', undefined);
+
+    const device = new BrowserVoiceMediaDevice();
+
+    expect(device.capabilities.playback).toBe(true);
+    expect(device.capabilities.playbackDucking).toBe(true);
+  });
   it('skips optional detector preparation when browser prerequisites are absent', async () => {
     vi.stubGlobal('Worker', undefined);
     await expect(new BrowserVoiceMediaDevice().prepare()).resolves.toBeUndefined();
@@ -78,6 +105,148 @@ describe('browser media device recovery guards', () => {
     expect(device.createSpeechPresenceDetector()).toBeUndefined();
   });
 
+  it('unlocks mobile Web Audio during the tap before remote capture starts', async () => {
+    const listeners = new Map<string, EventListener>();
+    const addEventListener = vi.fn((type: string, listener: EventListener) => listeners.set(type, listener));
+    const removeEventListener = vi.fn((type: string) => listeners.delete(type));
+    const contexts: FakeAudioContext[] = [];
+    class SuspendedAudioContext extends FakeAudioContext {
+      public constructor() {
+        super();
+        this.state = 'suspended';
+        contexts.push(this);
+      }
+
+      public override async resume(): Promise<void> {
+        this.state = 'running';
+      }
+    }
+    vi.stubGlobal('window', { addEventListener, removeEventListener });
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn() } });
+    vi.stubGlobal('AudioContext', SuspendedAudioContext);
+    vi.stubGlobal('Worker', undefined);
+    const device = new BrowserVoiceMediaDevice();
+
+    await device.prepare();
+    expect(contexts).toHaveLength(0);
+    listeners.get('pointerdown')?.({} as Event);
+    await Promise.resolve();
+
+    expect(contexts[0]?.state).toBe('running');
+    expect(removeEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
+    await device.close();
+    expect(contexts[0]?.state).toBe('closed');
+  });
+  it('primes mobile speech synthesis during a user tap before narration arrives', async () => {
+    const listeners = new Map<string, EventListener>();
+    const synthesis = {
+      cancel: vi.fn(),
+      getVoices: vi.fn(() => []),
+      pending: false,
+      resume: vi.fn(),
+      speak: vi.fn(),
+      speaking: false,
+    };
+    vi.stubGlobal('window', {
+      addEventListener: (type: string, listener: EventListener) => listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type),
+      speechSynthesis: synthesis,
+      SpeechSynthesisUtterance: FakeSpeechUtterance,
+    });
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('SpeechSynthesisUtterance', FakeSpeechUtterance);
+    vi.stubGlobal('Worker', undefined);
+    const device = new BrowserVoiceMediaDevice();
+
+    await device.prepare();
+    listeners.get('pointerdown')?.({} as Event);
+
+    expect(synthesis.resume).toHaveBeenCalledOnce();
+    expect(synthesis.speak).toHaveBeenCalledOnce();
+    const warmup = synthesis.speak.mock.calls[0]?.[0] as FakeSpeechUtterance;
+    expect(warmup).toMatchObject({ text: 'a', volume: 0.01, rate: 10 });
+    const playback = device.speak({
+      sequence: 1,
+      type: 'playback-start',
+      playbackId: 'queued-playback',
+      text: 'Narration follows the gesture-authorized warmup.',
+    });
+    expect(synthesis.cancel).not.toHaveBeenCalled();
+    expect(synthesis.speak).toHaveBeenCalledTimes(2);
+    const narration = synthesis.speak.mock.calls[1]?.[0] as FakeSpeechUtterance;
+    narration.onstart?.();
+    narration.onend?.();
+    await expect(playback.completion).resolves.toMatchObject({ outcome: 'completed' });
+    await device.close();
+  });
+
+  it('fails silent browser narration instead of remaining stuck in narrating', async () => {
+    vi.useFakeTimers();
+    const synthesis = {
+      cancel: vi.fn(),
+      getVoices: vi.fn(() => []),
+      pending: false,
+      resume: vi.fn(),
+      speak: vi.fn(),
+      speaking: false,
+    };
+    vi.stubGlobal('window', { speechSynthesis: synthesis, SpeechSynthesisUtterance: FakeSpeechUtterance });
+    vi.stubGlobal('SpeechSynthesisUtterance', FakeSpeechUtterance);
+    const device = new BrowserVoiceMediaDevice();
+    const playback = device.speak({
+      sequence: 1,
+      type: 'playback-start',
+      playbackId: 'stalled-playback',
+      text: 'This narration never starts.',
+    });
+
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await expect(playback.completion).resolves.toEqual({
+      playbackId: 'stalled-playback',
+      outcome: 'failed',
+      error: 'Browser speech synthesis did not start.',
+    });
+    expect(synthesis.cancel).toHaveBeenCalledOnce();
+    await device.close();
+  });
+
+  it('plays streamed backend PCM through the gesture-resumed AudioContext', async () => {
+    const contexts: FakeAudioContext[] = [];
+    const listeners = new Map<string, EventListener>();
+    class PlaybackAudioContext extends FakeAudioContext {
+      public constructor() {
+        super();
+        contexts.push(this);
+      }
+    }
+    vi.stubGlobal('window', {
+      addEventListener: (type: string, listener: EventListener) => listeners.set(type, listener),
+      removeEventListener: (type: string) => listeners.delete(type),
+    });
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('AudioContext', PlaybackAudioContext);
+    vi.stubGlobal('Worker', undefined);
+    const device = new BrowserVoiceMediaDevice();
+    await device.prepare();
+    listeners.get('pointerdown')?.({} as Event);
+    await Promise.resolve();
+    const playback = device.speak(
+      {
+        sequence: 1,
+        type: 'playback-start',
+        playbackId: 'streamed-playback',
+        text: 'Backend audio.',
+        delivery: 'streamed',
+      },
+      Promise.resolve(new Uint8Array([0, 0, 0xff, 0x7f])),
+    );
+    await vi.waitFor(() => expect(contexts[0]?.bufferSource.start).toHaveBeenCalledOnce());
+    expect(Array.from(contexts[0]!.copiedSamples[0]!)).toEqual([0, 32_767 / 32_768]);
+    contexts[0]!.bufferSource.onended?.();
+    await expect(playback.completion).resolves.toEqual({ playbackId: 'streamed-playback', outcome: 'completed' });
+    await device.close();
+  });
   it('emits exact 100 ms PCM batches and one final remainder for a large ScriptProcessor input', async () => {
     const track = { stop: vi.fn() };
     const stream = { getTracks: () => [track] };
@@ -119,9 +288,12 @@ describe('browser media device recovery guards', () => {
     const synthesis = {
       cancel: vi.fn(),
       getVoices: vi.fn(() => []),
+      pending: false,
+      resume: vi.fn(),
       speak: vi.fn((value: FakeSpeechUtterance) => {
         utterance = value;
       }),
+      speaking: false,
     };
     vi.stubGlobal('window', { speechSynthesis: synthesis, SpeechSynthesisUtterance: FakeSpeechUtterance });
     vi.stubGlobal('SpeechSynthesisUtterance', FakeSpeechUtterance);
@@ -134,6 +306,7 @@ describe('browser media device recovery guards', () => {
       playbackId: 'playback-1',
       text: 'Narration in progress',
     });
+    utterance?.onstart?.();
     playback.duck?.(0.2, 300, 8_000);
 
     await vi.advanceTimersByTimeAsync(150);

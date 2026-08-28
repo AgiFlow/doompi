@@ -122,9 +122,14 @@ export class AutonomousVoiceSession {
   private modalBlocked = false;
   private transcriptCorrectionAbort: AbortController | undefined;
   private transcriptAdmissionAbort: AbortController | undefined;
+  private pendingTranscriptAdmission:
+    | {
+        effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>;
+        assessment: VoiceTranscriptAdmissionAssessment;
+      }
+    | undefined;
   private playbackAbortInFlight: Promise<void> | undefined;
   private stopInFlight: Promise<void> | undefined;
-  private hardStopStarted = false;
   private started = false;
   private lastActivationState: AutoCaptureActivationState = 'disabled';
   private compositionDraft: string[] = [];
@@ -169,9 +174,9 @@ export class AutonomousVoiceSession {
 
   public toggleOff(): void {
     if (!this.started) return;
-    this.abortTranscriptCorrection();
-    this.abortTranscriptAdmission();
     this.actor.send({ type: 'TOGGLE_OFF_REQUESTED' });
+    this.abortTranscriptCorrection();
+    this.abortTranscriptAdmission(true);
   }
 
   public async shutdown(): Promise<void> {
@@ -215,7 +220,12 @@ export class AutonomousVoiceSession {
     }
     if (event.kind === 'candidate-acknowledged') {
       if (event.turnId === identity.turnId)
-        this.actor.send({ type: 'CANDIDATE_ACKNOWLEDGED', ...identity, revision: event.revision });
+        this.actor.send({
+          type: 'CANDIDATE_ACKNOWLEDGED',
+          ...identity,
+          revision: event.revision,
+          outcome: event.outcome,
+        });
       return;
     }
     if (event.kind === 'barge-in-evidence') {
@@ -610,14 +620,25 @@ export class AutonomousVoiceSession {
     this.transcriptCorrectionAbort?.abort(new Error('Voice command correction stopped.'));
   }
 
-  private abortTranscriptAdmission(): void {
+  private abortTranscriptAdmission(applyGracefulFallback = false): void {
+    const pending = this.pendingTranscriptAdmission;
     this.transcriptAdmissionAbort?.abort(new Error('Voice transcript admission stopped.'));
     this.transcriptAdmissionAbort = undefined;
+    this.pendingTranscriptAdmission = undefined;
+    if (applyGracefulFallback && pending && this.effectIsCurrent(pending.effect))
+      this.applyAdmittedTranscript(
+        { ...pending.effect, narrationOverlapPromoted: false },
+        pending.assessment.residualText,
+      );
   }
 
   private applyPolicy(effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>): void {
     if (!effect.evidence) {
-      this.applyAdmittedTranscript(effect, effect.transcript);
+      this.discardTranscript(effect, 'missing-evidence');
+      return;
+    }
+    if (effect.evidence.playbackOverlapMs > 0 && !effect.narrationOverlapPromoted) {
+      this.discardTranscript(effect, 'unauthorized-playback-overlap');
       return;
     }
     const references = this.dependencies.narrationReferences();
@@ -657,6 +678,7 @@ export class AutonomousVoiceSession {
     this.abortTranscriptAdmission();
     const controller = new AbortController();
     this.transcriptAdmissionAbort = controller;
+    this.pendingTranscriptAdmission = { effect, assessment };
     const playbackGeneration = this.snapshot.context.playbackGeneration;
     const narrationText = this.playbackReferences.get(playbackGeneration) ?? references[0];
     const input: VoiceTranscriptAdjudicationInput = {
@@ -683,6 +705,7 @@ export class AutonomousVoiceSession {
     controller?: AbortController,
   ): void {
     if (controller && this.transcriptAdmissionAbort !== controller) return;
+    if (controller) this.pendingTranscriptAdmission = undefined;
     if (!this.effectIsCurrent(effect) || controller?.signal.aborted) return;
     if (!decision.admit) {
       if (controller) this.transcriptAdmissionAbort = undefined;
@@ -726,8 +749,6 @@ export class AutonomousVoiceSession {
     const autoConfig = this.dependencies.config.autoCapture;
     if (!autoConfig) return;
     const acceptedAt = this.dependencies.clock.now();
-    this.recentTranscripts.push({ text: transcript, acceptedAt });
-    while (this.recentTranscripts.length > MAX_RECENT_TRANSCRIPTS) this.recentTranscripts.shift();
     const result = applyTranscriptPolicy({
       transcript,
       narrationOverlapPromoted: effect.narrationOverlapPromoted,
@@ -741,6 +762,15 @@ export class AutonomousVoiceSession {
       },
       narrationReferences: this.dependencies.narrationReferences(),
     });
+    if (
+      result.action === 'deliver' ||
+      result.action === 'compose-open' ||
+      result.action === 'compose-append' ||
+      (result.action === 'compose-send' && result.text)
+    ) {
+      this.recentTranscripts.push({ text: transcript, acceptedAt });
+      while (this.recentTranscripts.length > MAX_RECENT_TRANSCRIPTS) this.recentTranscripts.shift();
+    }
     if (result.action === 'deliver') {
       this.correctAndHandleTranscript(effect, result.text, (corrected) => this.acceptTranscript(effect, corrected));
       return;
@@ -824,38 +854,27 @@ export class AutonomousVoiceSession {
   }
 
   private stop(mode: 'graceful' | 'hard'): Promise<void> {
-    if (mode === 'hard') {
-      this.performHardStop();
-      return Promise.resolve();
+    if (this.stopInFlight) {
+      if (mode === 'hard') this.actor.send({ type: 'STOP_COMPLETED' });
+      return this.stopInFlight;
     }
-    this.stopInFlight ??= this.performGracefulStop().finally(() => {
-      this.stopInFlight = undefined;
-    });
+    this.stopInFlight = this.performStop(mode);
     return this.stopInFlight;
   }
 
-  private async performGracefulStop(): Promise<void> {
+  private async performStop(_mode: 'graceful' | 'hard'): Promise<void> {
     this.prepareStop();
+    const playbackCleanup = this.playbackAbortInFlight ?? Promise.resolve();
+    let workerCleanup: Promise<void>;
     try {
-      await this.dependencies.client.shutdown(SESSION_SHUTDOWN_REASON);
-    } catch (error) {
-      this.reportCleanupFailure('worker_shutdown', error);
-    } finally {
-      this.actor.send({ type: 'STOP_COMPLETED' });
-    }
-  }
-
-  private performHardStop(): void {
-    if (this.hardStopStarted) return;
-    this.hardStopStarted = true;
-    this.prepareStop();
-    try {
-      void this.dependencies.client
+      workerCleanup = this.dependencies.client
         .shutdown(SESSION_SHUTDOWN_REASON)
         .catch((error: unknown) => this.reportCleanupFailure('worker_shutdown', error));
     } catch (error) {
       this.reportCleanupFailure('worker_shutdown', error);
+      workerCleanup = Promise.resolve();
     }
+    await Promise.all([playbackCleanup, workerCleanup]);
     this.actor.send({ type: 'STOP_COMPLETED' });
   }
 

@@ -95,4 +95,35 @@ describe('VoiceWorkerSupervisor', () => {
     expect(workers).toHaveLength(2);
     await supervisor.stop();
   });
+
+  it('waits for graceful worker exit without forcing termination', async () => {
+    const worker = new FakeWorker();
+    const supervisor = new VoiceWorkerSupervisor({
+      createWorker: () => worker as unknown as VoiceWorkerHandle,
+      onEvent: () => undefined,
+    });
+    supervisor.start();
+
+    const stopping = supervisor.stopGracefully(1_000);
+    worker.emit('exit', 0);
+    await stopping;
+
+    expect(worker.terminated).toBe(false);
+  });
+
+  it('forces termination when graceful worker exit times out', async () => {
+    vi.useFakeTimers();
+    const worker = new FakeWorker();
+    const supervisor = new VoiceWorkerSupervisor({
+      createWorker: () => worker as unknown as VoiceWorkerHandle,
+      onEvent: () => undefined,
+    });
+    supervisor.start();
+
+    const stopping = supervisor.stopGracefully(100);
+    await vi.advanceTimersByTimeAsync(100);
+    await stopping;
+
+    expect(worker.terminated).toBe(true);
+  });
 });

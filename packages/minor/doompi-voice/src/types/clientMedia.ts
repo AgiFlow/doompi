@@ -1,12 +1,13 @@
 import type { SpeechPresenceDetector } from './clientCaptureActivity.ts';
 
 export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
-export const VOICE_MEDIA_PROTOCOL_VERSION = 5;
+export const VOICE_MEDIA_PROTOCOL_VERSION = 6;
 export const VOICE_MEDIA_SAMPLE_RATE = 16_000;
 export const VOICE_MEDIA_CHANNELS = 1;
 export const VOICE_MEDIA_BITS_PER_SAMPLE = 16;
 export const VOICE_MEDIA_CONTENT_TYPE = 'application/vnd.doompi.pcm-s16le';
 export const VOICE_MEDIA_ACTIVITY_STATE_HEADER = 'x-doompi-voice-activity-state';
+export const VOICE_MEDIA_PLAYBACK_STATE_HEADER = 'x-doompi-playback-state';
 export const VOICE_MEDIA_ACTIVITY_LEVEL_HEADER = 'x-doompi-voice-activity-level';
 export const VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER = 'x-doompi-voice-activity-elapsed';
 export const VOICE_MEDIA_ACTIVITY_EPOCH_HEADER = 'x-doompi-voice-activity-epoch';
@@ -22,12 +23,15 @@ export const VOICE_MEDIA_ROUTES = {
   clientHeartbeat: '/client/heartbeat',
   clientAudio: '/client/audio',
   clientCaptureStopped: '/client/capture-stopped',
+  clientPlaybackAudio: '/client/playback-audio',
   clientPlaybackResult: '/client/playback-result',
   hostCaptureStart: '/host/capture/start',
   hostCaptureAudio: '/host/capture/audio',
   hostCaptureStop: '/host/capture/stop',
   hostCaptureAbort: '/host/capture/abort',
   hostPlaybackStart: '/host/playback/start',
+  hostPlaybackAudio: '/host/playback/audio',
+  hostPlaybackAudioEnd: '/host/playback/audio-end',
   hostPlaybackResult: '/host/playback/result',
   hostPlaybackStop: '/host/playback/stop',
   hostPlaybackAbort: '/host/playback/abort',
@@ -45,6 +49,7 @@ export interface VoiceMediaCapabilities {
 }
 
 export type VoiceMediaCaptureMode = 'manual' | 'autonomous';
+export type VoiceMediaPlaybackDelivery = 'client' | 'streamed';
 export type VoiceMediaCaptureActivityState = 'listening' | 'speech' | 'endpoint';
 
 export interface VoiceMediaCaptureActivity {
@@ -101,6 +106,7 @@ export type VoiceMediaClientEvent =
       type: 'playback-start';
       playbackId: string;
       text: string;
+      delivery?: VoiceMediaPlaybackDelivery;
       voice?: string;
       rate?: number;
     }
@@ -136,6 +142,12 @@ export interface VoiceMediaTransport {
     activity?: VoiceMediaCaptureActivity,
   ): Promise<void>;
   captureStopped(clientId: string, connectionId: string, captureId: string, error?: string): Promise<void>;
+  receivePlaybackAudio?(
+    clientId: string,
+    connectionId: string,
+    playbackId: string,
+    signal: AbortSignal,
+  ): Promise<Uint8Array>;
   playbackFinished(clientId: string, connectionId: string, result: VoiceMediaPlaybackResult): Promise<void>;
 }
 
@@ -156,7 +168,10 @@ export interface VoiceMediaDevice {
   prepare?(): Promise<void>;
   createSpeechPresenceDetector?(): SpeechPresenceDetector | undefined;
   startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture>;
-  speak(request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>): VoiceMediaPlayback;
+  speak(
+    request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>,
+    audio?: Promise<Uint8Array>,
+  ): VoiceMediaPlayback;
   close(): Promise<void>;
 }
 

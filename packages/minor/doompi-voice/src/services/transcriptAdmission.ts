@@ -61,7 +61,7 @@ export interface VoiceTranscriptAdmissionAssessment {
 
 export interface VoiceTranscriptAdmissionInput {
   transcript: string;
-  evidence: VoiceTranscriptSignalEvidence;
+  evidence?: VoiceTranscriptSignalEvidence;
   observedAt: number;
   narrationOverlap: boolean;
   narrationReferences: readonly string[];
@@ -158,17 +158,18 @@ export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): Voi
   const normalized = normalizeEchoText(transcript);
   const tokens = transcriptTokens(transcript);
   const narration = bestNarrationAnalysis(transcript, input.narrationReferences);
+  const sourceEvidence = input.evidence;
   const evidence: VoiceTranscriptSignalEvidence = {
-    durationMs: Math.max(0, safeNumber(input.evidence.durationMs, 0)),
-    voicedMs: Math.max(0, safeNumber(input.evidence.voicedMs, 0)),
-    classifierSpeechMs: Math.max(0, safeNumber(input.evidence.classifierSpeechMs, 0)),
-    rmsDbfs: safeNumber(input.evidence.rmsDbfs, -120),
-    peakDbfs: safeNumber(input.evidence.peakDbfs, -120),
-    signalVariationDb: Math.max(0, safeNumber(input.evidence.signalVariationDb, 0)),
-    nonZeroRatio: Math.max(0, Math.min(1, safeNumber(input.evidence.nonZeroRatio, 0))),
-    gapCount: Math.max(0, Math.floor(safeNumber(input.evidence.gapCount, 0))),
-    playbackOverlapMs: Math.max(0, safeNumber(input.evidence.playbackOverlapMs, 0)),
-    classifier: input.evidence.classifier,
+    durationMs: Math.max(0, safeNumber(sourceEvidence?.durationMs ?? 0, 0)),
+    voicedMs: Math.max(0, safeNumber(sourceEvidence?.voicedMs ?? 0, 0)),
+    classifierSpeechMs: Math.max(0, safeNumber(sourceEvidence?.classifierSpeechMs ?? 0, 0)),
+    rmsDbfs: safeNumber(sourceEvidence?.rmsDbfs ?? -120, -120),
+    peakDbfs: safeNumber(sourceEvidence?.peakDbfs ?? -120, -120),
+    signalVariationDb: Math.max(0, safeNumber(sourceEvidence?.signalVariationDb ?? 0, 0)),
+    nonZeroRatio: Math.max(0, Math.min(1, safeNumber(sourceEvidence?.nonZeroRatio ?? 0, 0))),
+    gapCount: Math.max(0, Math.floor(safeNumber(sourceEvidence?.gapCount ?? 0, 0))),
+    playbackOverlapMs: Math.max(0, safeNumber(sourceEvidence?.playbackOverlapMs ?? 0, 0)),
+    classifier: sourceEvidence?.classifier ?? 'energy',
   };
   const narrationOverlap = input.narrationOverlap || evidence.playbackOverlapMs > 0;
   const base = {

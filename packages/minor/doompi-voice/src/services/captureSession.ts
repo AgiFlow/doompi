@@ -25,6 +25,7 @@ export interface CaptureSessionOptions {
   onClientActivity?: (activity: VoiceMediaCaptureActivity, captureGeneration: number) => void;
   shouldPersistPcm?(captureGeneration: number): boolean;
   onGap?: (gapCount: number) => void;
+  onRecoveryExhausted?: (error: Error, captureGeneration: number) => void;
   onStateChange?: (state: CaptureSessionState) => void;
 }
 
@@ -54,11 +55,17 @@ export class CaptureSession {
   private livenessTimer: TimerHandle | undefined;
   private startupTimer: TimerHandle | undefined;
   private recovery: Promise<void> | undefined;
+  private startupReadiness: Readiness | undefined;
+  private terminalOperation:
+    | { kind: 'drain'; promise: Promise<TurnSnapshot | undefined> }
+    | { kind: 'abort'; promise: Promise<TurnSnapshot | undefined> }
+    | undefined;
   private captureGeneration = 0;
   private recoveryAttempts = 0;
   private lastFrameAt = 0;
   private accepting = false;
   private stopping = false;
+  private recoveryExhaustionReported = false;
   private currentState: CaptureSessionState = 'idle';
 
   public constructor(options: CaptureSessionOptions) {
@@ -78,34 +85,66 @@ export class CaptureSession {
   }
 
   public async drain(): Promise<TurnSnapshot> {
+    const terminal = this.terminalOperation;
+    if (terminal) {
+      if (terminal.kind !== 'drain') {
+        await terminal.promise;
+        throw new Error('Voice capture session was aborted.');
+      }
+      const snapshot = await terminal.promise;
+      if (!snapshot) throw new Error('Voice capture drain did not produce a snapshot.');
+      return snapshot;
+    }
     if (this.currentState !== 'capturing' && this.currentState !== 'recovering')
       throw new Error('Voice capture session is not active.');
-    this.stopping = true;
-    this.setState('draining');
-    this.clearLiveness();
-    const handle = this.handle;
-    const remainder = handle ? await handle.stop() : Buffer.alloc(0);
-    await this.recovery?.catch(() => undefined);
-    const discardedBytes = this.appendCompleteSamples(remainder, this.captureGeneration);
-    this.accepting = false;
-    this.handle = undefined;
-    if (discardedBytes > 0) throw new Error('Voice recorder returned an incomplete trailing PCM sample.');
-    const snapshot = this.options.spool.createSnapshot();
-    this.setState('closed');
+    const promise = this.performDrain();
+    this.terminalOperation = { kind: 'drain', promise };
+    const snapshot = await promise;
+    if (!snapshot) throw new Error('Voice capture drain did not produce a snapshot.');
     return snapshot;
   }
 
   public async abort(): Promise<void> {
+    const terminal = this.terminalOperation;
+    if (terminal) {
+      await terminal.promise;
+      return;
+    }
     if (this.currentState === 'closed') return;
+    const promise = this.performAbort();
+    this.terminalOperation = { kind: 'abort', promise };
+    await promise;
+  }
+
+  private async performDrain(): Promise<TurnSnapshot> {
+    this.stopping = true;
+    this.setState('draining');
+    this.clearStartup();
+    this.clearLiveness();
+    await this.recovery?.catch(() => undefined);
+    const handle = this.handle;
+    this.handle = undefined;
+    const remainder = handle ? await handle.stop() : Buffer.alloc(0);
+    const discardedBytes = this.appendCompleteSamples(remainder, this.captureGeneration);
+    this.accepting = false;
+    this.setState('closed');
+    if (discardedBytes > 0) throw new Error('Voice recorder returned an incomplete trailing PCM sample.');
+    return this.options.spool.createSnapshot();
+  }
+
+  private async performAbort(): Promise<undefined> {
     this.stopping = true;
     this.accepting = false;
     this.clearStartup();
     this.clearLiveness();
+    this.startupReadiness?.reject(new Error('Voice capture startup was aborted.'));
+    await this.recovery?.catch(() => undefined);
     const handle = this.handle;
     this.handle = undefined;
     if (handle) await handle.abort();
     this.options.spool.close();
     this.setState('closed');
+    return undefined;
   }
 
   private async launchWithRecovery(): Promise<void> {
@@ -143,6 +182,7 @@ export class CaptureSession {
     this.captureGeneration = generation;
     this.options.spool.setCaptureGeneration(generation);
     const ready = readiness();
+    this.startupReadiness = ready;
     let sawFirstFrame = false;
     const handle = this.options.recorder.start(
       this.options.config,
@@ -190,6 +230,7 @@ export class CaptureSession {
     try {
       await ready.promise;
     } finally {
+      if (this.startupReadiness === ready) this.startupReadiness = undefined;
       this.clearStartup();
     }
     if (this.stopping || generation !== this.captureGeneration) return;
@@ -199,9 +240,16 @@ export class CaptureSession {
 
   private recover(_error: Error): Promise<void> {
     if (this.stopping) return Promise.resolve();
-    this.recovery ??= this.performRecovery().finally(() => {
-      this.recovery = undefined;
-    });
+    this.recovery ??= this.performRecovery()
+      .catch((error: unknown) => {
+        if (this.stopping || this.recoveryExhaustionReported) return;
+        this.recoveryExhaustionReported = true;
+        const failure = error instanceof Error ? error : new Error(String(error));
+        this.options.onRecoveryExhausted?.(failure, this.captureGeneration);
+      })
+      .finally(() => {
+        this.recovery = undefined;
+      });
     return this.recovery;
   }
 

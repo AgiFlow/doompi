@@ -115,6 +115,9 @@ class WorkerRecording implements LiveRecordingHandle {
       this.resolveCompletion = resolve;
     });
   }
+  public finish(result: ProcessResult): void {
+    this.resolveCompletion(result);
+  }
   public async stop(): Promise<Buffer> {
     this.resolveCompletion({ code: 0, stdout: '', stderr: '' });
     return this.remainder;
@@ -148,6 +151,24 @@ class WorkerRecorder implements IPcmAudioRecorder {
   }
   public emitActivity(activity: VoiceMediaCaptureActivity): void {
     this.activityListener?.(activity);
+  }
+}
+
+class RestartingWorkerRecorder implements IPcmAudioRecorder {
+  public readonly handles: WorkerRecording[] = [];
+  private readonly listeners: Array<(frame: Buffer) => void> = [];
+
+  public preflight(): void {}
+
+  public start(_config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle {
+    const handle = new WorkerRecording();
+    this.handles.push(handle);
+    this.listeners.push(onFrame);
+    return handle;
+  }
+
+  public emit(generation: number, frame: Buffer): void {
+    this.listeners[generation - 1]?.(frame);
   }
 }
 
@@ -262,6 +283,12 @@ describe('VoiceWorkerPipeline manual dictation', () => {
         outcome: 'committed',
       }),
     );
+    const retainedManifest = path.join(root, fs.readdirSync(root)[0]!, 'manifest.json');
+    expect(JSON.parse(fs.readFileSync(retainedManifest, 'utf8'))).toMatchObject({
+      acknowledgedRevision: 1,
+      acknowledgedOutcome: 'committed',
+    });
+    await pipeline.shutdown();
     expect(fs.readdirSync(root)).toEqual([]);
   });
 
@@ -439,6 +466,102 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     await pipeline.shutdown();
   });
 
+  it('aborts in-flight ASR during shutdown and suppresses late publications', async () => {
+    const recorder = new WorkerRecorder();
+    let observedSignal: AbortSignal | undefined;
+    const transcribe = vi.fn(
+      (request: TranscriptionRequest) =>
+        new Promise<string>((_resolve, reject) => {
+          const signal = request.signal;
+          if (!signal) throw new Error('transcription signal unavailable');
+          observedSignal = signal;
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle(beginCommand(), (published) => events.push(published));
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    recorder.emit(pcmFrame(1_000));
+    await beginning;
+    const finalization = pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 2,
+        kind: 'finalize-capture',
+        sessionId: 'session-1',
+        captureId: 'capture-1',
+        reason: 'explicit-stop',
+      },
+      (published) => events.push(published),
+    );
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
+
+    await pipeline.shutdown();
+    await finalization;
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(events.some((event) => event.kind === 'transcript-candidate')).toBe(false);
+    expect(events.some((event) => event.kind === 'failure' && event.code !== 'capture_duration_limit')).toBe(false);
+  });
+
+  it('publishes one terminal failure when recorder recovery is exhausted', async () => {
+    const recorder = new RestartingWorkerRecorder();
+    const clock = new ScheduledWorkerClock();
+    const pipeline = new VoiceWorkerPipeline({
+      clock,
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe: vi.fn() }),
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle(beginCommand(), (published) => events.push(published));
+    await vi.waitFor(() => expect(recorder.handles).toHaveLength(1));
+    recorder.emit(1, pcmFrame(1_000));
+    await beginning;
+
+    recorder.handles[0]?.finish({ code: 1, stdout: '', stderr: 'device lost' });
+    await vi.waitFor(() => expect(recorder.handles).toHaveLength(2));
+    for (let generation = 3; generation <= 4; generation += 1) {
+      clock.advance(8_000);
+      await vi.waitFor(() => expect(recorder.handles).toHaveLength(generation));
+    }
+    clock.advance(8_000);
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          kind: 'failure',
+          code: 'recorder_recovery_exhausted',
+          recoverable: false,
+          sessionId: 'session-1',
+          captureId: 'capture-1',
+          turnId: 'turn-1',
+        }),
+      ),
+    );
+    expect(
+      events.filter((event) => event.kind === 'failure' && event.code === 'recorder_recovery_exhausted'),
+    ).toHaveLength(1);
+    await pipeline.shutdown();
+  });
+
   it('reports the autonomous capture duration as a recoverable lifecycle boundary', async () => {
     const recorder = new WorkerRecorder();
     const clock = new ScheduledWorkerClock();
@@ -550,6 +673,66 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     expect(speechDetector.push).not.toHaveBeenCalled();
     expect(events).toContainEqual(expect.objectContaining({ kind: 'capture-state', state: 'speech' }));
     expect(events).toContainEqual(expect.objectContaining({ kind: 'endpoint-reached', turnId: 'turn-1' }));
+    await pipeline.shutdown();
+  });
+
+  it('revokes a reported client endpoint when a newer speech epoch arrives before soft finalization', async () => {
+    const recorder = new WorkerRecorder();
+    const transcribe = vi.fn(async () => 'resumed request');
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+      speechDetectorFactory,
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    const publish = (event: VoiceWorkerEventPayload) => events.push(event);
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, publish);
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    recorder.emit(pcmFrame(2_000));
+    recorder.emitActivity({ state: 'speech', levelDbfs: -35, elapsedMs: 500, epoch: 0, classifiedSpeechMs: 128 });
+    recorder.emitActivity({ state: 'endpoint', levelDbfs: -80, elapsedMs: 3_500, epoch: 0, classifiedSpeechMs: 128 });
+    await beginning;
+    expect(events.filter((event) => event.kind === 'endpoint-reached')).toHaveLength(1);
+
+    recorder.emitActivity({ state: 'speech', levelDbfs: -35, elapsedMs: 3_700, epoch: 1, classifiedSpeechMs: 128 });
+    await pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 2,
+        kind: 'finalize-capture',
+        sessionId: 'session-1',
+        captureId: 'capture-1',
+        reason: 'soft-endpoint',
+      },
+      publish,
+    );
+    expect(events.filter((event) => event.kind === 'drained')).toHaveLength(0);
+    expect(transcribe).not.toHaveBeenCalled();
+
+    recorder.emitActivity({ state: 'endpoint', levelDbfs: -80, elapsedMs: 6_700, epoch: 1, classifiedSpeechMs: 128 });
+    expect(events.filter((event) => event.kind === 'endpoint-reached')).toHaveLength(2);
+    await pipeline.handle(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 3,
+        kind: 'finalize-capture',
+        sessionId: 'session-1',
+        captureId: 'capture-1',
+        reason: 'soft-endpoint',
+      },
+      publish,
+    );
+    expect(events.filter((event) => event.kind === 'drained')).toHaveLength(1);
+    expect(transcribe).toHaveBeenCalledOnce();
     await pipeline.shutdown();
   });
 
@@ -1606,7 +1789,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     expect(events).toEqual([{ kind: 'failure', code: 'spool_recovery_failed', recoverable: true }]);
   });
 
-  it('rediscovers, resumes, and acknowledges an uncommitted durable spool after restart', async () => {
+  it('rediscovers, resumes, and acknowledges an unfrozen durable spool after restart', async () => {
     const root = temporaryRoot();
     const spool = NodeTurnSpool.create(root, {
       sessionId: 'session-1',
@@ -1616,7 +1799,6 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     spool.append(Buffer.alloc(PCM_FRAME_BYTES, 7));
     spool.append(Buffer.alloc(PCM_FRAME_BYTES, 9));
     spool.markUtteranceStart(PCM_FRAME_BYTES);
-    spool.createSnapshot();
     spool.close();
 
     const recorder = new WorkerRecorder();
@@ -1643,7 +1825,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       (published) => events.push(published),
     );
     expect(events).toContainEqual(
-      expect.objectContaining({ kind: 'recovered', sessionId: 'session-1', turnId: 'turn-1', revision: 1 }),
+      expect.objectContaining({ kind: 'recovered', sessionId: 'session-1', turnId: 'turn-1', revision: 0 }),
     );
     const beginning = pipeline.handle(beginCommand(), (published) => events.push(published));
     await vi.waitFor(() => expect(recorder.ready).toBe(true));
@@ -1676,15 +1858,59 @@ describe('VoiceWorkerPipeline manual dictation', () => {
         kind: 'acknowledge-candidate',
         sessionId: 'session-1',
         turnId: 'turn-1',
-        revision: 2,
+        revision: 1,
         outcome: 'committed',
       },
       (published) => events.push(published),
     );
-    expect(fs.readdirSync(root)).toEqual([]);
+    expect(fs.readdirSync(root)).toHaveLength(1);
   });
 
-  it('cleans acknowledged spools and accepts acknowledgement for recovered inactive work', async () => {
+  it('resumes a frozen spool at the exact revision without recorder start, gap, or new snapshot', async () => {
+    const root = temporaryRoot();
+    const spool = NodeTurnSpool.create(root, {
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+    });
+    spool.append(Buffer.alloc(PCM_FRAME_BYTES, 9));
+    spool.markUtteranceStart(0);
+    const frozen = spool.createSnapshot();
+    spool.close();
+
+    const recorder = new WorkerRecorder();
+    const transcribe = vi.fn(async (_request: TranscriptionRequest) => 'same frozen turn');
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize(
+      {
+        version: VOICE_WORKER_PROTOCOL_VERSION,
+        sequence: 0,
+        kind: 'initialize',
+        spoolDirectory: root,
+        activityHz: 8,
+      },
+      (published) => events.push(published),
+    );
+
+    await pipeline.handle(beginCommand(), (published) => events.push(published));
+
+    expect(recorder.ready).toBe(false);
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(transcribe.mock.calls[0]?.[0]).toMatchObject({ audioPath: frozen.wavPath });
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'drained', revision: 1 }));
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'transcript-candidate', revision: 1, transcript: 'same frozen turn' }),
+    );
+    const manifestPath = path.join(root, fs.readdirSync(root)[0]!, 'manifest.json');
+    expect(JSON.parse(fs.readFileSync(manifestPath, 'utf8'))).toMatchObject({ revision: 1, gapCount: 0 });
+  });
+
+  it('replays acknowledged tombstones and accepts acknowledgement for recovered inactive work', async () => {
     const root = temporaryRoot();
     const acknowledged = NodeTurnSpool.create(root, {
       sessionId: 'old-session',
@@ -1721,6 +1947,15 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       (published) => events.push(published),
     );
     expect(events.filter((published) => published.kind === 'recovered')).toHaveLength(1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'candidate-acknowledged',
+        sessionId: 'old-session',
+        turnId: 'old-turn',
+        revision: 1,
+        outcome: 'discarded',
+      }),
+    );
     await pipeline.handle(
       {
         version: VOICE_WORKER_PROTOCOL_VERSION,
@@ -1743,6 +1978,35 @@ describe('VoiceWorkerPipeline manual dictation', () => {
         outcome: 'discarded',
       }),
     );
-    expect(fs.readdirSync(root)).toEqual([]);
+    await expect(
+      pipeline.handle(
+        {
+          version: VOICE_WORKER_PROTOCOL_VERSION,
+          sequence: 2,
+          kind: 'acknowledge-candidate',
+          sessionId: 'pending-session',
+          turnId: 'pending-turn',
+          revision: 1,
+          outcome: 'discarded',
+        },
+        (published) => events.push(published),
+      ),
+    ).resolves.toBeUndefined();
+    expect(fs.readdirSync(root)).toHaveLength(2);
+    await expect(
+      pipeline.handle(
+        {
+          version: VOICE_WORKER_PROTOCOL_VERSION,
+          sequence: 3,
+          kind: 'acknowledge-candidate',
+          sessionId: 'pending-session',
+          turnId: 'pending-turn',
+          revision: 1,
+          outcome: 'committed',
+        },
+        (published) => events.push(published),
+      ),
+    ).rejects.toThrow('conflicts with the durable outcome');
+    expect(fs.readdirSync(root)).toHaveLength(2);
   });
 });

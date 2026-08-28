@@ -3,6 +3,7 @@ import type { ResolvedVoiceConfig, VoiceAdapterConfig, VoiceEngine, VoiceTtsConf
 import type {
   VoiceMediaCaptureActivity,
   VoiceMediaCaptureConfiguration,
+  VoiceMediaPlaybackDelivery,
   VoiceMediaPlaybackResult,
 } from './clientMedia.ts';
 
@@ -111,13 +112,19 @@ export interface VoiceMediaAudioPoll {
 }
 
 /** Agent-side half of the client media transport. */
-/** Agent-side half of the client media transport. */
 export interface IVoiceMediaHostConnection {
   startCapture(captureId: string, configuration: VoiceMediaCaptureConfiguration): Promise<void>;
   readCapture(captureId: string): Promise<VoiceMediaAudioPoll>;
   stopCapture(captureId: string): Promise<void>;
   abortCapture(captureId: string): Promise<void>;
-  startPlayback(request: { playbackId: string; text: string; voice?: string; rate?: number }): Promise<void>;
+  startPlayback(request: {
+    playbackId: string;
+    text: string;
+    voice?: string;
+    rate?: number;
+  }): Promise<VoiceMediaPlaybackDelivery | void>;
+  sendPlaybackAudio?(playbackId: string, pcm: Buffer): Promise<void>;
+  sealPlaybackAudio?(playbackId: string, error?: string): Promise<void>;
   readPlayback(playbackId: string): Promise<VoiceMediaPlaybackResult | undefined>;
   stopPlayback(playbackId: string): Promise<void>;
   abortPlayback(playbackId: string): Promise<void>;

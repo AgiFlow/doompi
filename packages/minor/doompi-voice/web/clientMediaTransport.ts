@@ -12,6 +12,7 @@ import {
   type VoiceMediaCapabilities,
   VOICE_MEDIA_EVENT_WAIT_NONE,
   type VoiceMediaPlaybackResult,
+  VOICE_MEDIA_PLAYBACK_STATE_HEADER,
   type VoiceMediaWake,
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
@@ -196,6 +197,43 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     if (!response.ok) throw await responseError(response);
   }
 
+  public async receivePlaybackAudio(
+    clientId: string,
+    connectionId: string,
+    playbackId: string,
+    signal: AbortSignal,
+  ): Promise<Uint8Array> {
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    while (!signal.aborted) {
+      const response = await sealedTransport.fetch(
+        voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientPlaybackAudio, {
+          clientId,
+          connectionId,
+          playbackId,
+        }),
+        { signal },
+      );
+      if (response.status === 200 && response.headers.get('content-type')?.startsWith(VOICE_MEDIA_CONTENT_TYPE)) {
+        const chunk = new Uint8Array(await response.arrayBuffer());
+        chunks.push(chunk);
+        byteLength += chunk.byteLength;
+        continue;
+      }
+      if (response.status === 204 && response.headers.get(VOICE_MEDIA_PLAYBACK_STATE_HEADER) === 'sealed') {
+        const pcm = new Uint8Array(byteLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          pcm.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        return pcm;
+      }
+      if (response.status === 204) continue;
+      throw await responseError(response);
+    }
+    throw new DOMException('Voice playback audio was aborted.', 'AbortError');
+  }
   public async playbackFinished(
     clientId: string,
     connectionId: string,

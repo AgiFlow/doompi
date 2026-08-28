@@ -29,6 +29,7 @@ export interface ITurnSpool {
   append(pcm: Buffer): void;
   recordGap(): void;
   createSnapshot(): TurnSnapshot;
+  getSnapshot(revision: number): TurnSnapshot;
   acknowledge(revision: number, outcome: 'committed' | 'discarded'): void;
   readCommittedPcm(): Buffer;
   close(): void;

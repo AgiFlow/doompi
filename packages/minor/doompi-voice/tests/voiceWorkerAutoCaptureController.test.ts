@@ -251,7 +251,7 @@ async function finishTurn(
   h: ReturnType<typeof harness>,
   transcript: string,
   revision = 1,
-  evidence?: VoiceTranscriptSignalEvidence,
+  evidence: VoiceTranscriptSignalEvidence = strongEvidence,
 ): Promise<{ identity: Identity; outcome: Exclude<VoiceCandidateOutcome, 'retry'> }> {
   const identity = h.current();
   h.speech(identity);
@@ -352,7 +352,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await h.controller.deactivate(h.ui);
 
     await expect(narration).resolves.toBe('interrupted');
-    expect(h.controller.state).toBe('disabled');
+    await vi.waitFor(() => expect(h.controller.state).toBe('disabled'));
     expect(generationSignal?.aborted).toBe(true);
     expect(h.tts.speak).not.toHaveBeenCalled();
   });
@@ -404,6 +404,35 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.client.beginCapture).toHaveBeenCalledTimes(21);
   });
 
+  it('discards a final candidate without audio evidence', async () => {
+    const h = harness();
+    await enable(h);
+    const identity = h.current();
+    h.speech(identity);
+    h.endpoint(identity);
+    h.drained(identity, 1);
+    h.candidate(identity, 'computer do not trust this', 1);
+    await flush();
+
+    expect(h.deliver).not.toHaveBeenCalled();
+    expect(h.client.acknowledgeCandidate).toHaveBeenCalledWith(identity.sessionId, identity.turnId, 1, 'discarded');
+  });
+
+  it('discards playback overlap that lacks current barge-in authorization', async () => {
+    const decide = vi.fn();
+    const h = harness({ adjudicator: { decide } });
+    await enable(h);
+
+    const result = await finishTurn(h, 'computer reject speaker echo', 1, {
+      ...strongEvidence,
+      playbackOverlapMs: 400,
+    });
+
+    expect(result.outcome).toBe('discarded');
+    expect(decide).not.toHaveBeenCalled();
+    expect(h.deliver).not.toHaveBeenCalled();
+  });
+
   it('rejects a repeated admitted transcript inside the duplicate window', async () => {
     const h = harness();
     await enable(h);
@@ -432,6 +461,34 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(decide).toHaveBeenCalledOnce();
     expect(result.outcome).toBe('discarded');
     expect(h.deliver).not.toHaveBeenCalled();
+  });
+
+  it('aborts model admission on toggle-off and applies the confirmed turn through unchanged policy', async () => {
+    let decideSignal: AbortSignal | undefined;
+    const decide = vi.fn(
+      (_input, signal: AbortSignal) =>
+        new Promise<never>(() => {
+          decideSignal = signal;
+        }),
+    );
+    const h = harness({ adjudicator: { decide } });
+    await enable(h);
+    const identity = h.current();
+    h.speech(identity);
+    h.endpoint(identity);
+    h.drained(identity, 1);
+    h.candidate(identity, 'computer preserve confirmed words', 1, ambiguousEvidence);
+    await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
+
+    await h.controller.toggle(h.ui);
+    await flush();
+
+    expect(decideSignal?.aborted).toBe(true);
+    expect(h.deliver).toHaveBeenCalledWith('preserve confirmed words');
+    expect(h.client.acknowledgeCandidate).toHaveBeenCalledWith(identity.sessionId, identity.turnId, 1, 'committed');
+    h.acknowledge(identity, 1, 'committed');
+    await flush();
+    expect(h.controller.state).toBe('disabled');
   });
 
   it('ignores stale adjudication after shutdown and aborts its model signal', async () => {
@@ -643,7 +700,18 @@ describe('VoiceWorkerAutoCaptureController', () => {
     const h = harness();
     await enable(h);
 
-    const result = await finishTurn(h, `doom prompt ${'x'.repeat(32_769)}`, 1);
+    const opened = await finishTurn(h, `doom prompt ${'x'.repeat(4_000)}`, 1);
+    h.acknowledge(opened.identity, 1, opened.outcome);
+    await flush();
+    h.ready();
+    for (let revision = 2; revision <= 8; revision += 1) {
+      const appended = await finishTurn(h, `segment-${revision} ${'x'.repeat(4_080)}`, revision);
+      expect(appended.outcome).toBe('committed');
+      h.acknowledge(appended.identity, revision, appended.outcome);
+      await flush();
+      h.ready();
+    }
+    const result = await finishTurn(h, `overflow ${'x'.repeat(200)}`, 9);
 
     expect(result.outcome).toBe('discarded');
     expect(h.deliver).not.toHaveBeenCalled();
@@ -724,7 +792,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.speech(identity);
     h.endpoint(identity);
     h.drained(identity, 1);
-    h.candidate(identity, 'computer preserve this request', 1);
+    h.candidate(identity, 'computer preserve this request', 1, strongEvidence);
     await flush();
 
     await h.controller.toggle(h.ui);
@@ -734,6 +802,24 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.deliver).toHaveBeenCalledWith('preserve this request');
     h.acknowledge(identity, 1, 'committed');
     await flush();
+    expect(h.controller.state).toBe('disabled');
+  });
+
+  it('does not reach disabled before delayed hard-stop cleanup settles', async () => {
+    let resolveShutdown!: () => void;
+    const shutdownBarrier = new Promise<void>((resolve) => {
+      resolveShutdown = resolve;
+    });
+    const h = harness({ shutdown: () => shutdownBarrier });
+    await enable(h);
+
+    const shuttingDown = h.controller.shutdown(h.ui);
+    await flush();
+    expect(h.controller.state).not.toBe('disabled');
+    expect(h.client.shutdown).toHaveBeenCalledWith('session-shutdown');
+
+    resolveShutdown();
+    await shuttingDown;
     expect(h.controller.state).toBe('disabled');
   });
 
@@ -758,7 +844,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.speech(identity);
     h.endpoint(identity);
     h.drained(identity, 1);
-    h.candidate(identity, 'computer do not deliver after shutdown', 1);
+    h.candidate(identity, 'computer do not deliver after shutdown', 1, strongEvidence);
     await flush();
 
     await h.controller.shutdown(h.ui);
@@ -815,7 +901,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.client.start).toHaveBeenCalledOnce();
 
     h.drained(identity, 4);
-    h.candidate(identity, 'computer preserve reload handoff', 4);
+    h.candidate(identity, 'computer preserve reload handoff', 4, strongEvidence);
     await flush();
     h.acknowledge(identity, 4, 'committed');
     await flush();
@@ -850,7 +936,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await h.controller.toggle(h.ui);
     expect(h.client.finalizeCapture).toHaveBeenCalledWith(identity.sessionId, identity.captureId, 'auto-disabled');
     h.drained(identity, 4);
-    h.candidate(identity, 'computer finish this request', 4);
+    h.candidate(identity, 'computer finish this request', 4, strongEvidence);
     await flush();
     expect(h.deliver).toHaveBeenCalledWith('finish this request');
     h.acknowledge(identity, 4, 'committed');
@@ -883,7 +969,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.controller.state).toBe('disabled');
   });
 
-  it('escalates a never-resolving graceful worker shutdown at the original deadline', async () => {
+  it('forces the lifecycle deadline without duplicating a never-resolving cleanup', async () => {
     const h = harness({ shutdown: () => new Promise<void>(() => undefined) });
     await enable(h);
     const identity = h.current();
@@ -899,7 +985,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     await flush();
 
     expect(h.client.cancelCapture).toHaveBeenCalledWith(identity.sessionId, identity.captureId);
-    expect(h.client.shutdown).toHaveBeenCalledTimes(2);
+    expect(h.client.shutdown).toHaveBeenCalledOnce();
     expect(h.ui.notify).toHaveBeenCalledWith('Autonomous voice failed: graceful_stop_timed_out', 'error');
     expect(h.controller.state).toBe('disabled');
     expect(h.client.beginCapture).toHaveBeenCalledOnce();
@@ -949,7 +1035,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.speech(identity);
     h.endpoint(identity);
     h.drained(identity, 1);
-    h.candidate(identity, 'computer preserve   my words', 1);
+    h.candidate(identity, 'computer preserve   my words', 1, strongEvidence);
     await flush();
 
     expect(h.deliver).not.toHaveBeenCalled();

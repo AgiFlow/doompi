@@ -106,26 +106,40 @@ sequenceDiagram
   VAD->>EP: speechEnded(utteranceIdleMs, evidence)
   EP->>EP: arm one timer for the remainder
   EP-->>M: endpoint-reached
-  Note over M: speech to finalizing
-  M->>SP: effect.finalizeCapture
-  SP->>SP: freeze, drain, snapshot
-  SP->>ASR: one pass over the whole spool
-  ASR-->>M: transcript-candidate (final)
-  Note over M: transcribing to applyingPolicy
-  M->>M: applyTranscriptPolicy
-  Note over M: applyingPolicy to delivering
-  M->>Pi: effect.deliver to sendUserMessage
-  Pi-->>M: returns (no receipt)
-  Note over M: delivering to acknowledging to startingNextTurn
+  Note over M: speech to finalizing; endpoint remains revocable
+  alt Fresh confirmed speech before drain commits
+    VAD-->>M: speech-confirmed
+    Note over M: finalizing back to speech
+  else Drain wins the terminal-operation gate
+    M->>SP: effect.finalizeCapture
+    SP->>SP: freeze, drain, snapshot once
+    SP-->>M: capture-processing (informational)
+    SP-->>M: capture-drained (positive revision)
+    Note over M: finalizing to transcribing
+    SP->>ASR: one pass over the exact frozen WAV revision
+    ASR-->>M: transcript-candidate (same revision)
+    Note over M: transcribing to applyingPolicy
+    M->>M: fail-closed admission and transcript policy
+    Note over M: applyingPolicy to delivering or acknowledging
+    M->>Pi: effect.deliver nonblank text (if accepted)
+    Pi-->>M: returns (no receipt)
+    M->>SP: acknowledge exact revision and outcome
+    SP-->>M: candidate-acknowledged (exact revision and outcome)
+    Note over M: acknowledging to startingNextTurn
+  end
 ```
 
 Two facts this diagram exists to make unmissable, because both routinely surprise people and both
 drove recent design work:
 
 - **A turn produces exactly one transcript.** `transcribe()` (`voiceWorkerPipeline.ts`) reads
-  the whole committed spool in a single pass. There is no interim or streaming ASR, so the
+  the exact frozen WAV revision in a single pass. `CAPTURE_PROCESSING` is only a progress event;
+  `CAPTURE_DRAINED` is the sole revision authority. There is no interim or streaming ASR, so the
   transcript policy never sees a partial hypothesis. A command spoken after a brief pause arrives
   glued to the sentence before it unless the endpoint window is short enough to split the turn.
+- **A soft endpoint can be revoked before drain commits.** A fresh confirmed 120 ms speech run moves
+  the lifecycle from `finalizing` back to `speech`; the shared capture terminal-operation gate ensures
+  that drain and abort cannot both mutate the recorder or spool.
 - **The VAD's 600 ms trailing window is inside `utteranceIdleMs`, not additional to it.**
   `speechEnded` (`autonomousEndpoint.ts`) arms a timer for
   `utteranceIdleMs - observedSilence`, so the default 3000 ms means roughly 3 s of true silence in
@@ -169,10 +183,11 @@ stateDiagram-v2
     speech --> finalizing: CAPTURE_DURATION_LIMIT_REACHED
     speech --> finalizing: TOGGLE_OFF_REQUESTED
 
-    finalizing --> transcribing: CAPTURE_DRAINED or CAPTURE_PROCESSING
+    finalizing --> speech: SPEECH_CONFIRMED after revocable endpoint
+    finalizing --> transcribing: CAPTURE_DRAINED(revision > 0)
 
-    transcribing --> applyingPolicy: TRANSCRIPTION_SUCCEEDED
-    transcribing --> acknowledging: TRANSCRIPTION_EMPTY
+    transcribing --> applyingPolicy: TRANSCRIPTION_SUCCEEDED(exact revision)
+    transcribing --> acknowledging: TRANSCRIPTION_EMPTY(exact revision)
 
     applyingPolicy --> delivering: TRANSCRIPT_ACCEPTED
     applyingPolicy --> delivering: TRANSCRIPT_COMPOSITION_SEND_REQUESTED
@@ -182,7 +197,7 @@ stateDiagram-v2
     delivering --> acknowledging: DELIVERY_SUCCEEDED
     delivering --> acknowledging: DELIVERY_FAILED
 
-    acknowledging --> startingNextTurn: CANDIDATE_ACKNOWLEDGED
+    acknowledging --> startingNextTurn: CANDIDATE_ACKNOWLEDGED(exact revision and outcome)
     startingNextTurn --> startingCapture: NEXT_TURN_READY
     --
     [*] --> silent
@@ -196,7 +211,7 @@ stateDiagram-v2
   active --> stopping: GRACEFUL_STOP_TIMED_OUT
   active --> stopping: CANDIDATE_ACKNOWLEDGED while stopping
   active --> failed: CAPTURE_START_FAILED
-  active --> failed: TRANSCRIPTION_FAILED or TRANSCRIPTION_TIMED_OUT
+  active --> failed: exact acknowledgement after terminal transcription failure
   active --> failed: WORKER_EXHAUSTED
 
   stopping --> off: STOP_COMPLETED
@@ -210,10 +225,7 @@ mermaid's `--`. They run concurrently.
 Edges are drawn from `active` where the real transition leaves the parallel region for a top-level
 node, because mermaid cannot address a top-level state from inside a composite without creating a
 duplicate. Their true origins are: `CAPTURE_START_FAILED` from `startingCapture`;
-`TRANSCRIPTION_FAILED` and `TRANSCRIPTION_TIMED_OUT` from `transcribing`; and
-`CANDIDATE_ACKNOWLEDGED` from `acknowledging`, via an inline guard that fires only when
-`stopRequested` is already set. XState writes these as `#autonomousVoice.failed` and
-`#autonomousVoice.stopping`.
+`TRANSCRIPTION_FAILED` and `TRANSCRIPTION_TIMED_OUT` first move from `transcribing` to `acknowledging`, mark the frozen revision discarded, and enter `failed` only after an exact acknowledgement. `CANDIDATE_ACKNOWLEDGED` from `acknowledging` instead enters `stopping` when `stopRequested` is already set. XState writes the terminal targets as `#autonomousVoice.failed` and `#autonomousVoice.stopping`.
 
 A newer `PLAYBACK_STARTED` arriving during `playing` supersedes the current generation in place; it
 is omitted from the diagram as a self-loop only to keep the region readable.
@@ -230,32 +242,35 @@ is omitted from the diagram as a self-loop only to keep the region readable.
 | capture  | `startingCapture`  | `requestCapture`                             | Waiting on the first valid PCM frame             |
 | capture  | `listening`        | none                                         | Live recorder, no confirmed speech               |
 | capture  | `speech`           | none                                         | Confirmed speech; endpoint timer armed           |
-| capture  | `finalizing`       | none                                         | Capture frozen, draining to a snapshot           |
-| capture  | `transcribing`     | none                                         | The single ASR pass                              |
-| capture  | `applyingPolicy`   | none                                         | Deciding deliver, compose, stop, or discard      |
-| capture  | `delivering`       | none                                         | Handed to Pi, awaiting a synchronous result      |
-| capture  | `acknowledging`    | `requestAcknowledgement`                     | Releasing the spool; the busiest node, 8 inbound |
+| capture  | `finalizing`       | none                                         | Soft endpoint is revocable until drain wins      |
+| capture  | `transcribing`     | none                                         | One ASR pass over the positive frozen revision   |
+| capture  | `applyingPolicy`   | none                                         | Fail-closed admission, then policy               |
+| capture  | `delivering`       | none                                         | Nonblank text handed to Pi once                  |
+| capture  | `acknowledging`    | `requestAcknowledgement`                     | Exact revision and outcome awaiting confirmation |
 | capture  | `startingNextTurn` | `requestNextTurn`                            | Minting the next capture and turn identity       |
 | playback | `silent`           | none                                         | Microphone fully eligible                        |
 | playback | `playing`          | none                                         | TTS active; frames excluded from the turn        |
 | playback | `echoTail`         | none                                         | 800 ms grace after playback ends                 |
 
+**Graceful and hard stop differ at admission.** Toggle-off aborts a pending admission or correction request but may let the already-confirmed turn continue with its deterministic unchanged-policy fallback. It prevents every next-turn effect. Hard stop, extension disposal, and session shutdown abort admission without delivering a new turn. Both paths share one session cleanup promise, and `STOP_COMPLETED` is emitted only after cleanup settles or the bounded forced-cleanup policy reports its outcome.
+
 ### The guards
 
-| Guard                          | Semantics                                                              |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| `isCurrentSession`             | Event's `sessionId` matches context                                    |
-| `isCurrentCapture`             | Session, capture, and turn all match                                   |
-| `isCurrentRevision`            | Identity matches and the revision is current or unset                  |
-| `isCurrentPlayback`            | Playback generation equals context                                     |
-| `isNewPlayback`                | Playback generation is strictly greater than context                   |
-| `isExactCurrentBargeInCommand` | Current generation, and the probe was an exact stop phrase             |
-| `isActionableCurrentBargeIn`   | Current generation, not a stop phrase, and the evidence rank clears 80 |
-| `stopWasNotRequested`          | `!context.stopRequested`                                               |
-| `stopWasRequested`             | Declared but never referenced; see divergences                         |
+| Guard                          | Semantics                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `isCurrentSession`             | Event's `sessionId` matches context                                       |
+| `isCurrentCapture`             | Session, capture, and turn all match                                      |
+| `isCurrentDrainedRevision`     | Current identity and a positive safe-integer drained revision             |
+| `isCurrentRevision`            | Identity and revision exactly match the frozen context revision           |
+| `isCurrentAcknowledgement`     | Identity, revision, and committed/discarded outcome exactly match context |
+| `isCurrentPlayback`            | Playback generation equals context                                        |
+| `isNewPlayback`                | Playback generation is strictly greater than context                      |
+| `isExactCurrentBargeInCommand` | Current generation, and the probe was an exact stop phrase                |
+| `isActionableCurrentBargeIn`   | Current generation, not a stop phrase, and the evidence rank clears 80    |
+| `stopWasNotRequested`          | `!context.stopRequested`                                                  |
+| `stopWasRequested`             | Declared but never referenced; see divergences                            |
 
-Identity guards are the reason a slow ASR result, a restarted worker, or a stale playback callback
-cannot mutate a turn that has already moved on.
+Identity and revision guards are why a slow ASR result, a restarted worker, or a stale playback callback cannot mutate a turn that has already moved on. Outcome matching also prevents a duplicate or conflicting acknowledgement from deleting a spool under the wrong decision.
 
 ### What the UI shows
 
@@ -447,6 +462,14 @@ Capability strings gate optional fields, so an older worker degrades rather than
 `capture`, `transcription`, `durable-spool`, `adaptive-vad`, `silero-vad`, `transcription-timeout`,
 `ranked-barge-in`, `intentional-barge-in`. `silero-vad` is advertised only when the model and
 native runtime actually initialize; capture continues on adaptive VAD alone when they do not.
+
+#### Restart ownership and shutdown
+
+Protocol v1 is unchanged. Reliability comes from parent and spool phase tracking, not new messages. `voiceWorkerClient.ts` retains `capturing`, `finalization-requested`, `frozen`, `candidate-observed`, or `acknowledgement-pending` for the active identity. Reconnect replays only work still owned by that phase: it resumes capture/finalization, lets a frozen spool reuse its WAV for ASR, sends nothing after the candidate was observed, or replays the exact pending acknowledgement.
+
+The spool manifest and acknowledgement tombstone preserve the matching durable phase. An identical acknowledgement is idempotent. A stale revision or conflicting outcome fails without deleting the spool. Clean parent progress or ordered shutdown removes the tombstone; uncertain termination keeps recoverable ownership.
+
+Pipeline operations and shutdown share one ordered barrier. Shutdown marks the pipeline closed, aborts active ASR and capture, suppresses late publications, then lets worker disposal close the message port. The parent waits up to two seconds for that graceful worker exit before forcing termination. Repeated shutdown and disposal calls await the same promises.
 
 ---
 

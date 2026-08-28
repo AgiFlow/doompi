@@ -73,6 +73,7 @@ describe('voice worker host boundary', () => {
     bridge.attach(startVoiceWorker(bridge.port, hooks));
     const client = new VoiceWorkerClient({
       spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
       workerFactory: () => bridge,
       onEvent: vi.fn(),
     });
@@ -98,6 +99,49 @@ describe('voice worker host boundary', () => {
     expect(handled).toContainEqual(expect.objectContaining({ kind: 'begin-capture', transcriptionTimeoutMs: 21_000 }));
     await client.shutdown('session-shutdown');
     expect(hooks.shutdown).toHaveBeenCalledWith('session-shutdown');
+  });
+
+  it('keeps the worker port open until the shared shutdown barrier settles', async () => {
+    const bridge = new WorkerBridge();
+    let resolveShutdown!: () => void;
+    const shutdownBarrier = new Promise<void>((resolve) => {
+      resolveShutdown = resolve;
+    });
+    const hooks = {
+      initialize: vi.fn(),
+      handle: vi.fn(),
+      shutdown: vi.fn(() => shutdownBarrier),
+    };
+    const runtime = startVoiceWorker(bridge.port, hooks);
+    bridge.attach(runtime);
+    bridge.postMessage({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: '/private/voice',
+      activityHz: 8,
+    });
+    await flush();
+    bridge.postMessage({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 1,
+      kind: 'shutdown',
+      reason: 'session-shutdown',
+    });
+    await flush();
+
+    let disposed = false;
+    const duplicateDispose = runtime.dispose().then(() => {
+      disposed = true;
+    });
+    await flush();
+    expect(disposed).toBe(false);
+    expect(bridge.port.close).not.toHaveBeenCalled();
+
+    resolveShutdown();
+    await duplicateDispose;
+    expect(bridge.port.close).toHaveBeenCalledOnce();
+    expect(hooks.shutdown).toHaveBeenCalledOnce();
   });
 
   it('returns a bounded diagnostic for a malformed control field', async () => {

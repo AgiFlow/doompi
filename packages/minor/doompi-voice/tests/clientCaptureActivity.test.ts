@@ -54,6 +54,23 @@ describe('portable client capture activity', () => {
     expect(lifecycle.push(pcmChunk(0), windows(false)).state).toBe('endpoint');
   });
 
+  it('revokes an endpoint only after a fresh confirmed speech run', () => {
+    const lifecycle = new ClientCaptureActivityLifecycle(600);
+    lifecycle.push(pcmChunk(2_000), windows(true, true, true, true));
+    const endpoint = lifecycle.push(pcmChunk(0), windows(...Array.from({ length: 19 }, () => false)));
+    expect(endpoint).toMatchObject({ state: 'endpoint', epoch: 0 });
+
+    expect(lifecycle.push(pcmChunk(2_000), windows(true, true, true))).toMatchObject({ state: 'endpoint', epoch: 0 });
+    expect(lifecycle.push(pcmChunk(0), windows(false))).toMatchObject({ state: 'endpoint', epoch: 0 });
+
+    const resumed = lifecycle.push(pcmChunk(2_000), windows(true, true, true, true));
+    expect(resumed).toMatchObject({ state: 'speech', epoch: 1, classifiedSpeechMs: 128 });
+    expect(resumed.elapsedMs).toBeGreaterThan(endpoint.elapsedMs);
+
+    expect(lifecycle.push(pcmChunk(0), windows(...Array.from({ length: 18 }, () => false))).state).toBe('speech');
+    expect(lifecycle.push(pcmChunk(0), windows(false))).toMatchObject({ state: 'endpoint', epoch: 1 });
+  });
+
   it('keeps RMS as level and elapsed-time telemetry', () => {
     const lifecycle = new ClientCaptureActivityLifecycle();
     expect(lifecycle.push(pcmChunk(16_384, 100))).toMatchObject({ state: 'listening', elapsedMs: 100, levelDbfs: -6 });

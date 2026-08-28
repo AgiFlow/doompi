@@ -85,6 +85,17 @@ describe('voice transcript admission', () => {
     ).toMatchObject({ action: 'review', reason: 'review' });
   });
 
+  it('treats missing signal evidence as no speech', () => {
+    expect(
+      assessVoiceTranscript({
+        transcript: 'run the focused tests',
+        observedAt: 10_000,
+        narrationOverlap: false,
+        narrationReferences: [],
+      }),
+    ).toMatchObject({ action: 'reject', reason: 'no_speech', score: 0 });
+  });
+
   it('accepts only a grounded, bounded continuation summary from structured model output', async () => {
     const model: IVoiceTranscriptAdmissionModelClient = {
       complete: vi.fn(async () =>

@@ -14,8 +14,10 @@ import {
   type VoiceMediaConnectRequest,
   VOICE_MEDIA_EVENT_WAIT_NONE,
   VOICE_MEDIA_HEARTBEAT_MS,
+  type VoiceMediaPlaybackDelivery,
   type VoiceMediaPlaybackOutcome,
   type VoiceMediaPlaybackResult,
+  VOICE_MEDIA_PLAYBACK_STATE_HEADER,
   type VoiceMediaWake,
   VOICE_MEDIA_CHANNELS,
   VOICE_MEDIA_CONTENT_TYPE,
@@ -31,6 +33,7 @@ const EVENT_WAIT_MS = 5_000;
 const AUDIO_WAIT_MS = 500;
 const MAX_AUDIO_CHUNK_BYTES = 64 * 1024;
 const MAX_QUEUED_AUDIO_BYTES = 2 * 1024 * 1024;
+const MAX_PLAYBACK_AUDIO_BYTES = 32 * 1024 * 1024;
 const MAX_EVENT_HISTORY = 64;
 const MAX_IDENTIFIER_LENGTH = 200;
 
@@ -65,6 +68,11 @@ interface HostedCapture {
 
 interface HostedPlayback {
   id: string;
+  delivery: VoiceMediaPlaybackDelivery;
+  audioChunks: Uint8Array[];
+  audioBytes: number;
+  audioSealed: boolean;
+  audioError?: string;
   result?: VoiceMediaPlaybackResult;
 }
 
@@ -188,6 +196,8 @@ class VoiceMediaBroker implements DoomApiHandler {
       return this.acceptAudio(request, url);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientCaptureStopped)
       return this.captureStopped(request);
+    if (request.method === 'GET' && url.pathname === VOICE_MEDIA_ROUTES.clientPlaybackAudio)
+      return this.readPlaybackAudio(url);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientPlaybackResult)
       return this.playbackFinished(request);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostCaptureStart)
@@ -199,6 +209,10 @@ class VoiceMediaBroker implements DoomApiHandler {
       return this.stopCapture(request, true);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackStart)
       return this.startPlayback(request);
+    if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackAudio)
+      return this.acceptPlaybackAudio(request, url);
+    if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackAudioEnd)
+      return this.sealPlaybackAudio(request);
     if (request.method === 'GET' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackResult)
       return this.readPlaybackResult(url);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackStop)
@@ -502,15 +516,74 @@ class VoiceMediaBroker implements DoomApiHandler {
       return errorResponse('No playback-capable voice client is connected.', 503);
     if (this.playback !== undefined && this.playback.result === undefined)
       return errorResponse('Voice playback is already active.', 409);
-    this.playback = { id: body.playbackId };
+    const delivery: VoiceMediaPlaybackDelivery = this.client?.controlLocation === 'remote' ? 'streamed' : 'client';
+    this.playback = { id: body.playbackId, delivery, audioChunks: [], audioBytes: 0, audioSealed: false };
     this.publish({
       type: 'playback-start',
       playbackId: body.playbackId,
       text: body.text,
+      delivery,
       ...(typeof body.voice === 'string' && body.voice !== '' ? { voice: body.voice } : {}),
       ...(typeof body.rate === 'number' && Number.isFinite(body.rate) ? { rate: body.rate } : {}),
     });
-    return new Response(null, { status: 201 });
+    return Response.json({ delivery }, { status: 201 });
+  }
+
+  private async acceptPlaybackAudio(request: Request, url: URL): Promise<Response> {
+    const playbackId = url.searchParams.get('playbackId');
+    const playback = this.playback;
+    if (!validId(playbackId) || playback?.id !== playbackId || playback.delivery !== 'streamed')
+      return errorResponse('Voice playback does not match streamed delivery.', 409);
+    if (playback.audioSealed) return errorResponse('Voice playback audio is already sealed.', 409);
+    if (request.headers.get('content-type') !== VOICE_MEDIA_CONTENT_TYPE)
+      return errorResponse('Voice playback audio must be PCM16.', 415);
+    const pcm = new Uint8Array(await request.arrayBuffer());
+    if (pcm.byteLength === 0 || pcm.byteLength > MAX_AUDIO_CHUNK_BYTES || pcm.byteLength % 2 !== 0)
+      return errorResponse('Voice playback audio chunk must contain complete PCM16 samples.', 400);
+    if (playback.audioBytes + pcm.byteLength > MAX_PLAYBACK_AUDIO_BYTES)
+      return errorResponse('Voice playback audio is too large.', 413);
+    playback.audioChunks.push(pcm);
+    playback.audioBytes += pcm.byteLength;
+    this.wake();
+    return new Response(null, { status: 204 });
+  }
+
+  private async sealPlaybackAudio(request: Request): Promise<Response> {
+    const body = await jsonRecord(request);
+    const playback = this.playback;
+    if (!validId(body?.playbackId) || playback?.id !== body.playbackId || playback.delivery !== 'streamed')
+      return errorResponse('Voice playback does not match streamed delivery.', 409);
+    playback.audioSealed = true;
+    if (typeof body.error === 'string' && body.error.trim() !== '') playback.audioError = body.error.slice(0, 500);
+    this.wake();
+    return new Response(null, { status: 204 });
+  }
+
+  private async readPlaybackAudio(url: URL): Promise<Response> {
+    const clientId = url.searchParams.get('clientId');
+    const connectionId = url.searchParams.get('connectionId');
+    const playbackId = url.searchParams.get('playbackId');
+    if (!this.matchesClient(clientId, connectionId))
+      return errorResponse('Voice media client does not own this session.', 409);
+    this.touchClient();
+    let playback = this.playback;
+    if (!validId(playbackId) || playback?.id !== playbackId || playback.delivery !== 'streamed')
+      return errorResponse('Voice playback does not match streamed delivery.', 409);
+    if (playback.audioChunks.length === 0 && !playback.audioSealed) {
+      await this.wait(AUDIO_WAIT_MS);
+      playback = this.playback;
+      if (playback?.id !== playbackId) return errorResponse('Voice playback does not match.', 409);
+    }
+    const chunk = playback.audioChunks.shift();
+    if (chunk !== undefined) {
+      playback.audioBytes -= chunk.byteLength;
+      return new Response(chunk, { headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE } });
+    }
+    if (playback.audioError) return errorResponse(playback.audioError, 410);
+    return new Response(null, {
+      status: 204,
+      headers: { [VOICE_MEDIA_PLAYBACK_STATE_HEADER]: playback.audioSealed ? 'sealed' : 'active' },
+    });
   }
 
   private async readPlaybackResult(url: URL): Promise<Response> {

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type BinaryProcessStartOptions,
@@ -11,7 +12,8 @@ import {
   type TtsPlayback,
   type TtsSpeakRequest,
 } from '../src/exports';
-
+import { MacOsSayPcmSynthesizer } from '../src/adapters/audio/infrastructure.ts';
+import { encodePcm16Wav } from '../src/services/pcm.ts';
 class DeferredBinaryProcess implements BinaryRunningProcess {
   readonly signals: NodeJS.Signals[] = [];
   readonly writes: (string | Buffer)[] = [];
@@ -123,6 +125,53 @@ describe('macOS say TTS adapter', () => {
     });
   });
 
+  it('writes private PCM16 output and returns its audio payload for remote delivery', async () => {
+    const pcm = Buffer.from([1, 0, 2, 0]);
+    let startedArgs: readonly string[] = [];
+    const writes: (string | Buffer)[] = [];
+    const synthesizer = new MacOsSayPcmSynthesizer(
+      { resolve: () => '/usr/bin/say' },
+      {
+        start: (_executable, args) => {
+          startedArgs = args;
+          const output = args[1];
+          if (output === undefined) throw new Error('missing output');
+          fs.writeFileSync(output, encodePcm16Wav(pcm));
+          return {
+            completion: Promise.resolve({ code: 0, stdout: '', stderr: '' }),
+            signal: () => true,
+            onStdout: () => () => undefined,
+            writeStdin: (data: string | Buffer) => {
+              writes.push(data);
+              return true;
+            },
+            closeStdin: () => undefined,
+          };
+        },
+      },
+    );
+
+    await expect(
+      synthesizer.synthesize(
+        {
+          id: 8,
+          kind: 'final',
+          text: 'Backend narration.',
+          config: { engine: 'macos-say', voice: 'Samantha', rate: 190 },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual(pcm);
+    expect(startedArgs.slice(2)).toEqual([
+      '--file-format=WAVE',
+      '--data-format=LEI16@16000',
+      '-v',
+      'Samantha',
+      '-r',
+      '190',
+    ]);
+    expect(writes).toEqual(['Backend narration.']);
+  });
   it('stops with bounded escalation and aborts immediately', async () => {
     const firstProcess = new DeferredBinaryProcess();
     const secondProcess = new DeferredBinaryProcess();

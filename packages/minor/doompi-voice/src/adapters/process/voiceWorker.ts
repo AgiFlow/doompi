@@ -69,6 +69,7 @@ export function startVoiceWorker(
   let disposed = false;
   let lastCommandSequence = -1;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let disposePromise: Promise<void> | undefined;
 
   const publish = (event: VoiceWorkerEventPayload): void => {
     if (disposed) return;
@@ -86,13 +87,15 @@ export function startVoiceWorker(
     heartbeat = undefined;
   };
 
-  const dispose = async (reason: 'session-shutdown' | 'extension-dispose' = 'extension-dispose'): Promise<void> => {
-    if (disposed) return;
-    disposed = true;
-    stopHeartbeat();
-    port.off('message', onMessage);
-    await hooks.shutdown(reason);
-    port.close();
+  const dispose = (reason: 'session-shutdown' | 'extension-dispose' = 'extension-dispose'): Promise<void> => {
+    disposePromise ??= (async () => {
+      disposed = true;
+      stopHeartbeat();
+      port.off('message', onMessage);
+      await hooks.shutdown(reason);
+      port.close();
+    })();
+    return disposePromise;
   };
 
   const onMessage = (value: unknown): void => {
@@ -119,6 +122,7 @@ export function startVoiceWorker(
       void Promise.resolve(hooks.initialize?.(command, publish)).then(
         () => {
           initializing = false;
+          if (disposed) return;
           initialized = true;
           publish({
             kind: 'ready',
@@ -131,6 +135,7 @@ export function startVoiceWorker(
         },
         () => {
           initializing = false;
+          if (disposed) return;
           publish({ kind: 'failure', code: 'initialization_failed', recoverable: false });
         },
       );

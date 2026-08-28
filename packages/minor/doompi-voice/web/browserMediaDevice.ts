@@ -14,6 +14,8 @@ const AUDIO_BUFFER_SIZE = 4_096;
 const AUDIO_UPLOAD_DURATION_MS = 100;
 const AUDIO_WORKLET_NAME = 'doompi-voice-capture';
 const DEFAULT_SPEECH_RATE_WPM = 180;
+const SPEECH_START_TIMEOUT_MS = 5_000;
+const SPEECH_WARMUP_TIMEOUT_MS = 10_000;
 const MIN_SPEECH_RATE = 0.1;
 const MAX_SPEECH_RATE = 10;
 const PCM_BYTES_PER_SAMPLE = 2;
@@ -22,6 +24,23 @@ const PCM_MINIMUM = -32_768;
 const PCM_UPLOAD_BYTES = (VOICE_MEDIA_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * AUDIO_UPLOAD_DURATION_MS) / 1_000;
 const SILENT_OUTPUT_GAIN = 1e-8;
 
+type SpeechUtteranceConstructor = new (text?: string) => SpeechSynthesisUtterance;
+
+function browserSpeechPlaybackAvailable(): boolean {
+  return typeof window !== 'undefined' && typeof window.speechSynthesis?.speak === 'function';
+}
+
+function browserPcmPlaybackAvailable(): boolean {
+  return typeof AudioContext === 'function';
+}
+
+function speechUtteranceConstructor(): SpeechUtteranceConstructor | undefined {
+  if (typeof SpeechSynthesisUtterance === 'function') return SpeechSynthesisUtterance;
+  if (typeof window === 'undefined') return undefined;
+  const candidate = (window as Window & { SpeechSynthesisUtterance?: SpeechUtteranceConstructor })
+    .SpeechSynthesisUtterance;
+  return typeof candidate === 'function' ? candidate : undefined;
+}
 /** Stateful rate conversion so chunk boundaries do not drop or duplicate time. */
 export class Pcm16Resampler {
   private sourceIndex = 0;
@@ -58,6 +77,7 @@ class BrowserSpeechPlayback implements VoiceMediaPlayback {
   private ducked = false;
   private fadeTimer: ReturnType<typeof setInterval> | undefined;
   private restoreTimer: ReturnType<typeof setTimeout> | undefined;
+  private startTimer: ReturnType<typeof setTimeout> | undefined;
 
   public constructor(
     private readonly synthesis: SpeechSynthesis,
@@ -67,9 +87,17 @@ class BrowserSpeechPlayback implements VoiceMediaPlayback {
     this.completion = new Promise((resolve) => {
       this.settleCompletion = resolve;
     });
+    utterance.onstart = () => {
+      if (this.startTimer !== undefined) clearTimeout(this.startTimer);
+      this.startTimer = undefined;
+    };
     utterance.onend = () => this.settle(this.requestedOutcome ?? 'completed');
     utterance.onerror = (event) =>
       this.settle(this.requestedOutcome ?? 'failed', event.error || 'Browser speech synthesis failed.');
+    this.startTimer = setTimeout(() => {
+      this.synthesis.cancel();
+      this.settle('failed', 'Browser speech synthesis did not start.');
+    }, SPEECH_START_TIMEOUT_MS);
   }
 
   public stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void {
@@ -122,32 +150,134 @@ class BrowserSpeechPlayback implements VoiceMediaPlayback {
     this.settled = true;
     if (this.fadeTimer !== undefined) clearInterval(this.fadeTimer);
     if (this.restoreTimer !== undefined) clearTimeout(this.restoreTimer);
+    if (this.startTimer !== undefined) clearTimeout(this.startTimer);
     this.fadeTimer = undefined;
     this.restoreTimer = undefined;
+    this.startTimer = undefined;
+    this.utterance.onstart = null;
     this.utterance.onend = null;
     this.utterance.onerror = null;
     this.settleCompletion({ playbackId: this.playbackId, outcome, ...(error ? { error } : {}) });
   }
 }
 
+class BrowserPcmPlayback implements VoiceMediaPlayback {
+  public readonly completion: Promise<VoiceMediaPlaybackResult>;
+  private source: AudioBufferSourceNode | undefined;
+  private gain: GainNode | undefined;
+  private settled = false;
+  private settleCompletion!: (result: VoiceMediaPlaybackResult) => void;
+  private restoreTimer: ReturnType<typeof setTimeout> | undefined;
+
+  public constructor(
+    private readonly context: AudioContext,
+    audio: Promise<Uint8Array>,
+    private readonly playbackId: string,
+  ) {
+    this.completion = new Promise((resolve) => {
+      this.settleCompletion = resolve;
+    });
+    void this.start(audio);
+  }
+
+  public stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void {
+    if (this.settled) return;
+    this.source?.stop();
+    this.settle(outcome);
+  }
+
+  public duck(targetGain: number, _fadeMs: number, holdMs: number): void {
+    if (this.settled || this.gain === undefined) return;
+    this.gain.gain.value = Math.max(0, Math.min(1, targetGain));
+    if (this.restoreTimer !== undefined) clearTimeout(this.restoreTimer);
+    this.restoreTimer = setTimeout(
+      () => {
+        this.restoreTimer = undefined;
+        if (this.gain !== undefined) this.gain.gain.value = 1;
+      },
+      Math.max(0, holdMs),
+    );
+  }
+
+  private async start(audio: Promise<Uint8Array>): Promise<void> {
+    try {
+      const pcm = await audio;
+      if (this.settled) return;
+      if (pcm.byteLength === 0 || pcm.byteLength % PCM_BYTES_PER_SAMPLE !== 0)
+        throw new Error('Streamed narration audio is empty or incomplete.');
+      if (this.context.state !== 'running')
+        throw new Error('Browser audio playback is suspended. Tap the voice control.');
+      const samples = new Float32Array(pcm.byteLength / PCM_BYTES_PER_SAMPLE);
+      const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+      for (let index = 0; index < samples.length; index += 1) samples[index] = view.getInt16(index * 2, true) / 32_768;
+      const buffer = this.context.createBuffer(1, samples.length, VOICE_MEDIA_SAMPLE_RATE);
+      buffer.copyToChannel(samples, 0);
+      const source = this.context.createBufferSource();
+      const gain = this.context.createGain();
+      gain.gain.value = 1;
+      source.buffer = buffer;
+      source.onended = () => this.settle('completed');
+      source.connect(gain);
+      gain.connect(this.context.destination);
+      this.source = source;
+      this.gain = gain;
+      source.start();
+    } catch (error) {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      this.settle('failed', message);
+    }
+  }
+
+  private settle(outcome: VoiceMediaPlaybackOutcome, error?: string): void {
+    if (this.settled) return;
+    this.settled = true;
+    if (this.restoreTimer !== undefined) clearTimeout(this.restoreTimer);
+    if (this.source !== undefined) this.source.onended = null;
+    this.source?.disconnect();
+    this.gain?.disconnect();
+    this.source = undefined;
+    this.gain = undefined;
+    this.settleCompletion({ playbackId: this.playbackId, outcome, ...(error ? { error } : {}) });
+  }
+}
 export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   public readonly capabilities: VoiceMediaCapabilities = {
     capture: typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia !== undefined,
-    playback: typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
+    playback: browserSpeechPlaybackAvailable() || browserPcmPlaybackAvailable(),
     captureActivity: false,
     autonomousOrchestration: false,
-    playbackDucking:
-      typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
+    playbackDucking: browserSpeechPlaybackAvailable() || browserPcmPlaybackAvailable(),
   };
   private stream: MediaStream | undefined;
   private context: AudioContext | undefined;
   private workletInstalled = false;
   private activeCapture: VoiceMediaCapture | undefined;
-  private activePlayback: BrowserSpeechPlayback | undefined;
+  private activePlayback: VoiceMediaPlayback | undefined;
   private speechDetector: BrowserSpeechPresenceDetector | undefined;
   private speechPreparation: Promise<void> | undefined;
+  private listeningForMediaUnlock = false;
+  private speechWarmup: SpeechSynthesisUtterance | undefined;
+  private speechWarmupTimer: ReturnType<typeof setTimeout> | undefined;
 
+  private readonly unlockMedia = (): void => {
+    if (typeof AudioContext !== 'undefined') {
+      try {
+        this.context ??= new AudioContext();
+        const context = this.context;
+        void context
+          .resume()
+          .then(() => {
+            if (context.state === 'running') this.stopListeningForMediaUnlock();
+          })
+          .catch(() => undefined);
+      } catch {
+        // Capture reports unsupported audio contexts when the host requests it.
+      }
+    }
+    this.warmSpeechSynthesis();
+  };
   public async prepare(): Promise<void> {
+    this.listenForMediaUnlock();
     this.speechPreparation ??= this.prepareSpeechDetector();
     await this.speechPreparation;
   }
@@ -165,6 +295,9 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     });
     this.context ??= new AudioContext();
     await this.context.resume();
+    if (this.context.state !== 'running')
+      throw new Error('Browser audio capture is suspended. Tap the voice control and try again.');
+    this.stopListeningForMediaUnlock();
 
     const captureStream = this.stream;
     const source = this.context.createMediaStreamSource(captureStream);
@@ -244,29 +377,44 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     return capture;
   }
 
-  public speak(request: Parameters<VoiceMediaDevice['speak']>[0]): VoiceMediaPlayback {
+  public speak(request: Parameters<VoiceMediaDevice['speak']>[0], audio?: Promise<Uint8Array>): VoiceMediaPlayback {
     if (!this.capabilities.playback) throw new Error('This browser cannot play speech narration.');
     this.activePlayback?.stop('aborted');
-    const utterance = new SpeechSynthesisUtterance(request.text);
-    if (request.rate !== undefined) {
-      utterance.rate = Math.max(MIN_SPEECH_RATE, Math.min(MAX_SPEECH_RATE, request.rate / DEFAULT_SPEECH_RATE_WPM));
+    let playback: VoiceMediaPlayback;
+    if (request.delivery === 'streamed') {
+      if (audio === undefined) throw new Error('Streamed narration audio is unavailable.');
+      if (typeof AudioContext !== 'function') throw new Error('This browser cannot play streamed narration audio.');
+      if (this.context === undefined || this.context.state !== 'running')
+        throw new Error('Browser audio playback is not unlocked. Tap the voice control and try again.');
+      playback = new BrowserPcmPlayback(this.context, audio, request.playbackId);
+    } else {
+      this.finishSpeechWarmup(false);
+      const synthesis = window.speechSynthesis;
+      const Utterance = speechUtteranceConstructor();
+      if (Utterance === undefined) throw new Error('This browser does not expose speech utterance playback.');
+      synthesis.resume();
+      const utterance = new Utterance(request.text);
+      if (request.rate !== undefined) {
+        utterance.rate = Math.max(MIN_SPEECH_RATE, Math.min(MAX_SPEECH_RATE, request.rate / DEFAULT_SPEECH_RATE_WPM));
+      }
+      if (request.voice) {
+        utterance.voice =
+          synthesis.getVoices().find((voice) => voice.name === request.voice || voice.voiceURI === request.voice) ??
+          null;
+      }
+      playback = new BrowserSpeechPlayback(synthesis, utterance, request.playbackId);
+      synthesis.speak(utterance);
     }
-    if (request.voice) {
-      utterance.voice =
-        window.speechSynthesis
-          .getVoices()
-          .find((voice) => voice.name === request.voice || voice.voiceURI === request.voice) ?? null;
-    }
-    const playback = new BrowserSpeechPlayback(window.speechSynthesis, utterance, request.playbackId);
     this.activePlayback = playback;
     void playback.completion.finally(() => {
       if (this.activePlayback === playback) this.activePlayback = undefined;
     });
-    window.speechSynthesis.speak(utterance);
     return playback;
   }
 
   public async close(): Promise<void> {
+    this.stopListeningForMediaUnlock();
+    this.finishSpeechWarmup(true);
     await this.activeCapture?.stop();
     this.activePlayback?.stop('aborted');
     for (const track of this.stream?.getTracks() ?? []) track.stop();
@@ -279,6 +427,54 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     this.speechPreparation = undefined;
     this.capabilities.captureActivity = false;
     this.capabilities.autonomousOrchestration = false;
+  }
+
+  private listenForMediaUnlock(): void {
+    if (
+      this.listeningForMediaUnlock ||
+      typeof window === 'undefined' ||
+      (!this.capabilities.capture && !this.capabilities.playback)
+    )
+      return;
+    this.listeningForMediaUnlock = true;
+    window.addEventListener('pointerdown', this.unlockMedia, { capture: true, passive: true });
+    window.addEventListener('keydown', this.unlockMedia, { capture: true });
+  }
+
+  private stopListeningForMediaUnlock(): void {
+    if (!this.listeningForMediaUnlock || typeof window === 'undefined') return;
+    this.listeningForMediaUnlock = false;
+    window.removeEventListener('pointerdown', this.unlockMedia, true);
+    window.removeEventListener('keydown', this.unlockMedia, true);
+  }
+
+  private warmSpeechSynthesis(): void {
+    if (!browserSpeechPlaybackAvailable() || this.activePlayback !== undefined || this.speechWarmup !== undefined)
+      return;
+    const synthesis = window.speechSynthesis;
+    const Utterance = speechUtteranceConstructor();
+    if (Utterance === undefined) return;
+    synthesis.resume();
+    if (synthesis.speaking || synthesis.pending) return;
+    const utterance = new Utterance('a');
+    utterance.volume = 0.01;
+    utterance.rate = MAX_SPEECH_RATE;
+    utterance.onend = () => this.finishSpeechWarmup(false);
+    utterance.onerror = () => this.finishSpeechWarmup(false);
+    this.speechWarmup = utterance;
+    this.speechWarmupTimer = setTimeout(() => this.finishSpeechWarmup(true), SPEECH_WARMUP_TIMEOUT_MS);
+    synthesis.speak(utterance);
+  }
+
+  private finishSpeechWarmup(cancel: boolean): void {
+    const utterance = this.speechWarmup;
+    if (utterance === undefined) return;
+    if (this.speechWarmupTimer !== undefined) clearTimeout(this.speechWarmupTimer);
+    this.speechWarmupTimer = undefined;
+    this.speechWarmup = undefined;
+    utterance.onend = null;
+    utterance.onerror = null;
+    if (cancel) window.speechSynthesis.cancel();
   }
 
   private async prepareSpeechDetector(): Promise<void> {

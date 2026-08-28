@@ -68,7 +68,21 @@ export class ClientCaptureActivityLifecycle {
     for (const window of windows) {
       if (!Number.isSafeInteger(window.sampleCount) || window.sampleCount <= 0)
         throw new Error('Speech-presence windows must contain a positive integer sample count.');
-      if (this.endpointReached) continue;
+      if (this.endpointReached) {
+        if (!window.speech) {
+          this.consecutiveSpeechSamples = 0;
+          continue;
+        }
+        this.consecutiveSpeechSamples += window.sampleCount;
+        if (this.consecutiveSpeechSamples < MINIMUM_SPEECH_SAMPLES) continue;
+        this.activityEpoch += 1;
+        this.classifiedSpeechSamples = this.consecutiveSpeechSamples;
+        this.consecutiveSpeechSamples = 0;
+        this.trailingSilenceSamples = 0;
+        this.speechStarted = true;
+        this.endpointReached = false;
+        continue;
+      }
       if (window.speech) {
         this.classifiedSpeechSamples += window.sampleCount;
         this.consecutiveSpeechSamples += window.sampleCount;

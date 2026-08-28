@@ -643,10 +643,12 @@ describe('voice client media session API', () => {
       ),
     );
     expect(startedResponse.status).toBe(201);
+    expect(await startedResponse.json()).toEqual({ delivery: 'client' });
     expect(await nextEvent(api, 0)).toMatchObject({
       type: 'playback-start',
       playbackId: 'playback-1',
       text: 'Narrate in the browser.',
+      delivery: 'client',
     });
 
     const finished = await api.fetch(
@@ -661,6 +663,67 @@ describe('voice client media session API', () => {
     api.close();
   });
 
+  it('relays sealed backend PCM narration to a remote browser', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.clientConnect,
+        json({
+          version: VOICE_MEDIA_PROTOCOL_VERSION,
+          clientId: CLIENT_ID,
+          connectionId: CONNECTION_ID,
+          clientKind: 'browser',
+          controlLocation: 'remote',
+          capabilities: {
+            capture: true,
+            playback: true,
+            captureActivity: true,
+            autonomousOrchestration: true,
+          },
+        }),
+      ),
+    );
+    const started = await api.fetch(
+      request(VOICE_MEDIA_ROUTES.hostPlaybackStart, json({ playbackId: 'remote-pcm', text: 'Remote audio.' }), true),
+    );
+    expect(await started.json()).toEqual({ delivery: 'streamed' });
+    expect(await nextEvent(api, 0)).toMatchObject({ playbackId: 'remote-pcm', delivery: 'streamed' });
+
+    const pcm = new Uint8Array([1, 0, 2, 0]);
+    expect(
+      (
+        await api.fetch(
+          request(
+            `${VOICE_MEDIA_ROUTES.hostPlaybackAudio}?playbackId=remote-pcm`,
+            {
+              method: 'POST',
+              headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
+              body: pcm,
+            },
+            true,
+          ),
+        )
+      ).status,
+    ).toBe(204);
+    expect(
+      (await api.fetch(request(VOICE_MEDIA_ROUTES.hostPlaybackAudioEnd, json({ playbackId: 'remote-pcm' }), true)))
+        .status,
+    ).toBe(204);
+    const audio = await api.fetch(
+      request(
+        `${VOICE_MEDIA_ROUTES.clientPlaybackAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&playbackId=remote-pcm`,
+      ),
+    );
+    expect(new Uint8Array(await audio.arrayBuffer())).toEqual(pcm);
+    const sealed = await api.fetch(
+      request(
+        `${VOICE_MEDIA_ROUTES.clientPlaybackAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&playbackId=remote-pcm`,
+      ),
+    );
+    expect(sealed.status).toBe(204);
+    expect(sealed.headers.get('x-doompi-playback-state')).toBe('sealed');
+    api.close();
+  });
   it('leases a session to one media client at a time', async () => {
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
     await connect(api);

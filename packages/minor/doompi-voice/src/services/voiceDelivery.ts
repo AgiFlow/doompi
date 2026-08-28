@@ -54,6 +54,10 @@ export class VoiceDelivery {
       turnId: request.turnId,
       revision: request.revision,
     };
+    if (request.text.trim().length === 0) {
+      this.dependencies.onResult({ kind: 'failed', ...identity, code: 'blank transcript' });
+      return;
+    }
     try {
       if (request.intent) this.dependencies.deliver(request.text, request.intent);
       else this.dependencies.deliver(request.text);

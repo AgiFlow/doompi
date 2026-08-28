@@ -30,6 +30,7 @@ import {
   type VoiceMediaCaptureActivity,
   type VoiceMediaCaptureConfiguration,
   VOICE_MEDIA_CONTENT_TYPE,
+  type VoiceMediaPlaybackDelivery,
   type VoiceMediaPlaybackResult,
   VOICE_MEDIA_ROUTES,
 } from '../../types/clientMedia.ts';
@@ -38,6 +39,11 @@ import type { ResolvedVoiceConfig, VoiceTtsConfig } from '@agimon-ai/doompi-conf
 const JSON_CONTENT_TYPE = 'application/json';
 const CAPTURE_ID_PREFIX = 'client-capture';
 const PLAYBACK_ID_PREFIX = 'client-playback';
+const PLAYBACK_AUDIO_CHUNK_BYTES = 64 * 1024;
+
+export interface ClientNarrationSynthesizer {
+  synthesize(request: TtsSpeakRequest, signal: AbortSignal): Promise<Buffer>;
+}
 
 interface UnixResponse {
   status: number;
@@ -96,8 +102,39 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
     text: string;
     voice?: string;
     rate?: number;
-  }): Promise<void> {
-    await this.expect(this.request('POST', VOICE_MEDIA_ROUTES.hostPlaybackStart, request), 201);
+  }): Promise<VoiceMediaPlaybackDelivery> {
+    const response = await this.request('POST', VOICE_MEDIA_ROUTES.hostPlaybackStart, request);
+    if (response.status !== 201) throw this.responseError(response);
+    const parsed: unknown = JSON.parse(response.body.toString('utf8'));
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('delivery' in parsed) ||
+      (parsed.delivery !== 'client' && parsed.delivery !== 'streamed')
+    )
+      throw new Error('Voice media host returned an invalid playback delivery.');
+    return parsed.delivery;
+  }
+
+  public async sendPlaybackAudio(playbackId: string, pcm: Buffer): Promise<void> {
+    await this.expect(
+      this.requestBinary(
+        'POST',
+        `${VOICE_MEDIA_ROUTES.hostPlaybackAudio}?playbackId=${encodeURIComponent(playbackId)}`,
+        pcm,
+      ),
+      204,
+    );
+  }
+
+  public async sealPlaybackAudio(playbackId: string, error?: string): Promise<void> {
+    await this.expect(
+      this.request('POST', VOICE_MEDIA_ROUTES.hostPlaybackAudioEnd, {
+        playbackId,
+        ...(error === undefined ? {} : { error }),
+      }),
+      204,
+    );
   }
 
   public async readPlayback(playbackId: string): Promise<VoiceMediaPlaybackResult | undefined> {
@@ -146,6 +183,33 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
       );
       request.once('error', reject);
       if (body !== undefined) request.write(body);
+      request.end();
+    });
+  }
+
+  private requestBinary(method: string, route: string, body: Buffer): Promise<UnixResponse> {
+    return new Promise((resolve, reject) => {
+      const request = http.request(
+        {
+          socketPath: this.options.socketPath,
+          path: `${DOOM_API_ROUTE_PREFIX}/${VOICE_MEDIA_API_BASE_PATH}${route}`,
+          method,
+          headers: {
+            authorization: `Bearer ${this.options.internalToken}`,
+            'content-type': VOICE_MEDIA_CONTENT_TYPE,
+            'content-length': String(body.byteLength),
+          },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk: Buffer) => chunks.push(chunk));
+          response.once('end', () =>
+            resolve({ status: response.statusCode ?? 500, headers: response.headers, body: Buffer.concat(chunks) }),
+          );
+        },
+      );
+      request.once('error', reject);
+      request.write(body);
       request.end();
     });
   }
@@ -278,15 +342,17 @@ export class ClientPcmAudioRecorder implements IPcmAudioRecorder {
 class ClientTtsPlayback implements TtsPlayback {
   public readonly reference: TtsPlaybackReference;
   public readonly completion: Promise<TtsPlaybackResult>;
-  private readonly started: Promise<void>;
+  private readonly started: Promise<VoiceMediaPlaybackDelivery | void>;
+  private readonly synthesisController = new AbortController();
   private stopOperation: Promise<void> | undefined;
   private abortOperation: Promise<void> | undefined;
 
   public constructor(
-    request: TtsSpeakRequest,
+    private readonly request: TtsSpeakRequest,
     private readonly playbackId: string,
     private readonly connection: IVoiceMediaHostConnection,
     private readonly clock: IClock,
+    private readonly synthesizer?: ClientNarrationSynthesizer,
   ) {
     this.reference = {
       id: request.id,
@@ -315,7 +381,8 @@ class ClientTtsPlayback implements TtsPlayback {
 
   private async settle(): Promise<TtsPlaybackResult> {
     try {
-      await this.started;
+      const delivery = await this.started;
+      if (delivery === 'streamed') await this.uploadNarration();
       let result: VoiceMediaPlaybackResult | undefined;
       while (result === undefined) result = await this.connection.readPlayback(this.playbackId);
       return {
@@ -332,7 +399,31 @@ class ClientTtsPlayback implements TtsPlayback {
     }
   }
 
+  private async uploadNarration(): Promise<void> {
+    if (
+      this.synthesizer === undefined ||
+      this.connection.sendPlaybackAudio === undefined ||
+      this.connection.sealPlaybackAudio === undefined
+    ) {
+      await this.connection.sealPlaybackAudio?.(this.playbackId, 'Backend narration synthesis is unavailable.');
+      return;
+    }
+    try {
+      const pcm = await this.synthesizer.synthesize(this.request, this.synthesisController.signal);
+      for (let offset = 0; offset < pcm.byteLength; offset += PLAYBACK_AUDIO_CHUNK_BYTES) {
+        await this.connection.sendPlaybackAudio(
+          this.playbackId,
+          pcm.subarray(offset, offset + PLAYBACK_AUDIO_CHUNK_BYTES),
+        );
+      }
+      await this.connection.sealPlaybackAudio(this.playbackId);
+    } catch (error) {
+      await this.connection.sealPlaybackAudio?.(this.playbackId, describeError(error)).catch(() => undefined);
+    }
+  }
+
   private async stopPlayback(abort: boolean): Promise<void> {
+    this.synthesisController.abort();
     await this.started;
     if (abort) await this.connection.abortPlayback(this.playbackId);
     else await this.connection.stopPlayback(this.playbackId);
@@ -344,6 +435,7 @@ export class ClientTtsAdapter implements ITtsAdapter {
   public constructor(
     private readonly connection: IVoiceMediaHostConnection,
     private readonly clock: IClock,
+    private readonly synthesizer?: ClientNarrationSynthesizer,
   ) {}
 
   public preflight(_config: VoiceTtsConfig): void {}
@@ -356,6 +448,7 @@ export class ClientTtsAdapter implements ITtsAdapter {
       `${PLAYBACK_ID_PREFIX}-${String(request.id)}-${randomUUID()}`,
       this.connection,
       this.clock,
+      this.synthesizer,
     );
   }
 }

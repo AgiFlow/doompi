@@ -60,6 +60,8 @@ class FakeRecording implements LiveRecordingHandle {
   public readonly completion: Promise<ProcessResult>;
   public stopRemainder = Buffer.alloc(0);
   public abortRemainder = Buffer.alloc(0);
+  public stopCalls = 0;
+  public abortCalls = 0;
   private resolveCompletion!: (result: ProcessResult) => void;
 
   public constructor() {
@@ -69,11 +71,13 @@ class FakeRecording implements LiveRecordingHandle {
   }
 
   public async stop(): Promise<Buffer> {
+    this.stopCalls += 1;
     this.finish();
     return this.stopRemainder;
   }
 
   public async abort(): Promise<Buffer> {
+    this.abortCalls += 1;
     this.finish({ code: 1, stdout: '', stderr: 'aborted' });
     return this.abortRemainder;
   }
@@ -174,7 +178,7 @@ describe('NodeTurnSpool', () => {
     const first = spool.createSnapshot();
     const second = spool.createSnapshot();
     spool.acknowledge(second.revision, 'committed');
-    expect(() => spool.acknowledge(first.revision, 'discarded')).toThrow('monotonic');
+    expect(() => spool.acknowledge(first.revision, 'discarded')).toThrow('revision');
     spool.close();
     expect(() => spool.readCommittedPcm()).toThrow('closed');
   });
@@ -221,6 +225,55 @@ describe('CaptureSession', () => {
     recorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
     await starting;
     await session.abort();
+  });
+
+  it('aborts pending startup readiness and performs one recorder terminal operation', async () => {
+    const recorder = new FakeRecorder();
+    const session = new CaptureSession({ recorder, config, spool: createSpool(), clock: new FakeClock() });
+    const starting = session.start();
+
+    await session.abort();
+
+    await expect(starting).rejects.toThrow('startup was aborted');
+    expect(recorder.handles[0]?.abortCalls).toBe(1);
+    expect(recorder.handles[0]?.stopCalls).toBe(0);
+    expect(session.state).toBe('closed');
+  });
+
+  it('serializes drain and abort with the first terminal operation winning', async () => {
+    const drainingRecorder = new FakeRecorder();
+    const draining = new CaptureSession({
+      recorder: drainingRecorder,
+      config,
+      spool: createSpool(),
+      clock: new FakeClock(),
+    });
+    const drainingStart = draining.start();
+    drainingRecorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await drainingStart;
+    const drain = draining.drain();
+    const abortAfterDrain = draining.abort();
+    await expect(drain).resolves.toMatchObject({ revision: 1 });
+    await expect(abortAfterDrain).resolves.toBeUndefined();
+    expect(drainingRecorder.handles[0]?.stopCalls).toBe(1);
+    expect(drainingRecorder.handles[0]?.abortCalls).toBe(0);
+
+    const abortingRecorder = new FakeRecorder();
+    const aborting = new CaptureSession({
+      recorder: abortingRecorder,
+      config,
+      spool: createSpool(),
+      clock: new FakeClock(),
+    });
+    const abortingStart = aborting.start();
+    abortingRecorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await abortingStart;
+    const abort = aborting.abort();
+    const drainAfterAbort = aborting.drain();
+    await expect(abort).resolves.toBeUndefined();
+    await expect(drainAfterAbort).rejects.toThrow('was aborted');
+    expect(abortingRecorder.handles[0]?.abortCalls).toBe(1);
+    expect(abortingRecorder.handles[0]?.stopCalls).toBe(0);
   });
 
   it('starts liveness only after the first frame and drains the final remainder', async () => {
@@ -319,6 +372,28 @@ describe('CaptureSession', () => {
         Buffer.alloc(12, 7),
       ]),
     );
+  });
+
+  it('reports recorder recovery exhaustion once and closes the false capture state', async () => {
+    const recorder = new FakeRecorder();
+    const exhausted = vi.fn();
+    const session = new CaptureSession({
+      recorder,
+      config,
+      spool: createSpool(),
+      clock: new FakeClock(),
+      maxRecoveryAttempts: 0,
+      onRecoveryExhausted: exhausted,
+    });
+    const starting = session.start();
+    recorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await starting;
+
+    recorder.handles[0]?.finish({ code: 1, stdout: '', stderr: 'device lost' });
+    await vi.waitFor(() => expect(exhausted).toHaveBeenCalledOnce());
+
+    expect(exhausted).toHaveBeenCalledWith(expect.any(Error), 1);
+    expect(session.state).toBe('closed');
   });
 
   it('scopes client activity to the active recovery generation', async () => {

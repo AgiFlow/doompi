@@ -65,6 +65,7 @@ class FakeDevice implements VoiceMediaDevice {
   public readonly playbacks: FakePlayback[] = [];
   public close = vi.fn(async () => undefined);
   public detectors: SpeechPresenceDetector[] = [];
+  public speakError: Error | undefined;
 
   public createSpeechPresenceDetector(): SpeechPresenceDetector | undefined {
     return this.detectors.shift();
@@ -76,6 +77,7 @@ class FakeDevice implements VoiceMediaDevice {
     return capture;
   }
   public speak(request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>): VoiceMediaPlayback {
+    if (this.speakError !== undefined) throw this.speakError;
     const completion = deferred<VoiceMediaPlaybackResult>();
     let settled = false;
     const finish = (outcome: VoiceMediaPlaybackOutcome): void => {
@@ -112,9 +114,9 @@ class FakeTransport implements VoiceMediaTransport {
   public startsEveryConnection = true;
   public sendFailure: Error | undefined;
 
-  public async connect(_clientId: string, connectionId: string): Promise<{ version: 5; cursor: number }> {
+  public async connect(_clientId: string, connectionId: string): Promise<{ version: 6; cursor: number }> {
     this.connectionIds.push(connectionId);
-    return { version: 5, cursor: 0 };
+    return { version: 6, cursor: 0 };
   }
   public nextEvent(
     _clientId: string,
@@ -259,6 +261,31 @@ describe('voice media client browser recovery', () => {
     await client.stop();
   });
 
+  it('acknowledges unavailable remote playback instead of leaving the host narrating', async () => {
+    const transport = new FakeTransport();
+    transport.startsEveryConnection = false;
+    const device = new FakeDevice();
+    device.speakError = new Error('browser playback unavailable');
+    const client = new VoiceMediaClient('client', 'connection', transport, device);
+    client.start();
+    await eventually(() => expect(transport.longPolls).toHaveLength(1));
+    transport.longPolls[0]!.resolve({
+      sequence: 1,
+      type: 'playback-start',
+      playbackId: 'unavailable-playback',
+      text: 'Narration cannot play here.',
+    });
+
+    await eventually(() => expect(transport.playbackFinished).toHaveBeenCalledOnce());
+
+    expect(transport.playbackFinished).toHaveBeenCalledWith('client', 'connection:1', {
+      playbackId: 'unavailable-playback',
+      outcome: 'failed',
+      error: 'Error: browser playback unavailable',
+    });
+    expect(transport.disconnect).not.toHaveBeenCalled();
+    await client.stop();
+  });
   it('clean stop aborts the long poll and disconnects exactly once', async () => {
     const transport = new FakeTransport();
     transport.startsEveryConnection = false;
