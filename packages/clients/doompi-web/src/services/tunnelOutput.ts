@@ -33,20 +33,17 @@ export function tunnelTarget(port: number): string {
  * The cloudflared argument vector.
  *
  * `--url` is a flag on the `tunnel` command rather than on `run`, so it comes
- * before the subcommand in both shapes. `--token` belongs to `run`.
+ * before the subcommand in both shapes. `--token-file` belongs to `run`.
  *
- * Flag placement here follows cloudflared's documented usage but has not been
- * exercised against a real binary in this repository; the tunnel adapter
- * surfaces the process output on failure so a wrong vector reports itself
- * rather than hanging.
+ * Flag placement here follows cloudflared's documented usage and local help.
  */
-export function tunnelArgs(config: TunnelConfig, port: number, token?: string): string[] {
+export function tunnelArgs(config: TunnelConfig, port: number, tokenFile?: string): string[] {
   const args = ['tunnel', '--no-autoupdate'];
   if (config.kind === 'named' && config.configFile !== undefined) args.push('--config', config.configFile);
   args.push('--url', tunnelTarget(port));
   if (config.kind === 'quick') return args;
   args.push('run');
-  if (token !== undefined && token !== '') args.push('--token', token);
+  if (tokenFile !== undefined && tokenFile !== '') args.push('--token-file', tokenFile);
   if (config.name !== undefined) args.push(config.name);
   return args;
 }

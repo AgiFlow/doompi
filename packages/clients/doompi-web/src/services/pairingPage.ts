@@ -149,14 +149,15 @@ const SCRIPT = `
         body: '{}',
       });
       if (!begun.ok) return false;
-      const { options } = await begun.json();
+      const { ceremonyId, options } = await begun.json();
+      if (typeof ceremonyId !== 'string') return false;
       const credential = await navigator.credentials.get({ publicKey: decodeOptions(options) });
       if (!credential) return false;
       const finished = await fetch('${REMOTE_API_ROUTE}/passkeys/authenticate/finish', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ response: encodeCredential(credential) }),
+        body: JSON.stringify({ ceremonyId, response: encodeCredential(credential) }),
       });
       return finished.ok;
     } catch {

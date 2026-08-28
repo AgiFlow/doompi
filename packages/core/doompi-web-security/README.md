@@ -48,15 +48,19 @@ Three properties worth knowing, because getting any of them wrong is silent:
 Every failure names itself. A decryption failure otherwise shows up as a blank page with nothing to
 go on.
 
-## The signed bundle manifest
+## The signed bundle-manifest primitive
 
-A provider that can serve the page can serve a page that leaks the session cookie and drives the
-socket, which would defeat every other guarantee. The hub signs a manifest of every asset with a
-long-lived ECDSA P-256 key; the page verifies it and pins the key it first saw.
+The signer can support a separately distributed verifier whose bootstrap and public key are already
+trusted. It hashes every asset and signs a canonical manifest with ECDSA P-256.
 
-`canonicalManifest` is hand-rolled rather than `JSON.stringify` of the whole object, because a
-signature is only worth something if both sides agree byte for byte on what was signed, and key order
-in a JSON object is an implementation detail.
+It is not a self-protection mechanism for a browser SPA. A server or TLS edge that can replace the page
+can also remove an in-page verifier or replace the key it trusts. DoomPi's Cloudflare transport treats
+Cloudflare as a trusted code-delivery boundary, so the cockpit does not use this primitive to claim
+protection from a malicious edge.
+
+`canonicalManifest` is hand-rolled rather than `JSON.stringify` of the whole object, because a signature
+is only worth anything if signer and verifier agree byte for byte, and key order in a JSON object is an
+implementation detail.
 
 ## Public API
 

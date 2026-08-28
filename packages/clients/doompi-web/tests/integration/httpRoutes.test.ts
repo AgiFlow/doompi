@@ -66,20 +66,6 @@ describe('static assets', () => {
   });
 });
 
-describe('the signed bundle manifest', () => {
-  it('describes and signs whatever is being served', async () => {
-    const response = await fetch(url('/bundle-manifest.json'));
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      manifest: { assets: { path: string }[] };
-      signature: string;
-      publicKey: string;
-    };
-    expect(body.manifest.assets.map((asset) => asset.path).sort()).toEqual(['/assets/app.js', '/index.html']);
-    expect(body.signature).toBeTruthy();
-    expect(body.publicKey).toBeTruthy();
-  });
-});
 
 describe('session-scoped routes', () => {
   it('lists files in the session directory', async () => {

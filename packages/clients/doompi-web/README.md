@@ -193,32 +193,28 @@ A quick tunnel cannot carry a passkey: `rpID` is bound to the hostname and a qui
 on every start, so a credential enrolled today would silently stop working tomorrow. The cockpit says
 so rather than letting the ceremony fail in the browser.
 
-### What the tunnel provider can and cannot see
+### Tunnel-provider trust and payload privacy
 
-Cloudflare terminates TLS at its edge, so without further work they read everything the cockpit
-carries. Two layers narrow that.
+Cloudflare is a trusted delivery boundary. It terminates TLS and delivers both the pairing page and the
+cockpit SPA. A browser cannot independently verify its first executable page against the same edge that
+served it: a malicious replacement could omit any in-page verifier, read the QR fragment, and control a
+paired agent. DoomPi therefore does not claim that browser-side bundle signing protects against a
+compromised Cloudflare edge.
 
-**The bundle is signed.** The hub holds an ECDSA P-256 key in `~/.doompi/web/signing.json` and serves
-a signed manifest of every asset. The page verifies it and pins the key. A cockpit signed by a
-different key is refused with a full-screen stop rather than a dismissible warning, because if the
-page is not the page this hub built then nothing rendered under it can be trusted.
+Within that trust model, **the payload is sealed**. The QR carries an ephemeral P-256 public key alongside
+the pairing code, in the URL fragment, which no browser sends to any server. The device completes an ECDH
+against it and both sides derive AES-256-GCM keys, separate per direction. Socket frames and API bodies
+then travel as ciphertext. This limits routine relay visibility, but it still depends on Cloudflare
+delivering the intended pairing code and SPA.
 
-**The payload is sealed.** The QR carries an ephemeral P-256 public key alongside the pairing code,
-in the URL fragment, which no browser sends to any server. The device completes an ECDH against it
-and both sides derive AES-256-GCM keys, separate per direction. Socket frames and API bodies then
-travel as ciphertext. Because the host key arrived on a screen rather than through the relay, there
-is no moment at which the relay could substitute its own; this is the job Telegram's emoji
-comparison does for a secret chat, done automatically instead of by eye.
+The channel implementation lives in `@agimon-ai/doompi-web-security`, which ships the envelope contract,
+a `node:crypto` half, and a WebCrypto half. **A web plugin that calls `fetch` directly sends plaintext to
+the relay**, so plugins use `sealedTransport.fetch` from that package's `./browser` subpath. The host
+cannot enforce this, which is why the import allowlist admits the helper and why it is said here.
 
-Both live in `@agimon-ai/doompi-web-security`, which ships the envelope contract, a `node:crypto`
-half, and a WebCrypto half. **A web plugin that calls `fetch` directly sends plaintext to the relay**,
-so plugins use `sealedTransport.fetch` from that package's `./browser` subpath. The host cannot
-enforce this, which is why the import allowlist admits the helper and why it is said here.
-
-What remains visible to the relay: timing, message sizes, connection patterns, and one page load. The
-pairing page itself is delivered by Cloudflare, so the very first load is trust-on-first-use.
-Everything after it is anchored on the QR. That window cannot be closed from inside a browser, which
-is the strongest argument for the WebRTC transport below.
+Cloudflare can still observe the served page and assets, timing, message sizes, connection patterns, and
+tunnel metadata. Do not enable this transport if Cloudflare is outside your trust boundary. Protect a
+named-tunnel account with a passkey or hardware MFA.
 
 ### What a paired device may browse
 

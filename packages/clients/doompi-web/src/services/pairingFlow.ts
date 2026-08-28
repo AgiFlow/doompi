@@ -17,11 +17,11 @@
 import { PAIRING_CODE_TTL_MS, PAIRING_REQUEST_TTL_MS, type PairingStatus } from '../types/remoteAccess.ts';
 import { sanitizeEdgeIp, sanitizeUserAgent } from './deviceSessions.ts';
 
-/** Failed claims allowed inside one window before the endpoint starts refusing. */
+/** Failed claims allowed per source inside one window before the endpoint starts refusing. */
 const ATTEMPT_LIMIT = 10;
 const ATTEMPT_WINDOW_MS = 60_000;
-/** Failures across one tunnel's life before the tunnel closes itself. */
-export const LIFETIME_FAILURE_LIMIT = 50;
+/** Caps throttle state even if many distinct peers reach the listener. */
+const SOURCE_LIMIT = 1024;
 /** How long a settled request stays readable, so a late approval is still collectable. */
 const PAIRING_REQUEST_RETENTION_MS = PAIRING_REQUEST_TTL_MS * 2;
 
@@ -33,9 +33,7 @@ export interface PairingRequest {
   status: PairingStatus;
 }
 
-export type ClaimOutcome =
-  | { ok: true; requestId: string }
-  | { ok: false; code: 'unknown_code' | 'rate_limited' | 'too_many_failures' };
+export type ClaimOutcome = { ok: true; requestId: string } | { ok: false; code: 'unknown_code' | 'rate_limited' };
 
 export interface PairingFlowOptions {
   /** Returns a fresh high-entropy token; the adapter supplies node:crypto. */
@@ -44,14 +42,18 @@ export interface PairingFlowOptions {
   digest: (token: string) => string;
   now: () => number;
   onNotice?: (message: string) => void;
-  /** Called when the lifetime failure limit trips, so the host can close the tunnel. */
-  onFailureLimit?: () => void;
 }
 
 export interface PairingFlow {
   /** Mints the code a QR carries. Replaces any previous one: only the newest is claimable. */
   mintCode(): { code: string; expiresAt: number };
-  claim(input: { code: string; userAgent: string | undefined; edgeIp: string | undefined }): ClaimOutcome;
+  claim(input: {
+    code: string;
+    userAgent: string | undefined;
+    edgeIp: string | undefined;
+    /** Source normalized by the adapter from trusted proxy metadata or the socket peer. */
+    sourceAddress: string | undefined;
+  }): ClaimOutcome;
   status(requestId: string): PairingStatus | undefined;
   approve(requestId: string): 'approved' | 'unknown' | 'expired' | 'settled';
   deny(requestId: string): 'denied' | 'unknown' | 'settled';
@@ -67,9 +69,7 @@ export function createPairingFlow(options: PairingFlowOptions): PairingFlow {
   /** Only the newest code is live, so minting a second one retires the first. */
   let liveCode: { hash: string; expiresAt: number } | undefined;
   const requests = new Map<string, PairingRequest>();
-  let windowStartedAt = 0;
-  let failuresInWindow = 0;
-  let failuresInLifetime = 0;
+  const attemptsBySource = new Map<string, { windowStartedAt: number; failures: number }>();
 
   const notice = options.onNotice ?? ((): void => {});
 
@@ -80,20 +80,22 @@ export function createPairingFlow(options: PairingFlowOptions): PairingFlow {
   const statusOf = (request: PairingRequest, now: number): PairingStatus =>
     isExpired(request, now) ? 'expired' : request.status;
 
-  const countFailure = (now: number): 'ok' | 'rate_limited' | 'too_many_failures' => {
-    if (now - windowStartedAt >= ATTEMPT_WINDOW_MS) {
-      windowStartedAt = now;
-      failuresInWindow = 0;
+  const countFailure = (sourceAddress: string | undefined, now: number): 'ok' | 'rate_limited' => {
+    const source = sourceAddress ?? 'unknown';
+    let attempts = attemptsBySource.get(source);
+    if (attempts === undefined || now - attempts.windowStartedAt >= ATTEMPT_WINDOW_MS) {
+      if (attempts === undefined && attemptsBySource.size >= SOURCE_LIMIT) {
+        const oldest = attemptsBySource.keys().next().value as string | undefined;
+        if (oldest !== undefined) attemptsBySource.delete(oldest);
+      }
+      attempts = { windowStartedAt: now, failures: 0 };
+      attemptsBySource.set(source, attempts);
     }
-    failuresInWindow += 1;
-    failuresInLifetime += 1;
-    if (failuresInLifetime >= LIFETIME_FAILURE_LIMIT) {
-      notice(`pairing has failed ${String(failuresInLifetime)} times; closing the tunnel`);
-      options.onFailureLimit?.();
-      return 'too_many_failures';
+    attempts.failures += 1;
+    if (attempts.failures === ATTEMPT_LIMIT + 1) {
+      notice(`pairing claim abuse detected from ${source}; throttling invalid attempts`);
     }
-    if (failuresInWindow > ATTEMPT_LIMIT) return 'rate_limited';
-    return 'ok';
+    return attempts.failures > ATTEMPT_LIMIT ? 'rate_limited' : 'ok';
   };
 
   return {
@@ -110,7 +112,7 @@ export function createPairingFlow(options: PairingFlowOptions): PairingFlow {
       // The code is single use and dies on the first claim, successful or not,
       // so a leaked one cannot be replayed behind the legitimate scan.
       if (liveCode === undefined || now >= liveCode.expiresAt || liveCode.hash !== presented) {
-        const limit = countFailure(now);
+        const limit = countFailure(input.sourceAddress, now);
         if (limit !== 'ok') return { ok: false, code: limit };
         return { ok: false, code: 'unknown_code' };
       }
@@ -177,13 +179,15 @@ export function createPairingFlow(options: PairingFlowOptions): PairingFlow {
         if (now - request.createdAt >= PAIRING_REQUEST_RETENTION_MS) requests.delete(id);
       }
       if (liveCode !== undefined && now >= liveCode.expiresAt) liveCode = undefined;
+      for (const [source, attempts] of attemptsBySource) {
+        if (now - attempts.windowStartedAt >= ATTEMPT_WINDOW_MS) attemptsBySource.delete(source);
+      }
     },
 
     clear() {
       requests.clear();
       liveCode = undefined;
-      failuresInWindow = 0;
-      failuresInLifetime = 0;
+      attemptsBySource.clear();
     },
   };
 }

@@ -10,6 +10,7 @@ import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
 import { type Context, Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
+import { bodyLimit } from 'hono/body-limit';
 import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
   DOOM_API_ROUTE_PREFIX,
@@ -56,8 +57,6 @@ import { createProviderAuth } from './providerAuth.ts';
 import { createRemoteGuard } from './remoteGuard.ts';
 import { createRemoteAccess } from './remoteAccess.ts';
 import { createRemoteAccessStore } from './remoteAccessStore.ts';
-import { createBundleSigner } from '@agimon-ai/doompi-web-security/node';
-import { BUNDLE_MANIFEST_ROUTE } from '@agimon-ai/doompi-web-security';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
 import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
 import {
@@ -86,6 +85,13 @@ const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
 const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
 const SEALED_HTTP_VERSION = 1;
+/** Upper bound for any body accepted from the tunnel before route-specific limits. */
+const TUNNEL_BODY_BYTES = 8 * 1024 * 1024;
+const TUNNEL_HEADER_BYTES = 16 * 1024;
+const TUNNEL_HEADERS_TIMEOUT_MS = 5000;
+const TUNNEL_REQUEST_TIMEOUT_MS = 10_000;
+const TUNNEL_CONNECTION_LIMIT = 64;
+const TUNNEL_REQUESTS_PER_SOCKET = 100;
 const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const SEALED_HTTP_FORBIDDEN_HEADERS = new Set([
   'connection',
@@ -353,8 +359,6 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   /** Known once the listener binds; until then the guard treats every request as remote. */
   let loopbackPort: number | undefined;
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
-  // Signed so a device can tell this bundle from one the edge substituted.
-  const bundleSigner = createBundleSigner(store.directory, notice);
   reapStaleTunnel(store.directory, notice);
   /**
    * Stands the host's sessions down so the container can take them over.
@@ -401,17 +405,32 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     // 127.0.0.1 and forges nothing a header could reveal.
     bindListener: async () =>
       await new Promise((resolve, reject) => {
-        const tunnelServer = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, (info) => {
-          nodeWs.injectWebSocket(tunnelServer);
-          resolve({
-            port: info.port,
-            close: async () =>
-              await new Promise<void>((done) => {
-                (tunnelServer as { closeAllConnections?: () => void }).closeAllConnections?.();
-                tunnelServer.close(() => done());
-              }),
-          });
-        });
+        const tunnelServer = serve(
+          {
+            fetch: app.fetch,
+            port: 0,
+            hostname: '127.0.0.1',
+            serverOptions: {
+              maxHeaderSize: TUNNEL_HEADER_BYTES,
+              headersTimeout: TUNNEL_HEADERS_TIMEOUT_MS,
+              requestTimeout: TUNNEL_REQUEST_TIMEOUT_MS,
+            },
+          },
+          (info) => {
+            nodeWs.injectWebSocket(tunnelServer);
+            resolve({
+              port: info.port,
+              close: async () =>
+                await new Promise<void>((done) => {
+                  (tunnelServer as { closeAllConnections?: () => void }).closeAllConnections?.();
+                  tunnelServer.close(() => done());
+                }),
+            });
+          },
+        );
+        const bounded = tunnelServer as typeof tunnelServer & { maxConnections: number; maxRequestsPerSocket: number };
+        bounded.maxConnections = TUNNEL_CONNECTION_LIMIT;
+        bounded.maxRequestsPerSocket = TUNNEL_REQUESTS_PER_SOCKET;
         tunnelServer.once('error', reject);
       }),
     onNotice: notice,
@@ -433,12 +452,39 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     channelReady: (deviceId, scope) => remote.channelFor(deviceId, scope) !== undefined,
     stepUp: {
       required: (action) => remote.stepUpRequired(action),
-      verify: async (action, assertion) => await remote.passkeys().finishStepUp(action, assertion),
+      verify: async (context, action, assertion) => {
+        if (typeof assertion !== 'object' || assertion === null) return false;
+        const ceremonyId = (assertion as { ceremonyId?: unknown }).ceremonyId;
+        const response = (assertion as { response?: unknown }).response;
+        if (typeof ceremonyId !== 'string') return false;
+        const trusted = (context.env as SealedRequestBindings | undefined)?.sealedDeviceId;
+        const deviceId = trusted ?? remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+        const caller = deviceId === undefined ? 'local' : `device:${deviceId}`;
+        return await remote.passkeys().finishStepUp(ceremonyId, caller, action, response);
+      },
     },
     extraOrigins: allowedOriginsFromEnv(process.env[ALLOW_ORIGIN_ENV]),
   });
   app.use('*', guard.middleware);
+  // Reject a declared oversized body before any public route reads it. Chunked
+  // bodies are bounded by the route-specific or downstream streaming limiter.
+  app.use('*', async (context, next) => {
+    if (guard.listenerOf(context) === 'local') return next();
+    const declared = Number(context.req.header('content-length'));
+    if (Number.isFinite(declared) && declared > TUNNEL_BODY_BYTES) {
+      return context.json({ error: 'The tunnel request body is too large.' }, 413);
+    }
+    return next();
+  });
   registerRemoteRoutes(app, { remote, listenerOf: (context) => guard.listenerOf(context) });
+  const tunnelBodyLimit = bodyLimit({
+    maxSize: TUNNEL_BODY_BYTES,
+    onError: (context) => context.json({ error: 'The tunnel request body is too large.' }, 413),
+  });
+  app.use('*', async (context, next) => {
+    if (guard.listenerOf(context) === 'local') return next();
+    return await tunnelBodyLimit(context, next);
+  });
   app.post(REMOTE_HTTP_ROUTE, async (context) => {
     const deviceId = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (deviceId === undefined) return context.json({ error: 'This device is not paired.' }, 401);
@@ -490,14 +536,6 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     );
     if (!sealed.ok) return context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
     return context.json(sealed.envelope);
-  });
-  // The asset list and its signature, so a page can verify what it was served.
-  // Behind the guard like everything else: a device that cannot reach the
-  // cockpit has no use for its manifest.
-  app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
-    const signed = bundleSigner.sign(assetsDir);
-    if (signed === undefined) return context.json({ error: 'No bundle to describe.' }, 404);
-    return context.json(signed);
   });
   // Every running session already serves Pi's protocol; the hub composes them
   // into one server so a browser sees a single endpoint with many sessions.

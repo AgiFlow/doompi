@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { LIFETIME_FAILURE_LIMIT, type PairingFlow, createPairingFlow } from '../../src/services/pairingFlow.ts';
+import { type PairingFlow, createPairingFlow } from '../../src/services/pairingFlow.ts';
 import { PAIRING_CODE_TTL_MS, PAIRING_REQUEST_TTL_MS } from '../../src/types/remoteAccess.ts';
 
 const START = 1_700_000_000_000;
@@ -8,14 +8,12 @@ const AGENT = 'Mozilla/5.0 (iPhone) Safari/604.1';
 let now: number;
 let issued: number;
 let notices: string[];
-let failureLimitHit: number;
 let flow: PairingFlow;
 
 beforeEach(() => {
   now = START;
   issued = 0;
   notices = [];
-  failureLimitHit = 0;
   flow = createPairingFlow({
     // A counter rather than randomness, so a test can name the token it expects.
     randomToken: () => {
@@ -25,14 +23,11 @@ beforeEach(() => {
     digest: (token) => `sha:${token}`,
     now: () => now,
     onNotice: (message) => notices.push(message),
-    onFailureLimit: () => {
-      failureLimitHit += 1;
-    },
   });
 });
 
-function claim(code: string): ReturnType<PairingFlow['claim']> {
-  return flow.claim({ code, userAgent: AGENT, edgeIp: '203.0.113.7' });
+function claim(code: string, sourceAddress = '127.0.0.1'): ReturnType<PairingFlow['claim']> {
+  return flow.claim({ code, userAgent: AGENT, edgeIp: '203.0.113.7', sourceAddress });
 }
 
 describe('the pairing handshake', () => {
@@ -149,22 +144,26 @@ describe('brute force', () => {
     expect(claim('wrong')).toEqual({ ok: false, code: 'unknown_code' });
   });
 
-  it('closes the tunnel once failures accumulate across its whole life', () => {
-    // The code is 256 bits, so guessing is not the threat. This exists so a
-    // scripted attempt is loud and self-limiting rather than merely futile.
-    for (let attempt = 0; attempt < LIFETIME_FAILURE_LIMIT; attempt += 1) {
-      now += 61_000;
-      claim('wrong');
-    }
-    expect(failureLimitHit).toBe(1);
-    expect(notices.some((message) => message.includes('closing the tunnel'))).toBe(true);
+  it('limits each normalized source independently and warns once when abuse starts', () => {
+    for (let attempt = 0; attempt < 11; attempt += 1) claim('wrong', 'cloudflare:203.0.113.1');
+
+    expect(claim('wrong', 'cloudflare:203.0.113.1')).toEqual({ ok: false, code: 'rate_limited' });
+    expect(claim('wrong', 'cloudflare:203.0.113.2')).toEqual({ ok: false, code: 'unknown_code' });
+    expect(notices.filter((message) => message.includes('pairing claim abuse detected'))).toEqual([
+      'pairing claim abuse detected from cloudflare:203.0.113.1; throttling invalid attempts',
+    ]);
   });
 });
 
 describe('what the host is told', () => {
   it('sanitizes the user agent and edge address before they reach a notice', () => {
     const { code } = flow.mintCode();
-    flow.claim({ code, userAgent: 'Evil/1.0\r\n[doompi-web] approved', edgeIp: 'not-an-address' });
+    flow.claim({
+      code,
+      userAgent: 'Evil/1.0\r\n[doompi-web] approved',
+      edgeIp: 'not-an-address',
+      sourceAddress: '127.0.0.1',
+    });
     expect(notices[0]).toBe('pairing requested from Evil/1.0 [doompi-web] approved via unknown');
     expect(notices[0]).not.toContain('\n');
   });

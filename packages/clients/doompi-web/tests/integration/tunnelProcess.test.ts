@@ -236,6 +236,12 @@ describe('reapStaleTunnel', () => {
     expect(fs.existsSync(pidPath)).toBe(false);
   });
 
+  it('removes a stale runtime token file even without a pid file', () => {
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(runtimeTokenFile, 'secret-token');
+    reapStaleTunnel(stateDir, (message) => notices.push(message));
+    expect(fs.existsSync(runtimeTokenFile)).toBe(false);
+  });
   it('ignores a pid recorded too long ago to trust', () => {
     // Past the window a recycled pid could belong to anything, so leaving it
     // alone beats killing an unrelated process.
@@ -285,10 +291,11 @@ describe('stopping a tunnel', () => {
     expect(exits[0]).toContain('stopped on its own');
   });
 
-  it('reads a named tunnel token from the file rather than the settings', async () => {
-    // The token is a Cloudflare account credential; inlining it in settings
-    // would put it in the first bug report that quotes them.
+  it('passes a protected runtime token file and removes it on stop', async () => {
+    // The token is a Cloudflare account credential, so neither settings nor
+    // the process argument list should contain its value.
     const tokenFile = path.join(stateDir, 'token');
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
     fs.writeFileSync(tokenFile, '  secret-token\n');
     const binary = script('cloudflared', 'echo "$@" > "$0.args"\nsleep 30');
     const launch = createTunnelLauncher({ cloudflaredPath: binary, stateDir, probe: goodProbe });
@@ -302,7 +309,12 @@ describe('stopping a tunnel', () => {
     await vi.waitFor(() => {
       expect(fs.existsSync(`${binary}.args`)).toBe(true);
     });
+    const args = fs.readFileSync(`${binary}.args`, 'utf8');
+    expect(args).toContain(`--token-file ${runtimeTokenFile}`);
+    expect(args).not.toContain('secret-token');
+    expect(fs.readFileSync(runtimeTokenFile, 'utf8')).toBe('secret-token');
+    if (process.platform !== 'win32') expect(fs.statSync(runtimeTokenFile).mode & 0o777).toBe(0o600);
     await result.stop();
-    expect(fs.readFileSync(`${binary}.args`, 'utf8')).toContain('--token secret-token');
+    expect(fs.existsSync(runtimeTokenFile)).toBe(false);
   });
 });

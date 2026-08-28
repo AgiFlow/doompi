@@ -54,7 +54,7 @@ export interface RemoteGuardOptions {
    */
   stepUp?: {
     required: (action: StepUpAction) => boolean;
-    verify: (action: StepUpAction, assertion: unknown) => Promise<boolean>;
+    verify: (context: Context, action: StepUpAction, assertion: unknown) => Promise<boolean>;
   };
 }
 
@@ -168,7 +168,7 @@ export function createRemoteGuard(options: RemoteGuardOptions): RemoteGuard {
     const action = stepUpActionFor(context.req.method, context.req.path);
     if (action !== undefined && options.stepUp?.required(action) === true) {
       const assertion = decodeAssertion(context.req.header(STEP_UP_HEADER));
-      if (assertion === undefined || !(await options.stepUp.verify(action, assertion))) {
+      if (assertion === undefined || !(await options.stepUp.verify(context, action, assertion))) {
         return context.json({ error: 'This action needs a fresh passkey gesture.', action }, UNAUTHORIZED);
       }
     }

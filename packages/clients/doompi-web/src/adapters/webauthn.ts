@@ -16,11 +16,12 @@ import {
 } from '../services/webauthnPolicy.ts';
 
 const ID_BYTES = 8;
+const CEREMONY_ID_BYTES = 16;
 const USER_ID_BYTES = 16;
+const MAX_PENDING_CEREMONIES = 256;
 const RP_NAME = 'DoomPi cockpit';
 /** One synthetic owner: there is exactly one person here, and passkeys need a subject. */
 const OWNER_NAME = 'this machine';
-
 export interface WebAuthnOptions {
   /** The tunnel origin, or undefined while remote access is off. */
   publicOrigin: () => string | undefined;
@@ -33,27 +34,40 @@ export interface WebAuthnOptions {
 
 export type PasskeySupport = { supported: true; rpId: string } | { supported: false; reason: string };
 
+export interface BegunCeremony {
+  ceremonyId: string;
+  options: Record<string, unknown>;
+}
+
 export interface WebAuthn {
   /** Whether the current tunnel can carry passkeys at all. */
   support(): PasskeySupport;
-  beginRegistration(label: string): Promise<Record<string, unknown> | undefined>;
+  beginRegistration(caller: string, label: string): Promise<BegunCeremony | undefined>;
   finishRegistration(
+    ceremonyId: string,
+    caller: string,
     response: unknown,
     label: string,
   ): Promise<{ ok: true; id: string } | { ok: false; error: string }>;
-  beginAuthentication(): Promise<Record<string, unknown> | undefined>;
+  beginAuthentication(caller: string): Promise<BegunCeremony | undefined>;
   finishAuthentication(
+    ceremonyId: string,
+    caller: string,
     response: unknown,
   ): Promise<{ ok: true; credential: StoredCredential } | { ok: false; error: string }>;
-  /** Mints a challenge bound to one action, good once and briefly. */
-  beginStepUp(action: StepUpAction): Promise<Record<string, unknown> | undefined>;
-  finishStepUp(action: StepUpAction, response: unknown): Promise<boolean>;
+  /** Mints a challenge bound to one caller and action, good once and briefly. */
+  beginStepUp(caller: string, action: StepUpAction): Promise<BegunCeremony | undefined>;
+  finishStepUp(ceremonyId: string, caller: string, action: StepUpAction, response: unknown): Promise<boolean>;
   clearChallenges(): void;
 }
+
+type CeremonyType = 'registration' | 'authentication' | 'step-up';
 
 interface PendingChallenge {
   challenge: string;
   issuedAt: number;
+  caller: string;
+  type: CeremonyType;
   /** Present for a step-up, so a challenge minted for one action cannot authorise another. */
   action?: StepUpAction;
 }
@@ -75,9 +89,7 @@ export function createWebAuthn(options: WebAuthnOptions): WebAuthn {
   const notice = options.onNotice ?? ((): void => {});
   /** One synthetic subject, stable for the life of the process. */
   const userId = randomBytes(USER_ID_BYTES);
-  /** Keyed by action for step-ups, and by a fixed key for the two ceremonies. */
   const pending = new Map<string, PendingChallenge>();
-  const CEREMONY_KEY = 'ceremony';
 
   const support = (): PasskeySupport => {
     const origin = options.publicOrigin();
@@ -93,19 +105,51 @@ export function createWebAuthn(options: WebAuthnOptions): WebAuthn {
     return { supported: true, rpId };
   };
 
-  const take = (key: string, ttl: number, action?: StepUpAction): string | undefined => {
-    const held = pending.get(key);
-    pending.delete(key);
+  const ttlFor = (held: PendingChallenge): number =>
+    held.type === 'step-up' ? STEP_UP_CHALLENGE_TTL_MS : CEREMONY_TTL_MS;
+
+  const sweepPending = (): void => {
+    const at = now();
+    for (const [id, held] of pending) {
+      if (!challengeIsFresh(held.issuedAt, at, ttlFor(held))) pending.delete(id);
+    }
+  };
+
+  const remember = (type: CeremonyType, caller: string, challenge: string, action?: StepUpAction): string => {
+    sweepPending();
+    while (pending.size >= MAX_PENDING_CEREMONIES) {
+      const oldest = pending.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      pending.delete(oldest);
+    }
+    let id: string;
+    do id = randomBytes(CEREMONY_ID_BYTES).toString('base64url');
+    while (pending.has(id));
+    pending.set(id, { challenge, issuedAt: now(), caller, type, ...(action === undefined ? {} : { action }) });
+    return id;
+  };
+
+  const take = (
+    id: string,
+    caller: string,
+    type: CeremonyType,
+    action?: StepUpAction,
+  ): string | undefined => {
+    const held = pending.get(id);
     if (held === undefined) return undefined;
-    if (!challengeIsFresh(held.issuedAt, now(), ttl)) return undefined;
-    if (action !== undefined && held.action !== action) return undefined;
+    if (!challengeIsFresh(held.issuedAt, now(), ttlFor(held))) {
+      pending.delete(id);
+      return undefined;
+    }
+    if (held.caller !== caller || held.type !== type || held.action !== action) return undefined;
+    pending.delete(id);
     return held.challenge;
   };
 
   return {
     support,
 
-    async beginRegistration(label) {
+    async beginRegistration(caller, label) {
       const ready = support();
       if (!ready.supported) return undefined;
       const options_ = await generateRegistrationOptions({
@@ -125,14 +169,14 @@ export function createWebAuthn(options: WebAuthnOptions): WebAuthn {
         },
         excludeCredentials: options.credentials().map((credential) => ({ id: credential.credentialId })),
       });
-      pending.set(CEREMONY_KEY, { challenge: options_.challenge, issuedAt: now() });
-      return options_ as unknown as Record<string, unknown>;
+      const ceremonyId = remember('registration', caller, options_.challenge);
+      return { ceremonyId, options: options_ as unknown as Record<string, unknown> };
     },
 
-    async finishRegistration(response, label) {
+    async finishRegistration(ceremonyId, caller, response, label) {
       const ready = support();
       if (!ready.supported) return { ok: false, error: ready.reason };
-      const challenge = take(CEREMONY_KEY, CEREMONY_TTL_MS);
+      const challenge = take(ceremonyId, caller, 'registration');
       if (challenge === undefined) return { ok: false, error: 'That registration expired. Try again.' };
       try {
         const verification = await verifyRegistrationResponse({
@@ -165,42 +209,40 @@ export function createWebAuthn(options: WebAuthnOptions): WebAuthn {
       }
     },
 
-    async beginAuthentication() {
+    async beginAuthentication(caller) {
       const ready = support();
       if (!ready.supported) return undefined;
       const options_ = await generateAuthenticationOptions({
         rpID: ready.rpId,
         userVerification: 'required',
       });
-      pending.set(CEREMONY_KEY, { challenge: options_.challenge, issuedAt: now() });
-      return options_ as unknown as Record<string, unknown>;
+      const ceremonyId = remember('authentication', caller, options_.challenge);
+      return { ceremonyId, options: options_ as unknown as Record<string, unknown> };
     },
 
-    async finishAuthentication(response) {
+    async finishAuthentication(ceremonyId, caller, response) {
       const ready = support();
       if (!ready.supported) return { ok: false, error: ready.reason };
-      const challenge = take(CEREMONY_KEY, CEREMONY_TTL_MS);
+      const challenge = take(ceremonyId, caller, 'authentication');
       if (challenge === undefined) return { ok: false, error: 'That sign-in expired. Try again.' };
       return await verifyAgainst(challenge, ready.rpId, response);
     },
 
-    async beginStepUp(action) {
+    async beginStepUp(caller, action) {
       const ready = support();
       if (!ready.supported) return undefined;
       const options_ = await generateAuthenticationOptions({
         rpID: ready.rpId,
         userVerification: 'required',
       });
-      // Keyed by action, so a challenge minted to approve one thing cannot be
-      // replayed to approve another.
-      pending.set(action, { challenge: options_.challenge, issuedAt: now(), action });
-      return options_ as unknown as Record<string, unknown>;
+      const ceremonyId = remember('step-up', caller, options_.challenge, action);
+      return { ceremonyId, options: options_ as unknown as Record<string, unknown> };
     },
 
-    async finishStepUp(action, response) {
+    async finishStepUp(ceremonyId, caller, action, response) {
       const ready = support();
       if (!ready.supported) return false;
-      const challenge = take(action, STEP_UP_CHALLENGE_TTL_MS, action);
+      const challenge = take(ceremonyId, caller, 'step-up', action);
       if (challenge === undefined) return false;
       return (await verifyAgainst(challenge, ready.rpId, response)).ok;
     },

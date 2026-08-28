@@ -67,15 +67,15 @@ describe('tunnelArgs', () => {
     ]);
   });
 
-  it('runs a named tunnel and passes its token', () => {
-    expect(tunnelArgs({ kind: 'named', hostname: 'doom.example.com', name: 'doom' }, 8123, 'secret')).toEqual([
+  it('runs a named tunnel with a token file', () => {
+    expect(tunnelArgs({ kind: 'named', hostname: 'doom.example.com', name: 'doom' }, 8123, '/tmp/token')).toEqual([
       'tunnel',
       '--no-autoupdate',
       '--url',
       'http://127.0.0.1:8123',
       'run',
-      '--token',
-      'secret',
+      '--token-file',
+      '/tmp/token',
       'doom',
     ]);
   });

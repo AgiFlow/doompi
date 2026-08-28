@@ -27,6 +27,7 @@ const LOG_TAIL = 20;
 const UNAUTHORIZED = 401;
 const OK = 200;
 const PID_FILE = 'tunnel.pid';
+const TOKEN_FILE = 'tunnel.token';
 const FILE_MODE = 0o600;
 /** A pid file older than this is stale beyond usefulness and the pid has likely been recycled. */
 const PID_FILE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -94,6 +95,7 @@ async function defaultProbe(url: string, signal: AbortSignal): Promise<ProbeResu
  */
 export function reapStaleTunnel(stateDir: string, onNotice: (message: string) => void): void {
   const pidPath = path.join(stateDir, PID_FILE);
+  fs.rmSync(path.join(stateDir, TOKEN_FILE), { force: true });
   let parsed: { pid?: unknown; startedAt?: unknown };
   try {
     parsed = JSON.parse(fs.readFileSync(pidPath, 'utf8')) as typeof parsed;
@@ -123,14 +125,21 @@ function tailOf(lines: readonly string[]): string {
   return lines.slice(-LOG_TAIL).join('').trim();
 }
 
-/** Reads a named tunnel's token from the file the settings point at, never from the settings themselves. */
-function readToken(config: TunnelConfig): string | undefined {
+/** Copies a named tunnel token to a private runtime file understood by cloudflared. */
+function writeTokenFile(config: TunnelConfig, stateDir: string): string | undefined {
   if (config.kind !== 'named' || config.tokenFile === undefined) return undefined;
+  let token: string;
   try {
-    return fs.readFileSync(config.tokenFile, 'utf8').trim();
+    token = fs.readFileSync(config.tokenFile, 'utf8').trim();
   } catch {
     return undefined;
   }
+  if (token === '') return undefined;
+  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  const tokenPath = path.join(stateDir, TOKEN_FILE);
+  fs.writeFileSync(tokenPath, token, { mode: FILE_MODE });
+  fs.chmodSync(tokenPath, FILE_MODE);
+  return tokenPath;
 }
 
 export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLauncher {
@@ -140,6 +149,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
   const selfTestRetryMs = options.selfTestRetryMs ?? SELF_TEST_RETRY_MS;
   const startTimeoutMs = options.startTimeoutMs ?? START_TIMEOUT_MS;
   const pidPath = path.join(options.stateDir, PID_FILE);
+  const runtimeTokenPath = path.join(options.stateDir, TOKEN_FILE);
 
   return async function launch(input: TunnelStartInput): Promise<TunnelStartResult> {
     if (input.signal?.aborted === true) {
@@ -150,7 +160,14 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
       return { ok: false, failure: 'not_installed', message: describeTunnelFailure('not_installed') };
     }
 
-    const args = tunnelArgs(input.config, input.port, readToken(input.config));
+    let tokenPath: string | undefined;
+    try {
+      tokenPath = writeTokenFile(input.config, options.stateDir);
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      return { ok: false, failure: 'spawn_failed', message: `${describeTunnelFailure('spawn_failed')} ${cause}` };
+    }
+    const args = tunnelArgs(input.config, input.port, tokenPath);
     let child: ChildProcess;
     try {
       // Never detached and never unref'd. A detached child becomes a process
@@ -159,6 +176,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
       // which detaches on purpose because sessions outlive the hub.
       child = spawnProcess(binary, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (error) {
+      fs.rmSync(runtimeTokenPath, { force: true });
       const cause = error instanceof Error ? error.message : String(error);
       return { ok: false, failure: 'spawn_failed', message: `${describeTunnelFailure('spawn_failed')} ${cause}` };
     }
@@ -180,6 +198,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
       // Synchronous on purpose: async work in an 'exit' handler never runs.
       // This is the net under process.exit(), an uncaught exception, and an
       // unhandled rejection, none of which reach the graceful close path.
+      fs.rmSync(runtimeTokenPath, { force: true });
       try {
         if (child.pid !== undefined) process.kill(child.pid, 'SIGKILL');
       } catch {
@@ -193,6 +212,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
       stopped = true;
       process.off('exit', onProcessExit);
       fs.rmSync(pidPath, { force: true });
+      fs.rmSync(runtimeTokenPath, { force: true });
       if (child.exitCode !== null || child.signalCode !== null) return;
       await new Promise<void>((resolve) => {
         const escalate = setTimeout(() => {
@@ -321,6 +341,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
 
       child.once('exit', (code) => {
         process.off('exit', onProcessExit);
+        fs.rmSync(runtimeTokenPath, { force: true });
         const message = `${describeTunnelFailure('exited')} (code ${String(code)})\n${tailOf(lines)}`;
         if (settle !== undefined) {
           finish({ ok: false, failure: 'exited', message }, false);

@@ -1,7 +1,6 @@
 import { TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect } from 'react';
-import { IntegrityBlock } from '../features/remote/IntegrityBlock.tsx';
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.tsx';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
 import { RemoteBanner } from '../features/remote/RemoteBanner.tsx';
@@ -61,9 +60,6 @@ export function Providers() {
       {/* Mounted once at the root rather than per route: a banner that warns
           the tunnel is open must not be missable by navigating, and the
           approval prompt has to reach the host wherever they are. */}
-      {/* First, and above everything: if the bundle is not the one this hub
-          signed, nothing rendered under it can be trusted. */}
-      <IntegrityBlock />
       <RemoteBanner />
       <RemoteAccessDialog />
       <PairingApprovalDialog />

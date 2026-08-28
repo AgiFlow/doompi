@@ -415,6 +415,81 @@ describe('pairing', () => {
     const replay = await fetch(tunnelUrl('/api/remote/pair'), { method: 'POST', headers, body });
     expect(replay.status).toBe(410);
   });
+
+  it.each([
+    ['/api/remote/pair', `${'{"code":"'}${'x'.repeat(2048)}"}`],
+    ['/api/remote/passkeys/authenticate/begin', JSON.stringify({ padding: 'x'.repeat(256) })],
+    ['/api/remote/passkeys/authenticate/finish', JSON.stringify({ response: { padding: 'x'.repeat(64 * 1024) } })],
+  ])('rejects an oversized public JSON body on %s', async (route, body) => {
+    const response = await fetch(tunnelUrl(route), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
+      body,
+    });
+    expect(response.status).toBe(413);
+  });
+
+  it('bounds concurrent public request bodies', async () => {
+    const encoder = new TextEncoder();
+    const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const held = Array.from({ length: 8 }, () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controllers.push(controller);
+          controller.enqueue(encoder.encode('{"code":"'));
+        },
+      });
+      return fetch(tunnelUrl('/api/remote/pair'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
+        body,
+        duplex: 'half',
+      } as RequestInit & { duplex: 'half' }).catch(() => undefined);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const overflow = await fetch(tunnelUrl('/api/remote/pair'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: tunnelOrigin() },
+      body: JSON.stringify({ code: 'wrong' }),
+    });
+    expect(overflow.status).toBe(429);
+    expect(overflow.headers.get('retry-after')).toBe('1');
+
+    for (const controller of controllers) controller.close();
+    await Promise.all(held);
+  });
+  it('uses Cloudflare client addresses independently and ignores generic forwarding headers', async () => {
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await fetch(tunnelUrl('/api/remote/pair'), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: tunnelOrigin(),
+          'cf-connecting-ip': '198.51.100.1',
+          'x-forwarded-for': `198.51.100.${String(attempt + 10)}`,
+        },
+        body: JSON.stringify({ code: 'wrong' }),
+      });
+      statuses.push(response.status);
+    }
+
+    expect(statuses.slice(0, 10)).toEqual(Array.from({ length: 10 }, () => 410));
+    expect(statuses[10]).toBe(429);
+    const otherSource = await fetch(tunnelUrl('/api/remote/pair'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: tunnelOrigin(),
+        'cf-connecting-ip': '198.51.100.2',
+      },
+      body: JSON.stringify({ code: 'wrong' }),
+    });
+    expect(otherSource.status).toBe(410);
+    expect(stopped).toBe(0);
+    expect((await fetch(tunnelUrl('/pair'))).status).toBe(200);
+  });
 });
 
 describe('step-up on the escalation paths', () => {

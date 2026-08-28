@@ -42,9 +42,14 @@ export async function registerPasskey(): Promise<PasskeyOutcome> {
   if (!passkeysAvailable()) return { ok: false, error: 'This browser has no passkey support.' };
   try {
     const begun = await postJson(`${REMOTE_API_ROUTE}/passkeys/register/begin`, {});
-    if (begun?.options === undefined) return { ok: false, error: 'Passkeys are unavailable on this tunnel.' };
+    if (typeof begun?.ceremonyId !== 'string' || begun.options === undefined) {
+      return { ok: false, error: 'Passkeys are unavailable on this tunnel.' };
+    }
     const response = await startRegistration({ optionsJSON: begun.options as never });
-    const finished = await postJson(`${REMOTE_API_ROUTE}/passkeys/register/finish`, { response });
+    const finished = await postJson(`${REMOTE_API_ROUTE}/passkeys/register/finish`, {
+      ceremonyId: begun.ceremonyId,
+      response,
+    });
     return finished === undefined ? { ok: false, error: 'That passkey was not accepted.' } : { ok: true };
   } catch (error) {
     return { ok: false, error: describe(error) };
@@ -56,9 +61,14 @@ export async function signInWithPasskey(): Promise<PasskeyOutcome> {
   if (!passkeysAvailable()) return { ok: false, error: 'This browser has no passkey support.' };
   try {
     const begun = await postJson(`${REMOTE_API_ROUTE}/passkeys/authenticate/begin`, {});
-    if (begun?.options === undefined) return { ok: false, error: 'Passkeys are unavailable on this tunnel.' };
+    if (typeof begun?.ceremonyId !== 'string' || begun.options === undefined) {
+      return { ok: false, error: 'Passkeys are unavailable on this tunnel.' };
+    }
     const response = await startAuthentication({ optionsJSON: begun.options as never });
-    const finished = await postJson(`${REMOTE_API_ROUTE}/passkeys/authenticate/finish`, { response });
+    const finished = await postJson(`${REMOTE_API_ROUTE}/passkeys/authenticate/finish`, {
+      ceremonyId: begun.ceremonyId,
+      response,
+    });
     return finished === undefined ? { ok: false, error: 'That passkey was not accepted.' } : { ok: true };
   } catch (error) {
     return { ok: false, error: describe(error) };
@@ -76,9 +86,12 @@ export async function assertionFor(action: string): Promise<string | undefined> 
   if (!passkeysAvailable()) return undefined;
   try {
     const begun = await postJson(`${REMOTE_API_ROUTE}/challenge`, { action });
-    if (begun?.options === undefined) return undefined;
+    if (typeof begun?.ceremonyId !== 'string' || begun.options === undefined) return undefined;
     const response = await startAuthentication({ optionsJSON: begun.options as never });
-    return btoa(JSON.stringify(response)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+    return btoa(JSON.stringify({ ceremonyId: begun.ceremonyId, response }))
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replaceAll('=', '');
   } catch {
     // A dismissed or failed gesture means the action does not proceed, which
     // the caller reports; there is nothing to log here.

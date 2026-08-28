@@ -79,6 +79,7 @@ export interface RemoteAccess {
     code: string;
     userAgent: string | undefined;
     edgeIp: string | undefined;
+    sourceAddress: string | undefined;
   }): ReturnType<PairingFlow['claim']>;
   pairingStatus(requestId: string): PairingStatus | undefined;
   approve(requestId: string): ReturnType<PairingFlow['approve']>;
@@ -171,9 +172,6 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
     digest: (token) => createHash('sha256').update(token).digest('hex'),
     now,
     onNotice: notice,
-    onFailureLimit: () => {
-      void disable();
-    },
   });
 
   const sweeper = setInterval(() => {
@@ -456,12 +454,15 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
       list: () => options.store.credentials(),
       // Wrapped rather than passed by reference: an unbound method carries
       // whatever `this` the caller happens to have.
-      beginRegistration: async (label) => await webauthn.beginRegistration(label),
-      finishRegistration: async (response, label) => await webauthn.finishRegistration(response, label),
-      beginAuthentication: async () => await webauthn.beginAuthentication(),
-      finishAuthentication: async (response) => await webauthn.finishAuthentication(response),
-      beginStepUp: async (action) => await webauthn.beginStepUp(action),
-      finishStepUp: async (action, response) => await webauthn.finishStepUp(action, response),
+      beginRegistration: async (caller, label) => await webauthn.beginRegistration(caller, label),
+      finishRegistration: async (ceremonyId, caller, response, label) =>
+        await webauthn.finishRegistration(ceremonyId, caller, response, label),
+      beginAuthentication: async (caller) => await webauthn.beginAuthentication(caller),
+      finishAuthentication: async (ceremonyId, caller, response) =>
+        await webauthn.finishAuthentication(ceremonyId, caller, response),
+      beginStepUp: async (caller, action) => await webauthn.beginStepUp(caller, action),
+      finishStepUp: async (ceremonyId, caller, action, response) =>
+        await webauthn.finishStepUp(ceremonyId, caller, action, response),
       forget: (id) => {
         const forgotten = options.store.removeCredential(id);
         if (forgotten) publish();
