@@ -62,11 +62,6 @@
       "import": "./dist/sessionApi.mjs",
       "require": "./dist/sessionApi.cjs"
     },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
