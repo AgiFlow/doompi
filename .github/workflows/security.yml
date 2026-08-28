@@ -81,3 +81,99 @@ jobs:
       - name: Verify registry signatures during burn-in
         continue-on-error: true
         run: pnpm audit signatures
+
+  secret-scan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the complete pull request history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject verified secrets in pull request commits
+        uses: trufflesecurity/trufflehog@20652fbbdefffcdaa493a5bf57ab2ac6b1db715b # v3.97.1
+        with:
+          extra_args: --only-verified
+
+  workflow-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out materialized package snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reject high-severity GitHub Actions vulnerabilities
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          advanced-security: false
+          annotations: true
+          min-confidence: high
+          min-severity: high
+          online-audits: true
+          version: 1.29.0
+
+  # Scorecard evaluates repository-wide controls on the default branch. Its
+  # upstream action does not support pull request revisions.
+  scorecard:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Analyze open source security posture
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          publish_results: false
+          results_file: scorecard-results.sarif
+          results_format: sarif
+
+      - name: Upload results to code scanning
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: scorecard-results.sarif
+
+  # Keep one stable required check in the repository ruleset. Individual jobs may
+  # evolve, but every pull request must pass all of them before this job succeeds.
+  security-gate:
+    if: always() && github.event_name == 'pull_request'
+    needs:
+      - dependency-review
+      - codeql
+      - dependency-audit
+      - secret-scan
+      - workflow-security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every security check to pass
+        env:
+          CODEQL_RESULT: ${{ needs.codeql.result }}
+          DEPENDENCY_AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
+          SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
+          WORKFLOW_SECURITY_RESULT: ${{ needs.workflow-security.result }}
+        run: |
+          results=(
+            "$CODEQL_RESULT"
+            "$DEPENDENCY_AUDIT_RESULT"
+            "$DEPENDENCY_REVIEW_RESULT"
+            "$SECRET_SCAN_RESULT"
+            "$WORKFLOW_SECURITY_RESULT"
+          )
+
+          for result in "${results[@]}"; do
+            if [[ "$result" != "success" ]]; then
+              printf 'A required security job finished with result: %s\n' "$result"
+              exit 1
+            fi
+          done
