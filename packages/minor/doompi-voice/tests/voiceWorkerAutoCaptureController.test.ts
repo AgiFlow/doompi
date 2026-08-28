@@ -478,7 +478,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
       playbackGeneration: 1,
       evidence: {
         exactStopCommand: false,
-        intentionalAddress: false,
+        intentionalAddress: true,
         classifierConfirmed: true,
         classifierSpeechMs: 160,
         residualTokenCount: 4,

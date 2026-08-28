@@ -8,6 +8,7 @@ describe('browser voice media', () => {
   it('publishes both one-shot and autonomous browser controls with a page-lifetime runtime', async () => {
     const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
 
+    expect(source).toContain('channels: [voiceMediaWakeChannel]');
     expect(source).toContain("overlays: [{ id: 'voice-media-runtime', component: VoiceMediaRuntime }]");
     expect(source).toContain("composerActions: [{ id: 'voice', component: VoiceComposerAction }]");
     expect(source).toContain("id: 'voice.capture'");

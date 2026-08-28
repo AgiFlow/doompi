@@ -4,6 +4,7 @@ import { VoiceComposerAction } from './VoiceComposerAction.tsx';
 import { VoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
 import { VoiceToolMessage } from './VoiceToolMessage.tsx';
 import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
+import { voiceMediaWakeChannel } from './voiceMediaWakeStore.ts';
 
 /**
  * This package's cockpit presence: pure metadata. The selection bar renders
@@ -11,6 +12,7 @@ import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'voice',
+  channels: [voiceMediaWakeChannel],
   // `v e` drives autonomous capture, which the runtime registers as
   // 'voice-auto'; 'voice' is the one-shot dictation command on `v v`. The row
   // shows the package's name and reaches the mode the key reaches.

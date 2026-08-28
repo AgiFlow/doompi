@@ -11,11 +11,15 @@ export const VOICE_MEDIA_ACTIVITY_LEVEL_HEADER = 'x-doompi-voice-activity-level'
 export const VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER = 'x-doompi-voice-activity-elapsed';
 export const VOICE_MEDIA_ACTIVITY_EPOCH_HEADER = 'x-doompi-voice-activity-epoch';
 export const VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER = 'x-doompi-voice-activity-speech-ms';
+export const VOICE_MEDIA_WAKE_TYPE = 'voice_media_wake';
+export const VOICE_MEDIA_HEARTBEAT_MS = 5_000;
+export const VOICE_MEDIA_EVENT_WAIT_NONE = '0';
 
 export const VOICE_MEDIA_ROUTES = {
   clientConnect: '/client/connect',
   clientDisconnect: '/client/disconnect',
   clientEvents: '/client/events',
+  clientHeartbeat: '/client/heartbeat',
   clientAudio: '/client/audio',
   clientCaptureStopped: '/client/capture-stopped',
   clientPlaybackResult: '/client/playback-result',
@@ -66,10 +70,19 @@ export interface VoiceMediaConnectRequest {
   capabilities: VoiceMediaCapabilities;
 }
 
+export interface VoiceMediaWake {
+  eventEpoch: string;
+  sequence: number;
+}
+
 export interface VoiceMediaConnectResult {
   version: typeof VOICE_MEDIA_PROTOCOL_VERSION;
   cursor: number;
+  eventEpoch?: string;
+  heartbeatMs?: number;
 }
+
+export type VoiceMediaHeartbeatResult = VoiceMediaWake;
 
 export type VoiceMediaClientEvent =
   | {

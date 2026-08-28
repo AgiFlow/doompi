@@ -177,7 +177,7 @@ export function classifyNarrationBargeInSource(evidence: NarrationBargeInEvidenc
 export function narrationBargeInIsActionable(evidence: NarrationBargeInEvidence): boolean {
   return (
     evidence.exactStopCommand ||
-    (classifyNarrationBargeInSource(evidence) === 'user' &&
+    (evidence.intentionalAddress === true &&
       evidence.residualTokenCount >= 1 &&
       rankNarrationBargeInEvidence(evidence) >= MINIMUM_BARGE_IN_SCORE)
   );
@@ -238,7 +238,6 @@ export class NarrationBargeInMonitor {
   private promoted = false;
   private discarded = false;
   private classifierSpeechMs = 0;
-  private pendingUnaddressedUserConfirmation = false;
 
   public constructor(private readonly dependencies: NarrationBargeInMonitorDependencies) {}
 
@@ -346,20 +345,11 @@ export class NarrationBargeInMonitor {
           : { classifierSpeechMs: active.probe.classifierSpeechMs }),
       });
       if (decision.actionable) {
-        const immediate = decision.evidence.exactStopCommand || decision.evidence.intentionalAddress === true;
-        if (immediate || this.pendingUnaddressedUserConfirmation) {
-          this.pendingUnaddressedUserConfirmation = false;
-          this.awaitingAuthority = true;
-          this.pendingProbe = undefined;
-          this.dependencies.onEvidence(active.probe.generation, decision);
-          return;
-        }
-        this.pendingUnaddressedUserConfirmation = true;
-      } else {
-        this.pendingUnaddressedUserConfirmation = false;
+        this.awaitingAuthority = true;
+        this.pendingProbe = undefined;
+        this.dependencies.onEvidence(active.probe.generation, decision);
+        return;
       }
-    } else {
-      this.pendingUnaddressedUserConfirmation = false;
     }
     const pending = this.pendingProbe;
     this.pendingProbe = undefined;
@@ -382,6 +372,5 @@ export class NarrationBargeInMonitor {
     this.promoted = false;
     this.discarded = false;
     this.classifierSpeechMs = 0;
-    this.pendingUnaddressedUserConfirmation = false;
   }
 }

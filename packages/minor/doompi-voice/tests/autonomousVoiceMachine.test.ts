@@ -306,7 +306,7 @@ describe('autonomous voice XState lifecycle', () => {
     expect(h.effects.some((effect) => effect.type === 'effect.abortPlayback')).toBe(false);
   });
 
-  it('prioritizes classifier-confirmed user speech without requiring an address phrase', () => {
+  it('does not prioritize classifier-confirmed speech without an address phrase during narration', () => {
     const h = harness();
     enable(h);
     h.actor.send({
@@ -333,15 +333,10 @@ describe('autonomous voice XState lifecycle', () => {
       },
     });
 
-    expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('speech');
-    expect(h.actor.getSnapshot().context.narrationOverlapPromoted).toBe(true);
-    expect(h.effects).toContainEqual({
-      type: 'effect.confirmBargeIn',
-      ...firstTurn,
-      playbackGeneration: 4,
-      outcome: 'promote',
-    });
-    expect(h.effects).toContainEqual({ type: 'effect.abortPlayback' });
+    expect(autonomousVoiceState(h.actor.getSnapshot())).toBe('listening');
+    expect(h.actor.getSnapshot().context.narrationOverlapPromoted).toBe(false);
+    expect(h.effects.some((effect) => effect.type === 'effect.confirmBargeIn')).toBe(false);
+    expect(h.effects.some((effect) => effect.type === 'effect.abortPlayback')).toBe(false);
   });
 
   it('discards command-only stop overlap instead of promoting narration tail audio', () => {

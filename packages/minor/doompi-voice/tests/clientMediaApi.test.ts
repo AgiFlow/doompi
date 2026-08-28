@@ -8,6 +8,8 @@ import {
   VOICE_MEDIA_ACTIVITY_STATE_HEADER,
   VOICE_MEDIA_CONTENT_TYPE,
   type VoiceMediaClientEvent,
+  VOICE_MEDIA_HEARTBEAT_MS,
+  type VoiceMediaWake,
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
 } from '../src/types/clientMedia.ts';
@@ -33,7 +35,7 @@ function json(value: object, host = false): RequestInit {
   };
 }
 
-async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId = CONNECTION_ID): Promise<void> {
+async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId = CONNECTION_ID): Promise<Response> {
   const response = await api.fetch(
     request(
       VOICE_MEDIA_ROUTES.clientConnect,
@@ -54,6 +56,7 @@ async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId
     ),
   );
   expect(response.status).toBe(200);
+  return response;
 }
 
 async function nextEvent(
@@ -71,6 +74,138 @@ async function nextEvent(
 }
 
 describe('voice client media session API', () => {
+  it('advertises push metadata only to browser clients and seeds the broker epoch', async () => {
+    const wakes: VoiceMediaWake[] = [];
+    const api = createVoiceMediaApi({
+      internalToken: INTERNAL_TOKEN,
+      eventEpoch: 'epoch-browser',
+      wakePublisher: { publish: (wake) => wakes.push(wake) },
+    });
+
+    expect(await (await connect(api)).json()).toEqual({
+      version: VOICE_MEDIA_PROTOCOL_VERSION,
+      cursor: 0,
+      eventEpoch: 'epoch-browser',
+      heartbeatMs: VOICE_MEDIA_HEARTBEAT_MS,
+    });
+    expect(wakes).toEqual([{ eventEpoch: 'epoch-browser', sequence: 0 }]);
+    api.close();
+
+    const native = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN, eventEpoch: 'epoch-native' });
+    const response = await native.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.clientConnect,
+        json({
+          version: VOICE_MEDIA_PROTOCOL_VERSION,
+          clientId: 'native-client',
+          connectionId: 'native-connection',
+          clientKind: 'native',
+          controlLocation: 'local',
+          capabilities: {
+            capture: true,
+            playback: true,
+            captureActivity: false,
+            autonomousOrchestration: false,
+          },
+        }),
+      ),
+    );
+    expect(await response.json()).toEqual({ version: VOICE_MEDIA_PROTOCOL_VERSION, cursor: 0 });
+    native.close();
+  });
+
+  it('keeps ordinary event polling blocking while wait=0 is immediate and explicit', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN, eventEpoch: 'epoch-wait' });
+    await connect(api);
+    let settled = false;
+    const longPoll = Promise.resolve(
+      api.fetch(
+        request(`${VOICE_MEDIA_ROUTES.clientEvents}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&after=0`),
+      ),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    const immediate = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.clientEvents}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&after=0&wait=0`),
+    );
+    expect(immediate.status).toBe(204);
+    expect(
+      (
+        await api.fetch(
+          request(
+            `${VOICE_MEDIA_ROUTES.clientEvents}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&after=0&wait=forever`,
+          ),
+        )
+      ).status,
+    ).toBe(400);
+
+    api.close();
+    expect((await longPoll).status).toBe(204);
+  });
+
+  it('heartbeats refresh the lease while only sequenced control events publish wakes', async () => {
+    let now = 0;
+    const wakes: VoiceMediaWake[] = [];
+    const api = createVoiceMediaApi({
+      internalToken: INTERNAL_TOKEN,
+      eventEpoch: 'epoch-activity',
+      now: () => now,
+      clientConnectWaitMs: 0,
+      wakePublisher: { publish: (wake) => wakes.push(wake) },
+    });
+    await connect(api);
+    now = 10_000;
+    const heartbeat = await api.fetch(
+      request(VOICE_MEDIA_ROUTES.clientHeartbeat, json({ clientId: CLIENT_ID, connectionId: CONNECTION_ID })),
+    );
+    expect(await heartbeat.json()).toEqual({ eventEpoch: 'epoch-activity', sequence: 0 });
+    now = 20_000;
+    expect(
+      (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-push' }), true))).status,
+    ).toBe(201);
+    expect(wakes).toEqual([
+      { eventEpoch: 'epoch-activity', sequence: 0 },
+      { eventEpoch: 'epoch-activity', sequence: 1 },
+    ]);
+    expect(
+      (
+        await api.fetch(
+          request(
+            `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&captureId=capture-push`,
+            {
+              method: 'POST',
+              headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
+              body: new Uint8Array([1, 2]),
+            },
+          ),
+        )
+      ).status,
+    ).toBe(204);
+    expect(
+      (
+        await api.fetch(
+          request(
+            VOICE_MEDIA_ROUTES.clientCaptureStopped,
+            json({ clientId: CLIENT_ID, connectionId: CONNECTION_ID, captureId: 'capture-push' }),
+          ),
+        )
+      ).status,
+    ).toBe(204);
+    expect(wakes).toHaveLength(2);
+    expect(
+      (
+        await api.fetch(
+          request(VOICE_MEDIA_ROUTES.clientHeartbeat, json({ clientId: CLIENT_ID, connectionId: 'stale-connection' })),
+        )
+      ).status,
+    ).toBe(409);
+    api.close();
+  });
+
   it('waits briefly for a remote media client that is still connecting', async () => {
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
     const capture = Promise.resolve(

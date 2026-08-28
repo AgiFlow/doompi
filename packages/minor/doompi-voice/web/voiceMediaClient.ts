@@ -1,10 +1,5 @@
+import { ClientCaptureActivityLifecycle, type SpeechPresenceDetector } from '../src/types/clientCaptureActivity.ts';
 import {
-  ClientCaptureActivityLifecycle,
-  type SpeechPresenceDetector,
-  type SpeechPresenceWindow,
-} from '../src/types/clientCaptureActivity.ts';
-import {
-  VOICE_MEDIA_SAMPLE_RATE,
   type VoiceMediaCapture,
   type VoiceMediaClientEvent,
   type VoiceMediaDevice,
@@ -14,10 +9,6 @@ import {
 
 const RECONNECT_DELAY_MS = 2_000;
 const MAX_CONNECTION_ID_LENGTH = 200;
-const DUCK_CUE_SAMPLES = (VOICE_MEDIA_SAMPLE_RATE * 320) / 1_000;
-const DUCK_TARGET_GAIN = 0.7;
-const DUCK_FADE_MS = 200;
-const DUCK_HOLD_MS = 800;
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -43,8 +34,6 @@ export class VoiceMediaClient {
   private speechDetector: SpeechPresenceDetector | undefined;
   private activityLifecycle: ClientCaptureActivityLifecycle | undefined;
   private playback: VoiceMediaPlayback | undefined;
-  private duckedPlayback: VoiceMediaPlayback | undefined;
-  private duckCueSamples = 0;
   private audioUploads: Promise<void> = Promise.resolve();
   private audioUploadError: Error | undefined;
   private activeConnectionId: string | undefined;
@@ -169,7 +158,6 @@ export class VoiceMediaClient {
           try {
             const windows = await speechDetector?.push(owned);
             if (generation !== this.captureGeneration || this.captureId !== captureId) return;
-            this.observePlaybackCue(windows ?? []);
             const activity = activityLifecycle?.push(owned, windows);
             await this.transport.sendAudio(this.clientId, connectionId, captureId, owned, activity);
           } catch (error) {
@@ -215,8 +203,6 @@ export class VoiceMediaClient {
     await this.speechDetector?.reset().catch(() => undefined);
     this.speechDetector = undefined;
     this.activityLifecycle = undefined;
-    this.duckCueSamples = 0;
-    this.duckedPlayback = undefined;
     if (this.audioUploadError !== undefined) {
       const error = this.audioUploadError;
       await this.transport
@@ -236,34 +222,14 @@ export class VoiceMediaClient {
     this.scheduleActivityReset();
     const playback = this.device.speak(event);
     this.playback = playback;
-    this.duckedPlayback = undefined;
-    this.duckCueSamples = 0;
     void playback.completion
       .then((result) => this.transport.playbackFinished(this.clientId, connectionId, result))
       .catch(() => undefined)
       .finally(() => {
         if (this.playback !== playback) return;
         this.playback = undefined;
-        if (this.duckedPlayback === playback) this.duckedPlayback = undefined;
-        this.duckCueSamples = 0;
         this.scheduleActivityReset();
       });
-  }
-
-  private observePlaybackCue(windows: readonly SpeechPresenceWindow[]): void {
-    const playback = this.playback;
-    if (!playback || playback.duck === undefined) {
-      this.duckCueSamples = 0;
-      return;
-    }
-    if (this.duckedPlayback === playback) return;
-    for (const window of windows) {
-      this.duckCueSamples = window.speech ? this.duckCueSamples + window.sampleCount : 0;
-      if (this.duckCueSamples < DUCK_CUE_SAMPLES) continue;
-      this.duckedPlayback = playback;
-      playback.duck(DUCK_TARGET_GAIN, DUCK_FADE_MS, DUCK_HOLD_MS);
-      return;
-    }
   }
 
   private scheduleActivityReset(): void {
@@ -294,8 +260,6 @@ export class VoiceMediaClient {
     this.activityLifecycle = undefined;
     this.captureId = undefined;
     this.audioUploadError = undefined;
-    this.duckedPlayback = undefined;
-    this.duckCueSamples = 0;
     await capture?.stop().catch(() => undefined);
     void uploads.catch(() => undefined);
     void speechDetector?.reset().catch(() => undefined);

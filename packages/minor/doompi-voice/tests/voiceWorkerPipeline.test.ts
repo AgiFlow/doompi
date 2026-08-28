@@ -1269,13 +1269,13 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     );
     await pipeline.shutdown();
   });
-  it('promotes client-classified unaddressed overlap and honors its queued endpoint', async () => {
+  it('promotes explicitly addressed client overlap and honors its queued endpoint', async () => {
     const recorder = new WorkerRecorder();
     const clock = new ScheduledWorkerClock();
     let transcription = 0;
     const transcribe = vi.fn(async (_request: TranscriptionRequest) => {
       transcription += 1;
-      return transcription === 1 ? 'The plan is ready please run all tests' : 'please run all tests';
+      return transcription === 1 ? 'The plan is ready hey doom please run all tests' : 'please run all tests';
     });
     const pipeline = new VoiceWorkerPipeline({
       clock,
@@ -1324,7 +1324,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       clock.advance(20);
       recorder.emit(pcmFrame(9_000));
     }
-    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
     recorder.emitActivity({
       state: 'endpoint',
       levelDbfs: -75,
@@ -1338,7 +1338,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
           kind: 'barge-in-evidence',
           playbackGeneration: 5,
           evidence: expect.objectContaining({
-            intentionalAddress: false,
+            intentionalAddress: true,
             classifierConfirmed: true,
             classifierSpeechMs: 160,
           }),
@@ -1382,8 +1382,8 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       },
       publish,
     );
-    expect(transcribe).toHaveBeenCalledTimes(3);
-    const finalRequest = transcribe.mock.calls[2]![0] as TranscriptionRequest;
+    expect(transcribe).toHaveBeenCalledTimes(2);
+    const finalRequest = transcribe.mock.calls[1]![0] as TranscriptionRequest;
     expect(fs.readFileSync(finalRequest.audioPath).subarray(44)).toEqual(
       Buffer.concat(Array.from({ length: 85 }, () => pcmFrame(9_000))),
     );

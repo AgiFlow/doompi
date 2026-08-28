@@ -62,6 +62,11 @@
       "import": "./dist/sessionApi.mjs",
       "require": "./dist/sessionApi.cjs"
     },
+    "./web-hub": {
+      "types": "./dist/webHub.d.mts",
+      "import": "./dist/webHub.mjs",
+      "require": "./dist/webHub.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -115,8 +120,14 @@
   },
   "doompiWeb": {
     "pluginId": "voice",
-    "channels": [],
-    "client": "./web/index.ts"
+    "channels": [
+      "voice_media_wake"
+    ],
+    "client": "./web/index.ts",
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "dist": "./dist/webHub.mjs"
+    }
   },
   "pi": {
     "extensions": [

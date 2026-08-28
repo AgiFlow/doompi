@@ -273,7 +273,7 @@ describe('voice media client browser recovery', () => {
     expect(device.close).toHaveBeenCalledOnce();
   });
 
-  it('uses only a shallow provisional duck for sustained classifier cues and resets activity epochs', async () => {
+  it('never ducks playback from classifier cues before the host attributes the speaker', async () => {
     const transport = new FakeTransport();
     const device = new FakeDevice();
     const windows: SpeechPresenceWindow[][] = [
@@ -305,7 +305,7 @@ describe('voice media client browser recovery', () => {
 
     for (let index = 0; index < 4; index += 1) device.callbacks[0]!(pcm);
     await eventually(() => expect(transport.audioSends).toHaveLength(5));
-    expect(device.playbacks[0]?.duck).toHaveBeenCalledWith(0.7, 200, 800);
+    expect(device.playbacks[0]?.duck).not.toHaveBeenCalled();
     expect(device.playbacks[0]?.stop).not.toHaveBeenCalled();
     expect(transport.audioSends[4]?.activity).toMatchObject({ epoch: 1, classifiedSpeechMs: 400 });
 

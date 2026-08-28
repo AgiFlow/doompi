@@ -67,7 +67,7 @@ describe('ranked narration barge-in', () => {
     expect(decision).toMatchObject({ actionable: false, speechSource: 'ambiguous' });
   });
 
-  it('accepts novel unaddressed user speech when a real classifier independently confirms it', () => {
+  it('classifies novel unaddressed speech but does not let the classifier alone interrupt narration', () => {
     const decision = analyzeNarrationBargeIn({
       transcript: 'The plan is ready please handle my new request',
       referenceText: 'The plan is ready',
@@ -84,7 +84,7 @@ describe('ranked narration barge-in', () => {
       classifierSpeechMs: 160,
       residualTokenCount: 5,
     });
-    expect(decision).toMatchObject({ actionable: true, speechSource: 'user' });
+    expect(decision).toMatchObject({ actionable: false, speechSource: 'user' });
   });
 
   it('combines intentional address with semantic and acoustic guards for novel user speech', () => {
@@ -195,7 +195,7 @@ describe('ranked narration barge-in', () => {
     expect(monitor.confirmed).toBe(false);
   });
 
-  it('requires two semantic confirmations before unaddressed user speech can interrupt narration', async () => {
+  it('never elevates unaddressed classifier speech to a narration interruption', async () => {
     const onEvidence = vi.fn();
     const transcribe = vi.fn(async () => 'The plan is ready please handle my new request');
     const monitor = new NarrationBargeInMonitor({ transcribe, onEvidence });
@@ -204,13 +204,10 @@ describe('ranked narration barge-in', () => {
       0,
     );
 
-    for (let index = 0; index < 60; index += 1) monitor.observe(pcmFrame(7_000), index * 20, undefined, 160);
-    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledOnce());
-    expect(onEvidence).not.toHaveBeenCalled();
+    for (let index = 0; index < 85; index += 1) monitor.observe(pcmFrame(7_000), index * 20, undefined, 160);
+    await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
 
-    for (let index = 60; index < 85; index += 1) monitor.observe(pcmFrame(7_000), index * 20, undefined, 160);
-    await vi.waitFor(() => expect(onEvidence).toHaveBeenCalledOnce());
-    expect(onEvidence).toHaveBeenCalledWith(4, expect.objectContaining({ actionable: true, speechSource: 'user' }));
+    expect(onEvidence).not.toHaveBeenCalled();
   });
 
   it('discards command-only overlap without exposing narration tail PCM', async () => {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
 import {
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -11,14 +12,18 @@ import {
   type VoiceMediaCaptureConfiguration,
   type VoiceMediaClientEvent,
   type VoiceMediaConnectRequest,
+  VOICE_MEDIA_EVENT_WAIT_NONE,
+  VOICE_MEDIA_HEARTBEAT_MS,
   type VoiceMediaPlaybackOutcome,
   type VoiceMediaPlaybackResult,
+  type VoiceMediaWake,
   VOICE_MEDIA_CHANNELS,
   VOICE_MEDIA_CONTENT_TYPE,
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
   VOICE_MEDIA_SAMPLE_RATE,
 } from '../types/clientMedia.ts';
+import { createVoiceMediaWakePublisher, type VoiceMediaWakePublisher } from './voiceMediaWakeFile.ts';
 
 const CLIENT_LEASE_MS = 15_000;
 const CLIENT_CONNECT_WAIT_MS = 3_000;
@@ -71,6 +76,9 @@ export interface VoiceMediaApiOptions {
   internalToken?: string;
   now?: () => number;
   clientConnectWaitMs?: number;
+  eventEpoch?: string;
+  wakePublisher?: VoiceMediaWakePublisher;
+  onNotice?: (message: string) => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -138,18 +146,27 @@ class VoiceMediaBroker implements DoomApiHandler {
   private readonly now: () => number;
   private readonly internalToken: string | undefined;
   private readonly clientConnectWaitMs: number;
+  private readonly eventEpoch: string;
+  private readonly wakePublisher: VoiceMediaWakePublisher | undefined;
+  private readonly onNotice: ((message: string) => void) | undefined;
   private readonly events: VoiceMediaClientEvent[] = [];
   private readonly waiters = new Set<() => void>();
   private client: ClientLease | undefined;
   private capture: HostedCapture | undefined;
   private playback: HostedPlayback | undefined;
   private sequence = 0;
+  private wakeFailureReported = false;
   private closed = false;
 
   public constructor(options: VoiceMediaApiOptions) {
     this.internalToken = options.internalToken;
     this.now = options.now ?? Date.now;
     this.clientConnectWaitMs = options.clientConnectWaitMs ?? CLIENT_CONNECT_WAIT_MS;
+    this.eventEpoch = options.eventEpoch ?? randomUUID();
+    if (!validId(this.eventEpoch)) throw new Error('Voice media event epoch is invalid.');
+    this.wakePublisher = options.wakePublisher;
+    this.onNotice = options.onNotice;
+    this.publishWake();
   }
 
   public fetch(request: Request): Promise<Response> | Response {
@@ -164,6 +181,8 @@ class VoiceMediaBroker implements DoomApiHandler {
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientConnect) return this.connect(request);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientDisconnect)
       return this.disconnect(request);
+    if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientHeartbeat)
+      return this.heartbeat(request);
     if (request.method === 'GET' && url.pathname === VOICE_MEDIA_ROUTES.clientEvents) return this.nextEvent(url);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientAudio)
       return this.acceptAudio(request, url);
@@ -241,7 +260,13 @@ class VoiceMediaBroker implements DoomApiHandler {
       lastSeenAt: this.now(),
     };
     this.wake();
-    return Response.json({ version: VOICE_MEDIA_PROTOCOL_VERSION, cursor: this.sequence });
+    return Response.json({
+      version: VOICE_MEDIA_PROTOCOL_VERSION,
+      cursor: this.sequence,
+      ...(declaration.clientKind === 'browser'
+        ? { eventEpoch: this.eventEpoch, heartbeatMs: VOICE_MEDIA_HEARTBEAT_MS }
+        : {}),
+    });
   }
 
   private async disconnect(request: Request): Promise<Response> {
@@ -254,16 +279,27 @@ class VoiceMediaBroker implements DoomApiHandler {
     return new Response(null, { status: 204 });
   }
 
+  private async heartbeat(request: Request): Promise<Response> {
+    const body = await jsonRecord(request);
+    if (!this.matchesClient(body?.clientId, body?.connectionId))
+      return errorResponse('Voice media client does not own this session.', 409);
+    this.touchClient();
+    return Response.json(this.currentWake());
+  }
+
   private async nextEvent(url: URL): Promise<Response> {
     const clientId = url.searchParams.get('clientId');
     const connectionId = url.searchParams.get('connectionId');
     if (!this.matchesClient(clientId, connectionId))
       return errorResponse('Voice media client does not own this session.', 409);
+    const eventWait = url.searchParams.get('wait');
+    if (eventWait !== null && eventWait !== VOICE_MEDIA_EVENT_WAIT_NONE)
+      return errorResponse('Invalid event wait mode.', 400);
     this.touchClient();
     const after = Number(url.searchParams.get('after') ?? '0');
     if (!Number.isSafeInteger(after) || after < 0) return errorResponse('Invalid event cursor.', 400);
     let event = this.events.find((candidate) => candidate.sequence > after);
-    if (event === undefined) {
+    if (event === undefined && eventWait === null) {
       await this.wait(EVENT_WAIT_MS);
       if (!this.matchesClient(clientId, connectionId))
         return errorResponse('Voice media client does not own this session.', 409);
@@ -534,6 +570,24 @@ class VoiceMediaBroker implements DoomApiHandler {
     this.events.push({ ...event, sequence: this.sequence } as VoiceMediaClientEvent);
     if (this.events.length > MAX_EVENT_HISTORY) this.events.splice(0, this.events.length - MAX_EVENT_HISTORY);
     this.wake();
+    this.publishWake();
+  }
+
+  private currentWake(): VoiceMediaWake {
+    return { eventEpoch: this.eventEpoch, sequence: this.sequence };
+  }
+
+  private publishWake(): void {
+    if (this.wakePublisher === undefined) return;
+    try {
+      this.wakePublisher.publish(this.currentWake());
+      this.wakeFailureReported = false;
+    } catch (error) {
+      if (this.wakeFailureReported) return;
+      this.wakeFailureReported = true;
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      this.onNotice?.(`voice media wake publication failed (${message})`);
+    }
   }
 
   private failActiveClientWork(message: string): void {
@@ -568,6 +622,19 @@ export function createVoiceMediaApi(options: VoiceMediaApiOptions = {}): DoomApi
 export const api: DoomApi = {
   basePath: VOICE_MEDIA_API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
-    return createVoiceMediaApi({ internalToken: context.internalToken });
+    let wakePublisher: VoiceMediaWakePublisher | undefined;
+    if (context.sessionId !== undefined) {
+      try {
+        wakePublisher = createVoiceMediaWakePublisher(context.sessionId);
+      } catch (error) {
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        context.onNotice(`voice media wake publisher unavailable (${message})`);
+      }
+    }
+    return createVoiceMediaApi({
+      internalToken: context.internalToken,
+      wakePublisher,
+      onNotice: (message) => context.onNotice(message),
+    });
   },
 };
