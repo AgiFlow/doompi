@@ -1,3 +1,19 @@
+## 0.0.1-alpha.40 (2026-08-28)
+
+### 🚀 Features
+
+- **doompi-notification:** route session notifications to browser clients ([a5599fa](https://github.com/AgiFlow/doompi/commit/a5599fa))
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features

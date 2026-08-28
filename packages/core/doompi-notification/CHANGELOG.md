@@ -1,3 +1,18 @@
+## 0.0.1-alpha.18 (2026-08-28)
+
+### 🚀 Features
+
+- **doompi-notification:** route session notifications to browser clients ([a5599fa](https://github.com/AgiFlow/doompi/commit/a5599fa))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.17 (2026-08-26)
 
 ### 🚀 Features

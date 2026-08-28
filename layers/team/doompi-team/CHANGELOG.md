@@ -1,3 +1,24 @@
+## 0.0.1-alpha.40 (2026-08-28)
+
+### 🚀 Features
+
+- improve remote settings and voice detection ([40ae47e](https://github.com/AgiFlow/doompi/commit/40ae47e))
+- expand cockpit controls and browser voice media ([7eba367](https://github.com/AgiFlow/doompi/commit/7eba367))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.3
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features

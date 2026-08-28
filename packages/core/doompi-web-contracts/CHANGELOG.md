@@ -1,3 +1,14 @@
+## 0.0.1-alpha.3 (2026-08-28)
+
+### 🚀 Features
+
+- expand cockpit controls and browser voice media ([7eba367](https://github.com/AgiFlow/doompi/commit/7eba367))
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.2 (2026-08-26)
 
 ### 🚀 Features

@@ -1,3 +1,21 @@
+## 0.0.1-alpha.3 (2026-08-28)
+
+### 🚀 Features
+
+- **doompi-telemetry:** add end-to-end observability and trace reporting ([c95a092](https://github.com/AgiFlow/doompi/commit/c95a092))
+- expand cockpit controls and browser voice media ([7eba367](https://github.com/AgiFlow/doompi/commit/7eba367))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.2 (2026-08-26)
 
 ### 🚀 Features

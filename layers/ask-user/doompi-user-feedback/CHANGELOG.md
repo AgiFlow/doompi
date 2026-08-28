@@ -1,3 +1,21 @@
+## 0.0.1-alpha.29 (2026-08-28)
+
+### 🚀 Features
+
+- **doompi-web:** harden remote access and responsive cockpit ([2cfa7a7](https://github.com/AgiFlow/doompi/commit/2cfa7a7))
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.3
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.28 (2026-08-26)
 
 ### 🚀 Features

@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-web-security",
-  "version": "0.0.1-alpha.1",
+  "version": "0.0.1-alpha.2",
   "description": "Shared security primitives for the DoomPi web cockpit: sealed channels and signed bundle manifests for independently trusted verifiers.",
   "keywords": [
     "ai",

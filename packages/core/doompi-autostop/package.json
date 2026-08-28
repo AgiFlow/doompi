@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-autostop",
-  "version": "0.0.1-alpha.17",
+  "version": "0.0.1-alpha.18",
   "description": "Shuts a DoomPi session down once the agent settles and stays idle.",
   "keywords": [
     "ai",

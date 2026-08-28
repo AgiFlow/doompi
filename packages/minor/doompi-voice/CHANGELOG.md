@@ -1,3 +1,33 @@
+## 0.0.1-alpha.40 (2026-08-28)
+
+### 🚀 Features
+
+- **doompi-voice:** push media events through the web hub ([396af8b](https://github.com/AgiFlow/doompi/commit/396af8b))
+- improve remote settings and voice detection ([40ae47e](https://github.com/AgiFlow/doompi/commit/40ae47e))
+- expand cockpit controls and browser voice media ([7eba367](https://github.com/AgiFlow/doompi/commit/7eba367))
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### 🩹 Fixes
+
+- **doompi-voice:** preserve package compatibility ([58552de](https://github.com/AgiFlow/doompi/commit/58552de))
+- **doompi-voice:** harden autonomous capture pipeline ([0b72dc3](https://github.com/AgiFlow/doompi/commit/0b72dc3))
+- **doompi-voice:** harden capture recovery and transcript admission ([27aa1b0](https://github.com/AgiFlow/doompi/commit/27aa1b0))
+- harden remote access and media capture ([a04cddc](https://github.com/AgiFlow/doompi/commit/a04cddc))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.3
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.2
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features
