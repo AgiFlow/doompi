@@ -11,9 +11,7 @@ Together they can dispatch structured jobs from one live session.
 
 ### Workflows
 
-GitHub Actions already has a decent vocabulary for long jobs, so DoomPi reuses it. Each job
-declares the DoomPi session it wants. Here, implementation gets development tools; an
-article waits for it and gets focused blog-writing context:
+Workflow mode uses GitHub Actions-style jobs. Each step launches the DoomPi session declared by its `interactiveRun`. In this example, the article job waits for implementation and uses a different domain:
 
 ```yaml
 on:
@@ -91,10 +89,7 @@ pnpm exec workflow-mcp run-workflow automations/workflows/blog-writing.workflow.
   --dry-run --skip-launch --prompt "Write a practical guide to scoped agent tooling"
 ```
 
-Real runs delegate to tmux by default and accept `WORKFLOW_LAUNCHER=cmux`. Development runs do
-not create branches, commits, or pushes. Blog runs leave review-ready Markdown, sources, and a
-publication checklist in the workflow run directory without writing into a site or calling a CMS.
-These examples live in the source repository and are not part of the published npm tarball.
+Real runs delegate to tmux by default; set `WORKFLOW_LAUNCHER=cmux` to use cmux. Development workflows do not create branches, commits, or pushes. Blog workflows leave Markdown, sources, and a publication checklist in the workflow run directory. They do not write into a site or call a CMS. These examples are source-repository fixtures and are not included in the published npm package.
 
 ### Loop
 

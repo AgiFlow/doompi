@@ -29,20 +29,17 @@ releases.
 before registering anything in Pi's settings:
 
 ```bash
-dpi init                                   # create this repository's .doom configuration
-dpi sync                                   # resolve and synchronize the DoomPi experiment
-dpi                                        # run the DoomPi experiment
-pi                                         # run your existing Pi setup for comparison
+dpi init    # create missing .doom files in this repository
+dpi sync    # install required packages and build synchronized DPI state
+dpi         # run the pinned Pi version with DPI's in-memory settings overlay
+pi          # run your existing Pi setup for comparison
 ```
 
 `dpi init` creates `.doom/config.yaml`, `.doom/modes.yaml`, `.doom/domains.yaml`, and
 `.doom/profiles.yaml` in the current repository. It preserves existing files unless you pass
 `--force` and does not create or change `.pi/settings.json`.
 
-`dpi sync` installs missing configured feature packages, writes DoomPi's generated state,
-package alias, and theme resource, but it does not register DoomPi in either normal Pi
-settings file. It prepares every declared layer so switching modes does not depend on the
-root package's dependency closure.
+`dpi sync` installs missing required feature packages, writes generated state, and refreshes the extension alias and theme. It does not persist DPI's settings overlay in either Pi settings file. Sync provisions every declared layer, so switching to a prepared mode does not depend on the root package's private dependencies.
 
 ### Sync storage and worktrees
 
@@ -59,9 +56,9 @@ When you are comfortable with DoomPi and no longer need the side-by-side experim
 it for normal Pi:
 
 ```bash
-doompi init                                  # seed ~/.pi/.doom and Pi integration resources
-doompi sync                                  # register DoomPi in normal Pi settings
-pi                                           # DoomPi now starts through the regular Pi command
+doompi init    # seed ~/.pi/.doom and register the extension alias and theme
+doompi sync    # build synchronized state and refresh Pi integration
+pi             # start DoomPi through the regular Pi command
 ```
 
 `doompi` remains available as an explicit harness when you want per-run matrix flags:

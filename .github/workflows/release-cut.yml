@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -49,10 +50,13 @@ jobs:
           git config user.email "doompi-release-bot@users.noreply.github.com"
 
       - name: Sync the release base branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           test "${GITHUB_REF_TYPE}" = "branch"
-          git fetch origin "${GITHUB_REF_NAME}"
+          # shellcheck disable=SC2016 # GH_TOKEN expands inside Git's credential-helper shell.
+          git -c credential.helper='!f() { echo "username=x-access-token"; echo "password=${GH_TOKEN}"; }; f' fetch origin "${GITHUB_REF_NAME}"
           git rebase "origin/${GITHUB_REF_NAME}"
 
       - name: Select the projects to release
@@ -97,13 +101,16 @@ jobs:
 
       - name: Cut the release branch
         if: env.RELEASE_PROJECTS != '' && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           RELEASE_BRANCH="release/alpha-${GITHUB_RUN_ID}"
           git switch -c "${RELEASE_BRANCH}"
           pnpm nx release prerelease --preid alpha --projects "${RELEASE_PROJECTS}" --skip-publish
           test -n "$(git log --format=%H "origin/${GITHUB_REF_NAME}..HEAD")"
-          git push origin "${RELEASE_BRANCH}"
+          # shellcheck disable=SC2016 # GH_TOKEN expands inside Git's credential-helper shell.
+          git -c credential.helper='!f() { echo "username=x-access-token"; echo "password=${GH_TOKEN}"; }; f' push origin "${RELEASE_BRANCH}"
           echo "RELEASE_BRANCH=${RELEASE_BRANCH}" >> "${GITHUB_ENV}"
 
       - name: Open the release pull request
