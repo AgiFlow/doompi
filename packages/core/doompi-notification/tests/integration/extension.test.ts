@@ -3,6 +3,10 @@ import {
   DOOM_ASK_USER_PROMPT_EVENT,
 } from '@agimon-ai/doompi-extension-contracts/ask-user';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import {
+  DOOM_NOTIFICATION_ENTRY_TYPE,
+  readDoomNotificationService,
+} from '@agimon-ai/doompi-extension-contracts/notification';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -141,6 +145,45 @@ describe('notification extension', () => {
     );
   });
 
+  it('routes settled notifications into RPC entries instead of host delivery', async () => {
+    const rpcContext = { ...harness.context, mode: 'rpc' } as ExtensionContext;
+
+    await harness.handlers.get('agent_settled')?.({ type: 'agent_settled' }, rpcContext);
+
+    expect(harness.appendEntry).toHaveBeenCalledWith(
+      DOOM_NOTIFICATION_ENTRY_TYPE,
+      expect.objectContaining({ title: 'Pi finished', subtitle: 'example', level: 'info' }),
+    );
+    expect(harness.exec).not.toHaveBeenCalled();
+  });
+
+  it('provides a frozen notification service on the package fiber', () => {
+    const service = readDoomNotificationService(cordis);
+
+    expect(service).toBeDefined();
+    expect(Object.isFrozen(service)).toBe(true);
+    expect(service?.generation).toContain(':notification');
+  });
+
+  it('routes ui.notify without calling the original UI method', async () => {
+    harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);
+
+    harness.ui.notify('Configuration needs attention', 'warning');
+    await vi.waitFor(() => expect(harness.exec).toHaveBeenCalledOnce());
+
+    expect(harness.notify).not.toHaveBeenCalled();
+    expect(harness.exec.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining(['--title', 'Pi', '--subtitle', 'example', '--body', 'Configuration needs attention']),
+    );
+  });
+
+  it('does not attention-gate ui.notify outside an agent run', async () => {
+    harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);
+
+    harness.ui.notify('Background task completed');
+    await vi.waitFor(() => expect(harness.exec).toHaveBeenCalledOnce());
+  });
+
   it('does not report completion while follow-up messages are pending', async () => {
     const busyContext = { ...harness.context, hasPendingMessages: () => true } as ExtensionContext;
 
@@ -201,6 +244,7 @@ describe('notification extension', () => {
     const originalSelect = harness.ui.select;
     const originalInput = harness.ui.input;
     const originalEditor = harness.ui.editor;
+    const originalNotify = harness.ui.notify;
 
     harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);
 
@@ -208,6 +252,7 @@ describe('notification extension', () => {
     expect(harness.ui.select).not.toBe(originalSelect);
     expect(harness.ui.input).not.toBe(originalInput);
     expect(harness.ui.editor).not.toBe(originalEditor);
+    expect(harness.ui.notify).not.toBe(originalNotify);
 
     await shutdown(harness);
 
@@ -215,7 +260,60 @@ describe('notification extension', () => {
     expect(harness.ui.select).toBe(originalSelect);
     expect(harness.ui.input).toBe(originalInput);
     expect(harness.ui.editor).toBe(originalEditor);
+    expect(harness.ui.notify).toBe(originalNotify);
   });
+
+  it.each(['older', 'newer'] as const)(
+    'preserves true host UI methods when the %s overlapping provider disposes first',
+    async (firstDisposed) => {
+      const originalConfirm = harness.ui.confirm;
+      const originalSelect = harness.ui.select;
+      const originalInput = harness.ui.input;
+      const originalEditor = harness.ui.editor;
+      const originalNotify = harness.ui.notify;
+      const newer = createPiHarness();
+      const newerContext = { ...newer.context, ui: harness.ui } as ExtensionContext;
+      await startExtension(newer);
+
+      harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);
+      newer.handlers.get('session_start')?.({ type: 'session_start' }, newerContext);
+      harness.handlers.get('agent_start')?.({ type: 'agent_start' }, harness.context);
+      newer.handlers.get('agent_start')?.({ type: 'agent_start' }, newerContext);
+
+      await harness.ui.confirm('Confirm ownership', 'Continue?');
+      await harness.ui.select('Select ownership', ['newer']);
+      await harness.ui.input('Input ownership', 'newer');
+      await harness.ui.editor('Editor ownership', 'newer');
+      harness.ui.notify('Notify ownership');
+      await vi.waitFor(() => expect(newer.exec).toHaveBeenCalledTimes(5));
+
+      expect(harness.exec).not.toHaveBeenCalled();
+      expect(originalConfirm).toHaveBeenCalledOnce();
+      expect(originalSelect).toHaveBeenCalledOnce();
+      expect(originalInput).toHaveBeenCalledOnce();
+      expect(originalEditor).toHaveBeenCalledOnce();
+      expect(originalNotify).not.toHaveBeenCalled();
+
+      if (firstDisposed === 'older') await shutdown(harness);
+      else await shutdown(newer, newerContext);
+
+      const firstDisposalRestoresHost = firstDisposed === 'newer';
+      expect(harness.ui.confirm === originalConfirm).toBe(firstDisposalRestoresHost);
+      expect(harness.ui.select === originalSelect).toBe(firstDisposalRestoresHost);
+      expect(harness.ui.input === originalInput).toBe(firstDisposalRestoresHost);
+      expect(harness.ui.editor === originalEditor).toBe(firstDisposalRestoresHost);
+      expect(harness.ui.notify === originalNotify).toBe(firstDisposalRestoresHost);
+
+      if (firstDisposed === 'older') await shutdown(newer, newerContext);
+      else await shutdown(harness);
+
+      expect(harness.ui.confirm).toBe(originalConfirm);
+      expect(harness.ui.select).toBe(originalSelect);
+      expect(harness.ui.input).toBe(originalInput);
+      expect(harness.ui.editor).toBe(originalEditor);
+      expect(harness.ui.notify).toBe(originalNotify);
+    },
+  );
 
   it('uses the ask-user event without duplicating its wrapped dialog notification', async () => {
     harness.handlers.get('session_start')?.({ type: 'session_start' }, harness.context);

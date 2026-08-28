@@ -10,7 +10,11 @@ import {
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import {
+  type DoomNotificationLevel,
+  readDoomNotificationService,
+} from '@agimon-ai/doompi-extension-contracts/notification';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import {
   consumeMinorModeReloadHandoff,
   discardMinorModeReloadHandoff,
@@ -39,6 +43,19 @@ interface CatalogBinding {
   current: MinorModeCatalogService | undefined;
   /** Journals the projection even if unchanged; set while a session is bound. */
   republish?: () => void;
+}
+
+function notify(cordis: Context, context: ExtensionContext, body: string, level: DoomNotificationLevel): void {
+  const service = readDoomNotificationService(cordis);
+  if (service) {
+    try {
+      void Promise.resolve(service.request({ body, level })).catch(() => undefined);
+    } catch {
+      // Notification delivery is best effort and does not fall back after routing.
+    }
+    return;
+  }
+  context.ui.notify(body, level);
 }
 
 function transitionSource(requesterSource: string): TransitionSource {
@@ -115,7 +132,9 @@ function modeCatalogPlugin(
       context,
       restoreSnapshot,
       onRestorationError(error) {
-        context.ui.notify(
+        notify(
+          sessionContext,
+          context,
           `Could not restore a minor mode after reload: ${error instanceof Error ? error.message : String(error)}`,
           'warning',
         );

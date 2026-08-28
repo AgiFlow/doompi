@@ -1,5 +1,9 @@
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
+import {
+  DOOM_NOTIFICATION_SERVICE,
+  type DoomNotificationService,
+} from '@agimon-ai/doompi-extension-contracts/notification';
 import { requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type {
   KeybindingsManager as CodingKeybindingsManager,
@@ -250,7 +254,40 @@ describe('doomPiUiExtension', () => {
     expect(ui.setTitle).toHaveBeenCalledWith(DOOM_PI_TITLE);
   });
 
-  it('warns when the configured theme cannot be applied', async () => {
+  it('routes theme warnings through the notification service', async () => {
+    const telemetry = createTelemetry();
+    let pi: ExtensionAPI | undefined;
+    const handlers = await registerExtension(telemetry, (value) => {
+      pi = value;
+    });
+    if (!pi) throw new Error('test Pi API was not captured');
+    const connection = await connectDoomCordisHost(pi, '@example/ui-notification-test');
+    const request = vi.fn();
+    const provider = connection.root.plugin((context) =>
+      context.provide(DOOM_NOTIFICATION_SERVICE, {
+        generation: 'ui-notification-test',
+        request,
+      } satisfies DoomNotificationService),
+    );
+    await provider;
+    const ui = createUi({ success: false, error: 'missing' });
+    const context = {
+      mode: 'tui',
+      cwd: '/repo/agirepo',
+      sessionManager: { getEntries: () => [], getSessionId: () => 'session-1' },
+      ui: ui as unknown as ExtensionUIContext,
+    } as unknown as ExtensionContext;
+
+    await handlers.get('session_start')?.({}, context);
+
+    expect(request).toHaveBeenCalledWith({ body: 'Could not apply Doom Pi theme: missing', level: 'warning' });
+    expect(ui.notify).not.toHaveBeenCalled();
+    await handlers.get('session_shutdown')?.({}, context);
+    await provider.dispose();
+    await connection.dispose();
+  });
+
+  it('falls back to the UI warning when the notification service is missing', async () => {
     const telemetry = createTelemetry();
     const handlers = await registerExtension(telemetry);
     const ui = createUi({ success: false, error: 'missing' });

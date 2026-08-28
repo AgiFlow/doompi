@@ -2,10 +2,12 @@
 
 ### 🚀 Features
 
+- deliver live notification entries from every attached session to browser pages with user-click permission
 - serve sessions over Pi's protocol and share test harnesses ([6f22b41](https://github.com/AgiFlow/doompi/commit/6f22b41))
 
 ### 🩹 Fixes
 
+- **doompi-web:** keep replayed, historical, and closed-page notifications silent without fallback delivery
 - **doompi-web:** stabilize browser CI ([bf05594](https://github.com/AgiFlow/doompi/commit/bf05594))
 - **root:** repair cockpit and packed runtime gates ([452a394](https://github.com/AgiFlow/doompi/commit/452a394))
 - **doompi-web:** bound test workers in CI ([d0defb4](https://github.com/AgiFlow/doompi/commit/d0defb4))

@@ -91,13 +91,17 @@ neither is shown facts it did not report:
   usage, cost, and session identity.
 - **Dialogs:** the extension UI sub-protocol (`select`, `confirm`, `input`, `editor`), which is how
   a permission prompt reaches the browser. Cancelling answers the agent rather than stranding it.
+- **Notifications:** live `doom-notification` entries from every attached session, including sessions
+  that are not focused. Browser permission is requested only after the user clicks **allow notifications**
+  in Settings. Replayed backlog and historical pages update the timeline but never notify.
 - **Leader Space:** `ctrl+k`, `ctrl+space`, or space in an empty composer. Keys walk the tree the
   installed web plugins declared (`SPC w r` opens the workflows tab, `SPC g e` toggles goal mode),
   backspace climbs, and `/` searches whatever `get_commands` reported to run it as a slash prompt.
-- **Settings:** the gear at the foot of the rail opens the settings pages. The providers page lists
-  every model provider Pi knows with whether it is authenticated, signs in with an API key or OAuth
-  through the hub, and signs out. The hub uses the same `auth.json` as the sessions, so a login
-  here is a login for every session on the machine.
+- **Settings:** the gear at the foot of the rail opens the settings pages. Notifications shows this
+  browser's permission and provides the user-click permission action. Providers lists every model
+  provider Pi knows with whether it is authenticated, signs in with an API key or OAuth through the
+  hub, and signs out. The hub uses the same `auth.json` as the sessions, so a login here is a login for
+  every session on the machine.
 
 ## Attach and reattach
 
@@ -116,6 +120,8 @@ perform the handshake itself: `attach` frames sent from the browser are refused.
   them.
 - Subagent, workflow, and runner surfaces report summaries only; per-run detail has no RPC source
   to render from yet.
+- Browser notifications require a live, connected page. There is no service worker, Web Push, replay,
+  or durable queue, so notifications emitted while every page is closed are not delivered later.
 
 ## Remote access
 

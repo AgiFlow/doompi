@@ -16,6 +16,10 @@ import {
   type DoomReadinessNotification,
 } from '@agimon-ai/doompi-extension-contracts/readiness';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
+import {
+  type DoomNotificationLevel,
+  readDoomNotificationService,
+} from '@agimon-ai/doompi-extension-contracts/notification';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -28,6 +32,20 @@ import {
 import { registerDoomConfigHelp } from './helpContribution.ts';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-config';
+
+function notify(cordis: Context, context: ExtensionContext, body: string, level: DoomNotificationLevel): void {
+  const service = readDoomNotificationService(cordis);
+  if (service) {
+    try {
+      void Promise.resolve(service.request({ body, level })).catch(() => undefined);
+    } catch {
+      // Notification delivery is best effort and does not fall back after routing.
+    }
+    return;
+  }
+  if (context.hasUI) context.ui.notify(body, level);
+  else process.emitWarning(body);
+}
 
 /** The fixed Config core's single standard Pi factory. */
 export async function registerConfigExtension(pi: ExtensionAPI): Promise<void> {
@@ -84,8 +102,7 @@ function configPlugin(cordis: Context, { pi }: ConfigPluginOptions): void {
         const diagnostics = notification.diagnostics.join('; ');
         const detail = (notification.error?.message ?? diagnostics) || 'Initialization did not complete.';
         const message = `${notification.packageId} initialization ${notification.state}: ${detail}`;
-        if (context.hasUI) context.ui.notify(message, 'warning');
-        else process.emitWarning(message);
+        notify(sessionContext, context, message, 'warning');
       },
     });
     sessionContext.effect(

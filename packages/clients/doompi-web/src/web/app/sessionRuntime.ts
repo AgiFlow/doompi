@@ -11,6 +11,7 @@ import {
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
 } from '../../types/hub.ts';
+import { parseDoomNotificationEntry } from '../../types/notification.ts';
 import {
   REMOTE_PAIRING_REQUEST_TYPE,
   REMOTE_STATE_TYPE,
@@ -20,6 +21,7 @@ import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegist
 import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
+import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
@@ -151,6 +153,10 @@ export function startSessionRuntime(): () => void {
         }
         case SESSION_FRAME_TYPE: {
           if (typeof frame.sessionId !== 'string' || !isRecord(frame.frame)) return;
+          const notification = parseDoomNotificationEntry(frame.frame);
+          if (notification !== undefined) {
+            void deliverBrowserNotification(frame.sessionId, notification.entryId, notification.data);
+          }
           applySessionFrame(frame.sessionId, frame.frame);
           // A select the bar asked for becomes the bar's popover; the claim is
           // settled here, at frame time, so no surface renders it twice.

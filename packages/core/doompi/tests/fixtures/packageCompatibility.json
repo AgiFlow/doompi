@@ -343,6 +343,7 @@
       "./mcp-tool-resolver": "tir",
       "./mode": "tir",
       "./narration": "tir",
+      "./notification": "tir",
       "./package-api": "tir",
       "./package-api-loader": "tir",
       "./protocol": "tir",
@@ -460,6 +461,11 @@
         "types": "./dist/narration.d.mts",
         "import": "./dist/narration.mjs",
         "require": "./dist/narration.cjs"
+      },
+      "./notification": {
+        "types": "./dist/notification.d.mts",
+        "import": "./dist/notification.mjs",
+        "require": "./dist/notification.cjs"
       },
       "./package-api": {
         "types": "./dist/packageApi.d.mts",

@@ -133,6 +133,32 @@ test('cancels a login flow and stays signed out', async ({ page, cockpit }) => {
   expect(fs.existsSync(authPath(cockpit.agentDir)) ? readAuth(cockpit.agentDir).anthropic : undefined).toBeUndefined();
 });
 
+test('requests browser notification permission from the settings button', async ({ page, cockpit }) => {
+  await page.addInitScript(() => {
+    class NotificationStub {
+      static permission = 'default';
+      static requestPermission(): Promise<'granted'> {
+        (window as typeof window & { notificationPermissionRequested?: boolean }).notificationPermissionRequested =
+          true;
+        NotificationStub.permission = 'granted';
+        return Promise.resolve('granted');
+      }
+    }
+    Object.defineProperty(window, 'Notification', { configurable: true, value: NotificationStub });
+  });
+
+  await page.goto(`${cockpit.url}/settings/notifications`);
+  await expect(page.getByTestId('settings-section-notifications')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('notification-permission-status')).toContainText('has not been decided');
+  await page.getByTestId('notification-permission-request').click();
+  await expect(page.getByTestId('notification-permission-status')).toContainText('are allowed');
+  expect(
+    await page.evaluate(
+      () => (window as typeof window & { notificationPermissionRequested?: boolean }).notificationPermissionRequested,
+    ),
+  ).toBe(true);
+});
+
 test('lists no plugins for the packaged bundle and nothing to resolve', async ({ page, cockpit }) => {
   await page.goto(`${cockpit.url}/settings/plugins`);
   await expect(page.getByTestId('settings-section-plugins')).toHaveAttribute('data-active', 'true');

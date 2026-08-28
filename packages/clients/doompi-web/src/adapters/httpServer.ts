@@ -44,6 +44,7 @@ import {
   threadBacklog,
   threadFrameEnvelope,
 } from '../types/hub.ts';
+import { parseDoomNotificationEntry } from '../types/notification.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
 import { watchRegistry } from './registryWatcher.ts';
@@ -761,8 +762,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               if (subscriptions.has(event.sessionId)) {
                 post({ type: event.frameType, sessionId: event.sessionId, payload: event.payload });
               }
-            } else if (subscriptions.has(event.sessionId)) {
-              post(sessionFrameEnvelope(event.sessionId, event.frame));
+            } else {
+              const notification = parseDoomNotificationEntry(event.frame);
+              if (notification !== undefined || subscriptions.has(event.sessionId)) {
+                post(sessionFrameEnvelope(event.sessionId, event.frame));
+              }
             }
           });
           disconnectThreads = threads.onFrame((event) => {

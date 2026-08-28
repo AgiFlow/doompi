@@ -5,6 +5,10 @@ import {
   type DoomMcpProjection,
 } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
 import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-extension-contracts/readiness';
+import {
+  DOOM_NOTIFICATION_SERVICE,
+  type DoomNotificationService,
+} from '@agimon-ai/doompi-extension-contracts/notification';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 
 const mocks = vi.hoisted(() => ({
@@ -242,7 +246,36 @@ describe('Config MCP projection publication', () => {
     await connection.dispose();
   });
 
-  it('reports a failed Config generation once and rejects the session barrier', async () => {
+  it('routes a failed Config generation through the notification service', async () => {
+    mocks.createConfigContext.mockRejectedValueOnce(new Error('config read failed'));
+    const { pi, dispatch } = host();
+    const extensionContext = context();
+    await registerConfigExtension(pi);
+    const connection = await connectDoomCordisHost(pi, 'config-mcp-notification-test');
+    const request = vi.fn();
+    const provider = connection.root.plugin((providerContext) =>
+      providerContext.provide(DOOM_NOTIFICATION_SERVICE, {
+        generation: 'config-notification-test',
+        request,
+      } satisfies DoomNotificationService),
+    );
+    await provider;
+
+    await expect(dispatch('session_start', extensionContext)).rejects.toThrow('config read failed');
+
+    expect(request).toHaveBeenCalledOnce();
+    expect(request).toHaveBeenCalledWith({
+      body: expect.stringContaining('config read failed'),
+      level: 'warning',
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+
+    await dispatch('session_shutdown', extensionContext);
+    await provider.dispose();
+    await connection.dispose();
+  });
+
+  it('falls back to the Config UI warning when the notification service is missing', async () => {
     mocks.createConfigContext.mockRejectedValueOnce(new Error('config read failed'));
     const { pi, dispatch } = host();
     const extensionContext = context();

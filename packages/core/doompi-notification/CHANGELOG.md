@@ -2,6 +2,8 @@
 
 ### 🚀 Features
 
+- add the shared notification service, routed `ui.notify` compatibility, and live browser delivery
+- keep unavailable delivery and RPC append failures silent without a host-notifier fallback
 - expand package APIs and upgrade Pi to 0.84.3 ([0aaad92](https://github.com/AgiFlow/doompi/commit/0aaad92))
 
 ### 🧱 Updated Dependencies
