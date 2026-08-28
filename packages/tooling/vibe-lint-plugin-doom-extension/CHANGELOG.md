@@ -1,3 +1,13 @@
+## 0.0.1-alpha.38 (2026-08-28)
+
+### 🚀 Features
+
+- **root:** expand the web cockpit ([9eae90f](https://github.com/AgiFlow/doompi/commit/9eae90f))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.37 (2026-08-26)
 
 ### 🚀 Features

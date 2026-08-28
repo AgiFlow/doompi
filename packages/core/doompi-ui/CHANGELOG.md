@@ -1,3 +1,25 @@
+## 0.0.1-alpha.40 (2026-08-28)
+
+### 🚀 Features
+
+- **doompi-notification:** route session notifications to browser clients ([a5599fa](https://github.com/AgiFlow/doompi/commit/a5599fa))
+
+### 🩹 Fixes
+
+- **root:** harden generated code and workflow checks ([0dfa452](https://github.com/AgiFlow/doompi/commit/0dfa452))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.12
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.3
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-08-26)
 
 ### 🚀 Features

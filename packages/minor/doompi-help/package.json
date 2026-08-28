@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-help",
-  "version": "0.0.1-alpha.22",
+  "version": "0.0.1-alpha.23",
   "description": "Activation-gated package guidance and help skills for DoomPi and Pi extensions.",
   "keywords": [
     "agent-documentation",

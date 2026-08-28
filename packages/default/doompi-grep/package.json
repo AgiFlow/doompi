@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-grep",
-  "version": "0.0.1-alpha.11",
+  "version": "0.0.1-alpha.12",
   "description": "Snapshot-bound hashline grep for Pi and DoomPi.",
   "keywords": [
     "ai",
