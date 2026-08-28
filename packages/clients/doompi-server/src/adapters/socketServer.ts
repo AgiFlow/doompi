@@ -1,9 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { evaluateHandshake, handshakeAccepted, handshakeRejected, replayFrame } from '../services/handshake.ts';
 import { createDetachedBacklog, createFrameDecoder, encodeFrame } from '../services/sessionFraming.ts';
 import type { AgentProcess, SessionFrame } from '../types/session.ts';
+import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 const OWNER_ONLY_SOCKET = 0o600;
 const OWNER_ONLY_UMASK = 0o177;
@@ -15,6 +17,7 @@ export interface SessionSocketOptions {
   agent: AgentProcess;
   /** Frames retained while no client is attached. */
   backlogLimit?: number;
+  telemetry?: ServerTelemetry;
   onNotice?: (message: string) => void;
 }
 
@@ -76,8 +79,23 @@ export function serveSessionSocket(options: SessionSocketOptions): SessionSocket
   const backlog = createDetachedBacklog(options.backlogLimit ?? DEFAULT_BACKLOG);
   const uiProjections = new Map<string, SessionFrame>();
   let client: net.Socket | undefined;
+  let clientTraceContext: DoomTraceContext | undefined;
+  let promptStart: { at: number; parent?: DoomTraceContext } | undefined;
 
   options.agent.onFrame((frame) => {
+    if (frame.type === 'agent_settled' && promptStart && options.telemetry) {
+      const completed = promptStart;
+      promptStart = undefined;
+      observe(
+        options.telemetry.runInSpan(
+          'doompi_server.prompt_to_settled',
+          { duration_ms: Math.round(performance.now() - completed.at) },
+          async () => undefined,
+          completed.parent,
+        ),
+        options.onNotice,
+      );
+    }
     const projectionKey = uiProjectionKey(frame);
     if (projectionKey !== undefined) uiProjections.set(projectionKey, frame);
     if (client) client.write(encodeFrame(frame));
@@ -101,6 +119,7 @@ export function serveSessionSocket(options: SessionSocketOptions): SessionSocket
 
       for (const frame of frames) {
         if (authenticated) {
+          if (frame.type === 'prompt') promptStart = { at: performance.now(), parent: clientTraceContext };
           options.agent.send(frame);
           continue;
         }
@@ -118,10 +137,22 @@ export function serveSessionSocket(options: SessionSocketOptions): SessionSocket
         }
         authenticated = true;
         client = connection;
+        clientTraceContext = outcome.traceContext;
         const drained = backlog.drain();
         const replayed = [...uiProjections.values(), ...drained.frames];
         connection.write(encodeFrame(handshakeAccepted(replayed.length, drained.dropped)));
         for (const missed of replayed) connection.write(encodeFrame(replayFrame(missed)));
+        if (options.telemetry) {
+          observe(
+            options.telemetry.runInSpan(
+              'doompi_server.socket.attach',
+              { replayed: replayed.length, dropped: drained.dropped },
+              async () => undefined,
+              outcome.traceContext,
+            ),
+            options.onNotice,
+          );
+        }
         options.onNotice?.(`client attached, replayed ${replayed.length} frame(s)`);
       }
     });
@@ -129,6 +160,9 @@ export function serveSessionSocket(options: SessionSocketOptions): SessionSocket
     const detach = (): void => {
       if (client === connection) {
         client = undefined;
+        clientTraceContext = undefined;
+        if (options.telemetry)
+          observe(options.telemetry.recordEvent('doompi_server.socket.detached'), options.onNotice);
         options.onNotice?.('client detached; the session keeps running');
       }
     };

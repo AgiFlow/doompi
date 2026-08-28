@@ -1,3 +1,4 @@
+import { context, isSpanContextValid, trace, type Context, type Span } from '@opentelemetry/api';
 import type {
   DoomTelemetry,
   DoomTelemetryAttributes,
@@ -8,6 +9,7 @@ import type {
   DoomTelemetryRecord,
   DoomTelemetryRuntimeLoader,
   DoomTelemetryStatus,
+  DoomTraceContext,
 } from '../types/telemetry.js';
 
 const DEFAULT_RETRY_DELAY_MS = 1_000;
@@ -21,6 +23,7 @@ const PARENT_SESSION_ID_HEADERS = ['AGENT_PARENT_SESSION_ID', 'PARENT_AGENT_SESS
 const TRANSPORT_SESSION_HEADERS = ['PI_SESSION_ID', 'AGENT_PARENT_SESSION_ID'] as const;
 const TRUE_VALUES = new Set(['1', 'true', 'yes']);
 const SPAN_STATUS_ERROR = 2;
+const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/u;
 const SENSITIVE_ATTRIBUTE_PARTS = [
   'prompt',
   'message',
@@ -329,6 +332,23 @@ function createSafeCallbackError(error: unknown): Error {
   return new Error(`Doom telemetry callback failed: ${errorType(error)}`);
 }
 
+function parentContext(parent: DoomTraceContext | undefined): Context | undefined {
+  if (!parent) return undefined;
+  const match = TRACEPARENT_PATTERN.exec(parent.traceparent);
+  if (!match) return undefined;
+  const [, traceId, spanId, traceFlags] = match;
+  if (!traceId || !spanId || !traceFlags) return undefined;
+  const spanContext = { traceId, spanId, traceFlags: Number.parseInt(traceFlags, 16), isRemote: true };
+  return isSpanContextValid(spanContext) ? trace.setSpanContext(context.active(), spanContext) : undefined;
+}
+
+function childTraceContext(span: Span | undefined): DoomTraceContext | undefined {
+  if (!span) return undefined;
+  const spanContext = span.spanContext();
+  if (!isSpanContextValid(spanContext)) return undefined;
+  const traceFlags = spanContext.traceFlags.toString(16).padStart(2, '0');
+  return { traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${traceFlags}` };
+}
 export function createDoomTelemetryService(
   options: DoomTelemetryOptions,
   runtimeLoader?: DoomTelemetryRuntimeLoader,
@@ -508,23 +528,33 @@ export function createDoomTelemetryService(
     recordError(event, error, attributes, errorOptions) {
       return emit('error', event, error, attributes, errorOptions);
     },
-    async runInSpan<T>(name: string, attributes: Record<string, unknown>, callback: () => Promise<T> | T) {
+    async runInSpan<T>(
+      name: string,
+      attributes: Record<string, unknown>,
+      callback: (context?: DoomTraceContext) => Promise<T> | T,
+      parent?: DoomTraceContext,
+    ) {
       let callbackPromise: Promise<T> | undefined;
       let callbackFailure: { value: unknown } | undefined;
-      const invokeCallback = (): Promise<T> => {
-        callbackPromise ??= Promise.resolve().then(callback);
+      const invokeCallback = (child?: DoomTraceContext): Promise<T> => {
+        callbackPromise ??= Promise.resolve().then(() => callback(child));
         return callbackPromise;
       };
       const nextHandle = await getHandle();
       if (!nextHandle) return invokeCallback();
       const startedAt = Date.now();
       try {
+        const nextParentContext = parentContext(parent);
         return await nextHandle.runInSpan(
           normalizeToken(name, 'doom.telemetry.span'),
-          { attributes: sanitizeTelemetryAttributes(attributes) },
+          {
+            attributes: sanitizeTelemetryAttributes(attributes),
+            ...(nextParentContext ? { context: nextParentContext } : {}),
+          },
           async (span) => {
+            const child = childTraceContext(span);
             try {
-              const result = await invokeCallback();
+              const result = await invokeCallback(child);
               span?.setAttribute('duration_ms', Date.now() - startedAt);
               span?.setAttribute('outcome', 'success');
               return result;

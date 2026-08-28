@@ -25,6 +25,8 @@ export interface TranscriptReduction {
   /** Present when the frame changed authoritative state. */
   snapshot?: SessionSnapshot;
   /** Present when the frame produced transient activity. */
+  /** Coarse assistant usage totals. Never includes message or tool content. */
+  aggregate?: Record<string, number>;
   progress?: TranscriptProgress;
 }
 
@@ -40,6 +42,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function text(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function assistantAggregate(message: Record<string, unknown>): Record<string, number> {
+  const aggregate: Record<string, number> = { assistant_messages: 1 };
+  const usage = isRecord(message.usage) ? message.usage : {};
+  const cost = isRecord(usage.cost) ? usage.cost : {};
+  const fields: Array<[string, unknown]> = [
+    ['input_tokens', usage.input ?? usage.inputTokens],
+    ['output_tokens', usage.output ?? usage.outputTokens],
+    ['cache_read_tokens', usage.cacheRead ?? usage.cacheReadTokens],
+    ['cache_write_tokens', usage.cacheWrite ?? usage.cacheWriteTokens],
+    ['total_tokens', usage.totalTokens],
+    ['cost_usd', cost.total ?? message.cost],
+  ];
+  for (const [name, value] of fields) {
+    const numeric = finiteNumber(value);
+    if (numeric !== undefined) aggregate[name] = numeric;
+  }
+  return aggregate;
 }
 
 /** Coerces to the protocol's JSON subset, which rejects undefined and non-plain objects. */
@@ -350,7 +375,11 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
                     status: 'complete',
                     stopReason: STOP_REASONS.has(stopReason) ? (stopReason as 'stop' | 'length' | 'toolUse') : 'stop',
                   };
-          return { snapshot: append(item), progress: { type: 'item_finished', item } };
+          return {
+            snapshot: append(item),
+            progress: { type: 'item_finished', item },
+            aggregate: assistantAggregate(message),
+          };
         }
         case 'tool_execution_start': {
           const toolCallId = text(frame.toolCallId);

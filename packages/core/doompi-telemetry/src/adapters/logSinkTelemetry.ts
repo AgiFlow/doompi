@@ -14,6 +14,7 @@ export type {
   DoomTelemetryOptions,
   DoomTelemetryRecord,
   DoomTelemetryStatus,
+  DoomTraceContext,
 } from '../types/telemetry.js';
 
 let nodeTelemetryModule: Promise<typeof import('@agimon-ai/log-sink-mcp/telemetry/node')> | undefined;

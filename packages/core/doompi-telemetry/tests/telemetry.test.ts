@@ -1,3 +1,4 @@
+import { trace, type Context } from '@opentelemetry/api';
 import type { NodeTelemetryHandle, NodeTelemetryOptions } from '@agimon-ai/log-sink-mcp/telemetry/node';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -243,8 +244,52 @@ describe('metadata-only Doom telemetry', () => {
     expect(callback).toHaveBeenCalledOnce();
   });
 
+  it('accepts a strict traceparent parent and passes the child traceparent to the callback', async () => {
+    let spanOptions: { context?: Context } | undefined;
+    const span = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      spanContext: () => ({
+        traceId: '11111111111111111111111111111111',
+        spanId: '3333333333333333',
+        traceFlags: 1,
+      }),
+    };
+    const handle = createMockHandle({
+      runInSpan: vi.fn(async (_name, options, callback) => {
+        spanOptions = options;
+        return callback(span as never);
+      }),
+    });
+    const telemetry = createDoomTelemetry({
+      serviceName: 'doom-test',
+      env: {},
+      endpointResolver: async () => ({ endpointSource: 'env', endpoint: 'http://logsink.test' }),
+      telemetryFactory: async () => handle,
+    });
+    const callback = vi.fn(async () => 'ok');
+
+    await telemetry.runInSpan('doom_test.child', {}, callback, {
+      traceparent: '00-11111111111111111111111111111111-2222222222222222-01',
+    });
+
+    expect(trace.getSpanContext(spanOptions?.context as Context)).toEqual({
+      traceId: '11111111111111111111111111111111',
+      spanId: '2222222222222222',
+      traceFlags: 1,
+      isRemote: true,
+    });
+    expect(callback).toHaveBeenCalledWith({
+      traceparent: '00-11111111111111111111111111111111-3333333333333333-01',
+    });
+  });
+
   it('records successful spans and sanitized error codes', async () => {
-    const span = { setAttribute: vi.fn(), setStatus: vi.fn() };
+    const span = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      spanContext: vi.fn(() => ({ traceId: '', spanId: '', traceFlags: 0 })),
+    };
     const handle = createMockHandle({
       runInSpan: vi.fn(async (_name, _options, callback) => callback(span as never)),
     });
@@ -344,7 +389,11 @@ describe('metadata-only Doom telemetry', () => {
   });
 
   it('rethrows non-Error callback failures without exporting their value', async () => {
-    const span = { setAttribute: vi.fn(), setStatus: vi.fn() };
+    const span = {
+      setAttribute: vi.fn(),
+      setStatus: vi.fn(),
+      spanContext: vi.fn(() => ({ traceId: '', spanId: '', traceFlags: 0 })),
+    };
     const handle = createMockHandle({
       runInSpan: vi.fn(async (_name, _options, callback) => callback(span as never)),
     });

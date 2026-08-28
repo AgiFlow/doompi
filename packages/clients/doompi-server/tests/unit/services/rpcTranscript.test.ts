@@ -442,6 +442,30 @@ describe('rpc transcript projection', () => {
     expect(subject.snapshot().transcript).toHaveLength(1);
   });
 
+  it('reduces assistant usage to content-free cost aggregates', () => {
+    const subject = transcript();
+    subject.apply({ type: 'message_start', message: { id: 'm1', role: 'assistant', content: [] } });
+
+    const reduction = subject.apply({
+      type: 'message_end',
+      message: {
+        id: 'm1',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'sensitive' }],
+        usage: { input: 12, output: 5, totalTokens: 17, cost: { total: 0.004 } },
+      },
+    });
+
+    expect(reduction.aggregate).toEqual({
+      assistant_messages: 1,
+      input_tokens: 12,
+      output_tokens: 5,
+      total_tokens: 17,
+      cost_usd: 0.004,
+    });
+    expect(JSON.stringify(reduction.aggregate)).not.toContain('sensitive');
+  });
+
   it('leaves a tool result to the execution frames that carry the call too', () => {
     const subject = transcript();
 

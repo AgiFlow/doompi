@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { serveSessionApis } from '../../src/adapters/packageApiServer.ts';
+import type { ServerTelemetry } from '../../src/adapters/serverTelemetry.ts';
 
 let cleanups: Array<() => Promise<void> | void> = [];
 
@@ -20,9 +21,13 @@ function socketDir(): string {
 }
 
 /** One request over the session's API socket, the way the hub's proxy makes it. */
-function request(socketPath: string, requestPath: string): Promise<{ status: number; body: string }> {
+function request(
+  socketPath: string,
+  requestPath: string,
+  headers?: Record<string, string>,
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const call = http.request({ socketPath, path: requestPath, method: 'GET' }, (incoming) => {
+    const call = http.request({ socketPath, path: requestPath, method: 'GET', headers }, (incoming) => {
       let body = '';
       incoming.setEncoding('utf8');
       incoming.on('data', (chunk: string) => (body += chunk));
@@ -166,6 +171,44 @@ describe('serving a session package APIs', () => {
 
     expect(notices.join('\n')).toMatch(/'bad' did not start/u);
     expect((await request(server.socketPath!, '/api/plugin/runner/x')).status).toBe(200);
+  });
+
+  it('records package API completion after a streamed body ends', async () => {
+    const spans: string[] = [];
+    const telemetry = {
+      runInSpan: async <T>(name: string, _attributes: Record<string, unknown>, callback: () => Promise<T> | T) => {
+        spans.push(name);
+        return callback();
+      },
+    } as unknown as ServerTelemetry;
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      telemetry,
+      apis: [
+        {
+          basePath: 'stream',
+          start: () => ({
+            fetch: () =>
+              new Response(
+                new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(new TextEncoder().encode('done'));
+                    controller.close();
+                  },
+                }),
+              ),
+            close: () => undefined,
+          }),
+        },
+      ],
+      onNotice: () => undefined,
+    });
+    cleanups.push(() => server.close());
+
+    expect(await request(server.socketPath!, '/api/plugin/stream/read')).toEqual({ status: 200, body: 'done' });
+    expect(spans).toEqual(['doompi_server.package_api.request', 'doompi_server.package_api.complete']);
   });
 
   it('removes its socket when it closes, so a relaunch is not blocked by a stale one', async () => {

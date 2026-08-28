@@ -22,6 +22,7 @@ import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
+import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
@@ -109,6 +110,7 @@ export function startSessionRuntime(): () => void {
           return;
 
         case SESSIONS_SNAPSHOT_TYPE:
+          recordBrowserPerformance({ name: 'web.browser.ready', duration_ms: browserReadyDuration() });
           applySessionsSnapshot(frame);
           // A snapshot means a fresh socket; any prior subscription died with
           // the old one.
@@ -134,6 +136,7 @@ export function startSessionRuntime(): () => void {
           const sessionId = frame.sessionId;
           const frames = frame.frames.filter(isRecord);
           const dropped = typeof frame.dropped === 'number' ? frame.dropped : 0;
+          recordBrowserPerformance({ name: 'web.browser.backlog', count: Math.min(10_000, frames.length + dropped) });
           applySessionBacklog(sessionId, frames.length, dropped);
           resetSessionStore(sessionId);
           for (const replayed of frames) applySessionFrame(sessionId, replayed);

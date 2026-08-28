@@ -332,6 +332,9 @@ importers:
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-extension-contracts
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../../core/doompi-telemetry
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -384,6 +387,9 @@ importers:
       '@agimon-ai/doompi-server':
         specifier: workspace:*
         version: link:../doompi-server
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../../core/doompi-telemetry
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -956,6 +962,9 @@ importers:
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.19
         version: 0.29.19(@earendil-works/pi-coding-agent@0.84.3(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
     devDependencies:
       '@types/node':
         specifier: 26.2.0

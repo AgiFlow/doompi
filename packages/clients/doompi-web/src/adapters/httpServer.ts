@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { PiServer, PiServerError } from '@earendil-works/pi-server';
+import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
@@ -73,6 +74,16 @@ import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
 import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
+import {
+  createBrowserTelemetryRateLimit,
+  createWebTelemetry,
+  forwardedTraceContext,
+  parseBrowserPerformanceBatch,
+  readTraceContext,
+  requestOperation,
+  shutdownWebTelemetry,
+  WEB_TELEMETRY_ROUTE,
+} from './webTelemetry.ts';
 
 // Pi's protocol rides its own socket so the DoomPi channel keeps the
 // vocabulary the protocol has no shape for: dialogs, minor modes, selection.
@@ -232,6 +243,7 @@ function buildHub(
   options: WebServerOptions,
   notice: (message: string) => void,
   channels: readonly WebHubChannel[],
+  telemetry: DoomTelemetry,
 ): SessionHub {
   return createSessionHub({
     source: watchRegistry(options.registryDir, notice),
@@ -242,6 +254,7 @@ function buildHub(
     }),
     readGit: readGitStatus,
     channels,
+    telemetry,
     onNotice: notice,
   });
 }
@@ -291,7 +304,12 @@ function mountHubApis(app: Hono, apis: readonly DoomApi[], notice: (message: str
  * it. A session that never mounted an API answers 404 with the reason rather
  * than leaving the page waiting.
  */
-function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: string) => void): void {
+function mountSessionApiProxy(
+  app: Hono,
+  hub: SessionHub,
+  notice: (message: string) => void,
+  telemetry: DoomTelemetry,
+): void {
   app.all(`${DOOM_API_ROUTE_PREFIX}/*`, async (context) => {
     const sessionId = context.req.query(API_SESSION_QUERY_PARAM);
     if (sessionId === undefined) return context.notFound();
@@ -302,14 +320,22 @@ function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: stri
     }
     const url = new URL(context.req.url);
     url.searchParams.delete(API_SESSION_QUERY_PARAM);
+    const parent = readTraceContext(context.req.raw.headers);
     try {
-      return await proxyToSocket({
-        socketPath: summary.apiSocketPath,
-        path: `${url.pathname}${url.search}`,
-        method: context.req.method,
-        headers: context.req.raw.headers,
-        body: context.req.raw.body,
-      });
+      return await telemetry.runInSpan(
+        'web.package_proxy',
+        { 'operation.name': 'web.package_proxy', 'http.method': context.req.method },
+        async (trace) =>
+          await proxyToSocket({
+            socketPath: summary.apiSocketPath as string,
+            path: `${url.pathname}${url.search}`,
+            method: context.req.method,
+            headers: context.req.raw.headers,
+            body: context.req.raw.body,
+            trace: forwardedTraceContext(trace, parent),
+          }),
+        parent,
+      );
     } catch (error) {
       notice(`session ${sessionId} API is unreachable (${describeError(error)})`);
       return context.json({ error: `Session ${sessionId} is not answering.` }, 502);
@@ -328,8 +354,9 @@ function mountSessionApiProxy(app: Hono, hub: SessionHub, notice: (message: stri
 export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const host = options.host ?? '127.0.0.1';
   const notice = options.onNotice ?? ((): void => {});
+  const telemetry = createWebTelemetry();
   const assetsDir = resolveAssetsDir(options.assetsDir, notice);
-  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice));
+  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice), telemetry);
   // Threads are journals the data channels can name (a subagent run's own
   // session file); the hub tails one only while a page follows it.
   const threads = createThreadJournals({
@@ -467,6 +494,27 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     extraOrigins: allowedOriginsFromEnv(process.env[ALLOW_ORIGIN_ENV]),
   });
   app.use('*', guard.middleware);
+  app.use('*', async (context, next) => {
+    const pathname = new URL(context.req.url).pathname;
+    if (pathname === REMOTE_HTTP_ROUTE) return next();
+    const operation = requestOperation(pathname);
+    if (operation === undefined) return next();
+    const started = performance.now();
+    return await telemetry.runInSpan(
+      operation,
+      { 'operation.name': operation, 'http.method': context.req.method },
+      async () => {
+        await next();
+        await telemetry.recordEvent('web.api.request', {
+          'operation.name': operation,
+          'http.method': context.req.method,
+          'http.status_code': context.res.status,
+          duration_ms: Math.max(0, Math.round(performance.now() - started)),
+        });
+      },
+      readTraceContext(context.req.raw.headers),
+    );
+  });
   // Reject a declared oversized body before any public route reads it. Chunked
   // bodies are bounded by the route-specific or downstream streaming limiter.
   app.use('*', async (context, next) => {
@@ -485,6 +533,29 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   app.use('*', async (context, next) => {
     if (guard.listenerOf(context) === 'local') return next();
     return await tunnelBodyLimit(context, next);
+  });
+  const browserTelemetryBodyLimit = bodyLimit({
+    maxSize: 8 * 1024,
+    onError: (context) => context.json({ error: 'The telemetry batch is too large.' }, 413),
+  });
+  const acceptBrowserTelemetryRequest = createBrowserTelemetryRateLimit();
+  app.post(WEB_TELEMETRY_ROUTE, browserTelemetryBodyLimit, async (context) => {
+    if (!acceptBrowserTelemetryRequest()) return context.json({ error: 'Too many telemetry batches.' }, 429);
+    let body: unknown;
+    try {
+      body = await context.req.json();
+    } catch {
+      return context.json({ error: 'The telemetry batch must be JSON.' }, 400);
+    }
+    const events = parseBrowserPerformanceBatch(body);
+    if (events === undefined) return context.json({ error: 'The telemetry batch is invalid.' }, 400);
+    for (const event of events) {
+      await telemetry.recordEvent(event.name, {
+        ...(event.duration_ms === undefined ? {} : { duration_ms: event.duration_ms }),
+        ...(event.count === undefined ? {} : { count: event.count }),
+      });
+    }
+    return context.body(null, 204);
   });
   app.post(REMOTE_HTTP_ROUTE, async (context) => {
     const deviceId = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
@@ -587,7 +658,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
   const pluginApis = mountHubApis(app, await loadPackageApis('hub', { onNotice: notice }), notice);
-  mountSessionApiProxy(app, hub, notice);
+  mountSessionApiProxy(app, hub, notice, telemetry);
 
   app.get('/api/health', (context) =>
     context.json({
@@ -611,7 +682,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
     await syncGuard.ensureSynced();
-    const outcome = await hub.create({ cwd: body.cwd, name });
+    const outcome = await hub.create({ cwd: body.cwd, name, trace: readTraceContext(context.req.raw.headers) });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
   });
@@ -623,7 +694,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   app.post(`${SESSIONS_API_ROUTE}/:sessionId/restart`, async (context) => {
     const sessionId = context.req.param('sessionId');
     await syncGuard.ensureSynced();
-    const outcome = await hub.restart(sessionId);
+    const outcome = await hub.restart(sessionId, readTraceContext(context.req.raw.headers));
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 202);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 404 : 502);
   });
@@ -957,30 +1028,33 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       nodeWs.injectWebSocket(server);
       const url = `http://${host}:${info.port}`;
       notice(`cockpit on ${url}`);
+      let closePromise: Promise<void> | undefined;
+      const close = async (): Promise<void> => {
+        // Remote access first, so the tunnel is down and every paired socket
+        // is closed before the rest of the hub starts letting go.
+        await remote.close();
+        await new Promise<void>((done) => {
+          threads.close();
+          syncGuard.close();
+          void localProtocolServer.close();
+          void remoteProtocolServer.close();
+          hub.close();
+          providerAuth.close();
+          for (const handler of pluginApis) handler.close();
+          // An upgraded socket leaves the HTTP server's connection tracking,
+          // so only the WebSocket server can let go of it. Without this the
+          // close callback waits on a browser that has no reason to leave.
+          for (const client of nodeWs.wss.clients) client.terminate();
+          nodeWs.wss.close();
+          (server as { closeAllConnections?: () => void }).closeAllConnections?.();
+          server.close(() => done());
+        });
+        await shutdownWebTelemetry(telemetry);
+      };
       resolve({
         url,
         port: info.port,
-        close: async () => {
-          // Remote access first, so the tunnel is down and every paired socket
-          // is closed before the rest of the hub starts letting go.
-          await remote.close();
-          await new Promise<void>((done) => {
-            threads.close();
-            syncGuard.close();
-            void localProtocolServer.close();
-            void remoteProtocolServer.close();
-            hub.close();
-            providerAuth.close();
-            for (const handler of pluginApis) handler.close();
-            // An upgraded socket leaves the HTTP server's connection tracking,
-            // so only the WebSocket server can let go of it. Without this the
-            // close callback waits on a browser that has no reason to leave.
-            for (const client of nodeWs.wss.clients) client.terminate();
-            nodeWs.wss.close();
-            (server as { closeAllConnections?: () => void }).closeAllConnections?.();
-            server.close(() => done());
-          });
-        },
+        close: () => (closePromise ??= close()),
       });
     });
     server.once('error', (error) => {
@@ -989,6 +1063,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       providerAuth.close();
       void remote.close();
       for (const handler of pluginApis) handler.close();
+      void telemetry.shutdown();
       reject(error);
     });
   });

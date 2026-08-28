@@ -8,6 +8,9 @@ import {
   type DoomApiContext,
   type DoomApiHandler,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
+import { validatedTraceContext } from '../services/traceContext.ts';
+import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 /** The socket name beside the session's own, so one directory holds the pair. */
 export const API_SOCKET_NAME = 'api.sock';
@@ -19,6 +22,7 @@ export interface PackageApiServerOptions {
   cwd: string;
   internalToken?: string;
   apis: readonly DoomApi[];
+  telemetry?: ServerTelemetry;
   onNotice: (message: string) => void;
 }
 
@@ -30,6 +34,39 @@ export interface PackageApiServer {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function responseWithCompletion(response: Response, complete: () => void): Response {
+  if (response.body === null) {
+    complete();
+    return response;
+  }
+  const reader = response.body.getReader();
+  let completed = false;
+  const finish = (): void => {
+    if (completed) return;
+    completed = true;
+    complete();
+  };
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          finish();
+          controller.close();
+        } else controller.enqueue(result.value);
+      } catch (error) {
+        finish();
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      finish();
+      await reader.cancel(reason);
+    },
+  });
+  return new Response(body, response);
 }
 
 /**
@@ -79,12 +116,44 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     if (handler === undefined)
       return Response.json({ error: `No API '${basePath}' in this session.` }, { status: 404 });
     url.pathname = slash === -1 ? '/' : rest.slice(slash);
+    const startedAt = performance.now();
+    const parent = validatedTraceContext(request.headers.get('traceparent'));
+    let childContext: DoomTraceContext | undefined;
+    let response: Response;
     try {
-      return await handler.fetch(new Request(url, request));
+      const invoke = async (context?: DoomTraceContext): Promise<Response> => {
+        childContext = context;
+        return handler.fetch(new Request(url, request));
+      };
+      response = options.telemetry
+        ? await options.telemetry.runInSpan(
+            'doompi_server.package_api.request',
+            { api: basePath, method: request.method },
+            invoke,
+            parent,
+          )
+        : await invoke();
     } catch (error) {
       options.onNotice(`package API '${basePath}' failed on ${url.pathname} (${describeError(error)})`);
-      return Response.json({ error: `The '${basePath}' API failed.` }, { status: 500 });
+      response = Response.json({ error: `The '${basePath}' API failed.` }, { status: 500 });
     }
+    return responseWithCompletion(response, () => {
+      if (!options.telemetry) return;
+      observe(
+        options.telemetry.runInSpan(
+          'doompi_server.package_api.complete',
+          {
+            api: basePath,
+            method: request.method,
+            status_code: response.status,
+            duration_ms: Math.round(performance.now() - startedAt),
+          },
+          async () => undefined,
+          childContext ?? parent,
+        ),
+        options.onNotice,
+      );
+    });
   };
 
   const socketPath = path.resolve(options.socketDir, API_SOCKET_NAME);

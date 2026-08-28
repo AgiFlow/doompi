@@ -1,3 +1,4 @@
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import type { AuthRuntime } from './auth.ts';
 import type { MigratingSession, RemoteAccessSettings, TunnelLauncher } from './remoteAccess.ts';
 import type { BridgeStatusFrame, SessionFrame } from './session.ts';
@@ -18,6 +19,7 @@ export interface AttachOptions {
   socketPath: string;
   token: string;
   handlers: AttachmentHandlers;
+  trace?: DoomTraceContext;
 }
 
 export interface WebServerOptions {

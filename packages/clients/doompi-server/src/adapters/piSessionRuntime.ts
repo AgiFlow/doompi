@@ -16,6 +16,7 @@ import type {
 } from '@earendil-works/pi-server';
 import { createRpcTranscript, type RpcTranscript } from '../services/rpcTranscript.ts';
 import type { AgentProcess } from '../types/session.ts';
+import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 const SETTLED = 'agent_settled';
 
@@ -24,6 +25,7 @@ export interface AgentSessionRuntimeOptions {
   sessionId: string;
   sessionName: string;
   cwd: string;
+  telemetry?: ServerTelemetry;
   /** Test seam for the projection. */
   transcript?: RpcTranscript;
 }
@@ -51,6 +53,13 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
 
   options.agent.onFrame((frame) => {
     const reduction = transcript.apply(frame);
+    if (reduction.aggregate && options.telemetry)
+      observe(
+        options.telemetry.recordEvent('doompi_server.transcript.aggregate', {
+          session_id: options.sessionId,
+          ...reduction.aggregate,
+        }),
+      );
     if (reduction.snapshot) emit({ type: 'snapshot' });
     if (reduction.progress) emit({ type: 'progress', progress: reduction.progress });
     if (frame.type === SETTLED) {
@@ -79,8 +88,13 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       requireLive();
       if (transcript.phase() !== 'idle') throw new PiServerError('busy', 'A turn is already running');
       const settled = awaitSettled();
-      options.agent.send({ type: 'prompt', message: input.text });
-      await settled;
+      const run = async (): Promise<void> => {
+        options.agent.send({ type: 'prompt', message: input.text });
+        await settled;
+      };
+      if (options.telemetry)
+        await options.telemetry.runInSpan('doompi_server.prompt_to_settled', { session_id: options.sessionId }, run);
+      else await run();
     },
 
     async steer(input: SteerInput) {

@@ -1,5 +1,6 @@
 import type { DoomTelemetry, DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
 
+const MAX_PENDING_EVENTS = 64;
 const SERVICE_NAME = 'doom-pi';
 const PACKAGE_NAME = '@agimon-ai/doompi';
 
@@ -54,6 +55,7 @@ export interface HarnessTelemetry {
 export function createHarnessTelemetry(options: HarnessTelemetryOptions = {}): HarnessTelemetry {
   let telemetryPromise: Promise<DoomTelemetry> | undefined;
   const pendingEvents: Array<{ event: HarnessEventName; attributes?: HarnessEventAttributes }> = [];
+  let pendingEventDropReported = false;
   const telemetry = (): Promise<DoomTelemetry> => {
     telemetryPromise ??= import('@agimon-ai/doompi-telemetry').then(({ createDoomTelemetry }) =>
       createDoomTelemetry({
@@ -88,7 +90,16 @@ export function createHarnessTelemetry(options: HarnessTelemetryOptions = {}): H
     },
     recordEvent: async (event, attributes) => {
       if (options.deferSpans && !telemetryPromise) {
-        pendingEvents.push({ event, attributes });
+        if (pendingEvents.length < MAX_PENDING_EVENTS) pendingEvents.push({ event, attributes });
+        else if (!pendingEventDropReported) {
+          pendingEventDropReported = true;
+          try {
+            const reportWarning = options.warn ?? ((message: string) => process.emitWarning(message));
+            reportWarning('Doom telemetry deferred event limit reached; later events were dropped.');
+          } catch {
+            // Telemetry warnings must not interrupt launcher startup.
+          }
+        }
         return;
       }
       await (await telemetry()).recordEvent(event, attributes);

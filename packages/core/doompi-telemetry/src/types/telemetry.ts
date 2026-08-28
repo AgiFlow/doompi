@@ -48,6 +48,10 @@ export interface DoomTelemetryErrorOptions {
   includeException?: boolean;
 }
 
+export interface DoomTraceContext {
+  traceparent: string;
+}
+
 export interface DoomTelemetry {
   recordDebug(event: string, attributes?: Record<string, unknown>): Promise<void>;
   recordEvent(event: string, attributes?: Record<string, unknown>): Promise<void>;
@@ -58,7 +62,12 @@ export interface DoomTelemetry {
     attributes?: Record<string, unknown>,
     options?: DoomTelemetryErrorOptions,
   ): Promise<void>;
-  runInSpan<T>(name: string, attributes: Record<string, unknown>, callback: () => Promise<T> | T): Promise<T>;
+  runInSpan<T>(
+    name: string,
+    attributes: Record<string, unknown>,
+    callback: (context?: DoomTraceContext) => Promise<T> | T,
+    parent?: DoomTraceContext,
+  ): Promise<T>;
   flush(): Promise<void>;
   shutdown(): Promise<void>;
   status(): DoomTelemetryStatus;

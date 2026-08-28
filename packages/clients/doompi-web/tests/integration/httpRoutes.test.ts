@@ -140,3 +140,30 @@ describe('plugin APIs', () => {
     expect((await fetch(url('/api/plugin/anything?session=nope'))).status).toBe(404);
   });
 });
+
+describe('browser telemetry ingestion', () => {
+  it('accepts the fixed bounded batch', async () => {
+    const response = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, events: [{ name: 'web.browser.ready', duration_ms: 12 }] }),
+    });
+    expect(response.status).toBe(204);
+  });
+
+  it('rejects unknown fields and oversized bodies', async () => {
+    const unknown = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, events: [{ name: 'web.browser.ready', path: '/private' }] }),
+    });
+    expect(unknown.status).toBe(400);
+
+    const oversized = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, events: [], padding: 'x'.repeat(9 * 1024) }),
+    });
+    expect(oversized.status).toBe(413);
+  });
+});

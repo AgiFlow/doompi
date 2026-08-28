@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { sessionRecordPath } from '../services/registryStore.ts';
 import { type BundledServerLaunch, defaultServerLaunch } from './bundledServer.ts';
 
@@ -41,6 +42,7 @@ export interface SpawnSessionInput {
    * room. The previous server has exited, so its socket is gone.
    */
   sessionDir?: string;
+  trace?: DoomTraceContext;
 }
 
 /** Launches doompi-server processes for sessions created from the page. */
@@ -149,11 +151,16 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
         '--registry-dir',
         options.registryDir,
       ];
+      const environment = { ...launch.environment };
+      delete environment.DOOMPI_TRACEPARENT;
+      if (/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(input.trace?.traceparent ?? '')) {
+        environment.DOOMPI_TRACEPARENT = input.trace?.traceparent;
+      }
       const child = spawn(launch.command, [...launch.args, ...args], {
         cwd: input.cwd,
         detached: true,
         stdio: ['ignore', log, log],
-        env: launch.environment,
+        env: environment,
       });
       fs.closeSync(log);
 

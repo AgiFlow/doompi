@@ -3,6 +3,7 @@ import path from 'node:path';
 import { parseRelaunchHandoff, type RelaunchHandoff } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import type { AgentLauncher, AgentProcess, AgentProcessOptions, SessionFrame } from '../types/session.ts';
 import { spawnAgentProcess } from './agentProcess.ts';
+import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 /** How long a relaunching agent may take to flush and exit before it is killed. */
 const GRACEFUL_EXIT_TIMEOUT_MS = 15_000;
@@ -14,6 +15,7 @@ export interface AgentSupervisorOptions {
   launcher: AgentLauncher;
   /** File the agent writes to request a relaunch; consumed on agent exit. */
   relaunchFile: string;
+  telemetry?: ServerTelemetry;
   onNotice?: (message: string) => void;
   /** Test seam for the underlying process spawner. */
   spawn?: typeof spawnAgentProcess;
@@ -41,6 +43,7 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
   let current: AgentProcess | undefined;
   let endRequested = false;
   let escalation: NodeJS.Timeout | undefined;
+  let generation = 0;
 
   // A file left behind by a crashed run must not relaunch this one.
   fs.rmSync(options.relaunchFile, { force: true });
@@ -97,6 +100,13 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
       current = agent;
       endRequested = false;
       earlyFrames.length = 0;
+      generation += 1;
+      const attachedGeneration = generation;
+      if (options.telemetry)
+        observe(
+          options.telemetry.recordEvent('doompi_server.agent.spawned', { generation: attachedGeneration }),
+          options.onNotice,
+        );
       agent.onFrame((frame) => {
         if (listeners.length === 0) {
           if (earlyFrames.length === EARLY_FRAME_LIMIT) earlyFrames.shift();
@@ -106,6 +116,14 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
         for (const listener of listeners) listener(frame);
       });
       void agent.exited.then(async (code) => {
+        if (options.telemetry)
+          observe(
+            options.telemetry.recordEvent('doompi_server.agent.exited', {
+              generation: attachedGeneration,
+              exit_code: code,
+            }),
+            options.onNotice,
+          );
         if (escalation) clearTimeout(escalation);
         escalation = undefined;
         const handoff = stopping ? undefined : takeHandoff();

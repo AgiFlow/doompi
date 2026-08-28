@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ChannelFrame, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type { DoomTelemetry, DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { createFrameRing, type FrameRing } from '../services/frameRing.ts';
 import {
   initialPresence,
@@ -77,6 +78,7 @@ export interface SessionHubOptions {
   journalLimit?: number;
   gitRefreshMs?: number;
   onNotice?: (message: string) => void;
+  telemetry?: DoomTelemetry;
 }
 
 export type StopOutcome = { ok: true } | { ok: false; code: 'unknown' | 'self' | 'signal_failed'; error: string };
@@ -110,7 +112,7 @@ export interface SessionHub {
    * this does, keeping the id so Pi resumes the same session and the transcript
    * survives.
    */
-  restart(sessionId: string): Promise<SpawnOutcome>;
+  restart(sessionId: string, trace?: DoomTraceContext): Promise<SpawnOutcome>;
   close(): void;
 }
 
@@ -142,6 +144,7 @@ interface ManagedSession {
    * order a reader runs out of interest in them.
    */
   journal: Record<string, unknown>[];
+  frameCount: number;
 }
 
 interface StartedChannel {
@@ -263,7 +266,9 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       process.kill(pid, 'SIGTERM');
     });
   let closed = false;
-
+  const emitTelemetry = (event: string, attributes: Record<string, string | number | boolean>): void => {
+    void options.telemetry?.recordEvent(event, attributes);
+  };
   const emit = (event: HubEvent): void => {
     for (const listener of listeners) listener(event);
   };
@@ -362,79 +367,96 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       pushSummary(managed);
       return;
     }
-    managed.attachment = attachToSession({
-      socketPath: managed.record.socketPath,
-      ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
-      token,
-      handlers: {
-        onFrame: (frame) => {
-          // The journal answer is the session's whole history. Each entry it
-          // carries is re-emitted as the append it once was, so it travels the
-          // same path as a live publish: into the ring for pages that
-          // subscribe later, and straight out to the ones already watching.
-          if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
-            // Keep the whole transcript before publishing any of it: the page
-            // pages back through this, and a read that arrives after the first
-            // one is the newest picture of the same history.
-            const whole = journalMessages(frame);
-            managed.journal = whole.length > journalLimit ? whole.slice(-journalLimit) : whole;
-            const restoredAt = new Date().toISOString();
-            const refreshing = managed.restoredJournal;
-            managed.restoredJournal = true;
-            let presenceChanged = false;
-            for (const entry of renderableJournalEntries(frame, restoreLimit)) {
-              // Once the transcript is on the page the live stream carries
-              // everything the agent does, and it carries it with no journal id
-              // to match on. Publishing an answer twice is the cost of getting
-              // that wrong, so a refresh only adds what no frame can carry.
-              if (refreshing && !isUnreportedEntry(entry)) continue;
-              const entryId = typeof entry.id === 'string' ? entry.id : undefined;
-              if (entryId !== undefined) {
-                if (managed.emittedEntryIds.has(entryId)) continue;
-                managed.emittedEntryIds.add(entryId);
+    const connect = (trace?: DoomTraceContext): SessionAttachment =>
+      attachToSession({
+        socketPath: managed.record.socketPath,
+        ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
+        token,
+        trace,
+        handlers: {
+          onFrame: (frame) => {
+            // The journal answer is the session's whole history. Each entry it
+            // carries is re-emitted as the append it once was, so it travels the
+            // same path as a live publish: into the ring for pages that
+            // subscribe later, and straight out to the ones already watching.
+            if (frame.type === 'response' && frame.command === GET_ENTRIES_COMMAND) {
+              // Keep the whole transcript before publishing any of it: the page
+              // pages back through this, and a read that arrives after the first
+              // one is the newest picture of the same history.
+              const whole = journalMessages(frame);
+              managed.journal = whole.length > journalLimit ? whole.slice(-journalLimit) : whole;
+              const restoredAt = new Date().toISOString();
+              const refreshing = managed.restoredJournal;
+              managed.restoredJournal = true;
+              let presenceChanged = false;
+              for (const entry of renderableJournalEntries(frame, restoreLimit)) {
+                // Once the transcript is on the page the live stream carries
+                // everything the agent does, and it carries it with no journal id
+                // to match on. Publishing an answer twice is the cost of getting
+                // that wrong, so a refresh only adds what no frame can carry.
+                if (refreshing && !isUnreportedEntry(entry)) continue;
+                const entryId = typeof entry.id === 'string' ? entry.id : undefined;
+                if (entryId !== undefined) {
+                  if (managed.emittedEntryIds.has(entryId)) continue;
+                  managed.emittedEntryIds.add(entryId);
+                }
+                const restored = { type: ENTRY_APPENDED_TYPE, entry };
+                managed.ring.record(restored);
+                managed.frameCount += 1;
+                emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
+                const next = presenceAfterRestoredEntry(managed.presence, entry, restoredAt);
+                presenceChanged ||= next !== managed.presence;
+                managed.presence = next;
               }
-              const restored = { type: ENTRY_APPENDED_TYPE, entry };
-              managed.ring.record(restored);
-              emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
-              const next = presenceAfterRestoredEntry(managed.presence, entry, restoredAt);
-              presenceChanged ||= next !== managed.presence;
-              managed.presence = next;
+              // The rail introduces a session by what it has done, so a restored
+              // transcript has to reach the summary as well as the timeline.
+              if (presenceChanged) pushSummary(managed);
+              return;
             }
-            // The rail introduces a session by what it has done, so a restored
-            // transcript has to reach the summary as well as the timeline.
-            if (presenceChanged) pushSummary(managed);
-            return;
-          }
-          const wasPhase = managed.presence.phase;
-          managed.ring.record(frame);
-          const next = reducePresence(managed.presence, frame, new Date().toISOString());
-          const changed = next !== managed.presence;
-          managed.presence = next;
-          emit({ kind: 'frame', sessionId: managed.record.id, frame });
-          if (changed) pushSummary(managed);
-          // A finished run is when the tree most plausibly changed.
-          if (wasPhase !== 'idle' && next.phase === 'idle') refreshGit(managed);
-          // A run boundary is the one moment a message can have been journalled
-          // without any frame carrying it: an extension that prompts the agent
-          // (autonomous voice dictating what it heard) sends the message
-          // itself, so the only report of it is the journal. Re-reading here is
-          // what puts it on the page; entries already published are skipped.
-          if (wasPhase !== next.phase) managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
+            const wasPhase = managed.presence.phase;
+            managed.ring.record(frame);
+            managed.frameCount += 1;
+            const next = reducePresence(managed.presence, frame, new Date().toISOString());
+            const changed = next !== managed.presence;
+            managed.presence = next;
+            emit({ kind: 'frame', sessionId: managed.record.id, frame });
+            if (changed) pushSummary(managed);
+            // A finished run is when the tree most plausibly changed.
+            if (wasPhase !== 'idle' && next.phase === 'idle') refreshGit(managed);
+            // A run boundary is the one moment a message can have been journalled
+            // without any frame carrying it: an extension that prompts the agent
+            // (autonomous voice dictating what it heard) sends the message
+            // itself, so the only report of it is the journal. Re-reading here is
+            // what puts it on the page; entries already published are skipped.
+            if (wasPhase !== next.phase) managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
+          },
+          onStatus: (status) => {
+            managed.attach = status.state;
+            managed.attachReason = status.reason;
+            // A fresh attach is the moment to ask for the facts events do not
+            // carry (name, pending count, streaming flags) and for the journal,
+            // whose minor-mode entry this hub missed if the session predates it.
+            if (status.state === 'attached') {
+              managed.attachment?.send({ type: 'get_state' });
+              managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
+            }
+            if (status.state === 'attached') {
+              emitTelemetry('web.session.attach', {
+                'attach.state': status.state,
+                replayed: status.replayed ?? 0,
+                dropped: status.dropped ?? 0,
+              });
+            }
+            pushSummary(managed);
+          },
         },
-        onStatus: (status) => {
-          managed.attach = status.state;
-          managed.attachReason = status.reason;
-          // A fresh attach is the moment to ask for the facts events do not
-          // carry (name, pending count, streaming flags) and for the journal,
-          // whose minor-mode entry this hub missed if the session predates it.
-          if (status.state === 'attached') {
-            managed.attachment?.send({ type: 'get_state' });
-            managed.attachment?.send({ type: GET_ENTRIES_COMMAND });
-          }
-          pushSummary(managed);
-        },
-      },
-    });
+      });
+    if (options.telemetry === undefined) managed.attachment = connect();
+    else {
+      void options.telemetry.runInSpan('web.session_attach', { 'operation.name': 'web.session_attach' }, (trace) => {
+        managed.attachment = connect(trace);
+      });
+    }
   };
 
   const startSession = (record: SessionRecord): void => {
@@ -446,9 +468,11 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       attach: 'connecting',
       emittedEntryIds: new Set<string>(),
       restoredJournal: false,
+      frameCount: 0,
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
+    emitTelemetry('web.session.lifecycle', { 'session.state': 'appeared', 'session.count': sessions.size });
     startAttachment(managed);
     pushSummary(managed);
     refreshGit(managed);
@@ -479,6 +503,13 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       if (seen.has(id)) continue;
       managed.attachment?.close();
       sessions.delete(id);
+      const ring = managed.ring.snapshot();
+      emitTelemetry('web.session.summary', {
+        frames: managed.frameCount,
+        backlog_dropped: ring.dropped,
+        'session.state': 'removed',
+      });
+      emitTelemetry('web.session.lifecycle', { 'session.state': 'removed', 'session.count': sessions.size });
       for (const channel of startedChannels) channel.source.sessionRemoved?.(id);
       options.onNotice?.(`session ${id} left`);
       emit({ kind: 'removed', sessionId: id });
@@ -514,6 +545,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const managed = sessions.get(sessionId);
       if (!managed) return undefined;
       const { frames, dropped } = managed.ring.snapshot();
+      emitTelemetry('web.session.backlog', { frames: frames.length, dropped });
       return { type: SESSION_BACKLOG_TYPE, sessionId, frames, dropped };
     },
     history(sessionId, request) {
@@ -591,7 +623,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       }
       return options.spawner.spawn(input);
     },
-    async restart(sessionId) {
+    async restart(sessionId, trace) {
       const spawner = options.spawner;
       if (!spawner) {
         return {
@@ -615,7 +647,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         };
       }
       options.onNotice?.(`restarting session ${sessionId}`);
-      return spawner.spawn({ cwd, name, sessionId, sessionDir: path.dirname(socketPath) });
+      return spawner.spawn({ cwd, name, sessionId, sessionDir: path.dirname(socketPath), trace });
     },
     close() {
       closed = true;
@@ -624,6 +656,11 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       if (gitTimer) clearInterval(gitTimer);
       for (const managed of sessions.values()) {
         managed.attachment?.close();
+        emitTelemetry('web.session.summary', {
+          frames: managed.frameCount,
+          backlog_dropped: managed.ring.snapshot().dropped,
+          'session.state': 'shutdown',
+        });
       }
       sessions.clear();
       listeners.clear();
