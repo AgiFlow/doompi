@@ -1,5 +1,6 @@
 import { assign, cancel, emit, raise, type SnapshotFrom, setup } from 'xstate';
 import { type NarrationBargeInEvidence, narrationBargeInIsActionable } from './narrationBargeIn.ts';
+import type { VoiceTranscriptSignalEvidence } from './transcriptAdmission.ts';
 import type { VoiceCompositionState } from './transcriptPolicy.ts';
 
 /** The failure code reported when no more specific one is available. */
@@ -52,7 +53,12 @@ export type AutonomousVoiceEvent =
   | ({ type: 'CAPTURE_DURATION_LIMIT_REACHED' } & AutonomousTurnIdentity)
   | ({ type: 'CAPTURE_DRAINED'; revision: number } & AutonomousTurnIdentity)
   | ({ type: 'CAPTURE_PROCESSING' } & AutonomousTurnIdentity)
-  | ({ type: 'TRANSCRIPTION_SUCCEEDED'; revision: number; transcript: string } & AutonomousTurnIdentity)
+  | ({
+      type: 'TRANSCRIPTION_SUCCEEDED';
+      revision: number;
+      transcript: string;
+      evidence?: VoiceTranscriptSignalEvidence;
+    } & AutonomousTurnIdentity)
   | ({ type: 'TRANSCRIPTION_EMPTY'; revision: number } & AutonomousTurnIdentity)
   | ({ type: 'TRANSCRIPTION_FAILED'; revision?: number; code: string; recoverable: boolean } & AutonomousTurnIdentity)
   | ({ type: 'TRANSCRIPTION_TIMED_OUT'; revision?: number } & AutonomousTurnIdentity)
@@ -103,6 +109,7 @@ export type AutonomousVoiceEffect =
       type: 'effect.applyTranscriptPolicy';
       revision: number;
       transcript: string;
+      evidence?: VoiceTranscriptSignalEvidence;
       narrationOverlapPromoted: boolean;
       compositionState: VoiceCompositionState;
     } & AutonomousTurnIdentity)
@@ -315,6 +322,7 @@ export const autonomousVoiceMachine = setup({
         turnId: event.turnId,
         revision: event.revision,
         transcript: event.transcript,
+        ...(event.evidence ? { evidence: event.evidence } : {}),
         narrationOverlapPromoted: context.narrationOverlapPromoted,
         compositionState: context.compositionState,
       };

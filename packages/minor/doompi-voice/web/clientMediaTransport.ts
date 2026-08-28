@@ -1,5 +1,11 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import {
+  VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
+  VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER,
+  VOICE_MEDIA_ACTIVITY_STATE_HEADER,
+  type VoiceMediaCaptureActivity,
   VOICE_MEDIA_CONTENT_TYPE,
   type VoiceMediaClientEvent,
   type VoiceMediaConnectResult,
@@ -80,12 +86,33 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     return (await response.json()) as VoiceMediaClientEvent;
   }
 
-  public async sendAudio(clientId: string, connectionId: string, captureId: string, pcm: Uint8Array): Promise<void> {
+  public async sendAudio(
+    clientId: string,
+    connectionId: string,
+    captureId: string,
+    pcm: Uint8Array,
+    activity?: VoiceMediaCaptureActivity,
+  ): Promise<void> {
     const response = await sealedTransport.fetch(
       voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientAudio, { clientId, connectionId, captureId }),
       {
         method: 'POST',
-        headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
+        headers: {
+          'content-type': VOICE_MEDIA_CONTENT_TYPE,
+          ...(activity === undefined
+            ? {}
+            : {
+                [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: activity.state,
+                [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: String(activity.levelDbfs),
+                [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(activity.elapsedMs),
+                ...(activity.epoch === undefined
+                  ? {}
+                  : { [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: String(activity.epoch) }),
+                ...(activity.classifiedSpeechMs === undefined
+                  ? {}
+                  : { [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(activity.classifiedSpeechMs) }),
+              }),
+        },
         body: new Blob([new Uint8Array(pcm)], { type: VOICE_MEDIA_CONTENT_TYPE }),
       },
     );

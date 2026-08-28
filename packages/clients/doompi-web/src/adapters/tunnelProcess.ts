@@ -25,6 +25,8 @@ const SELF_TEST_RETRY_MS = 500;
 /** Lines of process output kept for a failure report. */
 const LOG_TAIL = 20;
 const UNAUTHORIZED = 401;
+/** Cloudflare has the DNS route but no connector has registered yet. */
+const EDGE_TUNNEL_UNAVAILABLE = 530;
 const OK = 200;
 const PID_FILE = 'tunnel.pid';
 const TOKEN_FILE = 'tunnel.token';
@@ -254,7 +256,7 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
 
     const configuredOrigin = input.config.kind === 'named' ? `https://${input.config.hostname}` : undefined;
     let seenUrl = configuredOrigin;
-    let seenConnection = input.config.kind === 'named';
+    let seenConnection = false;
 
     const waitToRetry = async (): Promise<void> => {
       await new Promise<void>((resolve) => {
@@ -277,11 +279,13 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
         try {
           pairResponse = await probe(`${origin}${PAIRING_PAGE_ROUTE}`, selfTestAbort.signal);
           healthResponse = await probe(`${origin}/api/health`, selfTestAbort.signal);
-          break;
+          if (pairResponse.status !== EDGE_TUNNEL_UNAVAILABLE && healthResponse.status !== EDGE_TUNNEL_UNAVAILABLE)
+            break;
+          cause = `Cloudflare edge answered ${String(healthResponse.status)} before the connector registered`;
         } catch (error) {
           cause = error instanceof Error ? error.message : String(error);
-          if (attempt + 1 < SELF_TEST_ATTEMPTS && !selfTestAbort.signal.aborted) await waitToRetry();
         }
+        if (attempt + 1 < SELF_TEST_ATTEMPTS && !selfTestAbort.signal.aborted) await waitToRetry();
       }
       if (pairResponse === undefined || healthResponse === undefined) {
         return { ok: false, failure: 'self_test_failed', message: `The tunnel did not answer: ${cause}` };
@@ -365,10 +369,8 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
         if (!stopped) options.onExit?.(message);
       });
 
-      // A named tunnel already knows its hostname and has nothing to parse, so
-      // its readiness conditions are met the moment it is spawned. Waiting for
-      // output it may never print would hang until the deadline.
-      if (seenUrl !== undefined && seenConnection) consider('');
+      // A named tunnel already knows its hostname, but it still waits for
+      // cloudflared to register an edge connection before probing the public URL.
       if (input.signal?.aborted === true) cancel();
     });
   };

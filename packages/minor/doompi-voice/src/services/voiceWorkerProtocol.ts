@@ -1,4 +1,5 @@
 import type { NarrationBargeInEvidence } from './narrationBargeIn.ts';
+import type { VoiceTranscriptSignalEvidence } from './transcriptAdmission.ts';
 
 export const VOICE_WORKER_PROTOCOL_VERSION = 1 as const;
 export const VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY = 'transcription-timeout';
@@ -129,6 +130,7 @@ export type VoiceWorkerEvent =
       revision: number;
       transcript: string;
       final: boolean;
+      evidence?: VoiceTranscriptSignalEvidence;
     })
   | (VoiceWorkerEnvelope & {
       kind: 'candidate-acknowledged';
@@ -256,6 +258,8 @@ function parseBargeInEvidence(value: unknown): NarrationBargeInEvidence {
   assertExactKeys(value, [
     'exactStopCommand',
     'intentionalAddress',
+    'classifierConfirmed',
+    'classifierSpeechMs',
     'residualTokenCount',
     'residualRatio',
     'voicedMs',
@@ -266,12 +270,43 @@ function parseBargeInEvidence(value: unknown): NarrationBargeInEvidence {
   return {
     exactStopCommand: requireBoolean(value, 'exactStopCommand'),
     intentionalAddress: value.intentionalAddress === undefined ? false : requireBoolean(value, 'intentionalAddress'),
+    classifierConfirmed: value.classifierConfirmed === undefined ? false : requireBoolean(value, 'classifierConfirmed'),
+    classifierSpeechMs:
+      value.classifierSpeechMs === undefined ? 0 : requireNonNegativeInteger(value, 'classifierSpeechMs'),
     residualTokenCount: requireNonNegativeInteger(value, 'residualTokenCount'),
     residualRatio: requireNumber(value, 'residualRatio'),
     voicedMs: requireNonNegativeInteger(value, 'voicedMs'),
     peakDbAboveNoise: requireNumber(value, 'peakDbAboveNoise'),
     signalVariationDb: requireNumber(value, 'signalVariationDb'),
     narrationSimilarity: requireNumber(value, 'narrationSimilarity'),
+  };
+}
+
+function parseTranscriptEvidence(value: unknown): VoiceTranscriptSignalEvidence {
+  if (!isRecord(value)) throw new Error('Voice worker transcript evidence must be an object.');
+  assertExactKeys(value, [
+    'durationMs',
+    'voicedMs',
+    'classifierSpeechMs',
+    'rmsDbfs',
+    'peakDbfs',
+    'signalVariationDb',
+    'nonZeroRatio',
+    'gapCount',
+    'playbackOverlapMs',
+    'classifier',
+  ]);
+  return {
+    durationMs: requireNumber(value, 'durationMs'),
+    voicedMs: requireNumber(value, 'voicedMs'),
+    classifierSpeechMs: requireNumber(value, 'classifierSpeechMs'),
+    rmsDbfs: requireNumber(value, 'rmsDbfs'),
+    peakDbfs: requireNumber(value, 'peakDbfs'),
+    signalVariationDb: requireNumber(value, 'signalVariationDb'),
+    nonZeroRatio: requireNumber(value, 'nonZeroRatio'),
+    gapCount: requireNonNegativeInteger(value, 'gapCount'),
+    playbackOverlapMs: requireNumber(value, 'playbackOverlapMs'),
+    classifier: requireLiteral(value, 'classifier', ['client', 'host', 'energy']),
   };
 }
 
@@ -515,7 +550,7 @@ export function parseVoiceWorkerEvent(value: unknown): VoiceWorkerEvent {
         captureId: requireString(record, 'captureId'),
         turnId: requireString(record, 'turnId'),
       };
-    case 'transcript-candidate':
+    case 'transcript-candidate': {
       assertExactKeys(record, [
         'version',
         'sequence',
@@ -526,6 +561,7 @@ export function parseVoiceWorkerEvent(value: unknown): VoiceWorkerEvent {
         'revision',
         'transcript',
         'final',
+        'evidence',
       ]);
       return {
         ...envelope,
@@ -536,7 +572,9 @@ export function parseVoiceWorkerEvent(value: unknown): VoiceWorkerEvent {
         revision: requireNonNegativeInteger(record, 'revision'),
         transcript: requireString(record, 'transcript'),
         final: requireBoolean(record, 'final'),
+        ...(record.evidence === undefined ? {} : { evidence: parseTranscriptEvidence(record.evidence) }),
       };
+    }
     case 'candidate-acknowledged':
       assertExactKeys(record, [
         'version',

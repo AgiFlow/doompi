@@ -50,6 +50,12 @@ import {
   VoiceTurnFallbackNarrator,
 } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
+import {
+  type IVoiceTranscriptAdmissionModelClient,
+  type IVoiceTranscriptAdjudicator,
+  type VoiceTranscriptAdmissionModelRequest,
+  VoiceTranscriptAdjudicator,
+} from '../../services/transcriptAdmission.ts';
 import type { VoiceDeliveryIntent } from '../../services/voiceDelivery.ts';
 import {
   type AutoCaptureActivationState,
@@ -498,6 +504,49 @@ export function resolveVoiceCommandCorrector(reference: string, context: Extensi
   return new VoiceCommandCorrector(modelClient);
 }
 
+export function resolveVoiceTranscriptAdjudicator(
+  reference: string,
+  context: ExtensionContext,
+): IVoiceTranscriptAdjudicator {
+  const separator = reference.indexOf('/');
+  if (separator <= 0 || separator === reference.length - 1)
+    throw new Error('Voice transcript admission model must use provider/model-id form');
+  const provider = reference.slice(0, separator);
+  const modelId = reference.slice(separator + 1);
+  const model = context.modelRegistry.find(provider, modelId);
+  if (!model) throw new Error(`Voice transcript admission model is not registered: ${reference}`);
+  if (!context.modelRegistry.hasConfiguredAuth(model))
+    throw new Error(`Voice transcript admission model has no configured authentication: ${reference}`);
+
+  const modelClient: IVoiceTranscriptAdmissionModelClient = {
+    complete: async (request: VoiceTranscriptAdmissionModelRequest): Promise<string> => {
+      const response = await context.modelRegistry.complete(
+        model,
+        {
+          systemPrompt: request.systemPrompt,
+          messages: [{ role: 'user', content: request.input, timestamp: Date.now() }],
+        },
+        {
+          signal: request.signal,
+          maxTokens: request.maxTokens,
+          cacheRetention: request.cacheRetention,
+          reasoningEffort: 'none',
+          maxRetries: 0,
+        },
+      );
+      if (response.stopReason === 'error' || response.stopReason === 'aborted')
+        throw new Error(
+          response.errorMessage ?? `Voice transcript admission model stopped with ${response.stopReason}`,
+        );
+      return response.content
+        .filter((content) => content.type === 'text')
+        .map((content) => content.text)
+        .join('')
+        .trim();
+    },
+  };
+  return new VoiceTranscriptAdjudicator(modelClient);
+}
 export function resolveVoiceFallbackNarrator(reference: string, context: ExtensionContext): IVoiceTurnFallbackNarrator {
   const separator = reference.indexOf('/');
   if (separator <= 0 || separator === reference.length - 1)
@@ -891,6 +940,10 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       resolveCommandCorrector: async (reference) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');
         return resolveVoiceCommandCorrector(reference, activeContext);
+      },
+      resolveTranscriptAdjudicator: async (reference) => {
+        if (!activeContext) throw new Error('No autonomous voice session is active');
+        return resolveVoiceTranscriptAdjudicator(reference, activeContext);
       },
       resolveFallbackNarrator: async (reference) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');

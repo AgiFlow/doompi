@@ -1,9 +1,16 @@
+import type { SpeechPresenceDetector } from './clientCaptureActivity.ts';
+
 export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
-export const VOICE_MEDIA_PROTOCOL_VERSION = 3;
+export const VOICE_MEDIA_PROTOCOL_VERSION = 5;
 export const VOICE_MEDIA_SAMPLE_RATE = 16_000;
 export const VOICE_MEDIA_CHANNELS = 1;
 export const VOICE_MEDIA_BITS_PER_SAMPLE = 16;
 export const VOICE_MEDIA_CONTENT_TYPE = 'application/vnd.doompi.pcm-s16le';
+export const VOICE_MEDIA_ACTIVITY_STATE_HEADER = 'x-doompi-voice-activity-state';
+export const VOICE_MEDIA_ACTIVITY_LEVEL_HEADER = 'x-doompi-voice-activity-level';
+export const VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER = 'x-doompi-voice-activity-elapsed';
+export const VOICE_MEDIA_ACTIVITY_EPOCH_HEADER = 'x-doompi-voice-activity-epoch';
+export const VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER = 'x-doompi-voice-activity-speech-ms';
 
 export const VOICE_MEDIA_ROUTES = {
   clientConnect: '/client/connect',
@@ -28,6 +35,26 @@ export type VoiceMediaControlLocation = 'local' | 'remote';
 export interface VoiceMediaCapabilities {
   capture: boolean;
   playback: boolean;
+  captureActivity: boolean;
+  autonomousOrchestration: boolean;
+  playbackDucking?: boolean;
+}
+
+export type VoiceMediaCaptureMode = 'manual' | 'autonomous';
+export type VoiceMediaCaptureActivityState = 'listening' | 'speech' | 'endpoint';
+
+export interface VoiceMediaCaptureActivity {
+  state: VoiceMediaCaptureActivityState;
+  levelDbfs: number;
+  elapsedMs: number;
+  epoch?: number;
+  classifiedSpeechMs?: number;
+}
+
+export interface VoiceMediaCaptureConfiguration {
+  mode: VoiceMediaCaptureMode;
+  activityControl: 'host' | 'client';
+  endpointSilenceMs?: number;
 }
 
 export interface VoiceMediaConnectRequest {
@@ -52,6 +79,7 @@ export type VoiceMediaClientEvent =
       sampleRate: typeof VOICE_MEDIA_SAMPLE_RATE;
       channels: typeof VOICE_MEDIA_CHANNELS;
       bitsPerSample: typeof VOICE_MEDIA_BITS_PER_SAMPLE;
+      configuration: VoiceMediaCaptureConfiguration;
     }
   | { sequence: number; type: 'capture-stop'; captureId: string }
   | { sequence: number; type: 'capture-abort'; captureId: string }
@@ -87,7 +115,13 @@ export interface VoiceMediaTransport {
     after: number,
     signal: AbortSignal,
   ): Promise<VoiceMediaClientEvent | undefined>;
-  sendAudio(clientId: string, connectionId: string, captureId: string, pcm: Uint8Array): Promise<void>;
+  sendAudio(
+    clientId: string,
+    connectionId: string,
+    captureId: string,
+    pcm: Uint8Array,
+    activity?: VoiceMediaCaptureActivity,
+  ): Promise<void>;
   captureStopped(clientId: string, connectionId: string, captureId: string, error?: string): Promise<void>;
   playbackFinished(clientId: string, connectionId: string, result: VoiceMediaPlaybackResult): Promise<void>;
 }
@@ -99,11 +133,15 @@ export interface VoiceMediaCapture {
 export interface VoiceMediaPlayback {
   readonly completion: Promise<VoiceMediaPlaybackResult>;
   stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void;
+  duck?(targetGain: number, fadeMs: number, holdMs: number): void;
 }
 
 /** Client hardware boundary. Browser and future native clients implement the same contract. */
 export interface VoiceMediaDevice {
   readonly capabilities: VoiceMediaCapabilities;
+  /** Initializes optional authoritative media processors before capabilities are advertised. */
+  prepare?(): Promise<void>;
+  createSpeechPresenceDetector?(): SpeechPresenceDetector | undefined;
   startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture>;
   speak(request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>): VoiceMediaPlayback;
   close(): Promise<void>;

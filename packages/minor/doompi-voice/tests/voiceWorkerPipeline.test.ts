@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ClientPcmAudioRecorder } from '../src/adapters/audio/clientMedia.ts';
+import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
 import { NodeTurnSpool } from '../src/adapters/process/turnSpool.ts';
 import { VoiceWorkerPipeline } from '../src/adapters/process/voiceWorkerPipeline.ts';
 import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../src/services/pcm.ts';
@@ -19,11 +21,23 @@ import type {
   ISpeechPresenceDetector,
   ITranscriberAdapter,
   ITranscriberRegistry,
+  IVoiceMediaHostConnection,
   LiveRecordingHandle,
+  PcmAudioRecorderStartOptions,
   ProcessResult,
   TimerHandle,
   TranscriptionRequest,
+  VoiceMediaAudioPoll,
 } from '../src/types/index.ts';
+import {
+  VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_STATE_HEADER,
+  VOICE_MEDIA_CONTENT_TYPE,
+  VOICE_MEDIA_PROTOCOL_VERSION,
+  VOICE_MEDIA_ROUTES,
+  type VoiceMediaCaptureActivity,
+} from '../src/types/clientMedia.ts';
 
 const directories: string[] = [];
 const AMBIENT_REBASE_EXERCISE_MS = 1_600;
@@ -114,10 +128,16 @@ class WorkerRecording implements LiveRecordingHandle {
 class WorkerRecorder implements IPcmAudioRecorder {
   public readonly handle = new WorkerRecording();
   private listener: ((frame: Buffer) => void) | undefined;
+  private activityListener: ((activity: VoiceMediaCaptureActivity) => void) | undefined;
 
   public preflight(): void {}
-  public start(_config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle {
+  public start(
+    _config: ResolvedVoiceConfig,
+    onFrame: (frame: Buffer) => void,
+    options?: PcmAudioRecorderStartOptions,
+  ): LiveRecordingHandle {
     this.listener = onFrame;
+    this.activityListener = options?.onClientActivity;
     return this.handle;
   }
   public get ready(): boolean {
@@ -125,6 +145,9 @@ class WorkerRecorder implements IPcmAudioRecorder {
   }
   public emit(frame: Buffer): void {
     this.listener?.(frame);
+  }
+  public emitActivity(activity: VoiceMediaCaptureActivity): void {
+    this.activityListener?.(activity);
   }
 }
 
@@ -488,6 +511,228 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     await pipeline.shutdown();
   });
 
+  it('uses client-owned speech and endpoint decisions without host neural approval', async () => {
+    const recorder = new WorkerRecorder();
+    const speechDetector: ISpeechPresenceDetector = {
+      push: vi.fn(() => false),
+      reset: vi.fn(),
+    };
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({
+        engine: 'mlx-whisper',
+        preflight: () => undefined,
+        transcribe: vi.fn(async () => 'unused'),
+      }),
+      speechDetectorFactory: () => speechDetector,
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, (published) =>
+      events.push(published),
+    );
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    recorder.emitActivity({ state: 'listening', levelDbfs: -72, elapsedMs: 100 });
+    recorder.emit(pcmFrame(100));
+    recorder.emitActivity({ state: 'speech', levelDbfs: -42, elapsedMs: 200 });
+    recorder.emit(pcmFrame(2_000));
+    recorder.emitActivity({ state: 'endpoint', levelDbfs: -70, elapsedMs: 3_200 });
+    await beginning;
+
+    expect(speechDetector.push).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'capture-state', state: 'speech' }));
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'endpoint-reached', turnId: 'turn-1' }));
+    await pipeline.shutdown();
+  });
+
+  it('delivers queued API speech and endpoint transitions through the recorder to one endpoint', async () => {
+    const internalToken = 'pipeline-media-token';
+    const clientId = 'pipeline-client';
+    const connectionId = 'pipeline-connection';
+    const api = createVoiceMediaApi({ internalToken });
+    const apiRequest = (route: string, init: RequestInit = {}, host = false): Request => {
+      const headers = new Headers(init.headers);
+      if (host) headers.set('authorization', `Bearer ${internalToken}`);
+      return new Request(`http://voice.test${route}`, { ...init, headers });
+    };
+    const postJson = (value: object): RequestInit => ({
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(value),
+    });
+    expect(
+      (
+        await api.fetch(
+          apiRequest(
+            VOICE_MEDIA_ROUTES.clientConnect,
+            postJson({
+              version: VOICE_MEDIA_PROTOCOL_VERSION,
+              clientId,
+              connectionId,
+              clientKind: 'browser',
+              controlLocation: 'local',
+              capabilities: { capture: true, playback: false, captureActivity: true, autonomousOrchestration: true },
+            }),
+          ),
+        )
+      ).status,
+    ).toBe(200);
+
+    let captureId: string | undefined;
+    let releaseReads!: () => void;
+    const readsReleased = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    const connection: IVoiceMediaHostConnection = {
+      startCapture: async (nextCaptureId, configuration) => {
+        captureId = nextCaptureId;
+        const response = await api.fetch(
+          apiRequest(VOICE_MEDIA_ROUTES.hostCaptureStart, postJson({ captureId: nextCaptureId, configuration }), true),
+        );
+        if (response.status !== 201) throw new Error('capture start failed');
+      },
+      readCapture: async (activeCaptureId): Promise<VoiceMediaAudioPoll> => {
+        await readsReleased;
+        const response = await api.fetch(
+          apiRequest(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=${activeCaptureId}`, {}, true),
+        );
+        if (response.status === 204) return { pcm: Buffer.alloc(0), state: 'stopped' };
+        if (response.status !== 200) throw new Error('capture read failed');
+        const state = response.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER);
+        const activity: VoiceMediaCaptureActivity | undefined =
+          state === 'listening' || state === 'speech' || state === 'endpoint'
+            ? {
+                state,
+                levelDbfs: Number(response.headers.get(VOICE_MEDIA_ACTIVITY_LEVEL_HEADER)),
+                elapsedMs: Number(response.headers.get(VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER)),
+              }
+            : undefined;
+        return {
+          pcm: Buffer.from(await response.arrayBuffer()),
+          state: 'active',
+          ...(activity === undefined ? {} : { activity }),
+        };
+      },
+      stopCapture: async (activeCaptureId) => {
+        await api.fetch(apiRequest(VOICE_MEDIA_ROUTES.hostCaptureStop, postJson({ captureId: activeCaptureId }), true));
+      },
+      abortCapture: async (activeCaptureId) => {
+        await api.fetch(
+          apiRequest(VOICE_MEDIA_ROUTES.hostCaptureAbort, postJson({ captureId: activeCaptureId }), true),
+        );
+      },
+      startPlayback: async () => undefined,
+      readPlayback: async () => undefined,
+      stopPlayback: async () => undefined,
+      abortPlayback: async () => undefined,
+    };
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder: new ClientPcmAudioRecorder(connection),
+      registry: registryWith({
+        engine: 'mlx-whisper',
+        preflight: () => undefined,
+        transcribe: vi.fn(async () => 'unused'),
+      }),
+      speechDetectorFactory,
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, (event) =>
+      events.push(event),
+    );
+    await vi.waitFor(() => expect(captureId).toBeDefined());
+    const audioRoute = `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${clientId}&connectionId=${connectionId}&captureId=${captureId!}`;
+    const upload = (state: 'speech' | 'endpoint', elapsedMs: number, pcm: Buffer): Promise<Response> =>
+      Promise.resolve(
+        api.fetch(
+          apiRequest(audioRoute, {
+            method: 'POST',
+            headers: {
+              'content-type': VOICE_MEDIA_CONTENT_TYPE,
+              [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: state,
+              [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: state === 'speech' ? '-35' : '-80',
+              [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(elapsedMs),
+            },
+            body: pcm,
+          }),
+        ),
+      );
+    expect((await upload('speech', 500, pcmFrame(2_000))).status).toBe(204);
+    expect((await upload('endpoint', 1_100, pcmFrame(0))).status).toBe(204);
+    releaseReads();
+    await beginning;
+    await vi.waitFor(() => expect(events.filter((event) => event.kind === 'endpoint-reached')).toHaveLength(1));
+
+    expect(
+      events.flatMap((event) =>
+        event.kind === 'activity' && (event.elapsedMs === 500 || event.elapsedMs === 1_100)
+          ? [{ state: event.state, elapsedMs: event.elapsedMs }]
+          : [],
+      ),
+    ).toEqual([
+      { state: 'speech', elapsedMs: 500 },
+      { state: 'listening', elapsedMs: 1_100 },
+    ]);
+    expect(events.filter((event) => event.kind === 'endpoint-reached')).toEqual([
+      expect.objectContaining({ captureId: 'capture-1', turnId: 'turn-1' }),
+    ]);
+    await pipeline.shutdown();
+    api.close();
+  });
+
+  it('ignores reordered client endpoint signals and publishes one current endpoint', async () => {
+    const recorder = new WorkerRecorder();
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({
+        engine: 'mlx-whisper',
+        preflight: () => undefined,
+        transcribe: vi.fn(async () => 'unused'),
+      }),
+      speechDetectorFactory,
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, (event) =>
+      events.push(event),
+    );
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    recorder.emit(pcmFrame(100));
+    await beginning;
+
+    recorder.emitActivity({ state: 'speech', levelDbfs: -35, elapsedMs: 500 });
+    recorder.emitActivity({ state: 'endpoint', levelDbfs: -80, elapsedMs: 400 });
+    expect(events.filter((event) => event.kind === 'endpoint-reached')).toHaveLength(0);
+
+    recorder.emitActivity({ state: 'endpoint', levelDbfs: -80, elapsedMs: 1_100 });
+    recorder.emitActivity({ state: 'endpoint', levelDbfs: -80, elapsedMs: 1_200 });
+    expect(events.filter((event) => event.kind === 'endpoint-reached')).toEqual([
+      expect.objectContaining({ kind: 'endpoint-reached', captureId: 'capture-1', turnId: 'turn-1' }),
+    ]);
+    await pipeline.shutdown();
+  });
   it('falls back to adaptive VAD when neural inference cannot initialize', async () => {
     const recorder = new WorkerRecorder();
     const clock = new ScheduledWorkerClock();

@@ -6,7 +6,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NodeTurnSpool } from '../src/adapters/process/turnSpool.ts';
 import { CaptureSession } from '../src/services/captureSession.ts';
 import { PCM_FRAME_BYTES } from '../src/services/pcm.ts';
-import type { IClock, IPcmAudioRecorder, LiveRecordingHandle, ProcessResult, TimerHandle } from '../src/types/index.ts';
+import type {
+  IClock,
+  IPcmAudioRecorder,
+  LiveRecordingHandle,
+  PcmAudioRecorderStartOptions,
+  ProcessResult,
+  TimerHandle,
+} from '../src/types/index.ts';
+import type { VoiceMediaCaptureActivity } from '../src/types/clientMedia.ts';
 
 const directories: string[] = [];
 const config: ResolvedVoiceConfig = {
@@ -78,18 +86,28 @@ class FakeRecording implements LiveRecordingHandle {
 class FakeRecorder implements IPcmAudioRecorder {
   public readonly handles: FakeRecording[] = [];
   private readonly listeners: Array<(frame: Buffer) => void> = [];
+  private readonly activityListeners: Array<((activity: VoiceMediaCaptureActivity) => void) | undefined> = [];
 
   public preflight(): void {}
 
-  public start(_config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle {
+  public start(
+    _config: ResolvedVoiceConfig,
+    onFrame: (frame: Buffer) => void,
+    options?: PcmAudioRecorderStartOptions,
+  ): LiveRecordingHandle {
     const handle = new FakeRecording();
     this.handles.push(handle);
     this.listeners.push(onFrame);
+    this.activityListeners.push(options?.onClientActivity);
     return handle;
   }
 
   public emit(generation: number, frame: Buffer): void {
     this.listeners[generation - 1]?.(frame);
+  }
+
+  public emitActivity(generation: number, activity: VoiceMediaCaptureActivity): void {
+    this.activityListeners[generation - 1]?.(activity);
   }
 }
 
@@ -281,5 +299,37 @@ describe('CaptureSession', () => {
         Buffer.alloc(12, 7),
       ]),
     );
+  });
+
+  it('scopes client activity to the active recovery generation', async () => {
+    const recorder = new FakeRecorder();
+    const spool = createSpool();
+    const activities: Array<{ activity: VoiceMediaCaptureActivity; generation: number }> = [];
+    const session = new CaptureSession({
+      recorder,
+      config,
+      spool,
+      clock: new FakeClock(),
+      onClientActivity: (activity, generation) => activities.push({ activity, generation }),
+    });
+
+    const starting = session.start();
+    recorder.emit(1, Buffer.alloc(PCM_FRAME_BYTES));
+    await starting;
+    recorder.emitActivity(1, { state: 'speech', levelDbfs: -35, elapsedMs: 500 });
+    recorder.handles[0]!.finish({ code: 1, stdout: '', stderr: 'upload interrupted' });
+    await vi.waitFor(() => expect(spool.snapshotManifest().captureGeneration).toBe(2));
+    recorder.emit(2, Buffer.alloc(PCM_FRAME_BYTES));
+    await vi.waitFor(() => expect(session.state).toBe('capturing'));
+
+    recorder.emitActivity(1, { state: 'endpoint', levelDbfs: -80, elapsedMs: 1_100 });
+    recorder.emitActivity(2, { state: 'listening', levelDbfs: -70, elapsedMs: 100 });
+
+    expect(activities).toEqual([
+      { activity: { state: 'speech', levelDbfs: -35, elapsedMs: 500 }, generation: 1 },
+      { activity: { state: 'listening', levelDbfs: -70, elapsedMs: 100 }, generation: 2 },
+    ]);
+    expect(spool.snapshotManifest()).toMatchObject({ captureGeneration: 2, gapCount: 1 });
+    await session.abort();
   });
 });

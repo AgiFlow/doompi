@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
 import {
+  VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_STATE_HEADER,
   VOICE_MEDIA_CONTENT_TYPE,
   type VoiceMediaClientEvent,
   VOICE_MEDIA_PROTOCOL_VERSION,
@@ -38,7 +41,7 @@ async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId
         connectionId,
         clientKind: 'browser',
         controlLocation: 'local',
-        capabilities: { capture: true, playback: true },
+        capabilities: { capture: true, playback: true, captureActivity: true, autonomousOrchestration: true },
       }),
     ),
   );
@@ -86,7 +89,7 @@ describe('voice client media session API', () => {
           connectionId: CONNECTION_ID,
           clientKind: 'browser',
           controlLocation: 'local',
-          capabilities: { capture: true, playback: true },
+          capabilities: { capture: true, playback: true, captureActivity: true, autonomousOrchestration: true },
         }),
       ),
     );
@@ -315,6 +318,46 @@ describe('voice client media session API', () => {
     api.close();
   });
 
+  it.each([
+    { captureActivity: false, autonomousOrchestration: false },
+    { captureActivity: true, autonomousOrchestration: false },
+    { captureActivity: false, autonomousOrchestration: true },
+  ])(
+    'falls back to host autonomous activity control for mixed client capabilities %j',
+    async ({ captureActivity, autonomousOrchestration }) => {
+      const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+      const connected = await api.fetch(
+        request(
+          VOICE_MEDIA_ROUTES.clientConnect,
+          json({
+            version: VOICE_MEDIA_PROTOCOL_VERSION,
+            clientId: CLIENT_ID,
+            connectionId: CONNECTION_ID,
+            clientKind: 'native',
+            controlLocation: 'local',
+            capabilities: { capture: true, playback: true, captureActivity, autonomousOrchestration },
+          }),
+        ),
+      );
+      expect(connected.status).toBe(200);
+      const started = await api.fetch(
+        request(
+          VOICE_MEDIA_ROUTES.hostCaptureStart,
+          json({
+            captureId: 'fallback-capture',
+            configuration: { mode: 'autonomous', activityControl: 'client', endpointSilenceMs: 3_000 },
+          }),
+          true,
+        ),
+      );
+      expect(started.status).toBe(201);
+      expect(await nextEvent(api, 0)).toMatchObject({
+        type: 'capture-start',
+        configuration: { mode: 'autonomous', activityControl: 'host', endpointSilenceMs: 3_000 },
+      });
+      api.close();
+    },
+  );
   it('streams browser PCM to an authenticated host capture and drains cleanly', async () => {
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
     await connect(api);
@@ -323,11 +366,27 @@ describe('voice client media session API', () => {
       (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-1' })))).status,
     ).toBe(404);
     expect(
-      (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-1' }), true))).status,
+      (
+        await api.fetch(
+          request(
+            VOICE_MEDIA_ROUTES.hostCaptureStart,
+            json({
+              captureId: 'capture-1',
+              configuration: { mode: 'autonomous', activityControl: 'client', endpointSilenceMs: 3_000 },
+            }),
+            true,
+          ),
+        )
+      ).status,
     ).toBe(201);
 
     const started = await nextEvent(api, 0);
-    expect(started).toMatchObject({ type: 'capture-start', captureId: 'capture-1', sampleRate: 16_000 });
+    expect(started).toMatchObject({
+      type: 'capture-start',
+      captureId: 'capture-1',
+      sampleRate: 16_000,
+      configuration: { mode: 'autonomous', activityControl: 'client', endpointSilenceMs: 3_000 },
+    });
 
     const pcm = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const accepted = await api.fetch(
@@ -335,7 +394,12 @@ describe('voice client media session API', () => {
         `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&captureId=capture-1`,
         {
           method: 'POST',
-          headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
+          headers: {
+            'content-type': VOICE_MEDIA_CONTENT_TYPE,
+            [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: 'speech',
+            [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: '-41.5',
+            [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: '700',
+          },
           body: pcm,
         },
       ),
@@ -345,6 +409,9 @@ describe('voice client media session API', () => {
     const audio = await api.fetch(request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-1`, {}, true));
     expect(audio.status).toBe(200);
     expect(new Uint8Array(await audio.arrayBuffer())).toEqual(pcm);
+    expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
+    expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_LEVEL_HEADER)).toBe('-41.5');
+    expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER)).toBe('700');
 
     expect(
       (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStop, json({ captureId: 'capture-1' }), true))).status,
@@ -363,6 +430,57 @@ describe('voice client media session API', () => {
     const drained = await api.fetch(request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-1`, {}, true));
     expect(drained.status).toBe(204);
     expect(drained.headers.get('x-doompi-capture-state')).toBe('stopped');
+    api.close();
+  });
+
+  it('preserves queued speech and endpoint transitions in separate host reads', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await connect(api);
+    expect(
+      (
+        await api.fetch(
+          request(
+            VOICE_MEDIA_ROUTES.hostCaptureStart,
+            json({
+              captureId: 'capture-transitions',
+              configuration: { mode: 'autonomous', activityControl: 'client', endpointSilenceMs: 600 },
+            }),
+            true,
+          ),
+        )
+      ).status,
+    ).toBe(201);
+    const audioRoute = `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&captureId=capture-transitions`;
+    const upload = (state: 'speech' | 'endpoint', elapsedMs: number, pcm: Uint8Array): Promise<Response> =>
+      Promise.resolve(
+        api.fetch(
+          request(audioRoute, {
+            method: 'POST',
+            headers: {
+              'content-type': VOICE_MEDIA_CONTENT_TYPE,
+              [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: state,
+              [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: state === 'speech' ? '-35' : '-80',
+              [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(elapsedMs),
+            },
+            body: pcm,
+          }),
+        ),
+      );
+    const speechPcm = new Uint8Array([1, 2]);
+    const endpointPcm = new Uint8Array([3, 4]);
+    expect((await upload('speech', 500, speechPcm)).status).toBe(204);
+    expect((await upload('endpoint', 1_100, endpointPcm)).status).toBe(204);
+
+    const speech = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-transitions`, {}, true),
+    );
+    const endpoint = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-transitions`, {}, true),
+    );
+    expect(new Uint8Array(await speech.arrayBuffer())).toEqual(speechPcm);
+    expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
+    expect(new Uint8Array(await endpoint.arrayBuffer())).toEqual(endpointPcm);
+    expect(endpoint.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('endpoint');
     api.close();
   });
 
@@ -408,7 +526,7 @@ describe('voice client media session API', () => {
           connectionId: 'another-connection',
           clientKind: 'browser',
           controlLocation: 'local',
-          capabilities: { capture: true, playback: true },
+          capabilities: { capture: true, playback: true, captureActivity: true, autonomousOrchestration: true },
         }),
       ),
     );
@@ -440,7 +558,7 @@ describe('voice client media session API', () => {
           connectionId: 'remote-connection',
           clientKind: 'browser',
           controlLocation: 'remote',
-          capabilities: { capture: true, playback: true },
+          capabilities: { capture: true, playback: true, captureActivity: true, autonomousOrchestration: true },
         }),
       ),
     );
@@ -456,7 +574,7 @@ describe('voice client media session API', () => {
           connectionId: 'local-connection-2',
           clientKind: 'browser',
           controlLocation: 'local',
-          capabilities: { capture: true, playback: true },
+          capabilities: { capture: true, playback: true, captureActivity: true, autonomousOrchestration: true },
         }),
       ),
     );
@@ -507,6 +625,88 @@ describe('voice client media session API', () => {
       request(`${VOICE_MEDIA_ROUTES.clientEvents}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&after=0`),
     );
     expect(stalePoll.status).toBe(409);
+    api.close();
+  });
+
+  it('does not forward reordered client activity while preserving its PCM', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await connect(api);
+    const started = await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.hostCaptureStart,
+        json({
+          captureId: 'capture-ordered',
+          configuration: { mode: 'autonomous', activityControl: 'client', endpointSilenceMs: 600 },
+        }),
+        true,
+      ),
+    );
+    expect(started.status).toBe(201);
+
+    const audioRoute = `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&captureId=capture-ordered`;
+    const send = (state: 'listening' | 'speech' | 'endpoint', elapsedMs: number): Promise<Response> =>
+      Promise.resolve(
+        api.fetch(
+          request(audioRoute, {
+            method: 'POST',
+            headers: {
+              'content-type': VOICE_MEDIA_CONTENT_TYPE,
+              [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: state,
+              [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: '-41',
+              [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(elapsedMs),
+            },
+            body: new Uint8Array([1, 2]),
+          }),
+        ),
+      );
+
+    expect((await send('speech', 500)).status).toBe(204);
+    const speech = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
+    );
+    expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
+
+    expect((await send('endpoint', 400)).status).toBe(204);
+    const reordered = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
+    );
+    expect(new Uint8Array(await reordered.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
+    expect(reordered.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBeNull();
+    api.close();
+  });
+
+  it('bounds reconnect recovery to a new capture and rejects stale capture uploads', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await connect(api);
+    expect(
+      (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-before' }), true)))
+        .status,
+    ).toBe(201);
+
+    await connect(api, 'replacement-connection');
+    expect(
+      (await api.fetch(request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-before`, {}, true))).status,
+    ).toBe(410);
+    expect(
+      (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-after' }), true)))
+        .status,
+    ).toBe(201);
+
+    const staleUpload = await api.fetch(
+      request(
+        `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=replacement-connection&captureId=capture-before`,
+        {
+          method: 'POST',
+          headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
+          body: new Uint8Array([1, 2]),
+        },
+      ),
+    );
+    expect(staleUpload.status).toBe(409);
+    const current = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-after`, {}, true),
+    );
+    expect(current.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBeNull();
     api.close();
   });
 });

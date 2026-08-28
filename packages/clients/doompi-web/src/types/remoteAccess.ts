@@ -33,14 +33,16 @@ export const PAIRING_STATUS_QUERY = 'request';
 export const DEVICE_COOKIE = 'doompi_device';
 
 /**
- * Passkey sign-in, reachable without a session on the tunnel listener.
+ * Passkey ceremonies exposed directly on the pairing surface.
  *
- * It has to be: proving a registered passkey is how a returning device gets a
- * session in the first place, so gating these behind one would mean a passkey
- * could never be used and every visit would need another QR.
+ * Sign-in is unauthenticated because it creates a session. Registration requires
+ * the paired device cookie issued after host approval, but remains direct so the
+ * self-contained pairing page can offer enrolment before loading the cockpit.
  */
 export const PASSKEY_AUTH_BEGIN_ROUTE = '/api/remote/passkeys/authenticate/begin';
 export const PASSKEY_AUTH_FINISH_ROUTE = '/api/remote/passkeys/authenticate/finish';
+export const PASSKEY_REGISTER_BEGIN_ROUTE = '/api/remote/passkeys/register/begin';
+export const PASSKEY_REGISTER_FINISH_ROUTE = '/api/remote/passkeys/register/finish';
 
 /** Header carrying a step-up assertion for an action that needs more than a live session. */
 export const STEP_UP_HEADER = 'x-doompi-assertion';

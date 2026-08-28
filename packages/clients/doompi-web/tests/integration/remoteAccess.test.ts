@@ -772,16 +772,30 @@ describe('passkeys', () => {
     expect(response.status).toBe(409);
   });
 
-  it('keeps enrolment on the host, because enrolling is granting access', async () => {
+  it('lets only a host-approved device reach direct registration', async () => {
+    const headers = { 'content-type': 'application/json', origin: tunnelOrigin() };
+    const unpaired = await fetch(tunnelUrl('/api/remote/passkeys/register/begin'), {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+    expect(unpaired.status).toBe(401);
+
     const cookie = cookieValue(await pair());
-    for (const route of ['/api/remote/passkeys/register/begin', '/api/remote/passkeys/register/finish']) {
-      const response = await sealedFetch(cookie, route, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      expect(response.status, route).toBe(403);
-    }
+    const begun = await fetch(tunnelUrl('/api/remote/passkeys/register/begin'), {
+      method: 'POST',
+      headers: { ...headers, cookie },
+      body: '{}',
+    });
+    // The quick tunnel cannot finish a passkey ceremony, but authorization passed.
+    expect(begun.status).toBe(409);
+
+    const malformedFinish = await fetch(tunnelUrl('/api/remote/passkeys/register/finish'), {
+      method: 'POST',
+      headers: { ...headers, cookie },
+      body: '{}',
+    });
+    expect(malformedFinish.status).toBe(400);
   });
 
   it('refuses to forget a passkey that is not registered', async () => {

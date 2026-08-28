@@ -16,6 +16,8 @@ interface WeightedGuard {
 export interface NarrationBargeInEvidence {
   exactStopCommand: boolean;
   intentionalAddress?: boolean;
+  classifierConfirmed?: boolean;
+  classifierSpeechMs?: number;
   residualTokenCount: number;
   residualRatio: number;
   voicedMs: number;
@@ -46,6 +48,7 @@ export interface NarrationBargeInProbe {
   startPhrases: readonly string[];
   stopPhrases: readonly string[];
   noiseProfile?: VadNoiseProfile;
+  classifierSpeechMs?: number;
 }
 
 export interface NarrationBargeInMonitorDependencies {
@@ -143,24 +146,29 @@ function exactResidualStopCommand(
 
 export function rankNarrationBargeInEvidence(evidence: NarrationBargeInEvidence): number {
   if (evidence.exactStopCommand) return 100;
+  const classifierSpeechMs = evidence.classifierSpeechMs ?? 0;
   const guards: readonly WeightedGuard[] = [
-    { matched: evidence.intentionalAddress === true, weight: 40 },
-    { matched: evidence.residualTokenCount >= 2, weight: 45 },
-    { matched: evidence.residualTokenCount >= 4, weight: 15 },
-    { matched: evidence.residualRatio >= 0.3, weight: 20 },
-    { matched: evidence.voicedMs >= 400, weight: 15 },
+    { matched: evidence.intentionalAddress === true, weight: 30 },
+    { matched: evidence.classifierConfirmed === true || classifierSpeechMs >= 120, weight: 35 },
+    { matched: classifierSpeechMs >= 300, weight: 15 },
+    { matched: evidence.residualTokenCount >= 1, weight: 30 },
+    { matched: evidence.residualTokenCount >= 2, weight: 20 },
+    { matched: evidence.residualTokenCount >= 4, weight: 10 },
+    { matched: evidence.residualRatio >= 0.3, weight: 15 },
+    { matched: evidence.voicedMs >= 300, weight: 10 },
     { matched: evidence.peakDbAboveNoise >= 6, weight: 10 },
     { matched: evidence.signalVariationDb >= 3, weight: 10 },
-    { matched: evidence.residualTokenCount > 0 && evidence.narrationSimilarity >= 0.75, weight: -40 },
+    { matched: evidence.residualTokenCount > 0 && evidence.narrationSimilarity >= 0.75, weight: -50 },
   ];
   return guards.reduce((score, guard) => score + (guard.matched ? guard.weight : 0), 0);
 }
 
 export function narrationBargeInIsActionable(evidence: NarrationBargeInEvidence): boolean {
+  const speechAuthority = evidence.intentionalAddress === true || evidence.classifierConfirmed === true;
   return (
     evidence.exactStopCommand ||
-    (evidence.intentionalAddress === true &&
-      evidence.residualTokenCount >= 2 &&
+    (speechAuthority &&
+      evidence.residualTokenCount >= 1 &&
       rankNarrationBargeInEvidence(evidence) >= MINIMUM_BARGE_IN_SCORE)
   );
 }
@@ -172,6 +180,7 @@ export function analyzeNarrationBargeIn(input: {
   stopPhrases: readonly string[];
   pcm: Buffer;
   noiseProfile?: VadNoiseProfile;
+  classifierSpeechMs?: number;
 }): NarrationBargeInDecision {
   const activity = overlapActivity(input.pcm, input.noiseProfile);
   const analysis = extractNovelNarrationResidual(input.transcript, input.referenceText);
@@ -181,6 +190,7 @@ export function analyzeNarrationBargeIn(input: {
   const levels = activity.buckets.map((bucket) => bucket.levelDbAboveNoise);
   const peakDbAboveNoise = levels.length > 0 ? Math.max(...levels) : 0;
   const signalVariationDb = levels.length > 1 ? Math.max(...levels) - Math.min(...levels) : 0;
+  const classifierSpeechMs = Math.max(0, input.classifierSpeechMs ?? 0);
   const evidence: NarrationBargeInEvidence = {
     exactStopCommand: exactResidualStopCommand(
       analysis.residualRuns,
@@ -189,6 +199,8 @@ export function analyzeNarrationBargeIn(input: {
       analysis.echoAligned,
     ),
     intentionalAddress: address.detected,
+    classifierConfirmed: classifierSpeechMs >= 120,
+    classifierSpeechMs,
     residualTokenCount,
     residualRatio: transcriptTokenCount > 0 ? residualTokenCount / transcriptTokenCount : 0,
     voicedMs: activity.voicedMs,
@@ -210,6 +222,7 @@ export class NarrationBargeInMonitor {
   private awaitingAuthority = false;
   private promoted = false;
   private discarded = false;
+  private classifierSpeechMs = 0;
 
   public constructor(private readonly dependencies: NarrationBargeInMonitorDependencies) {}
 
@@ -233,10 +246,11 @@ export class NarrationBargeInMonitor {
     if (!this.promoted) this.reset();
   }
 
-  public observe(frame: Buffer, observedAt: number, noiseProfile?: VadNoiseProfile): void {
+  public observe(frame: Buffer, observedAt: number, noiseProfile?: VadNoiseProfile, classifierSpeechMs = 0): void {
     if (!this.reference || this.promoted || this.discarded) return;
     if (frame.length !== PCM_FRAME_BYTES)
       throw new Error(`Barge-in monitor requires ${PCM_FRAME_BYTES}-byte PCM frames`);
+    this.classifierSpeechMs = Math.max(this.classifierSpeechMs, classifierSpeechMs);
     this.frames.push(Buffer.from(frame));
     while (this.frames.length > OVERLAP_RING_FRAMES) this.frames.shift();
     if (this.awaitingAuthority || observedAt < this.nextProbeAt || this.frames.length < PROBE_FRAMES) return;
@@ -250,6 +264,7 @@ export class NarrationBargeInMonitor {
       startPhrases: [...this.reference.startPhrases],
       stopPhrases: [...this.reference.stopPhrases],
       ...(noiseProfile ? { noiseProfile: { ...noiseProfile } } : {}),
+      classifierSpeechMs: this.classifierSpeechMs,
     };
     this.schedule(probe);
   }
@@ -310,6 +325,9 @@ export class NarrationBargeInMonitor {
         stopPhrases: active.probe.stopPhrases,
         pcm: active.probe.pcm,
         ...(active.probe.noiseProfile ? { noiseProfile: active.probe.noiseProfile } : {}),
+        ...(active.probe.classifierSpeechMs === undefined
+          ? {}
+          : { classifierSpeechMs: active.probe.classifierSpeechMs }),
       });
       if (decision.actionable) {
         this.awaitingAuthority = true;
@@ -338,5 +356,6 @@ export class NarrationBargeInMonitor {
     this.awaitingAuthority = false;
     this.promoted = false;
     this.discarded = false;
+    this.classifierSpeechMs = 0;
   }
 }

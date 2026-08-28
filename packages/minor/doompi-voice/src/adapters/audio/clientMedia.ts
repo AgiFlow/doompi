@@ -12,6 +12,7 @@ import type {
   ITtsAdapter,
   IVoiceMediaHostConnection,
   LiveRecordingHandle,
+  PcmAudioRecorderStartOptions,
   ProcessResult,
   TtsPlayback,
   TtsPlaybackReference,
@@ -20,7 +21,14 @@ import type {
   VoiceMediaAudioPoll,
 } from '../../types/index.ts';
 import {
+  VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
+  VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER,
+  VOICE_MEDIA_ACTIVITY_STATE_HEADER,
   VOICE_MEDIA_API_BASE_PATH,
+  type VoiceMediaCaptureActivity,
+  type VoiceMediaCaptureConfiguration,
   VOICE_MEDIA_CONTENT_TYPE,
   type VoiceMediaPlaybackResult,
   VOICE_MEDIA_ROUTES,
@@ -53,8 +61,8 @@ export interface UnixVoiceMediaHostOptions {
 export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
   public constructor(private readonly options: UnixVoiceMediaHostOptions) {}
 
-  public async startCapture(captureId: string): Promise<void> {
-    await this.expect(this.request('POST', VOICE_MEDIA_ROUTES.hostCaptureStart, { captureId }), 201);
+  public async startCapture(captureId: string, configuration: VoiceMediaCaptureConfiguration): Promise<void> {
+    await this.expect(this.request('POST', VOICE_MEDIA_ROUTES.hostCaptureStart, { captureId, configuration }), 201);
   }
 
   public async readCapture(captureId: string): Promise<VoiceMediaAudioPoll> {
@@ -63,7 +71,8 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
       `${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=${encodeURIComponent(captureId)}`,
     );
     if (response.status === 200 && response.headers['content-type']?.startsWith(VOICE_MEDIA_CONTENT_TYPE)) {
-      return { pcm: response.body, state: 'active' as const };
+      const activity = this.captureActivity(response.headers);
+      return { pcm: response.body, state: 'active' as const, ...(activity === undefined ? {} : { activity }) };
     }
     if (response.status === 204) {
       const rawState = response.headers['x-doompi-capture-state'];
@@ -141,6 +150,31 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
     });
   }
 
+  private captureActivity(headers: http.IncomingHttpHeaders): VoiceMediaCaptureActivity | undefined {
+    const state = headers[VOICE_MEDIA_ACTIVITY_STATE_HEADER];
+    if (state === undefined) return undefined;
+    const levelDbfs = Number(headers[VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]);
+    const elapsedMs = Number(headers[VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]);
+    const epochHeader = headers[VOICE_MEDIA_ACTIVITY_EPOCH_HEADER];
+    const speechMsHeader = headers[VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER];
+    const epoch = epochHeader === undefined ? undefined : Number(epochHeader);
+    const classifiedSpeechMs = speechMsHeader === undefined ? undefined : Number(speechMsHeader);
+    if (
+      (state !== 'listening' && state !== 'speech' && state !== 'endpoint') ||
+      !Number.isFinite(levelDbfs) ||
+      !Number.isSafeInteger(elapsedMs) ||
+      (epoch !== undefined && (!Number.isSafeInteger(epoch) || epoch < 0)) ||
+      (classifiedSpeechMs !== undefined && (!Number.isSafeInteger(classifiedSpeechMs) || classifiedSpeechMs < 0))
+    )
+      throw new Error('Voice media client returned invalid capture activity.');
+    return {
+      state,
+      levelDbfs,
+      elapsedMs,
+      ...(epoch === undefined ? {} : { epoch }),
+      ...(classifiedSpeechMs === undefined ? {} : { classifiedSpeechMs }),
+    };
+  }
   private async expect(pending: Promise<UnixResponse>, status: number): Promise<void> {
     const response = await pending;
     if (response.status !== status) throw this.responseError(response);
@@ -179,8 +213,9 @@ class ClientPcmRecording implements LiveRecordingHandle {
   public constructor(
     private readonly connection: IVoiceMediaHostConnection,
     onFrame: (frame: Buffer) => void,
+    private readonly options: PcmAudioRecorderStartOptions,
   ) {
-    this.started = connection.startCapture(this.captureId);
+    this.started = connection.startCapture(this.captureId, options.capture);
     this.completion = this.consume(onFrame).catch(failedProcess);
   }
 
@@ -198,6 +233,7 @@ class ClientPcmRecording implements LiveRecordingHandle {
     await this.started;
     while (!this.aborting) {
       const batch = await this.connection.readCapture(this.captureId);
+      if (batch.activity !== undefined) this.options.onClientActivity?.(batch.activity);
       for (const frame of this.assembler.push(batch.pcm)) onFrame(frame);
       if (batch.state === 'stopped') return { code: 0, stdout: '', stderr: '' };
     }
@@ -228,8 +264,14 @@ export class ClientPcmAudioRecorder implements IPcmAudioRecorder {
 
   public preflight(_config: ResolvedVoiceConfig): void {}
 
-  public start(_config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle {
-    return new ClientPcmRecording(this.connection, onFrame);
+  public start(
+    _config: ResolvedVoiceConfig,
+    onFrame: (frame: Buffer) => void,
+    options: PcmAudioRecorderStartOptions = {
+      capture: { mode: 'manual', activityControl: 'host' },
+    },
+  ): LiveRecordingHandle {
+    return new ClientPcmRecording(this.connection, onFrame, options);
   }
 }
 

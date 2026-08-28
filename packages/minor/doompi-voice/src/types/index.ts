@@ -1,6 +1,10 @@
 import type { IDoomConfigLoader } from '@agimon-ai/doompi-config/types';
 import type { ResolvedVoiceConfig, VoiceAdapterConfig, VoiceEngine, VoiceTtsConfig } from '@agimon-ai/doompi-config';
-import type { VoiceMediaPlaybackResult } from './clientMedia.ts';
+import type {
+  VoiceMediaCaptureActivity,
+  VoiceMediaCaptureConfiguration,
+  VoiceMediaPlaybackResult,
+} from './clientMedia.ts';
 
 /** Everything the voice runtime is assembled from. */
 export interface VoiceDependencies {
@@ -86,19 +90,30 @@ export interface LiveRecordingHandle {
   // biome-ignore lint/suspicious/noConfusingVoidType: Public adapters may abort without buffered audio.
   abort(): Promise<Buffer | void>;
 }
+export interface PcmAudioRecorderStartOptions {
+  capture: VoiceMediaCaptureConfiguration;
+  onClientActivity?(activity: VoiceMediaCaptureActivity): void;
+}
+
 export interface IPcmAudioRecorder {
   preflight(config: ResolvedVoiceConfig): void;
-  start(config: ResolvedVoiceConfig, onFrame: (frame: Buffer) => void): LiveRecordingHandle;
+  start(
+    config: ResolvedVoiceConfig,
+    onFrame: (frame: Buffer) => void,
+    options?: PcmAudioRecorderStartOptions,
+  ): LiveRecordingHandle;
 }
 
 export interface VoiceMediaAudioPoll {
   pcm: Buffer;
   state: 'active' | 'stopping' | 'stopped';
+  activity?: VoiceMediaCaptureActivity;
 }
 
 /** Agent-side half of the client media transport. */
+/** Agent-side half of the client media transport. */
 export interface IVoiceMediaHostConnection {
-  startCapture(captureId: string): Promise<void>;
+  startCapture(captureId: string, configuration: VoiceMediaCaptureConfiguration): Promise<void>;
   readCapture(captureId: string): Promise<VoiceMediaAudioPoll>;
   stopCapture(captureId: string): Promise<void>;
   abortCapture(captureId: string): Promise<void>;

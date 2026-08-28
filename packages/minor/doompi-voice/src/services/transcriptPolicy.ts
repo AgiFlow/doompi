@@ -204,17 +204,15 @@ export function applyTranscriptPolicy(input: TranscriptPolicyInput): TranscriptP
       input.startPhrases,
       overlap ? MAX_MISALIGNED_NARRATION_TAIL_TOKENS : 0,
     );
+    const accepted = addressedText ?? residual;
     const composition =
-      addressedText === undefined
-        ? undefined
-        : (compositionCommand(residual, compositionState, compositionPhrases) ??
-          compositionCommand(addressedText, compositionState, compositionPhrases));
+      compositionCommand(residual, compositionState, compositionPhrases) ??
+      (accepted === residual ? undefined : compositionCommand(accepted, compositionState, compositionPhrases));
     if (composition) return composition;
     if (input.stopPhrases.some((phrase) => exactPhrase(residual, phrase))) return { action: 'stop' };
-    if (addressedText === undefined) return { action: 'discard', reason: 'narration-echo' };
-    if (!addressedText) return { action: 'discard', reason: 'empty' };
-    if (input.stopPhrases.some((phrase) => exactPhrase(addressedText, phrase))) return { action: 'stop' };
-    return acceptedText(addressedText, compositionState);
+    if (!accepted) return { action: 'discard', reason: 'empty' };
+    if (input.stopPhrases.some((phrase) => exactPhrase(accepted, phrase))) return { action: 'stop' };
+    return acceptedText(accepted, compositionState);
   }
 
   const composition = compositionCommand(transcript, compositionState, compositionPhrases);

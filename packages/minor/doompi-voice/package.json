@@ -32,6 +32,7 @@
     "llms.txt",
     "src/prompts",
     "src/types/clientMedia.ts",
+    "src/types/clientCaptureActivity.ts",
     "README.md",
     "LICENSE",
     "package.json"
@@ -83,6 +84,7 @@
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
+    "onnxruntime-web": "1.23.2",
     "sherpa-onnx-node": "1.13.6",
     "xstate": "5.32.5"
   },

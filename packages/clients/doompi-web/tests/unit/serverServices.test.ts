@@ -123,6 +123,7 @@ describe('static assets', () => {
     expect(contentTypeFor('/x/index.html')).toBe('text/html; charset=utf-8');
     expect(contentTypeFor('/x/app.JS')).toBe('text/javascript; charset=utf-8');
     expect(contentTypeFor('/x/font.woff2')).toBe('font/woff2');
+    expect(contentTypeFor('/x/runtime.wasm')).toBe('application/wasm');
     expect(contentTypeFor('/x/thing.bin')).toBe('application/octet-stream');
   });
 });

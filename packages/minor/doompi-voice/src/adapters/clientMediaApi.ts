@@ -1,7 +1,14 @@
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
 import {
+  VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
+  VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER,
+  VOICE_MEDIA_ACTIVITY_STATE_HEADER,
   VOICE_MEDIA_API_BASE_PATH,
   VOICE_MEDIA_BITS_PER_SAMPLE,
+  type VoiceMediaCaptureActivity,
+  type VoiceMediaCaptureConfiguration,
   type VoiceMediaClientEvent,
   type VoiceMediaConnectRequest,
   type VoiceMediaPlaybackOutcome,
@@ -27,17 +34,27 @@ interface ClientLease {
   connectionId: string;
   capture: boolean;
   playback: boolean;
+  captureActivity: boolean;
+  autonomousOrchestration: boolean;
+  playbackDucking: boolean;
   controlLocation: VoiceMediaConnectRequest['controlLocation'];
   lastSeenAt: number;
 }
 
 type CaptureState = 'active' | 'stopping' | 'stopped' | 'aborted' | 'failed';
 
+interface QueuedAudioBatch {
+  pcm: Uint8Array;
+  activity?: VoiceMediaCaptureActivity;
+}
+
 interface HostedCapture {
   id: string;
   state: CaptureState;
-  chunks: Uint8Array[];
+  batches: QueuedAudioBatch[];
   queuedBytes: number;
+  configuration: VoiceMediaCaptureConfiguration;
+  lastActivity?: VoiceMediaCaptureActivity;
   error?: string;
 }
 
@@ -80,6 +97,41 @@ async function jsonRecord(request: Request): Promise<Record<string, unknown> | u
 function playbackOutcome(value: unknown): VoiceMediaPlaybackOutcome | undefined {
   if (value === 'completed' || value === 'stopped' || value === 'aborted' || value === 'failed') return value;
   return undefined;
+}
+
+function activityOrder(state: VoiceMediaCaptureActivity['state']): number {
+  return state === 'listening' ? 0 : state === 'speech' ? 1 : 2;
+}
+
+function captureActivity(request: Request): VoiceMediaCaptureActivity | undefined | null {
+  const state = request.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER);
+  const level = request.headers.get(VOICE_MEDIA_ACTIVITY_LEVEL_HEADER);
+  const elapsed = request.headers.get(VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER);
+  const epoch = request.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER);
+  const speechMs = request.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER);
+  if (state === null && level === null && elapsed === null && epoch === null && speechMs === null) return undefined;
+  const levelDbfs = Number(level);
+  const elapsedMs = Number(elapsed);
+  const activityEpoch = epoch === null ? undefined : Number(epoch);
+  const classifiedSpeechMs = speechMs === null ? undefined : Number(speechMs);
+  if (
+    (state !== 'listening' && state !== 'speech' && state !== 'endpoint') ||
+    !Number.isFinite(levelDbfs) ||
+    levelDbfs < -120 ||
+    levelDbfs > 0 ||
+    !Number.isSafeInteger(elapsedMs) ||
+    elapsedMs < 0 ||
+    (activityEpoch !== undefined && (!Number.isSafeInteger(activityEpoch) || activityEpoch < 0)) ||
+    (classifiedSpeechMs !== undefined && (!Number.isSafeInteger(classifiedSpeechMs) || classifiedSpeechMs < 0))
+  )
+    return null;
+  return {
+    state,
+    levelDbfs,
+    elapsedMs,
+    ...(activityEpoch === undefined ? {} : { epoch: activityEpoch }),
+    ...(classifiedSpeechMs === undefined ? {} : { classifiedSpeechMs }),
+  };
 }
 
 class VoiceMediaBroker implements DoomApiHandler {
@@ -153,7 +205,10 @@ class VoiceMediaBroker implements DoomApiHandler {
       (body.clientKind !== 'browser' && body.clientKind !== 'native') ||
       (body.controlLocation !== 'local' && body.controlLocation !== 'remote') ||
       typeof capabilities?.capture !== 'boolean' ||
-      typeof capabilities.playback !== 'boolean'
+      typeof capabilities.playback !== 'boolean' ||
+      typeof capabilities.captureActivity !== 'boolean' ||
+      typeof capabilities.autonomousOrchestration !== 'boolean' ||
+      (capabilities.playbackDucking !== undefined && typeof capabilities.playbackDucking !== 'boolean')
     ) {
       return errorResponse('Invalid voice media client declaration.', 400);
     }
@@ -179,6 +234,9 @@ class VoiceMediaBroker implements DoomApiHandler {
       connectionId: declaration.connectionId,
       capture: declaration.capabilities.capture,
       playback: declaration.capabilities.playback,
+      captureActivity: declaration.capabilities.captureActivity,
+      autonomousOrchestration: declaration.capabilities.autonomousOrchestration,
+      playbackDucking: declaration.capabilities.playbackDucking === true,
       controlLocation: declaration.controlLocation,
       lastSeenAt: this.now(),
     };
@@ -229,6 +287,10 @@ class VoiceMediaBroker implements DoomApiHandler {
       (capture.state !== 'active' && capture.state !== 'stopping')
     )
       return errorResponse('Voice capture is not active.', 409);
+    const activity = captureActivity(request);
+    if (activity === null) return errorResponse('Voice capture activity is invalid.', 400);
+    if (activity !== undefined && capture.configuration.activityControl !== 'client')
+      return errorResponse('Voice capture activity belongs to the host.', 409);
     if (request.headers.get('content-type') !== VOICE_MEDIA_CONTENT_TYPE)
       return errorResponse('Voice audio must be PCM16.', 415);
     const declaredLength = Number(request.headers.get('content-length') ?? '0');
@@ -238,7 +300,21 @@ class VoiceMediaBroker implements DoomApiHandler {
       return errorResponse('Voice audio chunk must contain complete PCM16 samples.', 400);
     if (capture.queuedBytes + pcm.byteLength > MAX_QUEUED_AUDIO_BYTES)
       return errorResponse('Voice audio consumer is falling behind.', 429);
-    capture.chunks.push(pcm);
+    let acceptedActivity: VoiceMediaCaptureActivity | undefined;
+    const previousActivity = capture.lastActivity;
+    const previousEpoch = previousActivity?.epoch ?? 0;
+    const nextEpoch = activity?.epoch ?? 0;
+    if (
+      activity !== undefined &&
+      (previousActivity === undefined ||
+        (activity.elapsedMs >= previousActivity.elapsedMs &&
+          (nextEpoch > previousEpoch ||
+            (nextEpoch === previousEpoch && activityOrder(activity.state) >= activityOrder(previousActivity.state)))))
+    ) {
+      acceptedActivity = activity;
+      capture.lastActivity = activity;
+    }
+    capture.batches.push({ pcm, ...(acceptedActivity === undefined ? {} : { activity: acceptedActivity }) });
     capture.queuedBytes += pcm.byteLength;
     this.wake();
     return new Response(null, { status: 204 });
@@ -280,7 +356,17 @@ class VoiceMediaBroker implements DoomApiHandler {
 
   private async startCapture(request: Request): Promise<Response> {
     const body = await jsonRecord(request);
+    const requested = isRecord(body?.configuration) ? body.configuration : { mode: 'manual', activityControl: 'host' };
     if (!validId(body?.captureId)) return errorResponse('Voice capture id is required.', 400);
+    if (
+      (requested?.mode !== 'manual' && requested?.mode !== 'autonomous') ||
+      (requested.activityControl !== 'host' && requested.activityControl !== 'client') ||
+      (requested.endpointSilenceMs !== undefined &&
+        (typeof requested.endpointSilenceMs !== 'number' ||
+          !Number.isSafeInteger(requested.endpointSilenceMs) ||
+          requested.endpointSilenceMs < 250))
+    )
+      return errorResponse('Voice capture configuration is invalid.', 400);
     if (!(await this.clientAvailableAfterWait('capture')))
       return errorResponse('No capture-capable voice client is connected.', 503);
     if (
@@ -290,15 +376,26 @@ class VoiceMediaBroker implements DoomApiHandler {
       this.capture.state !== 'failed'
     )
       return errorResponse('Voice capture is already active.', 409);
-    this.capture = { id: body.captureId, state: 'active', chunks: [], queuedBytes: 0 };
+    const configuration: VoiceMediaCaptureConfiguration = {
+      mode: requested.mode,
+      activityControl:
+        requested.activityControl === 'client' &&
+        this.client?.captureActivity &&
+        (requested.mode !== 'autonomous' || this.client.autonomousOrchestration)
+          ? 'client'
+          : 'host',
+      ...(typeof requested.endpointSilenceMs === 'number' ? { endpointSilenceMs: requested.endpointSilenceMs } : {}),
+    };
+    this.capture = { id: body.captureId, state: 'active', batches: [], queuedBytes: 0, configuration };
     this.publish({
       type: 'capture-start',
       captureId: body.captureId,
       sampleRate: VOICE_MEDIA_SAMPLE_RATE,
       channels: VOICE_MEDIA_CHANNELS,
       bitsPerSample: VOICE_MEDIA_BITS_PER_SAMPLE,
+      configuration,
     });
-    return new Response(null, { status: 201 });
+    return Response.json({ configuration }, { status: 201 });
   }
 
   private async readAudio(url: URL): Promise<Response> {
@@ -308,7 +405,7 @@ class VoiceMediaBroker implements DoomApiHandler {
       return errorResponse('Voice capture does not match.', 409);
     let capture = this.capture;
     if (
-      capture.chunks.length === 0 &&
+      capture.batches.length === 0 &&
       capture.state !== 'stopped' &&
       capture.state !== 'aborted' &&
       capture.state !== 'failed'
@@ -317,16 +414,27 @@ class VoiceMediaBroker implements DoomApiHandler {
       capture = this.capture;
       if (capture?.id !== captureId) return errorResponse('Voice capture does not match.', 409);
     }
-    if (capture.chunks.length > 0) {
-      const pcm = new Uint8Array(capture.queuedBytes);
-      let offset = 0;
-      for (const chunk of capture.chunks) {
-        pcm.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-      capture.chunks = [];
-      capture.queuedBytes = 0;
-      return new Response(pcm, { headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE } });
+    const batch = capture.batches.shift();
+    if (batch !== undefined) {
+      capture.queuedBytes -= batch.pcm.byteLength;
+      return new Response(batch.pcm, {
+        headers: {
+          'content-type': VOICE_MEDIA_CONTENT_TYPE,
+          ...(batch.activity === undefined
+            ? {}
+            : {
+                [VOICE_MEDIA_ACTIVITY_STATE_HEADER]: batch.activity.state,
+                [VOICE_MEDIA_ACTIVITY_LEVEL_HEADER]: String(batch.activity.levelDbfs),
+                [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(batch.activity.elapsedMs),
+                ...(batch.activity.epoch === undefined
+                  ? {}
+                  : { [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: String(batch.activity.epoch) }),
+                ...(batch.activity.classifiedSpeechMs === undefined
+                  ? {}
+                  : { [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(batch.activity.classifiedSpeechMs) }),
+              }),
+        },
+      });
     }
     if (capture.state === 'aborted' || capture.state === 'failed')
       return errorResponse(capture.error ?? 'Voice media client stopped capture unexpectedly.', 410);
@@ -339,7 +447,7 @@ class VoiceMediaBroker implements DoomApiHandler {
       return errorResponse('Voice capture does not match.', 409);
     if (abort) {
       this.capture.state = 'aborted';
-      this.capture.chunks = [];
+      this.capture.batches = [];
       this.capture.queuedBytes = 0;
       this.publish({ type: 'capture-abort', captureId: body.captureId });
     } else if (this.capture.state === 'active') {

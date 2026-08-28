@@ -273,17 +273,21 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTr
   };
 
   return (
-    <div data-testid="subagents-panel" className="flex min-h-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-[26px] py-[18px]">
-        <div className="flex items-center gap-3 pb-3">
+    <div data-testid="subagents-panel" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-[26px] sm:py-[18px]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-3">
           <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">SUBAGENTS · this session</span>
-          <span className="min-w-0 flex-1" />
-          <span data-testid="subagents-tally" className="text-[9px] text-doom-faint">
+          <span className="hidden min-w-0 flex-1 sm:block" />
+          <span
+            data-testid="subagents-tally"
+            className="order-3 w-full text-[9px] text-doom-faint sm:order-none sm:w-auto"
+          >
             {runs.length === 0 ? 'no runs yet' : `${runningTally} running · ${doneTally} done · ${failedTally} failed`}
           </span>
           <Button
             variant="outline"
             size="xs"
+            className="ml-auto sm:ml-0"
             data-testid="subagents-launch"
             title="pick an agent from the catalog and launch it"
             onClick={showCatalog}
@@ -299,7 +303,10 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTr
           />
         ) : (
           <>
-            <div data-testid="subagents-grid" className="grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-4">
+            <div
+              data-testid="subagents-grid"
+              className="grid grid-cols-[repeat(auto-fill,minmax(min(420px,100%),1fr))] gap-4"
+            >
               {sessionId === null
                 ? null
                 : runs.map((run) => (

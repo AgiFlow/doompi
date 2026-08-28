@@ -21,6 +21,7 @@ export interface SettingsSection {
 const HOST_SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'providers', label: 'providers', detail: 'sign in to the model providers Pi can use' },
   { id: 'appearance', label: 'appearance', detail: 'pick the theme the cockpit renders with' },
+  { id: 'remote', label: 'remote control', detail: 'save a named tunnel for remote access' },
   { id: 'plugins', label: 'plugins', detail: 'the web plugins this bundle carries and what their install resolved' },
 ];
 

@@ -1,5 +1,6 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import type { IClock, IPcmAudioRecorder, LiveRecordingHandle, TimerHandle } from '../types/index.ts';
+import type { VoiceMediaCaptureActivity, VoiceMediaCaptureConfiguration } from '../types/clientMedia.ts';
 import { PCM_BYTES_PER_SAMPLE } from './pcm.ts';
 import type { ITurnSpool, TurnSnapshot } from './turnSpool.ts';
 
@@ -20,6 +21,8 @@ export interface CaptureSessionOptions {
   staleFrameMs?: number;
   maxRecoveryAttempts?: number;
   onFrame?: (frame: Buffer, captureGeneration: number) => void;
+  capture?: VoiceMediaCaptureConfiguration;
+  onClientActivity?: (activity: VoiceMediaCaptureActivity, captureGeneration: number) => void;
   shouldPersistPcm?(captureGeneration: number): boolean;
   onGap?: (gapCount: number) => void;
   onStateChange?: (state: CaptureSessionState) => void;
@@ -140,16 +143,26 @@ export class CaptureSession {
     this.options.spool.setCaptureGeneration(generation);
     const ready = readiness();
     let sawFirstFrame = false;
-    const handle = this.options.recorder.start(this.options.config, (frame) => {
-      if (!this.accepting || generation !== this.captureGeneration) return;
-      if (this.options.shouldPersistPcm?.(generation) !== false) this.options.spool.append(frame);
-      this.lastFrameAt = this.options.clock.now();
-      this.options.onFrame?.(frame, generation);
-      if (!sawFirstFrame) {
-        sawFirstFrame = true;
-        ready.resolve();
-      }
-    });
+    const handle = this.options.recorder.start(
+      this.options.config,
+      (frame) => {
+        if (!this.accepting || generation !== this.captureGeneration) return;
+        if (this.options.shouldPersistPcm?.(generation) !== false) this.options.spool.append(frame);
+        this.lastFrameAt = this.options.clock.now();
+        this.options.onFrame?.(frame, generation);
+        if (!sawFirstFrame) {
+          sawFirstFrame = true;
+          ready.resolve();
+        }
+      },
+      {
+        capture: this.options.capture ?? { mode: 'manual', activityControl: 'host' },
+        onClientActivity: (activity) => {
+          if (this.accepting && generation === this.captureGeneration)
+            this.options.onClientActivity?.(activity, generation);
+        },
+      },
+    );
     this.handle = handle;
     this.startupTimer = this.options.clock.setTimeout(() => {
       if (!sawFirstFrame && generation === this.captureGeneration)

@@ -16,6 +16,8 @@ import {
   PAIRING_STATUS_ROUTE,
   PASSKEY_AUTH_BEGIN_ROUTE,
   PASSKEY_AUTH_FINISH_ROUTE,
+  PASSKEY_REGISTER_BEGIN_ROUTE,
+  PASSKEY_REGISTER_FINISH_ROUTE,
   REMOTE_API_ROUTE,
   REMOTE_CHANNEL_ROUTE,
   type RemoteChannelScope,
@@ -191,6 +193,10 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     const deviceId = trusted ?? remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     return deviceId === undefined ? 'local' : `device:${deviceId}`;
   };
+  const registrationCaller = (context: Context): string | undefined => {
+    const caller = authenticatedCeremonyCaller(context);
+    return isLocal(context) || caller !== 'local' ? caller : undefined;
+  };
   const publicCeremonyCaller = (context: Context, create: boolean): string | undefined => {
     let token = getCookie(context, CEREMONY_CALLER_COOKIE, 'host');
     if (token !== undefined && !CEREMONY_CALLER_TOKEN.test(token)) token = undefined;
@@ -320,8 +326,8 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     return context.json({ state: remote.state(undefined, isLocal(context)) });
   });
 
-  // Passkeys. Registration is local-only: enrolling a credential is granting
-  // access, and a device that can grant access can make its own permanent.
+  // Registration is direct so the approved phone can enrol before opening the
+  // cockpit. On the tunnel listener, the device cookie remains mandatory.
   app.get(`${REMOTE_API_ROUTE}/passkeys`, (context) => {
     const passkeys = remote.passkeys();
     return context.json({
@@ -335,27 +341,39 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     });
   });
 
-  app.post(`${REMOTE_API_ROUTE}/passkeys/register/begin`, async (context) => {
-    const refused = localOnly(context);
-    if (refused) return refused;
-    const begun = await remote.passkeys().beginRegistration(authenticatedCeremonyCaller(context), labelFrom(context));
-    if (begun === undefined) return context.json({ error: remote.passkeys().support() }, CONFLICT);
-    return context.json(begun);
-  });
+  app.post(
+    PASSKEY_REGISTER_BEGIN_ROUTE,
+    publicBudget,
+    publicDeadline,
+    limitedJsonBody(PASSKEY_BEGIN_BODY_BYTES),
+    async (context) => {
+      const caller = registrationCaller(context);
+      if (caller === undefined) return context.json({ error: 'This device is not paired.' }, UNAUTHORIZED);
+      const begun = await remote.passkeys().beginRegistration(caller, labelFrom(context));
+      if (begun === undefined) return context.json({ error: remote.passkeys().support() }, CONFLICT);
+      return context.json(begun);
+    },
+  );
 
-  app.post(`${REMOTE_API_ROUTE}/passkeys/register/finish`, async (context) => {
-    const refused = localOnly(context);
-    if (refused) return refused;
-    const body = await readJson(context);
-    if (body === undefined || typeof body.ceremonyId !== 'string' || !('response' in body)) {
-      return context.json({ error: 'A ceremonyId and response are required.' }, BAD_REQUEST);
-    }
-    const outcome = await remote
-      .passkeys()
-      .finishRegistration(body.ceremonyId, authenticatedCeremonyCaller(context), body.response, labelFrom(context));
-    if (!outcome.ok) return context.json({ error: outcome.error }, BAD_REQUEST);
-    return context.json({ id: outcome.id });
-  });
+  app.post(
+    PASSKEY_REGISTER_FINISH_ROUTE,
+    publicBudget,
+    publicDeadline,
+    limitedJsonBody(PASSKEY_FINISH_BODY_BYTES),
+    async (context) => {
+      const caller = registrationCaller(context);
+      if (caller === undefined) return context.json({ error: 'This device is not paired.' }, UNAUTHORIZED);
+      const body = await readJson(context);
+      if (body === undefined || typeof body.ceremonyId !== 'string' || !('response' in body)) {
+        return context.json({ error: 'A ceremonyId and response are required.' }, BAD_REQUEST);
+      }
+      const outcome = await remote
+        .passkeys()
+        .finishRegistration(body.ceremonyId, caller, body.response, labelFrom(context));
+      if (!outcome.ok) return context.json({ error: outcome.error }, BAD_REQUEST);
+      return context.json({ id: outcome.id });
+    },
+  );
 
   // Sign-in is reachable unauthenticated on purpose: proving a registered
   // passkey is how a returning device gets a session without another QR.
