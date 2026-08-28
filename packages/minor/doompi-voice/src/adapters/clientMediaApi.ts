@@ -14,6 +14,7 @@ import {
 } from '../types/clientMedia.ts';
 
 const CLIENT_LEASE_MS = 15_000;
+const CLIENT_CONNECT_WAIT_MS = 3_000;
 const EVENT_WAIT_MS = 5_000;
 const AUDIO_WAIT_MS = 500;
 const MAX_AUDIO_CHUNK_BYTES = 64 * 1024;
@@ -26,6 +27,7 @@ interface ClientLease {
   connectionId: string;
   capture: boolean;
   playback: boolean;
+  controlLocation: VoiceMediaConnectRequest['controlLocation'];
   lastSeenAt: number;
 }
 
@@ -36,6 +38,7 @@ interface HostedCapture {
   state: CaptureState;
   chunks: Uint8Array[];
   queuedBytes: number;
+  error?: string;
 }
 
 interface HostedPlayback {
@@ -50,6 +53,7 @@ type UnsequencedEvent<Event extends VoiceMediaClientEvent> = Event extends Voice
 export interface VoiceMediaApiOptions {
   internalToken?: string;
   now?: () => number;
+  clientConnectWaitMs?: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,6 +85,7 @@ function playbackOutcome(value: unknown): VoiceMediaPlaybackOutcome | undefined 
 class VoiceMediaBroker implements DoomApiHandler {
   private readonly now: () => number;
   private readonly internalToken: string | undefined;
+  private readonly clientConnectWaitMs: number;
   private readonly events: VoiceMediaClientEvent[] = [];
   private readonly waiters = new Set<() => void>();
   private client: ClientLease | undefined;
@@ -92,6 +97,7 @@ class VoiceMediaBroker implements DoomApiHandler {
   public constructor(options: VoiceMediaApiOptions) {
     this.internalToken = options.internalToken;
     this.now = options.now ?? Date.now;
+    this.clientConnectWaitMs = options.clientConnectWaitMs ?? CLIENT_CONNECT_WAIT_MS;
   }
 
   public fetch(request: Request): Promise<Response> | Response {
@@ -145,6 +151,7 @@ class VoiceMediaBroker implements DoomApiHandler {
       !validId(body.clientId) ||
       !validId(body.connectionId) ||
       (body.clientKind !== 'browser' && body.clientKind !== 'native') ||
+      (body.controlLocation !== 'local' && body.controlLocation !== 'remote') ||
       typeof capabilities?.capture !== 'boolean' ||
       typeof capabilities.playback !== 'boolean'
     ) {
@@ -155,7 +162,8 @@ class VoiceMediaBroker implements DoomApiHandler {
     if (
       existing !== undefined &&
       existing.id !== declaration.clientId &&
-      this.now() - existing.lastSeenAt <= CLIENT_LEASE_MS
+      this.now() - existing.lastSeenAt <= CLIENT_LEASE_MS &&
+      !(declaration.controlLocation === 'remote' && existing.controlLocation === 'local')
     ) {
       return errorResponse('Another client owns voice media for this session.', 409);
     }
@@ -171,8 +179,10 @@ class VoiceMediaBroker implements DoomApiHandler {
       connectionId: declaration.connectionId,
       capture: declaration.capabilities.capture,
       playback: declaration.capabilities.playback,
+      controlLocation: declaration.controlLocation,
       lastSeenAt: this.now(),
     };
+    this.wake();
     return Response.json({ version: VOICE_MEDIA_PROTOCOL_VERSION, cursor: this.sequence });
   }
 
@@ -241,7 +251,12 @@ class VoiceMediaBroker implements DoomApiHandler {
     this.touchClient();
     if (!validId(body?.captureId) || this.capture?.id !== body.captureId)
       return errorResponse('Voice capture does not match.', 409);
-    if (this.capture.state !== 'aborted' && this.capture.state !== 'failed') this.capture.state = 'stopped';
+    if (typeof body.error === 'string' && body.error.trim() !== '') {
+      this.capture.state = 'failed';
+      this.capture.error = body.error.slice(0, 500);
+    } else if (this.capture.state !== 'aborted' && this.capture.state !== 'failed') {
+      this.capture.state = 'stopped';
+    }
     this.wake();
     return new Response(null, { status: 204 });
   }
@@ -266,7 +281,8 @@ class VoiceMediaBroker implements DoomApiHandler {
   private async startCapture(request: Request): Promise<Response> {
     const body = await jsonRecord(request);
     if (!validId(body?.captureId)) return errorResponse('Voice capture id is required.', 400);
-    if (!this.clientAvailable('capture')) return errorResponse('No capture-capable voice client is connected.', 503);
+    if (!(await this.clientAvailableAfterWait('capture')))
+      return errorResponse('No capture-capable voice client is connected.', 503);
     if (
       this.capture !== undefined &&
       this.capture.state !== 'stopped' &&
@@ -313,7 +329,7 @@ class VoiceMediaBroker implements DoomApiHandler {
       return new Response(pcm, { headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE } });
     }
     if (capture.state === 'aborted' || capture.state === 'failed')
-      return errorResponse('Voice media client stopped capture unexpectedly.', 410);
+      return errorResponse(capture.error ?? 'Voice media client stopped capture unexpectedly.', 410);
     return new Response(null, { status: 204, headers: { 'x-doompi-capture-state': capture.state } });
   }
 
@@ -338,7 +354,8 @@ class VoiceMediaBroker implements DoomApiHandler {
     const body = await jsonRecord(request);
     if (!validId(body?.playbackId) || typeof body.text !== 'string' || body.text.trim() === '')
       return errorResponse('Voice playback id and text are required.', 400);
-    if (!this.clientAvailable('playback')) return errorResponse('No playback-capable voice client is connected.', 503);
+    if (!(await this.clientAvailableAfterWait('playback')))
+      return errorResponse('No playback-capable voice client is connected.', 503);
     if (this.playback !== undefined && this.playback.result === undefined)
       return errorResponse('Voice playback is already active.', 409);
     this.playback = { id: body.playbackId };
@@ -389,6 +406,12 @@ class VoiceMediaBroker implements DoomApiHandler {
     const client = this.client;
     if (client === undefined || this.now() - client.lastSeenAt > CLIENT_LEASE_MS) return false;
     return client[capability];
+  }
+
+  private async clientAvailableAfterWait(capability: 'capture' | 'playback'): Promise<boolean> {
+    if (this.clientAvailable(capability)) return true;
+    if (this.clientConnectWaitMs > 0) await this.wait(this.clientConnectWaitMs);
+    return this.clientAvailable(capability);
   }
 
   private expireClientIfNeeded(): void {

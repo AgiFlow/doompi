@@ -14,7 +14,7 @@ const SCOPED_TRANSPORTS = [
   ['http', sealedHttpSession],
 ] as const;
 
-/** Stored by the pairing page so a reload can re-establish without another scan. */
+/** Stored after QR pairing or passkey sign-in so this tab can re-establish the ephemeral channel. */
 const HOST_KEY_STORAGE = 'doompi.channelKey';
 
 let restoration: Promise<boolean> | undefined;

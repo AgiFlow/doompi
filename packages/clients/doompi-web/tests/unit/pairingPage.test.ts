@@ -47,6 +47,12 @@ describe('the pairing page', () => {
     expect(html).not.toContain('location.search');
   });
 
+  it('stores the fresh host key returned by a passkey sign-in', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('rememberChannelKey(result.hostPublicKey)');
+    expect(html).toContain("sessionStorage.setItem('doompi.channelKey', value)");
+  });
+
   it('warns rather than silently failing without JavaScript', () => {
     expect(pairingPageHtml({ nonce: NONCE })).toContain('<noscript>');
   });

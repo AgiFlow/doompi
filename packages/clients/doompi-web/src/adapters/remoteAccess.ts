@@ -102,7 +102,7 @@ export interface RemoteAccess {
   };
   /** Whether this action needs a fresh gesture that has not been supplied. */
   stepUpRequired(action: StepUpAction): boolean;
-  /** The host's ephemeral public key for this tunnel, printed in the QR. */
+  /** The host's ephemeral public key for this tunnel, delivered after QR pairing or passkey sign-in. */
   channelPublicKey(): string | undefined;
   /** Completes one purpose-bound sealed channel against a fresh device key. */
   openChannel(deviceId: string, scope: RemoteChannelScope, clientPublicKey: string): boolean;

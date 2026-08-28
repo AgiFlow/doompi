@@ -40,9 +40,11 @@ const REQUEST_TIMEOUT = 408;
 const PUBLIC_REQUEST_CONCURRENCY = 8;
 const PUBLIC_REQUEST_TIMEOUT_MS = 5000;
 const PAIRING_BODY_BYTES = 2 * 1024;
+const CHANNEL_BODY_BYTES = 4 * 1024;
 const PASSKEY_BEGIN_BODY_BYTES = 256;
 const PASSKEY_FINISH_BODY_BYTES = 64 * 1024;
 const CEREMONY_CALLER_COOKIE = 'doompi_ceremony_caller';
+const CEREMONY_CALLER_TOKEN = /^[A-Za-z0-9_-]{22}$/u;
 const CEREMONY_CALLER_MAX_AGE_SECONDS = 10 * 60;
 const PUBLIC_BEGIN_LIMIT = 10;
 const PUBLIC_BEGIN_WINDOW_MS = 60_000;
@@ -191,8 +193,9 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
   };
   const publicCeremonyCaller = (context: Context, create: boolean): string | undefined => {
     let token = getCookie(context, CEREMONY_CALLER_COOKIE, 'host');
-    if (token === undefined && create) {
-      token = randomBytes(16).toString('base64url');
+    if (token !== undefined && !CEREMONY_CALLER_TOKEN.test(token)) token = undefined;
+    if (token === undefined && create) token = randomBytes(16).toString('base64url');
+    if (token !== undefined && create) {
       setCookie(context, CEREMONY_CALLER_COOKIE, token, {
         prefix: 'host',
         httpOnly: true,
@@ -207,12 +210,7 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     return context.body(pairingPageHtml({ nonce }), 200, pairingPageHeaders(nonce));
   });
 
-  app.post(
-    PAIRING_CLAIM_ROUTE,
-    publicBudget,
-    publicDeadline,
-    limitedJsonBody(PAIRING_BODY_BYTES),
-    async (context) => {
+  app.post(PAIRING_CLAIM_ROUTE, publicBudget, publicDeadline, limitedJsonBody(PAIRING_BODY_BYTES), async (context) => {
     let body: unknown;
     try {
       body = await context.req.json();
@@ -231,8 +229,7 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     if (outcome.ok) return context.json({ requestId: outcome.requestId, status: 'pending' }, ACCEPTED);
     if (outcome.code === 'unknown_code') return context.json({ error: 'That code is not valid.' }, GONE);
     return context.json({ error: 'Too many attempts.' }, TOO_MANY);
-    },
-  );
+  });
 
   app.get(PAIRING_STATUS_ROUTE, (context) => {
     const requestId = context.req.query(PAIRING_STATUS_QUERY);
@@ -368,16 +365,17 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     publicDeadline,
     limitedJsonBody(PASSKEY_BEGIN_BODY_BYTES),
     async (context) => {
-    const source = sourceAddressOf(context, options.listenerOf(context)) ?? 'unknown';
-    if (!publicBeginAllowed(source)) {
-      context.header('Retry-After', '60');
-      return context.json({ error: 'Too many passkey sign-in attempts. Try again shortly.' }, TOO_MANY);
-    }
-    const caller = publicCeremonyCaller(context, true);
-    if (caller === undefined) return context.json({ error: 'Could not start this sign-in.' }, CONFLICT);
-    const begun = await remote.passkeys().beginAuthentication(caller);
-    if (begun === undefined) return context.json({ error: 'Passkeys are unavailable.' }, CONFLICT);
-    return context.json(begun);
+      const listener = options.listenerOf(context);
+      const source = sourceAddressOf(context, listener) ?? 'unknown';
+      if (listener === 'tunnel' && !publicBeginAllowed(source)) {
+        context.header('Retry-After', '60');
+        return context.json({ error: 'Too many passkey sign-in attempts. Try again shortly.' }, TOO_MANY);
+      }
+      const caller = publicCeremonyCaller(context, true);
+      if (caller === undefined) return context.json({ error: 'Could not start this sign-in.' }, CONFLICT);
+      const begun = await remote.passkeys().beginAuthentication(caller);
+      if (begun === undefined) return context.json({ error: 'Passkeys are unavailable.' }, CONFLICT);
+      return context.json(begun);
     },
   );
 
@@ -387,22 +385,25 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     publicDeadline,
     limitedJsonBody(PASSKEY_FINISH_BODY_BYTES),
     async (context) => {
-    const body = await readJson(context);
-    if (body === undefined || typeof body.ceremonyId !== 'string' || !('response' in body)) {
-      return context.json({ error: 'A ceremonyId and response are required.' }, BAD_REQUEST);
-    }
-    const caller = publicCeremonyCaller(context, false);
-    if (caller === undefined) return context.json({ error: 'That sign-in was not started by this browser.' }, UNAUTHORIZED);
-    const outcome = await remote.passkeys().finishAuthentication(body.ceremonyId, caller, body.response);
-    if (!outcome.ok) return context.json({ error: outcome.error }, UNAUTHORIZED);
-    const session = remote.sessionForPasskey(outcome.credential.label);
-    setCookie(context, DEVICE_COOKIE, session.token, {
-      prefix: 'host',
-      httpOnly: true,
-      sameSite: 'Lax',
-      maxAge: session.maxAgeSeconds,
-    });
-    return context.json({ ok: true });
+      const body = await readJson(context);
+      if (body === undefined || typeof body.ceremonyId !== 'string' || !('response' in body)) {
+        return context.json({ error: 'A ceremonyId and response are required.' }, BAD_REQUEST);
+      }
+      const caller = publicCeremonyCaller(context, false);
+      if (caller === undefined)
+        return context.json({ error: 'That sign-in was not started by this browser.' }, UNAUTHORIZED);
+      const outcome = await remote.passkeys().finishAuthentication(body.ceremonyId, caller, body.response);
+      if (!outcome.ok) return context.json({ error: outcome.error }, UNAUTHORIZED);
+      const hostPublicKey = remote.channelPublicKey();
+      if (hostPublicKey === undefined) return context.json({ error: 'Sealed channels are unavailable.' }, CONFLICT);
+      const session = remote.sessionForPasskey(outcome.credential.label);
+      setCookie(context, DEVICE_COOKIE, session.token, {
+        prefix: 'host',
+        httpOnly: true,
+        sameSite: 'Lax',
+        maxAge: session.maxAgeSeconds,
+      });
+      return context.json({ ok: true, hostPublicKey });
     },
   );
 
@@ -430,10 +431,10 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
    * Completes the sealed channel for the calling device.
    *
    * Unsealed by necessity: this is the request that establishes sealing. It
-   * carries only a public key, which is safe for the relay to see, and it is
-   * useless without the host key the device read off the QR.
+   * carries only a public key, which is safe for the relay to see, and needs the
+   * host key delivered by an approved QR or successful passkey sign-in.
    */
-  app.post(REMOTE_CHANNEL_ROUTE, async (context) => {
+  app.post(REMOTE_CHANNEL_ROUTE, limitedJsonBody(CHANNEL_BODY_BYTES), async (context) => {
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, UNAUTHORIZED);
     const body = await readJson(context);

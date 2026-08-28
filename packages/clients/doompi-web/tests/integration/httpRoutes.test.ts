@@ -66,7 +66,6 @@ describe('static assets', () => {
   });
 });
 
-
 describe('session-scoped routes', () => {
   it('lists files in the session directory', async () => {
     const response = await fetch(url(`/api/sessions/${SESSION}/files?q=package`));

@@ -104,25 +104,39 @@ export class VoiceMediaClient {
     this.captureId = captureId;
     this.audioUploads = Promise.resolve();
     this.audioUploadError = undefined;
-    this.capture = await this.device.startCapture((pcm) => {
-      const owned = new Uint8Array(pcm);
-      this.audioUploads = this.audioUploads.then(async () => {
-        if (this.audioUploadError !== undefined) return;
-        try {
-          await this.transport.sendAudio(this.clientId, this.connectionId, captureId, owned);
-        } catch (error) {
-          this.audioUploadError = error instanceof Error ? error : new Error(String(error));
-        }
+    try {
+      this.capture = await this.device.startCapture((pcm) => {
+        const owned = new Uint8Array(pcm);
+        this.audioUploads = this.audioUploads.then(async () => {
+          if (this.audioUploadError !== undefined) return;
+          try {
+            await this.transport.sendAudio(this.clientId, this.connectionId, captureId, owned);
+          } catch (error) {
+            this.audioUploadError = error instanceof Error ? error : new Error(String(error));
+          }
+        });
       });
-    });
+    } catch (error) {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      await this.transport.captureStopped(this.clientId, this.connectionId, captureId, message).catch(() => undefined);
+      this.captureId = undefined;
+      throw error;
+    }
   }
 
   private async finishCapture(captureId: string, acknowledge: boolean): Promise<void> {
     await this.capture?.stop();
     this.capture = undefined;
-    this.captureId = undefined;
     await this.audioUploads;
-    if (this.audioUploadError !== undefined) throw this.audioUploadError;
+    if (this.audioUploadError !== undefined) {
+      const error = this.audioUploadError;
+      await this.transport
+        .captureStopped(this.clientId, this.connectionId, captureId, `${error.name}: ${error.message}`)
+        .catch(() => undefined);
+      this.captureId = undefined;
+      throw error;
+    }
+    this.captureId = undefined;
     if (acknowledge) await this.transport.captureStopped(this.clientId, this.connectionId, captureId);
   }
 

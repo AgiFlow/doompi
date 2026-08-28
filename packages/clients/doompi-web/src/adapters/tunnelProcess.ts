@@ -129,14 +129,26 @@ function tailOf(lines: readonly string[]): string {
 function writeTokenFile(config: TunnelConfig, stateDir: string): string | undefined {
   if (config.kind !== 'named' || config.tokenFile === undefined) return undefined;
   let token: string;
+  let sourcePath: string;
   try {
-    token = fs.readFileSync(config.tokenFile, 'utf8').trim();
+    sourcePath = fs.realpathSync(config.tokenFile);
+    token = fs.readFileSync(sourcePath, 'utf8').trim();
   } catch {
     return undefined;
   }
   if (token === '') return undefined;
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const tokenPath = path.join(stateDir, TOKEN_FILE);
+  let existingTarget: string | undefined;
+  try {
+    existingTarget = fs.realpathSync(tokenPath);
+  } catch {
+    // Missing is the normal state before launch.
+  }
+  if (sourcePath === path.resolve(tokenPath) || sourcePath === existingTarget) {
+    throw new Error('The configured tunnel token file cannot also be DoomPi runtime token storage.');
+  }
+  fs.rmSync(tokenPath, { force: true });
   fs.writeFileSync(tokenPath, token, { mode: FILE_MODE });
   fs.chmodSync(tokenPath, FILE_MODE);
   return tokenPath;

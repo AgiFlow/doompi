@@ -187,11 +187,12 @@ served it: a malicious replacement could omit any in-page verifier, read the QR 
 paired agent. DoomPi therefore does not claim that browser-side bundle signing protects against a
 compromised Cloudflare edge.
 
-Within that trust model, **the payload is sealed**. The QR carries an ephemeral P-256 public key alongside
-the pairing code, in the URL fragment, which no browser sends to any server. The device completes an ECDH
-against it and both sides derive AES-256-GCM keys, separate per direction. Socket frames and API bodies
-then travel as ciphertext. This limits routine relay visibility, but it still depends on Cloudflare
-delivering the intended pairing code and SPA.
+Within that trust model, **the payload is sealed**. A QR carries an ephemeral P-256 public key alongside the
+pairing code, in the URL fragment, which no browser sends to any server. A returning device that proves a
+passkey receives the current public key in the successful authentication response instead. Both paths then
+complete ECDH and derive AES-256-GCM keys, separate per direction. Socket frames and API bodies travel as
+ciphertext. This limits routine relay visibility, but it still depends on Cloudflare delivering the intended
+pairing page and SPA.
 
 The channel implementation lives in `@agimon-ai/doompi-web-security`, which ships the envelope contract,
 a `node:crypto` half, and a WebCrypto half. **A web plugin that calls `fetch` directly sends plaintext to

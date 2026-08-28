@@ -48,7 +48,9 @@ function loadKey(stateDir: string, onNotice: (message: string) => void): StoredK
     ) {
       return parsed as StoredKey;
     }
-    onNotice(`the bundle signing key at ${keyPath} is unreadable; generating a new one, so existing pins must be updated`);
+    onNotice(
+      `the bundle signing key at ${keyPath} is unreadable; generating a new one, so existing pins must be updated`,
+    );
   } catch {
     // First run, which is the normal path and not worth a notice.
   }

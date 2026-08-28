@@ -37,6 +37,7 @@ async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId
         clientId: CLIENT_ID,
         connectionId,
         clientKind: 'browser',
+        controlLocation: 'local',
         capabilities: { capture: true, playback: true },
       }),
     ),
@@ -59,8 +60,22 @@ async function nextEvent(
 }
 
 describe('voice client media session API', () => {
-  it('rejects invalid media operations and publishes stop and abort events', async () => {
+  it('waits briefly for a remote media client that is still connecting', async () => {
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    const capture = Promise.resolve(
+      api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-waiting' }), true)),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await connect(api);
+
+    expect((await capture).status).toBe(201);
+    expect(await nextEvent(api, 0)).toMatchObject({ type: 'capture-start', captureId: 'capture-waiting' });
+    api.close();
+  });
+
+  it('rejects invalid media operations and publishes stop and abort events', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN, clientConnectWaitMs: 0 });
 
     const invalidConnect = await api.fetch(
       request(
@@ -70,6 +85,7 @@ describe('voice client media session API', () => {
           clientId: CLIENT_ID,
           connectionId: CONNECTION_ID,
           clientKind: 'browser',
+          controlLocation: 'local',
           capabilities: { capture: true, playback: true },
         }),
       ),
@@ -244,6 +260,31 @@ describe('voice client media session API', () => {
     expect((await api.fetch(request('/unknown'))).status).toBe(503);
   });
 
+  it('returns the browser capture startup error to the host', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await connect(api);
+    expect(
+      (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStart, json({ captureId: 'capture-error' }), true)))
+        .status,
+    ).toBe(201);
+
+    const stopped = await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.clientCaptureStopped,
+        json({
+          clientId: CLIENT_ID,
+          connectionId: CONNECTION_ID,
+          captureId: 'capture-error',
+          error: 'NotSupportedError: AudioWorklet could not start',
+        }),
+      ),
+    );
+    expect(stopped.status).toBe(204);
+    const audio = await api.fetch(request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-error`, {}, true));
+    expect(audio.status).toBe(410);
+    expect(await audio.json()).toEqual({ error: 'NotSupportedError: AudioWorklet could not start' });
+    api.close();
+  });
   it('fails active capture and playback when the client lease expires', async () => {
     let now = 0;
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN, now: () => now });
@@ -366,6 +407,7 @@ describe('voice client media session API', () => {
           clientId: 'another-browser',
           connectionId: 'another-connection',
           clientKind: 'browser',
+          controlLocation: 'local',
           capabilities: { capture: true, playback: true },
         }),
       ),
@@ -374,6 +416,75 @@ describe('voice client media session API', () => {
     api.close();
   });
 
+  it('hands the media lease to a remote controller and keeps local clients from taking it back', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await connect(api);
+    expect(
+      (
+        await api.fetch(
+          request(
+            VOICE_MEDIA_ROUTES.hostPlaybackStart,
+            json({ playbackId: 'playback-local', text: 'Move this narration to the remote client.' }),
+            true,
+          ),
+        )
+      ).status,
+    ).toBe(201);
+
+    const remoteConnect = await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.clientConnect,
+        json({
+          version: VOICE_MEDIA_PROTOCOL_VERSION,
+          clientId: 'remote-browser',
+          connectionId: 'remote-connection',
+          clientKind: 'browser',
+          controlLocation: 'remote',
+          capabilities: { capture: true, playback: true },
+        }),
+      ),
+    );
+    expect(remoteConnect.status).toBe(200);
+    const remoteCursor = (await remoteConnect.json()) as { cursor: number };
+
+    const localReconnect = await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.clientConnect,
+        json({
+          version: VOICE_MEDIA_PROTOCOL_VERSION,
+          clientId: 'local-browser-2',
+          connectionId: 'local-connection-2',
+          clientKind: 'browser',
+          controlLocation: 'local',
+          capabilities: { capture: true, playback: true },
+        }),
+      ),
+    );
+    expect(localReconnect.status).toBe(409);
+    const displaced = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostPlaybackResult}?playbackId=playback-local`, {}, true),
+    );
+    expect(await displaced.json()).toMatchObject({ outcome: 'failed' });
+
+    expect(
+      (
+        await api.fetch(
+          request(
+            VOICE_MEDIA_ROUTES.hostPlaybackStart,
+            json({ playbackId: 'playback-remote', text: 'Narrate beside the user.' }),
+            true,
+          ),
+        )
+      ).status,
+    ).toBe(201);
+    const remoteEvent = await api.fetch(
+      request(
+        `${VOICE_MEDIA_ROUTES.clientEvents}?clientId=remote-browser&connectionId=remote-connection&after=${String(remoteCursor.cursor)}`,
+      ),
+    );
+    expect(await remoteEvent.json()).toMatchObject({ type: 'playback-start', playbackId: 'playback-remote' });
+    api.close();
+  });
   it('lets one browser tab replace its stale runtime without accepting stale cleanup', async () => {
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
     const replacementConnectionId = 'replacement-connection';

@@ -45,6 +45,7 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
         clientId,
         connectionId,
         clientKind: 'browser',
+        controlLocation: sealedTransport.active() ? 'remote' : 'local',
         capabilities,
       }),
     );
@@ -91,10 +92,15 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     if (!response.ok) throw await responseError(response);
   }
 
-  public async captureStopped(clientId: string, connectionId: string, captureId: string): Promise<void> {
+  public async captureStopped(
+    clientId: string,
+    connectionId: string,
+    captureId: string,
+    error?: string,
+  ): Promise<void> {
     const response = await sealedTransport.fetch(
       voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientCaptureStopped),
-      jsonBody({ clientId, connectionId, captureId }),
+      jsonBody({ clientId, connectionId, captureId, ...(error === undefined ? {} : { error }) }),
     );
     if (!response.ok) throw await responseError(response);
   }

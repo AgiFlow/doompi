@@ -1,5 +1,5 @@
 export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
-export const VOICE_MEDIA_PROTOCOL_VERSION = 2;
+export const VOICE_MEDIA_PROTOCOL_VERSION = 3;
 export const VOICE_MEDIA_SAMPLE_RATE = 16_000;
 export const VOICE_MEDIA_CHANNELS = 1;
 export const VOICE_MEDIA_BITS_PER_SAMPLE = 16;
@@ -23,6 +23,7 @@ export const VOICE_MEDIA_ROUTES = {
 } as const;
 
 export type VoiceClientKind = 'browser' | 'native';
+export type VoiceMediaControlLocation = 'local' | 'remote';
 
 export interface VoiceMediaCapabilities {
   capture: boolean;
@@ -34,6 +35,7 @@ export interface VoiceMediaConnectRequest {
   clientId: string;
   connectionId: string;
   clientKind: VoiceClientKind;
+  controlLocation: VoiceMediaControlLocation;
   capabilities: VoiceMediaCapabilities;
 }
 
@@ -86,7 +88,7 @@ export interface VoiceMediaTransport {
     signal: AbortSignal,
   ): Promise<VoiceMediaClientEvent | undefined>;
   sendAudio(clientId: string, connectionId: string, captureId: string, pcm: Uint8Array): Promise<void>;
-  captureStopped(clientId: string, connectionId: string, captureId: string): Promise<void>;
+  captureStopped(clientId: string, connectionId: string, captureId: string, error?: string): Promise<void>;
   playbackFinished(clientId: string, connectionId: string, result: VoiceMediaPlaybackResult): Promise<void>;
 }
 

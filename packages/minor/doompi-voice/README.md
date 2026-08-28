@@ -70,7 +70,10 @@ defaults to 3,000.
 
 When the agent is launched by `doompi-server`, capture and narration use the connected browser.
 The browser sends mono 16 kHz PCM16 through the authenticated session media API, while VAD,
-spooling, and Whisper stay on the agent host. Standalone terminal launches retain the macOS FFmpeg and `say` adapters. In the browser,
+spooling, and Whisper stay on the agent host. A browser using the sealed remote-control channel
+takes the session media lease from a local browser, so narration and capture follow the user to
+their remote device. Local clients cannot take that lease back while the remote client remains
+connected. Standalone terminal launches retain the macOS FFmpeg and `say` adapters. In the browser,
 `tts.voice` selects an exact SpeechSynthesis voice name or URI. If it does not match, the browser
 uses its default voice. The client media contract is browser-neutral so a native client can
 provide its own microphone and playback adapters later through

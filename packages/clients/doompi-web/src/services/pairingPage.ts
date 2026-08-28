@@ -89,14 +89,13 @@ const STYLE = `
 const SCRIPT = `
   const params = new URLSearchParams(location.hash.slice(1));
   const code = params.get('c') ?? '';
-  // Read off the screen, never through the relay, which is what makes the
-  // channel authenticated rather than merely encrypted. Handed to the bundle
-  // rather than used here: doing the exchange inline would grow the one
-  // document whose smallness keeps the public allowlist to three exact paths.
-  const channelKey = params.get('k') ?? '';
-  if (channelKey !== '') {
-    try { sessionStorage.setItem('doompi.channelKey', channelKey); } catch { /* storage denied */ }
+  // A QR supplies the key out of band. A successful passkey sign-in receives the
+  // current public key from the trusted host after proving the credential.
+  function rememberChannelKey(value) {
+    if (typeof value !== 'string' || value === '') return false;
+    try { sessionStorage.setItem('doompi.channelKey', value); return true; } catch { return false; }
   }
+  rememberChannelKey(params.get('k'));
   history.replaceState(null, '', location.pathname);
   const state = document.getElementById('state');
   const manual = document.getElementById('manual');
@@ -159,7 +158,9 @@ const SCRIPT = `
         credentials: 'same-origin',
         body: JSON.stringify({ ceremonyId, response: encodeCredential(credential) }),
       });
-      return finished.ok;
+      if (!finished.ok) return false;
+      const result = await finished.json();
+      return rememberChannelKey(result.hostPublicKey);
     } catch {
       return false;
     }

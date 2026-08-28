@@ -1,6 +1,6 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { REMOTE_API_ROUTE, STEP_UP_HEADER } from '../../types/remoteAccess.ts';
-import { sealedHttpSession } from './sealedSession.ts';
+import { rememberHostChannelKey, sealedHttpSession } from './sealedSession.ts';
 
 /**
  * The browser half of the passkey ceremonies.
@@ -69,7 +69,11 @@ export async function signInWithPasskey(): Promise<PasskeyOutcome> {
       ceremonyId: begun.ceremonyId,
       response,
     });
-    return finished === undefined ? { ok: false, error: 'That passkey was not accepted.' } : { ok: true };
+    if (typeof finished?.hostPublicKey !== 'string' || finished.hostPublicKey === '') {
+      return { ok: false, error: 'That passkey was not accepted.' };
+    }
+    rememberHostChannelKey(finished.hostPublicKey);
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: describe(error) };
   }

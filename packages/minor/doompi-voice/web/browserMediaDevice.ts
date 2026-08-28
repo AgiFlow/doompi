@@ -8,11 +8,16 @@ import type {
 import { VOICE_MEDIA_SAMPLE_RATE } from '../src/types/clientMedia.ts';
 
 const AUDIO_BUFFER_SIZE = 4_096;
+const AUDIO_UPLOAD_DURATION_MS = 100;
+const AUDIO_WORKLET_NAME = 'doompi-voice-capture';
 const DEFAULT_SPEECH_RATE_WPM = 180;
 const MIN_SPEECH_RATE = 0.1;
 const MAX_SPEECH_RATE = 10;
+const PCM_BYTES_PER_SAMPLE = 2;
 const PCM_MAXIMUM = 32_767;
 const PCM_MINIMUM = -32_768;
+const PCM_UPLOAD_BYTES = (VOICE_MEDIA_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * AUDIO_UPLOAD_DURATION_MS) / 1_000;
+const SILENT_OUTPUT_GAIN = 1e-8;
 
 /** Stateful rate conversion so chunk boundaries do not drop or duplicate time. */
 export class Pcm16Resampler {
@@ -85,6 +90,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
 
   private stream: MediaStream | undefined;
   private context: AudioContext | undefined;
+  private workletInstalled = false;
   private activeCapture: VoiceMediaCapture | undefined;
   private activePlayback: BrowserSpeechPlayback | undefined;
 
@@ -100,14 +106,56 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
 
     const captureStream = this.stream;
     const source = this.context.createMediaStreamSource(captureStream);
-    const processor = this.context.createScriptProcessor(AUDIO_BUFFER_SIZE, 1, 1);
     const muted = this.context.createGain();
-    muted.gain.value = 0;
+    muted.gain.value = SILENT_OUTPUT_GAIN;
     const resampler = new Pcm16Resampler(this.context.sampleRate);
-    processor.onaudioprocess = (event) => {
-      const pcm = resampler.push(event.inputBuffer.getChannelData(0));
-      if (pcm.byteLength > 0) onPcm(pcm);
+    let pendingPcmChunks: Uint8Array[] = [];
+    let pendingPcmBytes = 0;
+    const flushPcm = (): void => {
+      if (pendingPcmBytes === 0) return;
+      const upload = new Uint8Array(pendingPcmBytes);
+      let offset = 0;
+      for (const chunk of pendingPcmChunks) {
+        upload.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      pendingPcmChunks = [];
+      pendingPcmBytes = 0;
+      onPcm(upload);
     };
+    const acceptSamples = (samples: Float32Array): void => {
+      const pcm = resampler.push(samples);
+      if (pcm.byteLength === 0) return;
+      pendingPcmChunks.push(pcm);
+      pendingPcmBytes += pcm.byteLength;
+      if (pendingPcmBytes >= PCM_UPLOAD_BYTES) flushPcm();
+    };
+    let processor: AudioNode;
+    let stopProcessor: () => void;
+    if (typeof AudioWorkletNode !== 'undefined' && this.context.audioWorklet !== undefined) {
+      if (!this.workletInstalled) {
+        await this.context.audioWorklet.addModule(
+          new URL('./browserCaptureWorklet.js?no-inline', import.meta.url).href,
+        );
+        this.workletInstalled = true;
+      }
+      const worklet = new AudioWorkletNode(this.context, AUDIO_WORKLET_NAME);
+      worklet.port.onmessage = (event: MessageEvent<unknown>) => {
+        if (event.data instanceof Float32Array) acceptSamples(event.data);
+      };
+      processor = worklet;
+      stopProcessor = () => {
+        worklet.port.onmessage = null;
+        worklet.port.close();
+      };
+    } else {
+      const scriptProcessor = this.context.createScriptProcessor(AUDIO_BUFFER_SIZE, 1, 1);
+      scriptProcessor.onaudioprocess = (event) => acceptSamples(event.inputBuffer.getChannelData(0));
+      processor = scriptProcessor;
+      stopProcessor = () => {
+        scriptProcessor.onaudioprocess = null;
+      };
+    }
     source.connect(processor);
     processor.connect(muted);
     muted.connect(this.context.destination);
@@ -117,7 +165,8 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
       stop: async () => {
         if (stopped) return;
         stopped = true;
-        processor.onaudioprocess = null;
+        stopProcessor();
+        flushPcm();
         source.disconnect();
         processor.disconnect();
         muted.disconnect();
@@ -159,5 +208,6 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     this.stream = undefined;
     if (this.context !== undefined && this.context.state !== 'closed') await this.context.close();
     this.context = undefined;
+    this.workletInstalled = false;
   }
 }

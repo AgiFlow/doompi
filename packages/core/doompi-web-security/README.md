@@ -24,14 +24,14 @@ bundle, is what makes that impossible.
 
 ## The sealed channel
 
-A hosted tunnel terminates TLS at its provider's edge, so everything the cockpit carries is plaintext
-to them. Sealing the payload underneath their TLS leaves them a relay that sees timing and sizes but
-not content.
+A hosted tunnel terminates TLS at its provider's edge, so without application sealing everything the
+cockpit carries is plaintext to them. Sealing the payload underneath their TLS leaves them a relay that
+sees timing and sizes but not content.
 
-The key exchange is anchored out of band rather than negotiated in band. The host's ephemeral P-256
-public key is printed in a QR on a screen the user is holding, so there is no moment at which a relay
-could substitute its own. That is the job Telegram's emoji comparison does for a secret chat, done
-automatically instead of by eye.
+The QR pairing path anchors key exchange out of band. The host's ephemeral P-256 public key is printed on
+the screen the user is holding, so the relay cannot substitute its own. A returning device instead receives
+the current public key after proving a passkey. That path depends on the trusted code-delivery edge described
+above, and the key itself is public rather than secret.
 
 Three properties worth knowing, because getting any of them wrong is silent:
 

@@ -16,6 +16,20 @@ describe('browser voice media', () => {
     expect(source).toContain("command: 'minor voice-auto'");
   });
 
+  it('identifies a sealed remote controller when it claims the session media lease', async () => {
+    const source = await readFile(new URL('../web/clientMediaTransport.ts', import.meta.url), 'utf8');
+
+    expect(source).toContain("controlLocation: sealedTransport.active() ? 'remote' : 'local'");
+  });
+
+  it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
+    const source = await readFile(new URL('../web/browserMediaDevice.ts', import.meta.url), 'utf8');
+
+    expect(source).toContain("new URL('./browserCaptureWorklet.js?no-inline', import.meta.url).href");
+    expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
+    expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
+  });
+
   it('fills the mobile composer action with manual controls and autonomous phase icons', async () => {
     const source = await readFile(new URL('../web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 

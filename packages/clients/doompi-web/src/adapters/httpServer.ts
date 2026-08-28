@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { PiServer } from '@earendil-works/pi-server';
+import { PiServer, PiServerError } from '@earendil-works/pi-server';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
@@ -539,16 +539,32 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
   // Every running session already serves Pi's protocol; the hub composes them
   // into one server so a browser sees a single endpoint with many sessions.
-  const protocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
-  const protocolServer = new PiServer(
-    createPiHubService({
-      records: () => hub.records(),
-      spawn: (input) => hub.create(input),
-      onNotice: notice,
-    }),
-    { listeners: [protocolListener], onError: (error) => notice(`protocol: ${error.message}`) },
-  );
-  await protocolServer.start();
+  // Remote clients get a distinct protocol service that can attach to existing
+  // sessions but cannot bypass HTTP step-up by creating one directly.
+  const localProtocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
+  const remoteProtocolListener = createPiWebSocketListener({
+    onError: (error) => notice(`protocol: ${error.message}`),
+  });
+  const protocolService = createPiHubService({
+    records: () => hub.records(),
+    spawn: (input) => hub.create(input),
+    onNotice: notice,
+  });
+  const remoteProtocolService = {
+    ...protocolService,
+    createSession: async () => {
+      throw new PiServerError('not_implemented', 'Remote protocol clients cannot create sessions');
+    },
+  };
+  const localProtocolServer = new PiServer(protocolService, {
+    listeners: [localProtocolListener],
+    onError: (error) => notice(`protocol: ${error.message}`),
+  });
+  const remoteProtocolServer = new PiServer(remoteProtocolService, {
+    listeners: [remoteProtocolListener],
+    onError: (error) => notice(`protocol: ${error.message}`),
+  });
+  await Promise.all([localProtocolServer.start(), remoteProtocolServer.start()]);
   // Provider credentials belong to the machine, not to a session: the hub
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
@@ -844,7 +860,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       const local = guard.listenerOf(context) === 'local';
       const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
       const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'protocol');
-      let handler: ReturnType<typeof protocolListener.accept>;
+      let handler: ReturnType<typeof localProtocolListener.accept>;
       let untrack: (() => void) | undefined;
       return {
         onOpen(_event, ws) {
@@ -853,7 +869,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
             return;
           }
           if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
-          handler = protocolListener.accept({
+          handler = (local ? localProtocolListener : remoteProtocolListener).accept({
             send: (data) => {
               if (local) {
                 ws.send(data as ArrayBuffer);
@@ -947,7 +963,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           await new Promise<void>((done) => {
             threads.close();
             syncGuard.close();
-            void protocolServer.close();
+            void localProtocolServer.close();
+            void remoteProtocolServer.close();
             hub.close();
             providerAuth.close();
             for (const handler of pluginApis) handler.close();

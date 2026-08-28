@@ -118,7 +118,7 @@ describe('starting a tunnel', () => {
     const launch = createTunnelLauncher({
       cloudflaredPath: binary,
       stateDir,
-      startTimeoutMs: 25,
+      startTimeoutMs: 1000,
       probe: async (_url, signal) =>
         await new Promise<ProbeResult>((_resolve, reject) => {
           signal.addEventListener(
@@ -316,5 +316,19 @@ describe('stopping a tunnel', () => {
     if (process.platform !== 'win32') expect(fs.statSync(runtimeTokenFile).mode & 0o777).toBe(0o600);
     await result.stop();
     expect(fs.existsSync(runtimeTokenFile)).toBe(false);
+  });
+
+  it('refuses a runtime-path token source without deleting the operator credential', async () => {
+    const tokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(tokenFile, 'operator-token');
+    const binary = script('cloudflared', 'echo spawned > "$0.spawned"\nsleep 30');
+    const launch = createTunnelLauncher({ cloudflaredPath: binary, stateDir, probe: goodProbe });
+    const result = await launch({
+      port: 7999,
+      config: { kind: 'named', hostname: 'doom.example.com', tokenFile },
+    });
+    expect(result).toMatchObject({ ok: false, failure: 'spawn_failed' });
+    expect(fs.readFileSync(tokenFile, 'utf8')).toBe('operator-token');
+    expect(fs.existsSync(`${binary}.spawned`)).toBe(false);
   });
 });

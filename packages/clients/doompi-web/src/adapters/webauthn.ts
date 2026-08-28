@@ -105,6 +105,7 @@ export function createWebAuthn(options: WebAuthnOptions): WebAuthn {
     return { supported: true, rpId };
   };
 
+  const ceremonyKey = (id: string, caller: string, type: CeremonyType): string => `${type}\u0000${caller}\u0000${id}`;
   const ttlFor = (held: PendingChallenge): number =>
     held.type === 'step-up' ? STEP_UP_CHALLENGE_TTL_MS : CEREMONY_TTL_MS;
 
@@ -123,26 +124,29 @@ export function createWebAuthn(options: WebAuthnOptions): WebAuthn {
       pending.delete(oldest);
     }
     let id: string;
-    do id = randomBytes(CEREMONY_ID_BYTES).toString('base64url');
-    while (pending.has(id));
-    pending.set(id, { challenge, issuedAt: now(), caller, type, ...(action === undefined ? {} : { action }) });
+    do {
+      id = randomBytes(CEREMONY_ID_BYTES).toString('base64url');
+    } while (pending.has(ceremonyKey(id, caller, type)));
+    pending.set(ceremonyKey(id, caller, type), {
+      challenge,
+      issuedAt: now(),
+      caller,
+      type,
+      ...(action === undefined ? {} : { action }),
+    });
     return id;
   };
 
-  const take = (
-    id: string,
-    caller: string,
-    type: CeremonyType,
-    action?: StepUpAction,
-  ): string | undefined => {
-    const held = pending.get(id);
+  const take = (id: string, caller: string, type: CeremonyType, action?: StepUpAction): string | undefined => {
+    const key = ceremonyKey(id, caller, type);
+    const held = pending.get(key);
     if (held === undefined) return undefined;
     if (!challengeIsFresh(held.issuedAt, now(), ttlFor(held))) {
-      pending.delete(id);
+      pending.delete(key);
       return undefined;
     }
     if (held.caller !== caller || held.type !== type || held.action !== action) return undefined;
-    pending.delete(id);
+    pending.delete(key);
     return held.challenge;
   };
 
