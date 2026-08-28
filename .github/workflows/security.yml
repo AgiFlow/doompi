@@ -110,15 +110,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install pinned zizmor CLI
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/zizmor"
+          "${RUNNER_TEMP}/zizmor/bin/pip" install \
+            --disable-pip-version-check \
+            --no-input \
+            "zizmor==1.29.0"
+
       - name: Reject high-severity GitHub Actions vulnerabilities
-        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
-        with:
-          advanced-security: false
-          annotations: true
-          min-confidence: high
-          min-severity: high
-          online-audits: true
-          version: 1.29.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          "${RUNNER_TEMP}/zizmor/bin/zizmor" \
+            --format github \
+            --min-confidence high \
+            --min-severity high \
+            .github/workflows
 
   # Scorecard evaluates repository-wide controls on the default branch. Its
   # upstream action does not support pull request revisions.

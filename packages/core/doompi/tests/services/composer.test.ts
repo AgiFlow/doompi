@@ -52,6 +52,12 @@ const fakeResolvers = {
 
 const temporaryRoots: string[] = [];
 
+function javascriptStringLiteral(value: string): string {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029');
+}
 function makeRoot(): string {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-composer-')));
   temporaryRoots.push(root);
@@ -88,8 +94,11 @@ function writeCompiledBundle(root: string, name: string): { bundle: string; inpu
   const manifest = path.join(generatedDirectory, 'cache', `${name}.json`);
   fs.mkdirSync(path.dirname(bundle), { recursive: true });
   fs.mkdirSync(path.dirname(manifest), { recursive: true });
-  fs.writeFileSync(input, `export const source = ${JSON.stringify(name)};\n`);
-  fs.writeFileSync(bundle, `export default (pi) => pi.registerCommand(${JSON.stringify(`${name}-loaded`)});\n`);
+  fs.writeFileSync(input, `export const source = ${javascriptStringLiteral(name)};\n`);
+  fs.writeFileSync(
+    bundle,
+    `export default (pi) => pi.registerCommand(${javascriptStringLiteral(`${name}-loaded`)});\n`,
+  );
   const stat = fs.statSync(input);
   fs.writeFileSync(
     manifest,
