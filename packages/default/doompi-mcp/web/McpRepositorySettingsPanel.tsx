@@ -53,9 +53,9 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
 
   return (
     <div className="flex flex-col gap-3" data-testid="mcp-repository-settings">
-      <div className="flex flex-wrap items-center gap-2 rounded border border-doom-border bg-doom-panel px-3 py-2">
+      <div className="flex flex-col items-stretch gap-2 rounded border border-doom-border bg-doom-panel px-3 py-2 min-[560px]:flex-row min-[560px]:items-center">
         <Badge>{catalog?.sync.fresh ? 'synced' : 'sync required'}</Badge>
-        <span className="min-w-0 flex-1 text-[10px] text-doom-muted">
+        <span className="min-w-0 text-[10px] leading-relaxed text-doom-muted min-[560px]:flex-1">
           {catalog?.sync.fresh
             ? 'Cached inspection is local. Discovery contacts the configured servers.'
             : catalog
@@ -68,7 +68,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
           loading={busy === 'loading'}
           disabled={busy !== undefined}
           onClick={() => void loadMcpSettings(request, repository.id)}
-          className="text-[10px]"
+          className="w-full text-[10px] min-[560px]:w-auto"
         >
           refresh cache
         </Button>
@@ -78,15 +78,15 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
           loading={busy === 'discovering'}
           disabled={busy !== undefined || !catalog?.sync.fresh}
           onClick={() => setConfirmDiscovery(true)}
-          className="text-[10px]"
+          className="w-full text-[10px] min-[560px]:w-auto"
         >
           discover live
         </Button>
       </div>
 
       {!confirmDiscovery ? null : (
-        <div className="flex flex-wrap items-center gap-2 rounded border border-doom-accent/50 bg-doom-accent/5 px-3 py-2">
-          <span className="min-w-0 flex-1 text-[10px] text-doom-hi">
+        <div className="flex flex-col items-stretch gap-2 rounded border border-doom-accent/50 bg-doom-accent/5 px-3 py-2 min-[560px]:flex-row min-[560px]:items-center">
+          <span className="min-w-0 text-[10px] leading-relaxed text-doom-hi min-[560px]:flex-1">
             Discovery starts configured processes and contacts remote MCP servers. Continue?
           </span>
           <Button
@@ -96,11 +96,16 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
               setConfirmDiscovery(false);
               void discoverMcpSettings(requestWithStepUp, repository.id);
             }}
-            className="text-[10px]"
+            className="w-full text-[10px] min-[560px]:w-auto"
           >
             confirm discovery
           </Button>
-          <Button variant="ghost" size="xs" onClick={() => setConfirmDiscovery(false)} className="text-[10px]">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setConfirmDiscovery(false)}
+            className="w-full text-[10px] min-[560px]:w-auto"
+          >
             cancel
           </Button>
         </div>
@@ -111,7 +116,9 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
       {authorization ? (
         <div className="flex flex-col gap-2 rounded border border-doom-border bg-doom-panel px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold text-doom-hi">{authorization.serverName}</span>
+            <span className="min-w-0 basis-full text-[10px] font-bold text-doom-hi min-[560px]:basis-auto">
+              {authorization.serverName}
+            </span>
             <Badge>{authorization.status}</Badge>
             <span className="min-w-0 flex-1 text-[9px] text-doom-faint">authorization flow</span>
             {TERMINAL_AUTHORIZATION.has(authorization.status) ? null : (
@@ -121,7 +128,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
                 loading={busy === 'cancelling'}
                 disabled={busy !== undefined}
                 onClick={() => void cancelMcpFlow(requestWithStepUp, repository.id, authorization.id)}
-                className="text-[10px]"
+                className="w-full text-[10px] min-[560px]:w-auto"
               >
                 cancel
               </Button>
@@ -153,7 +160,9 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
               className="flex flex-col gap-2 rounded border border-doom-border bg-doom-panel px-3 py-2"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-doom-hi">{server.name}</span>
+                <span className="min-w-0 basis-full truncate text-[11px] font-bold text-doom-hi min-[560px]:basis-auto min-[560px]:flex-1">
+                  {server.name}
+                </span>
                 <Badge>{server.state}</Badge>
                 <Badge>{server.source}</Badge>
                 <Badge>{server.credentialPresent ? 'credential present' : 'no credential'}</Badge>
@@ -162,14 +171,14 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
                   size="xs"
                   disabled={busy !== undefined || !catalog.sync.fresh}
                   onClick={() => setConfirmAuthorization(server.name)}
-                  className="text-[10px]"
+                  className="w-full text-[10px] min-[560px]:w-auto"
                 >
                   authorize
                 </Button>
               </div>
               {confirmAuthorization !== server.name ? null : (
-                <div className="flex flex-wrap items-center gap-2 border-t border-doom-border pt-2">
-                  <span className="min-w-0 flex-1 text-[9px] text-doom-muted">
+                <div className="flex flex-col items-stretch gap-2 border-t border-doom-border pt-2 min-[560px]:flex-row min-[560px]:items-center">
+                  <span className="min-w-0 text-[9px] leading-relaxed text-doom-muted min-[560px]:flex-1">
                     Start a bounded OAuth attempt for this server? A passkey may be required.
                   </span>
                   <Button
@@ -179,7 +188,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
                       setConfirmAuthorization(undefined);
                       void authorizeMcpServer(requestWithStepUp, repository.id, server.name);
                     }}
-                    className="text-[10px]"
+                    className="w-full text-[10px] min-[560px]:w-auto"
                   >
                     continue
                   </Button>
@@ -187,7 +196,7 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
                     variant="ghost"
                     size="xs"
                     onClick={() => setConfirmAuthorization(undefined)}
-                    className="text-[10px]"
+                    className="w-full text-[10px] min-[560px]:w-auto"
                   >
                     cancel
                   </Button>

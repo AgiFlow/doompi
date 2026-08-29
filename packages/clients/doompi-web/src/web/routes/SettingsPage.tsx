@@ -54,8 +54,8 @@ export function SettingsPage() {
         />
       ) : null}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-doom-border px-2 sm:px-5">
-          <span className="flex min-w-0 items-center gap-1.5">
+        <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 border-b border-doom-border px-3 py-2 sm:flex sm:h-12 sm:justify-between sm:px-5 sm:py-0">
+          <span className="order-1 flex min-w-0 items-center gap-1.5 sm:order-none">
             <Button
               variant="ghost"
               size="icon"
@@ -70,10 +70,15 @@ export function SettingsPage() {
             <span className="truncate text-[13px] font-bold text-doom-hi">settings</span>
           </span>
           <nav
-            className="flex items-center gap-0.5 rounded-md border border-doom-border bg-doom-panel p-0.5"
+            className="order-3 col-span-2 flex w-full items-center gap-0.5 rounded-md border border-doom-border bg-doom-panel p-0.5 sm:order-none sm:w-auto"
             aria-label="settings workspace"
           >
-            <Button asChild variant={workspace === 'general' ? 'outline' : 'ghost'} size="xs">
+            <Button
+              asChild
+              variant={workspace === 'general' ? 'outline' : 'ghost'}
+              size="xs"
+              className="flex-1 sm:flex-none"
+            >
               <Link
                 to="/settings/$section"
                 params={{ section: DEFAULT_SETTINGS_SECTION }}
@@ -82,7 +87,12 @@ export function SettingsPage() {
                 general
               </Link>
             </Button>
-            <Button asChild variant={workspace === 'repository' ? 'outline' : 'ghost'} size="xs">
+            <Button
+              asChild
+              variant={workspace === 'repository' ? 'outline' : 'ghost'}
+              size="xs"
+              className="flex-1 sm:flex-none"
+            >
               <Link
                 to="/settings/$section"
                 params={{ section: DEFAULT_REPOSITORY_SETTINGS_SECTION }}
@@ -92,10 +102,11 @@ export function SettingsPage() {
               </Link>
             </Button>
           </nav>
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="order-2 sm:order-none">
             {activeId !== null ? (
               <Link to="/session/$sessionId" params={{ sessionId: activeId }} data-testid="settings-close">
-                back to session
+                <span className="sm:hidden">back</span>
+                <span className="hidden sm:inline">back to session</span>
               </Link>
             ) : (
               <Link to="/" data-testid="settings-close">
@@ -107,11 +118,11 @@ export function SettingsPage() {
         {current?.workspace === 'repository' ? (
           <RepositoryWorkspace current={current} />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
             <SettingsMenu active={current?.id} workspace="general" />
             <section
               data-testid="settings-content"
-              className="min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5"
+              className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"
             >
               {current?.id === 'providers' ? <ProviderSettings /> : null}
               {current?.id === 'appearance' ? <AppearanceSettings /> : null}

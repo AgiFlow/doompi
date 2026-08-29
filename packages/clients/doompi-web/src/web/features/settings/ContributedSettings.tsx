@@ -97,7 +97,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
 
   return (
     <div data-testid={`settings-field-${field.id}`} data-dirty={dirty} className="flex flex-col gap-1 py-2.5">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-doom-hi">{field.label}</span>
         {dirty ? (
           <Badge tone="cyan" data-testid={`settings-dirty-${field.id}`} className="shrink-0 text-[8px]">
@@ -153,11 +153,13 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
         />
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {field.detail === undefined ? null : (
-          <span className="min-w-0 flex-1 truncate text-[9px] text-doom-faint">{field.detail}</span>
+          <span className="min-w-0 basis-full text-[9px] leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
+            {field.detail}
+          </span>
         )}
-        <span className="shrink-0 text-[9px] text-doom-faint/70">{keyOf(field)}</span>
+        <span className="min-w-0 break-all text-[9px] text-doom-faint/70 min-[480px]:shrink-0">{keyOf(field)}</span>
         {dirty ? (
           <Button
             variant="ghost"
@@ -285,8 +287,13 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
       <header className="flex flex-col gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-[12px] font-bold text-doom-hi">{section.label}</span>
-          <span className="min-w-0 flex-1 truncate text-[10px] text-doom-faint">{section.detail}</span>
-          <nav data-testid="settings-scope" className="flex shrink-0 items-center gap-1">
+          <span className="min-w-0 basis-full text-[10px] leading-relaxed text-doom-faint min-[560px]:basis-auto min-[560px]:flex-1">
+            {section.detail}
+          </span>
+          <nav
+            data-testid="settings-scope"
+            className="flex w-full shrink-0 items-center justify-between gap-1 min-[480px]:w-auto min-[480px]:justify-start"
+          >
             <span className="text-[9px] text-doom-faint">editing</span>
             {(['global', 'repository'] as SettingsScope[]).map((entry) => (
               <Button
@@ -311,7 +318,7 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
           </nav>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="shrink-0 text-[9px] text-doom-faint">repository</span>
           {repositories.length === 0 ? (
             <span data-testid="settings-no-repositories" className="text-[10px] text-doom-faint">
@@ -327,7 +334,7 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
                 setRepoRoot(next);
               }}
             >
-              <SelectTrigger data-testid="settings-repository" className="text-[10px]">
+              <SelectTrigger data-testid="settings-repository" className="w-full text-[10px] min-[480px]:w-auto">
                 <SelectValue placeholder="pick a repository" />
               </SelectTrigger>
               <SelectContent>
@@ -363,7 +370,7 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
         ))}
       </div>
 
-      <footer className="flex items-center gap-2 border-t border-doom-border pt-3">
+      <footer className="flex flex-wrap items-center gap-2 border-t border-doom-border pt-3">
         <Button
           variant="outline"
           size="xs"
@@ -387,7 +394,10 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
             discard
           </Button>
         )}
-        <span data-testid="settings-save-note" className="text-[9px] text-doom-faint">
+        <span
+          data-testid="settings-save-note"
+          className="min-w-0 basis-full text-[9px] leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1"
+        >
           {dirtyFields.length > 0
             ? `${String(dirtyFields.length)} unsaved · writing to ${scope === 'global' ? 'the global config' : 'this repository'}`
             : note}

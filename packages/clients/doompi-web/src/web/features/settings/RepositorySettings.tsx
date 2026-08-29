@@ -59,8 +59,8 @@ interface SingleAxisProps {
   draft: string | null | undefined;
   dirty: boolean;
   busy: boolean;
-  onChange(value: string | null): void;
-  onRevert(): void;
+  onChange: (value: string | null) => void;
+  onRevert: () => void;
 }
 
 function SingleAxis({
@@ -83,7 +83,7 @@ function SingleAxis({
   const shown = value === null || value === undefined ? effective : value;
   return (
     <div data-testid={`repository-axis-${id}`} data-dirty={dirty} className="flex flex-col gap-1.5 py-3">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 text-[11px] font-bold text-doom-hi">{label}</span>
         {dirty ? (
           <Badge tone="cyan" className="text-[8px]">
@@ -105,12 +105,18 @@ function SingleAxis({
           ))}
         </SelectContent>
       </Select>
-      <div className="flex min-w-0 items-start gap-2">
+      <div className="flex min-w-0 flex-col items-stretch gap-1.5 min-[480px]:flex-row min-[480px]:items-start min-[480px]:gap-2">
         <span className="min-w-0 flex-1 text-[9px] leading-relaxed text-doom-faint">
           {optionDetail(options, shown) || detail}
         </span>
         {dirty ? (
-          <Button variant="ghost" size="xs" disabled={busy} onClick={onRevert} className="shrink-0 text-[9px]">
+          <Button
+            variant="ghost"
+            size="xs"
+            disabled={busy}
+            onClick={onRevert}
+            className="self-end text-[9px] min-[480px]:shrink-0 min-[480px]:self-auto"
+          >
             revert
           </Button>
         ) : origin === 'repository' ? (
@@ -119,7 +125,7 @@ function SingleAxis({
             size="xs"
             disabled={busy}
             onClick={() => onChange(null)}
-            className="shrink-0 text-[9px]"
+            className="self-end text-[9px] min-[480px]:shrink-0 min-[480px]:self-auto"
           >
             clear override
           </Button>
@@ -134,8 +140,8 @@ interface DomainsAxisProps {
   draft: readonly string[] | null | undefined;
   dirty: boolean;
   busy: boolean;
-  onChange(value: readonly string[] | null): void;
-  onRevert(): void;
+  onChange: (value: readonly string[] | null) => void;
+  onRevert: () => void;
 }
 
 function DomainsAxis({ view, draft, dirty, busy, onChange, onRevert }: DomainsAxisProps) {
@@ -148,7 +154,7 @@ function DomainsAxis({ view, draft, dirty, busy, onChange, onRevert }: DomainsAx
 
   return (
     <div data-testid="repository-axis-domains" data-dirty={dirty} className="flex flex-col gap-2 py-3">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 text-[11px] font-bold text-doom-hi">domains</span>
         {dirty ? (
           <Badge tone="cyan" className="text-[8px]">
@@ -180,7 +186,7 @@ function DomainsAxis({ view, draft, dirty, busy, onChange, onRevert }: DomainsAx
           <span className="text-[10px] text-doom-faint">No domains are configured.</span>
         ) : null}
       </div>
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 text-[9px] text-doom-faint">
           {selected.length === 0 ? 'No domains selected.' : selected.join(', ')}
         </span>
@@ -294,7 +300,7 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
       )}
 
       {view === undefined ? null : (
-        <section className="flex flex-col divide-y divide-doom-border rounded-md border border-doom-border px-3">
+        <section className="flex flex-col divide-y divide-doom-border rounded-md border border-doom-border px-2.5 sm:px-3">
           <SingleAxis
             id="major-mode"
             label="major mode"
@@ -331,7 +337,7 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
             onChange={(value) => change('profile', value)}
             onRevert={() => revert('profile')}
           />
-          <footer className="flex items-center gap-2 py-3">
+          <footer className="flex flex-wrap items-center gap-2 py-3">
             <Button
               variant="outline"
               size="xs"
@@ -348,7 +354,7 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
                 discard
               </Button>
             )}
-            <span className="min-w-0 flex-1 text-[9px] text-doom-faint">
+            <span className="min-w-0 basis-full text-[9px] text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
               {dirty > 0 ? `${String(dirty)} unsaved ${dirty === 1 ? 'axis' : 'axes'}` : note}
             </span>
           </footer>
