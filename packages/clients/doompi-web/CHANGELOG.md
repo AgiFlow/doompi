@@ -1,3 +1,33 @@
+## 0.0.1-alpha.2 (2026-08-29)
+
+### 🚀 Features
+
+- expand cockpit integrations and voice workflows ([efc3e19](https://github.com/AgiFlow/doompi/commit/efc3e19))
+- improve cockpit workflows and voice handoff ([20db7d1](https://github.com/AgiFlow/doompi/commit/20db7d1))
+
+### 🩹 Fixes
+
+- stabilize runtime configuration flows ([a092b79](https://github.com/AgiFlow/doompi/commit/a092b79))
+- make settings responsive across viewports ([e72b763](https://github.com/AgiFlow/doompi/commit/e72b763))
+- persist session names across restarts ([dd5e526](https://github.com/AgiFlow/doompi/commit/dd5e526))
+- **doompi-web:** skip sync outside repositories ([b1bf00f](https://github.com/AgiFlow/doompi/commit/b1bf00f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.3
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.1 (2026-08-28)
 
 ### 🚀 Features

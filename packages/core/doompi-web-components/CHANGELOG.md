@@ -1,3 +1,17 @@
+## 0.0.1-alpha.2 (2026-08-29)
+
+### 🚀 Features
+
+- improve cockpit workflows and voice handoff ([20db7d1](https://github.com/AgiFlow/doompi/commit/20db7d1))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.38
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.1 (2026-08-28)
 
 ### 🚀 Features
