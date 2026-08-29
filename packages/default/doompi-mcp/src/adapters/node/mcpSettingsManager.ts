@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readSyncDrift } from '@agimon-ai/doompi/services';
-import { readSyncState } from '@agimon-ai/doompi/services/syncState';
+import type { DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
 import type { McpServerStateChange, McpToolInfo, TokenStore } from '@agimon-ai/mcp-proxy';
 import type {
   McpAuthorizationFlow,
@@ -39,7 +38,6 @@ interface InternalAuthorizationFlow extends McpAuthorizationFlow {
 }
 
 export interface McpSettingsManagerOptions {
-  homeDirectory?: string;
   discoveryTimeoutMs?: number;
   authorizationTimeoutMs?: number;
   tokenStore?: TokenStore;
@@ -93,7 +91,6 @@ function safeAuthorizationUrl(url: URL): string | undefined {
 }
 
 export class McpSettingsManager {
-  private readonly homeDirectory: string;
   private readonly discoveryTimeoutMs: number;
   private readonly authorizationTimeoutMs: number;
   private readonly injectedTokenStore?: TokenStore;
@@ -101,7 +98,6 @@ export class McpSettingsManager {
   private readonly flows = new Map<string, InternalAuthorizationFlow>();
 
   constructor(options: McpSettingsManagerOptions = {}) {
-    this.homeDirectory = options.homeDirectory ?? os.homedir();
     this.discoveryTimeoutMs = options.discoveryTimeoutMs ?? DISCOVERY_TIMEOUT_MS;
     this.authorizationTimeoutMs = options.authorizationTimeoutMs ?? AUTHORIZATION_TIMEOUT_MS;
     this.injectedTokenStore = options.tokenStore;
@@ -130,14 +126,18 @@ export class McpSettingsManager {
     return presence;
   }
 
-  private prepare(repositoryId: string, repositoryRoot: string, onlyServer?: string): PreparedMcpRepository {
-    const drift = readSyncDrift({ repoRoot: repositoryRoot, homeDirectory: this.homeDirectory });
-    const state = readSyncState(repositoryRoot, this.homeDirectory);
-    if (!state) {
+  private prepare(
+    repositoryId: string,
+    repositoryRoot: string,
+    sync: DoomRepositorySyncView | undefined,
+    onlyServer?: string,
+  ): PreparedMcpRepository {
+    if (!sync?.mcpProjection) {
+      const readiness = sync ?? EMPTY_SYNC;
       return {
         catalog: {
           repositoryId,
-          sync: { ...EMPTY_SYNC, reasons: [...EMPTY_SYNC.reasons] },
+          sync: { fresh: readiness.fresh, reasons: [...readiness.reasons] },
           servers: [],
           droppedServers: [],
           diagnostics: [],
@@ -155,7 +155,7 @@ export class McpSettingsManager {
     const stagingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-mcp-settings-'));
     fs.chmodSync(stagingDirectory, 0o700);
     try {
-      const projected = mcpSessionConfigFromProjection(state.fileState.mcpProjection);
+      const projected = mcpSessionConfigFromProjection(sync.mcpProjection);
       const configuration: McpSessionConfig = {
         ...projected,
         repoRoot: repositoryRoot,
@@ -179,7 +179,7 @@ export class McpSettingsManager {
       return {
         catalog: {
           repositoryId,
-          sync: { fresh: drift.fresh, reasons: [...drift.reasons] },
+          sync: { fresh: sync.fresh, reasons: [...sync.reasons] },
           servers,
           droppedServers: [...groups.droppedServers],
           diagnostics: groups.diagnostics.map((diagnostic) =>
@@ -200,8 +200,12 @@ export class McpSettingsManager {
     if (prepared.stagingDirectory) fs.rmSync(prepared.stagingDirectory, { recursive: true, force: true });
   }
 
-  async readCatalog(repositoryId: string, repositoryRoot: string): Promise<McpRepositoryCatalog> {
-    const prepared = this.prepare(repositoryId, repositoryRoot);
+  async readCatalog(
+    repositoryId: string,
+    repositoryRoot: string,
+    sync: DoomRepositorySyncView | undefined,
+  ): Promise<McpRepositoryCatalog> {
+    const prepared = this.prepare(repositoryId, repositoryRoot, sync);
     try {
       const presence = await this.credentialPresence(prepared.catalog.servers.map((server) => server.name));
       return {
@@ -216,10 +220,14 @@ export class McpSettingsManager {
     }
   }
 
-  async discover(repositoryId: string, repositoryRoot: string): Promise<McpRepositoryCatalog> {
+  async discover(
+    repositoryId: string,
+    repositoryRoot: string,
+    sync: DoomRepositorySyncView | undefined,
+  ): Promise<McpRepositoryCatalog> {
     if (this.busyRepositories.has(repositoryId))
       throw new Error('MCP management is already active for this repository.');
-    const prepared = this.prepare(repositoryId, repositoryRoot);
+    const prepared = this.prepare(repositoryId, repositoryRoot, sync);
     if (!prepared.catalog.sync.fresh) {
       this.cleanupPrepared(prepared);
       throw new Error('Sync this repository before discovering MCP capabilities.');
@@ -288,19 +296,24 @@ export class McpSettingsManager {
     }
   }
 
-  async authorize(repositoryId: string, repositoryRoot: string, serverName: string): Promise<McpAuthorizationFlow> {
+  async authorize(
+    repositoryId: string,
+    repositoryRoot: string,
+    sync: DoomRepositorySyncView | undefined,
+    serverName: string,
+  ): Promise<McpAuthorizationFlow> {
     this.sweepFlows();
     if (this.busyRepositories.has(repositoryId))
       throw new Error('MCP management is already active for this repository.');
 
-    const full = this.prepare(repositoryId, repositoryRoot);
+    const full = this.prepare(repositoryId, repositoryRoot, sync);
     const configured = full.catalog.servers.some((server) => server.name === serverName);
     const fresh = full.catalog.sync.fresh;
     this.cleanupPrepared(full);
     if (!fresh) throw new Error('Sync this repository before authorizing an MCP server.');
     if (!configured) throw new Error('That MCP server is not enabled for this repository.');
 
-    const prepared = this.prepare(repositoryId, repositoryRoot, serverName);
+    const prepared = this.prepare(repositoryId, repositoryRoot, sync, serverName);
     const flow: InternalAuthorizationFlow = {
       id: randomUUID(),
       repositoryId,

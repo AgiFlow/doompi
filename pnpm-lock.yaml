@@ -1499,9 +1499,6 @@ importers:
 
   packages/default/doompi-mcp:
     dependencies:
-      '@agimon-ai/doompi':
-        specifier: workspace:*
-        version: link:../../core/doompi
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config

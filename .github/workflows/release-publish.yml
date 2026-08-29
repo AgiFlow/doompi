@@ -59,7 +59,7 @@ jobs:
           pnpm nx run-many -t lint --parallel=3
           pnpm lint:vibe --preflight-only
           pnpm nx run-many -t typecheck --parallel=3
-          pnpm nx run-many -t test --parallel=3
+          pnpm nx run-many -t test --parallel=1
           pnpm nx run-many -t test-system --parallel=1
 
       - name: Select the versions that are missing from the registry

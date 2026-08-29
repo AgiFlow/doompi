@@ -32,10 +32,9 @@ afterEach(() => {
 describe('McpSettingsManager', () => {
   it('reads an unsynced repository without starting a runtime or exposing its path', async () => {
     const repositoryRoot = temporaryDirectory('doompi-mcp-repository-');
-    const homeDirectory = temporaryDirectory('doompi-mcp-home-');
-    const manager = new McpSettingsManager({ homeDirectory, tokenStore });
+    const manager = new McpSettingsManager({ tokenStore });
 
-    const catalog = await manager.readCatalog(REPOSITORY_ID, repositoryRoot);
+    const catalog = await manager.readCatalog(REPOSITORY_ID, repositoryRoot, undefined);
 
     expect(catalog).toEqual({
       repositoryId: REPOSITORY_ID,
@@ -49,14 +48,14 @@ describe('McpSettingsManager', () => {
   });
 
   it('refuses executable discovery until the repository has a fresh sync projection', async () => {
-    const manager = new McpSettingsManager({
-      homeDirectory: temporaryDirectory('doompi-mcp-home-'),
-      tokenStore,
-    });
+    const manager = new McpSettingsManager({ tokenStore });
 
-    await expect(manager.discover(REPOSITORY_ID, temporaryDirectory('doompi-mcp-repository-'))).rejects.toThrow(
-      'Sync this repository before discovering MCP capabilities.',
-    );
+    await expect(
+      manager.discover(REPOSITORY_ID, temporaryDirectory('doompi-mcp-repository-'), {
+        fresh: false,
+        reasons: ['never-synced'],
+      }),
+    ).rejects.toThrow('Sync this repository before discovering MCP capabilities.');
     await manager.dispose();
   });
 });

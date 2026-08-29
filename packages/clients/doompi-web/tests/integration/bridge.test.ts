@@ -29,7 +29,7 @@ afterEach(async () => {
     fs.rmSync(registryDir, { recursive: true, force: true });
   }
   running = [];
-});
+}, 30_000);
 
 async function bridge(overrides: { token?: string } = {}): Promise<{ session: FakeSession; server: WebServer }> {
   const registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-bridge-'));

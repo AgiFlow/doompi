@@ -111,6 +111,7 @@ import {
   type VoiceOwnershipSessionHost,
   voiceOwnershipLabel,
 } from '../../services/sessionVoiceOwnership.ts';
+import { VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS } from '../../types/voiceOwnership.ts';
 
 export {
   MlxWhisperAdapter,
@@ -995,12 +996,33 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         await autoController.activate(ui);
         return;
       }
-      if (sessionVoiceOwnership.requestActivation() === undefined)
-        throw new Error('Autonomous voice activation is unavailable for this server session.');
+      const request = sessionVoiceOwnership.requestActivation();
+      if (request === undefined) throw new Error('Autonomous voice activation is unavailable for this server session.');
+      const bridge = ownershipBridge;
+      if (bridge === undefined) {
+        sessionVoiceOwnership.clearActivationRequest(request.requestId);
+        throw new Error('Autonomous voice ownership is not connected for this server session.');
+      }
       ui.setIndicator('processing');
       ui.setStatus('voice auto: starting');
       mode?.publish(voiceModeState('starting', canRunVoice(context)));
-      await ownershipBridge?.synchronize();
+      try {
+        await bridge.synchronize();
+      } catch (error) {
+        sessionVoiceOwnership.clearActivationRequest(request.requestId);
+        ui.setIndicator(undefined);
+        ui.setStatus(undefined);
+        mode?.publish(voiceModeState('disabled', canRunVoice(context)));
+        throw error;
+      }
+      container.clock.setTimeout(() => {
+        if (sessionVoiceOwnership.snapshot().activation?.requestId !== request.requestId) return;
+        sessionVoiceOwnership.clearActivationRequest(request.requestId);
+        ui.setIndicator(undefined);
+        ui.setStatus(undefined);
+        mode?.publish(voiceModeState('disabled', canRunVoice(context)));
+        ui.notify('Autonomous voice activation timed out while waiting for session ownership.', 'error');
+      }, VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS);
     };
 
     cordis.provide(DOOM_NARRATION_SERVICE, createVoiceNarrationService(autoController));

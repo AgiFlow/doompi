@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { PiServer, PiServerError } from '@earendil-works/pi-server';
+import { readSyncDrift } from '@agimon-ai/doompi/services';
+import { readSyncState } from '@agimon-ai/doompi/services/syncState';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
@@ -18,6 +20,7 @@ import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApi,
   type DoomApiHandler,
+  type DoomRepositorySyncView,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
@@ -268,7 +271,7 @@ function repositoryId(root: string): string {
 }
 
 /** Active repositories plus a bounded set seen earlier during this hub process. */
-function createSettingsRepositoryRegistry(hub: SessionHub): {
+export function createSettingsRepositoryRegistry(hub: SessionHub): {
   list(): SettingsRepository[];
   resolve(repositoryId: string): string | undefined;
 } {
@@ -322,13 +325,14 @@ function mountHubApis(
   apis: readonly DoomApi[],
   notice: (message: string) => void,
   resolveRepository: (repositoryId: string) => string | undefined,
+  readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
 ): DoomApiHandler[] {
   const handlers: DoomApiHandler[] = [];
   for (const api of apis) {
     const mount = `${DOOM_API_ROUTE_PREFIX}/${api.basePath}`;
     let handler: DoomApiHandler;
     try {
-      handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository });
+      handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository, readRepositorySync });
     } catch (error) {
       notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
       continue;
@@ -703,6 +707,22 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const repositoryRegistry = createSettingsRepositoryRegistry(hub);
   const repositories = (): SettingsRepository[] => repositoryRegistry.list();
   const resolveRepository = (repositoryId: string): string | undefined => repositoryRegistry.resolve(repositoryId);
+  const readRepositorySync = (repositoryId: string): DoomRepositorySyncView | undefined => {
+    const root = resolveRepository(repositoryId);
+    if (root === undefined) return undefined;
+    const drift = readSyncDrift({ repoRoot: root });
+    let state: ReturnType<typeof readSyncState>;
+    try {
+      state = readSyncState(root);
+    } catch {
+      state = undefined;
+    }
+    return {
+      fresh: drift.fresh,
+      reasons: [...drift.reasons],
+      ...(state === undefined ? {} : { mcpProjection: state.fileState.mcpProjection }),
+    };
+  };
   registerSettingsRoutes(app, {
     repositories,
     models: () => providerAuth.listModels(),
@@ -710,7 +730,13 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // Package APIs, mounted before the SPA fallback so their routes are reachable
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
-  const pluginApis = mountHubApis(app, await loadPackageApis('hub', { onNotice: notice }), notice, resolveRepository);
+  const pluginApis = mountHubApis(
+    app,
+    await loadPackageApis('hub', { onNotice: notice }),
+    notice,
+    resolveRepository,
+    readRepositorySync,
+  );
   mountSessionApiProxy(app, hub, notice, telemetry);
 
   app.get('/api/health', (context) =>

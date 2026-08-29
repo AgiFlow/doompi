@@ -9,6 +9,7 @@ import {
   type DoomMcpProjectionService,
 } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
 import {
+  DOOM_CORDIS_HOST_REQUIRED_ENV,
   installDoomCordisHost,
   type DoomCordisHostController,
 } from '@agimon-ai/doompi-extension-contracts/cordis-host';
@@ -212,6 +213,7 @@ function nativeProjection(configPath: string, enabled = true): DoomMcpProjection
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv(DOOM_CORDIS_HOST_REQUIRED_ENV, '');
   registeredExtensions.length = 0;
   notify = vi.fn();
   custom = vi.fn().mockResolvedValue(undefined);
@@ -247,6 +249,7 @@ beforeEach(() => {
 afterEach(async () => {
   for (const extension of registeredExtensions) await extension.shutdownSession();
   registeredExtensions.length = 0;
+  vi.unstubAllEnvs();
   delete process.env[SESSION_ENV_VAR];
   fs.rmSync(repoRoot, { recursive: true, force: true });
 });

@@ -158,9 +158,9 @@ export interface RepositorySettingsRepository {
 export interface RepositorySettingsPanelProps {
   repository: RepositorySettingsRepository | null;
   /** Same-origin request routed through the host's sealed transport when remote. */
-  request(input: string, init?: RequestInit): Promise<Response>;
+  request: (input: string, init?: RequestInit) => Promise<Response>;
   /** The same transport, retrying once after the host's fresh passkey gesture. */
-  requestWithStepUp(input: string, init?: RequestInit): Promise<Response>;
+  requestWithStepUp: (input: string, init?: RequestInit) => Promise<Response>;
 }
 
 /** One package-owned panel below the host's repository selection controls. */

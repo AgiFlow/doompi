@@ -38,14 +38,13 @@ function serverNameOf(value: unknown): string | undefined {
   return typeof value === 'string' &&
     value.length > 0 &&
     value.length <= MAX_SERVER_NAME &&
-    !/[\u0000-\u001f]/u.test(value)
+    !Array.from(value).some((character) => character.charCodeAt(0) <= 0x1f)
     ? value
     : undefined;
 }
 
-async function resolveRepository(context: DoomApiContext, repositoryId: string): Promise<string | undefined> {
-  if (!context.resolveRepository) return undefined;
-  return await context.resolveRepository(repositoryId);
+function resolveRepository(context: DoomApiContext, repositoryId: string): string | undefined {
+  return context.resolveRepository?.(repositoryId);
 }
 
 function errorStatus(error: unknown): { status: number; message: string } {
@@ -59,10 +58,10 @@ function errorStatus(error: unknown): { status: number; message: string } {
 async function handleCatalog(request: Request, context: DoomApiContext): Promise<Response> {
   const repositoryId = repositoryIdOf(new URL(request.url).searchParams.get('repositoryId'));
   if (!repositoryId) return json({ error: 'A valid repositoryId is required.' }, 400);
-  const repositoryRoot = await resolveRepository(context, repositoryId);
+  const repositoryRoot = resolveRepository(context, repositoryId);
   if (!repositoryRoot) return json({ error: 'That repository is not available to this hub.' }, 404);
   try {
-    return json(await manager.readCatalog(repositoryId, repositoryRoot));
+    return json(await manager.readCatalog(repositoryId, repositoryRoot, context.readRepositorySync?.(repositoryId)));
   } catch {
     return json({ error: 'The synced MCP catalog could not be read.' }, 500);
   }
@@ -72,10 +71,10 @@ async function handleDiscovery(request: Request, context: DoomApiContext): Promi
   const body = await bodyOf(request);
   const repositoryId = repositoryIdOf(body?.repositoryId);
   if (!repositoryId) return json({ error: 'A valid repositoryId is required.' }, 400);
-  const repositoryRoot = await resolveRepository(context, repositoryId);
+  const repositoryRoot = resolveRepository(context, repositoryId);
   if (!repositoryRoot) return json({ error: 'That repository is not available to this hub.' }, 404);
   try {
-    return json(await manager.discover(repositoryId, repositoryRoot));
+    return json(await manager.discover(repositoryId, repositoryRoot, context.readRepositorySync?.(repositoryId)));
   } catch (error) {
     const failure = errorStatus(error);
     return json({ error: failure.message }, failure.status);
@@ -87,10 +86,13 @@ async function handleAuthorize(request: Request, context: DoomApiContext): Promi
   const repositoryId = repositoryIdOf(body?.repositoryId);
   const serverName = serverNameOf(body?.serverName);
   if (!repositoryId || !serverName) return json({ error: 'A valid repositoryId and serverName are required.' }, 400);
-  const repositoryRoot = await resolveRepository(context, repositoryId);
+  const repositoryRoot = resolveRepository(context, repositoryId);
   if (!repositoryRoot) return json({ error: 'That repository is not available to this hub.' }, 404);
   try {
-    return json(await manager.authorize(repositoryId, repositoryRoot, serverName), 202);
+    return json(
+      await manager.authorize(repositoryId, repositoryRoot, context.readRepositorySync?.(repositoryId), serverName),
+      202,
+    );
   } catch (error) {
     const failure = errorStatus(error);
     return json({ error: failure.message }, failure.status);
@@ -102,7 +104,7 @@ async function handleAuthorizationFlow(request: Request, context: DoomApiContext
   const repositoryId = repositoryIdOf(new URL(request.url).searchParams.get('repositoryId'));
   if (!repositoryId || !FLOW_ID.test(flowId))
     return json({ error: 'A valid repositoryId and flow id are required.' }, 400);
-  if (!(await resolveRepository(context, repositoryId))) {
+  if (!resolveRepository(context, repositoryId)) {
     return json({ error: 'That repository is not available to this hub.' }, 404);
   }
   if (request.method === 'DELETE') {
