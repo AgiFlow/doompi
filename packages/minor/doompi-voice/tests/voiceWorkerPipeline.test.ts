@@ -484,11 +484,12 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
     });
     const events: VoiceWorkerEventPayload[] = [];
+    const root = temporaryRoot();
     pipeline.initialize({
       version: VOICE_WORKER_PROTOCOL_VERSION,
       sequence: 0,
       kind: 'initialize',
-      spoolDirectory: temporaryRoot(),
+      spoolDirectory: root,
       activityHz: 8,
     });
     const beginning = pipeline.handle(beginCommand(), (published) => events.push(published));
@@ -514,6 +515,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     expect(observedSignal?.aborted).toBe(true);
     expect(events.some((event) => event.kind === 'transcript-candidate')).toBe(false);
     expect(events.some((event) => event.kind === 'failure' && event.code !== 'capture_duration_limit')).toBe(false);
+    expect(fs.readdirSync(root)).toEqual([]);
   });
 
   it('publishes one terminal failure when recorder recovery is exhausted', async () => {
@@ -597,6 +599,104 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     await pipeline.shutdown();
   });
 
+  it.each([
+    ['digital silence', () => Array.from({ length: 20 }, () => pcmFrame(0))],
+    ['steady ambient room noise', () => Array.from({ length: 20 }, () => pcmFrame(128))],
+    [
+      'an isolated transient click',
+      () => {
+        const click = Buffer.alloc(PCM_FRAME_BYTES);
+        click.writeInt16LE(12_000, 0);
+        return [click, ...Array.from({ length: 19 }, () => pcmFrame(0))];
+      },
+    ],
+  ])('rejects %s before autonomous ASR', async (_label, frames) => {
+    const recorder = new WorkerRecorder();
+    const transcribe = vi.fn(async () => 'plausible hallucinated request');
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+      speechDetectorFactory: () => ({ push: () => false, reset: () => undefined }),
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+    const beginning = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, (event) =>
+      events.push(event),
+    );
+    await vi.waitFor(() => expect(recorder.ready).toBe(true));
+    for (const frame of frames()) recorder.emit(frame);
+    await beginning;
+    await pipeline.handle(
+      { ...beginCommand(), sequence: 2, kind: 'finalize-capture', reason: 'explicit-stop' },
+      (event) => events.push(event),
+    );
+
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'failure', code: 'empty_transcript' }));
+    await pipeline.shutdown();
+  });
+
+  it('continues with fresh audio after rejecting a silent autonomous capture', async () => {
+    const recorder = new RestartingWorkerRecorder();
+    const transcribe = vi.fn(async () => 'real short command');
+    const pipeline = new VoiceWorkerPipeline({
+      clock: new WorkerClock(),
+      recorder,
+      registry: registryWith({ engine: 'mlx-whisper', preflight: () => undefined, transcribe }),
+      speechDetectorFactory: () => ({ push: (frame) => frame.some((byte) => byte !== 0), reset: () => undefined }),
+    });
+    const events: VoiceWorkerEventPayload[] = [];
+    const publish = (event: VoiceWorkerEventPayload) => events.push(event);
+    pipeline.initialize({
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'initialize',
+      spoolDirectory: temporaryRoot(),
+      activityHz: 8,
+    });
+
+    const first = pipeline.handle({ ...beginCommand(), mode: 'autonomous' as const }, publish);
+    await vi.waitFor(() => expect(recorder.handles).toHaveLength(1));
+    for (let index = 0; index < 20; index += 1) recorder.emit(1, pcmFrame(0));
+    await first;
+    await pipeline.handle(
+      { ...beginCommand(), sequence: 2, kind: 'finalize-capture', reason: 'explicit-stop' },
+      publish,
+    );
+    await pipeline.handle(
+      { ...beginCommand(), sequence: 3, kind: 'acknowledge-candidate', revision: 1, outcome: 'discarded' },
+      publish,
+    );
+
+    const secondCommand = {
+      ...beginCommand(),
+      sequence: 4,
+      mode: 'autonomous' as const,
+      captureId: 'capture-2',
+      turnId: 'turn-2',
+    };
+    const second = pipeline.handle(secondCommand, publish);
+    await vi.waitFor(() => expect(recorder.handles).toHaveLength(2));
+    for (let index = 0; index < 10; index += 1) recorder.emit(2, pcmFrame(4_000));
+    await second;
+    await pipeline.handle(
+      { ...secondCommand, sequence: 5, kind: 'finalize-capture', reason: 'explicit-stop' },
+      publish,
+    );
+
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'transcript-candidate', turnId: 'turn-2', transcript: 'real short command' }),
+    );
+    await pipeline.shutdown();
+  });
   it('requires neural speech evidence before autonomous capture confirms high energy', async () => {
     const recorder = new WorkerRecorder();
     const speechDetector: ISpeechPresenceDetector = {

@@ -12,7 +12,8 @@ import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 export const VOICE_DESCRIBE_TOOL = 'describe_voice_tools';
 export const VOICE_USE_TOOL = 'use_voice_tools';
 export const VOICE_NARRATE_TOOL = 'narrate';
-export const VOICE_TOOL_NAMES = [VOICE_DESCRIBE_TOOL, VOICE_USE_TOOL, VOICE_NARRATE_TOOL] as const;
+export const VOICE_TRANSFER_TOOL = 'transfer_voice';
+export const VOICE_TOOL_NAMES = [VOICE_DESCRIBE_TOOL, VOICE_USE_TOOL, VOICE_NARRATE_TOOL, VOICE_TRANSFER_TOOL] as const;
 
 /** The toned lines the shared MessageLines draws; the vocabulary is the components package's. */
 export type LineTone = MessageLineTone;

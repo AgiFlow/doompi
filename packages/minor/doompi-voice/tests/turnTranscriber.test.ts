@@ -23,6 +23,29 @@ describe('TurnTranscriber', () => {
     expect(retryNormalized).not.toHaveBeenCalled();
   });
 
+  it('preserves generic ASR evidence from a structured adapter result', async () => {
+    await expect(
+      new TurnTranscriber(clock).transcribe({
+        transcribe: async () => ({
+          transcript: '  short command  ',
+          evidence: { noSpeechProbability: 0.1, speechDurationMs: 300 },
+        }),
+      }),
+    ).resolves.toEqual({
+      kind: 'success',
+      transcript: 'short command',
+      evidence: { noSpeechProbability: 0.1, speechDurationMs: 300 },
+    });
+  });
+
+  it('retains decoding evidence when both structured passes are empty', async () => {
+    await expect(
+      new TurnTranscriber(clock).transcribe({
+        transcribe: async () => ({ transcript: '', evidence: { noSpeechProbability: 0.7 } }),
+        retryNormalized: async () => ({ transcript: ' ', evidence: { noSpeechProbability: 0.9 } }),
+      }),
+    ).resolves.toEqual({ kind: 'empty', evidence: { noSpeechProbability: 0.9 } });
+  });
   it('performs at most one normalized retry after an empty nonzero pass', async () => {
     const retryNormalized = vi.fn(async () => ' recovered words ');
     const outcome = await new TurnTranscriber(clock).transcribe({

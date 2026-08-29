@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { VoiceActivitySection } from './VoiceActivitySection.tsx';
 import { VoiceComposerAction } from './VoiceComposerAction.tsx';
-import { VoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
+import { startVoiceMediaRuntime, VoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
 import { VoiceToolMessage } from './VoiceToolMessage.tsx';
 import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
 import { voiceMediaWakeChannel } from './voiceMediaWakeStore.ts';
@@ -13,6 +13,7 @@ import { voiceMediaWakeChannel } from './voiceMediaWakeStore.ts';
 export const webPlugin = defineWebPlugin({
   id: 'voice',
   channels: [voiceMediaWakeChannel],
+  start: startVoiceMediaRuntime,
   // `v e` drives autonomous capture, which the runtime registers as
   // 'voice-auto'; 'voice' is the one-shot dictation command on `v v`. The row
   // shows the package's name and reaches the mode the key reaches.
@@ -21,7 +22,9 @@ export const webPlugin = defineWebPlugin({
   // group in the dock rather than a word inside a chip.
   // hideWhenEmpty: the group reports a capture in progress, so it belongs in
   // the dock while one is running and nowhere otherwise.
-  activityGroups: [{ name: 'voice', keys: 'v e', statusKey: 'doom-voice', hideWhenEmpty: true, order: 60 }],
+  activityGroups: [
+    { name: 'voice', keys: 'v e', statusKey: 'doom-voice', hideWhenEmpty: true, placement: 'bottom', order: 60 },
+  ],
   // Same name as the group: the dock renders this inside it, in place of the
   // raw status line the session publishes for a terminal footer.
   activitySections: [{ id: 'voice', component: VoiceActivitySection }],

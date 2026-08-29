@@ -46,6 +46,7 @@ import {
 import {
   type FallbackNarrationModelRequest,
   type IFallbackNarrationModelClient,
+  type IVoiceNarrationCompactor,
   type IVoiceTurnFallbackNarrator,
   VoiceTurnFallbackNarrator,
 } from '../../services/fallbackNarration.ts';
@@ -102,6 +103,8 @@ import { createMinorModeVoiceTool, createVoiceMinorModeCatalog } from './minorMo
 import { isNarrationRuntimeActive, type NarrationToolRuntime, registerNarrationTool } from './narrationTool.ts';
 import { collectVoiceCommandContext } from './voiceCommandContext.ts';
 import { registerVoiceToolFacades } from './voiceTools.ts';
+import { createTransferVoiceToolLifecycle } from './transferVoiceTool.ts';
+import { registerSessionVoiceOwnership, voiceOwnershipLabel } from '../../services/sessionVoiceOwnership.ts';
 
 export {
   MlxWhisperAdapter,
@@ -549,7 +552,10 @@ export function resolveVoiceTranscriptAdjudicator(
   };
   return new VoiceTranscriptAdjudicator(modelClient, clock);
 }
-export function resolveVoiceFallbackNarrator(reference: string, context: ExtensionContext): IVoiceTurnFallbackNarrator {
+export function resolveVoiceFallbackNarrator(
+  reference: string,
+  context: ExtensionContext,
+): IVoiceTurnFallbackNarrator & IVoiceNarrationCompactor {
   const separator = reference.indexOf('/');
   if (separator <= 0 || separator === reference.length - 1)
     throw new Error('Voice fallback narration model must use provider/model-id form');
@@ -708,14 +714,13 @@ export class VoiceSessionController implements IVoiceSessionController {
         ui.notify('No speech detected', INFO_NOTIFICATION);
         return;
       }
-      const transcript = (
-        await selected.adapter.transcribe({
-          audioPath: recording.filePath,
-          workspace,
-          config: selected.config,
-          language: config.language,
-        })
-      ).trim();
+      const transcription = await selected.adapter.transcribe({
+        audioPath: recording.filePath,
+        workspace,
+        config: selected.config,
+        language: config.language,
+      });
+      const transcript = (typeof transcription === 'string' ? transcription : transcription.transcript).trim();
       if (!transcript) {
         await this.telemetry.recordEvent(TRANSCRIPTION_FINISHED_EVENT, {
           engine: selected.adapter.engine,
@@ -907,6 +912,9 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       narrationToolRuntime = undefined;
     };
 
+    const transferVoiceTool = typeof pi.registerTool === 'function' ? createTransferVoiceToolLifecycle(pi) : undefined;
+    if (transferVoiceTool) yield () => transferVoiceTool.dispose();
+
     const voiceToolFacades =
       typeof pi.registerTool === 'function'
         ? registerVoiceToolFacades(pi, () => voiceToolSession, options.waitUntilConfigured)
@@ -1002,6 +1010,20 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
               parameters: [],
             },
             {
+              id: 'mute',
+              label: 'Mute autonomous microphone',
+              description: 'Pause autonomous microphone capture while narration remains active.',
+              contexts: ['tui', 'headless'],
+              parameters: [],
+            },
+            {
+              id: 'unmute',
+              label: 'Unmute autonomous microphone',
+              description: 'Start a fresh autonomous microphone capture.',
+              contexts: ['tui', 'headless'],
+              parameters: [],
+            },
+            {
               id: 'deactivate',
               label: 'Stop autonomous voice',
               description: 'Stop autonomous voice capture.',
@@ -1026,6 +1048,14 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
             lastUi = createVoiceUi(execution.context, footer);
             await controller.toggle(lastUi);
             return { message: 'Manual voice recording started. Stop it to fill the current prompt.' };
+          }
+          if (actionId === 'mute') {
+            autoController.setMicrophoneMuted(true);
+            return { message: 'Autonomous voice microphone muted.' };
+          }
+          if (actionId === 'unmute') {
+            autoController.setMicrophoneMuted(false);
+            return { message: 'Autonomous voice microphone unmuted.' };
           }
           if (actionId === 'deactivate') {
             await autoController.deactivate(ui);
@@ -1067,8 +1097,11 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         else await autoController.deactivate(lastAutoUi);
       },
     });
+    let ownershipDispose: (() => void) | undefined;
+    yield () => ownershipDispose?.();
     pi.on('session_start', async (event, ctx) => {
       if (!active) return;
+      transferVoiceTool?.sessionStarted();
       const ownGeneration = ++sessionGeneration;
       const reason = (event as { reason?: string }).reason;
       if (autoController.state !== 'disabled') {
@@ -1085,6 +1118,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       voiceToolSession?.dispose();
       voiceToolSession = undefined;
 
+      ownershipDispose?.();
+      ownershipDispose = undefined;
       const sessionId = (ctx as unknown as VoiceSessionContextLike).sessionManager?.getSessionId();
       let reloadHandoff = false;
       if (sessionId) {
@@ -1107,6 +1142,12 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       // well, would keep reporting otherwise for the life of the session.
       mode?.publish(voiceModeState('disabled', canRunVoice(ctx)));
       if (!ctx.hasUI) return;
+      ownershipDispose = registerSessionVoiceOwnership({
+        label: voiceOwnershipLabel(process.env.PI_PROJECT_ROOT ?? process.cwd()),
+        eligible: true,
+        requiresBrowserBind: true,
+        controller: autoController,
+      });
       lastUi = createVoiceUi(ctx, footer);
       lastAutoUi = createAutoCaptureUi(ctx, footer);
       lastUi.setIndicator(undefined);
@@ -1141,6 +1182,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       voiceToolSession?.setActive(false);
       voiceToolSession?.dispose();
       voiceToolSession = undefined;
+      ownershipDispose?.();
+      ownershipDispose = undefined;
       activeContext = undefined;
       const autoUi = lastAutoUi;
       lastUi = undefined;

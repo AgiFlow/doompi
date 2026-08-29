@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -774,6 +775,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
       const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'session');
       const subscriptions = new Set<string>();
+      const connectionId = randomUUID();
       /** The threads this page follows; one socket may follow several of one session. */
       const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
       let disconnect: (() => void) | undefined;
@@ -830,7 +832,10 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               releaseThreads(event.sessionId);
               post({ type: SESSION_REMOVED_TYPE, sessionId: event.sessionId });
             } else if (event.kind === 'channel') {
-              if (subscriptions.has(event.sessionId)) {
+              if (
+                event.connectionId === connectionId ||
+                (event.connectionId === undefined && subscriptions.has(event.sessionId))
+              ) {
                 post({ type: event.frameType, sessionId: event.sessionId, payload: event.payload });
               }
             } else {
@@ -869,6 +874,14 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           }
           if (!isRecord(parsed) || typeof parsed.sessionId !== 'string') return;
           const sessionId = parsed.sessionId;
+          if (
+            typeof parsed.type === 'string' &&
+            hub.channelTypes().includes(parsed.type) &&
+            (subscriptions.has(sessionId) || hub.channelReceivesWithoutSubscription(parsed.type))
+          ) {
+            hub.receiveChannel(sessionId, parsed.type, parsed.payload, connectionId);
+            return;
+          }
           if (parsed.type === SUBSCRIBE_TYPE) {
             const backlog = hub.backlog(sessionId);
             if (!backlog) return; // Unknown session; the snapshot said otherwise.
@@ -913,6 +926,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           }
         },
         onClose() {
+          hub.disconnectChannels(connectionId);
           if (registered) pages.delete(registered);
           registered = undefined;
           untrack?.();

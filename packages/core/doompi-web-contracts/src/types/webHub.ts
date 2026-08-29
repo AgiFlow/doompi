@@ -22,12 +22,29 @@ export interface HubSessionScope {
   cwd: string;
 }
 
+export interface HubSessionApiRequest {
+  basePath: string;
+  path: string;
+  method: string;
+  body?: string | Uint8Array<ArrayBuffer> | null;
+  signal?: AbortSignal;
+}
+
+export interface HubChannelConnection {
+  /** Opaque for one page socket lifetime. */
+  connectionId: string;
+}
+
 /** What the hub hands a channel when it starts. */
 export interface HubChannelHost {
   /** Every session the hub currently manages. */
   sessions(): readonly HubSessionScope[];
   /** Live fan-out to the session's page subscribers. */
   publish(sessionId: string, payload: unknown): void;
+  /** Delivers only to the authenticated page socket named by connectionId. */
+  publishToConnection?(connectionId: string, sessionId: string, payload: unknown): boolean;
+  /** Authenticated machine-local transport to a session package API. */
+  requestSessionApi(scope: HubSessionScope, request: HubSessionApiRequest): Promise<Response>;
   onNotice(message: string): void;
 }
 
@@ -54,4 +71,10 @@ export interface WebHubChannel {
   /** Wire frame type; globally unique across every loaded plugin. */
   frameType: string;
   start(host: HubChannelHost): HubChannelSource;
+  /** Allows an authenticated connection to acknowledge targeted frames after its session subscription changes. */
+  receiveWithoutSubscription?: boolean;
+  /** Receives only frames matching frameType and a live session scope. */
+  receive?(scope: HubSessionScope, payload: unknown, connection: HubChannelConnection): void;
+  /** The authenticated page socket has closed. */
+  disconnected?(connection: HubChannelConnection): void;
 }

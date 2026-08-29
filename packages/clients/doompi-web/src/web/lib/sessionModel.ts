@@ -3,10 +3,16 @@ import { DIALOG_ANSWERED_TYPE, MINOR_MODE_ENTRY_TYPE, type MinorModeProjection }
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
 
+export interface UserImage {
+  data: string;
+  mimeType: string;
+}
+
 export interface UserEntry {
   kind: 'user';
   id: string;
   text: string;
+  images?: UserImage[];
 }
 
 export interface AssistantEntry {
@@ -49,6 +55,7 @@ export interface QueuedEntry {
   kind: 'queued';
   id: string;
   text: string;
+  images?: UserImage[];
 }
 
 export type TimelineEntry = UserEntry | AssistantEntry | ToolEntry | NoticeEntry | SettledEntry | QueuedEntry;
@@ -143,7 +150,7 @@ export interface SessionState {
    * sends on your behalf. Matching a journal message against this list is what
    * lets both appear exactly once.
    */
-  pendingUserEntries: { id: string; text: string }[];
+  pendingUserEntries: { id: string; text: string; images?: UserImage[] }[];
   nextId: number;
 }
 
@@ -190,6 +197,23 @@ export function textFromContent(content: unknown): string {
     .map((block) => (isRecord(block) && block.type === 'text' ? asString(block.text) : ''))
     .filter(Boolean)
     .join('');
+}
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+export function isSupportedImageMimeType(mimeType: string): boolean {
+  return SUPPORTED_IMAGE_MIME_TYPES.has(mimeType);
+}
+
+/** Keeps only image blocks the cockpit can safely render as data URLs. */
+export function imagesFromContent(content: unknown): UserImage[] {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) => {
+    if (!isRecord(block) || block.type !== 'image') return [];
+    const data = asString(block.data);
+    const mimeType = asString(block.mimeType);
+    return data && isSupportedImageMimeType(mimeType) ? [{ data, mimeType }] : [];
+  });
 }
 
 /** A one-line description of a tool call, good enough for a card header. */
@@ -425,8 +449,9 @@ function thinkingFromContent(content: readonly Frame[]): string {
 }
 
 /** Remembers a prompt this page rendered, so the journal's copy of it folds into the same entry. */
-function withPendingUser(state: SessionState, id: string, text: string): SessionState {
-  return { ...state, pendingUserEntries: [...state.pendingUserEntries, { id, text }] };
+function withPendingUser(state: SessionState, id: string, text: string, images: UserImage[] = []): SessionState {
+  const pending = { id, text, ...(images.length > 0 ? { images } : {}) };
+  return { ...state, pendingUserEntries: [...state.pendingUserEntries, pending] };
 }
 
 /**
@@ -438,14 +463,24 @@ function withPendingUser(state: SessionState, id: string, text: string): Session
  * same message the journal later reports, so it settles the entry that stands
  * rather than adding a second copy of the text.
  */
-function reconcilePendingUser(state: SessionState, text: string): SessionState | undefined {
+function reconcilePendingUser(state: SessionState, text: string, images: UserImage[]): SessionState | undefined {
   const index = state.pendingUserEntries.findIndex((pending) => pending.text === text);
   if (index === -1) return undefined;
-  const { id } = state.pendingUserEntries[index] as { id: string };
+  const pending = state.pendingUserEntries[index] as { id: string; images?: UserImage[] };
   const pendingUserEntries = state.pendingUserEntries.filter((_, at) => at !== index);
-  const entries = state.entries.map((entry) =>
-    entry.id === id && entry.kind === 'queued' ? { kind: 'user' as const, id: entry.id, text: entry.text } : entry,
-  );
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== pending.id) return entry;
+    const reconciledImages = images.length > 0 ? images : pending.images;
+    if (entry.kind === 'queued') {
+      return {
+        kind: 'user' as const,
+        id: entry.id,
+        text: entry.text,
+        ...(reconciledImages ? { images: reconciledImages } : {}),
+      };
+    }
+    return entry.kind === 'user' && images.length > 0 ? { ...entry, images } : entry;
+  });
   return { ...state, entries, pendingUserEntries };
 }
 
@@ -464,8 +499,12 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
 
   if (role === 'user') {
     const text = textFromContent(content);
-    if (!text) return state;
-    return reconcilePendingUser(state, text) ?? withEntry(state, { kind: 'user', id: `u${state.nextId}`, text });
+    const images = imagesFromContent(content);
+    if (!text && images.length === 0) return state;
+    return (
+      reconcilePendingUser(state, text, images) ??
+      withEntry(state, { kind: 'user', id: `u${state.nextId}`, text, ...(images.length > 0 ? { images } : {}) })
+    );
   }
 
   if (role === 'assistant') {
@@ -684,15 +723,17 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
 }
 
 /** Records the prompt locally, because Pi does not echo it back as an event. */
-export function appendUserPrompt(state: SessionState, text: string): SessionState {
+export function appendUserPrompt(state: SessionState, text: string, images: UserImage[] = []): SessionState {
   const id = `u${state.nextId}`;
-  return withPendingUser(withEntry(state, { kind: 'user', id, text }), id, text);
+  const entry: UserEntry = { kind: 'user', id, text, ...(images.length > 0 ? { images } : {}) };
+  return withPendingUser(withEntry(state, entry), id, text, images);
 }
 
 /** A follow-up waits for the current run, so it is marked rather than shown as sent. */
-export function appendQueued(state: SessionState, text: string): SessionState {
+export function appendQueued(state: SessionState, text: string, images: UserImage[] = []): SessionState {
   const id = `q${state.nextId}`;
-  return withPendingUser(withEntry(state, { kind: 'queued', id, text }), id, text);
+  const entry: QueuedEntry = { kind: 'queued', id, text, ...(images.length > 0 ? { images } : {}) };
+  return withPendingUser(withEntry(state, entry), id, text, images);
 }
 
 export function clearDialog(state: SessionState): SessionState {

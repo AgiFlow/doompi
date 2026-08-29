@@ -6,7 +6,7 @@ import type { SubagentRun } from '../src/types/webSubagents.ts';
 import { agentThreadTab } from './AgentThreadPanel.tsx';
 import { openCatalog } from './catalogStore.ts';
 import { formatRunDuration } from './format.ts';
-import { isTerminalRun, subagents, visibleRuns } from './subagentsStore.ts';
+import { activityRuns, isTerminalRun, subagents } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
 const SUBAGENTS_TAB = 'subagents';
@@ -37,7 +37,7 @@ function detail(run: SubagentRun): string {
  * the runtime's footer one-liner, which only says whether anything is running.
  */
 export function AgentsActivitySection({ sessionId, openTab, openTransientTab }: WebPluginSlotProps) {
-  const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
+  const runs = useStore(subagents.store, (state) => activityRuns(subagents.select(state, sessionId)));
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {

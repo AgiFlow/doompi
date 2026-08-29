@@ -13,6 +13,25 @@ describe('protocol transcript projection', () => {
     expect(toTimelineEntries(items)).toEqual([{ kind: 'user', id: 'u1', text: 'do the thing' }]);
   });
 
+  it('retains supported user images and drops image content with unsupported MIME types', () => {
+    const items: TranscriptItem[] = [
+      {
+        id: 'u1',
+        role: 'user',
+        content: [
+          { type: 'text', text: 'review this' },
+          { type: 'image', data: 'cG5n', mimeType: 'image/png' },
+          { type: 'image', data: 'c3Zn', mimeType: 'image/svg+xml' },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    expect(toTimelineEntries(items)).toEqual([
+      { kind: 'user', id: 'u1', text: 'review this', images: [{ data: 'cG5n', mimeType: 'image/png' }] },
+    ]);
+  });
+
   it('splits assistant text from its thinking and reports streaming', () => {
     const items: TranscriptItem[] = [
       {

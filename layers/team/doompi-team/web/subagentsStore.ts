@@ -44,11 +44,16 @@ function without(list: readonly string[], runId: string): string[] {
   return list.filter((id) => id !== runId);
 }
 
-/** The session's runs minus the ones the reader dismissed; the reported list itself while nothing is. */
+/** The full Subagents tab's runs minus the ones the reader dismissed. */
 export function visibleRuns(session: SubagentsSession): SubagentRun[] {
   return session.dismissed.length === 0
     ? session.runs
     : session.runs.filter((run) => !session.dismissed.includes(run.runId));
+}
+
+/** Only runs that can still be doing work belong in the activity group. */
+export function activityRuns(session: SubagentsSession): SubagentRun[] {
+  return visibleRuns(session).filter((run) => run.state === 'queued' || run.state === 'running');
 }
 
 /**

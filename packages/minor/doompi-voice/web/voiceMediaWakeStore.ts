@@ -1,9 +1,13 @@
 import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
 import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../src/types/clientMedia.ts';
+import { parseBrowserVoiceOwnershipPayload, type BrowserVoiceOwnershipPayload } from '../src/types/voiceOwnership.ts';
 
 const MAX_EVENT_EPOCH_LENGTH = 200;
 
 export const voiceMediaWakes = defineSessionStore<VoiceMediaWake | undefined>(undefined);
+export const voiceOwnershipCommands = defineSessionStore<
+  Extract<BrowserVoiceOwnershipPayload, { type: 'browser-media-command' }> | undefined
+>(undefined);
 
 export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
@@ -21,14 +25,31 @@ export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | nul
   return { eventEpoch: record.eventEpoch, sequence: record.sequence as number };
 }
 
-export const voiceMediaWakeChannel = voiceMediaWakes.channel<VoiceMediaWake>({
+export const voiceMediaWakeChannel = {
   channel: VOICE_MEDIA_WAKE_TYPE,
-  parse: parseVoiceMediaWakePayload,
-  reduce(current, wake) {
-    if (current?.eventEpoch === wake.eventEpoch && wake.sequence <= current.sequence) return current;
-    return wake;
+  parse(
+    input: unknown,
+  ): VoiceMediaWake | Extract<BrowserVoiceOwnershipPayload, { type: 'browser-media-command' }> | null {
+    const wake = parseVoiceMediaWakePayload(input);
+    if (wake !== null) return wake;
+    const ownership = parseBrowserVoiceOwnershipPayload(input);
+    return ownership?.type === 'browser-media-command' ? ownership : null;
   },
-});
+  apply(
+    sessionId: string,
+    payload: VoiceMediaWake | Extract<BrowserVoiceOwnershipPayload, { type: 'browser-media-command' }>,
+  ) {
+    if ('type' in payload) voiceOwnershipCommands.update(sessionId, () => payload);
+    else
+      voiceMediaWakes.update(sessionId, (current) =>
+        current?.eventEpoch === payload.eventEpoch && payload.sequence <= current.sequence ? current : payload,
+      );
+  },
+  drop(sessionId: string) {
+    voiceMediaWakes.drop(sessionId);
+    voiceOwnershipCommands.drop(sessionId);
+  },
+};
 
 export function waitForVoiceMediaWake(
   sessionId: string,

@@ -122,6 +122,7 @@ function fakeHost(scopes: HubSessionScope[]): FakeHost {
     notices,
     sessions: () => scopes,
     publish: (sessionId, payload) => published.push({ sessionId, payload: payload as WorkflowCatalogPayload }),
+    requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
     onNotice: (message) => notices.push(message),
   };
 }

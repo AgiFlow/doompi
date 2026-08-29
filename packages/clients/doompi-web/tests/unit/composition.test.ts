@@ -322,7 +322,7 @@ describe('a catalog mode that cannot run here', () => {
     modes: [
       {
         id: 'voice-auto',
-        label: 'Voice',
+        label: 'Autonomous voice',
         description: 'autonomous capture',
         order: 30,
         activation: 'inactive' as const,
@@ -335,6 +335,14 @@ describe('a catalog mode that cannot run here', () => {
         })),
       },
     ],
+  });
+
+  it('matches the packaged voice row by mode id when its live label differs', () => {
+    const modes = minorModes({}, [], catalog([{ id: 'activate', enabled: true }]));
+
+    expect(modes.filter((mode) => mode.id === 'voice-auto')).toHaveLength(1);
+    expect(modes.find((mode) => mode.name === 'voice')).toMatchObject({ id: 'voice-auto', availability: 'off' });
+    expect(modes.some((mode) => mode.name === 'autonomous voice')).toBe(false);
   });
 
   it('is unavailable, and carries the mode own words for why', () => {

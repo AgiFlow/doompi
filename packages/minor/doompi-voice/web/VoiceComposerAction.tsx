@@ -37,6 +37,8 @@ function VoicePhaseIcon({ phase }: { phase: VoicePhase }) {
     case 'waiting':
       return <AlertIcon className="h-3.5 w-3.5" />;
     case 'idle':
+    case 'starting':
+    case 'muted':
     case 'listening':
     case 'recording':
       return <MicIcon className="h-3.5 w-3.5" />;

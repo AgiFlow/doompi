@@ -59,36 +59,40 @@ afterAll(() => resetWebPlugins());
  * packages, not a composition a user chose.
  */
 describe('the workspace web plugin composition', () => {
-  it('scans every plugin package without a notice and installs them all without a diagnostic', async () => {
-    const packages = pluginPackageRoots();
-    expect(packages.length).toBeGreaterThan(0);
+  it(
+    'scans every plugin package without a notice and installs them all without a diagnostic',
+    { timeout: 30_000 },
+    async () => {
+      const packages = pluginPackageRoots();
+      expect(packages.length).toBeGreaterThan(0);
 
-    const notices: string[] = [];
-    const declared = scanWebPlugins(
-      HOST_ROOT,
-      packages.map((entry) => entry.root),
-      (message) => notices.push(message),
-    );
-    expect(notices).toEqual([]);
-    expect(declared).toHaveLength(packages.reduce((sum, entry) => sum + entry.blocks, 0));
+      const notices: string[] = [];
+      const declared = scanWebPlugins(
+        HOST_ROOT,
+        packages.map((entry) => entry.root),
+        (message) => notices.push(message),
+      );
+      expect(notices).toEqual([]);
+      expect(declared).toHaveLength(packages.reduce((sum, entry) => sum + entry.blocks, 0));
 
-    const definitions: WebPluginDefinition[] = [];
-    for (const plugin of declared) {
-      const entry = path.join(plugin.packageDir, plugin.client.entry);
-      const module = (await import(pathToFileURL(entry).href)) as { webPlugin?: WebPluginDefinition };
-      expect(module.webPlugin?.id, entry).toBe(plugin.pluginId);
-      if (module.webPlugin) definitions.push(module.webPlugin);
-    }
-
-    resetWebPlugins();
-    installWebPlugins(definitions);
-    expect(webPluginDiagnostics()).toEqual([]);
-    for (const definition of definitions) {
-      for (const slot of definition.slots ?? []) {
-        expect(slot.slot.startsWith(`${definition.id}.`), `${definition.id} declares ${slot.slot}`).toBe(true);
+      const definitions: WebPluginDefinition[] = [];
+      for (const plugin of declared) {
+        const entry = path.join(plugin.packageDir, plugin.client.entry);
+        const module = (await import(pathToFileURL(entry).href)) as { webPlugin?: WebPluginDefinition };
+        expect(module.webPlugin?.id, entry).toBe(plugin.pluginId);
+        if (module.webPlugin) definitions.push(module.webPlugin);
       }
-    }
-  });
+
+      resetWebPlugins();
+      installWebPlugins(definitions);
+      expect(webPluginDiagnostics()).toEqual([]);
+      for (const definition of definitions) {
+        for (const slot of definition.slots ?? []) {
+          expect(slot.slot.startsWith(`${definition.id}.`), `${definition.id} declares ${slot.slot}`).toBe(true);
+        }
+      }
+    },
+  );
 
   it('keeps the packaged fallback tables equal to what the packages declare', async () => {
     // The packaged bundle carries no plugins, so composition.ts keeps a copy

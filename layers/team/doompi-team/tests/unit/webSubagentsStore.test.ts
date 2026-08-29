@@ -23,6 +23,33 @@ describe('subagents plugin channel', () => {
     subagents.reset();
   });
 
+  it('keeps terminal outcomes in history but removes them from activity immediately', async () => {
+    const { activityRuns, subagentRunsChannel, subagents, visibleRuns } = await import('../../web/subagentsStore.ts');
+    const session = () => subagents.select(subagents.store.state, 'activity');
+    subagents.reset();
+    const feed = (runs: unknown[]) => subagentRunsChannel.apply('activity', subagentRunsChannel.parse({ runs })!);
+
+    feed([
+      run('success', 'running'),
+      run('failure', 'running'),
+      run('cancelled', 'running'),
+      run('queued', 'queued'),
+      run('running', 'running'),
+    ]);
+    expect(activityRuns(session()).map((entry) => entry.runId)).toEqual([
+      'success',
+      'failure',
+      'cancelled',
+      'queued',
+      'running',
+    ]);
+
+    feed([run('success', 'done'), run('failure', 'failed'), run('cancelled', 'stopped'), run('running', 'running')]);
+    expect(activityRuns(session()).map((entry) => entry.runId)).toEqual(['running']);
+    expect(visibleRuns(session()).map((entry) => entry.runId)).toEqual(['success', 'failure', 'cancelled', 'running']);
+    subagents.reset();
+  });
+
   it('hides a cleared run until the feed forgets it, and closes its drawer', async () => {
     const { subagentRunsChannel, subagents, visibleRuns, dismissRun, openRun } =
       await import('../../web/subagentsStore.ts');

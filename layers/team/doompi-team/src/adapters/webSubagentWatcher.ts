@@ -2,7 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { parseSubagentRun, presentRuns, RUN_STATUS_FILE_NAME } from '../services/webSubagentRuns.ts';
+import {
+  activeRunIdsFromRegistry,
+  parseSubagentRun,
+  presentRuns,
+  reconcileRunLifecycles,
+  RUN_REGISTRY_FILE_NAME,
+  RUN_STATUS_FILE_NAME,
+} from '../services/webSubagentRuns.ts';
 import type { SubagentRun } from '../types/webSubagents.ts';
 
 const POLL_MS = 1000;
@@ -43,6 +50,7 @@ export interface SubagentRunsSource {
 export function watchSubagentRuns(sessionId: string, onRuns: (runs: SubagentRun[]) => void): SubagentRunsSource {
   const runsDir = teamRunsDirFor({ sessionId, tmpdir: os.tmpdir(), uid: process.getuid?.() });
   if (runsDir === undefined) return { close: () => undefined };
+  const scopeDir = path.dirname(runsDir);
 
   let watcher: fs.FSWatcher | undefined;
   let debounce: NodeJS.Timeout | undefined;
@@ -69,7 +77,22 @@ export function watchSubagentRuns(sessionId: string, onRuns: (runs: SubagentRun[
       const run = parseSubagentRun(raw);
       if (run) runs.push(run);
     }
-    return presentRuns(runs, Date.now());
+
+    let activeRunIds: ReadonlySet<string> | undefined;
+    try {
+      const registry = fs.readFileSync(path.join(scopeDir, RUN_REGISTRY_FILE_NAME), 'utf8');
+      activeRunIds = activeRunIdsFromRegistry(registry, (pid) => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch (error) {
+          return (error as NodeJS.ErrnoException).code === 'EPERM';
+        }
+      });
+    } catch {
+      // Without a readable authoritative registry, preserve status snapshots.
+    }
+    return presentRuns(reconcileRunLifecycles(runs, activeRunIds), Date.now());
   };
 
   const emit = (): void => {
@@ -84,7 +107,7 @@ export function watchSubagentRuns(sessionId: string, onRuns: (runs: SubagentRun[
   const ensureWatcher = (): void => {
     if (watcher || closed) return;
     try {
-      watcher = fs.watch(runsDir, { recursive: true }, () => {
+      watcher = fs.watch(scopeDir, { recursive: true }, () => {
         if (debounce) clearTimeout(debounce);
         debounce = setTimeout(emit, DEBOUNCE_MS);
       });

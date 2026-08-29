@@ -47,6 +47,7 @@ export class VoiceMediaClient {
   private connectionAttempt = 0;
   private failAttempt: ((error: Error) => void) | undefined;
   private runOperation: Promise<void> | undefined;
+  private readonly listeningWaiters = new Set<(listening: boolean) => void>();
 
   public constructor(
     private readonly clientId: string,
@@ -59,13 +60,24 @@ export class VoiceMediaClient {
     this.runOperation ??= this.run();
   }
 
-  public async stop(): Promise<void> {
+  public get listening(): boolean {
+    return this.capture !== undefined;
+  }
+
+  public waitForListening(): Promise<boolean> {
+    if (this.listening) return Promise.resolve(true);
+    if (this.abortController.signal.aborted) return Promise.resolve(false);
+    return new Promise((resolve) => this.listeningWaiters.add(resolve));
+  }
+
+  public async stop(closeDevice = true): Promise<void> {
     this.abortController.abort();
     await this.runOperation?.catch(() => undefined);
-    await this.releaseMedia();
+    await this.releaseMedia(closeDevice);
     const connectionId = this.activeConnectionId;
     if (connectionId !== undefined) await this.transport.disconnect(this.clientId, connectionId).catch(() => undefined);
     this.activeConnectionId = undefined;
+    this.resolveListening(false);
   }
 
   private async run(): Promise<void> {
@@ -177,6 +189,7 @@ export class VoiceMediaClient {
           }
         });
       });
+      this.resolveListening(true);
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       await this.transport.captureStopped(this.clientId, connectionId, captureId, message).catch(() => undefined);
@@ -223,6 +236,7 @@ export class VoiceMediaClient {
     }
     this.captureId = undefined;
     this.captureGeneration += 1;
+    this.resolveListening(false);
     if (acknowledge) await this.transport.captureStopped(this.clientId, connectionId, captureId);
   }
 
@@ -281,7 +295,7 @@ export class VoiceMediaClient {
     });
   }
 
-  private async releaseMedia(): Promise<void> {
+  private async releaseMedia(closeDevice = true): Promise<void> {
     this.captureGeneration += 1;
     const capture = this.capture;
     const uploads = this.audioUploads;
@@ -293,13 +307,19 @@ export class VoiceMediaClient {
     this.captureId = undefined;
     this.audioUploadError = undefined;
     await capture?.stop().catch(() => undefined);
+    this.resolveListening(false);
     void uploads.catch(() => undefined);
     void speechDetector?.reset().catch(() => undefined);
     this.playbackAudioController?.abort();
     this.playbackAudioController = undefined;
     this.playback?.stop('aborted');
     this.playback = undefined;
-    await this.device.close().catch(() => undefined);
+    if (closeDevice) await this.device.close().catch(() => undefined);
+  }
+
+  private resolveListening(listening: boolean): void {
+    for (const resolve of this.listeningWaiters) resolve(listening);
+    this.listeningWaiters.clear();
   }
 
   private nextConnectionId(): string {

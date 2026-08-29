@@ -8,7 +8,7 @@ const texts = (lines: Array<{ text: string }>) => lines.map((entry) => entry.tex
 
 describe('voice tool call summaries', () => {
   it('names discover, run, and narrate with what they target', () => {
-    expect(VOICE_TOOL_NAMES).toEqual(['describe_voice_tools', 'use_voice_tools', 'narrate']);
+    expect(VOICE_TOOL_NAMES).toEqual(['describe_voice_tools', 'use_voice_tools', 'narrate', 'transfer_voice']);
     expect(voiceCallSummary('describe_voice_tools', {})).toEqual({
       glyph: '☰',
       action: 'discover',

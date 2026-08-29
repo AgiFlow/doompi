@@ -22,6 +22,7 @@ import {
   appendQueued,
   appendUserPrompt,
   clearDialog,
+  isSupportedImageMimeType,
   initialSessionState,
   prependHistory,
   reduceSession,
@@ -187,6 +188,7 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
       kind: 'user',
       id: pending.id,
       text: pending.text,
+      ...(pending.images ? { images: pending.images } : {}),
     }));
     return {
       ...state,
@@ -280,7 +282,10 @@ export function submitMessage(
   if (!trimmed || sessionId === null) return;
   const store = sessionStoreFor(sessionId);
   const streaming = store.state.streaming;
-  store.setState((state) => appendUserPrompt(state, trimmed));
+  const userImages = images
+    .filter((image) => isSupportedImageMimeType(image.mimeType))
+    .map(({ data, mimeType }) => ({ data, mimeType }));
+  store.setState((state) => appendUserPrompt(state, trimmed, userImages));
   sendFrame(sessionId, streaming ? steerCommand(trimmed, images) : promptCommand(trimmed, images));
 }
 
@@ -291,7 +296,10 @@ export function queueFollowUp(
 ): void {
   const trimmed = text.trim();
   if (!trimmed || sessionId === null) return;
-  sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed));
+  const userImages = images
+    .filter((image) => isSupportedImageMimeType(image.mimeType))
+    .map(({ data, mimeType }) => ({ data, mimeType }));
+  sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed, userImages));
   sendFrame(sessionId, followUpCommand(trimmed, images));
 }
 

@@ -3,12 +3,20 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Dot,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  EditIcon,
+  KebabIcon,
+  MessageIcon,
   Textarea,
+  TrashIcon,
   type DotTone,
 } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { WebTask } from '../src/types/webTasks.ts';
 import { requestTaskInstruction, requestTaskRemoval, tasks, type TaskInstructionKind } from './tasksStore.ts';
 
@@ -40,6 +48,8 @@ function TaskRow({
   setEditor: (editor: EditorState | undefined) => void;
 }) {
   const editing = editor?.taskId === task.id;
+  const editorRequested = useRef(false);
+  const editorInput = useRef<HTMLTextAreaElement>(null);
   const detail = task.status === 'in_progress' ? task.activeForm : task.description;
   return (
     <div
@@ -47,14 +57,69 @@ function TaskRow({
       data-task-status={task.status}
       className="flex flex-col gap-1 rounded-[5px] px-1 py-1"
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-1.5">
         <Dot tone={STATUS_TONE[task.status]} pulse={task.status === 'in_progress'} />
         <span
-          className={`min-w-0 flex-1 truncate text-[10px] font-bold ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
+          data-testid={`activity-task-title-${task.id}`}
+          className={`min-w-0 truncate text-[10px] font-bold ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
         >
           <span className="text-doom-faint">#{task.id}</span> {task.subject}
         </span>
         <span className="shrink-0 text-[8px] text-doom-faint">{task.status.replace('_', ' ')}</span>
+        {task.status !== 'completed' && task.status !== 'deleted' ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-testid={`activity-task-menu-${task.id}`}
+                aria-label={`task #${task.id} actions`}
+                title={`task #${task.id} actions`}
+                className="self-center shrink-0 text-doom-faint hover:bg-doom-deep hover:text-doom-hi data-[state=open]:bg-doom-deep data-[state=open]:text-doom-hi"
+              >
+                <KebabIcon className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              data-testid={`activity-task-menu-list-${task.id}`}
+              onCloseAutoFocus={(event) => {
+                if (!editorRequested.current) return;
+                editorRequested.current = false;
+                event.preventDefault();
+                editorInput.current?.focus();
+              }}
+            >
+              <DropdownMenuItem
+                data-testid={`activity-task-edit-${task.id}`}
+                onSelect={() => {
+                  editorRequested.current = true;
+                  setEditor({ taskId: task.id, kind: 'edit', value: '' });
+                }}
+              >
+                <EditIcon className="h-3 w-3" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                data-testid={`activity-task-note-${task.id}`}
+                onSelect={() => {
+                  editorRequested.current = true;
+                  setEditor({ taskId: task.id, kind: 'note', value: '' });
+                }}
+              >
+                <MessageIcon className="h-3 w-3" />
+                Note
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                data-testid={`activity-task-remove-${task.id}`}
+                onSelect={() => requestTaskRemoval(sendSessionFrame, sessionId, task.id)}
+              >
+                <TrashIcon className="h-3 w-3" />
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
       {detail || task.delegation?.agent || task.blockedBy.length > 0 ? (
         <span className="truncate pl-3 text-[9px] text-doom-faint">
@@ -62,34 +127,6 @@ function TaskRow({
           {detail ?? ''}
           {task.blockedBy.length > 0 ? ` · blocked by ${task.blockedBy.map((id) => `#${id}`).join(', ')}` : ''}
         </span>
-      ) : null}
-      {task.status !== 'completed' && task.status !== 'deleted' ? (
-        <div className="flex items-center gap-2 pl-3">
-          <Button
-            variant="link"
-            size="xs"
-            className="h-auto px-0 text-[8px]"
-            onClick={() => setEditor({ taskId: task.id, kind: 'edit', value: '' })}
-          >
-            edit
-          </Button>
-          <Button
-            variant="link"
-            size="xs"
-            className="h-auto px-0 text-[8px]"
-            onClick={() => setEditor({ taskId: task.id, kind: 'note', value: '' })}
-          >
-            note
-          </Button>
-          <Button
-            variant="link"
-            size="xs"
-            className="h-auto px-0 text-[8px] text-doom-red"
-            onClick={() => requestTaskRemoval(sendSessionFrame, sessionId, task.id)}
-          >
-            remove
-          </Button>
-        </div>
       ) : null}
       {editing ? (
         <form
@@ -102,6 +139,7 @@ function TaskRow({
           }}
         >
           <Textarea
+            ref={editorInput}
             autoFocus
             rows={2}
             size="sm"

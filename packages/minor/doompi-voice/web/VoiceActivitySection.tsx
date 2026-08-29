@@ -41,9 +41,14 @@ function Meter({ tone }: { tone: VoiceTone }) {
  */
 export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
-  const stopManualRecording = (): void => {
-    if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message: '/voice' });
+  const sendCommand = (message: string): void => {
+    if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message });
   };
+  const stopManualRecording = (): void => sendCommand('/voice');
+  const toggleAutonomousMicrophone = (): void =>
+    sendCommand(`/minor voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`);
+  const showAutonomousMicrophoneControl =
+    view.mode === 'auto' && view.phase !== 'starting' && view.phase !== 'draining';
   return (
     <div data-testid="voice-activity" data-voice-phase={view.phase} className="flex flex-col gap-1.5 px-1">
       <span className="flex min-w-0 items-center gap-2">
@@ -65,6 +70,19 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
             onClick={stopManualRecording}
           >
             stop
+          </Button>
+        ) : null}
+        {showAutonomousMicrophoneControl ? (
+          <Button
+            variant="subtle"
+            size="xs"
+            data-testid="voice-autonomous-microphone-toggle"
+            aria-label={`${view.microphoneMuted ? 'unmute' : 'mute'} autonomous voice microphone`}
+            aria-pressed={view.microphoneMuted}
+            title={`${view.microphoneMuted ? 'unmute' : 'mute'} autonomous voice microphone`}
+            onClick={toggleAutonomousMicrophone}
+          >
+            {view.microphoneMuted ? 'unmute' : 'mute'}
           </Button>
         ) : null}
         {view.active ? <Meter tone={view.tone} /> : null}

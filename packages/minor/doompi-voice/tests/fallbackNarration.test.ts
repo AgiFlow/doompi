@@ -136,22 +136,85 @@ describe('Voice turn fallback narration', () => {
     expect(malformedResult.generationError).toBeInstanceOf(Error);
   });
 
-  it('propagates caller cancellation and aborts the model request', async () => {
-    let modelSignal: AbortSignal | undefined;
+  it('accepts a concise summary grounded across every represented narration', async () => {
+    const secret = ['sk', 'live', 'abcdefghijklmnop'].join('_');
+    const complete = vi.fn(async (_request: FallbackNarrationModelRequest) =>
+      JSON.stringify({ speech: 'First update and second warning.' }),
+    );
+    const narrator = new VoiceTurnFallbackNarrator({ complete });
+
+    await expect(
+      narrator.compact(
+        [`First update at /private/result with ${secret}. `.repeat(300), 'Second warning needs review.'],
+        new AbortController().signal,
+      ),
+    ).resolves.toBe('First update and second warning.');
+    const request = complete.mock.calls[0]![0];
+    expect(request).toMatchObject({ maxTokens: 192, cacheRetention: 'none' });
+    expect(request.systemPrompt).toContain('untrusted data');
+    expect(request.input).not.toContain('/private/result');
+    expect(request.input).not.toContain('abcdefghijklmnop');
+    const payload = JSON.parse(request.input) as { narrations: string[] };
+    expect(payload.narrations).toHaveLength(2);
+    expect(Array.from(payload.narrations[0] ?? '')).toHaveLength(4_000);
+  });
+
+  it('rejects summaries grounded only by stopwords or one represented narration', async () => {
+    const stopwordOnly = new VoiceTurnFallbackNarrator({
+      complete: vi.fn(async () => JSON.stringify({ speech: 'The is in it and to them.' })),
+    });
+    await expect(
+      stopwordOnly.compact(['Build passed.', 'Tests passed.'], new AbortController().signal),
+    ).rejects.toThrow('not grounded');
+
+    const partial = new VoiceTurnFallbackNarrator({
+      complete: vi.fn(async () => JSON.stringify({ speech: 'The build passed.' })),
+    });
+    await expect(
+      partial.compact(['Build passed.', 'Deployment needs review.'], new AbortController().signal),
+    ).rejects.toThrow('not grounded');
+  });
+
+  it('rejects contradictory and unrelated compaction output', async () => {
+    const contradictory = new VoiceTurnFallbackNarrator({
+      complete: vi.fn(async () => JSON.stringify({ speech: 'The deployment succeeded.' })),
+    });
+    await expect(
+      contradictory.compact(['The deployment failed.', 'Deployment logs are ready.'], new AbortController().signal),
+    ).rejects.toThrow('not grounded');
+
+    const unrelated = new VoiceTurnFallbackNarrator({
+      complete: vi.fn(async () => JSON.stringify({ speech: 'Completely unrelated zebras.' })),
+    });
+    await expect(unrelated.compact(['Build passed.', 'Tests passed.'], new AbortController().signal)).rejects.toThrow(
+      'not grounded',
+    );
+  });
+
+  it('propagates caller cancellation and aborts fallback and compaction model requests', async () => {
+    const modelSignals: AbortSignal[] = [];
     const narrator = new VoiceTurnFallbackNarrator({
       complete: vi.fn((request: FallbackNarrationModelRequest) => {
-        modelSignal = request.signal;
+        modelSignals.push(request.signal);
         return new Promise<string>(() => undefined);
       }),
     });
-    const controller = new AbortController();
-    const narration = narrator.create('Long result. '.repeat(40), controller.signal);
+    const fallbackController = new AbortController();
+    const narration = narrator.create('Long result. '.repeat(40), fallbackController.signal);
     await Promise.resolve();
 
-    controller.abort(new Error('session replaced'));
+    fallbackController.abort(new Error('session replaced'));
 
     await expect(narration).rejects.toThrow('session replaced');
-    expect(modelSignal?.aborted).toBe(true);
+    expect(modelSignals[0]?.aborted).toBe(true);
+
+    const compactionController = new AbortController();
+    const compaction = narrator.compact(['Build passed.', 'Tests passed.'], compactionController.signal);
+    await Promise.resolve();
+    compactionController.abort(new Error('compaction cancelled'));
+
+    await expect(compaction).rejects.toThrow('compaction cancelled');
+    expect(modelSignals[1]?.aborted).toBe(true);
   });
 
   it('bounds model latency and retains deterministic speech after timeout', async () => {

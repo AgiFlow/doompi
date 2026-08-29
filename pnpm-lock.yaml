@@ -1309,6 +1309,9 @@ importers:
       hono:
         specifier: 4.13.3
         version: 4.13.3
+      ignore:
+        specifier: 7.0.6
+        version: 7.0.6
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.3

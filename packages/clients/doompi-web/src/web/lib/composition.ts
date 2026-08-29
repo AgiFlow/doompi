@@ -96,7 +96,9 @@ export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
 /** The declared source a catalog mode corresponds to, by id, id stem, or label. */
 function sourceFor(sources: readonly MinorModeSource[], mode: MinorModeRecordProjection): MinorModeSource | undefined {
   const candidates = new Set([mode.id.toLowerCase(), mode.id.toLowerCase().split('.')[0], mode.label.toLowerCase()]);
-  return sources.find((source) => candidates.has(source.name.toLowerCase()));
+  return sources.find((source) =>
+    [source.name, source.modeId].some((identity) => identity !== undefined && candidates.has(identity.toLowerCase())),
+  );
 }
 
 /**
@@ -199,6 +201,8 @@ export interface ActivityGroup {
   active: boolean;
   /** The plugin tab the group's key chip opens, when its package declares one. */
   tab?: string;
+  /** Keeps the group visible below the dock's scrolling ordinary groups. */
+  placement?: 'bottom';
 }
 
 /**
@@ -218,14 +222,15 @@ export function activityGroups(statuses: Record<string, string>, widgets: readon
   const groups: ActivityGroup[] = [];
   for (const source of pluginActivityGroups()) {
     const tab = source.tab === undefined ? {} : { tab: source.tab };
+    const placement = source.placement === undefined ? {} : { placement: source.placement };
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
       if (summary.length === 0 && source.hideWhenEmpty === true) continue;
-      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0, ...tab });
+      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0, ...tab, ...placement });
       continue;
     }
     if (source.widgetKeys !== undefined && source.widgetKeys.some((key) => widgets.includes(key))) {
-      groups.push({ name: source.name, keys: source.keys, summary: '', active: false, ...tab });
+      groups.push({ name: source.name, keys: source.keys, summary: '', active: false, ...tab, ...placement });
     }
   }
   return groups;

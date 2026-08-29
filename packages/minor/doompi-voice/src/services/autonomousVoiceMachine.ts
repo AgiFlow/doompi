@@ -92,6 +92,8 @@ export type AutonomousVoiceEvent =
       playbackGeneration: number;
       evidence: NarrationBargeInEvidence;
     } & AutonomousTurnIdentity)
+  | { type: 'MICROPHONE_MUTE_REQUESTED' }
+  | { type: 'MICROPHONE_UNMUTE_REQUESTED' }
   | { type: 'TOGGLE_OFF_REQUESTED' }
   | { type: 'HARD_STOP_REQUESTED' }
   | { type: 'STOP_COMPLETED' }
@@ -522,7 +524,16 @@ export const autonomousVoiceMachine = setup({
       states: {
         capture: {
           initial: 'startingCapture',
+          on: {
+            MICROPHONE_MUTE_REQUESTED: { target: '.muted', actions: 'requestCaptureCancellation' },
+          },
           states: {
+            muted: {
+              on: {
+                MICROPHONE_MUTE_REQUESTED: {},
+                MICROPHONE_UNMUTE_REQUESTED: { target: 'startingNextTurn' },
+              },
+            },
             startingCapture: {
               entry: 'requestCapture',
               on: {
@@ -844,9 +855,10 @@ export type AutonomousVoiceSnapshot = SnapshotFrom<typeof autonomousVoiceMachine
 
 export function autonomousVoiceState(
   snapshot: AutonomousVoiceSnapshot,
-): 'off' | 'starting' | 'listening' | 'speech' | 'processing' | 'stopping' | 'failed' {
+): 'off' | 'starting' | 'muted' | 'listening' | 'speech' | 'processing' | 'stopping' | 'failed' {
   if (snapshot.matches('off')) return 'off';
   if (snapshot.matches('enabling') || snapshot.matches({ active: { capture: 'startingCapture' } })) return 'starting';
+  if (snapshot.matches({ active: { capture: 'muted' } })) return 'muted';
   if (snapshot.matches({ active: { capture: 'listening' } })) return 'listening';
   if (snapshot.matches({ active: { capture: 'speech' } })) return 'speech';
   if (snapshot.matches('stopping')) return 'stopping';

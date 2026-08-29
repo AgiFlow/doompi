@@ -286,6 +286,42 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.resolveCommandCorrector).toHaveBeenCalledWith('provider/model');
   });
 
+  it('mutes autonomous capture without interrupting narration and unmutes into a fresh capture', async () => {
+    const h = harness();
+    await enable(h);
+    const mutedIdentity = h.current();
+    const narration = h.controller.narrateAgent('Narration keeps playing.');
+    await flush();
+
+    h.controller.setMicrophoneMuted(true);
+
+    expect(h.controller.state).toBe('active');
+    expect(h.controller.microphoneMuted).toBe(true);
+    expect(h.client.cancelCapture).toHaveBeenCalledWith(mutedIdentity.sessionId, mutedIdentity.captureId);
+    expect(h.client.beginCapture).toHaveBeenCalledOnce();
+    expect(h.playbackAborts[0]).not.toHaveBeenCalled();
+    expect(h.ui.setStatus).toHaveBeenLastCalledWith('voice auto: narrating, microphone muted');
+
+    h.speech(mutedIdentity);
+    h.durationLimit(mutedIdentity);
+    expect(h.client.beginCapture).toHaveBeenCalledOnce();
+    h.controller.setMicrophoneMuted(false);
+    const freshIdentity = h.current();
+
+    expect(h.controller.microphoneMuted).toBe(false);
+    expect(freshIdentity.captureId).not.toBe(mutedIdentity.captureId);
+    expect(h.client.beginCapture).toHaveBeenCalledTimes(2);
+    h.ready(freshIdentity);
+    h.finishPlayback();
+    await expect(narration).resolves.toBe('completed');
+
+    h.controller.setMicrophoneMuted(true);
+    expect(h.controller.microphoneMuted).toBe(true);
+    await h.controller.deactivate(h.ui);
+    await flush();
+    expect(h.controller.microphoneMuted).toBe(false);
+  });
+
   it('generates omitted-turn fallback speech and routes it through final-priority playback', async () => {
     const create = vi.fn(async () => ({ text: 'Fallback spoken summary.', source: 'model' as const }));
     const h = harness({ fallbackNarrator: { create } });
@@ -463,7 +499,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.deliver).not.toHaveBeenCalled();
   });
 
-  it('aborts model admission on toggle-off and applies the confirmed turn through unchanged policy', async () => {
+  it('aborts model admission on toggle-off and discards the same ambiguous evidence as model failure', async () => {
     let decideSignal: AbortSignal | undefined;
     const decide = vi.fn(
       (_input, signal: AbortSignal) =>
@@ -477,7 +513,56 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.speech(identity);
     h.endpoint(identity);
     h.drained(identity, 1);
-    h.candidate(identity, 'computer preserve confirmed words', 1, ambiguousEvidence);
+    h.candidate(identity, 'uncertain request', 1, ambiguousEvidence);
+    await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
+
+    await h.controller.toggle(h.ui);
+    await flush();
+
+    expect(decideSignal?.aborted).toBe(true);
+    expect(h.deliver).not.toHaveBeenCalled();
+    expect(h.client.acknowledgeCandidate).toHaveBeenCalledWith(identity.sessionId, identity.turnId, 1, 'discarded');
+    h.acknowledge(identity, 1, 'discarded');
+    await flush();
+    expect(h.controller.state).toBe('disabled');
+  });
+
+  it('finishes a corroborated reviewed turn when toggle-off aborts model admission', async () => {
+    let decideSignal: AbortSignal | undefined;
+    const decide = vi.fn(
+      (_input, signal: AbortSignal) =>
+        new Promise<never>(() => {
+          decideSignal = signal;
+        }),
+    );
+    const h = harness({ adjudicator: { decide } });
+    await enable(h);
+    const identity = h.current();
+    const narration = h.controller.narrateAgent('Safe spoken update');
+    await flush();
+    h.emit({
+      kind: 'barge-in-evidence',
+      ...identity,
+      playbackGeneration: 1,
+      evidence: {
+        exactStopCommand: false,
+        intentionalAddress: true,
+        classifierConfirmed: true,
+        classifierSpeechMs: 640,
+        residualTokenCount: 4,
+        residualRatio: 1,
+        voicedMs: 800,
+        peakDbAboveNoise: 12,
+        signalVariationDb: 9,
+        narrationSimilarity: 0,
+      },
+    });
+    await flush();
+    await expect(narration).resolves.toBe('interrupted');
+    h.speech(identity);
+    h.endpoint(identity);
+    h.drained(identity, 1);
+    h.candidate(identity, 'computer preserve confirmed words', 1, { ...strongEvidence, playbackOverlapMs: 400 });
     await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
 
     await h.controller.toggle(h.ui);

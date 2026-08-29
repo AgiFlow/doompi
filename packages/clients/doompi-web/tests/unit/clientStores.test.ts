@@ -156,17 +156,26 @@ describe('transcript ownership', () => {
     ]);
   });
 
-  it('keeps an optimistic prompt until the protocol publishes it', () => {
+  it('keeps an optimistic prompt and its images until the protocol publishes it', () => {
+    const rpcImages = [{ type: 'image' as const, data: 'bG9jYWw=', mimeType: 'image/png' }];
+    const userImages = [{ data: 'bG9jYWw=', mimeType: 'image/png' }];
     setActiveSession('s1');
-    submitMessage('stay visible');
+    submitMessage('stay visible', rpcImages);
 
     applyProtocolTranscript('s1', [], false);
     expect(sessionStoreFor('s1').state.entries).toEqual([
-      expect.objectContaining({ kind: 'user', text: 'stay visible' }),
+      expect.objectContaining({ kind: 'user', text: 'stay visible', images: userImages }),
     ]);
 
-    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'stay visible' }], false);
-    expect(sessionStoreFor('s1').state.entries).toEqual([{ kind: 'user', id: 'protocol-user', text: 'stay visible' }]);
+    const authoritativeImages = [{ data: 'cHVibGlzaGVk', mimeType: 'image/png' }];
+    applyProtocolTranscript(
+      's1',
+      [{ kind: 'user', id: 'protocol-user', text: 'stay visible', images: authoritativeImages }],
+      false,
+    );
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: 'protocol-user', text: 'stay visible', images: authoritativeImages },
+    ]);
   });
   it('preserves a protocol transcript through a legacy backlog reset', () => {
     applyProtocolTranscript(
@@ -462,9 +471,10 @@ describe('session actions', () => {
     expect(sessionStoreFor('s1').state.entries).toHaveLength(2);
   });
 
-  it('send image payloads for prompts, steering, and follow-ups', () => {
+  it('send image payloads for prompts, steering, and follow-ups and keep local copies visible', () => {
     setActiveSession('s1');
     const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
+    const userImages = [{ data: 'aGVsbG8=', mimeType: 'image/png' }];
     submitMessage('first', images);
     applySessionFrame('s1', { type: 'agent_start' });
     submitMessage('second', images);
@@ -473,6 +483,11 @@ describe('session actions', () => {
       { type: 'prompt', message: 'first', images },
       { type: 'steer', message: 'second', images },
       { type: 'follow_up', message: 'later', images },
+    ]);
+    expect(sessionStoreFor('s1').state.entries).toMatchObject([
+      { kind: 'user', text: 'first', images: userImages },
+      { kind: 'user', text: 'second', images: userImages },
+      { kind: 'queued', text: 'later', images: userImages },
     ]);
   });
   it('take an explicit session id past the focus', () => {

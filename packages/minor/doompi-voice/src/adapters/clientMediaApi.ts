@@ -26,6 +26,12 @@ import {
   VOICE_MEDIA_SAMPLE_RATE,
 } from '../types/clientMedia.ts';
 import { createVoiceMediaWakePublisher, type VoiceMediaWakePublisher } from './voiceMediaWakeFile.ts';
+import { sessionVoiceOwnership } from '../services/sessionVoiceOwnership.ts';
+import {
+  VOICE_OWNERSHIP_ROUTES,
+  parseVoiceOwnershipCommand,
+  parseVoiceOwnershipTransferRequest,
+} from '../types/voiceOwnership.ts';
 
 const CLIENT_LEASE_MS = 15_000;
 const CLIENT_CONNECT_WAIT_MS = 3_000;
@@ -82,6 +88,7 @@ type UnsequencedEvent<Event extends VoiceMediaClientEvent> = Event extends Voice
 
 export interface VoiceMediaApiOptions {
   internalToken?: string;
+  hubToken?: string;
   now?: () => number;
   clientConnectWaitMs?: number;
   eventEpoch?: string;
@@ -153,6 +160,7 @@ function captureActivity(request: Request): VoiceMediaCaptureActivity | undefine
 class VoiceMediaBroker implements DoomApiHandler {
   private readonly now: () => number;
   private readonly internalToken: string | undefined;
+  private readonly hubToken: string | undefined;
   private readonly clientConnectWaitMs: number;
   private readonly eventEpoch: string;
   private readonly wakePublisher: VoiceMediaWakePublisher | undefined;
@@ -168,6 +176,7 @@ class VoiceMediaBroker implements DoomApiHandler {
 
   public constructor(options: VoiceMediaApiOptions) {
     this.internalToken = options.internalToken;
+    this.hubToken = options.hubToken;
     this.now = options.now ?? Date.now;
     this.clientConnectWaitMs = options.clientConnectWaitMs ?? CLIENT_CONNECT_WAIT_MS;
     this.eventEpoch = options.eventEpoch ?? randomUUID();
@@ -185,7 +194,18 @@ class VoiceMediaBroker implements DoomApiHandler {
         this.internalToken !== undefined && request.headers.get('authorization') === `Bearer ${this.internalToken}`;
       if (!authorized) return errorResponse('Not found.', 404);
     }
+    if (url.pathname.startsWith('/hub/')) {
+      const authorized =
+        this.hubToken !== undefined && request.headers.get('authorization') === `Bearer ${this.hubToken}`;
+      if (!authorized) return errorResponse('Not found.', 404);
+    }
 
+    if (request.method === 'GET' && url.pathname === VOICE_OWNERSHIP_ROUTES.state)
+      return Response.json(sessionVoiceOwnership.snapshot());
+    if (request.method === 'POST' && url.pathname === VOICE_OWNERSHIP_ROUTES.command)
+      return this.ownershipCommand(request);
+    if (request.method === 'POST' && url.pathname === VOICE_OWNERSHIP_ROUTES.request)
+      return this.ownershipTransfer(request);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientConnect) return this.connect(request);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientDisconnect)
       return this.disconnect(request);
@@ -220,6 +240,21 @@ class VoiceMediaBroker implements DoomApiHandler {
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackAbort)
       return this.stopPlayback(request, true);
     return errorResponse('Not found.', 404);
+  }
+
+  private async ownershipCommand(request: Request): Promise<Response> {
+    const command = parseVoiceOwnershipCommand(await jsonRecord(request));
+    if (command === undefined) return errorResponse('Invalid voice ownership command.', 400);
+    return Response.json(await sessionVoiceOwnership.command(command));
+  }
+
+  private async ownershipTransfer(request: Request): Promise<Response> {
+    const transfer = parseVoiceOwnershipTransferRequest(await jsonRecord(request));
+    if (transfer === undefined) return errorResponse('Invalid voice ownership request.', 400);
+    const accepted = sessionVoiceOwnership.transfer(transfer.handle);
+    return accepted === undefined
+      ? errorResponse('Voice transfer is not currently eligible.', 409)
+      : Response.json(accepted, { status: 202 });
   }
 
   public close(): void {
@@ -706,6 +741,7 @@ export const api: DoomApi = {
     }
     return createVoiceMediaApi({
       internalToken: context.internalToken,
+      hubToken: context.hubToken,
       wakePublisher,
       onNotice: (message) => context.onNotice(message),
     });

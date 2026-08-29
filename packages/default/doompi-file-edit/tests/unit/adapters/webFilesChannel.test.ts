@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { HubChannelHost, HubSessionScope } from '@agimon-ai/doompi-web-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FileEditPaths } from '../../../src/adapters/FileEditPaths/FileEditPaths.ts';
 import { createFilesChannel, readSessionFiles, watchFiles } from '../../../src/adapters/webFilesChannel.ts';
 import type { FilesItemView } from '../../../src/types/webFiles.ts';
 
@@ -19,6 +20,7 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 /** A file the timeline names that is actually there, which is what a row requires. */
@@ -73,12 +75,78 @@ describe('readSessionFiles', () => {
     expect(readSessionFiles(timelinePath, root)).toEqual([]);
   });
 
+  it('filters rows through the project .doomignore while preserving visible metadata and order', () => {
+    const kept = place('src/kept.ts');
+    const ignored = place('generated.log');
+    fs.writeFileSync(
+      timelinePath,
+      [
+        line({ version: 2, path: kept, tool: 'edit', at: 10, origin: 'tool', before: 'before' }),
+        line({ version: 2, path: ignored, tool: 'bash', at: 20, origin: 'scan' }),
+      ].join(''),
+    );
+    fs.writeFileSync(path.join(root, '.doomignore'), '*.log\n');
+
+    expect(readSessionFiles(timelinePath, root)).toEqual([
+      { path: kept, relPath: path.join('src', 'kept.ts'), tool: 'edit', at: 10, count: 1, diffable: true },
+    ]);
+  });
+
+  it('fails open when .doomignore cannot be read', () => {
+    const kept = place('kept.ts');
+    fs.writeFileSync(
+      timelinePath,
+      line({ version: 2, path: kept, tool: 'edit', at: 10, origin: 'tool', before: 'before' }),
+    );
+    fs.mkdirSync(path.join(root, '.doomignore'));
+
+    expect(readSessionFiles(timelinePath, root).map((row) => row.relPath)).toEqual(['kept.ts']);
+  });
+
   it('answers nothing for a session that has changed nothing yet', () => {
     expect(readSessionFiles(timelinePath, root)).toEqual([]);
   });
 });
 
 describe('watchFiles', () => {
+  it('refreshes filtering from .doomignore and dedupes unchanged visible lists', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('PI_CODING_AGENT_DIR', root);
+    const scope: HubSessionScope = { sessionId: 'refresh-ignore', cwd: root };
+    const actualTimelinePath = new FileEditPaths().timelinePath(root, scope.sessionId);
+    const kept = place('kept.ts');
+    const ignored = place('generated.log');
+    fs.writeFileSync(
+      actualTimelinePath,
+      [
+        line({ version: 2, path: kept, tool: 'edit', at: 10, origin: 'tool', before: 'before' }),
+        line({ version: 2, path: ignored, tool: 'edit', at: 20, origin: 'tool', before: 'before' }),
+      ].join(''),
+    );
+    fs.writeFileSync(path.join(root, '.doomignore'), '*.log\n');
+    const seen: string[][] = [];
+    const source = watchFiles(scope, (items) => seen.push(items.map((row) => row.relPath)), {
+      pollMs: 10,
+      debounceMs: 1,
+    });
+
+    try {
+      expect(seen).toEqual([['kept.ts']]);
+      fs.writeFileSync(path.join(root, '.doomignore'), '*.tmp\n');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(seen).toEqual([['kept.ts'], ['generated.log', 'kept.ts']]);
+
+      fs.writeFileSync(path.join(root, '.doomignore'), '# no visible change\n');
+      await vi.advanceTimersByTimeAsync(10);
+      expect(seen).toHaveLength(2);
+
+      fs.rmSync(path.join(root, '.doomignore'));
+      await vi.advanceTimersByTimeAsync(10);
+      expect(seen).toHaveLength(2);
+    } finally {
+      source.close();
+    }
+  });
   it('reports the current list, then reports again only once it changes', async () => {
     vi.useFakeTimers();
     const seen: FilesItemView[][] = [];
@@ -115,6 +183,7 @@ describe('createFilesChannel', () => {
       published,
       sessions: () => [],
       publish: (sessionId, payload) => published.push([sessionId, payload]),
+      requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
       onNotice: () => undefined,
     };
   }

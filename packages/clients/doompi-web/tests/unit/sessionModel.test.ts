@@ -3,6 +3,7 @@ import {
   appendQueued,
   appendUserPrompt,
   clearDialog,
+  imagesFromContent,
   initialSessionState,
   prependHistory,
   reduceSession,
@@ -30,6 +31,19 @@ describe('textFromContent', () => {
     expect(textFromContent('plain')).toBe('plain');
     expect(textFromContent(undefined)).toBe('');
     expect(textFromContent(42)).toBe('');
+  });
+});
+
+describe('imagesFromContent', () => {
+  it('keeps only complete image blocks with a supported MIME type', () => {
+    expect(
+      imagesFromContent([
+        { type: 'image', data: 'cG5n', mimeType: 'image/png' },
+        { type: 'image', data: 'c3Zn', mimeType: 'image/svg+xml' },
+        { type: 'image', data: '', mimeType: 'image/jpeg' },
+        { type: 'text', text: 'ignored' },
+      ]),
+    ).toEqual([{ data: 'cG5n', mimeType: 'image/png' }]);
   });
 });
 
@@ -470,6 +484,13 @@ describe('reduceSession', () => {
     const state = appendUserPrompt(initialSessionState, 'do the thing');
     expect(state.entries[0]).toMatchObject({ kind: 'user', text: 'do the thing' });
   });
+
+  it('retains supported images on an optimistic prompt', () => {
+    const images = [{ data: 'cG5n', mimeType: 'image/png' }];
+    const state = appendUserPrompt(initialSessionState, 'review this', images);
+    expect(state.entries[0]).toMatchObject({ kind: 'user', text: 'review this', images });
+    expect(state.pendingUserEntries[0]).toMatchObject({ text: 'review this', images });
+  });
 });
 
 describe('agent notifications', () => {
@@ -551,6 +572,27 @@ describe('restoring a journalled transcript', () => {
       output: 'M src/index.ts',
       isError: false,
       running: false,
+    });
+  });
+
+  it('restores supported images from journalled user content', () => {
+    const state = reduceSession(
+      initialSessionState,
+      journal('e1', {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'review this' },
+          { type: 'image', data: 'cG5n', mimeType: 'image/png' },
+          { type: 'image', data: 'c3Zn', mimeType: 'image/svg+xml' },
+        ],
+      }),
+    );
+
+    expect(state.entries[0]).toEqual({
+      kind: 'user',
+      id: 'u1',
+      text: 'review this',
+      images: [{ data: 'cG5n', mimeType: 'image/png' }],
     });
   });
 

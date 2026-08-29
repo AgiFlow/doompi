@@ -97,7 +97,16 @@ export class VoiceWorkerClient {
       onSpawn: () => this.initializeWorker(),
       ...(options.onRestart ? { onRestart: options.onRestart } : {}),
       onExhausted: (reason) => {
-        this.rejectReady?.(new Error(`Voice worker supervision exhausted after ${reason}.`));
+        const rejectPendingStartup = this.rejectReady;
+        this.started = false;
+        this.ready = undefined;
+        this.resolveReady = undefined;
+        this.rejectReady = undefined;
+        this.activeCapture = undefined;
+        this.activePlayback = undefined;
+        this.workerCapabilities.clear();
+        this.readyCount = 0;
+        rejectPendingStartup?.(new Error(`Voice worker supervision exhausted after ${reason}.`));
         options.onExhausted?.(reason);
       },
     });

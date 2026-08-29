@@ -139,34 +139,111 @@ describe('VoiceNarrationPlayback', () => {
     await h.playback.deactivate();
   });
 
-  it('gives external clarification priority over direct narration', async () => {
+  it('never interrupts active autonomous narration and preserves FIFO without a compactor', async () => {
     const h = fixture();
     h.playback.activate(config);
 
     const direct = h.playback.narrate('Direct update.', 'final');
     const external = h.playback.narrate('External handoff.', 'clarification');
+    const latest = h.playback.narrate('Latest update.', 'final');
 
-    expect(h.playbacks[0]?.abort).toHaveBeenCalledOnce();
-    await expect(direct).resolves.toBe('interrupted');
-    expect(h.playbacks[1]?.request).toMatchObject({ kind: 'clarification', text: 'External handoff.' });
+    expect(h.playbacks[0]?.abort).not.toHaveBeenCalled();
+    expect(h.playbacks).toHaveLength(1);
+    h.playbacks[0]?.settle();
+    await expect(direct).resolves.toBe('completed');
+    expect(h.playbacks[1]?.request.text).toBe('External handoff.');
+
     h.playbacks[1]?.settle();
     await expect(external).resolves.toBe('completed');
+    expect(h.playbacks[2]?.request.text).toBe('Latest update.');
+    h.playbacks[2]?.settle();
+    await expect(latest).resolves.toBe('completed');
   });
 
-  it('supersedes only replaced pending narration', async () => {
+  it('compacts two pending requests and settles represented callers after summary playback', async () => {
     const h = fixture();
-    h.playback.activate(config);
+    let finishCompaction!: (summary: string) => void;
+    const compact = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          finishCompaction = resolve;
+        }),
+    );
+    h.playback.activate(config, { compact });
 
-    const active = h.playback.narrate('Active.', 'final');
-    const replaced = h.playback.narrate('Replaced.', 'final');
-    const latest = h.playback.narrate('Latest.', 'final');
+    const active = h.playback.narrate('Active update.', 'final');
+    const first = h.playback.narrate('First pending update.', 'final');
+    expect(compact).not.toHaveBeenCalled();
+    const second = h.playback.narrate('Second pending warning.', 'clarification');
+    await flush();
 
-    await expect(replaced).resolves.toBe('superseded');
+    expect(compact).toHaveBeenCalledWith(['First pending update.', 'Second pending warning.'], expect.any(AbortSignal));
+    expect(h.playbacks[0]?.abort).not.toHaveBeenCalled();
+    finishCompaction('Pending update and warning.');
+    await flush();
     h.playbacks[0]?.settle();
     await expect(active).resolves.toBe('completed');
-    expect(h.playbacks[1]?.request.text).toBe('Latest.');
+    expect(h.playbacks[1]?.request).toMatchObject({ kind: 'clarification', text: 'Pending update and warning.' });
+
+    let representedSettled = false;
+    void Promise.all([first, second]).then(() => {
+      representedSettled = true;
+    });
+    await flush();
+    expect(representedSettled).toBe(false);
     h.playbacks[1]?.settle();
-    await expect(latest).resolves.toBe('completed');
+    await expect(Promise.all([first, second])).resolves.toEqual(['completed', 'completed']);
+  });
+
+  it('folds arrivals during compaction into the pending summary', async () => {
+    const h = fixture();
+    const completions: Array<(summary: string) => void> = [];
+    const compact = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    h.playback.activate(config, { compact });
+
+    const active = h.playback.narrate('Active.', 'final');
+    const first = h.playback.narrate('First.', 'final');
+    const second = h.playback.narrate('Second.', 'final');
+    const later = h.playback.narrate('Later.', 'final');
+    await flush();
+    completions[0]?.('First and second.');
+    await flush();
+
+    expect(compact).toHaveBeenNthCalledWith(2, ['First and second.', 'Later.'], expect.any(AbortSignal));
+    completions[1]?.('All pending updates.');
+    await flush();
+    h.playbacks[0]?.settle();
+    await active;
+    expect(h.playbacks[1]?.request.text).toBe('All pending updates.');
+    h.playbacks[1]?.settle();
+    await expect(Promise.all([first, second, later])).resolves.toEqual(['completed', 'completed', 'completed']);
+  });
+
+  it('falls back to FIFO without dropping content when compaction fails', async () => {
+    const h = fixture();
+    const compact = vi.fn(async () => {
+      throw new Error('summary unavailable');
+    });
+    h.playback.activate(config, { compact });
+
+    const active = h.playback.narrate('Active.', 'final');
+    const first = h.playback.narrate('First exact pending.', 'final');
+    const second = h.playback.narrate('Second exact pending.', 'final');
+    await flush();
+    h.playbacks[0]?.settle();
+    await active;
+    expect(h.playbacks[1]?.request.text).toBe('First exact pending.');
+    h.playbacks[1]?.settle();
+    await first;
+    expect(h.playbacks[2]?.request.text).toBe('Second exact pending.');
+    h.playbacks[2]?.settle();
+    await expect(second).resolves.toBe('completed');
+    expect(h.logger.recordError).toHaveBeenCalledWith('doom_voice.narration_compaction_failed', expect.any(Error));
   });
 
   it('maps caller cancellation and deactivation to interrupted', async () => {
@@ -184,6 +261,50 @@ describe('VoiceNarrationPlayback', () => {
     await expect(active).resolves.toBe('interrupted');
     await deactivated;
     expect(h.playback.references()).toEqual([]);
+  });
+
+  it('settles one cancelled represented caller without cancelling the shared summary', async () => {
+    const h = fixture();
+    const compact = vi.fn(async () => 'Shared pending summary.');
+    h.playback.activate(config, { compact });
+    const active = h.playback.narrate('Active.', 'final');
+    const cancellation = new AbortController();
+    const cancelled = h.playback.narrate('Cancelled pending.', 'final', cancellation.signal);
+    const retained = h.playback.narrate('Retained pending.', 'final');
+    await flush();
+
+    cancellation.abort(new Error('caller stopped waiting'));
+    await expect(cancelled).resolves.toBe('interrupted');
+    h.playbacks[0]?.settle();
+    await active;
+    expect(h.playbacks[1]?.request.text).toBe('Shared pending summary.');
+    expect(h.playbacks[1]?.abort).not.toHaveBeenCalled();
+    h.playbacks[1]?.settle();
+    await expect(retained).resolves.toBe('completed');
+  });
+
+  it('aborts compaction and settles all queued callers during cleanup', async () => {
+    const h = fixture();
+    let compactionSignal: AbortSignal | undefined;
+    const compact = vi.fn(
+      (_narrations: readonly string[], signal: AbortSignal) =>
+        new Promise<string>((_resolve, reject) => {
+          compactionSignal = signal;
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    );
+    h.playback.activate(config, { compact });
+    const active = h.playback.narrate('Active.', 'final');
+    const first = h.playback.narrate('First pending.', 'final');
+    const second = h.playback.narrate('Second pending.', 'final');
+    await flush();
+
+    const cleanup = h.playback.deactivate();
+    await expect(Promise.all([active, first, second])).resolves.toEqual(['interrupted', 'interrupted', 'interrupted']);
+    await cleanup;
+    expect(compactionSignal?.aborted).toBe(true);
+    expect(h.playbacks[0]?.abort).toHaveBeenCalledOnce();
+    expect(h.playbacks).toHaveLength(1);
   });
 
   it('bounds retained narration references to the latest sixteen utterances', async () => {

@@ -277,6 +277,8 @@ export interface ActivityGroupContribution {
    * leaves this off: its frame is worth keeping when it is idle.
    */
   hideWhenEmpty?: boolean;
+  /** Keeps the group visible below the dock's scrolling ordinary groups. */
+  placement?: 'bottom';
   /** Sort position in the dock; lower first, name breaks ties. */
   order?: number;
 }

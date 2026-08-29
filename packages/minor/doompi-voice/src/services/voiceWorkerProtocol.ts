@@ -1,3 +1,4 @@
+import type { AsrDecodingEvidence } from '../types/index.ts';
 import type { NarrationBargeInEvidence } from './narrationBargeIn.ts';
 import type { VoiceTranscriptSignalEvidence } from './transcriptAdmission.ts';
 
@@ -226,6 +227,12 @@ function requireNumber(record: Record<string, unknown>, key: string): number {
   return value;
 }
 
+function requireBoundedNumber(record: Record<string, unknown>, key: string, minimum: number, maximum: number): number {
+  const value = requireNumber(record, key);
+  if (value < minimum || value > maximum) throw new Error(`Voice worker field ${key} is out of range.`);
+  return value;
+}
+
 function requireNonNegativeInteger(record: Record<string, unknown>, key: string): number {
   const value = requireNumber(record, key);
   if (!Number.isSafeInteger(value) || value < 0)
@@ -285,6 +292,34 @@ function parseBargeInEvidence(value: unknown): NarrationBargeInEvidence {
   };
 }
 
+function parseAsrEvidence(value: unknown): AsrDecodingEvidence {
+  if (!isRecord(value)) throw new Error('Voice worker ASR evidence must be an object.');
+  assertExactKeys(value, [
+    'noSpeechProbability',
+    'averageLogProbability',
+    'compressionRatio',
+    'segmentDurationMs',
+    'speechDurationMs',
+  ]);
+  return {
+    ...(value.noSpeechProbability === undefined
+      ? {}
+      : { noSpeechProbability: requireBoundedNumber(value, 'noSpeechProbability', 0, 1) }),
+    ...(value.averageLogProbability === undefined
+      ? {}
+      : { averageLogProbability: requireBoundedNumber(value, 'averageLogProbability', -20, 0) }),
+    ...(value.compressionRatio === undefined
+      ? {}
+      : { compressionRatio: requireBoundedNumber(value, 'compressionRatio', 0, 100) }),
+    ...(value.segmentDurationMs === undefined
+      ? {}
+      : { segmentDurationMs: requireBoundedNumber(value, 'segmentDurationMs', 0, 300_000) }),
+    ...(value.speechDurationMs === undefined
+      ? {}
+      : { speechDurationMs: requireBoundedNumber(value, 'speechDurationMs', 0, 300_000) }),
+  };
+}
+
 function parseTranscriptEvidence(value: unknown): VoiceTranscriptSignalEvidence {
   if (!isRecord(value)) throw new Error('Voice worker transcript evidence must be an object.');
   assertExactKeys(value, [
@@ -298,6 +333,7 @@ function parseTranscriptEvidence(value: unknown): VoiceTranscriptSignalEvidence 
     'gapCount',
     'playbackOverlapMs',
     'classifier',
+    'asr',
   ]);
   return {
     durationMs: requireNumber(value, 'durationMs'),
@@ -310,6 +346,7 @@ function parseTranscriptEvidence(value: unknown): VoiceTranscriptSignalEvidence 
     gapCount: requireNonNegativeInteger(value, 'gapCount'),
     playbackOverlapMs: requireNumber(value, 'playbackOverlapMs'),
     classifier: requireLiteral(value, 'classifier', ['client', 'host', 'energy']),
+    ...(value.asr === undefined ? {} : { asr: parseAsrEvidence(value.asr) }),
   };
 }
 

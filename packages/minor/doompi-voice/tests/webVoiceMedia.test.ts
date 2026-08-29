@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { browserVoiceMediaClientId } from '../web/browserMediaIdentity.ts';
+import { VoiceActivitySection } from '../web/VoiceActivitySection.tsx';
 import { VoiceComposerAction } from '../web/VoiceComposerAction.tsx';
+import { VoiceOwnershipCursor } from '../web/voiceOwnershipCursor.ts';
 
 describe('browser voice media', () => {
   it('publishes both one-shot and autonomous browser controls with a page-lifetime runtime', async () => {
@@ -75,10 +77,69 @@ describe('browser voice media', () => {
     const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="voice-recording-stop"');
-    expect(source).toContain("message: '/voice'");
+    expect(source).toContain("sendCommand('/voice')");
     expect(source).toContain('stop recording and fill the prompt');
   });
 
+  it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', async () => {
+    const active = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ statuses: { 'doom-voice': 'voice auto: listening' } }).props,
+    );
+    expect(active.html).toContain('data-testid="voice-autonomous-microphone-toggle"');
+    expect(active.html).toContain('aria-label="mute autonomous voice microphone"');
+
+    const muted = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ statuses: { 'doom-voice': 'voice auto: microphone muted' } }).props,
+    );
+    expect(muted.html).toContain('aria-label="unmute autonomous voice microphone"');
+    expect(muted.html).toContain('aria-pressed="true"');
+
+    const manual = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ statuses: { 'doom-voice': 'voice: recording 0:03' } }).props,
+    );
+    expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
+
+    const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    expect(source).toContain("`/minor voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
+  });
+
+  it('keeps retired hub epochs across browser runtime remounts in the same tab', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const cursor = new VoiceOwnershipCursor(storage);
+    const command = (epoch: string, generation: number, revision = 1) => ({
+      type: 'browser-media-command' as const,
+      version: 1 as const,
+      epoch,
+      generation,
+      revision,
+      action: 'attach' as const,
+    });
+
+    expect(cursor.accept(command('old-epoch', 20))).toBe(true);
+    expect(cursor.accept(command('old-epoch', 20))).toBe(false);
+    for (let index = 1; index <= 12; index += 1)
+      expect(cursor.accept(command(`new-epoch-${String(index)}`, 1))).toBe(true);
+    expect(cursor.accept(command('new-epoch-12', 1, 2))).toBe(true);
+
+    const remounted = new VoiceOwnershipCursor(storage);
+    expect(remounted.accept(command('old-epoch', 21))).toBe(false);
+    expect(remounted.accept(command('new-epoch-12', 1, 2))).toBe(false);
+    expect(remounted.accept(command('new-epoch-12', 1, 3))).toBe(true);
+  });
+
+  it('reannounces the browser media runtime while a session remains mounted', async () => {
+    const source = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+
+    expect(source).toContain('window.setInterval(announce, BROWSER_RUNTIME_ANNOUNCE_MS)');
+    expect(source).not.toContain('announcedSessionId');
+  });
   it('keeps one browser media identity across runtime remounts in the same tab', () => {
     const values = new Map<string, string>();
     const storage = {

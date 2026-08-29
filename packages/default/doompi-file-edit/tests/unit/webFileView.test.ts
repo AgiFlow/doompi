@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { FilesItemView } from '../../src/types/webFiles.ts';
 import type { FileComment } from '../../web/filesStore.ts';
 import {
   buildReviewPrompt,
   commentAnchor,
   fileTabId,
+  filterFileItems,
   gutterWidth,
   previewModeOf,
   trimSnippet,
@@ -16,6 +18,30 @@ const comment = (overrides: Partial<FileComment> = {}): FileComment => ({
   snippet: 'const retries = 3;',
   body: 'this retry is unbounded',
   ...overrides,
+});
+
+const fileItem = (relPath: string): FilesItemView => ({
+  path: `/repo/${relPath}`,
+  relPath,
+  tool: 'edit',
+  at: 10,
+  count: 1,
+  diffable: true,
+});
+describe('filterFileItems', () => {
+  const items = [fileItem('src/Newest.ts'), fileItem('docs/Guide.md'), fileItem('src/oldest.test.ts')];
+
+  it('returns every item in its original order for an empty query', () => {
+    expect(filterFileItems(items, '  ')).toEqual(items);
+  });
+
+  it('matches relative paths case-insensitively, including later items', () => {
+    expect(filterFileItems(items, 'OLDEST')).toEqual([items[2]]);
+  });
+
+  it('preserves newest-change order when several paths match', () => {
+    expect(filterFileItems(items, 'sRc/')).toEqual([items[0], items[2]]);
+  });
 });
 
 describe('previewModeOf', () => {

@@ -18,6 +18,7 @@ export {
   MessageCircle as MessageIcon,
   Mic as MicIcon,
   MoreVertical as KebabIcon,
+  Pencil as EditIcon,
   Palette as PaletteIcon,
   Plus as PlusIcon,
   RefreshCw as RefreshIcon,
@@ -26,6 +27,7 @@ export {
   Settings as GearIcon,
   ShieldCheck as ShieldIcon,
   Square as StopIcon,
+  Trash2 as TrashIcon,
   Volume2 as VolumeIcon,
   X as CloseIcon,
 } from 'lucide-react';

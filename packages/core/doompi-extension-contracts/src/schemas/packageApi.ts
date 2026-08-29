@@ -32,6 +32,8 @@ export interface DoomApiContext {
   cwd?: string;
   /** Shared only with child processes in this session, never with remote API clients. */
   internalToken?: string;
+  /** Shared only with the cockpit hub for privileged cross-session coordination. */
+  hubToken?: string;
   onNotice(message: string): void;
 }
 

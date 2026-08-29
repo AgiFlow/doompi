@@ -10,7 +10,7 @@ import {
   type AutonomousVoiceTelemetrySink,
 } from '../../services/autonomousVoiceTelemetry.ts';
 import type { IVoiceCommandCorrector, VoiceCommandContext } from '../../services/commandCorrection.ts';
-import type { IVoiceTurnFallbackNarrator } from '../../services/fallbackNarration.ts';
+import type { IVoiceNarrationCompactor, IVoiceTurnFallbackNarrator } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
 import { VoiceNarrationPlayback, type VoiceNarrationPlaybackLogger } from '../../services/narrationPlayback.ts';
 import type { IVoiceTranscriptAdjudicator } from '../../services/transcriptAdmission.ts';
@@ -35,7 +35,7 @@ export interface VoiceWorkerAutoCaptureDependencies {
   loadConfig(): ResolvedVoiceConfig;
   resolveCommandCorrector(reference: string): Promise<IVoiceCommandCorrector | undefined>;
   resolveTranscriptAdjudicator?(reference: string): Promise<IVoiceTranscriptAdjudicator | undefined>;
-  resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator>;
+  resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator & Partial<IVoiceNarrationCompactor>>;
   tts: ITtsAdapter;
   clock: IClock;
   deliver(text: string, intent?: VoiceDeliveryIntent): void;
@@ -55,7 +55,7 @@ export class VoiceWorkerAutoCaptureController {
   private readonly narration: VoiceNarrationPlayback;
   private readonly telemetrySink: VoiceWorkerAutoCaptureTelemetrySink;
   private readonly telemetry: AutonomousVoiceTelemetry;
-  private fallbackNarrator: IVoiceTurnFallbackNarrator | undefined;
+  private fallbackNarrator: (IVoiceTurnFallbackNarrator & Partial<IVoiceNarrationCompactor>) | undefined;
   private fallbackNarration: AbortController | undefined;
   private shutdownInFlight: Promise<void> | undefined;
   private readonly disabledWaiters = new Set<() => void>();
@@ -88,6 +88,46 @@ export class VoiceWorkerAutoCaptureController {
 
   public get activationId(): number {
     return this.activationRevision;
+  }
+
+  public get microphoneMuted(): boolean {
+    return this.session?.microphoneMuted ?? false;
+  }
+
+  public setMicrophoneMuted(muted: boolean): void {
+    if (this.activationState === 'disabled' || this.disposed) return;
+    this.session?.setMicrophoneMuted(muted);
+  }
+
+  public async prepareVoiceTransfer(): Promise<void> {
+    if (this.disposed || this.activationState !== 'active') throw new Error('Autonomous voice is not active.');
+  }
+
+  public async quiesceVoiceTransfer(): Promise<void> {
+    if (this.disposed || this.activationState === 'disabled') throw new Error('Autonomous voice is not active.');
+    const session = this.session;
+    this.activationRevision += 1;
+    this.setState('draining');
+    await this.narration.abortPlayback().catch(() => undefined);
+    await session?.shutdown();
+    await this.resetLocal(this.ui, session);
+  }
+
+  public async activateVoiceTransfer(): Promise<void> {
+    if (this.disposed || this.ui === undefined) throw new Error('Voice UI is unavailable.');
+    if (this.activationState !== 'disabled') throw new Error('Voice target is not inactive.');
+    await this.enable(this.ui);
+    if (this.state !== 'active' || this.microphoneMuted) throw new Error('Fresh voice capture is not listening.');
+  }
+
+  public async abortVoiceTransfer(): Promise<void> {
+    if (this.activationState === 'disabled') return;
+    await this.quiesceVoiceTransfer();
+  }
+
+  public async resumeVoiceTransfer(): Promise<void> {
+    if (this.activationState === 'active') return;
+    await this.activateVoiceTransfer();
   }
 
   public async toggle(ui: AutoCaptureUi): Promise<void> {
@@ -266,7 +306,12 @@ export class VoiceWorkerAutoCaptureController {
         },
       });
       this.session = createdSession;
-      this.narration.activate(config);
+      this.narration.activate(
+        config,
+        fallbackNarrator.compact
+          ? { compact: (narrations, signal) => fallbackNarrator.compact!(narrations, signal) }
+          : undefined,
+      );
       await createdSession.start();
       if (revision !== this.activationRevision || this.session !== createdSession || this.disposed) {
         await createdSession.shutdown();

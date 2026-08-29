@@ -29,6 +29,7 @@ function fakeHost(scopes: HubSessionScope[]): FakeHost {
     published,
     sessions: () => scopes,
     publish: (sessionId, payload) => published.push({ sessionId, payload }),
+    requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
     onNotice: () => undefined,
   };
 }
