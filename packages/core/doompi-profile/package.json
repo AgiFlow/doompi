@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-profile",
-  "version": "0.0.1-alpha.19",
+  "version": "0.0.1-alpha.20",
   "description": "Persona and environment profile switching for DoomPi sessions.",
   "keywords": [
     "agent-persona",

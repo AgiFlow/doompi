@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-goal",
-  "version": "0.0.1-alpha.31",
+  "version": "0.0.1-alpha.32",
   "description": "Pi minor mode for persistent agent goals, token budgets, and goal history.",
   "keywords": [
     "agent-goals",
