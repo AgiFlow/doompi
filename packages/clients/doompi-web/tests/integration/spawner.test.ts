@@ -64,6 +64,26 @@ describe('createServerSpawner', () => {
     process.kill(record.pid as number);
   }, 15_000);
 
+  it('uses the folder name and numbers repeated automatic names', async () => {
+    const { registryDir, cwd, binDir } = workspace();
+    const command = writeExecutable(binDir, 'fake-doompi-server', REGISTERING_SERVER);
+    const spawner = createServerSpawner({ registryDir, command });
+
+    const first = await spawner.spawn({ cwd });
+    if (!first.ok) throw new Error(first.error);
+    const second = await spawner.spawn({ cwd });
+    if (!second.ok) throw new Error(second.error);
+    const explicit = await spawner.spawn({ cwd, name: 'project' });
+    if (!explicit.ok) throw new Error(explicit.error);
+
+    const records = [first, second, explicit].map((outcome) => {
+      const file = path.join(registryDir, 'sessions', `${outcome.sessionId}.json`);
+      return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    });
+    expect(records.map((record) => record.name)).toEqual(['project', 'project 2', 'project']);
+    for (const record of records) process.kill(record.pid as number);
+  }, 15_000);
+
   it('keeps the given session id and reuses its directory, so a restart resumes in place', async () => {
     const { registryDir, cwd, binDir } = workspace();
     const command = writeExecutable(binDir, 'fake-doompi-server', REGISTERING_SERVER);

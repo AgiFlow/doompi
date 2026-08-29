@@ -124,7 +124,7 @@ describe('the session hub over a registry', () => {
     expect(signalled).toEqual([process.ppid]);
   });
 
-  it('restarts a session under the same id, in its own directory, once its record is withdrawn', async () => {
+  it('restarts a session under the same id, directory, and latest reported name', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'live', name: 'live', pid: process.ppid });
     const spawned: SpawnSessionInput[] = [];
@@ -145,6 +145,8 @@ describe('the session hub over a registry', () => {
     );
     await session.waitForAttach();
     await waitFor(() => harness.latest('live') !== undefined, 'the session listed');
+    session.emit({ type: 'response', command: 'get_state', success: true, data: { sessionName: 'renamed' } });
+    await waitFor(() => harness.latest('live')?.name === 'renamed', 'the renamed session');
 
     const outcome = await harness.hub.restart('live');
 
@@ -154,7 +156,7 @@ describe('the session hub over a registry', () => {
     // reused so repeated restarts cannot outgrow the unix socket path limit.
     expect(spawned).toHaveLength(1);
     expect(spawned[0]?.sessionId).toBe('live');
-    expect(spawned[0]?.name).toBe('live');
+    expect(spawned[0]?.name).toBe('renamed');
     expect(spawned[0]?.sessionDir).toBe(path.dirname(session.socketPath));
   });
 

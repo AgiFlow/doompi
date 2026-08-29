@@ -200,7 +200,7 @@ export function NewSessionDialog({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void submit();
               }}
-              placeholder="untitled"
+              placeholder="folder name"
             />
           </label>
           {error ? (

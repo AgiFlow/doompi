@@ -692,8 +692,10 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const managed = sessions.get(sessionId);
       if (!managed) return { ok: false, code: 'invalid_request', error: 'Unknown session.' };
       // Read before the stop: once the record is withdrawn there is nothing
-      // left to say where the replacement should go.
-      const { cwd, name, socketPath } = managed.record;
+      // left to say where the replacement should go. The live session name wins
+      // because the registry record still carries the name used at startup.
+      const { cwd, socketPath } = managed.record;
+      const name = managed.presence.sessionName ?? managed.record.name;
       const stopped = stopSession(sessionId);
       if (!stopped.ok) return { ok: false, code: 'invalid_request', error: stopped.error };
       if (!(await awaitWithdrawal(sessionId))) {
