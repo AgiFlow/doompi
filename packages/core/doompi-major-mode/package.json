@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-major-mode",
-  "version": "0.0.1-alpha.19",
+  "version": "0.0.1-alpha.20",
   "description": "Named major-mode selection and layer composition switching for DoomPi sessions.",
   "keywords": [
     "ai",

@@ -1,3 +1,19 @@
+## 0.0.1-alpha.25 (2026-08-29)
+
+### 🚀 Features
+
+- expand cockpit integrations and voice workflows ([efc3e19](https://github.com/AgiFlow/doompi/commit/efc3e19))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.5
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.40
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.24 (2026-08-29)
 
 ### 🚀 Features
