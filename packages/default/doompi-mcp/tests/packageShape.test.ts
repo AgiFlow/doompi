@@ -13,6 +13,7 @@ interface PackageManifest {
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiApi?: { basePath?: string; hub?: { entry?: string; dist?: string } };
 }
 
 /** Release bumps rewrite the manifest version, so assert its shape rather than a fixed value. */
@@ -62,14 +63,14 @@ describe('doom-mcp package boundary', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.peerDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.84.3',
-        '@earendil-works/pi-tui': '0.84.3',
+        '@earendil-works/pi-coding-agent': '0.84.4',
+        '@earendil-works/pi-tui': '0.84.4',
       }),
     );
     expect(manifest.devDependencies).toEqual(
       expect.objectContaining({
-        '@earendil-works/pi-coding-agent': '0.84.3',
-        '@earendil-works/pi-tui': '0.84.3',
+        '@earendil-works/pi-coding-agent': '0.84.4',
+        '@earendil-works/pi-tui': '0.84.4',
       }),
     );
   });
@@ -93,6 +94,16 @@ describe('doom-mcp package boundary', () => {
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 
+  it('declares the repository MCP hub API from source to built output', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.doompiApi).toEqual({
+      basePath: 'mcp',
+      hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
+    });
+    await expectFile('src/exports/webHub.ts');
+    await expectFile('dist/webHub.mjs');
+  });
   it('exports one standard Pi adapter without a wildcard or alternate Doom entry', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};

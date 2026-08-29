@@ -18,8 +18,9 @@ describe('what a session must be for autonomous voice to run', () => {
     expect(canRunVoice(undefined)).toBe(false);
   });
 
-  it('offers autonomous first and manual second when voice is off', () => {
+  it('keeps microphone controls out of the manual and autonomous mode actions', () => {
     const state = voiceModeState('disabled', true);
+    expect(state.actions.map((action) => action.id)).toEqual(['activate', 'manual', 'deactivate']);
     expect(state.actions.filter((action) => action.enabled).map((action) => action.id)).toEqual(['activate', 'manual']);
     expect(blocked(state)).toEqual([{ id: 'deactivate', reason: 'Autonomous voice is disabled.' }]);
   });

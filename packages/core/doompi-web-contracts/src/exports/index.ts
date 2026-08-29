@@ -1,4 +1,5 @@
 export { defineSessionChannel, defineSlot, defineWebPlugin } from '../services/define.ts';
+export { defineGlobalStore } from '../services/globalStore.ts';
 export { defineSessionStore } from '../services/sessionStore.ts';
 export { toolResultText, toolResultTextLines } from '../services/toolResult.ts';
 export type {
@@ -12,6 +13,7 @@ export type {
 } from '../types/webHub.ts';
 export type {
   ActivityGroupContribution,
+  GlobalStore,
   LeaderBindingContribution,
   LeaderKeyContribution,
   MinorModeContribution,
@@ -26,6 +28,9 @@ export type {
   SlotDataFill,
   SlotDeclaration,
   SlotFillContribution,
+  RepositorySettingsPanelContribution,
+  RepositorySettingsPanelProps,
+  RepositorySettingsRepository,
   SettingsFieldContribution,
   SettingsFieldOption,
   SettingsSectionContribution,

@@ -132,6 +132,15 @@ export function voiceCallSummary(toolName: string, args: JsonRecord): VoiceCallS
     const preview = speech.length > PREVIEW_LENGTH ? `${speech.slice(0, PREVIEW_LENGTH - 3)}…` : speech;
     return { action: 'narrate', ...(preview ? { detail: preview } : {}), detailIsName: false };
   }
+  if (toolName === VOICE_TRANSFER_TOOL) {
+    const target = readNumber(args, 'target');
+    return {
+      glyph: '↪',
+      action: 'hand off',
+      ...(target === undefined ? {} : { detail: `target ${target}` }),
+      detailIsName: false,
+    };
+  }
   if (toolName === VOICE_DESCRIBE_TOOL) {
     const names = requestedNames(args);
     if (names.length === 1) return { glyph: '☰', action: 'discover', detail: names[0], detailIsName: true };

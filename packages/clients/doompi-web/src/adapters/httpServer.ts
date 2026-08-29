@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,9 +21,11 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import { findRepositoryRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
+import type { SettingsRepository } from '../types/settings.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
   API_SESSION_QUERY_PARAM,
@@ -260,6 +262,53 @@ function buildHub(
   });
 }
 
+/** Stable browser identity for an admitted canonical repository root. */
+function repositoryId(root: string): string {
+  return `repo-${createHash('sha256').update(root).digest('base64url').slice(0, 24)}`;
+}
+
+/** Active repositories plus a bounded set seen earlier during this hub process. */
+function createSettingsRepositoryRegistry(hub: SessionHub): {
+  list(): SettingsRepository[];
+  resolve(repositoryId: string): string | undefined;
+} {
+  const recent = new Map<string, { repository: SettingsRepository; seenAt: number }>();
+  const refresh = (): SettingsRepository[] => {
+    for (const [root, entry] of recent) {
+      recent.set(root, { ...entry, repository: { ...entry.repository, active: false } });
+    }
+    for (const record of hub.records()) {
+      try {
+        const root = fs.realpathSync(findRepositoryRoot(record.cwd));
+        recent.set(root, {
+          repository: { id: repositoryId(root), path: root, name: path.basename(root) || root, active: true },
+          seenAt: Date.now(),
+        });
+      } catch {
+        // A session outside a marked repository is valid, but has no repository settings surface.
+      }
+    }
+    const inactive = [...recent.entries()]
+      .filter(([, entry]) => !entry.repository.active)
+      .sort((left, right) => right[1].seenAt - left[1].seenAt);
+    for (const [root] of inactive.slice(12)) recent.delete(root);
+    return [...recent.values()]
+      .sort(
+        (left, right) =>
+          Number(right.repository.active) - Number(left.repository.active) ||
+          right.seenAt - left.seenAt ||
+          left.repository.path.localeCompare(right.repository.path),
+      )
+      .map((entry) => entry.repository);
+  };
+  return {
+    list: refresh,
+    resolve(repositoryId) {
+      return refresh().find((entry) => entry.id === repositoryId)?.path;
+    },
+  };
+}
+
 /**
  * Mounts the hub-scoped package APIs under /api/plugin/<basePath>/.
  *
@@ -268,13 +317,18 @@ function buildHub(
  * put it. An API that throws answers 500 for its own routes alone; one bad
  * package never takes the cockpit down with it.
  */
-function mountHubApis(app: Hono, apis: readonly DoomApi[], notice: (message: string) => void): DoomApiHandler[] {
+function mountHubApis(
+  app: Hono,
+  apis: readonly DoomApi[],
+  notice: (message: string) => void,
+  resolveRepository: (repositoryId: string) => string | undefined,
+): DoomApiHandler[] {
   const handlers: DoomApiHandler[] = [];
   for (const api of apis) {
     const mount = `${DOOM_API_ROUTE_PREFIX}/${api.basePath}`;
     let handler: DoomApiHandler;
     try {
-      handler = api.start({ scope: 'hub', onNotice: notice });
+      handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository });
     } catch (error) {
       notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
       continue;
@@ -642,23 +696,21 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
   registerAuthRoutes(app, providerAuth);
-  // Settings read and write the machine's Doom config. The page names a
-  // repository rather than a session, so the picker is fed from the working
-  // directories the hub already manages.
+  // Settings read and write the machine's Doom config. Session working
+  // directories are normalized to their nearest repository marker before the
+  // picker or a package API can address them. The bounded registry keeps recent
+  // roots available after their last session closes without trusting browser paths.
+  const repositoryRegistry = createSettingsRepositoryRegistry(hub);
+  const repositories = (): SettingsRepository[] => repositoryRegistry.list();
+  const resolveRepository = (repositoryId: string): string | undefined => repositoryRegistry.resolve(repositoryId);
   registerSettingsRoutes(app, {
-    repositories: () => {
-      const seen = new Map<string, { path: string; name: string; active: boolean }>();
-      for (const record of hub.records()) {
-        seen.set(record.cwd, { path: record.cwd, name: path.basename(record.cwd) || record.cwd, active: true });
-      }
-      return [...seen.values()].sort((left, right) => left.path.localeCompare(right.path));
-    },
+    repositories,
     models: () => providerAuth.listModels(),
   });
   // Package APIs, mounted before the SPA fallback so their routes are reachable
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
-  const pluginApis = mountHubApis(app, await loadPackageApis('hub', { onNotice: notice }), notice);
+  const pluginApis = mountHubApis(app, await loadPackageApis('hub', { onNotice: notice }), notice, resolveRepository);
   mountSessionApiProxy(app, hub, notice, telemetry);
 
   app.get('/api/health', (context) =>

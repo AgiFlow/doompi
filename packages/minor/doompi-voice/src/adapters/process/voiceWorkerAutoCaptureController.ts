@@ -58,6 +58,7 @@ export class VoiceWorkerAutoCaptureController {
   private fallbackNarrator: (IVoiceTurnFallbackNarrator & Partial<IVoiceNarrationCompactor>) | undefined;
   private fallbackNarration: AbortController | undefined;
   private shutdownInFlight: Promise<void> | undefined;
+  private activationErrorMessage: string | undefined;
   private readonly disabledWaiters = new Set<() => void>();
   private disposed = false;
 
@@ -90,6 +91,10 @@ export class VoiceWorkerAutoCaptureController {
     return this.activationRevision;
   }
 
+  public get activationError(): string | undefined {
+    return this.activationErrorMessage;
+  }
+
   public get microphoneMuted(): boolean {
     return this.session?.microphoneMuted ?? false;
   }
@@ -97,37 +102,6 @@ export class VoiceWorkerAutoCaptureController {
   public setMicrophoneMuted(muted: boolean): void {
     if (this.activationState === 'disabled' || this.disposed) return;
     this.session?.setMicrophoneMuted(muted);
-  }
-
-  public async prepareVoiceTransfer(): Promise<void> {
-    if (this.disposed || this.activationState !== 'active') throw new Error('Autonomous voice is not active.');
-  }
-
-  public async quiesceVoiceTransfer(): Promise<void> {
-    if (this.disposed || this.activationState === 'disabled') throw new Error('Autonomous voice is not active.');
-    const session = this.session;
-    this.activationRevision += 1;
-    this.setState('draining');
-    await this.narration.abortPlayback().catch(() => undefined);
-    await session?.shutdown();
-    await this.resetLocal(this.ui, session);
-  }
-
-  public async activateVoiceTransfer(): Promise<void> {
-    if (this.disposed || this.ui === undefined) throw new Error('Voice UI is unavailable.');
-    if (this.activationState !== 'disabled') throw new Error('Voice target is not inactive.');
-    await this.enable(this.ui);
-    if (this.state !== 'active' || this.microphoneMuted) throw new Error('Fresh voice capture is not listening.');
-  }
-
-  public async abortVoiceTransfer(): Promise<void> {
-    if (this.activationState === 'disabled') return;
-    await this.quiesceVoiceTransfer();
-  }
-
-  public async resumeVoiceTransfer(): Promise<void> {
-    if (this.activationState === 'active') return;
-    await this.activateVoiceTransfer();
   }
 
   public async toggle(ui: AutoCaptureUi): Promise<void> {
@@ -245,6 +219,7 @@ export class VoiceWorkerAutoCaptureController {
   }
 
   private async enable(ui: AutoCaptureUi): Promise<void> {
+    this.activationErrorMessage = undefined;
     const revision = this.activationRevision + 1;
     this.activationRevision = revision;
     this.setState('starting');
@@ -318,6 +293,8 @@ export class VoiceWorkerAutoCaptureController {
       }
     } catch (error) {
       if (revision !== this.activationRevision) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.activationErrorMessage = message.slice(0, 300);
       if (createdSession && this.session === createdSession) {
         try {
           await createdSession.shutdown();
@@ -329,7 +306,7 @@ export class VoiceWorkerAutoCaptureController {
         }
       }
       await this.resetLocal(ui, createdSession);
-      ui.notify(error instanceof Error ? error.message : String(error), 'error');
+      ui.notify(message, 'error');
     }
   }
 

@@ -96,8 +96,8 @@
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
-    "@earendil-works/pi-coding-agent": "0.84.3",
-    "@earendil-works/pi-tui": "0.84.3",
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4",
     "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
@@ -105,8 +105,8 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.3",
-    "@earendil-works/pi-tui": "0.84.3"
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

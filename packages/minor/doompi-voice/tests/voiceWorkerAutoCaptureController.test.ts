@@ -1313,17 +1313,20 @@ describe('VoiceWorkerAutoCaptureController', () => {
     const manual = harness({ manualState: 'recording' });
     await manual.controller.toggle(manual.ui);
     expect(manual.controller.state).toBe('disabled');
+    expect(manual.controller.activationError).toContain('Stop manual');
     expect(manual.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Stop manual'), 'error');
 
     const missing = harness({ loadedConfig: { ...config, autoCapture: undefined } });
     await missing.controller.toggle(missing.ui);
     expect(missing.controller.state).toBe('disabled');
+    expect(missing.controller.activationError).toContain('not configured');
     expect(missing.ui.notify).toHaveBeenCalledWith(expect.stringContaining('not configured'), 'error');
 
     const unavailable = harness({ start: async () => Promise.reject(new Error('worker unavailable')) });
     await unavailable.controller.toggle(unavailable.ui);
     await flush();
-    expect(unavailable.ui.notify).toHaveBeenCalledWith(expect.stringContaining('failed to start'), 'error');
+    expect(unavailable.ui.notify).toHaveBeenCalledWith(expect.stringContaining('worker unavailable'), 'error');
+    expect(unavailable.controller.activationError).toBe('worker unavailable');
     expect(unavailable.controller.state).toBe('disabled');
   });
 

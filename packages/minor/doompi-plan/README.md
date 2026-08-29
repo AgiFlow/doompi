@@ -13,7 +13,7 @@ tool-level workflow protection rather than a repository permission boundary.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.3
+- Pi 0.84.4
 
 ## Install
 

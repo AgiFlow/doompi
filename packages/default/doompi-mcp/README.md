@@ -12,7 +12,7 @@ absent rather than merely hidden from the model.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.3 and Pi TUI 0.84.3
+- Pi 0.84.4 and Pi TUI 0.84.4
 
 ## Install
 

@@ -1,375 +1,228 @@
-import type { HubSessionScope } from '@agimon-ai/doompi-web-contracts';
-import type { IClock } from '../types/index.ts';
 import {
-  VOICE_OWNERSHIP_MAX_TARGETS,
+  VOICE_OWNERSHIP_LEASE_MS,
   VOICE_OWNERSHIP_PROTOCOL_VERSION,
+  type BrowserVoiceOwnershipPayload,
   type VoiceOwnershipAcknowledgement,
+  type VoiceOwnershipAction,
   type VoiceOwnershipCommand,
-  type VoiceOwnershipPhase,
   type VoiceOwnershipRegistration,
-  type VoiceOwnershipView,
+  type VoiceOwnershipTarget,
 } from '../types/voiceOwnership.ts';
 
-const VOICE_OWNERSHIP_STEP_TIMEOUT_MS = 15_000;
 interface Participant {
-  scope: HubSessionScope;
-  registration: VoiceOwnershipRegistration;
-  seenAt: number;
+  sessionId: string;
+  label: string;
+  leaseId: string;
+  revision: number;
+  eligible: boolean;
+  active: boolean;
+  lastSeen: number;
 }
-interface Transaction {
-  generation: number;
-  sourceId: string;
-  targetId: string;
-  source: Participant;
-  target: Participant;
-  mediaRebindStarted: boolean;
-  cancelled: boolean;
-  inFlight?: Promise<unknown>;
-  inFlightController?: AbortController;
-  rollbackOperation?: Promise<void>;
+
+export interface VoiceOwnershipCommandDelivery {
+  send(sessionId: string, command: VoiceOwnershipCommand): Promise<VoiceOwnershipAcknowledgement>;
 }
+
+export type VoiceOwnershipSelectionPublisher = (payload: BrowserVoiceOwnershipPayload) => void;
+
 export interface VoiceOwnershipCoordinatorOptions {
-  send(
-    scope: HubSessionScope,
-    command: VoiceOwnershipCommand,
-    signal?: AbortSignal,
-  ): Promise<VoiceOwnershipAcknowledgement | undefined>;
-  rebindMedia?(
-    source: HubSessionScope,
-    target: HubSessionScope,
-    epoch: string,
-    generation: number,
-    signal?: AbortSignal,
-  ): Promise<void>;
-  mediaReady?(target: HubSessionScope, epoch: string, generation: number, signal?: AbortSignal): Promise<void>;
-  clock: Pick<IClock, 'setTimeout' | 'clear'>;
-  now(): number;
   leaseMs?: number;
-  stepTimeoutMs?: number;
-  onNotice?: (message: string) => void;
+  now(): number;
+  createId(): string;
 }
 
 export class VoiceOwnershipCoordinator {
   private readonly participants = new Map<string, Participant>();
-  private readonly handles = new Map<string, Map<string, string>>();
-  private ownerId: string | undefined;
-  private transaction: Transaction | undefined;
-  private readonly epoch = globalThis.crypto.randomUUID();
-  private generation = 0;
-  private revision = 0;
+  private readonly leaseMs: number;
+  private readonly now: () => number;
+  private readonly createId: () => string;
+  private selectedSessionId: string | null = null;
+  private operation: Promise<unknown> = Promise.resolve();
 
-  public constructor(private readonly options: VoiceOwnershipCoordinatorOptions) {}
+  public constructor(
+    private readonly delivery: VoiceOwnershipCommandDelivery,
+    private readonly publishSelection: VoiceOwnershipSelectionPublisher,
+    options: VoiceOwnershipCoordinatorOptions,
+  ) {
+    this.leaseMs = options.leaseMs ?? VOICE_OWNERSHIP_LEASE_MS;
+    this.now = () => options.now();
+    this.createId = () => options.createId();
+  }
 
-  public update(scope: HubSessionScope, registration: VoiceOwnershipRegistration): void {
-    const previous = this.participants.get(scope.sessionId);
+  public update(sessionId: string, registration: VoiceOwnershipRegistration): void {
+    this.prune();
+    const previous = this.participants.get(sessionId);
     if (
-      previous &&
-      previous.registration.leaseId === registration.leaseId &&
-      registration.revision < previous.registration.revision
+      previous !== undefined &&
+      previous.leaseId === registration.leaseId &&
+      registration.revision < previous.revision
     )
       return;
-    const changed = previous === undefined || JSON.stringify(previous.registration) !== JSON.stringify(registration);
-    this.participants.set(scope.sessionId, { scope, registration, seenAt: this.options.now() });
-    if (this.ownerId === undefined && registration.active && registration.eligible) {
-      this.ownerId = scope.sessionId;
-      this.generation += 1;
-    } else if (
-      registration.active &&
-      this.ownerId !== scope.sessionId &&
-      this.transaction?.targetId !== scope.sessionId
-    ) {
-      void this.forceInactive(scope);
-    }
-    this.expire();
-    if (changed) void this.publishViews();
+    this.participants.set(sessionId, {
+      sessionId,
+      label: registration.label,
+      leaseId: registration.leaseId,
+      revision: registration.revision,
+      eligible: registration.eligible,
+      active: registration.active,
+      lastSeen: this.now(),
+    });
+    this.reconcileSelection();
   }
 
   public remove(sessionId: string): void {
-    const transaction = this.transaction;
-    const transactionParticipant = transaction?.sourceId === sessionId || transaction?.targetId === sessionId;
-    if (transactionParticipant)
-      void this.rollback(
-        transaction?.sourceId === sessionId
-          ? 'Voice transfer source disconnected.'
-          : 'Voice transfer target disconnected.',
-      );
     this.participants.delete(sessionId);
-    this.handles.delete(sessionId);
-    if (transaction?.sourceId === sessionId) this.ownerId = undefined;
-    else if (!transactionParticipant && this.ownerId === sessionId) {
-      this.ownerId = undefined;
-      this.generation += 1;
-      this.revision = 0;
-    }
+    this.reconcileSelection();
   }
 
-  public view(sessionId: string): VoiceOwnershipView {
-    this.expire();
-    const owner = this.ownerId === sessionId;
-    const targets = owner && this.transaction === undefined ? this.targetsFor(sessionId) : [];
+  public payload(): BrowserVoiceOwnershipPayload {
+    this.prune();
+    this.reconcileSelection();
     return {
+      type: 'browser-media-session',
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
-      epoch: this.epoch,
-      generation: this.generation,
-      revision: this.revision,
-      owner,
-      transaction: this.transaction !== undefined,
-      targets,
+      activeSessionId: this.selectedSessionId,
     };
   }
 
-  public async transfer(sourceId: string, handle: string): Promise<boolean> {
-    this.expire();
-    if (this.transaction !== undefined || this.ownerId !== sourceId) return false;
-    const targetId = this.handles.get(sourceId)?.get(handle);
-    if (targetId === undefined || !this.eligibleTarget(sourceId, targetId)) return false;
-    const source = this.participants.get(sourceId);
-    const target = this.participants.get(targetId);
-    if (!source || !target) return false;
-    const transaction: Transaction = {
-      generation: ++this.generation,
-      sourceId,
-      targetId,
-      source,
-      target,
-      mediaRebindStarted: false,
-      cancelled: false,
+  public activate(sessionId: string): Promise<boolean> {
+    return this.enqueue(() => this.activateNow(sessionId));
+  }
+
+  public handoff(sourceSessionId: string, targetHandle: string): Promise<boolean> {
+    return this.enqueue(async () => {
+      this.prune();
+      const source = this.participants.get(sourceSessionId);
+      if (source === undefined || !source.active) return false;
+      const targetSessionId = this.targetsFor(sourceSessionId).find(
+        (target) => target.handle === targetHandle,
+      )?.sessionId;
+      if (targetSessionId === undefined) return false;
+      if (!(await this.sendAction(sourceSessionId, 'deactivate'))) return false;
+      return this.activateNow(targetSessionId);
+    });
+  }
+
+  public targetsFor(sourceSessionId: string): Array<VoiceOwnershipTarget & { sessionId: string }> {
+    this.prune();
+    const eligible = [...this.participants.values()]
+      .filter((participant) => participant.sessionId !== sourceSessionId && participant.eligible)
+      .sort((left, right) => left.label.localeCompare(right.label) || left.sessionId.localeCompare(right.sessionId));
+    return eligible.map((participant, index) => ({
+      sessionId: participant.sessionId,
+      handle: this.handleFor(participant),
+      label: participant.label,
+      order: index + 1,
+    }));
+  }
+
+  public catalog(sessionId: string): VoiceOwnershipTarget[] {
+    return this.targetsFor(sessionId).map(({ sessionId: _sessionId, ...target }) => target);
+  }
+
+  public publishCatalogs(): Promise<void> {
+    return this.enqueue(async () => {
+      this.prune();
+      const participants = [...this.participants.values()];
+      for (const participant of participants) {
+        const command: VoiceOwnershipCommand = {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          commandId: this.createId(),
+          action: 'catalog',
+          targets: this.catalog(participant.sessionId),
+        };
+        const acknowledgement = await this.delivery.send(participant.sessionId, command);
+        this.applyAcknowledgement(participant.sessionId, acknowledgement);
+      }
+      this.reconcileSelection();
+    });
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.operation.then(operation, operation);
+    this.operation = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  private async activateNow(sessionId: string): Promise<boolean> {
+    this.prune();
+    const target = this.participants.get(sessionId);
+    if (target === undefined || !target.eligible) return false;
+    const activeOthers = [...this.participants.values()]
+      .filter((participant) => participant.active && participant.sessionId !== sessionId)
+      .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+    for (const participant of activeOthers) {
+      if (!(await this.sendAction(participant.sessionId, 'deactivate'))) {
+        await this.sendAction(sessionId, 'deactivate');
+        this.reconcileSelection();
+        return false;
+      }
+    }
+    this.setSelected(sessionId);
+    if (target.active) return true;
+    if (await this.sendAction(sessionId, 'activate')) return true;
+    this.reconcileSelection();
+    return false;
+  }
+
+  private async sendAction(sessionId: string, action: Exclude<VoiceOwnershipAction, 'catalog'>): Promise<boolean> {
+    const command: VoiceOwnershipCommand = {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      commandId: this.createId(),
+      action,
     };
-    this.revision = 0;
-    this.transaction = transaction;
     try {
-      await this.runStep(transaction, (signal) => this.publishViews(signal));
-      this.requireCurrent(transaction);
-      await this.runStep(transaction, (signal) => this.requireAck(target, 'prepare', false, signal));
-      this.requireCurrent(transaction);
-      await this.runStep(transaction, (signal) => this.requireAck(source, 'quiesce', true, signal));
-      this.requireCurrent(transaction);
-      if (
-        (source.registration.requiresBrowserBind || target.registration.requiresBrowserBind) &&
-        this.options.rebindMedia
-      ) {
-        transaction.mediaRebindStarted = true;
-        await this.runStep(transaction, (signal) =>
-          this.options.rebindMedia!(source.scope, target.scope, this.epoch, transaction.generation, signal),
-        );
-        this.requireCurrent(transaction);
-      }
-      const activated = await this.runStep(transaction, (signal) => this.requireAck(target, 'activate', false, signal));
-      this.requireCurrent(transaction);
-      if (activated.listening !== true) throw new Error('Target capture did not reach listening state.');
-      if (target.registration.requiresBrowserBind && this.options.mediaReady) {
-        await this.runStep(transaction, (signal) =>
-          this.options.mediaReady!(target.scope, this.epoch, transaction.generation, signal),
-        );
-        this.requireCurrent(transaction);
-      }
-      await this.runStep(transaction, (signal) => this.requireAck(target, 'commit', false, signal));
-      this.requireCurrent(transaction);
-      await this.runStep(transaction, (signal) => this.requireAck(source, 'commit', true, signal));
-      this.requireCurrent(transaction);
-      this.ownerId = targetId;
-      this.transaction = undefined;
-      await this.publishViews();
-      return true;
-    } catch (error) {
-      this.options.onNotice?.(
-        `voice ownership transfer rolled back (${error instanceof Error ? error.message : String(error)})`,
-      );
-      await this.rollback('Voice transfer failed.');
+      const acknowledgement = await this.delivery.send(sessionId, command);
+      if (acknowledgement.commandId !== command.commandId || acknowledgement.action !== action) return false;
+      this.applyAcknowledgement(sessionId, acknowledgement);
+      return acknowledgement.ok && acknowledgement.active === (action === 'activate');
+    } catch {
       return false;
     }
   }
 
-  private requireCurrent(transaction: Transaction): void {
-    if (this.transaction !== transaction || transaction.cancelled)
-      throw new Error('Voice ownership transaction is stale.');
+  private applyAcknowledgement(sessionId: string, acknowledgement: VoiceOwnershipAcknowledgement): void {
+    const participant = this.participants.get(sessionId);
+    if (participant === undefined) return;
+    participant.active = acknowledgement.active;
+    participant.lastSeen = this.now();
   }
 
-  private async runStep<T>(transaction: Transaction, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    const controller = new AbortController();
-    const operation = this.runBounded(run, controller);
-    transaction.inFlight = operation;
-    transaction.inFlightController = controller;
-    try {
-      return await operation;
-    } finally {
-      if (transaction.inFlight === operation) {
-        transaction.inFlight = undefined;
-        transaction.inFlightController = undefined;
-      }
+  private handleFor(participant: Participant): string {
+    return participant.leaseId;
+  }
+
+  private prune(): void {
+    const cutoff = this.now() - this.leaseMs;
+    let changed = false;
+    for (const [sessionId, participant] of this.participants) {
+      if (participant.lastSeen >= cutoff) continue;
+      this.participants.delete(sessionId);
+      changed = true;
     }
+    if (changed) this.reconcileSelection();
   }
 
-  private runBounded<T>(run: (signal: AbortSignal) => Promise<T>, controller = new AbortController()): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      let settled = false;
-      const timeout = this.options.clock.setTimeout(
-        () => controller.abort(new Error('Voice ownership step timed out.')),
-        this.options.stepTimeoutMs ?? VOICE_OWNERSHIP_STEP_TIMEOUT_MS,
-      );
-      const cleanup = (): void => {
-        this.options.clock.clear(timeout);
-        controller.signal.removeEventListener('abort', aborted);
-      };
-      const aborted = (): void => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(
-          controller.signal.reason instanceof Error
-            ? controller.signal.reason
-            : new Error('Voice ownership step aborted.'),
-        );
-      };
-      controller.signal.addEventListener('abort', aborted, { once: true });
-      void Promise.resolve()
-        .then(() => run(controller.signal))
-        .then(
-          (value) => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            resolve(value);
-          },
-          (error: unknown) => {
-            if (settled) return;
-            settled = true;
-            cleanup();
-            reject(error);
-          },
-        );
-    });
+  private reconcileSelection(): void {
+    const selected =
+      (this.selectedSessionId === null ? undefined : this.participants.get(this.selectedSessionId))?.active === true
+        ? this.selectedSessionId
+        : ([...this.participants.values()]
+            .filter((participant) => participant.active)
+            .sort((left, right) => left.sessionId.localeCompare(right.sessionId))[0]?.sessionId ?? null);
+    this.setSelected(selected);
   }
 
-  private rollback(reason: string): Promise<void> {
-    const transaction = this.transaction;
-    if (transaction === undefined) return Promise.resolve();
-    transaction.cancelled = true;
-    transaction.inFlightController?.abort(new Error(reason));
-    transaction.rollbackOperation ??= this.finishRollback(transaction);
-    return transaction.rollbackOperation;
-  }
-
-  private async finishRollback(transaction: Transaction): Promise<void> {
-    await transaction.inFlight?.catch(() => undefined);
-    this.ownerId = undefined;
-    await this.sendBestEffort(transaction.target, 'abort', false);
-    if (transaction.mediaRebindStarted && this.options.rebindMedia)
-      await this.runBounded((signal) =>
-        this.options.rebindMedia!(
-          transaction.target.scope,
-          transaction.source.scope,
-          this.epoch,
-          transaction.generation,
-          signal,
-        ),
-      ).catch(() => undefined);
-    const resumed = await this.sendBestEffort(transaction.source, 'resume', true);
-    this.ownerId =
-      resumed?.listening === true && this.participants.has(transaction.sourceId) ? transaction.sourceId : undefined;
-    if (this.transaction === transaction) this.transaction = undefined;
-    await this.publishViews();
-  }
-
-  private async forceInactive(participant: HubSessionScope): Promise<void> {
-    const held = this.participants.get(participant.sessionId);
-    if (held === undefined) return;
-    await this.sendBestEffort(held, 'abort', false);
-  }
-
-  private targetsFor(sourceId: string): Array<{ handle: string; label: string }> {
-    let sourceHandles = this.handles.get(sourceId);
-    if (sourceHandles === undefined) {
-      sourceHandles = new Map();
-      this.handles.set(sourceId, sourceHandles);
-    }
-    const eligible = [...this.participants.entries()]
-      .filter(([targetId]) => this.eligibleTarget(sourceId, targetId))
-      .sort((left, right) => left[1].registration.label.localeCompare(right[1].registration.label))
-      .slice(0, VOICE_OWNERSHIP_MAX_TARGETS);
-    const live = new Set(eligible.map(([targetId]) => targetId));
-    for (const [handle, targetId] of sourceHandles) if (!live.has(targetId)) sourceHandles.delete(handle);
-    return eligible.map(([targetId, participant]) => {
-      let handle = [...sourceHandles].find((entry) => entry[1] === targetId)?.[0];
-      if (handle === undefined) {
-        handle = globalThis.crypto.randomUUID();
-        sourceHandles!.set(handle, targetId);
-      }
-      return { handle, label: participant.registration.label };
-    });
-  }
-
-  private eligibleTarget(sourceId: string, targetId: string): boolean {
-    const target = this.participants.get(targetId);
-    return targetId !== sourceId && target !== undefined && target.registration.eligible && !target.registration.active;
-  }
-
-  private expire(): void {
-    const now = this.options.now();
-    const leaseMs = this.options.leaseMs ?? 15_000;
-    for (const [sessionId, participant] of this.participants)
-      if (now - participant.seenAt > leaseMs) this.remove(sessionId);
-  }
-
-  private async requireAck(
-    participant: Participant,
-    phase: VoiceOwnershipPhase,
-    source: boolean,
-    signal?: AbortSignal,
-  ): Promise<VoiceOwnershipAcknowledgement> {
-    const command = this.command(phase, source, participant.scope.sessionId);
-    const acknowledgement = await this.options.send(participant.scope, command, signal);
-    if (
-      !acknowledgement ||
-      acknowledgement.version !== VOICE_OWNERSHIP_PROTOCOL_VERSION ||
-      acknowledgement.epoch !== command.epoch ||
-      acknowledgement.generation !== command.generation ||
-      acknowledgement.revision !== command.revision ||
-      acknowledgement.phase !== phase ||
-      !acknowledgement.ok
-    )
-      throw new Error(`Invalid or failed ${phase} acknowledgement.`);
-    return acknowledgement;
-  }
-
-  private async sendBestEffort(
-    participant: Participant,
-    phase: VoiceOwnershipPhase,
-    source: boolean,
-  ): Promise<VoiceOwnershipAcknowledgement | undefined> {
-    try {
-      return await this.runBounded((signal) => this.requireAck(participant, phase, source, signal));
-    } catch {
-      return undefined;
-    }
-  }
-
-  private command(phase: VoiceOwnershipPhase, source: boolean, sessionId: string): VoiceOwnershipCommand {
-    this.revision += 1;
-    return {
+  private setSelected(sessionId: string | null): void {
+    if (this.selectedSessionId === sessionId) return;
+    this.selectedSessionId = sessionId;
+    this.publishSelection({
+      type: 'browser-media-session',
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
-      epoch: this.epoch,
-      generation: this.generation,
-      revision: this.revision,
-      phase,
-      source,
-      catalog: this.view(sessionId),
-    };
-  }
-
-  private async publishViews(signal?: AbortSignal): Promise<void> {
-    await Promise.all(
-      [...this.participants.values()].map(async (participant) => {
-        const command = this.command(
-          'prepare',
-          this.ownerId === participant.scope.sessionId,
-          participant.scope.sessionId,
-        );
-        const send = signal
-          ? this.options.send(participant.scope, command, signal)
-          : this.runBounded((boundedSignal) => this.options.send(participant.scope, command, boundedSignal));
-        await send.catch(() => undefined);
-      }),
-    );
+      activeSessionId: sessionId,
+    });
   }
 }

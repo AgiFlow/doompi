@@ -7,7 +7,7 @@ import { RemoteBanner } from '../features/remote/RemoteBanner.tsx';
 import { ThreadView } from '../features/session/ThreadView.tsx';
 import { installWebPlugins, startWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
 import { bindThreadRenderer } from '../lib/threadRenderer.ts';
-import { sendFrame, sendHubFrame } from '../lib/transport.ts';
+import { onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { routeTree } from '../routes/routeTree.tsx';
 import { restoreSealedSession } from '../lib/sealedSession.ts';
 import { refreshRemoteState } from '../stores/remoteAccessStore.ts';
@@ -44,7 +44,7 @@ export function Providers() {
     void restoreSealedSession().then(() => {
       if (cancelled) return;
       stopRuntime = startSessionRuntime();
-      stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame });
+      stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame, onHubConnected });
       // One read at start; after that the hub pushes state, so nothing polls.
       void refreshRemoteState();
     });

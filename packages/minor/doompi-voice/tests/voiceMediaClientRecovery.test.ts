@@ -113,9 +113,11 @@ class FakeTransport implements VoiceMediaTransport {
   }> = [];
   public startsEveryConnection = true;
   public sendFailure: Error | undefined;
+  public connectFailure: Error | undefined;
 
   public async connect(_clientId: string, connectionId: string): Promise<{ version: 6; cursor: number }> {
     this.connectionIds.push(connectionId);
+    if (this.connectFailure !== undefined) throw this.connectFailure;
     return { version: 6, cursor: 0 };
   }
   public nextEvent(
@@ -173,6 +175,23 @@ async function reconnect(transport: FakeTransport): Promise<void> {
 }
 
 describe('voice media client browser recovery', () => {
+  it('reports a competing browser lease instead of appearing connected', async () => {
+    vi.useFakeTimers();
+    const transport = new FakeTransport();
+    transport.connectFailure = new Error('Another client owns voice media for this session.');
+    const states: string[] = [];
+    const client = new VoiceMediaClient('client', 'connection', transport, new FakeDevice(), (state) =>
+      states.push(state),
+    );
+
+    client.start();
+    await eventually(() => expect(states).toContain('conflict'));
+
+    expect(states.slice(0, 2)).toEqual(['connecting', 'conflict']);
+    await client.stop();
+    expect(states.at(-1)).toBe('disconnected');
+  });
+
   it.each(['detector', 'sendAudio'] as const)(
     '%s rejection tears down once and reconnects with a distinct bounded identity',
     async (failureSource) => {

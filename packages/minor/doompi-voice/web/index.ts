@@ -1,10 +1,10 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { VoiceActivitySection } from './VoiceActivitySection.tsx';
 import { VoiceComposerAction } from './VoiceComposerAction.tsx';
-import { startVoiceMediaRuntime, VoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
+import { startVoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
 import { VoiceToolMessage } from './VoiceToolMessage.tsx';
 import { VOICE_TOOL_NAMES } from './voiceToolRender.ts';
-import { voiceMediaWakeChannel } from './voiceMediaWakeStore.ts';
+import { voiceMediaWakeChannel, voiceOwnershipChannel } from './voiceMediaWakeStore.ts';
 
 /**
  * This package's cockpit presence: pure metadata. The selection bar renders
@@ -12,7 +12,7 @@ import { voiceMediaWakeChannel } from './voiceMediaWakeStore.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'voice',
-  channels: [voiceMediaWakeChannel],
+  channels: [voiceMediaWakeChannel, voiceOwnershipChannel],
   start: startVoiceMediaRuntime,
   // `v e` drives autonomous capture, which the runtime registers as
   // 'voice-auto'; 'voice' is the one-shot dictation command on `v v`. The row
@@ -29,7 +29,6 @@ export const webPlugin = defineWebPlugin({
   // raw status line the session publishes for a terminal footer.
   activitySections: [{ id: 'voice', component: VoiceActivitySection }],
   composerActions: [{ id: 'voice', component: VoiceComposerAction }],
-  overlays: [{ id: 'voice-media-runtime', component: VoiceMediaRuntime }],
   // The voice tools' timeline cards, the web half of src/adapters/pi/voiceToolRender.ts.
   toolRenderers: [{ tools: [...VOICE_TOOL_NAMES], message: VoiceToolMessage }],
   // The TUI's SPC v bindings, backed by the browser media runtime here.

@@ -11,6 +11,7 @@ import type { DoomLeaderContributionHandle, LeaderBinding } from '@agimon-ai/doo
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { voiceMediaHostConnection } from '../audio/clientMedia.ts';
 import { VoiceConfigController } from '../../adapters/pi/voiceConfig';
 import { createVoiceContainer, installVoiceRuntime, voiceLeaderBindings } from './voice.ts';
 
@@ -97,7 +98,13 @@ function voicePlugin(cordis: Context, { pi }: VoicePluginConfig): void {
     let activeLeader: DoomLeaderContributionHandle | undefined;
     const leader = { update: (bindings: readonly LeaderBinding[]) => activeLeader?.update(bindings) };
 
-    installVoiceRuntime(cordis, pi, { footer, leader, container, waitUntilConfigured });
+    installVoiceRuntime(cordis, pi, {
+      footer,
+      leader,
+      container,
+      ownershipHost: voiceMediaHostConnection(),
+      waitUntilConfigured,
+    });
 
     const configs = container.configs;
     let contribution: DoomConfigContributionHandle | undefined;

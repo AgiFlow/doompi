@@ -17,3 +17,55 @@ export interface McpToolDetails {
   /** Present only when the downstream result carried something beyond text and images. */
   blocks?: McpResultBlock[];
 }
+
+/** Hub API paths for repository-scoped MCP management. */
+export const MCP_REPOSITORY_API_PATH = '/repository';
+export const MCP_DISCOVERY_API_PATH = '/repository/discover';
+export const MCP_AUTHORIZATION_API_PATH = '/repository/authorize';
+
+export type McpRepositoryServerState =
+  | 'not-connected'
+  | 'connecting'
+  | 'connected'
+  | 'degraded'
+  | 'needs-auth'
+  | 'failed'
+  | 'closed';
+
+export interface McpRepositoryTool {
+  name: string;
+  piName: string;
+  description?: string;
+}
+
+export interface McpRepositoryServer {
+  name: string;
+  state: McpRepositoryServerState;
+  source: 'cached' | 'live' | 'configured';
+  credentialPresent: boolean;
+  tools: McpRepositoryTool[];
+  error?: string;
+}
+
+export interface McpRepositoryCatalog {
+  repositoryId: string;
+  sync: {
+    fresh: boolean;
+    reasons: string[];
+  };
+  servers: McpRepositoryServer[];
+  droppedServers: string[];
+  diagnostics: string[];
+}
+
+export type McpAuthorizationStatus = 'starting' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'expired';
+
+export interface McpAuthorizationFlow {
+  id: string;
+  repositoryId: string;
+  serverName: string;
+  status: McpAuthorizationStatus;
+  authorizationUrl?: string;
+  error?: string;
+  expiresAt: number;
+}

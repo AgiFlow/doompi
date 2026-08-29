@@ -68,6 +68,10 @@ describe('stepUpActionFor', () => {
     ['POST', '/api/sessions', 'session.create'],
     ['POST', '/api/auth/logins/flow-1/answer', 'provider.login'],
     ['DELETE', '/api/auth/providers/anthropic', 'provider.logout'],
+    ['PUT', '/api/settings/repository/selection', 'settings.write'],
+    ['POST', '/api/plugin/mcp/repository/discover', 'mcp.discover'],
+    ['POST', '/api/plugin/mcp/repository/authorize', 'mcp.authorize'],
+    ['DELETE', '/api/plugin/mcp/repository/authorize/flow-1', 'mcp.authorize'],
   ])('gates %s %s', (method, path, action) => {
     expect(stepUpActionFor(method, path)).toBe(action);
   });
@@ -79,6 +83,8 @@ describe('stepUpActionFor', () => {
       ['DELETE', '/api/sessions/abc'],
       ['GET', '/api/auth/providers'],
       ['POST', '/api/auth/logins'],
+      ['GET', '/api/plugin/mcp/repository'],
+      ['GET', '/api/plugin/mcp/repository/authorize/flow-1'],
     ]) {
       expect(stepUpActionFor(method, path), `${method} ${path}`).toBeUndefined();
     }
@@ -88,6 +94,7 @@ describe('stepUpActionFor', () => {
     expect(stepUpActionFor('POST', '/api/sessions/extra')).toBeUndefined();
     expect(stepUpActionFor('DELETE', '/api/auth/providers/a/b')).toBeUndefined();
     expect(stepUpActionFor('POST', '/api/auth/logins/a/b/answer')).toBeUndefined();
+    expect(stepUpActionFor('POST', '/api/plugin/mcp/repository/discover/extra')).toBeUndefined();
   });
 });
 

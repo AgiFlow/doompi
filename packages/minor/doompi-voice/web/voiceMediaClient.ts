@@ -10,6 +10,9 @@ import {
 
 const RECONNECT_DELAY_MS = 2_000;
 const MAX_CONNECTION_ID_LENGTH = 200;
+const MEDIA_CLIENT_CONFLICT = 'Another client owns voice media for this session.';
+
+export type VoiceMediaClientConnectionState = 'connecting' | 'connected' | 'conflict' | 'disconnected';
 
 function playbackFailure(playbackId: string, error: unknown): VoiceMediaPlaybackResult {
   const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -54,9 +57,11 @@ export class VoiceMediaClient {
     private readonly connectionId: string,
     private readonly transport: VoiceMediaTransport,
     private readonly device: VoiceMediaDevice,
+    private readonly onConnectionState: (state: VoiceMediaClientConnectionState) => void = () => undefined,
   ) {}
 
   public start(): void {
+    this.onConnectionState('connecting');
     this.runOperation ??= this.run();
   }
 
@@ -78,6 +83,7 @@ export class VoiceMediaClient {
     if (connectionId !== undefined) await this.transport.disconnect(this.clientId, connectionId).catch(() => undefined);
     this.activeConnectionId = undefined;
     this.resolveListening(false);
+    this.onConnectionState('disconnected');
   }
 
   private async run(): Promise<void> {
@@ -96,6 +102,7 @@ export class VoiceMediaClient {
         await this.device.prepare?.();
         const connected = await this.transport.connect(this.clientId, connectionId, this.device.capabilities);
         this.activeConnectionId = connectionId;
+        this.onConnectionState('connected');
         let cursor = connected.cursor;
         while (!signal.aborted) {
           const event = await Promise.race([
@@ -106,8 +113,9 @@ export class VoiceMediaClient {
           cursor = event.sequence;
           await this.handle(event, connectionId);
         }
-      } catch {
+      } catch (error) {
         if (signal.aborted) return;
+        if (error instanceof Error && error.message === MEDIA_CLIENT_CONFLICT) this.onConnectionState('conflict');
         attemptController.abort();
         await this.releaseMedia();
         if (this.activeConnectionId === connectionId) {

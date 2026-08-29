@@ -167,9 +167,11 @@ export class AutonomousVoiceSession {
     this.started = true;
     this.actor.start();
     this.actor.send({ type: 'ENABLE_REQUESTED', sessionId: this.sessionId });
-    await waitFor(this.actor, (snapshot) => !snapshot.matches('enabling'), { timeout: SESSION_STOP_WAIT_MS });
-    if (this.actor.getSnapshot().matches('failed') || this.actor.getSnapshot().matches('off'))
-      throw new Error('Autonomous voice failed to start.');
+    const snapshot = await waitFor(this.actor, (current) => !current.matches('enabling'), {
+      timeout: SESSION_STOP_WAIT_MS,
+    });
+    if (snapshot.matches('failed') || snapshot.matches('off'))
+      throw new Error(snapshot.context.failure?.code ?? 'Autonomous voice failed to start.');
   }
 
   public toggleOff(): void {

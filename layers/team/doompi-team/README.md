@@ -13,7 +13,7 @@ requests while Task remains the source of truth for task status and dependencies
 
 - Node.js 22.19.0 or newer
 - `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
-  `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` 0.84.3
+  `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-tui` 0.84.4
 
 ## Install
 

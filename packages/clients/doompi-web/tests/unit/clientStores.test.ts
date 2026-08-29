@@ -16,7 +16,14 @@ import {
   setThinkingLevelCommand,
   steerCommand,
 } from '../../src/web/lib/commands.ts';
-import { bindTransport, releaseTransport, sendFrame, sendHubFrame } from '../../src/web/lib/transport.ts';
+import {
+  bindTransport,
+  notifyHubConnected,
+  onHubConnected,
+  releaseTransport,
+  sendFrame,
+  sendHubFrame,
+} from '../../src/web/lib/transport.ts';
 import {
   dropThreads,
   heldThreads,
@@ -217,8 +224,20 @@ describe('transport', () => {
   it('sends hub frames unenveloped', () => {
     sendHubFrame({ type: 'subscribe', sessionId: 's1' });
     expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
+    expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
   });
 
+  it('notifies hub connection subscribers until they unsubscribe', () => {
+    let connections = 0;
+    const unsubscribe = onHubConnected(() => (connections += 1));
+
+    notifyHubConnected();
+    notifyHubConnected();
+    unsubscribe();
+    notifyHubConnected();
+
+    expect(connections).toBe(2);
+  });
   it('drops frames when nothing is bound rather than throwing', () => {
     releaseTransport();
     expect(() => sendFrame('s1', { type: 'prompt' })).not.toThrow();

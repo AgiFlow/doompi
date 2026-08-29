@@ -2,7 +2,11 @@ import {
   SETTINGS_CONFIG_API_ROUTE,
   SETTINGS_MODELS_API_ROUTE,
   SETTINGS_REPOSITORIES_API_ROUTE,
+  SETTINGS_REPOSITORY_API_ROUTE,
+  SETTINGS_REPOSITORY_SELECTION_API_ROUTE,
   SETTINGS_VALUE_API_ROUTE,
+  type RepositorySelectionWriteRequest,
+  type RepositorySettingsView,
   type SettingsConfigView,
   type SettingsModel,
   type SettingsRepository,
@@ -104,6 +108,40 @@ export async function listSettingsRepositories(): Promise<readonly SettingsRepos
   }
 }
 
+export type ReadRepositorySettingsResult =
+  | { ok: true; settings: RepositorySettingsView }
+  | { ok: false; error: string };
+
+export async function readRepositorySettings(repositoryId: string): Promise<ReadRepositorySettingsResult> {
+  const search = new URLSearchParams({ repository: repositoryId });
+  try {
+    const response = await sealedHttpSession.fetch(`${SETTINGS_REPOSITORY_API_ROUTE}?${search.toString()}`);
+    const body = await readBody(response);
+    if (!response.ok) return { ok: false, error: errorOf(body, `The hub answered ${String(response.status)}.`) };
+    if (!isRecord(body)) return { ok: false, error: 'The hub answered with no repository settings.' };
+    return { ok: true, settings: body as unknown as RepositorySettingsView };
+  } catch {
+    return { ok: false, error: UNREACHABLE };
+  }
+}
+
+export async function writeRepositorySelection(
+  request: RepositorySelectionWriteRequest,
+): Promise<ReadRepositorySettingsResult> {
+  try {
+    const response = await fetchWithStepUp(SETTINGS_REPOSITORY_SELECTION_API_ROUTE, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(request),
+    });
+    const body = await readBody(response);
+    if (!response.ok) return { ok: false, error: errorOf(body, `The hub answered ${String(response.status)}.`) };
+    if (!isRecord(body)) return { ok: false, error: 'The hub answered with no repository settings.' };
+    return { ok: true, settings: body as unknown as RepositorySettingsView };
+  } catch {
+    return { ok: false, error: UNREACHABLE };
+  }
+}
 /**
  * The models a picker offers. An empty list is not an error: a machine with no
  * authenticated provider has none, and those fields fall back to free text.

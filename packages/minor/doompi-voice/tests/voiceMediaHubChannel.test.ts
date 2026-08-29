@@ -1,589 +1,341 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import type { HubChannelHost } from '@agimon-ai/doompi-web-contracts';
+import type { HubChannelHost, HubSessionScope } from '@agimon-ai/doompi-web-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVoiceMediaWakeChannel } from '../src/adapters/voiceMediaHubChannel.ts';
 import {
-  createVoiceMediaWakePublisher,
-  parseVoiceMediaWake,
-  voiceMediaWakePath,
-  watchVoiceMediaWake,
-} from '../src/adapters/voiceMediaWakeFile.ts';
-import type { VoiceMediaWake } from '../src/types/clientMedia.ts';
+  createVoiceMediaWakeChannel,
+  createVoiceOwnershipChannel,
+  webHubChannels,
+} from '../src/adapters/voiceMediaHubChannel.ts';
+import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../src/types/clientMedia.ts';
+import {
+  VOICE_OWNERSHIP_FRAME_TYPE,
+  VOICE_OWNERSHIP_PROTOCOL_VERSION,
+  VOICE_OWNERSHIP_ROUTES,
+  type BrowserVoiceOwnershipPayload,
+  type VoiceOwnershipActivationRequest,
+  type VoiceOwnershipCommand,
+  type VoiceOwnershipHandoffRequest,
+  type VoiceOwnershipTarget,
+} from '../src/types/voiceOwnership.ts';
 
-const cleanups: Array<() => void> = [];
+interface SessionState {
+  leaseId: string;
+  label: string;
+  active: boolean;
+  eligible?: boolean;
+  activation?: VoiceOwnershipActivationRequest;
+  handoff?: VoiceOwnershipHandoffRequest;
+  catalog: VoiceOwnershipTarget[];
+}
+
+function scope(sessionId: string): HubSessionScope {
+  return { sessionId, cwd: `/workspace/${sessionId}` };
+}
+
+function ownershipHarness(initial: Record<string, Omit<SessionState, 'catalog'>>) {
+  const states = new Map<string, SessionState>(
+    Object.entries(initial).map(([sessionId, state]) => [sessionId, { ...state, catalog: [] }]),
+  );
+  const actions: string[] = [];
+  const published: Array<{ sessionId: string; payload: unknown }> = [];
+  const notices: string[] = [];
+  const host: HubChannelHost = {
+    sessions: () => [...states.keys()].map(scope),
+    publish: (sessionId, payload) => published.push({ sessionId, payload }),
+    onNotice: (message) => notices.push(message),
+    async requestSessionApi(session, request) {
+      const state = states.get(session.sessionId);
+      if (state === undefined) return new Response(null, { status: 404 });
+      if (request.path === VOICE_OWNERSHIP_ROUTES.state) {
+        return Response.json({
+          registration: {
+            version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+            leaseId: state.leaseId,
+            revision: 1,
+            label: state.label,
+            eligible: state.eligible ?? true,
+            active: state.active,
+          },
+          targets: state.catalog,
+          ...(state.activation === undefined ? {} : { activation: state.activation }),
+          ...(state.handoff === undefined ? {} : { handoff: state.handoff }),
+        });
+      }
+      if (request.path !== VOICE_OWNERSHIP_ROUTES.command || typeof request.body !== 'string')
+        return new Response(null, { status: 404 });
+      const command = JSON.parse(request.body) as VoiceOwnershipCommand;
+      actions.push(`${session.sessionId}:${command.action}`);
+      if (command.action === 'catalog') state.catalog = command.targets ?? [];
+      else state.active = command.action === 'activate';
+      return Response.json({
+        version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+        commandId: command.commandId,
+        action: command.action,
+        ok: true,
+        active: state.active,
+      });
+    },
+  };
+  return { states, actions, published, notices, host };
+}
 
 afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+  vi.restoreAllMocks();
 });
 
-function temporaryDirectory(): string {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-voice-wake-'));
-  cleanups.push(() => fs.rmSync(directory, { recursive: true, force: true }));
-  return directory;
-}
-
-async function waitFor(predicate: () => boolean, description: string): Promise<void> {
-  const deadline = Date.now() + 2_000;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${description}.`);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-}
-
-async function flushMicrotasks(): Promise<void> {
-  for (let index = 0; index < 20; index += 1) await Promise.resolve();
-}
-
-describe('voice media wake snapshots', () => {
-  it('writes private atomic snapshots to an opaque stable session path', () => {
-    const directory = temporaryDirectory();
-    const sessionId = 'secret/session-id';
-    const publisher = createVoiceMediaWakePublisher(sessionId, { directory });
-    publisher.publish({ eventEpoch: 'epoch-a', sequence: 7 });
-
-    const target = voiceMediaWakePath(sessionId, { directory });
-    expect(path.basename(target)).toMatch(/^[a-f0-9]{64}\.json$/u);
-    expect(target).not.toContain('secret');
-    expect(fs.statSync(directory).mode & 0o777).toBe(0o700);
-    expect(fs.statSync(target).mode & 0o777).toBe(0o600);
-    expect(JSON.parse(fs.readFileSync(target, 'utf8'))).toEqual({ eventEpoch: 'epoch-a', sequence: 7 });
-    expect(fs.readdirSync(directory)).toEqual([path.basename(target)]);
-  });
-
-  it('rejects malformed or expanded wake payloads', () => {
-    expect(parseVoiceMediaWake({ eventEpoch: 'epoch', sequence: 0 })).toEqual({ eventEpoch: 'epoch', sequence: 0 });
-    for (const invalid of [
-      null,
-      [],
-      'wake',
-      { eventEpoch: 'epoch', sequence: 0, sessionId: 'secret' },
-      { eventEpoch: '', sequence: 0 },
-      { eventEpoch: 'x'.repeat(201), sequence: 0 },
-      { eventEpoch: 'epoch', sequence: -1 },
-      { eventEpoch: 'epoch', sequence: 1.5 },
-      { eventEpoch: 'epoch', sequence: Number.MAX_SAFE_INTEGER + 1 },
-    ]) {
-      expect(parseVoiceMediaWake(invalid)).toBeUndefined();
-    }
-  });
-
-  it('watches the stable path across broker replacement and stops cleanly', async () => {
-    const directory = temporaryDirectory();
-    const publisher = createVoiceMediaWakePublisher('session-a', { directory });
-    publisher.publish({ eventEpoch: 'epoch-before', sequence: 3 });
-    const received: Array<VoiceMediaWake | undefined> = [];
-    const source = watchVoiceMediaWake('session-a', (wake) => received.push(wake), {
-      directory,
-      debounceMs: 5,
-      pollMs: 20,
-    });
-    cleanups.push(() => source.close());
-
-    await waitFor(() => received.some((wake) => wake?.eventEpoch === 'epoch-before'), 'initial wake');
-    publisher.publish({ eventEpoch: 'epoch-after', sequence: 0 });
-    await waitFor(() => received.some((wake) => wake?.eventEpoch === 'epoch-after'), 'replacement wake');
-    source.close();
-    const count = received.length;
-    publisher.publish({ eventEpoch: 'epoch-final', sequence: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(received).toHaveLength(count);
-  });
-});
-
-describe('voice media wake hub channel', () => {
-  it('publishes and snapshots wake markers while disposing replaced and removed sources', () => {
+describe('voice media hub channels', () => {
+  it('keeps media wake delivery on its existing per-session channel', () => {
     const callbacks = new Map<string, (wake: VoiceMediaWake | undefined) => void>();
-    const closes: Array<ReturnType<typeof vi.fn>> = [];
-    const watch = vi.fn((sessionId: string, onWake: (wake: VoiceMediaWake | undefined) => void) => {
-      callbacks.set(sessionId, onWake);
-      const close = vi.fn();
-      closes.push(close);
+    const close = vi.fn();
+    const watch = vi.fn((sessionId: string, callback: (wake: VoiceMediaWake | undefined) => void) => {
+      callbacks.set(sessionId, callback);
       return { close };
     });
-    const published: Array<{ sessionId: string; payload: unknown }> = [];
+    const publish = vi.fn();
+    const channel = createVoiceMediaWakeChannel(watch);
+    const source = channel.start({
+      sessions: () => [],
+      publish,
+      requestSessionApi: async () => new Response(null, { status: 404 }),
+      onNotice: () => undefined,
+    });
+    const session = scope('session-a');
+
+    source.sessionAdded?.(session);
+    source.sessionAdded?.(session);
+    const wake = { eventEpoch: 'event-a', sequence: 2 };
+    callbacks.get('session-a')?.(wake);
+
+    expect(channel.frameType).toBe(VOICE_MEDIA_WAKE_TYPE);
+    expect(source.payloadFor(session)).toEqual(wake);
+    expect(publish).toHaveBeenCalledWith('session-a', wake);
+    callbacks.get('session-a')?.(undefined);
+    expect(source.payloadFor(session)).toBeUndefined();
+    source.sessionRemoved?.('session-a');
+    expect(close).toHaveBeenCalledTimes(2);
+    source.close();
+  });
+
+  it('exports separate wake and ownership WebSocket channels', () => {
+    expect(webHubChannels.map((channel) => channel.frameType)).toEqual([
+      VOICE_MEDIA_WAKE_TYPE,
+      VOICE_OWNERSHIP_FRAME_TYPE,
+    ]);
+  });
+
+  it('executes a session activation request on the server and only publishes the selected session id', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      target: {
+        leaseId: 'lease-target',
+        label: 'Target',
+        active: false,
+        activation: {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          requestId: 'activate-target',
+        },
+      },
+    });
+    const channel = createVoiceOwnershipChannel({ pollMs: 5 });
+    const source = channel.start(h.host);
+    source.sessionAdded?.(scope('source'));
+    source.sessionAdded?.(scope('target'));
+
+    await vi.waitFor(() => expect(h.states.get('target')?.active).toBe(true));
+
+    const stateActions = h.actions.filter((action) => !action.endsWith(':catalog'));
+    expect(stateActions).toEqual(['source:deactivate', 'target:activate']);
+    expect(h.states.get('source')?.active).toBe(false);
+    expect(h.notices).toEqual([]);
+    const selections = h.published
+      .map((entry) => entry.payload as Partial<BrowserVoiceOwnershipPayload>)
+      .filter((payload) => payload.type === 'browser-media-session');
+    expect(selections.at(-1)).toEqual({
+      type: 'browser-media-session',
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      activeSessionId: 'target',
+    });
+    expect(Object.keys(selections.at(-1)!)).toEqual(['type', 'version', 'activeSessionId']);
+    expect(source.payloadFor(scope('source'))).toEqual(selections.at(-1));
+    source.close();
+  });
+
+  it('performs a direct server-side handoff from the source request', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      target: { leaseId: 'lease-target', label: 'Target', active: false },
+    });
+    const channel = createVoiceOwnershipChannel({ pollMs: 5 });
+    const source = channel.start(h.host);
+    source.sessionAdded?.(scope('source'));
+    source.sessionAdded?.(scope('target'));
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Target', order: 1 }]),
+    );
+    h.actions.length = 0;
+    h.states.get('source')!.handoff = {
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      requestId: 'handoff-target',
+      handle: 'lease-target',
+    };
+
+    await vi.waitFor(() => expect(h.states.get('target')?.active).toBe(true));
+
+    expect(h.actions.filter((action) => !action.endsWith(':catalog'))).toEqual([
+      'source:deactivate',
+      'target:activate',
+    ]);
+    expect(h.states.get('source')?.active).toBe(false);
+    expect(h.notices).toEqual([]);
+    source.close();
+  });
+
+  it('drops a removed active session from the global browser selection', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+    });
+    const channel = createVoiceOwnershipChannel({ pollMs: 5 });
+    const source = channel.start(h.host);
+    source.sessionAdded?.(scope('source'));
+    await vi.waitFor(() =>
+      expect((source.payloadFor(scope('source')) as BrowserVoiceOwnershipPayload).activeSessionId).toBe('source'),
+    );
+
+    source.sessionRemoved?.('source');
+
+    expect((source.payloadFor(scope('source')) as BrowserVoiceOwnershipPayload).activeSessionId).toBeNull();
+    source.close();
+  });
+
+  it('rejects ineligible activation and unknown handoff requests without browser participation', async () => {
+    const h = ownershipHarness({
+      source: {
+        leaseId: 'lease-source',
+        label: 'Source',
+        active: true,
+        handoff: {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          requestId: 'missing-handoff',
+          handle: 'missing-target',
+        },
+      },
+      target: {
+        leaseId: 'lease-target',
+        label: 'Target',
+        active: false,
+        eligible: false,
+        activation: {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          requestId: 'ineligible-activation',
+        },
+      },
+    });
+    const source = createVoiceOwnershipChannel({ pollMs: 5 }).start(h.host);
+    source.sessionAdded?.(scope('source'));
+    source.sessionAdded?.(scope('target'));
+
+    await vi.waitFor(() =>
+      expect(h.notices).toEqual(
+        expect.arrayContaining([
+          'voice handoff requested by source was rejected',
+          'voice activation requested by target was rejected',
+        ]),
+      ),
+    );
+
+    expect(h.actions.every((action) => action.endsWith(':catalog'))).toBe(true);
+    source.close();
+  });
+
+  it('reports invalid state payloads and non-Error polling failures', async () => {
+    let calls = 0;
+    const notices: string[] = [];
     const host: HubChannelHost = {
       sessions: () => [],
-      publish: (sessionId, payload) => published.push({ sessionId, payload }),
-      requestSessionApi: () => Promise.resolve(new Response(null, { status: 501 })),
-      onNotice: () => undefined,
-    };
-    const channel = createVoiceMediaWakeChannel(watch);
-    const source = channel.start(host);
-
-    expect(channel.frameType).toBe('voice_media_wake');
-    source.sessionAdded?.({ sessionId: 'session-a', cwd: '/repo' });
-    callbacks.get('session-a')?.({ eventEpoch: 'epoch-a', sequence: 2 });
-    expect(source.payloadFor({ sessionId: 'session-a', cwd: '/repo' })).toEqual({
-      eventEpoch: 'epoch-a',
-      sequence: 2,
-    });
-    expect(published).toEqual([{ sessionId: 'session-a', payload: { eventEpoch: 'epoch-a', sequence: 2 } }]);
-
-    source.sessionAdded?.({ sessionId: 'session-a', cwd: '/repo' });
-    expect(closes[0]).toHaveBeenCalledOnce();
-    callbacks.get('session-a')?.({ eventEpoch: 'epoch-b', sequence: 0 });
-    callbacks.get('session-a')?.(undefined);
-    expect(source.payloadFor({ sessionId: 'session-a', cwd: '/repo' })).toBeUndefined();
-    callbacks.get('session-a')?.({ eventEpoch: 'epoch-b', sequence: 1 });
-    source.sessionRemoved?.('session-a');
-    expect(closes[1]).toHaveBeenCalledOnce();
-    expect(source.payloadFor({ sessionId: 'session-a', cwd: '/repo' })).toBeUndefined();
-    source.sessionAdded?.({ sessionId: 'session-b', cwd: '/repo' });
-    source.close();
-    expect(closes[2]).toHaveBeenCalledOnce();
-  });
-});
-
-describe('voice ownership hub transport', () => {
-  it('polls strict registrations and drains a source transfer request through guarded commands', async () => {
-    const commands: Array<{
-      sessionId: string;
-      command: {
-        epoch: string;
-        generation: number;
-        revision: number;
-        phase: string;
-        catalog?: { targets: Array<{ handle: string }> };
-      };
-    }> = [];
-    const browserActions: string[] = [];
-    const scopes = new Map([
-      ['source', { sessionId: 'source', cwd: '/source' }],
-      ['target', { sessionId: 'target', cwd: '/target' }],
-    ]);
-    const channel = createVoiceMediaWakeChannel(() => ({ close: () => undefined }));
-    const host: HubChannelHost = {
-      sessions: () => [...scopes.values()],
       publish: () => undefined,
-      publishToConnection: (connectionId, sessionId, payload) => {
-        const command = payload as {
-          type?: string;
-          version: number;
-          generation: number;
-          revision: number;
-          action: string;
-        };
-        if (connectionId !== 'opaque-browser' || command.type !== 'browser-media-command') return false;
-        browserActions.push(`${sessionId}:${command.action}`);
-        queueMicrotask(() =>
-          channel.receive?.(
-            scopes.get(sessionId)!,
-            {
-              ...command,
-              type: 'browser-media-ack',
-              ok: true,
-              ...(command.action === 'ready' ? { listening: true } : {}),
-            },
-            { connectionId },
-          ),
-        );
-        return true;
-      },
-      onNotice: () => undefined,
-      requestSessionApi: async (scope, request) => {
-        if (request.method === 'GET') {
-          return Response.json({
-            registration: {
-              version: 1,
-              leaseId: `lease-${scope.sessionId}`,
-              revision: 1,
-              label: scope.sessionId === 'source' ? 'Source' : 'Target',
-              eligible: true,
-              active: scope.sessionId === 'source',
-              requiresBrowserBind: true,
-            },
-            view: { version: 1, generation: 0, revision: 0, owner: false, transaction: false, targets: [] },
-          });
-        }
-        const command = JSON.parse(String(request.body)) as (typeof commands)[number]['command'];
-        commands.push({ sessionId: scope.sessionId, command });
-        return Response.json({
-          version: 1,
-          epoch: command.epoch,
-          generation: command.generation,
-          revision: command.revision,
-          phase: command.phase,
-          ok: true,
-          ...(command.phase === 'activate' || command.phase === 'resume' ? { listening: true } : {}),
-        });
+      onNotice: (message) => notices.push(message),
+      async requestSessionApi() {
+        calls += 1;
+        if (calls === 1) return new Response(null, { status: 503 });
+        if (calls === 2) return Response.json(null);
+        if (calls === 3) throw new Error('broken socket');
+        throw 'socket unavailable';
       },
     };
-    const source = channel.start(host);
-    source.sessionAdded?.(scopes.get('source')!);
-    source.sessionAdded?.(scopes.get('target')!);
-    channel.receive?.(
-      scopes.get('source')!,
-      { type: 'browser-media-runtime', version: 1 },
-      { connectionId: 'opaque-browser' },
+    const source = createVoiceOwnershipChannel({ pollMs: 2 }).start(host);
+    source.sessionAdded?.(scope('invalid'));
+
+    await vi.waitFor(() => expect(calls).toBeGreaterThanOrEqual(4));
+    expect(notices).toContain('voice ownership poll failed for invalid (broken socket)');
+    expect(notices).toContain('voice ownership poll failed for invalid (socket unavailable)');
+    source.close();
+
+    const defaultSource = createVoiceOwnershipChannel().start({
+      ...host,
+      requestSessionApi: async () => Response.json(null),
+    });
+    defaultSource.close();
+  });
+
+  it('reports both HTTP and non-Error catalog delivery failures', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+    });
+    const originalRequest = h.host.requestSessionApi.bind(h.host);
+    let commands = 0;
+    const host: HubChannelHost = {
+      ...h.host,
+      async requestSessionApi(session, request) {
+        if (request.path !== VOICE_OWNERSHIP_ROUTES.command) return originalRequest(session, request);
+        commands += 1;
+        if (commands === 1) return new Response(null, { status: 503 });
+        throw 'catalog unavailable';
+      },
+    };
+    const source = createVoiceOwnershipChannel({ pollMs: 2 }).start(host);
+    source.sessionAdded?.(scope('source'));
+
+    await vi.waitFor(() =>
+      expect(h.notices.filter((notice) => notice.includes('catalog update failed')).length).toBeGreaterThanOrEqual(2),
     );
-    await waitFor(
-      () => commands.some((entry) => entry.sessionId === 'source' && (entry.command.catalog?.targets.length ?? 0) > 0),
-      'ownership catalog',
-    );
-    const catalog = commands.find(
-      (entry) => entry.sessionId === 'source' && (entry.command.catalog?.targets.length ?? 0) > 0,
-    )?.command.catalog;
-    const handle = catalog?.targets[0]?.handle;
-    if (!handle) throw new Error('target handle unavailable');
-    channel.receive?.(
-      scopes.get('source')!,
-      { version: 1, requestId: 'request-1', handle },
-      { connectionId: 'opaque-browser' },
-    );
-    await waitFor(() => commands.some((entry) => entry.command.phase === 'commit'), 'ownership commit');
-    expect(commands.map((entry) => entry.command.phase)).toEqual(
-      expect.arrayContaining(['prepare', 'quiesce', 'activate', 'commit']),
-    );
-    expect(browserActions).toEqual(['source:detach', 'target:attach', 'target:ready']);
-    source.sessionRemoved?.('target');
+    expect(h.notices.some((notice) => notice.includes('HTTP 503'))).toBe(true);
+    expect(h.notices.some((notice) => notice.includes('catalog unavailable'))).toBe(true);
     source.close();
   });
 
-  it('does not replay an older rejected request after a newer request and target reconnect', async () => {
-    const scopes = new Map([
-      ['source', { sessionId: 'source', cwd: '/source' }],
-      ['target', { sessionId: 'target', cwd: '/target' }],
-    ]);
-    const commands: Array<{
-      sessionId: string;
-      command: {
-        epoch: string;
-        generation: number;
-        revision: number;
-        phase: string;
-        catalog?: { targets: Array<{ handle: string }> };
-      };
-    }> = [];
-    let request: { version: 1; requestId: string; handle: string } | undefined;
-    let sourcePolls = 0;
-    const host: HubChannelHost = {
-      sessions: () => [...scopes.values()],
-      publish: () => undefined,
-      onNotice: () => undefined,
-      requestSessionApi: async (scope, apiRequest) => {
-        if (apiRequest.method === 'GET') {
-          if (scope.sessionId === 'source') sourcePolls += 1;
-          return Response.json({
-            registration: {
-              version: 1,
-              leaseId: `lease-${scope.sessionId}`,
-              revision: 1,
-              label: scope.sessionId,
-              eligible: true,
-              active: scope.sessionId === 'source',
-              requiresBrowserBind: false,
-            },
-            ...(scope.sessionId === 'source' && request !== undefined ? { request } : {}),
-          });
-        }
-        const command = JSON.parse(String(apiRequest.body)) as (typeof commands)[number]['command'];
-        commands.push({ sessionId: scope.sessionId, command });
-        return Response.json({
-          version: 1,
-          epoch: command.epoch,
-          generation: command.generation,
-          revision: command.revision,
-          phase: command.phase,
-          ok: true,
-          ...(command.phase === 'activate' || command.phase === 'resume' ? { listening: true } : {}),
-        });
+  it('rejects activation if its target scope disappears after source deactivation', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      target: {
+        leaseId: 'lease-target',
+        label: 'Target',
+        active: false,
+        activation: {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          requestId: 'removed-target',
+        },
       },
-    };
-    const channel = createVoiceMediaWakeChannel(() => ({ close: () => undefined }));
-    const runtimeSource = channel.start(host);
-    runtimeSource.sessionAdded?.(scopes.get('source')!);
-    runtimeSource.sessionAdded?.(scopes.get('target')!);
-    await waitFor(
-      () => commands.some((entry) => entry.sessionId === 'source' && (entry.command.catalog?.targets.length ?? 0) > 0),
-      'initial ownership catalog',
-    );
-    const handle = commands.find(
-      (entry) => entry.sessionId === 'source' && (entry.command.catalog?.targets.length ?? 0) > 0,
-    )?.command.catalog?.targets[0]?.handle;
-    if (handle === undefined) throw new Error('Expected an ownership target handle.');
-
-    runtimeSource.sessionRemoved?.('target');
-    request = { version: 1, requestId: 'request-once', handle };
-    const rejectedPoll = sourcePolls + 1;
-    runtimeSource.sessionAdded?.(scopes.get('source')!);
-    await waitFor(() => sourcePolls >= rejectedPoll, 'rejected request poll');
-    await flushMicrotasks();
-    expect(commands.some((entry) => entry.command.phase === 'quiesce')).toBe(false);
-
-    request = { version: 1, requestId: 'request-newer', handle };
-    const newerPoll = sourcePolls + 1;
-    runtimeSource.sessionAdded?.(scopes.get('source')!);
-    await waitFor(() => sourcePolls >= newerPoll, 'newer request poll');
-    await flushMicrotasks();
-    expect(commands.some((entry) => entry.command.phase === 'quiesce')).toBe(false);
-
-    request = { version: 1, requestId: 'request-once', handle };
-    runtimeSource.sessionAdded?.(scopes.get('target')!);
-    await flushMicrotasks();
-    const reconnectPoll = sourcePolls + 1;
-    runtimeSource.sessionAdded?.(scopes.get('source')!);
-    await waitFor(() => sourcePolls >= reconnectPoll, 'reconnect request poll');
-    await flushMicrotasks();
-    expect(commands.some((entry) => entry.command.phase === 'quiesce')).toBe(false);
-    runtimeSource.close();
-  });
-
-  it.each(['detach', 'attach', 'ready'] as const)(
-    'times out a missing %s acknowledgement, rolls back, ignores its late acknowledgement, and transfers again',
-    async (droppedAction) => {
-      vi.useFakeTimers();
-      const scopes = new Map([
-        ['source', { sessionId: 'source', cwd: '/source' }],
-        ['target', { sessionId: 'target', cwd: '/target' }],
-      ]);
-      const commands: Array<{
-        sessionId: string;
-        command: {
-          epoch: string;
-          generation: number;
-          revision: number;
-          phase: string;
-          catalog?: { owner: boolean; transaction: boolean; targets: Array<{ handle: string }> };
-        };
-      }> = [];
-      const notices: string[] = [];
-      let dropped:
-        | {
-            sessionId: string;
-            command: { epoch: string; generation: number; revision: number; action: 'detach' | 'attach' | 'ready' };
-          }
-        | undefined;
-      const channel = createVoiceMediaWakeChannel(() => ({ close: () => undefined }), {
-        browserAcknowledgementTimeoutMs: 25,
-      });
-      const host: HubChannelHost = {
-        sessions: () => [...scopes.values()],
-        publish: () => undefined,
-        publishToConnection: (connectionId, sessionId, payload) => {
-          const command = payload as {
-            type?: string;
-            epoch: string;
-            generation: number;
-            revision: number;
-            action: 'detach' | 'attach' | 'ready';
-          };
-          if (connectionId !== 'browser' || command.type !== 'browser-media-command') return false;
-          if (command.action === droppedAction && dropped === undefined) {
-            dropped = { sessionId, command };
-            return true;
-          }
-          queueMicrotask(() =>
-            channel.receive?.(
-              scopes.get(sessionId)!,
-              {
-                ...command,
-                type: 'browser-media-ack',
-                version: 1,
-                ok: true,
-                ...(command.action === 'ready' ? { listening: true } : {}),
-              },
-              { connectionId },
-            ),
-          );
-          return true;
-        },
-        onNotice: (notice) => notices.push(notice),
-        requestSessionApi: async (scope, request) => {
-          if (request.method === 'GET')
-            return Response.json({
-              registration: {
-                version: 1,
-                leaseId: `lease-${scope.sessionId}`,
-                revision: 1,
-                label: scope.sessionId,
-                eligible: true,
-                active: scope.sessionId === 'source',
-                requiresBrowserBind: true,
-              },
-            });
-          const command = JSON.parse(String(request.body)) as (typeof commands)[number]['command'];
-          commands.push({ sessionId: scope.sessionId, command });
-          return Response.json({
-            version: 1,
-            epoch: command.epoch,
-            generation: command.generation,
-            revision: command.revision,
-            phase: command.phase,
-            ok: true,
-            ...(command.phase === 'activate' || command.phase === 'resume' ? { listening: true } : {}),
-          });
-        },
-      };
-      const source = channel.start(host);
-      try {
-        source.sessionAdded?.(scopes.get('source')!);
-        source.sessionAdded?.(scopes.get('target')!);
-        channel.receive?.(
-          scopes.get('source')!,
-          { type: 'browser-media-runtime', version: 1 },
-          { connectionId: 'browser' },
-        );
-        await flushMicrotasks();
-        const initialHandle = commands.find(
-          (entry) => entry.sessionId === 'source' && (entry.command.catalog?.targets.length ?? 0) > 0,
-        )?.command.catalog?.targets[0]?.handle;
-        if (!initialHandle) throw new Error('initial target handle unavailable');
-        channel.receive?.(
-          scopes.get('source')!,
-          { version: 1, requestId: 'request-1', handle: initialHandle },
-          { connectionId: 'browser' },
-        );
-        await vi.advanceTimersByTimeAsync(0);
-        await flushMicrotasks();
-        expect(dropped?.command.action).toBe(droppedAction);
-
-        await vi.advanceTimersByTimeAsync(25);
-        await flushMicrotasks();
-        expect(notices.some((notice) => notice.includes(`${droppedAction} acknowledgement timed out`))).toBe(true);
-        expect(commands.some((entry) => entry.sessionId === 'target' && entry.command.phase === 'abort')).toBe(true);
-        expect(commands.some((entry) => entry.sessionId === 'source' && entry.command.phase === 'resume')).toBe(true);
-        const restored = commands.findLast(
-          (entry) =>
-            entry.sessionId === 'source' &&
-            entry.command.catalog?.owner === true &&
-            entry.command.catalog.transaction === false &&
-            entry.command.catalog.targets.length > 0,
-        );
-        expect(restored).toBeDefined();
-
-        const late = dropped!;
-        channel.receive?.(
-          scopes.get(late.sessionId)!,
-          { ...late.command, type: 'browser-media-ack', version: 1, ok: true },
-          { connectionId: 'browser' },
-        );
-        const phasesAfterLateAcknowledgement = commands.length;
-        await flushMicrotasks();
-        expect(commands).toHaveLength(phasesAfterLateAcknowledgement);
-
-        const restoredHandle = restored!.command.catalog!.targets[0]!.handle;
-        channel.receive?.(
-          scopes.get('source')!,
-          { version: 1, requestId: 'request-2', handle: restoredHandle },
-          { connectionId: 'browser' },
-        );
-        await vi.advanceTimersByTimeAsync(0);
-        await flushMicrotasks();
-        expect(
-          commands.findLast((entry) => entry.sessionId === 'target' && entry.command.catalog?.owner === true)?.command
-            .catalog?.transaction,
-        ).toBe(false);
-      } finally {
-        source.close();
-        vi.useRealTimers();
-      }
-    },
-  );
-
-  it('rejects and removes a pending browser acknowledgement when the channel closes', async () => {
-    vi.useFakeTimers();
-    const scopes = new Map([
-      ['source', { sessionId: 'source', cwd: '/source' }],
-      ['target', { sessionId: 'target', cwd: '/target' }],
-    ]);
-    const commands: Array<{
-      sessionId: string;
-      command: {
-        epoch: string;
-        generation: number;
-        revision: number;
-        phase: string;
-        catalog?: { targets: Array<{ handle: string }> };
-      };
-    }> = [];
-    const notices: string[] = [];
-    const channel = createVoiceMediaWakeChannel(() => ({ close: () => undefined }), {
-      browserAcknowledgementTimeoutMs: 25,
     });
+    const originalRequest = h.host.requestSessionApi.bind(h.host);
+    let removeTarget = (): void => undefined;
     const host: HubChannelHost = {
-      sessions: () => [...scopes.values()],
-      publish: () => undefined,
-      publishToConnection: () => true,
-      onNotice: (notice) => notices.push(notice),
-      requestSessionApi: async (scope, request) => {
-        if (request.method === 'GET')
-          return Response.json({
-            registration: {
-              version: 1,
-              leaseId: `lease-${scope.sessionId}`,
-              revision: 1,
-              label: scope.sessionId,
-              eligible: true,
-              active: scope.sessionId === 'source',
-              requiresBrowserBind: true,
-            },
-          });
-        const command = JSON.parse(String(request.body)) as (typeof commands)[number]['command'];
-        commands.push({ sessionId: scope.sessionId, command });
-        return Response.json({
-          version: 1,
-          epoch: command.epoch,
-          generation: command.generation,
-          revision: command.revision,
-          phase: command.phase,
-          ok: true,
-          ...(command.phase === 'activate' || command.phase === 'resume' ? { listening: true } : {}),
-        });
+      ...h.host,
+      async requestSessionApi(session, request) {
+        const response = await originalRequest(session, request);
+        if (request.path === VOICE_OWNERSHIP_ROUTES.command && typeof request.body === 'string') {
+          const ownershipCommand = JSON.parse(request.body) as VoiceOwnershipCommand;
+          if (session.sessionId === 'source' && ownershipCommand.action === 'deactivate') removeTarget();
+        }
+        return response;
       },
     };
-    const source = channel.start(host);
-    let closed = false;
-    try {
-      source.sessionAdded?.(scopes.get('source')!);
-      source.sessionAdded?.(scopes.get('target')!);
-      channel.receive?.(
-        scopes.get('source')!,
-        { type: 'browser-media-runtime', version: 1 },
-        { connectionId: 'browser' },
-      );
-      await flushMicrotasks();
-      const handle = commands.find(
-        (entry) => entry.sessionId === 'source' && (entry.command.catalog?.targets.length ?? 0) > 0,
-      )?.command.catalog?.targets[0]?.handle;
-      if (!handle) throw new Error('target handle unavailable');
-      channel.receive?.(
-        scopes.get('source')!,
-        { version: 1, requestId: 'request', handle },
-        { connectionId: 'browser' },
-      );
-      await flushMicrotasks();
-      source.close();
-      closed = true;
-      await flushMicrotasks();
+    const runtime = createVoiceOwnershipChannel({ pollMs: 5 }).start(host);
+    removeTarget = () => runtime.sessionRemoved?.('target');
+    runtime.sessionAdded?.(scope('source'));
+    runtime.sessionAdded?.(scope('target'));
 
-      await vi.waitFor(() =>
-        expect(notices.some((notice) => notice.includes('Voice media channel closed'))).toBe(true),
-      );
-      await vi.waitFor(() =>
-        expect(commands.some((entry) => entry.sessionId === 'target' && entry.command.phase === 'abort')).toBe(true),
-      );
-      await vi.waitFor(() =>
-        expect(commands.some((entry) => entry.sessionId === 'source' && entry.command.phase === 'resume')).toBe(true),
-      );
-      expect(vi.getTimerCount()).toBe(0);
-      channel.receive?.(
-        scopes.get('source')!,
-        {
-          type: 'browser-media-ack',
-          version: 1,
-          epoch: 'closed-epoch',
-          generation: 2,
-          revision: 1,
-          action: 'detach',
-          ok: true,
-        },
-        { connectionId: 'browser' },
-      );
-    } finally {
-      if (!closed) source.close();
-      vi.useRealTimers();
-    }
+    await vi.waitFor(() => expect(h.notices).toContain('voice activation requested by target was rejected'));
+    expect(h.states.get('source')?.active).toBe(false);
+    expect(h.states.get('target')?.active).toBe(false);
+    runtime.close();
   });
 });

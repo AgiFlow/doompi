@@ -1,13 +1,20 @@
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
+import { defineGlobalStore, defineSessionStore } from '@agimon-ai/doompi-web-contracts';
 import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../src/types/clientMedia.ts';
-import { parseBrowserVoiceOwnershipPayload, type BrowserVoiceOwnershipPayload } from '../src/types/voiceOwnership.ts';
+import {
+  VOICE_OWNERSHIP_FRAME_TYPE,
+  parseBrowserVoiceOwnershipPayload,
+  type BrowserVoiceOwnershipPayload,
+} from '../src/types/voiceOwnership.ts';
 
 const MAX_EVENT_EPOCH_LENGTH = 200;
 
 export const voiceMediaWakes = defineSessionStore<VoiceMediaWake | undefined>(undefined);
-export const voiceOwnershipCommands = defineSessionStore<
-  Extract<BrowserVoiceOwnershipPayload, { type: 'browser-media-command' }> | undefined
->(undefined);
+export const activeVoiceSession = defineGlobalStore<string | null>(null);
+export interface VoiceMediaBrowserState {
+  sessionId: string;
+  phase: 'connecting' | 'connected' | 'conflict';
+}
+export const voiceMediaBrowserState = defineGlobalStore<VoiceMediaBrowserState | undefined>(undefined);
 
 export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
@@ -27,27 +34,27 @@ export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | nul
 
 export const voiceMediaWakeChannel = {
   channel: VOICE_MEDIA_WAKE_TYPE,
-  parse(
-    input: unknown,
-  ): VoiceMediaWake | Extract<BrowserVoiceOwnershipPayload, { type: 'browser-media-command' }> | null {
-    const wake = parseVoiceMediaWakePayload(input);
-    if (wake !== null) return wake;
-    const ownership = parseBrowserVoiceOwnershipPayload(input);
-    return ownership?.type === 'browser-media-command' ? ownership : null;
-  },
-  apply(
-    sessionId: string,
-    payload: VoiceMediaWake | Extract<BrowserVoiceOwnershipPayload, { type: 'browser-media-command' }>,
-  ) {
-    if ('type' in payload) voiceOwnershipCommands.update(sessionId, () => payload);
-    else
-      voiceMediaWakes.update(sessionId, (current) =>
-        current?.eventEpoch === payload.eventEpoch && payload.sequence <= current.sequence ? current : payload,
-      );
+  parse: parseVoiceMediaWakePayload,
+  apply(sessionId: string, payload: VoiceMediaWake) {
+    voiceMediaWakes.update(sessionId, (current) =>
+      current?.eventEpoch === payload.eventEpoch && payload.sequence <= current.sequence ? current : payload,
+    );
   },
   drop(sessionId: string) {
     voiceMediaWakes.drop(sessionId);
-    voiceOwnershipCommands.drop(sessionId);
+  },
+};
+
+export const voiceOwnershipChannel = {
+  channel: VOICE_OWNERSHIP_FRAME_TYPE,
+  parse(input: unknown): BrowserVoiceOwnershipPayload | null {
+    return parseBrowserVoiceOwnershipPayload(input) ?? null;
+  },
+  apply(_sessionId: string, payload: BrowserVoiceOwnershipPayload) {
+    activeVoiceSession.update((current) => (current === payload.activeSessionId ? current : payload.activeSessionId));
+  },
+  drop(sessionId: string) {
+    activeVoiceSession.update((current) => (current === sessionId ? null : current));
   },
 };
 

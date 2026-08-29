@@ -58,8 +58,8 @@ describe('doompi-grep package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig?.access).toBe('public');
     for (const dependency of piPeers) {
-      expect(manifest.peerDependencies?.[dependency]).toBe('0.84.3');
-      expect(manifest.devDependencies?.[dependency]).toBe('0.84.3');
+      expect(manifest.peerDependencies?.[dependency]).toBe('0.84.4');
+      expect(manifest.devDependencies?.[dependency]).toBe('0.84.4');
     }
     for (const dependency of doomDependencies) expect(manifest.dependencies?.[dependency]).toBe('workspace:*');
   });

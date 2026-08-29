@@ -98,7 +98,7 @@ boilerplate:
 
       Run pnpm fixcode in the generated package before the first lint. Rendered names change line widths, so a template signature that wraps in the source can render as a single line the formatter wants joined.
 
-      Pi packages use version 0.84.3 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
+      Pi packages use version 0.84.4 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
 
       A cockpit (web) presence is not generated here; add it with the scaffold-doom-web-plugin feature, then one scaffold-doom-web-tool-card per Pi tool the package registers. It lives in web/, outside the src vocabulary, and is governed by the web-plugin-* rules.
 features:

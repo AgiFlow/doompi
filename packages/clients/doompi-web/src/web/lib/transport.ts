@@ -3,6 +3,7 @@ import { sessionCommand } from '../../types/hub.ts';
 type Frame = Record<string, unknown>;
 
 let send: ((frame: object) => void) | undefined;
+const hubConnectedListeners = new Set<() => void>();
 
 /**
  * Holds the live socket sender.
@@ -27,4 +28,15 @@ export function sendFrame(sessionId: string, frame: Frame): void {
 /** Sends one hub-level frame (subscribe, unsubscribe) as-is. */
 export function sendHubFrame(frame: object): void {
   send?.(frame);
+}
+
+/** Subscribes to fresh page socket connections. */
+export function onHubConnected(listener: () => void): () => void {
+  hubConnectedListeners.add(listener);
+  return () => hubConnectedListeners.delete(listener);
+}
+
+/** Notifies page socket consumers after the hub establishes a fresh connection. */
+export function notifyHubConnected(): void {
+  for (const listener of hubConnectedListeners) listener();
 }

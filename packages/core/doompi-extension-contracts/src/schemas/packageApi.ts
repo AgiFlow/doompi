@@ -34,6 +34,11 @@ export interface DoomApiContext {
   internalToken?: string;
   /** Shared only with the cockpit hub for privileged cross-session coordination. */
   hubToken?: string;
+  /**
+   * Resolves a hub-issued opaque repository id to an admitted canonical root.
+   * Hub APIs must never accept a browser-supplied filesystem path instead.
+   */
+  resolveRepository?(repositoryId: string): string | undefined;
   onNotice(message: string): void;
 }
 

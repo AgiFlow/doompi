@@ -1,13 +1,16 @@
 import { Link } from '@tanstack/react-router';
-import { settingsSections } from '../../lib/settingsSections.ts';
+import { settingsSections, type SettingsWorkspace } from '../../lib/settingsSections.ts';
 
-export function SettingsMenu({ active }: { active: string | undefined }) {
+export function SettingsMenu({ active, workspace }: { active: string | undefined; workspace: SettingsWorkspace }) {
   return (
     <nav
       data-testid="settings-menu"
       className="flex w-full shrink-0 gap-0.5 overflow-x-auto border-b border-doom-border px-2.5 py-2 [scrollbar-width:none] sm:w-[220px] sm:flex-col sm:overflow-x-visible sm:border-r sm:border-b-0 sm:py-3 [&::-webkit-scrollbar]:hidden"
     >
-      {settingsSections().map((section) => {
+      <span className="hidden px-[11px] pb-1 pt-0.5 text-[9px] font-bold uppercase tracking-wide text-doom-faint sm:block">
+        {workspace}
+      </span>
+      {settingsSections(workspace).map((section) => {
         const current = section.id === active;
         return (
           <Link

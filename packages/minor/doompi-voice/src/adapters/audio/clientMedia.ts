@@ -34,12 +34,19 @@ import {
   type VoiceMediaPlaybackResult,
   VOICE_MEDIA_ROUTES,
 } from '../../types/clientMedia.ts';
+import {
+  VOICE_OWNERSHIP_ROUTES,
+  parseVoiceOwnershipCommand,
+  type VoiceOwnershipCommand,
+  type VoiceOwnershipSessionSnapshot,
+} from '../../types/voiceOwnership.ts';
 import type { ResolvedVoiceConfig, VoiceTtsConfig } from '@agimon-ai/doompi-config';
 
 const JSON_CONTENT_TYPE = 'application/json';
 const CAPTURE_ID_PREFIX = 'client-capture';
 const PLAYBACK_ID_PREFIX = 'client-playback';
 const PLAYBACK_AUDIO_CHUNK_BYTES = 64 * 1024;
+const OWNERSHIP_SYNC_TIMEOUT_MS = 5_000;
 
 export interface ClientNarrationSynthesizer {
   synthesize(request: TtsSpeakRequest, signal: AbortSignal): Promise<Buffer>;
@@ -67,6 +74,20 @@ export interface UnixVoiceMediaHostOptions {
 export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
   public constructor(private readonly options: UnixVoiceMediaHostOptions) {}
 
+  public async syncOwnership(snapshot: VoiceOwnershipSessionSnapshot): Promise<VoiceOwnershipCommand | undefined> {
+    const response = await this.request('POST', VOICE_OWNERSHIP_ROUTES.sync, snapshot, OWNERSHIP_SYNC_TIMEOUT_MS);
+    if (response.status !== 200) throw this.responseError(response);
+    const parsed: unknown = JSON.parse(response.body.toString('utf8'));
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+      throw new Error('Voice media host returned an invalid ownership sync response.');
+    const record = parsed as Record<string, unknown>;
+    if (!Object.keys(record).every((key) => key === 'command'))
+      throw new Error('Voice media host returned an invalid ownership sync response.');
+    if (record.command === undefined) return undefined;
+    const command = parseVoiceOwnershipCommand(record.command);
+    if (command === undefined) throw new Error('Voice media host returned an invalid ownership command.');
+    return command;
+  }
   public async startCapture(captureId: string, configuration: VoiceMediaCaptureConfiguration): Promise<void> {
     await this.expect(this.request('POST', VOICE_MEDIA_ROUTES.hostCaptureStart, { captureId, configuration }), 201);
   }
@@ -158,7 +179,7 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
     await this.expect(this.request('POST', VOICE_MEDIA_ROUTES.hostPlaybackAbort, { playbackId }), 204);
   }
 
-  private request(method: string, route: string, json?: object): Promise<UnixResponse> {
+  private request(method: string, route: string, json?: object, timeoutMs?: number): Promise<UnixResponse> {
     const body = json === undefined ? undefined : Buffer.from(JSON.stringify(json), 'utf8');
     return new Promise((resolve, reject) => {
       const request = http.request(
@@ -182,6 +203,8 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
         },
       );
       request.once('error', reject);
+      if (timeoutMs !== undefined)
+        request.setTimeout(timeoutMs, () => request.destroy(new Error('Voice ownership synchronization timed out.')));
       if (body !== undefined) request.write(body);
       request.end();
     });

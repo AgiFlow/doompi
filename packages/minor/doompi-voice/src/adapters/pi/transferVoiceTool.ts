@@ -7,7 +7,7 @@ const TransferVoiceInputSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['target'],
-  properties: { target: { type: 'string', minLength: 1, maxLength: 128 } },
+  properties: { target: { type: 'integer', minimum: 1, maximum: 10_000 } },
 } as unknown as typeof VoiceToolDescribeInputSchema;
 
 function result(text: string, accepted: boolean): AgentToolResult<{ accepted: boolean }> {
@@ -15,33 +15,34 @@ function result(text: string, accepted: boolean): AgentToolResult<{ accepted: bo
 }
 
 function description(): string {
-  const targets = sessionVoiceOwnership.snapshot().view.targets;
-  const catalog = targets.map((target) => `- ${target.label}: ${target.handle}`).join('\n');
-  return `Transfer autonomous voice ownership to one eligible target. Target handles are opaque and source-bound.\n\nEligible targets:\n${catalog}`;
+  const targets = sessionVoiceOwnership.snapshot().targets;
+  const catalog = targets.map((target) => `${target.order}. ${target.label}`).join('\n');
+  return `Hand autonomous voice to one eligible session by its current number. Session IDs remain private.\n\nEligible sessions:\n${catalog || '(none)'}`;
 }
 
 function definition(): ToolDefinition<typeof TransferVoiceInputSchema, { accepted: boolean }> {
   return {
     name: TRANSFER_VOICE_TOOL_NAME,
-    label: 'Transfer voice',
+    label: 'Hand off voice',
     description: description(),
-    promptSnippet: 'Transfer voice ownership to an eligible session.',
+    promptSnippet: 'Hand autonomous voice to an eligible session.',
     promptGuidelines: [
-      'Use only a target handle currently listed in this tool description. Handles are opaque and may become stale.',
-      'A transfer is transactional. A rejected request performs no partial ownership change.',
+      'Use the numbered target currently listed in this tool description.',
+      'The server turns off this session before it activates the target session.',
     ],
     parameters: TransferVoiceInputSchema,
     executionMode: 'sequential',
     async execute(_toolCallId, params, _signal, _onUpdate, _context: ExtensionContext) {
       const target = (params as unknown as { target?: unknown }).target;
-      if (typeof target !== 'string') return result('Voice transfer rejected: target handle is invalid.', false);
-      const accepted = sessionVoiceOwnership.transfer(target);
-      return accepted === undefined
-        ? result('Voice transfer rejected: ownership or target eligibility changed.', false)
-        : result(
-            'Voice transfer requested. The current agent continues working while voice control moves transactionally.',
-            true,
-          );
+      if (!Number.isSafeInteger(target) || (target as number) < 1)
+        return result('Voice handoff rejected: target session number is invalid.', false);
+      const catalogTarget = sessionVoiceOwnership.snapshot().targets.find((candidate) => candidate.order === target);
+      if (catalogTarget === undefined || sessionVoiceOwnership.handoff(target as number) === undefined)
+        return result('Voice handoff rejected: the target is unavailable or no longer eligible.', false);
+      return result(
+        `Voice handoff to "${catalogTarget.label}" requested. The current agent continues working while the server switches autonomous voice.`,
+        true,
+      );
     },
   };
 }
@@ -92,8 +93,8 @@ export function createTransferVoiceToolLifecycle(
 }
 
 export function reconcileTransferVoiceTool(pi: Pick<ExtensionAPI, 'getActiveTools' | 'setActiveTools'>): void {
-  const view = sessionVoiceOwnership.snapshot().view;
-  const visible = view.owner && !view.transaction && view.targets.length > 0;
+  const snapshot = sessionVoiceOwnership.snapshot();
+  const visible = snapshot.registration?.active === true && snapshot.targets.length > 0;
   const current = pi.getActiveTools();
   const active = current.filter((name) => name !== TRANSFER_VOICE_TOOL_NAME);
   if (visible) active.push(TRANSFER_VOICE_TOOL_NAME);

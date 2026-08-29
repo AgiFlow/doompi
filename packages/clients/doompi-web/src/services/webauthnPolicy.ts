@@ -16,13 +16,19 @@
 /**
  * Actions that need a fresh gesture even from a live session.
  *
- * Chosen as the two escalation paths rather than everything: writing a provider
- * credential redirects the machine's model traffic, and spawning a session
- * picks an arbitrary directory to run an agent in. Putting a biometric check in
- * front of ordinary prompting or tool approval would land it in the hot loop of
- * actually using the agent, where it would be trained away within a day.
+ * These are escalation paths rather than ordinary prompting or tool approval:
+ * credentials redirect machine traffic, sessions run code in a selected directory,
+ * repository writes change future sessions, and live MCP operations may start local
+ * processes or contact remote servers.
  */
-export const STEP_UP_ACTIONS = ['provider.login', 'provider.logout', 'session.create'] as const;
+export const STEP_UP_ACTIONS = [
+  'provider.login',
+  'provider.logout',
+  'session.create',
+  'settings.write',
+  'mcp.discover',
+  'mcp.authorize',
+] as const;
 
 export type StepUpAction = (typeof STEP_UP_ACTIONS)[number];
 
@@ -43,8 +49,11 @@ const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAc
   { method: 'POST', pattern: /^\/api\/sessions$/u, action: 'session.create' },
   { method: 'POST', pattern: /^\/api\/auth\/logins\/[^/]+\/answer$/u, action: 'provider.login' },
   { method: 'DELETE', pattern: /^\/api\/auth\/providers\/[^/]+$/u, action: 'provider.logout' },
+  { method: 'PUT', pattern: /^\/api\/settings\/(?:value|repository\/selection)$/u, action: 'settings.write' },
+  { method: 'POST', pattern: /^\/api\/plugin\/mcp\/repository\/discover$/u, action: 'mcp.discover' },
+  { method: 'POST', pattern: /^\/api\/plugin\/mcp\/repository\/authorize$/u, action: 'mcp.authorize' },
+  { method: 'DELETE', pattern: /^\/api\/plugin\/mcp\/repository\/authorize\/[^/]+$/u, action: 'mcp.authorize' },
 ];
-
 export function stepUpActionFor(method: string, path: string): StepUpAction | undefined {
   const wanted = method.toUpperCase();
   return GATED_ROUTES.find((route) => route.method === wanted && route.pattern.test(path))?.action;

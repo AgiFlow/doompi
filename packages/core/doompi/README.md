@@ -50,7 +50,7 @@ releases.
 
 - Node.js 22.19.0 or newer
 - macOS or Linux on arm64 or x64 for the bundled Runner backend
-- Pi 0.84.3 and Pi TUI 0.84.3 for packages that declare them as peer requirements
+- Pi 0.84.4 and Pi TUI 0.84.4 for packages that declare them as peer requirements
 
 ## Try DoomPi without replacing your Pi setup
 

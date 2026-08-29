@@ -7,10 +7,15 @@ import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx'
 import { ContributedSettings } from '../features/settings/ContributedSettings.tsx';
 import { NotificationSettings } from '../features/settings/NotificationSettings.tsx';
 import { PluginSettings } from '../features/settings/PluginSettings.tsx';
+import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace.tsx';
 import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
 import { RemoteControlSettings } from '../features/settings/RemoteControlSettings.tsx';
 import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
-import { DEFAULT_SETTINGS_SECTION, settingsSection } from '../lib/settingsSections.ts';
+import {
+  DEFAULT_REPOSITORY_SETTINGS_SECTION,
+  DEFAULT_SETTINGS_SECTION,
+  settingsSection,
+} from '../lib/settingsSections.ts';
 import { sessionsStore } from '../stores/sessionsStore.ts';
 
 /**
@@ -24,6 +29,7 @@ export function SettingsPage() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const [railOpen, setRailOpen] = useState(false);
   const current = settingsSection(section);
+  const workspace = current?.workspace ?? 'general';
 
   useEffect(() => {
     if (current) return;
@@ -63,6 +69,29 @@ export function SettingsPage() {
             </Button>
             <span className="truncate text-[13px] font-bold text-doom-hi">settings</span>
           </span>
+          <nav
+            className="flex items-center gap-0.5 rounded-md border border-doom-border bg-doom-panel p-0.5"
+            aria-label="settings workspace"
+          >
+            <Button asChild variant={workspace === 'general' ? 'outline' : 'ghost'} size="xs">
+              <Link
+                to="/settings/$section"
+                params={{ section: DEFAULT_SETTINGS_SECTION }}
+                data-testid="settings-workspace-general"
+              >
+                general
+              </Link>
+            </Button>
+            <Button asChild variant={workspace === 'repository' ? 'outline' : 'ghost'} size="xs">
+              <Link
+                to="/settings/$section"
+                params={{ section: DEFAULT_REPOSITORY_SETTINGS_SECTION }}
+                data-testid="settings-workspace-repository"
+              >
+                repository
+              </Link>
+            </Button>
+          </nav>
           <Button asChild variant="ghost" size="sm">
             {activeId !== null ? (
               <Link to="/session/$sessionId" params={{ sessionId: activeId }} data-testid="settings-close">
@@ -75,17 +104,24 @@ export function SettingsPage() {
             )}
           </Button>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <SettingsMenu active={current?.id} />
-          <section data-testid="settings-content" className="min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-            {current?.id === 'providers' ? <ProviderSettings /> : null}
-            {current?.id === 'appearance' ? <AppearanceSettings /> : null}
-            {current?.id === 'notifications' ? <NotificationSettings /> : null}
-            {current?.id === 'remote' ? <RemoteControlSettings /> : null}
-            {current?.id === 'plugins' ? <PluginSettings /> : null}
-            {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
-          </section>
-        </div>
+        {current?.workspace === 'repository' ? (
+          <RepositoryWorkspace current={current} />
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+            <SettingsMenu active={current?.id} workspace="general" />
+            <section
+              data-testid="settings-content"
+              className="min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5"
+            >
+              {current?.id === 'providers' ? <ProviderSettings /> : null}
+              {current?.id === 'appearance' ? <AppearanceSettings /> : null}
+              {current?.id === 'notifications' ? <NotificationSettings /> : null}
+              {current?.id === 'remote' ? <RemoteControlSettings /> : null}
+              {current?.id === 'plugins' ? <PluginSettings /> : null}
+              {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

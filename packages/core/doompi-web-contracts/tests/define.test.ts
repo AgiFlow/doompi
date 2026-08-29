@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineSessionChannel, defineWebPlugin } from '../src/services/define.ts';
-import type { SessionChannelContribution } from '../src/types/webPlugin.ts';
+import type { SessionChannelContribution, WebPluginRuntime } from '../src/types/webPlugin.ts';
 
 interface DemoPayload {
   items: string[];
@@ -34,5 +34,25 @@ describe('contract identity helpers', () => {
     const plugin = defineWebPlugin({ id: 'demo', channels: [channel] });
     expect(plugin.id).toBe('demo');
     expect(plugin.channels).toHaveLength(1);
+  });
+
+  it('requires a page hub connection subscription on plugin runtimes', () => {
+    const listeners = new Set<() => void>();
+    const runtime: WebPluginRuntime = {
+      sendSessionFrame: () => undefined,
+      sendHubFrame: () => undefined,
+      onHubConnected(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    };
+    let connections = 0;
+    const unsubscribe = runtime.onHubConnected(() => (connections += 1));
+
+    for (const listener of listeners) listener();
+    unsubscribe();
+    for (const listener of listeners) listener();
+
+    expect(connections).toBe(1);
   });
 });

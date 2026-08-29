@@ -26,11 +26,19 @@ import {
   VOICE_MEDIA_SAMPLE_RATE,
 } from '../types/clientMedia.ts';
 import { createVoiceMediaWakePublisher, type VoiceMediaWakePublisher } from './voiceMediaWakeFile.ts';
-import { sessionVoiceOwnership } from '../services/sessionVoiceOwnership.ts';
 import {
+  VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS,
+  VOICE_OWNERSHIP_LEASE_MS,
   VOICE_OWNERSHIP_ROUTES,
+  parseVoiceOwnershipAcknowledgement,
+  parseVoiceOwnershipActivationRequest,
   parseVoiceOwnershipCommand,
-  parseVoiceOwnershipTransferRequest,
+  parseVoiceOwnershipHandoffRequest,
+  parseVoiceOwnershipRegistration,
+  parseVoiceOwnershipTargets,
+  type VoiceOwnershipAcknowledgement,
+  type VoiceOwnershipCommand,
+  type VoiceOwnershipSessionSnapshot,
 } from '../types/voiceOwnership.ts';
 
 const CLIENT_LEASE_MS = 15_000;
@@ -46,6 +54,7 @@ const MAX_IDENTIFIER_LENGTH = 200;
 interface ClientLease {
   id: string;
   connectionId: string;
+  kind: VoiceMediaConnectRequest['clientKind'];
   capture: boolean;
   playback: boolean;
   captureActivity: boolean;
@@ -93,6 +102,7 @@ export interface VoiceMediaApiOptions {
   clientConnectWaitMs?: number;
   eventEpoch?: string;
   wakePublisher?: VoiceMediaWakePublisher;
+  ownershipCommandTimeoutMs?: number;
   onNotice?: (message: string) => void;
 }
 
@@ -157,6 +167,64 @@ function captureActivity(request: Request): VoiceMediaCaptureActivity | undefine
   };
 }
 
+function parseOwnershipSnapshot(value: unknown): VoiceOwnershipSessionSnapshot | undefined {
+  const input = isRecord(value) ? value : undefined;
+  if (
+    input === undefined ||
+    !Object.keys(input).every((key) =>
+      ['registration', 'targets', 'activation', 'handoff', 'acknowledgement'].includes(key),
+    )
+  )
+    return undefined;
+  const registration = parseVoiceOwnershipRegistration(input.registration);
+  const targets = parseVoiceOwnershipTargets(input.targets);
+  const activation = parseVoiceOwnershipActivationRequest(input.activation);
+  const handoff = parseVoiceOwnershipHandoffRequest(input.handoff);
+  const acknowledgement = parseVoiceOwnershipAcknowledgement(input.acknowledgement);
+  if (
+    targets === undefined ||
+    (input.registration !== undefined && registration === undefined) ||
+    (input.activation !== undefined && activation === undefined) ||
+    (input.handoff !== undefined && handoff === undefined) ||
+    (input.acknowledgement !== undefined && acknowledgement === undefined)
+  )
+    return undefined;
+  return {
+    ...(registration === undefined ? {} : { registration }),
+    targets,
+    ...(activation === undefined ? {} : { activation }),
+    ...(handoff === undefined ? {} : { handoff }),
+    ...(acknowledgement === undefined ? {} : { acknowledgement }),
+  };
+}
+
+function emptyOwnershipSnapshot(): VoiceOwnershipSessionSnapshot {
+  return { targets: [] };
+}
+
+function sameOwnershipCommand(
+  command: VoiceOwnershipCommand,
+  acknowledgement: VoiceOwnershipAcknowledgement | undefined,
+): boolean {
+  return acknowledgement?.commandId === command.commandId && acknowledgement.action === command.action;
+}
+
+function sameOwnershipCommands(left: VoiceOwnershipCommand, right: VoiceOwnershipCommand): boolean {
+  return (
+    left.commandId === right.commandId &&
+    left.action === right.action &&
+    JSON.stringify(left.targets) === JSON.stringify(right.targets)
+  );
+}
+
+interface PendingOwnershipCommand {
+  command: VoiceOwnershipCommand;
+  completion: Promise<VoiceOwnershipAcknowledgement>;
+  timeout: ReturnType<typeof setTimeout>;
+  resolve(acknowledgement: VoiceOwnershipAcknowledgement): void;
+  reject(error: Error): void;
+}
+
 class VoiceMediaBroker implements DoomApiHandler {
   private readonly now: () => number;
   private readonly internalToken: string | undefined;
@@ -164,6 +232,7 @@ class VoiceMediaBroker implements DoomApiHandler {
   private readonly clientConnectWaitMs: number;
   private readonly eventEpoch: string;
   private readonly wakePublisher: VoiceMediaWakePublisher | undefined;
+  private readonly ownershipCommandTimeoutMs: number;
   private readonly onNotice: ((message: string) => void) | undefined;
   private readonly events: VoiceMediaClientEvent[] = [];
   private readonly waiters = new Set<() => void>();
@@ -172,6 +241,9 @@ class VoiceMediaBroker implements DoomApiHandler {
   private playback: HostedPlayback | undefined;
   private sequence = 0;
   private wakeFailureReported = false;
+  private ownershipSnapshot = emptyOwnershipSnapshot();
+  private ownershipSyncedAt: number | undefined;
+  private pendingOwnershipCommand: PendingOwnershipCommand | undefined;
   private closed = false;
 
   public constructor(options: VoiceMediaApiOptions) {
@@ -182,6 +254,7 @@ class VoiceMediaBroker implements DoomApiHandler {
     this.eventEpoch = options.eventEpoch ?? randomUUID();
     if (!validId(this.eventEpoch)) throw new Error('Voice media event epoch is invalid.');
     this.wakePublisher = options.wakePublisher;
+    this.ownershipCommandTimeoutMs = options.ownershipCommandTimeoutMs ?? VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS;
     this.onNotice = options.onNotice;
     this.publishWake();
   }
@@ -201,11 +274,10 @@ class VoiceMediaBroker implements DoomApiHandler {
     }
 
     if (request.method === 'GET' && url.pathname === VOICE_OWNERSHIP_ROUTES.state)
-      return Response.json(sessionVoiceOwnership.snapshot());
+      return Response.json(this.currentOwnershipSnapshot());
     if (request.method === 'POST' && url.pathname === VOICE_OWNERSHIP_ROUTES.command)
       return this.ownershipCommand(request);
-    if (request.method === 'POST' && url.pathname === VOICE_OWNERSHIP_ROUTES.request)
-      return this.ownershipTransfer(request);
+    if (request.method === 'POST' && url.pathname === VOICE_OWNERSHIP_ROUTES.sync) return this.ownershipSync(request);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientConnect) return this.connect(request);
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.clientDisconnect)
       return this.disconnect(request);
@@ -245,20 +317,64 @@ class VoiceMediaBroker implements DoomApiHandler {
   private async ownershipCommand(request: Request): Promise<Response> {
     const command = parseVoiceOwnershipCommand(await jsonRecord(request));
     if (command === undefined) return errorResponse('Invalid voice ownership command.', 400);
-    return Response.json(await sessionVoiceOwnership.command(command));
+    const snapshot = this.currentOwnershipSnapshot();
+    if (snapshot.registration === undefined) return errorResponse('Voice runtime is unavailable.', 503);
+    if (sameOwnershipCommand(command, snapshot.acknowledgement)) return Response.json(snapshot.acknowledgement);
+    const existing = this.pendingOwnershipCommand;
+    if (existing !== undefined) {
+      if (!sameOwnershipCommands(existing.command, command))
+        return errorResponse('Another voice ownership command is pending.', 409);
+      return Response.json(await existing.completion);
+    }
+    let resolve!: (acknowledgement: VoiceOwnershipAcknowledgement) => void;
+    let reject!: (error: Error) => void;
+    const completion = new Promise<VoiceOwnershipAcknowledgement>((accept, decline) => {
+      resolve = accept;
+      reject = decline;
+    });
+    const timeout = setTimeout(
+      () => reject(new Error('Voice ownership command timed out.')),
+      this.ownershipCommandTimeoutMs,
+    );
+    const pending: PendingOwnershipCommand = { command, completion, timeout, resolve, reject };
+    this.pendingOwnershipCommand = pending;
+    const aborted = (): void => reject(new Error('Voice ownership command aborted.'));
+    request.signal.addEventListener('abort', aborted, { once: true });
+    try {
+      return Response.json(await completion);
+    } catch (error) {
+      return errorResponse(error instanceof Error ? error.message : 'Voice ownership command failed.', 503);
+    } finally {
+      clearTimeout(timeout);
+      request.signal.removeEventListener('abort', aborted);
+      if (this.pendingOwnershipCommand === pending) this.pendingOwnershipCommand = undefined;
+    }
   }
 
-  private async ownershipTransfer(request: Request): Promise<Response> {
-    const transfer = parseVoiceOwnershipTransferRequest(await jsonRecord(request));
-    if (transfer === undefined) return errorResponse('Invalid voice ownership request.', 400);
-    const accepted = sessionVoiceOwnership.transfer(transfer.handle);
-    return accepted === undefined
-      ? errorResponse('Voice transfer is not currently eligible.', 409)
-      : Response.json(accepted, { status: 202 });
+  private async ownershipSync(request: Request): Promise<Response> {
+    const snapshot = parseOwnershipSnapshot(await jsonRecord(request));
+    if (snapshot === undefined) return errorResponse('Invalid voice ownership session snapshot.', 400);
+    this.ownershipSnapshot = snapshot;
+    this.ownershipSyncedAt = this.now();
+    const pending = this.pendingOwnershipCommand;
+    if (pending !== undefined && sameOwnershipCommand(pending.command, snapshot.acknowledgement)) {
+      this.pendingOwnershipCommand = undefined;
+      pending.resolve(snapshot.acknowledgement!);
+      return Response.json({});
+    }
+    return Response.json(pending === undefined ? {} : { command: pending.command });
+  }
+
+  private currentOwnershipSnapshot(): VoiceOwnershipSessionSnapshot {
+    return this.ownershipSyncedAt !== undefined && this.now() - this.ownershipSyncedAt <= VOICE_OWNERSHIP_LEASE_MS
+      ? this.ownershipSnapshot
+      : emptyOwnershipSnapshot();
   }
 
   public close(): void {
     this.closed = true;
+    this.pendingOwnershipCommand?.reject(new Error('Voice media transport closed.'));
+    this.pendingOwnershipCommand = undefined;
     this.failActiveClientWork('Voice media transport closed.');
     this.wake();
   }
@@ -300,6 +416,7 @@ class VoiceMediaBroker implements DoomApiHandler {
     this.client = {
       id: declaration.clientId,
       connectionId: declaration.connectionId,
+      kind: declaration.clientKind,
       capture: declaration.capabilities.capture,
       playback: declaration.capabilities.playback,
       captureActivity: declaration.capabilities.captureActivity,
@@ -551,7 +668,8 @@ class VoiceMediaBroker implements DoomApiHandler {
       return errorResponse('No playback-capable voice client is connected.', 503);
     if (this.playback !== undefined && this.playback.result === undefined)
       return errorResponse('Voice playback is already active.', 409);
-    const delivery: VoiceMediaPlaybackDelivery = this.client?.controlLocation === 'remote' ? 'streamed' : 'client';
+    const delivery: VoiceMediaPlaybackDelivery =
+      this.client?.kind === 'browser' || this.client?.controlLocation === 'remote' ? 'streamed' : 'client';
     this.playback = { id: body.playbackId, delivery, audioChunks: [], audioBytes: 0, audioSealed: false };
     this.publish({
       type: 'playback-start',
