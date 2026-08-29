@@ -1,3 +1,18 @@
+## 0.0.1-alpha.4 (2026-08-29)
+
+### 🚀 Features
+
+- expand cockpit integrations and voice workflows ([efc3e19](https://github.com/AgiFlow/doompi/commit/efc3e19))
+- improve cockpit workflows and voice handoff ([20db7d1](https://github.com/AgiFlow/doompi/commit/20db7d1))
+
+### 🩹 Fixes
+
+- stabilize runtime configuration flows ([a092b79](https://github.com/AgiFlow/doompi/commit/a092b79))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.3 (2026-08-28)
 
 ### 🚀 Features

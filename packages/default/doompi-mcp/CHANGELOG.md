@@ -1,3 +1,26 @@
+## 0.0.1-alpha.41 (2026-08-29)
+
+### 🚀 Features
+
+- expand cockpit integrations and voice workflows ([efc3e19](https://github.com/AgiFlow/doompi/commit/efc3e19))
+
+### 🩹 Fixes
+
+- stabilize runtime configuration flows ([a092b79](https://github.com/AgiFlow/doompi/commit/a092b79))
+- make settings responsive across viewports ([e72b763](https://github.com/AgiFlow/doompi/commit/e72b763))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.4
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.40 (2026-08-28)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,22 @@
+## 0.0.1-alpha.41 (2026-08-29)
+
+### 🚀 Features
+
+- expand cockpit integrations and voice workflows ([efc3e19](https://github.com/AgiFlow/doompi/commit/efc3e19))
+- improve cockpit workflows and voice handoff ([20db7d1](https://github.com/AgiFlow/doompi/commit/20db7d1))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.4
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.40 (2026-08-28)
 
 ### 🚀 Features
