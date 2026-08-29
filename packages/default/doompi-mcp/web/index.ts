@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { McpRepositorySettingsPanel } from './McpRepositorySettingsPanel.tsx';
 import { McpToolMessage } from './McpToolMessage.tsx';
 import { matchMcpTool } from './mcpToolMatch.ts';
 
@@ -11,6 +12,12 @@ import { matchMcpTool } from './mcpToolMatch.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'mcp',
+  repositorySettingsPanel: {
+    label: 'MCP servers',
+    detail: 'Inspect cached capabilities, discover live servers, and complete OAuth authorization.',
+    order: 100,
+    component: McpRepositorySettingsPanel,
+  },
   toolRenderers: [
     {
       tools: [],

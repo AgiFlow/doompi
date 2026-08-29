@@ -28,13 +28,20 @@ function ProviderRow({
 }) {
   const authenticated = provider.authenticated !== undefined;
   return (
-    <Panel asChild className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:border-doom-blue/30">
+    <Panel
+      asChild
+      className="flex flex-col items-stretch gap-2.5 px-3.5 py-3 transition-colors hover:border-doom-blue/30 min-[560px]:flex-row min-[560px]:items-center"
+    >
       <li data-testid={`provider-${provider.id}`} data-authenticated={authenticated}>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
           <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
         </div>
-        <Badge tone={authenticated ? 'green' : 'neutral'} data-testid={`provider-status-${provider.id}`}>
+        <Badge
+          tone={authenticated ? 'green' : 'neutral'}
+          data-testid={`provider-status-${provider.id}`}
+          className="self-start min-[560px]:self-auto"
+        >
           <Dot tone={authenticated ? 'green' : 'neutral'} />
           {statusText(provider)}
         </Badge>
@@ -189,7 +196,7 @@ export function ProviderSettings() {
       ) : null}
       {providers ? (
         <>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-stretch gap-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-3">
             <Input
               data-testid="provider-filter"
               value={filter}
@@ -197,7 +204,7 @@ export function ProviderSettings() {
               onChange={(event) => setFilter(event.target.value)}
               className="flex-1"
             />
-            <span className="shrink-0 text-[10px] text-doom-faint">
+            <span className="shrink-0 text-right text-[10px] text-doom-faint">
               {authenticatedCount} of {providers.length} signed in
             </span>
           </div>

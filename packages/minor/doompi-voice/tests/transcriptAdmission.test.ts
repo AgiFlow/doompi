@@ -85,6 +85,71 @@ describe('voice transcript admission', () => {
     ).toMatchObject({ action: 'review', reason: 'review' });
   });
 
+  it('routes a conflicting high score to the existing review path instead of accepting classifier-backed text', () => {
+    const result = assessment({
+      evidence: {
+        ...strongEvidence,
+        voicedMs: 0,
+      },
+    });
+
+    expect(result.score).toBeGreaterThanOrEqual(85);
+    expect(result).toMatchObject({ action: 'review', reason: 'review' });
+    expect(result.matchedGuards).toContain('evidence_conflict');
+  });
+
+  it('rejects deterministic MLX no-speech decoding evidence and reviews weaker decoding conflicts', () => {
+    expect(
+      assessment({
+        evidence: {
+          ...strongEvidence,
+          asr: { noSpeechProbability: 0.82, averageLogProbability: -1.4, compressionRatio: 1.1 },
+        },
+      }),
+    ).toMatchObject({ action: 'reject', reason: 'no_speech', matchedGuards: ['asr_no_speech'] });
+
+    expect(
+      assessment({
+        evidence: {
+          ...strongEvidence,
+          asr: { noSpeechProbability: 0.55, averageLogProbability: -1.3, compressionRatio: 3.1 },
+        },
+      }),
+    ).toMatchObject({ action: 'review', reason: 'review' });
+  });
+
+  it('accepts credible ASR plus PCM evidence when a classifier is unavailable', () => {
+    expect(
+      assessment({
+        evidence: {
+          ...strongEvidence,
+          classifierSpeechMs: 0,
+          classifier: 'energy',
+          asr: {
+            noSpeechProbability: 0.08,
+            averageLogProbability: -0.3,
+            compressionRatio: 1.2,
+            speechDurationMs: 700,
+          },
+        },
+      }),
+    ).toMatchObject({ action: 'accept', reason: 'accepted' });
+  });
+  it.each(['stop', 'send it'])(
+    'preserves a real short command with corroborating speech evidence: %s',
+    (transcript) => {
+      expect(
+        assessment({ transcript, evidence: { ...strongEvidence, voicedMs: 160, classifierSpeechMs: 160 } }),
+      ).toMatchObject({
+        action: 'accept',
+        reason: 'accepted',
+      });
+    },
+  );
+
+  it('preserves ordinary speech with corroborating classifier and PCM evidence', () => {
+    expect(assessment()).toMatchObject({ action: 'accept', reason: 'accepted' });
+  });
   it('treats missing signal evidence as no speech', () => {
     expect(
       assessVoiceTranscript({
@@ -130,6 +195,21 @@ describe('voice transcript admission', () => {
     );
   });
 
+  it('passes suspicious conflict evidence through the existing structured adjudicator', async () => {
+    const model: IVoiceTranscriptAdmissionModelClient = {
+      complete: vi.fn(async () =>
+        JSON.stringify({ admit: false, narration: 'drop', summary: null, reason: 'no_speech' }),
+      ),
+    };
+    const adjudicator = new VoiceTranscriptAdjudicator(model, clock);
+    const conflicted = assessment({ evidence: { ...strongEvidence, voicedMs: 0 } });
+
+    await expect(adjudicator.decide({ assessment: conflicted }, new AbortController().signal)).resolves.toEqual({
+      admit: false,
+      reason: 'no_speech',
+    });
+    expect(model.complete).toHaveBeenCalledOnce();
+  });
   it.each([
     'not json',
     'x'.repeat(1_025),

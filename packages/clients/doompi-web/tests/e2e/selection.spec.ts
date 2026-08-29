@@ -322,7 +322,7 @@ test('a mode that cannot run here is offered as unavailable, with the reason', a
         modes: [
           {
             id: 'voice-auto',
-            label: 'Voice',
+            label: 'Autonomous voice',
             description: 'autonomous capture',
             order: 30,
             activation: 'inactive',
@@ -345,6 +345,7 @@ test('a mode that cannot run here is offered as unavailable, with the reason', a
 
   await page.getByTestId('axis-minor').click();
   const row = page.getByTestId('minor-voice');
+  await expect(page.getByTestId('minor-autonomous voice')).toHaveCount(0);
   await expect(row).toHaveAttribute('data-availability', 'unavailable');
   await expect(page.getByTestId('minor-reason-voice')).toHaveText('Autonomous voice requires an interactive session.');
 

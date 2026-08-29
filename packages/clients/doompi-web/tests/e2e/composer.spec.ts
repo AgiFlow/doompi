@@ -175,6 +175,13 @@ test('attaches image payloads and inlines removable text files', async ({ page, 
   await page.getByTestId('composer-input').fill('Review these');
   await page.getByTestId('composer-send').click();
 
+  const sentImage = page.getByTestId('user-attached-image');
+  await expect(sentImage).toBeVisible();
+  await expect(sentImage).toHaveAttribute(
+    'src',
+    `data:image/png;base64,${Buffer.from('image bytes').toString('base64')}`,
+  );
+
   const prompt = await cockpit.session.waitForCommand('prompt');
   expect(prompt.message).toBe('Review these\n\nAttached file "details.md":\n\nexpected behavior');
   expect(prompt.images).toEqual([

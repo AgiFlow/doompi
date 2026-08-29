@@ -7,7 +7,7 @@ Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doomp
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- `@earendil-works/pi-coding-agent` 0.84.3
+- `@earendil-works/pi-coding-agent` 0.84.4
 - One of `docker`, `podman`, `nerdctl`, or `finch` on the host for sandboxed launches
 
 ## Install

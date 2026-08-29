@@ -72,6 +72,42 @@ describe('VoiceWorkerSupervisor', () => {
     await supervisor.stop();
   });
 
+  it('exhausts the restart budget across ready-then-crash cycles', async () => {
+    const workers: FakeWorker[] = [];
+    const exhausted: string[] = [];
+    const supervisor = new VoiceWorkerSupervisor({
+      createWorker: () => {
+        const worker = new FakeWorker();
+        workers.push(worker);
+        return worker as unknown as VoiceWorkerHandle;
+      },
+      onEvent: () => undefined,
+      onExhausted: (reason) => exhausted.push(reason),
+      maxRestarts: 1,
+    });
+
+    supervisor.start();
+    workers[0]!.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: [],
+    });
+    workers[0]!.emit('error', new Error('first crash'));
+    workers[1]!.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: [],
+    });
+    workers[1]!.emit('error', new Error('second crash'));
+
+    expect(workers).toHaveLength(2);
+    expect(workers.every((worker) => worker.terminated)).toBe(true);
+    expect(exhausted).toEqual(['error']);
+    await supervisor.stop();
+  });
+
   it('restarts after a missed heartbeat', async () => {
     vi.useFakeTimers();
     let now = 0;

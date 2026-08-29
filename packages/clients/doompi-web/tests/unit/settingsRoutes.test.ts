@@ -17,6 +17,8 @@ import type { SettingsConfigView, SettingsScope } from '../../src/types/settings
 
 const CONFIG = '/api/settings/config';
 const VALUE = '/api/settings/value';
+const REPOSITORY = '/api/settings/repository';
+const REPOSITORY_SELECTION = '/api/settings/repository/selection';
 const MAIN_MODEL = 'modes.planning.main.model';
 
 const temporaries: string[] = [];
@@ -31,11 +33,11 @@ function workspace(): { home: string; repo: string } {
   return { home, repo };
 }
 
-function app(home: string): Hono {
+function app(home: string, repositoryPath = '/repo-one'): Hono {
   const hono = new Hono();
   registerSettingsRoutes(hono, {
     homeDirectory: home,
-    repositories: () => [{ path: '/repo-one', name: 'repo-one', active: true }],
+    repositories: () => [{ id: 'repo-one', path: repositoryPath, name: 'repo-one', active: true }],
     models: async () => [{ value: 'anthropic/opus', label: 'opus', group: 'Anthropic' }],
   });
   return hono;
@@ -47,6 +49,43 @@ function writeGlobal(home: string, yaml: string): void {
 
 function writeRepository(repo: string, yaml: string): void {
   fs.writeFileSync(path.join(repo, '.doom', 'config.yaml'), yaml);
+}
+
+function writeCatalogs(home: string, repo: string): void {
+  fs.writeFileSync(
+    path.join(home, '.pi', '.doom', 'modes.yaml'),
+    [
+      'defaultMajorMode: copilot',
+      'layers: {}',
+      'majorMode:',
+      '  copilot:',
+      '    description: General-purpose mode.',
+      '    layers: []',
+      '  minimal:',
+      '    description: Minimal mode.',
+      '    layers: []',
+      '',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(home, '.pi', '.doom', 'domains.yaml'),
+    [
+      'defaultDomains: [development]',
+      'plugins: { roots: [], entries: {} }',
+      'domains:',
+      '  development: { description: Build product code., plugins: [] }',
+      '  testing: { description: Verify behavior., plugins: [] }',
+      'aliases:',
+      '  quality: [development, testing]',
+      '',
+    ].join('\n'),
+  );
+  fs.mkdirSync(path.join(repo, 'agents', 'reviewer'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'agents', 'reviewer', 'AGENTS.md'), 'Review carefully.\n');
+  fs.writeFileSync(
+    path.join(repo, '.doom', 'profiles.yaml'),
+    'profiles:\n  entries:\n    reviewer:\n      persona: agents/reviewer\n',
+  );
 }
 
 async function read(hono: Hono, repo: string, key = MAIN_MODEL): Promise<SettingsConfigView> {
@@ -263,13 +302,92 @@ describe('writing configuration', () => {
   });
 });
 
+describe('repository selection control plane', () => {
+  it('reads effective catalogs and catalog defaults through an admitted repository id', async () => {
+    const { home, repo } = workspace();
+    writeCatalogs(home, repo);
+
+    const response = await app(home, repo).request(`${REPOSITORY}?repository=repo-one`);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, any>;
+    expect(body.repository).toMatchObject({ id: 'repo-one', path: repo });
+    expect(body.catalogs.majorModes.map((entry: { name: string }) => entry.name)).toEqual(['copilot', 'minimal']);
+    expect(body.catalogs.domains.map((entry: { name: string }) => entry.name)).toEqual([
+      'development',
+      'quality',
+      'testing',
+    ]);
+    expect(body.catalogs.profiles).toEqual([{ name: 'reviewer' }]);
+    expect(body.selection).toMatchObject({
+      majorMode: { effective: 'copilot', origin: 'default' },
+      domains: { effective: ['development'], origin: 'default' },
+      profile: { origin: 'default' },
+    });
+  });
+
+  it('writes all changed axes atomically and reports the repository overrides', async () => {
+    const { home, repo } = workspace();
+    writeCatalogs(home, repo);
+    const hono = app(home, repo);
+    const before = (await (await hono.request(`${REPOSITORY}?repository=repo-one`)).json()) as { hash: string };
+
+    const response = await hono.request(REPOSITORY_SELECTION, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        repositoryId: 'repo-one',
+        expectedHash: before.hash,
+        changes: { majorMode: 'minimal', domains: ['testing'], profile: 'reviewer' },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, any>;
+    expect(body.selection).toMatchObject({
+      majorMode: { effective: 'minimal', repository: 'minimal', origin: 'repository' },
+      domains: { effective: ['testing'], repository: ['testing'], origin: 'repository' },
+      profile: { effective: 'reviewer', repository: 'reviewer', origin: 'repository' },
+    });
+    const written = fs.readFileSync(path.join(repo, '.doom', 'config.yaml'), 'utf8');
+    expect(written).toContain('majorMode: minimal');
+    expect(written).toContain('- testing');
+    expect(written).toContain('profile: reviewer');
+  });
+
+  it('refuses unknown catalog entries, unadmitted ids, and stale hashes without writing', async () => {
+    const { home, repo } = workspace();
+    writeCatalogs(home, repo);
+    const hono = app(home, repo);
+
+    const unknown = await hono.request(REPOSITORY_SELECTION, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repositoryId: 'repo-one', expectedHash: '', changes: { domains: ['missing'] } }),
+    });
+    expect(unknown.status).toBe(422);
+    expect(fs.existsSync(path.join(repo, '.doom', 'config.yaml'))).toBe(false);
+
+    expect((await hono.request(`${REPOSITORY}?repository=not-admitted`)).status).toBe(404);
+    writeRepository(repo, 'selection:\n  majorMode: copilot\n');
+    const stale = await hono.request(REPOSITORY_SELECTION, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repositoryId: 'repo-one', expectedHash: '', changes: { majorMode: 'minimal' } }),
+    });
+    expect(stale.status).toBe(409);
+    expect(fs.readFileSync(path.join(repo, '.doom', 'config.yaml'), 'utf8')).toContain('majorMode: copilot');
+  });
+});
 describe('what the page needs besides values', () => {
   it('offers the repositories the hub knows about', async () => {
     const { home } = workspace();
 
     const response = await app(home).request('/api/settings/repositories');
 
-    expect(await response.json()).toEqual({ repositories: [{ path: '/repo-one', name: 'repo-one', active: true }] });
+    expect(await response.json()).toEqual({
+      repositories: [{ id: 'repo-one', path: '/repo-one', name: 'repo-one', active: true }],
+    });
   });
 
   it('offers the machine models, so a picker works with no session running', async () => {

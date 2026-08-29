@@ -51,6 +51,31 @@ test('lists the groups whose packages report in, each rendered by its own plugin
   await expect(page.getByTestId('activity-summary-workflows')).toContainText('no runs yet');
 });
 
+test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {
+  await page.setViewportSize({ width: 1280, height: 280 });
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('doom-team-agents'));
+  cockpit.session.emit(status('doom-runner-runners'));
+  cockpit.session.emit(widget('workflow-mcp-progress'));
+  cockpit.session.emit(status('doom-voice', 'listening'));
+
+  const scroll = page.getByTestId('activity-scroll');
+  const pinned = page.getByTestId('activity-pinned');
+  await expect(page.getByTestId('activity-voice')).toBeVisible();
+  await expect(pinned.getByTestId('activity-voice')).toBeVisible();
+  await expect.poll(() => scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  const pinnedTop = await pinned.evaluate((element) => element.getBoundingClientRect().top);
+  await scroll.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(page.getByTestId('activity-voice')).toBeVisible();
+  expect(await pinned.evaluate((element) => element.getBoundingClientRect().top)).toBe(pinnedTop);
+});
+
 test('counts the groups whose session summary is busy', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

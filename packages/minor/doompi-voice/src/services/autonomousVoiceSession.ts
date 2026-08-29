@@ -167,9 +167,11 @@ export class AutonomousVoiceSession {
     this.started = true;
     this.actor.start();
     this.actor.send({ type: 'ENABLE_REQUESTED', sessionId: this.sessionId });
-    await waitFor(this.actor, (snapshot) => !snapshot.matches('enabling'), { timeout: SESSION_STOP_WAIT_MS });
-    if (this.actor.getSnapshot().matches('failed') || this.actor.getSnapshot().matches('off'))
-      throw new Error('Autonomous voice failed to start.');
+    const snapshot = await waitFor(this.actor, (current) => !current.matches('enabling'), {
+      timeout: SESSION_STOP_WAIT_MS,
+    });
+    if (snapshot.matches('failed') || snapshot.matches('off'))
+      throw new Error(snapshot.context.failure?.code ?? 'Autonomous voice failed to start.');
   }
 
   public toggleOff(): void {
@@ -177,6 +179,18 @@ export class AutonomousVoiceSession {
     this.actor.send({ type: 'TOGGLE_OFF_REQUESTED' });
     this.abortTranscriptCorrection();
     this.abortTranscriptAdmission(true);
+  }
+
+  public setMicrophoneMuted(muted: boolean): void {
+    if (!this.started || !this.snapshot.matches('active')) return;
+    if (muted === this.snapshot.matches({ active: { capture: 'muted' } })) return;
+    this.abortTranscriptCorrection();
+    this.abortTranscriptAdmission();
+    this.actor.send({ type: muted ? 'MICROPHONE_MUTE_REQUESTED' : 'MICROPHONE_UNMUTE_REQUESTED' });
+  }
+
+  public get microphoneMuted(): boolean {
+    return this.snapshot.matches({ active: { capture: 'muted' } });
   }
 
   public async shutdown(): Promise<void> {
@@ -625,13 +639,16 @@ export class AutonomousVoiceSession {
     this.transcriptAdmissionAbort?.abort(new Error('Voice transcript admission stopped.'));
     this.transcriptAdmissionAbort = undefined;
     this.pendingTranscriptAdmission = undefined;
-    if (applyGracefulFallback && pending && this.effectIsCurrent(pending.effect))
-      this.applyAdmittedTranscript(
-        { ...pending.effect, narrationOverlapPromoted: false },
-        pending.assessment.residualText,
-      );
+    if (applyGracefulFallback && pending && this.effectIsCurrent(pending.effect)) {
+      const decision = this.fallbackAdmission(pending.assessment);
+      if (decision.admit)
+        this.applyAdmittedTranscript(
+          { ...pending.effect, narrationOverlapPromoted: false },
+          pending.assessment.residualText,
+        );
+      else this.discardTranscript(pending.effect, decision.reason);
+    }
   }
-
   private applyPolicy(effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>): void {
     if (!effect.evidence) {
       this.discardTranscript(effect, 'missing-evidence');
@@ -694,7 +711,17 @@ export class AutonomousVoiceSession {
   }
 
   private fallbackAdmission(assessment: VoiceTranscriptAdmissionAssessment): VoiceTranscriptAdjudicationDecision {
-    const admit = assessment.score >= 85 && assessment.residualText.length > 0 && assessment.narrationSimilarity < 0.75;
+    const matched = new Set(assessment.matchedGuards);
+    const corroborated =
+      [matched.has('classifier_confirmed'), matched.has('voiced_200ms'), matched.has('asr_corroborated')].filter(
+        Boolean,
+      ).length >= 2;
+    const admit =
+      assessment.score >= 85 &&
+      corroborated &&
+      !matched.has('evidence_conflict') &&
+      assessment.residualText.length > 0 &&
+      assessment.narrationSimilarity < 0.75;
     return { admit, reason: admit ? 'user_speech' : 'uncertain' };
   }
 

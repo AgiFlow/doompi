@@ -38,6 +38,7 @@ import type {
   ITranscriberRegistry,
   SelectedTranscriber,
   TimerHandle,
+  TranscriptionAdapterOutput,
 } from '../../types/index.ts';
 import type { VoiceMediaCaptureActivity } from '../../types/clientMedia.ts';
 import {
@@ -124,6 +125,14 @@ function matchesCapture(active: ActiveWorkerCapture, command: { sessionId: strin
 
 function clientActivityOrder(state: VoiceMediaCaptureActivity['state']): number {
   return state === 'listening' ? 0 : state === 'speech' ? 1 : 2;
+}
+function isDeterministicNoSpeech(summary: ReturnType<typeof analyzePcm16>, classifierSpeechMs: number): boolean {
+  if (summary.nonZeroSamples === 0) return true;
+  if (classifierSpeechMs >= 80) return false;
+  const stableAmbient =
+    classifierSpeechMs === 0 && summary.durationMs >= 200 && summary.signalVariationDb < 1.5 && summary.rmsDbfs < -42;
+  const isolatedTransient = summary.voicedMs < 120 && summary.nonZeroRatio < 0.05;
+  return stableAmbient || isolatedTransient;
 }
 
 export interface VoiceWorkerPipelineDependencies {
@@ -767,7 +776,23 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     const manifest = active.spool.snapshotManifest();
     const pcm = active.spool.readCommittedPcm().subarray(manifest.utteranceStartByte ?? 0);
     const summary = analyzePcm16(pcm);
-    const transcribePath = (targetPath: string, signal: AbortSignal): Promise<string> =>
+    const classifierSpeechMs = Math.max(active.clientClassifierSpeechMs, active.hostClassifierSpeechMs);
+    const baseEvidence: VoiceTranscriptSignalEvidence = {
+      durationMs: summary.durationMs,
+      voicedMs: summary.voicedMs,
+      classifierSpeechMs,
+      rmsDbfs: summary.rmsDbfs,
+      peakDbfs: summary.peakDbfs,
+      signalVariationDb: summary.signalVariationDb,
+      nonZeroRatio: summary.nonZeroRatio,
+      gapCount: manifest.gapCount,
+      playbackOverlapMs: active.playbackOverlapMs,
+      classifier: active.clientActivityObserved ? 'client' : active.speechDetector ? 'host' : 'energy',
+    };
+    if (active.command.mode === 'autonomous' && isDeterministicNoSpeech(summary, classifierSpeechMs))
+      return { outcome: { kind: 'empty' }, evidence: baseEvidence };
+
+    const transcribePath = (targetPath: string, signal: AbortSignal): Promise<TranscriptionAdapterOutput> =>
       active.selected.adapter.transcribe({
         audioPath: targetPath,
         workspace: active.spool.directory,
@@ -792,16 +817,8 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     return {
       outcome,
       evidence: {
-        durationMs: summary.durationMs,
-        voicedMs: summary.voicedMs,
-        classifierSpeechMs: Math.max(active.clientClassifierSpeechMs, active.hostClassifierSpeechMs),
-        rmsDbfs: summary.rmsDbfs,
-        peakDbfs: summary.peakDbfs,
-        signalVariationDb: summary.signalVariationDb,
-        nonZeroRatio: summary.nonZeroRatio,
-        gapCount: manifest.gapCount,
-        playbackOverlapMs: active.playbackOverlapMs,
-        classifier: active.clientActivityObserved ? 'client' : active.speechDetector ? 'host' : 'energy',
+        ...baseEvidence,
+        ...(outcome.kind === 'success' && outcome.evidence ? { asr: outcome.evidence } : {}),
       },
     };
   }
@@ -1071,7 +1088,6 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     active.bargeIn?.stop();
     active.transcriptionAbort.abort();
     await active.session.abort();
-    if (!active.finalized) active.spool.remove();
-    else active.spool.close();
+    active.spool.remove();
   }
 }

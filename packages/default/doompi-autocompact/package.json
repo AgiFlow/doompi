@@ -62,14 +62,14 @@
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.3",
+    "@earendil-works/pi-coding-agent": "0.84.4",
     "@types/node": "26.2.0",
     "@vitest/coverage-v8": "4.1.11",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.3"
+    "@earendil-works/pi-coding-agent": "0.84.4"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

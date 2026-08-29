@@ -16,14 +16,24 @@ export interface ResolveHarnessOptionsInput {
   report?: HarnessFailureReporter;
 }
 
+/** Uses the nearest configured repository, or the selected directory for an unconfigured workspace. */
+function resolveConfigurationRoot(cwd: string): string {
+  try {
+    return findRepositoryRoot(cwd);
+  } catch {
+    return path.resolve(cwd);
+  }
+}
+
 /**
- * Settles the repository root and the full option matrix for one run.
+ * Settles the configuration root and the full option matrix for one run.
  *
  * Two passes are required: the first reads --cwd without touching repository
  * configuration, which keeps a run resolvable even when modes.yaml is
  * malformed, and the second applies the defaults that root supplies. An
  * inherited root wins, which is how a nested run stays pinned to the outer
- * repository rather than re-deriving one from its own cwd.
+ * repository rather than re-deriving one from its own cwd. When no configured
+ * repository exists, the selected working directory is the configuration root.
  */
 export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): HarnessOptions {
   const environment = input.environment ?? process.env;
@@ -32,7 +42,7 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
 
   const initial = parseHarnessArgs(args);
   const inheritedRoot = readHarnessState(environment, input.report).root;
-  const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(initial.options.cwd);
+  const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : resolveConfigurationRoot(initial.options.cwd);
   const parsed = parseHarnessArgs(
     args,
     environment,

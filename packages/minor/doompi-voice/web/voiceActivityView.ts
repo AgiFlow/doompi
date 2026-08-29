@@ -16,6 +16,8 @@ const ELAPSED = /\b(\d+:[0-5]\d)\b/u;
 
 export type VoicePhase =
   | 'idle'
+  | 'starting'
+  | 'muted'
   | 'listening'
   | 'hearing'
   | 'processing'
@@ -41,6 +43,8 @@ export interface VoiceActivityView {
   tone: VoiceTone;
   /** True while the microphone is open or work is in flight; the dot pulses on this. */
   active: boolean;
+  /** True while autonomous voice remains enabled but microphone capture is paused. */
+  microphoneMuted: boolean;
   /** `1:07` while a manual recording runs, empty otherwise. */
   elapsed: string;
 }
@@ -52,6 +56,7 @@ const IDLE: VoiceActivityView = {
   detail: 'start autonomous capture from the minor modes, or dictate one message with the voice tool.',
   tone: 'idle',
   active: false,
+  microphoneMuted: false,
   elapsed: '',
 };
 
@@ -85,11 +90,18 @@ const AUTO_PHASES: { match: string; phase: VoicePhase; label: string; detail: st
     tone: 'live',
   },
   {
-    match: 'narrating and listening',
+    match: 'narrating',
     phase: 'narrating',
     label: 'narrating',
-    detail: 'reading the reply aloud, and still listening.',
+    detail: 'reading the reply aloud.',
     tone: 'live',
+  },
+  {
+    match: 'microphone muted',
+    phase: 'muted',
+    label: 'microphone muted',
+    detail: 'narration remains active; unmute to start a fresh capture.',
+    tone: 'idle',
   },
   {
     match: 'confirmation needed',
@@ -112,9 +124,15 @@ const AUTO_PHASES: { match: string; phase: VoicePhase; label: string; detail: st
     detail: 'finishing what it already heard.',
     tone: 'attention',
   },
+  {
+    match: 'starting',
+    phase: 'starting',
+    label: 'starting',
+    detail: 'preparing autonomous microphone capture.',
+    tone: 'live',
+  },
   { match: 'listening', phase: 'listening', label: 'listening', detail: '', tone: 'live' },
 ];
-
 /** The voice panel's state, read from the raw `doom-voice` status the session published. */
 export function voiceActivityView(status: string | undefined): VoiceActivityView {
   const raw = (status ?? '').replace(SPINNER, '').trim();
@@ -122,15 +140,26 @@ export function voiceActivityView(status: string | undefined): VoiceActivityView
 
   if (raw.startsWith(AUTO_PREFIX)) {
     const rest = raw.slice(AUTO_PREFIX.length).trim();
+    const microphoneMuted = rest.includes('microphone muted');
     const found = AUTO_PHASES.find((candidate) => rest.includes(candidate.match));
-    if (!found) return { ...IDLE, mode: 'auto', label: rest || 'listening', detail: '', tone: 'live', active: true };
+    if (!found)
+      return {
+        ...IDLE,
+        mode: 'auto',
+        label: rest || 'listening',
+        detail: '',
+        tone: 'live',
+        active: true,
+        microphoneMuted,
+      };
     return {
       mode: 'auto',
       phase: found.phase,
       label: found.label,
       detail: found.detail,
       tone: found.tone,
-      active: true,
+      active: found.phase !== 'muted',
+      microphoneMuted,
       elapsed: '',
     };
   }
@@ -145,10 +174,20 @@ export function voiceActivityView(status: string | undefined): VoiceActivityView
       detail: recording ? 'the microphone is open; it sends when you stop.' : 'turning what you said into text.',
       tone: recording ? 'attention' : 'live',
       active: true,
+      microphoneMuted: false,
       elapsed: recording ? (ELAPSED.exec(rest)?.[1] ?? '') : '',
     };
   }
 
   // An unfamiliar line is still the session talking, so it is shown as it came.
-  return { mode: 'auto', phase: 'listening', label: raw, detail: '', tone: 'live', active: true, elapsed: '' };
+  return {
+    mode: 'auto',
+    phase: 'listening',
+    label: raw,
+    detail: '',
+    tone: 'live',
+    active: true,
+    microphoneMuted: false,
+    elapsed: '',
+  };
 }

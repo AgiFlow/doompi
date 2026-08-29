@@ -46,6 +46,7 @@ import {
 import {
   type FallbackNarrationModelRequest,
   type IFallbackNarrationModelClient,
+  type IVoiceNarrationCompactor,
   type IVoiceTurnFallbackNarrator,
   VoiceTurnFallbackNarrator,
 } from '../../services/fallbackNarration.ts';
@@ -102,6 +103,15 @@ import { createMinorModeVoiceTool, createVoiceMinorModeCatalog } from './minorMo
 import { isNarrationRuntimeActive, type NarrationToolRuntime, registerNarrationTool } from './narrationTool.ts';
 import { collectVoiceCommandContext } from './voiceCommandContext.ts';
 import { registerVoiceToolFacades } from './voiceTools.ts';
+import { createTransferVoiceToolLifecycle } from './transferVoiceTool.ts';
+import {
+  registerSessionVoiceOwnership,
+  SessionVoiceOwnershipBridge,
+  sessionVoiceOwnership,
+  type VoiceOwnershipSessionHost,
+  voiceOwnershipLabel,
+} from '../../services/sessionVoiceOwnership.ts';
+import { VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS } from '../../types/voiceOwnership.ts';
 
 export {
   MlxWhisperAdapter,
@@ -549,7 +559,10 @@ export function resolveVoiceTranscriptAdjudicator(
   };
   return new VoiceTranscriptAdjudicator(modelClient, clock);
 }
-export function resolveVoiceFallbackNarrator(reference: string, context: ExtensionContext): IVoiceTurnFallbackNarrator {
+export function resolveVoiceFallbackNarrator(
+  reference: string,
+  context: ExtensionContext,
+): IVoiceTurnFallbackNarrator & IVoiceNarrationCompactor {
   const separator = reference.indexOf('/');
   if (separator <= 0 || separator === reference.length - 1)
     throw new Error('Voice fallback narration model must use provider/model-id form');
@@ -708,14 +721,13 @@ export class VoiceSessionController implements IVoiceSessionController {
         ui.notify('No speech detected', INFO_NOTIFICATION);
         return;
       }
-      const transcript = (
-        await selected.adapter.transcribe({
-          audioPath: recording.filePath,
-          workspace,
-          config: selected.config,
-          language: config.language,
-        })
-      ).trim();
+      const transcription = await selected.adapter.transcribe({
+        audioPath: recording.filePath,
+        workspace,
+        config: selected.config,
+        language: config.language,
+      });
+      const transcript = (typeof transcription === 'string' ? transcription : transcription.transcript).trim();
       if (!transcript) {
         await this.telemetry.recordEvent(TRANSCRIPTION_FINISHED_EVENT, {
           engine: selected.adapter.engine,
@@ -869,6 +881,7 @@ export interface VoiceExtensionOptions {
   footer?: VoiceFooterContributionHandle;
   leader?: VoiceLeaderContributionHandle;
   container?: VoiceDependencies;
+  ownershipHost?: VoiceOwnershipSessionHost;
   autoClientFactory?: VoiceWorkerSessionClientFactory;
   identityNonceFactory?: AutonomousTurnNonceFactory;
   waitUntilConfigured?: (context: ExtensionContext, signal?: AbortSignal) => Promise<void>;
@@ -877,6 +890,7 @@ export interface VoiceExtensionOptions {
 export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: VoiceExtensionOptions = {}): void {
   cordis.effect(function* () {
     const container = options.container ?? createVoiceContainer();
+    const ownershipHost = options.ownershipHost;
     const controller = container.sessionController;
     const configs = container.configs;
     const footer = options.footer ?? { update: () => undefined, dispose: () => undefined };
@@ -906,6 +920,9 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       activeContext = undefined;
       narrationToolRuntime = undefined;
     };
+
+    const transferVoiceTool = typeof pi.registerTool === 'function' ? createTransferVoiceToolLifecycle(pi) : undefined;
+    if (transferVoiceTool) yield () => transferVoiceTool.dispose();
 
     const voiceToolFacades =
       typeof pi.registerTool === 'function'
@@ -974,6 +991,40 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       ...(options.autoClientFactory ? { clientFactory: options.autoClientFactory } : {}),
       ...(options.identityNonceFactory ? { identityNonceFactory: options.identityNonceFactory } : {}),
     });
+    const requestAutonomousActivation = async (ui: AutoCaptureUi, context: ExtensionContext): Promise<void> => {
+      if (ownershipHost === undefined) {
+        await autoController.activate(ui);
+        return;
+      }
+      const request = sessionVoiceOwnership.requestActivation();
+      if (request === undefined) throw new Error('Autonomous voice activation is unavailable for this server session.');
+      const bridge = ownershipBridge;
+      if (bridge === undefined) {
+        sessionVoiceOwnership.clearActivationRequest(request.requestId);
+        throw new Error('Autonomous voice ownership is not connected for this server session.');
+      }
+      ui.setIndicator('processing');
+      ui.setStatus('voice auto: starting');
+      mode?.publish(voiceModeState('starting', canRunVoice(context)));
+      try {
+        await bridge.synchronize();
+      } catch (error) {
+        sessionVoiceOwnership.clearActivationRequest(request.requestId);
+        ui.setIndicator(undefined);
+        ui.setStatus(undefined);
+        mode?.publish(voiceModeState('disabled', canRunVoice(context)));
+        throw error;
+      }
+      container.clock.setTimeout(() => {
+        if (sessionVoiceOwnership.snapshot().activation?.requestId !== request.requestId) return;
+        sessionVoiceOwnership.clearActivationRequest(request.requestId);
+        ui.setIndicator(undefined);
+        ui.setStatus(undefined);
+        mode?.publish(voiceModeState('disabled', canRunVoice(context)));
+        ui.notify('Autonomous voice activation timed out while waiting for session ownership.', 'error');
+      }, VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS);
+    };
+
     cordis.provide(DOOM_NARRATION_SERVICE, createVoiceNarrationService(autoController));
     if (typeof pi.registerTool === 'function') {
       registerNarrationTool(pi, () => narrationToolRuntime, options.waitUntilConfigured);
@@ -1019,8 +1070,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
           const ui = createAutoCaptureUi(execution.context, footer);
           lastAutoUi = ui;
           if (actionId === 'activate') {
-            await autoController.activate(ui);
-            return { message: 'Autonomous voice activation requested.' };
+            await requestAutonomousActivation(ui, execution.context);
+            return { message: 'Autonomous voice activation requested through the session hub.' };
           }
           if (actionId === 'manual') {
             lastUi = createVoiceUi(execution.context, footer);
@@ -1056,19 +1107,39 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       },
     });
     pi.registerCommand(AUTO_COMMAND_NAME, {
-      description: 'Toggle autonomous voice capture with primary-agent narration',
-      handler: async (_args, ctx) => {
+      description: 'Toggle autonomous voice capture, or mute and unmute its microphone',
+      handler: async (args, ctx) => {
         if (!active || !ctx.hasUI) return;
         await options.waitUntilConfigured?.(ctx);
         if (!active) return;
         activeContext = ctx;
         lastAutoUi = createAutoCaptureUi(ctx, footer);
-        if (autoController.state === 'disabled') await autoController.activate(lastAutoUi);
+        const microphoneAction = args.trim().toLowerCase();
+        if (microphoneAction === 'mute' || microphoneAction === 'unmute') {
+          if (autoController.state !== 'active') {
+            lastAutoUi.notify('Autonomous voice is not active.', INFO_NOTIFICATION);
+            return;
+          }
+          autoController.setMicrophoneMuted(microphoneAction === 'mute');
+          return;
+        }
+        if (microphoneAction) {
+          lastAutoUi.notify('Usage: /voice-auto [mute|unmute]', INFO_NOTIFICATION);
+          return;
+        }
+        if (autoController.state === 'disabled') await requestAutonomousActivation(lastAutoUi, ctx);
         else await autoController.deactivate(lastAutoUi);
       },
     });
+    let ownershipDispose: (() => void) | undefined;
+    let ownershipBridge: SessionVoiceOwnershipBridge | undefined;
+    yield () => {
+      ownershipBridge?.stop();
+      ownershipDispose?.();
+    };
     pi.on('session_start', async (event, ctx) => {
       if (!active) return;
+      transferVoiceTool?.sessionStarted();
       const ownGeneration = ++sessionGeneration;
       const reason = (event as { reason?: string }).reason;
       if (autoController.state !== 'disabled') {
@@ -1085,6 +1156,10 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       voiceToolSession?.dispose();
       voiceToolSession = undefined;
 
+      ownershipBridge?.stop();
+      ownershipBridge = undefined;
+      ownershipDispose?.();
+      ownershipDispose = undefined;
       const sessionId = (ctx as unknown as VoiceSessionContextLike).sessionManager?.getSessionId();
       let reloadHandoff = false;
       if (sessionId) {
@@ -1107,11 +1182,41 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       // well, would keep reporting otherwise for the life of the session.
       mode?.publish(voiceModeState('disabled', canRunVoice(ctx)));
       if (!ctx.hasUI) return;
+      ownershipDispose = registerSessionVoiceOwnership({
+        label: () => pi.getSessionName() ?? voiceOwnershipLabel(process.env.PI_PROJECT_ROOT ?? process.cwd()),
+        eligible: true,
+        controller: {
+          get state() {
+            return autoController.state;
+          },
+          get activationError() {
+            return autoController.activationError;
+          },
+          activateVoice: () => autoController.activate(lastAutoUi ?? createAutoCaptureUi(ctx, footer)),
+          deactivateVoice: async () => {
+            const ui = lastAutoUi ?? createAutoCaptureUi(ctx, footer);
+            const alreadyDisabled = autoController.state === 'disabled';
+            await autoController.deactivate(ui);
+            if (alreadyDisabled) {
+              ui.setIndicator(undefined);
+              ui.setStatus(undefined);
+              mode?.publish(voiceModeState('disabled', canRunVoice(activeContext)));
+            }
+          },
+        },
+      });
       lastUi = createVoiceUi(ctx, footer);
       lastAutoUi = createAutoCaptureUi(ctx, footer);
       lastUi.setIndicator(undefined);
       lastUi.setStatus(STATUS_KEY, undefined);
-      if (reloadHandoff && lastAutoUi) await autoController.activate(lastAutoUi);
+      if (ownershipHost !== undefined) {
+        ownershipBridge = new SessionVoiceOwnershipBridge(sessionVoiceOwnership, ownershipHost, container.clock);
+        ownershipBridge.start();
+      }
+      if (reloadHandoff && lastAutoUi) {
+        if (ownershipHost === undefined) await autoController.activate(lastAutoUi);
+        else await requestAutonomousActivation(lastAutoUi, ctx);
+      }
     });
     pi.on('before_agent_start', (_event, ctx) => {
       if (!active) return;
@@ -1141,6 +1246,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       voiceToolSession?.setActive(false);
       voiceToolSession?.dispose();
       voiceToolSession = undefined;
+      ownershipDispose?.();
+      ownershipDispose = undefined;
       activeContext = undefined;
       const autoUi = lastAutoUi;
       lastUi = undefined;

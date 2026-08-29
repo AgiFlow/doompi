@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { teamRunsDirFor } from '../../src/adapters/webSubagentWatcher.ts';
-import { journalPathOf, parseSubagentRun, presentRuns, RUN_ID_PATTERN } from '../../src/services/webSubagentRuns.ts';
+import {
+  activeRunIdsFromRegistry,
+  journalPathOf,
+  parseSubagentRun,
+  presentRuns,
+  reconcileRunLifecycles,
+  RUN_ID_PATTERN,
+} from '../../src/services/webSubagentRuns.ts';
 import type { SubagentRun } from '../../src/types/webSubagents.ts';
 
 describe('subagentRuns', () => {
@@ -53,6 +60,7 @@ describe('subagentRuns', () => {
     expect(parseSubagentRun(JSON.stringify({ ...base, state: 'running' }))?.state).toBe('running');
     expect(parseSubagentRun(JSON.stringify({ ...base, state: 'complete' }))?.state).toBe('done');
     expect(parseSubagentRun(JSON.stringify({ ...base, state: 'paused' }))?.state).toBe('stopped');
+    expect(parseSubagentRun(JSON.stringify({ ...base, state: 'cancelled' }))?.state).toBe('stopped');
     expect(parseSubagentRun(JSON.stringify({ ...base, state: 'sideways' }))).toBeUndefined();
 
     const withOutput = parseSubagentRun(
@@ -97,6 +105,67 @@ describe('subagentRuns', () => {
       now,
     );
     expect(presented.map((entry) => entry.runId)).toEqual(['young-run', 'older-run', 'fresh-done']);
+  });
+
+  it('reconciles stale and orphaned snapshots from the live process registry without an age cutoff', () => {
+    const base: SubagentRun = {
+      runId: 'stale',
+      agent: 'a',
+      state: 'running',
+      rawState: 'running',
+      task: '',
+      cwd: '/w',
+      startedAt: 1,
+      lastUpdate: 2,
+      tail: [],
+    };
+    const registry = JSON.stringify({
+      version: 1,
+      runs: [
+        { runId: 'live-long-run', pid: 101 },
+        { runId: 'orphan', pid: 202 },
+        { runId: 'restored', pid: 303 },
+      ],
+    });
+    const active = activeRunIdsFromRegistry(registry, (pid) => pid !== 202);
+    const reconciled = reconcileRunLifecycles(
+      [
+        base,
+        { ...base, runId: 'live-long-run', startedAt: -1_000_000_000 },
+        { ...base, runId: 'orphan' },
+        { ...base, runId: 'restored' },
+        { ...base, runId: 'finished', state: 'done' },
+      ],
+      active,
+    );
+
+    expect(reconciled.map(({ runId, state }) => [runId, state])).toEqual([
+      ['stale', 'stopped'],
+      ['live-long-run', 'running'],
+      ['orphan', 'stopped'],
+      ['restored', 'running'],
+      ['finished', 'done'],
+    ]);
+    expect(reconciled[0]?.endedAt).toBe(2);
+  });
+
+  it('fails open when the lifecycle registry is malformed or unavailable', () => {
+    const running: SubagentRun = {
+      runId: 'live',
+      agent: 'a',
+      state: 'running',
+      rawState: 'running',
+      task: '',
+      cwd: '/w',
+      startedAt: 1,
+      lastUpdate: 2,
+      tail: [],
+    };
+    expect(activeRunIdsFromRegistry('{', () => false)).toBeUndefined();
+    expect(
+      activeRunIdsFromRegistry(JSON.stringify({ version: 1, runs: [{ runId: 'live' }] }), () => false),
+    ).toBeUndefined();
+    expect(reconcileRunLifecycles([running], undefined)).toEqual([running]);
   });
 
   it('names the run journal only when the status carries an absolute .jsonl path', () => {

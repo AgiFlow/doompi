@@ -23,6 +23,7 @@ function fakeHost(): FakeHost {
     notices,
     sessions: () => [{ sessionId: 's1', cwd: '/w' }],
     publish: (sessionId, payload) => published.push({ sessionId, payload: payload as SubagentCatalogPayload }),
+    requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
     onNotice: (message) => notices.push(message),
   };
 }

@@ -3,7 +3,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
-import { sessionRecordPath } from '../services/registryStore.ts';
+import {
+  isRecordFileName,
+  parseSessionRecord,
+  sessionRecordPath,
+  sessionRecordsDir,
+} from '../services/registryStore.ts';
 import { type BundledServerLaunch, defaultServerLaunch } from './bundledServer.ts';
 
 /** Names the server in messages; the resolved command is a node path nobody would recognise. */
@@ -63,6 +68,36 @@ function logTail(logPath: string): string {
   } catch {
     return '';
   }
+}
+
+function registeredSessionNames(registryDir: string): Set<string> {
+  const names = new Set<string>();
+  const recordsDir = sessionRecordsDir(registryDir);
+  let files: string[];
+  try {
+    files = fs.readdirSync(recordsDir);
+  } catch {
+    return names;
+  }
+  for (const file of files) {
+    if (!isRecordFileName(file)) continue;
+    try {
+      const record = parseSessionRecord(fs.readFileSync(path.join(recordsDir, file), 'utf8'));
+      if (record) names.add(record.name);
+    } catch {
+      // A disappearing or unreadable record is not a live name to reserve.
+    }
+  }
+  return names;
+}
+
+function automaticSessionName(cwd: string, registryDir: string): string {
+  const base = path.basename(path.resolve(cwd)) || 'root';
+  const names = registeredSessionNames(registryDir);
+  if (!names.has(base)) return base;
+  let suffix = 2;
+  while (names.has(`${base} ${suffix}`)) suffix += 1;
+  return `${base} ${suffix}`;
 }
 
 /**
@@ -138,6 +173,7 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
       fs.mkdirSync(sessionDir, { recursive: true, mode: OWNER_ONLY_DIR });
       fs.writeFileSync(tokenFile, crypto.randomBytes(TOKEN_BYTES).toString('hex'), { mode: OWNER_ONLY_FILE });
 
+      const sessionName = input.name ?? automaticSessionName(input.cwd, options.registryDir);
       const log = fs.openSync(logPath, 'a', OWNER_ONLY_FILE);
       const args = [
         '--listen',
@@ -147,7 +183,7 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
         '--session-id',
         sessionId,
         '--name',
-        input.name ?? 'untitled',
+        sessionName,
         '--registry-dir',
         options.registryDir,
       ];

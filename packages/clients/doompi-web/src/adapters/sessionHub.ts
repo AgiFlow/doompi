@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ChannelFrame, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type {
+  ChannelFrame,
+  HubChannelSource,
+  HubSessionApiRequest,
+  HubSessionScope,
+  WebHubChannel,
+} from '@agimon-ai/doompi-web-contracts';
 import type { DoomTelemetry, DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { createFrameRing, type FrameRing } from '../services/frameRing.ts';
 import {
@@ -27,6 +33,7 @@ import type { BridgeState, SessionFrame } from '../types/session.ts';
 import type { RecordSource } from './registryWatcher.ts';
 import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSpawner.ts';
 import { attachToSession } from './sessionSocketClient.ts';
+import { proxyToSocket } from './packageApiProxy.ts';
 
 const GIT_REFRESH_MS = 10_000;
 const GET_ENTRIES_COMMAND = 'get_entries';
@@ -56,7 +63,7 @@ export type HubEvent =
   | { kind: 'upsert'; session: SessionSummary }
   | { kind: 'removed'; sessionId: string }
   | { kind: 'frame'; sessionId: string; frame: SessionFrame }
-  | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown };
+  | { kind: 'channel'; frameType: string; sessionId: string; payload: unknown; connectionId?: string };
 
 export interface SessionHubOptions {
   source: RecordSource;
@@ -101,6 +108,12 @@ export interface SessionHub {
   channelFrames(sessionId: string): ChannelFrame[];
   /** The journal behind one thread of a session, from the first data channel that names it; undefined until one does. */
   threadJournal(sessionId: string, threadId: string): string | undefined;
+  /** Whether a channel accepts authenticated acknowledgements after subscription changes. */
+  channelReceivesWithoutSubscription(frameType: string): boolean;
+  /** Routes a page payload to exactly one loaded channel for a live session. */
+  receiveChannel(sessionId: string, frameType: string, payload: unknown, connectionId: string): void;
+  /** Withdraws connection-scoped channel state when a page socket closes. */
+  disconnectChannels(connectionId: string): void;
   command(sessionId: string, frame: SessionFrame): void;
   create(input: SpawnSessionInput): Promise<SpawnOutcome>;
   /**
@@ -148,6 +161,7 @@ interface ManagedSession {
 }
 
 interface StartedChannel {
+  channel: WebHubChannel;
   frameType: string;
   source: HubChannelSource;
 }
@@ -243,6 +257,13 @@ function scopeOf(record: SessionRecord): HubSessionScope {
   return { sessionId: record.id, cwd: record.cwd };
 }
 
+function sessionApiPath(request: HubSessionApiRequest): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(request.basePath)) throw new Error('Invalid session API base path.');
+  if (!request.path.startsWith('/') || request.path.startsWith('//') || request.path.includes('#'))
+    throw new Error('Invalid session API path.');
+  return `/api/plugin/${request.basePath}${request.path}`;
+}
+
 /**
  * Holds the hub's live view of every registered session.
  *
@@ -307,12 +328,33 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   };
 
   const startedChannels: StartedChannel[] = (options.channels ?? []).map((channel) => ({
+    channel,
     frameType: channel.frameType,
     source: channel.start({
       sessions: () => [...sessions.values()].map((managed) => scopeOf(managed.record)),
       publish: (sessionId, payload) => {
         if (closed) return;
         emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload });
+      },
+      publishToConnection: (connectionId, sessionId, payload) => {
+        if (closed || connectionId === '') return false;
+        emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload, connectionId });
+        return true;
+      },
+      requestSessionApi: async (scope, request) => {
+        const managed = sessions.get(scope.sessionId);
+        if (managed === undefined || managed.record.cwd !== scope.cwd || managed.record.apiSocketPath === undefined)
+          return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
+        const token = readTokenFile(managed.record);
+        const headers = new Headers({ authorization: `Bearer ${token}` });
+        return await proxyToSocket({
+          socketPath: managed.record.apiSocketPath,
+          path: sessionApiPath(request),
+          method: request.method,
+          headers,
+          body: request.body ?? null,
+          ...(request.signal === undefined ? {} : { signal: request.signal }),
+        });
       },
       onNotice: (message) => options.onNotice?.(message),
     }),
@@ -594,6 +636,21 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       }
       return undefined;
     },
+    channelReceivesWithoutSubscription(frameType) {
+      return startedChannels.some(
+        (candidate) => candidate.frameType === frameType && candidate.channel.receiveWithoutSubscription === true,
+      );
+    },
+    receiveChannel(sessionId, frameType, payload, connectionId) {
+      const managed = sessions.get(sessionId);
+      if (managed === undefined || connectionId === '') return;
+      const started = startedChannels.find((candidate) => candidate.frameType === frameType);
+      started?.channel.receive?.(scopeOf(managed.record), payload, { connectionId });
+    },
+    disconnectChannels(connectionId) {
+      if (connectionId === '') return;
+      for (const started of startedChannels) started.channel.disconnected?.({ connectionId });
+    },
     command(sessionId, frame) {
       const managed = sessions.get(sessionId);
       if (!managed) return;
@@ -635,8 +692,10 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const managed = sessions.get(sessionId);
       if (!managed) return { ok: false, code: 'invalid_request', error: 'Unknown session.' };
       // Read before the stop: once the record is withdrawn there is nothing
-      // left to say where the replacement should go.
-      const { cwd, name, socketPath } = managed.record;
+      // left to say where the replacement should go. The live session name wins
+      // because the registry record still carries the name used at startup.
+      const { cwd, socketPath } = managed.record;
+      const name = managed.presence.sessionName ?? managed.record.name;
       const stopped = stopSession(sessionId);
       if (!stopped.ok) return { ok: false, code: 'invalid_request', error: stopped.error };
       if (!(await awaitWithdrawal(sessionId))) {

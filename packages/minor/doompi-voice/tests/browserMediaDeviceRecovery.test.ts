@@ -272,6 +272,26 @@ describe('browser media device recovery guards', () => {
     expect(track.stop).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps one page-lifetime microphone stream across rebindable captures', async () => {
+    const track = { stop: vi.fn() };
+    const stream = { getTracks: () => [track] };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('AudioWorkletNode', undefined);
+    const device = new BrowserVoiceMediaDevice(true);
+
+    const first = await device.startCapture(() => undefined);
+    await first.stop();
+    expect(track.stop).not.toHaveBeenCalled();
+    const second = await device.startCapture(() => undefined);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    await second.stop();
+    expect(track.stop).not.toHaveBeenCalled();
+
+    await device.close();
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
   it('rejects capture when microphone APIs are unavailable', async () => {
     vi.stubGlobal('navigator', {});
     const device = new BrowserVoiceMediaDevice();

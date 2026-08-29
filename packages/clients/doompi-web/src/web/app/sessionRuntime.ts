@@ -19,7 +19,7 @@ import {
 } from '../../types/remoteAccess.ts';
 import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
 import { startProtocolRuntime } from './protocolRuntime.ts';
-import { bindTransport, releaseTransport, sendHubFrame } from '../lib/transport.ts';
+import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
@@ -116,6 +116,7 @@ export function startSessionRuntime(): () => void {
           // the old one.
           syncSubscription(true);
           resubscribeThreads();
+          notifyHubConnected();
           return;
         case SESSION_UPSERT_TYPE:
           applySessionUpsert(frame);

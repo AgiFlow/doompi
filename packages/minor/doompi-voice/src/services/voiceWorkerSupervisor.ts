@@ -44,6 +44,7 @@ export class VoiceWorkerSupervisor {
   public start(): void {
     if (this.worker) return;
     this.stopping = false;
+    this.restarts = 0;
     this.spawn();
     const checkMs = this.options.heartbeatCheckMs ?? DEFAULT_HEARTBEAT_CHECK_MS;
     this.heartbeatTimer = setInterval(() => this.checkHeartbeat(), checkMs);
@@ -113,10 +114,7 @@ export class VoiceWorkerSupervisor {
         return;
       }
       lastEventSequence = event.sequence;
-      if (event.kind === 'heartbeat' || event.kind === 'ready') {
-        this.lastHeartbeatAt = this.now();
-        if (event.kind === 'ready') this.restarts = 0;
-      }
+      if (event.kind === 'heartbeat' || event.kind === 'ready') this.lastHeartbeatAt = this.now();
       this.options.onEvent(event);
     });
     worker.on('error', () => this.restart('error', generation));
@@ -140,6 +138,10 @@ export class VoiceWorkerSupervisor {
 
     const maxRestarts = this.options.maxRestarts ?? DEFAULT_MAX_RESTARTS;
     if (this.restarts >= maxRestarts) {
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = undefined;
+      }
       this.options.onExhausted?.(reason);
       return;
     }

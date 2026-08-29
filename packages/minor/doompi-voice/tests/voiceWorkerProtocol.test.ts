@@ -27,6 +27,25 @@ describe('voice worker protocol', () => {
         revision: 2,
         transcript: 'one, two, three',
         final: true,
+        evidence: {
+          durationMs: 800,
+          voicedMs: 500,
+          classifierSpeechMs: 400,
+          rmsDbfs: -35,
+          peakDbfs: -20,
+          signalVariationDb: 8,
+          nonZeroRatio: 0.7,
+          gapCount: 0,
+          playbackOverlapMs: 0,
+          classifier: 'host',
+          asr: {
+            noSpeechProbability: 0.1,
+            averageLogProbability: -0.3,
+            compressionRatio: 1.2,
+            segmentDurationMs: 800,
+            speechDurationMs: 720,
+          },
+        },
       }),
     ).toMatchObject({ kind: 'transcript-candidate', revision: 2, transcript: 'one, two, three' });
   });

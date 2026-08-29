@@ -631,7 +631,7 @@ describe('voice client media session API', () => {
     api.close();
   });
 
-  it('delivers narration to the client and returns physical playback settlement', async () => {
+  it('requests streamed backend narration for local browser playback', async () => {
     const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
     await connect(api);
 
@@ -643,12 +643,12 @@ describe('voice client media session API', () => {
       ),
     );
     expect(startedResponse.status).toBe(201);
-    expect(await startedResponse.json()).toEqual({ delivery: 'client' });
+    expect(await startedResponse.json()).toEqual({ delivery: 'streamed' });
     expect(await nextEvent(api, 0)).toMatchObject({
       type: 'playback-start',
       playbackId: 'playback-1',
       text: 'Narrate in the browser.',
-      delivery: 'client',
+      delivery: 'streamed',
     });
 
     const finished = await api.fetch(

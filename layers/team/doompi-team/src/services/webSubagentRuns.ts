@@ -9,6 +9,8 @@ import type { SubagentRun, SubagentRunState } from '../types/webSubagents.ts';
  * because doompi-web must not depend on the team package at runtime.
  */
 export const RUN_STATUS_FILE_NAME = 'status.json';
+/** Process registry beside the runs directory, mirrored from runRegistry.ts. */
+export const RUN_REGISTRY_FILE_NAME = 'registry.json';
 
 const TAIL_LIMIT = 12;
 const TAIL_ENTRY_LIMIT = 200;
@@ -38,6 +40,8 @@ const STATE_MAP: Readonly<Record<string, SubagentRunState>> = {
   failed: 'failed',
   paused: 'stopped',
   stopped: 'stopped',
+  canceled: 'stopped',
+  cancelled: 'stopped',
 };
 
 const TERMINAL_STATES: ReadonlySet<SubagentRunState> = new Set(['done', 'failed', 'stopped']);
@@ -118,6 +122,46 @@ export function parseSubagentRun(raw: string): SubagentRun | undefined {
     ...(error === undefined ? {} : { error }),
     tail,
   };
+}
+
+/**
+ * Reads the runtime-owned process registry into the ids whose runner process is
+ * still alive. An unreadable or foreign registry returns undefined so callers
+ * fail open rather than hiding work whose lifecycle cannot be proven.
+ */
+export function activeRunIdsFromRegistry(
+  raw: string,
+  isAlive: (pid: number) => boolean,
+): ReadonlySet<string> | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.runs)) return undefined;
+
+  const records: Array<{ runId: string; pid: number }> = [];
+  for (const entry of parsed.runs) {
+    if (!isRecord(entry)) return undefined;
+    const runId = asOptionalString(entry.runId);
+    const pid = asOptionalNumber(entry.pid);
+    if (!runId || pid === undefined || !Number.isSafeInteger(pid) || pid <= 0) return undefined;
+    records.push({ runId, pid });
+  }
+  return new Set(records.filter((record) => isAlive(record.pid)).map((record) => record.runId));
+}
+
+/** Reconciles status snapshots that outlived their authoritative runner record. */
+export function reconcileRunLifecycles(
+  runs: readonly SubagentRun[],
+  activeRunIds: ReadonlySet<string> | undefined,
+): SubagentRun[] {
+  if (activeRunIds === undefined) return [...runs];
+  return runs.map((run) => {
+    if (TERMINAL_STATES.has(run.state) || activeRunIds.has(run.runId)) return run;
+    return { ...run, state: 'stopped', endedAt: run.endedAt ?? run.lastUpdate };
+  });
 }
 
 /** Active runs first, then newest first; terminal runs leave after the retention window. */

@@ -1,20 +1,69 @@
 import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership.ts';
 import { browserVoiceMediaClientId } from '../web/browserMediaIdentity.ts';
+import { VoiceActivitySection } from '../web/VoiceActivitySection.tsx';
 import { VoiceComposerAction } from '../web/VoiceComposerAction.tsx';
+import {
+  activeVoiceSession,
+  voiceMediaBrowserState,
+  voiceMediaWakes,
+  voiceOwnershipChannel,
+  waitForVoiceMediaWake,
+} from '../web/voiceMediaWakeStore.ts';
+
+afterEach(() => {
+  activeVoiceSession.reset();
+  voiceMediaBrowserState.reset();
+  voiceMediaWakes.reset();
+});
 
 describe('browser voice media', () => {
-  it('publishes both one-shot and autonomous browser controls with a page-lifetime runtime', async () => {
+  it('publishes both controls and page-lifetime media channels', async () => {
     const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain('channels: [voiceMediaWakeChannel]');
-    expect(source).toContain("overlays: [{ id: 'voice-media-runtime', component: VoiceMediaRuntime }]");
+    expect(source).toContain('channels: [voiceMediaWakeChannel, voiceOwnershipChannel]');
+    expect(source).toContain('start: startVoiceMediaRuntime');
+    expect(source).not.toContain('voice-media-runtime');
     expect(source).toContain("composerActions: [{ id: 'voice', component: VoiceComposerAction }]");
     expect(source).toContain("id: 'voice.capture'");
     expect(source).toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
+  });
+
+  it('keeps the server-selected session in one reactive page-wide store', () => {
+    const published: Array<string | null> = [];
+    const subscription = activeVoiceSession.store.subscribe(() => published.push(activeVoiceSession.store.state));
+    const payload = {
+      type: 'browser-media-session',
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      activeSessionId: 'session-b',
+    } as const;
+
+    expect(voiceOwnershipChannel.parse(payload)).toEqual(payload);
+    expect(voiceOwnershipChannel.parse(null)).toBeNull();
+    voiceOwnershipChannel.apply('session-a', payload);
+    voiceOwnershipChannel.apply('session-b', payload);
+    voiceOwnershipChannel.drop('session-a');
+    expect(activeVoiceSession.store.state).toBe('session-b');
+    voiceOwnershipChannel.drop('session-b');
+
+    expect(activeVoiceSession.store.state).toBeNull();
+    expect(published).toEqual(['session-b', null]);
+    subscription.unsubscribe();
+  });
+
+  it('releases media wake listeners on abort and timeout', async () => {
+    const aborted = new AbortController();
+    const abortWait = waitForVoiceMediaWake('session-a', 'event-a', 0, 100, aborted.signal);
+    aborted.abort();
+    await expect(abortWait).resolves.toBeUndefined();
+
+    await expect(
+      waitForVoiceMediaWake('session-a', 'event-a', 0, 1, new AbortController().signal),
+    ).resolves.toBeUndefined();
   });
 
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
@@ -75,8 +124,60 @@ describe('browser voice media', () => {
     const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="voice-recording-stop"');
-    expect(source).toContain("message: '/voice'");
+    expect(source).toContain("sendCommand('/voice')");
     expect(source).toContain('stop recording and fill the prompt');
+  });
+
+  it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', async () => {
+    const active = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ statuses: { 'doom-voice': 'voice auto: listening' } }).props,
+    );
+    expect(active.html).toContain('data-testid="voice-autonomous-microphone-toggle"');
+    expect(active.html).toContain('aria-label="mute autonomous voice microphone"');
+
+    const muted = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ statuses: { 'doom-voice': 'voice auto: microphone muted' } }).props,
+    );
+    expect(muted.html).toContain('aria-label="unmute autonomous voice microphone"');
+    expect(muted.html).toContain('aria-pressed="true"');
+
+    const manual = renderPlugin(
+      VoiceActivitySection,
+      slotPropsFixture({ statuses: { 'doom-voice': 'voice: recording 0:03' } }).props,
+    );
+    expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
+
+    const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
+  });
+
+  it('shows a browser lease conflict instead of a misleading listening state', () => {
+    voiceMediaBrowserState.update(() => ({ sessionId: 'session-a', phase: 'conflict' }));
+    const fixture = slotPropsFixture({
+      sessionId: 'session-a',
+      statuses: { 'doom-voice': 'voice auto: listening' },
+    });
+
+    const activity = renderPlugin(VoiceActivitySection, fixture.props);
+    const composer = renderPlugin(VoiceComposerAction, fixture.props);
+
+    expect(activity.html).toContain('data-voice-phase="conflict"');
+    expect(activity.html).toContain('microphone unavailable');
+    expect(activity.html).toContain('another browser tab owns voice capture');
+    expect(composer.html).toContain('data-voice-phase="conflict"');
+    expect(composer.html).toContain('microphone unavailable: another browser tab owns voice capture');
+  });
+  it('switches browser media from the server-selected global value without acknowledgements', async () => {
+    const source = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+
+    expect(source).toContain('activeVoiceSession.store.subscribe');
+    expect(source).toContain('this.boundSessionId = sessionId');
+    expect(source).not.toContain('sendHubFrame');
+    expect(source).not.toContain('browser-media-ack');
+    expect(source).not.toContain('setInterval');
+    expect(source).not.toContain('sessionStorage.setItem');
   });
 
   it('keeps one browser media identity across runtime remounts in the same tab', () => {

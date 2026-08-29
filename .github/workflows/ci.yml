@@ -61,7 +61,7 @@ jobs:
         run: pnpm nx run-many -t typecheck --parallel=3
 
       - name: Test packages
-        run: pnpm nx run-many -t test --parallel=3
+        run: pnpm nx run-many -t test --parallel=1
 
   # Browser gate for the cockpit.
   #

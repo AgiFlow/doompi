@@ -1,4 +1,4 @@
-import { Button, Input, StatusBadge } from '@agimon-ai/doompi-web-components';
+import { Button, StatusBadge, Textarea } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -92,14 +92,16 @@ export function AgentThreadPanel({
       {canSteer ? (
         <form
           data-testid="agent-steer-composer"
-          className="flex shrink-0 items-center gap-2 border-t border-doom-border-soft px-[26px] py-2"
+          className="flex shrink-0 items-end gap-2 border-t border-doom-border-soft px-[26px] py-3"
           onSubmit={submitGuidance}
         >
-          <Input
+          <Textarea
             data-testid="agent-steer-input"
             aria-label="Steering guidance"
+            rows={3}
             value={guidance}
             placeholder="Guide this agent…"
+            className="min-h-20 flex-1 resize-y"
             onChange={(event) => setGuidance(event.target.value)}
           />
           <Button data-testid="agent-steer-submit" type="submit" size="xs" disabled={guidance.trim() === ''}>

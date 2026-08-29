@@ -10,7 +10,7 @@ import {
   type AutonomousVoiceTelemetrySink,
 } from '../../services/autonomousVoiceTelemetry.ts';
 import type { IVoiceCommandCorrector, VoiceCommandContext } from '../../services/commandCorrection.ts';
-import type { IVoiceTurnFallbackNarrator } from '../../services/fallbackNarration.ts';
+import type { IVoiceNarrationCompactor, IVoiceTurnFallbackNarrator } from '../../services/fallbackNarration.ts';
 import type { NarrationPlaybackOutcome } from '../../services/narration.ts';
 import { VoiceNarrationPlayback, type VoiceNarrationPlaybackLogger } from '../../services/narrationPlayback.ts';
 import type { IVoiceTranscriptAdjudicator } from '../../services/transcriptAdmission.ts';
@@ -35,7 +35,7 @@ export interface VoiceWorkerAutoCaptureDependencies {
   loadConfig(): ResolvedVoiceConfig;
   resolveCommandCorrector(reference: string): Promise<IVoiceCommandCorrector | undefined>;
   resolveTranscriptAdjudicator?(reference: string): Promise<IVoiceTranscriptAdjudicator | undefined>;
-  resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator>;
+  resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator & Partial<IVoiceNarrationCompactor>>;
   tts: ITtsAdapter;
   clock: IClock;
   deliver(text: string, intent?: VoiceDeliveryIntent): void;
@@ -55,9 +55,10 @@ export class VoiceWorkerAutoCaptureController {
   private readonly narration: VoiceNarrationPlayback;
   private readonly telemetrySink: VoiceWorkerAutoCaptureTelemetrySink;
   private readonly telemetry: AutonomousVoiceTelemetry;
-  private fallbackNarrator: IVoiceTurnFallbackNarrator | undefined;
+  private fallbackNarrator: (IVoiceTurnFallbackNarrator & Partial<IVoiceNarrationCompactor>) | undefined;
   private fallbackNarration: AbortController | undefined;
   private shutdownInFlight: Promise<void> | undefined;
+  private activationErrorMessage: string | undefined;
   private readonly disabledWaiters = new Set<() => void>();
   private disposed = false;
 
@@ -88,6 +89,19 @@ export class VoiceWorkerAutoCaptureController {
 
   public get activationId(): number {
     return this.activationRevision;
+  }
+
+  public get activationError(): string | undefined {
+    return this.activationErrorMessage;
+  }
+
+  public get microphoneMuted(): boolean {
+    return this.session?.microphoneMuted ?? false;
+  }
+
+  public setMicrophoneMuted(muted: boolean): void {
+    if (this.activationState === 'disabled' || this.disposed) return;
+    this.session?.setMicrophoneMuted(muted);
   }
 
   public async toggle(ui: AutoCaptureUi): Promise<void> {
@@ -205,6 +219,7 @@ export class VoiceWorkerAutoCaptureController {
   }
 
   private async enable(ui: AutoCaptureUi): Promise<void> {
+    this.activationErrorMessage = undefined;
     const revision = this.activationRevision + 1;
     this.activationRevision = revision;
     this.setState('starting');
@@ -266,13 +281,20 @@ export class VoiceWorkerAutoCaptureController {
         },
       });
       this.session = createdSession;
-      this.narration.activate(config);
+      this.narration.activate(
+        config,
+        fallbackNarrator.compact
+          ? { compact: (narrations, signal) => fallbackNarrator.compact!(narrations, signal) }
+          : undefined,
+      );
       await createdSession.start();
       if (revision !== this.activationRevision || this.session !== createdSession || this.disposed) {
         await createdSession.shutdown();
       }
     } catch (error) {
       if (revision !== this.activationRevision) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.activationErrorMessage = message.slice(0, 300);
       if (createdSession && this.session === createdSession) {
         try {
           await createdSession.shutdown();
@@ -284,7 +306,7 @@ export class VoiceWorkerAutoCaptureController {
         }
       }
       await this.resetLocal(ui, createdSession);
-      ui.notify(error instanceof Error ? error.message : String(error), 'error');
+      ui.notify(message, 'error');
     }
   }
 

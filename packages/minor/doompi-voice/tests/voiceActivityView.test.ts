@@ -46,6 +46,21 @@ describe('reading the voice status line', () => {
     });
   });
 
+  it('reports microphone mute independently from autonomous narration', () => {
+    expect(voiceActivityView('voice auto: microphone muted')).toMatchObject({
+      mode: 'auto',
+      phase: 'muted',
+      active: false,
+      microphoneMuted: true,
+    });
+    expect(voiceActivityView('voice auto: narrating, microphone muted')).toMatchObject({
+      phase: 'narrating',
+      active: true,
+      microphoneMuted: true,
+    });
+    expect(voiceActivityView('voice auto: listening').microphoneMuted).toBe(false);
+  });
+
   it('reads a manual recording through its spinner, and keeps the elapsed time', () => {
     const recording = voiceActivityView('⣻ voice: recording 1:07');
     expect(recording).toMatchObject({ mode: 'manual', phase: 'recording', tone: 'attention', active: true });

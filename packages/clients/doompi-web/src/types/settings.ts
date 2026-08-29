@@ -7,11 +7,14 @@
  * the config file on everyone's behalf and hands each contributed field the
  * result through props.
  */
+import type { RepositorySettingsRepository } from '@agimon-ai/doompi-web-contracts';
 
 export const SETTINGS_CONFIG_API_ROUTE = '/api/settings/config';
 export const SETTINGS_VALUE_API_ROUTE = '/api/settings/value';
 export const SETTINGS_REPOSITORIES_API_ROUTE = '/api/settings/repositories';
 export const SETTINGS_MODELS_API_ROUTE = '/api/settings/models';
+export const SETTINGS_REPOSITORY_API_ROUTE = '/api/settings/repository';
+export const SETTINGS_REPOSITORY_SELECTION_API_ROUTE = '/api/settings/repository/selection';
 
 /** Which of the two config files a read or write is about. */
 export type SettingsScope = 'global' | 'repository';
@@ -23,14 +26,7 @@ export type SettingsOrigin = 'global' | 'repository' | 'default';
 export type SettingsKeyScope = 'global' | 'repository' | 'both';
 
 /** One repository the picker offers. */
-export interface SettingsRepository {
-  /** Absolute path, and the value a request sends back as `repoRoot`. */
-  path: string;
-  /** The last path segment, for the picker's label. */
-  name: string;
-  /** True when a session is open on it, so the picker can lead with those. */
-  active: boolean;
-}
+export type SettingsRepository = RepositorySettingsRepository;
 
 /** One model the machine can actually use, for a field declaring optionsFrom: 'models'. */
 export interface SettingsModel {
@@ -68,6 +64,52 @@ export interface SettingsWriteRequest {
   value: string | null;
   /** The hash of the target file when the page read it. */
   expectedHash: string;
+}
+
+/** A named option from one effective repository catalog. */
+export interface RepositoryCatalogOption {
+  name: string;
+  description?: string;
+  /** Present for a domain alias, naming the entries it expands to. */
+  expandsTo?: readonly string[];
+  /** Present for a major mode, naming its ordered layers. */
+  layers?: readonly string[];
+}
+
+/** One selection axis, keeping an inherited effective value apart from this repository's override. */
+export interface RepositorySelectionValue<T> {
+  effective?: T;
+  repository?: T;
+  origin: SettingsOrigin;
+}
+
+/** The repository control plane's safe, non-secret catalog and selection view. */
+export interface RepositorySettingsView {
+  repository: SettingsRepository;
+  hash: string;
+  catalogs: {
+    majorModes: readonly RepositoryCatalogOption[];
+    domains: readonly RepositoryCatalogOption[];
+    profiles: readonly RepositoryCatalogOption[];
+  };
+  selection: {
+    majorMode: RepositorySelectionValue<string>;
+    domains: RepositorySelectionValue<readonly string[]>;
+    profile: RepositorySelectionValue<string>;
+  };
+}
+
+export interface RepositorySelectionChanges {
+  majorMode?: string | null;
+  domains?: readonly string[] | null;
+  profile?: string | null;
+}
+
+/** An optimistic, atomic write into one repository's selection defaults. */
+export interface RepositorySelectionWriteRequest {
+  repositoryId: string;
+  expectedHash: string;
+  changes: RepositorySelectionChanges;
 }
 
 /** What a route reports when it refuses; the page shows `error` verbatim. */

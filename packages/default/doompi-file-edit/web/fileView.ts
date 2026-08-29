@@ -1,6 +1,7 @@
 import { grammarKeyOf, mediaKindOf } from '@agimon-ai/doompi-web-components';
 import type { FileEditTool } from '../src/types/domain.ts';
 import type { FileEditsDiffHunk } from '../src/types/fileEditsApi.ts';
+import type { FilesItemView } from '../src/types/webFiles.ts';
 import type { FileComment } from './filesStore.ts';
 
 /**
@@ -19,6 +20,13 @@ export const TOOL_LABEL: Readonly<Record<FileEditTool, string>> = {
   bash: 'command',
   user: 'you',
 };
+
+/** Filters visible relative paths without changing the timeline's newest-first order. */
+export function filterFileItems(items: readonly FilesItemView[], query: string): FilesItemView[] {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (normalized.length === 0) return [...items];
+  return items.filter((item) => item.relPath.toLocaleLowerCase().includes(normalized));
+}
 
 /**
  * How the preview shows a file: as the thing it is, wherever the browser can.

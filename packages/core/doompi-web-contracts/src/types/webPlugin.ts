@@ -10,9 +10,11 @@ import type { ComponentType, ReactNode } from 'react';
  * @tanstack/store, @tanstack/react-store, this contract,
  * @agimon-ai/doompi-web-components, and the package's own web/ and src/types
  * modules; never another plugin, a node builtin, or a server framework, which
- * the host bundle would swallow. Per-session state takes the shape
- * defineSessionStore gives it. Tailwind utility classes must appear as
- * complete literal strings so the host's class scanner can see them.
+ * modules; never another plugin, a node builtin, or a server framework, which
+ * the host bundle would swallow. Page-wide state takes the shape
+ * defineGlobalStore gives it; per-session state takes the shape defineSessionStore
+ * gives it. Tailwind utility classes must appear as complete literal strings so
+ * the host's class scanner can see them.
  *
  * Plugins are independent: none depends on another, any of them may be added
  * or removed at the next sync, and every relation between two plugins (a fill
@@ -140,6 +142,36 @@ export interface SettingsFieldOption {
   /** Groups entries under a heading, as providers group their models. */
   group?: string;
 }
+/** One repository the host has admitted into repository-scoped settings. */
+export interface RepositorySettingsRepository {
+  /** Opaque hub-issued identity. Package APIs resolve this through DoomApiContext. */
+  id: string;
+  /** Last path segment, for compact pickers and headings. */
+  name: string;
+  /** Display-only absolute path. APIs must use id rather than trusting this value. */
+  path: string;
+  /** True while at least one session is open inside this repository. */
+  active: boolean;
+}
+
+/** Props for a package panel placed inside the host's repository control plane. */
+export interface RepositorySettingsPanelProps {
+  repository: RepositorySettingsRepository | null;
+  /** Same-origin request routed through the host's sealed transport when remote. */
+  request: (input: string, init?: RequestInit) => Promise<Response>;
+  /** The same transport, retrying once after the host's fresh passkey gesture. */
+  requestWithStepUp: (input: string, init?: RequestInit) => Promise<Response>;
+}
+
+/** One package-owned panel below the host's repository selection controls. */
+export interface RepositorySettingsPanelContribution {
+  label: string;
+  detail: string;
+  /** Sort position below the host controls; lower first, then plugin id. */
+  order?: number;
+  component: ComponentType<RepositorySettingsPanelProps>;
+}
+
 /**
  * A page in cockpit settings, contributed by the package that owns the
  * settings on it. The id is the URL segment (/settings/:id), so it is unique
@@ -277,9 +309,19 @@ export interface ActivityGroupContribution {
    * leaves this off: its frame is worth keeping when it is idle.
    */
   hideWhenEmpty?: boolean;
+  /** Keeps the group visible below the dock's scrolling ordinary groups. */
+  placement?: 'bottom';
   /** Sort position in the dock; lower first, name breaks ties. */
   order?: number;
 }
+/** Page-wide plugin state shared by its runtime, channels, and every rendered contribution. */
+export interface GlobalStore<T> {
+  readonly store: Store<T>;
+  /** Replaces the value; an updater returning the current value publishes nothing. */
+  update(updater: (current: T) => T): void;
+  reset(): void;
+}
+
 /**
  * One session-scoped data channel: the hub pushes ChannelFrame payloads whose
  * frame type equals `channel`; parse is the validation gate at the boundary
@@ -417,10 +459,11 @@ export interface ToolRendererContribution {
   /** Stands in for the composer input while this tool runs and holds a request. */
   prompt?: ToolPromptContribution;
 }
-/** What a plugin's optional runtime may do; both send on the page's hub socket. */
+/** What a plugin's optional runtime may do through the page's hub socket. */
 export interface WebPluginRuntime {
   sendSessionFrame: SessionFrameSender;
   sendHubFrame(frame: Record<string, unknown>): void;
+  onHubConnected(listener: () => void): () => void;
 }
 export interface WebPluginDefinition {
   id: string;
@@ -448,6 +491,11 @@ export interface WebPluginDefinition {
    * owns the scope switch, the repository picker, and every write.
    */
   settingsSections?: SettingsSectionContribution[];
+  /**
+   * A package-owned management panel inside the host's repository page. The
+   * host owns repository identity and passes only repositories it admitted.
+   */
+  repositorySettingsPanel?: RepositorySettingsPanelContribution;
   /** The slots this plugin opens for others, each named '<this plugin id>.<name>'. */
   slots?: SlotDeclaration[];
   /** This plugin's contributions into slots other plugins (or the host) declare. */

@@ -12,7 +12,8 @@ import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 export const VOICE_DESCRIBE_TOOL = 'describe_voice_tools';
 export const VOICE_USE_TOOL = 'use_voice_tools';
 export const VOICE_NARRATE_TOOL = 'narrate';
-export const VOICE_TOOL_NAMES = [VOICE_DESCRIBE_TOOL, VOICE_USE_TOOL, VOICE_NARRATE_TOOL] as const;
+export const VOICE_TRANSFER_TOOL = 'transfer_voice';
+export const VOICE_TOOL_NAMES = [VOICE_DESCRIBE_TOOL, VOICE_USE_TOOL, VOICE_NARRATE_TOOL, VOICE_TRANSFER_TOOL] as const;
 
 /** The toned lines the shared MessageLines draws; the vocabulary is the components package's. */
 export type LineTone = MessageLineTone;
@@ -130,6 +131,15 @@ export function voiceCallSummary(toolName: string, args: JsonRecord): VoiceCallS
     const speech = typeof args.text === 'string' ? inlineText(args.text) : '';
     const preview = speech.length > PREVIEW_LENGTH ? `${speech.slice(0, PREVIEW_LENGTH - 3)}…` : speech;
     return { action: 'narrate', ...(preview ? { detail: preview } : {}), detailIsName: false };
+  }
+  if (toolName === VOICE_TRANSFER_TOOL) {
+    const target = readNumber(args, 'target');
+    return {
+      glyph: '↪',
+      action: 'hand off',
+      ...(target === undefined ? {} : { detail: `target ${target}` }),
+      detailIsName: false,
+    };
   }
   if (toolName === VOICE_DESCRIBE_TOOL) {
     const names = requestedNames(args);

@@ -1,7 +1,7 @@
 import { Button, EmptyState, Kbd, SectionLabel, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { activityGroups } from '../../lib/composition.ts';
+import { activityGroups, type ActivityGroup } from '../../lib/composition.ts';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry.ts';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
@@ -24,6 +24,8 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
   const widgets = useActiveSession((state) => state.widgets);
   const slotProps = usePluginSlotProps(activeId);
   const groups = activityGroups(statuses, widgets);
+  const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
+  const pinnedGroups = groups.filter((group) => group.placement === 'bottom');
   const busy = groups.filter((group) => group.active).length;
 
   return (
@@ -45,7 +47,7 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div data-testid="activity-scroll" className="min-h-0 flex-1 overflow-y-auto">
         {groups.length === 0 ? (
           <EmptyState
             data-testid="activity-empty"
@@ -53,66 +55,25 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
             title="nothing supervised yet"
             description="a package's group appears here once its extension reports in."
           />
-        ) : (
+        ) : null}
+        {ordinaryGroups.length > 0 ? (
           <div className="flex flex-col">
-            {groups.map((group) => (
-              <div
-                key={group.name}
-                data-testid={`activity-${group.name}`}
-                data-active={group.active}
-                className="flex flex-col gap-2 border-b border-doom-border-soft px-3 py-3"
-              >
-                <div className="flex items-center gap-2 px-1">
-                  {/* One marker per head. The glyph says "section", so a group
-                      never reads as one more row among the items beneath it,
-                      and it carries the busy colour the status dot used to:
-                      two marks for one fact is one mark too many. A glyph
-                      rather than an icon because every group is declared by a
-                      plugin the host knows nothing about. */}
-                  <span
-                    aria-hidden
-                    data-active={group.active}
-                    className={`text-[11px] font-bold ${
-                      group.active ? 'animate-pulse text-doom-yellow' : 'text-doom-faint'
-                    }`}
-                  >
-                    #
-                  </span>
-                  <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
-                  {group.tab === undefined ? (
-                    <Kbd data-testid={`activity-keys-${group.name}`} className="bg-doom-panel">
-                      {group.keys}
-                    </Kbd>
-                  ) : (
-                    <Button
-                      variant="subtle"
-                      size="xs"
-                      data-testid={`activity-open-${group.name}`}
-                      title={`open the ${group.tab} tab`}
-                      onClick={() => slotProps.openTab(group.tab ?? null)}
-                      className="h-auto px-1.5 py-0.5 text-[8px] font-bold text-doom-violet hover:text-doom-magenta"
-                    >
-                      {group.keys}
-                    </Button>
-                  )}
-                </div>
-                {slotFills(activityGroupSlot(group.name)).length > 0 ? (
-                  slotProps.renderSlot(activityGroupSlot(group.name))
-                ) : (
-                  <p
-                    data-testid={`activity-summary-${group.name}`}
-                    className={`px-1 text-[10px] ${group.active ? 'text-doom-yellow' : 'text-doom-faint'}`}
-                  >
-                    {group.summary || 'idle'}
-                  </p>
-                )}
-              </div>
+            {ordinaryGroups.map((group) => (
+              <ActivityGroupView key={group.name} group={group} slotProps={slotProps} />
             ))}
           </div>
-        )}
+        ) : null}
 
         <PluginSurface slot={HOST_SLOTS.activity} sessionId={activeId} />
       </div>
+
+      {pinnedGroups.length > 0 ? (
+        <div data-testid="activity-pinned" className="shrink-0">
+          {pinnedGroups.map((group) => (
+            <ActivityGroupView key={group.name} group={group} slotProps={slotProps} />
+          ))}
+        </div>
+      ) : null}
 
       <div className="border-t border-doom-border px-4 py-3">
         <span className="text-[9px] leading-relaxed text-doom-faint">
@@ -121,5 +82,64 @@ export function ActivityDock({ onClose }: { onClose: () => void }) {
         </span>
       </div>
     </aside>
+  );
+}
+
+function ActivityGroupView({
+  group,
+  slotProps,
+}: {
+  group: ActivityGroup;
+  slotProps: ReturnType<typeof usePluginSlotProps>;
+}) {
+  return (
+    <div
+      data-testid={`activity-${group.name}`}
+      data-active={group.active}
+      className="flex flex-col gap-2 border-b border-doom-border-soft px-3 py-3"
+    >
+      <div className="flex items-center gap-2 px-1">
+        {/* One marker per head. The glyph says "section", so a group
+            never reads as one more row among the items beneath it,
+            and it carries the busy colour the status dot used to:
+            two marks for one fact is one mark too many. A glyph
+            rather than an icon because every group is declared by a
+            plugin the host knows nothing about. */}
+        <span
+          aria-hidden
+          data-active={group.active}
+          className={`text-[11px] font-bold ${group.active ? 'animate-pulse text-doom-yellow' : 'text-doom-faint'}`}
+        >
+          #
+        </span>
+        <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
+        {group.tab === undefined ? (
+          <Kbd data-testid={`activity-keys-${group.name}`} className="bg-doom-panel">
+            {group.keys}
+          </Kbd>
+        ) : (
+          <Button
+            variant="subtle"
+            size="xs"
+            data-testid={`activity-open-${group.name}`}
+            title={`open the ${group.tab} tab`}
+            onClick={() => slotProps.openTab(group.tab ?? null)}
+            className="h-auto px-1.5 py-0.5 text-[8px] font-bold text-doom-violet hover:text-doom-magenta"
+          >
+            {group.keys}
+          </Button>
+        )}
+      </div>
+      {slotFills(activityGroupSlot(group.name)).length > 0 ? (
+        slotProps.renderSlot(activityGroupSlot(group.name))
+      ) : (
+        <p
+          data-testid={`activity-summary-${group.name}`}
+          className={`px-1 text-[10px] ${group.active ? 'text-doom-yellow' : 'text-doom-faint'}`}
+        >
+          {group.summary || 'idle'}
+        </p>
+      )}
+    </div>
   );
 }

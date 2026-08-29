@@ -248,6 +248,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     autonomousOrchestration: false,
     playbackDucking: browserSpeechPlaybackAvailable() || browserPcmPlaybackAvailable(),
   };
+  public constructor(private readonly rebindProtocolSupported = false) {}
   private stream: MediaStream | undefined;
   private context: AudioContext | undefined;
   private workletInstalled = false;
@@ -368,8 +369,9 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
         source.disconnect();
         processor.disconnect();
         muted.disconnect();
-        for (const track of captureStream.getTracks()) track.stop();
-        if (this.stream === captureStream) this.stream = undefined;
+        if (!this.rebindProtocolSupported || this.stream !== captureStream)
+          for (const track of captureStream.getTracks()) track.stop();
+        if (!this.rebindProtocolSupported && this.stream === captureStream) this.stream = undefined;
         if (this.activeCapture === capture) this.activeCapture = undefined;
       },
     };
@@ -493,7 +495,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
       await detector.initialize(new URL('../models/silero_vad_v6.2.1.onnx', import.meta.url).href);
       this.speechDetector = detector;
       this.capabilities.captureActivity = true;
-      this.capabilities.autonomousOrchestration = true;
+      this.capabilities.autonomousOrchestration = this.rebindProtocolSupported;
     } catch {
       await detector?.close().catch(() => undefined);
     }

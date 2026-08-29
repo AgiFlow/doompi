@@ -124,7 +124,7 @@ describe('the session hub over a registry', () => {
     expect(signalled).toEqual([process.ppid]);
   });
 
-  it('restarts a session under the same id, in its own directory, once its record is withdrawn', async () => {
+  it('restarts a session under the same id, directory, and latest reported name', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'live', name: 'live', pid: process.ppid });
     const spawned: SpawnSessionInput[] = [];
@@ -145,6 +145,8 @@ describe('the session hub over a registry', () => {
     );
     await session.waitForAttach();
     await waitFor(() => harness.latest('live') !== undefined, 'the session listed');
+    session.emit({ type: 'response', command: 'get_state', success: true, data: { sessionName: 'renamed' } });
+    await waitFor(() => harness.latest('live')?.name === 'renamed', 'the renamed session');
 
     const outcome = await harness.hub.restart('live');
 
@@ -154,7 +156,7 @@ describe('the session hub over a registry', () => {
     // reused so repeated restarts cannot outgrow the unix socket path limit.
     expect(spawned).toHaveLength(1);
     expect(spawned[0]?.sessionId).toBe('live');
-    expect(spawned[0]?.name).toBe('live');
+    expect(spawned[0]?.name).toBe('renamed');
     expect(spawned[0]?.sessionDir).toBe(path.dirname(session.socketPath));
   });
 
@@ -522,6 +524,33 @@ describe('the session hub over a registry', () => {
     await waitFor(() => lifecycle.includes('removed:chan'), 'the removal reaching the channel');
     harness.hub.close();
     expect(lifecycle.at(-1)).toBe('closed');
+  });
+
+  it('routes incoming channel payloads by live scope, frame type, and connection', async () => {
+    const registryDir = freshRegistryDir();
+    const received: unknown[] = [];
+    const channel: WebHubChannel = {
+      frameType: 'strict_data',
+      start: () => ({ payloadFor: () => undefined, close: () => undefined }),
+      receive: (scope, payload, connection) => received.push({ scope, payload, connection }),
+    };
+    const session = await startRegisteredSession(registryDir, { id: 'strict' });
+    const harness = startHub(registryDir, undefined, [channel]);
+    await session.waitForAttach();
+    await waitFor(() => harness.hub.snapshot().some((candidate) => candidate.id === 'strict'), 'strict session');
+
+    harness.hub.receiveChannel('strict', 'other', { ignored: 1 }, 'page-one');
+    harness.hub.receiveChannel('missing', 'strict_data', { ignored: 2 }, 'page-one');
+    harness.hub.receiveChannel('strict', 'strict_data', { ignored: 3 }, '');
+    harness.hub.receiveChannel('strict', 'strict_data', { accepted: true }, 'page-one');
+
+    expect(received).toEqual([
+      {
+        scope: { sessionId: 'strict', cwd: harness.hub.snapshot().find((candidate) => candidate.id === 'strict')?.cwd },
+        payload: { accepted: true },
+        connection: { connectionId: 'page-one' },
+      },
+    ]);
   });
 
   it('creates sessions through the injected spawner', async () => {

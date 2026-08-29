@@ -11,7 +11,7 @@ The `ask_user_question` tool presents concrete options and waits for the user to
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.3 and Pi TUI 0.84.3
+- Pi 0.84.4 and Pi TUI 0.84.4
 
 ## Install
 

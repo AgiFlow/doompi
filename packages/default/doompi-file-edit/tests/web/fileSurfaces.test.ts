@@ -135,7 +135,7 @@ describe('FilesActivitySection', () => {
     expect(rendered.includes('nothing changed yet')).toBe(true);
   });
 
-  it('lists each changed file with its tool, and marks one with no diff', () => {
+  it('lists each changed file with its metadata, and marks one with no diff', () => {
     filesChannel.apply(
       SESSION,
       filesChannel.parse({
@@ -148,14 +148,31 @@ describe('FilesActivitySection', () => {
     expect(rendered.includes('4×')).toBe(true);
     expect(rendered.includes('command')).toBe(true);
     expect(rendered.html).toContain('data-file-diffable="false"');
+    expect(rendered.html).toContain('changed by a command, so no diff was captured');
+    expect(rendered.html).not.toContain('activity-files-show-all');
   });
 
-  it('caps the rows it draws and says how many it left out', () => {
-    const many = Array.from({ length: 20 }, (_, index) => item(`file-${String(index)}.ts`));
+  it('draws only five compact rows and offers the complete total', () => {
+    const many = Array.from({ length: 6 }, (_, index) => item(`file-${String(index)}.ts`));
     filesChannel.apply(SESSION, filesChannel.parse({ items: many })!);
     const fixture = slotPropsFixture({ sessionId: SESSION });
     const rendered = renderPlugin(FilesActivitySection, fixture.props);
-    expect(rendered.includes('and 8 more')).toBe(true);
+    expect(rendered.html.match(/data-file-diffable=/gu)).toHaveLength(5);
+    expect(rendered.includes('file-4.ts')).toBe(true);
+    expect(rendered.includes('file-5.ts')).toBe(false);
+    expect(rendered.includes('show all 6 files')).toBe(true);
+    expect(rendered.html).toContain('aria-label="show all 6 changed files"');
+  });
+
+  it('shows every compact row without show all when there are exactly five', () => {
+    filesChannel.apply(
+      SESSION,
+      filesChannel.parse({ items: Array.from({ length: 5 }, (_, index) => item(`file-${String(index)}.ts`)) })!,
+    );
+    const fixture = slotPropsFixture({ sessionId: SESSION });
+    const rendered = renderPlugin(FilesActivitySection, fixture.props);
+    expect(rendered.html.match(/data-file-diffable=/gu)).toHaveLength(5);
+    expect(rendered.html).not.toContain('activity-files-show-all');
   });
 });
 

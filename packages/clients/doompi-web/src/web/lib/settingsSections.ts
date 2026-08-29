@@ -1,5 +1,9 @@
 import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
-import { pluginSettingsSections } from './pluginRegistry.ts';
+import {
+  pluginRepositorySettingsPanels,
+  pluginSettingsSections,
+  type InstalledRepositorySettingsPanel,
+} from './pluginRegistry.ts';
 
 /**
  * The settings menu, as data: the rail's gear and the settings page both
@@ -10,25 +14,48 @@ import { pluginSettingsSections } from './pluginRegistry.ts';
  * sort after them, by their declared order and then their id, so the menu is
  * stable across syncs whatever order plugins install in.
  */
+export type SettingsWorkspace = 'general' | 'repository';
+
 export interface SettingsSection {
   id: string;
   label: string;
   detail: string;
+  workspace: SettingsWorkspace;
   /** The fields a contributed page renders; absent on the host's own pages. */
   contribution?: SettingsSectionContribution;
+  /** Package panel hosted inside the repository workspace. */
+  repositoryPanel?: InstalledRepositorySettingsPanel;
 }
 
-const HOST_SETTINGS_SECTIONS: readonly SettingsSection[] = [
-  { id: 'providers', label: 'providers', detail: 'sign in to the model providers Pi can use' },
-  { id: 'appearance', label: 'appearance', detail: 'pick the theme the cockpit renders with' },
-  { id: 'notifications', label: 'notifications', detail: 'allow live session notifications in this browser' },
-  { id: 'remote', label: 'remote control', detail: 'save a named tunnel for remote access' },
-  { id: 'plugins', label: 'plugins', detail: 'the web plugins this bundle carries and what their install resolved' },
+const GENERAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
+  { id: 'providers', label: 'providers', detail: 'sign in to the model providers Pi can use', workspace: 'general' },
+  { id: 'appearance', label: 'appearance', detail: 'pick the theme the cockpit renders with', workspace: 'general' },
+  {
+    id: 'notifications',
+    label: 'notifications',
+    detail: 'allow live session notifications in this browser',
+    workspace: 'general',
+  },
+  { id: 'remote', label: 'remote control', detail: 'save a named tunnel for remote access', workspace: 'general' },
+  {
+    id: 'plugins',
+    label: 'plugins',
+    detail: 'the web plugins this bundle carries and what their install resolved',
+    workspace: 'general',
+  },
 ];
+
+const REPOSITORY_DEFAULTS_SECTION: SettingsSection = {
+  id: 'repositories',
+  label: 'defaults',
+  detail: 'mode, domains, and profile',
+  workspace: 'repository',
+};
 
 const DEFAULT_CONTRIBUTED_ORDER = 1000;
 
-export const DEFAULT_SETTINGS_SECTION = HOST_SETTINGS_SECTIONS[0]!.id;
+export const DEFAULT_SETTINGS_SECTION = GENERAL_SETTINGS_SECTIONS[0]!.id;
+export const DEFAULT_REPOSITORY_SETTINGS_SECTION = REPOSITORY_DEFAULTS_SECTION.id;
 
 function byMenuOrder(left: SettingsSectionContribution, right: SettingsSectionContribution): number {
   return (
@@ -42,14 +69,23 @@ function byMenuOrder(left: SettingsSectionContribution, right: SettingsSectionCo
  * const: plugins install before the first render, but a module-level array
  * evaluated at import time would freeze the list before that happened.
  */
-export function settingsSections(): readonly SettingsSection[] {
+export function settingsSections(workspace?: SettingsWorkspace): readonly SettingsSection[] {
   const contributed = [...pluginSettingsSections()].sort(byMenuOrder).map((contribution) => ({
     id: contribution.id,
     label: contribution.label,
     detail: contribution.detail,
+    workspace: 'general' as const,
     contribution,
   }));
-  return [...HOST_SETTINGS_SECTIONS, ...contributed];
+  const repositoryPanels = pluginRepositorySettingsPanels().map((repositoryPanel) => ({
+    id: `repository-${repositoryPanel.pluginId}`,
+    label: repositoryPanel.label,
+    detail: repositoryPanel.detail,
+    workspace: 'repository' as const,
+    repositoryPanel,
+  }));
+  const all = [...GENERAL_SETTINGS_SECTIONS, ...contributed, REPOSITORY_DEFAULTS_SECTION, ...repositoryPanels];
+  return workspace === undefined ? all : all.filter((section) => section.workspace === workspace);
 }
 
 export function settingsSection(id: string | undefined): SettingsSection | undefined {

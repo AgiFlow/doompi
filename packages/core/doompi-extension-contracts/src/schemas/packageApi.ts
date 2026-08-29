@@ -10,6 +10,15 @@
  * to one HTTP framework; a Hono app satisfies it through `app.fetch`.
  */
 
+import type { DoomMcpProjection } from './mcpProjection.ts';
+
+/** The host-owned sync view a repository-scoped package API may inspect. */
+export interface DoomRepositorySyncView {
+  fresh: boolean;
+  reasons: string[];
+  mcpProjection?: DoomMcpProjection;
+}
+
 /** Where an API runs: inside one session's server, or in the machine-wide hub. */
 export type DoomApiScope = 'session' | 'hub';
 
@@ -32,6 +41,15 @@ export interface DoomApiContext {
   cwd?: string;
   /** Shared only with child processes in this session, never with remote API clients. */
   internalToken?: string;
+  /** Shared only with the cockpit hub for privileged cross-session coordination. */
+  hubToken?: string;
+  /**
+   * Resolves a hub-issued opaque repository id to an admitted canonical root.
+   * Hub APIs must never accept a browser-supplied filesystem path instead.
+   */
+  resolveRepository?(repositoryId: string): string | undefined;
+  /** Reads the admitted repository's sync projection without exposing its state path. */
+  readRepositorySync?(repositoryId: string): DoomRepositorySyncView | undefined;
   onNotice(message: string): void;
 }
 

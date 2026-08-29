@@ -45,10 +45,14 @@ export function PluginSettings() {
         ) : (
           <ul className="flex flex-col gap-1">
             {plugins.map((plugin) => (
-              <Panel asChild key={plugin.id} className="flex items-baseline gap-3 bg-transparent px-3 py-2">
+              <Panel
+                asChild
+                key={plugin.id}
+                className="flex flex-col gap-0.5 bg-transparent px-3 py-2 min-[480px]:flex-row min-[480px]:items-baseline min-[480px]:gap-3"
+              >
                 <li data-testid={`settings-plugin-${plugin.id}`}>
                   <span className="text-[12px] font-bold text-doom-hi">{plugin.id}</span>
-                  <span className="min-w-0 flex-1 truncate text-[10px] text-doom-faint">
+                  <span className="min-w-0 w-full truncate text-[10px] text-doom-faint min-[480px]:w-auto min-[480px]:flex-1">
                     {contributions(plugin).join(' · ') || 'no contributions'}
                   </span>
                 </li>

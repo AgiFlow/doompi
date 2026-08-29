@@ -19,11 +19,16 @@ export function projectAutonomousVoiceUi(
   if (snapshot.matches('failed')) return { indicator: 'draining', status: 'voice auto: error' };
   if (snapshot.matches('stopping') || snapshot.context.stopRequested)
     return { indicator: 'draining', status: 'voice auto: stopping' };
+  const state = autonomousVoiceState(snapshot);
+  const microphoneMuted = state === 'muted';
   if (snapshot.matches({ active: { playback: 'playing' } }))
-    return { indicator: 'narrating', status: 'voice auto: narrating' };
+    return {
+      indicator: 'narrating',
+      status: microphoneMuted ? 'voice auto: narrating, microphone muted' : 'voice auto: narrating',
+    };
+  if (state === 'muted') return { indicator: undefined, status: 'voice auto: microphone muted' };
   if (options.modalBlocked) return { indicator: 'waiting', status: 'voice auto: waiting for keyboard input' };
   if (options.confirmationPending) return { indicator: 'confirming', status: 'voice auto: confirmation needed' };
-  const state = autonomousVoiceState(snapshot);
   if (snapshot.context.compositionState === 'submitting')
     return { indicator: 'processing', status: 'voice auto: sending composed prompt' };
   if (snapshot.context.compositionState === 'collecting') {

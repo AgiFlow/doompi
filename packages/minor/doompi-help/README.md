@@ -11,7 +11,7 @@ Packages contribute concise `llms.txt` indexes. Help keeps them out of the defau
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.3
+- Pi 0.84.4
 
 ## Install
 

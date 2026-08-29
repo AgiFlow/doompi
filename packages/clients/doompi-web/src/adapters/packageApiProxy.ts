@@ -13,6 +13,7 @@ export interface ProxyToSocketInput {
   headers: Headers;
   body: BodyInit | null;
   trace?: DoomTraceContext;
+  signal?: AbortSignal;
 }
 
 function outgoingHeaders(headers: Headers, trace?: DoomTraceContext): Record<string, string> {
@@ -43,6 +44,7 @@ export async function proxyToSocket(input: ProxyToSocketInput): Promise<Response
         path: input.path,
         method: input.method,
         headers: outgoingHeaders(input.headers, input.trace),
+        signal: input.signal,
       },
       (incoming) => {
         const headers = new Headers();

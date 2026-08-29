@@ -2118,6 +2118,7 @@
       "llms.txt",
       "src/prompts",
       "src/types/clientMedia.ts",
+      "src/types/voiceOwnership.ts",
       "src/types/clientCaptureActivity.ts",
       "README.md",
       "LICENSE",

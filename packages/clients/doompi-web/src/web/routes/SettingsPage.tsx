@@ -7,10 +7,15 @@ import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx'
 import { ContributedSettings } from '../features/settings/ContributedSettings.tsx';
 import { NotificationSettings } from '../features/settings/NotificationSettings.tsx';
 import { PluginSettings } from '../features/settings/PluginSettings.tsx';
+import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace.tsx';
 import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
 import { RemoteControlSettings } from '../features/settings/RemoteControlSettings.tsx';
 import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
-import { DEFAULT_SETTINGS_SECTION, settingsSection } from '../lib/settingsSections.ts';
+import {
+  DEFAULT_REPOSITORY_SETTINGS_SECTION,
+  DEFAULT_SETTINGS_SECTION,
+  settingsSection,
+} from '../lib/settingsSections.ts';
 import { sessionsStore } from '../stores/sessionsStore.ts';
 
 /**
@@ -24,6 +29,7 @@ export function SettingsPage() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const [railOpen, setRailOpen] = useState(false);
   const current = settingsSection(section);
+  const workspace = current?.workspace ?? 'general';
 
   useEffect(() => {
     if (current) return;
@@ -48,8 +54,8 @@ export function SettingsPage() {
         />
       ) : null}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-doom-border px-2 sm:px-5">
-          <span className="flex min-w-0 items-center gap-1.5">
+        <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 border-b border-doom-border px-3 py-2 sm:flex sm:h-12 sm:justify-between sm:px-5 sm:py-0">
+          <span className="order-1 flex min-w-0 items-center gap-1.5 sm:order-none">
             <Button
               variant="ghost"
               size="icon"
@@ -63,10 +69,44 @@ export function SettingsPage() {
             </Button>
             <span className="truncate text-[13px] font-bold text-doom-hi">settings</span>
           </span>
-          <Button asChild variant="ghost" size="sm">
+          <nav
+            className="order-3 col-span-2 flex w-full items-center gap-0.5 rounded-md border border-doom-border bg-doom-panel p-0.5 sm:order-none sm:w-auto"
+            aria-label="settings workspace"
+          >
+            <Button
+              asChild
+              variant={workspace === 'general' ? 'outline' : 'ghost'}
+              size="xs"
+              className="flex-1 sm:flex-none"
+            >
+              <Link
+                to="/settings/$section"
+                params={{ section: DEFAULT_SETTINGS_SECTION }}
+                data-testid="settings-workspace-general"
+              >
+                general
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant={workspace === 'repository' ? 'outline' : 'ghost'}
+              size="xs"
+              className="flex-1 sm:flex-none"
+            >
+              <Link
+                to="/settings/$section"
+                params={{ section: DEFAULT_REPOSITORY_SETTINGS_SECTION }}
+                data-testid="settings-workspace-repository"
+              >
+                repository
+              </Link>
+            </Button>
+          </nav>
+          <Button asChild variant="ghost" size="sm" className="order-2 sm:order-none">
             {activeId !== null ? (
               <Link to="/session/$sessionId" params={{ sessionId: activeId }} data-testid="settings-close">
-                back to session
+                <span className="sm:hidden">back</span>
+                <span className="hidden sm:inline">back to session</span>
               </Link>
             ) : (
               <Link to="/" data-testid="settings-close">
@@ -75,17 +115,24 @@ export function SettingsPage() {
             )}
           </Button>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <SettingsMenu active={current?.id} />
-          <section data-testid="settings-content" className="min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-            {current?.id === 'providers' ? <ProviderSettings /> : null}
-            {current?.id === 'appearance' ? <AppearanceSettings /> : null}
-            {current?.id === 'notifications' ? <NotificationSettings /> : null}
-            {current?.id === 'remote' ? <RemoteControlSettings /> : null}
-            {current?.id === 'plugins' ? <PluginSettings /> : null}
-            {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
-          </section>
-        </div>
+        {current?.workspace === 'repository' ? (
+          <RepositoryWorkspace current={current} />
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+            <SettingsMenu active={current?.id} workspace="general" />
+            <section
+              data-testid="settings-content"
+              className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"
+            >
+              {current?.id === 'providers' ? <ProviderSettings /> : null}
+              {current?.id === 'appearance' ? <AppearanceSettings /> : null}
+              {current?.id === 'notifications' ? <NotificationSettings /> : null}
+              {current?.id === 'remote' ? <RemoteControlSettings /> : null}
+              {current?.id === 'plugins' ? <PluginSettings /> : null}
+              {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

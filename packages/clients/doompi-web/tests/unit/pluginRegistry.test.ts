@@ -11,6 +11,7 @@ import {
   pluginActivityGroups,
   pluginLeaderBindings,
   pluginMinorModes,
+  pluginRepositorySettingsPanels,
   pluginSelectionAxes,
   pluginToolRenderer,
   resetWebPlugins,
@@ -19,7 +20,7 @@ import {
   webPluginDiagnostics,
   webTabs,
 } from '../../src/web/lib/pluginRegistry.ts';
-
+import { settingsSections } from '../../src/web/lib/settingsSections.ts';
 interface ItemsPayload {
   items: string[];
 }
@@ -120,6 +121,47 @@ describe('the web plugin registry', () => {
     expect(webPluginDiagnostics()).toEqual([]);
 
     expect(() => installWebPlugins([])).toThrow(/already installed/);
+  });
+
+  it('orders repository management panels without sharing repository ownership with plugins', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'later',
+        repositorySettingsPanel: { label: 'later', detail: 'later panel', order: 20, component: Other },
+      }),
+      defineWebPlugin({
+        id: 'first',
+        repositorySettingsPanel: { label: 'first', detail: 'first panel', order: 10, component: Panel },
+      }),
+    ]);
+
+    expect(pluginRepositorySettingsPanels()).toEqual([
+      { pluginId: 'first', label: 'first', detail: 'first panel', order: 10, component: Panel },
+      { pluginId: 'later', label: 'later', detail: 'later panel', order: 20, component: Other },
+    ]);
+  });
+
+  it('separates general sections from repository defaults and package panels', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'mcp',
+        repositorySettingsPanel: { label: 'MCP servers', detail: 'servers and authorization', component: Panel },
+      }),
+      defineWebPlugin({
+        id: 'planning',
+        settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
+      }),
+    ]);
+
+    expect(settingsSections('general').map((section) => section.id)).toEqual([
+      'providers',
+      'appearance',
+      'notifications',
+      'remote',
+      'plugins',
+      'planning',
+    ]);
+    expect(settingsSections('repository').map((section) => section.id)).toEqual(['repositories', 'repository-mcp']);
   });
 
   it('collects leader bindings in install order and refuses keys the TUI would', () => {
@@ -458,7 +500,11 @@ describe('the web plugin registry', () => {
         },
       }),
     ]);
-    const stop = startWebPlugins({ sendSessionFrame: () => undefined, sendHubFrame: () => undefined });
+    const stop = startWebPlugins({
+      sendSessionFrame: () => undefined,
+      sendHubFrame: () => undefined,
+      onHubConnected: () => () => undefined,
+    });
     stop();
     expect(log).toEqual(['start:a', 'start:b', 'stop:b', 'stop:a']);
   });

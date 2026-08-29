@@ -1,6 +1,8 @@
 import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import { useStore } from '@tanstack/react-store';
 import { type VoiceTone, voiceActivityView } from './voiceActivityView.ts';
+import { voiceMediaBrowserState } from './voiceMediaWakeStore.ts';
 
 const TONE_DOT: Readonly<Record<VoiceTone, DotTone>> = {
   idle: 'muted',
@@ -41,15 +43,30 @@ function Meter({ tone }: { tone: VoiceTone }) {
  */
 export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
-  const stopManualRecording = (): void => {
-    if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message: '/voice' });
+  const browserState = useStore(voiceMediaBrowserState.store);
+  const mediaConflict =
+    sessionId !== null &&
+    browserState?.sessionId === sessionId &&
+    browserState.phase === 'conflict' &&
+    view.mode !== 'off';
+  const tone: VoiceTone = mediaConflict ? 'attention' : view.tone;
+  const sendCommand = (message: string): void => {
+    if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message });
   };
+  const stopManualRecording = (): void => sendCommand('/voice');
+  const toggleAutonomousMicrophone = (): void => sendCommand(`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`);
+  const showAutonomousMicrophoneControl =
+    !mediaConflict && view.mode === 'auto' && view.phase !== 'starting' && view.phase !== 'draining';
   return (
-    <div data-testid="voice-activity" data-voice-phase={view.phase} className="flex flex-col gap-1.5 px-1">
+    <div
+      data-testid="voice-activity"
+      data-voice-phase={mediaConflict ? 'conflict' : view.phase}
+      className="flex flex-col gap-1.5 px-1"
+    >
       <span className="flex min-w-0 items-center gap-2">
-        <Dot tone={TONE_DOT[view.tone]} pulse={view.active} />
-        <span data-testid="voice-label" className={`flex-1 truncate text-[11px] font-bold ${TONE_TEXT[view.tone]}`}>
-          {view.label}
+        <Dot tone={TONE_DOT[tone]} pulse={mediaConflict ? false : view.active} />
+        <span data-testid="voice-label" className={`flex-1 truncate text-[11px] font-bold ${TONE_TEXT[tone]}`}>
+          {mediaConflict ? 'microphone unavailable' : view.label}
         </span>
         {view.elapsed ? (
           <span data-testid="voice-elapsed" className="shrink-0 text-[10px] tabular-nums text-doom-yellow">
@@ -67,11 +84,26 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
             stop
           </Button>
         ) : null}
-        {view.active ? <Meter tone={view.tone} /> : null}
+        {showAutonomousMicrophoneControl ? (
+          <Button
+            variant="subtle"
+            size="xs"
+            data-testid="voice-autonomous-microphone-toggle"
+            aria-label={`${view.microphoneMuted ? 'unmute' : 'mute'} autonomous voice microphone`}
+            aria-pressed={view.microphoneMuted}
+            title={`${view.microphoneMuted ? 'unmute' : 'mute'} autonomous voice microphone`}
+            onClick={toggleAutonomousMicrophone}
+          >
+            {view.microphoneMuted ? 'unmute' : 'mute'}
+          </Button>
+        ) : null}
+        {!mediaConflict && view.active ? <Meter tone={view.tone} /> : null}
       </span>
-      {view.detail ? (
+      {mediaConflict || view.detail ? (
         <span data-testid="voice-detail" className="text-[9px] leading-relaxed text-doom-faint">
-          {view.detail}
+          {mediaConflict
+            ? 'another browser tab owns voice capture. Close it or stop voice there, then retry.'
+            : view.detail}
         </span>
       ) : null}
       {view.mode !== 'off' ? (

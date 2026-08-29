@@ -107,6 +107,7 @@ async function main(): Promise<number> {
         sessionId: resolved.identity.sessionId,
         cwd: process.cwd(),
         internalToken: apiInternalToken,
+        hubToken: token,
         apis: await loadPackageApis('session', { onNotice: notice }),
         telemetry,
         onNotice: notice,

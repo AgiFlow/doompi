@@ -1,4 +1,4 @@
-import type { IClock } from '../types/index.ts';
+import type { AsrDecodingEvidence, IClock } from '../types/index.ts';
 import type { VoiceCommandContext } from './commandCorrection.ts';
 import { alignNarrationSpan, extractNovelNarrationResidual, normalizeEchoText } from './semanticEcho.ts';
 
@@ -32,6 +32,7 @@ export interface VoiceTranscriptSignalEvidence {
   gapCount: number;
   playbackOverlapMs: number;
   classifier: VoiceTranscriptClassifier;
+  asr?: AsrDecodingEvidence;
 }
 
 export interface RecentVoiceTranscript {
@@ -150,6 +151,32 @@ function safeNumber(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function boundedOptionalNumber(value: number | undefined, minimum: number, maximum: number): number | undefined {
+  return value !== undefined && Number.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : undefined;
+}
+
+function normalizeAsrEvidence(source: AsrDecodingEvidence | undefined): AsrDecodingEvidence | undefined {
+  if (!source) return undefined;
+  const evidence: AsrDecodingEvidence = {
+    ...(boundedOptionalNumber(source.noSpeechProbability, 0, 1) === undefined
+      ? {}
+      : { noSpeechProbability: boundedOptionalNumber(source.noSpeechProbability, 0, 1) }),
+    ...(boundedOptionalNumber(source.averageLogProbability, -20, 0) === undefined
+      ? {}
+      : { averageLogProbability: boundedOptionalNumber(source.averageLogProbability, -20, 0) }),
+    ...(boundedOptionalNumber(source.compressionRatio, 0, 100) === undefined
+      ? {}
+      : { compressionRatio: boundedOptionalNumber(source.compressionRatio, 0, 100) }),
+    ...(boundedOptionalNumber(source.segmentDurationMs, 0, 300_000) === undefined
+      ? {}
+      : { segmentDurationMs: boundedOptionalNumber(source.segmentDurationMs, 0, 300_000) }),
+    ...(boundedOptionalNumber(source.speechDurationMs, 0, 300_000) === undefined
+      ? {}
+      : { speechDurationMs: boundedOptionalNumber(source.speechDurationMs, 0, 300_000) }),
+  };
+  return Object.keys(evidence).length > 0 ? evidence : undefined;
+}
+
 export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): VoiceTranscriptAdmissionAssessment {
   const transcript = boundedText(
     input.transcript.normalize('NFKC').replace(/\s+/gu, ' ').trim(),
@@ -159,6 +186,7 @@ export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): Voi
   const tokens = transcriptTokens(transcript);
   const narration = bestNarrationAnalysis(transcript, input.narrationReferences);
   const sourceEvidence = input.evidence;
+  const asr = normalizeAsrEvidence(sourceEvidence?.asr);
   const evidence: VoiceTranscriptSignalEvidence = {
     durationMs: Math.max(0, safeNumber(sourceEvidence?.durationMs ?? 0, 0)),
     voicedMs: Math.max(0, safeNumber(sourceEvidence?.voicedMs ?? 0, 0)),
@@ -170,6 +198,7 @@ export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): Voi
     gapCount: Math.max(0, Math.floor(safeNumber(sourceEvidence?.gapCount ?? 0, 0))),
     playbackOverlapMs: Math.max(0, safeNumber(sourceEvidence?.playbackOverlapMs ?? 0, 0)),
     classifier: sourceEvidence?.classifier ?? 'energy',
+    ...(asr ? { asr } : {}),
   };
   const narrationOverlap = input.narrationOverlap || evidence.playbackOverlapMs > 0;
   const base = {
@@ -192,9 +221,38 @@ export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): Voi
     return { ...base, action: 'reject', reason: 'duplicate', score: 0, matchedGuards: ['duplicate'] };
   if (evidence.classifierSpeechMs < 120 && evidence.voicedMs < 120 && evidence.peakDbfs < -58 && evidence.rmsDbfs < -66)
     return { ...base, action: 'reject', reason: 'no_speech', score: 0, matchedGuards: ['no_speech'] };
+  const asrNoSpeech = evidence.asr?.noSpeechProbability;
+  const asrLogProbability = evidence.asr?.averageLogProbability;
+  if (asrNoSpeech !== undefined && (asrNoSpeech >= 0.8 || (asrNoSpeech >= 0.6 && (asrLogProbability ?? 0) <= -1)))
+    return { ...base, action: 'reject', reason: 'no_speech', score: 0, matchedGuards: ['asr_no_speech'] };
+
+  const classifierCorroboration = evidence.classifierSpeechMs >= 120;
+  const pcmCorroboration =
+    evidence.voicedMs >= 120 &&
+    evidence.peakDbfs >= -48 &&
+    evidence.rmsDbfs >= -55 &&
+    evidence.signalVariationDb >= 2 &&
+    evidence.nonZeroRatio >= 0.1;
+  const hasAsrDecodingSignal =
+    asrNoSpeech !== undefined ||
+    asrLogProbability !== undefined ||
+    evidence.asr?.compressionRatio !== undefined ||
+    evidence.asr?.speechDurationMs !== undefined;
+  const asrCorroboration =
+    hasAsrDecodingSignal &&
+    (asrNoSpeech === undefined || asrNoSpeech < 0.5) &&
+    (asrLogProbability === undefined || asrLogProbability > -1.2) &&
+    (evidence.asr?.compressionRatio === undefined || evidence.asr.compressionRatio < 2.8) &&
+    (evidence.asr?.speechDurationMs === undefined || evidence.asr.speechDurationMs >= 120);
+  const corroboratingFamilies = [classifierCorroboration, pcmCorroboration, asrCorroboration].filter(Boolean).length;
+  const suspiciousConflict =
+    (classifierCorroboration && !pcmCorroboration && !asrCorroboration) ||
+    (asrNoSpeech !== undefined && asrNoSpeech >= 0.5) ||
+    (asrLogProbability !== undefined && asrLogProbability <= -1.2) ||
+    (evidence.asr?.compressionRatio !== undefined && evidence.asr.compressionRatio >= 2.8);
 
   const guards: readonly WeightedGuard[] = [
-    { name: 'classifier_confirmed', matched: evidence.classifierSpeechMs >= 120, weight: 40 },
+    { name: 'classifier_confirmed', matched: classifierCorroboration, weight: 40 },
     { name: 'classifier_sustained', matched: evidence.classifierSpeechMs >= 300, weight: 15 },
     { name: 'voiced_200ms', matched: evidence.voicedMs >= 200, weight: 20 },
     { name: 'voiced_500ms', matched: evidence.voicedMs >= 500, weight: 10 },
@@ -205,6 +263,20 @@ export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): Voi
     { name: 'bounded_duration', matched: evidence.durationMs >= 200 && evidence.durationMs <= 45_000, weight: 5 },
     { name: 'has_words', matched: tokens.length >= 1, weight: 10 },
     { name: 'multiple_words', matched: tokens.length >= 3, weight: 10 },
+    {
+      name: 'short_speech_corroborated',
+      matched: tokens.length <= 2 && classifierCorroboration && pcmCorroboration,
+      weight: 10,
+    },
+    { name: 'asr_corroborated', matched: asrCorroboration, weight: 10 },
+    { name: 'asr_no_speech_risk', matched: asrNoSpeech !== undefined && asrNoSpeech >= 0.5, weight: -45 },
+    { name: 'asr_low_logprob', matched: asrLogProbability !== undefined && asrLogProbability <= -1.2, weight: -35 },
+    {
+      name: 'asr_high_compression',
+      matched: evidence.asr?.compressionRatio !== undefined && evidence.asr.compressionRatio >= 2.8,
+      weight: -30,
+    },
+    { name: 'evidence_conflict', matched: suspiciousConflict, weight: 0 },
     { name: 'capture_gap', matched: evidence.gapCount > 0, weight: -15 },
     { name: 'weak_peak', matched: evidence.peakDbfs < -60, weight: -25 },
     { name: 'weak_rms', matched: evidence.rmsDbfs < -68, weight: -20 },
@@ -218,7 +290,8 @@ export function assessVoiceTranscript(input: VoiceTranscriptAdmissionInput): Voi
   ];
   const matchedGuards = guards.filter((guard) => guard.matched).map((guard) => guard.name);
   const score = guards.reduce((total, guard) => total + (guard.matched ? guard.weight : 0), 0);
-  if (narrationOverlap) return { ...base, action: 'review', reason: 'review', score, matchedGuards };
+  if (narrationOverlap || suspiciousConflict || (score >= ACCEPT_SCORE && corroboratingFamilies < 2))
+    return { ...base, action: 'review', reason: 'review', score, matchedGuards };
   if (score >= ACCEPT_SCORE) return { ...base, action: 'accept', reason: 'accepted', score, matchedGuards };
   if (score <= REJECT_SCORE) return { ...base, action: 'reject', reason: 'no_speech', score, matchedGuards };
   return { ...base, action: 'review', reason: 'review', score, matchedGuards };

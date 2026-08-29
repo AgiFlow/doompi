@@ -6,6 +6,7 @@ import type {
 } from '@earendil-works/pi-protocol';
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 import {
+  imagesFromContent,
   summariseArgs,
   type AssistantEntry,
   type TimelineEntry,
@@ -22,7 +23,8 @@ function userEntry(item: UserTranscriptItem): UserEntry {
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('');
-  return { kind: 'user', id: item.id, text };
+  const images = imagesFromContent(item.content);
+  return { kind: 'user', id: item.id, text, ...(images.length > 0 ? { images } : {}) };
 }
 
 function assistantEntry(item: AssistantTranscriptItem): AssistantEntry {

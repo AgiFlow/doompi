@@ -22,6 +22,7 @@ function fakeHost(): FakeHost {
     published,
     sessions: () => [{ sessionId: SESSION, cwd: '/workspace' }],
     publish: (sessionId, payload) => published.push({ sessionId, payload }),
+    requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
     onNotice: () => undefined,
   };
 }

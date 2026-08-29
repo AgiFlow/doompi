@@ -35,7 +35,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
-const SESSION_STORE_HELPER = 'defineSessionStore';
+const STORE_HELPERS = 'defineGlobalStore/defineSessionStore';
 
 export interface WebPluginBlock {
   pluginId?: unknown;
@@ -188,9 +188,9 @@ export const webPluginImportAllowlist: RuleDefinition = {
 
 export const webPluginNoModuleState: RuleDefinition = {
   preflight: true,
-  rule: 'A web plugin keeps no mutable module state: per-session state lives in a defineSessionStore record and actions send through props',
+  rule: 'A web plugin keeps no mutable module state: page-wide state lives in defineGlobalStore and per-session state lives in defineSessionStore',
   rationale:
-    'A module-level let is state nothing subscribes to and nothing resets: a remembered runtime sender outlives the page it was bound for, a cached status goes stale without a re-render, and each plugin reinvents the bookkeeping. The contract gives every component sendSessionFrame and the session statuses as props, and defineSessionStore holds whatever must survive a render, so a mutable module binding has no job left.',
+    'A module-level let is state nothing subscribes to and nothing resets: a remembered runtime sender outlives the page it was bound for, a cached status goes stale without a re-render, and each plugin reinvents the bookkeeping. The contract gives every component sendSessionFrame and the session statuses as props, defineGlobalStore owns page-wide reactive state, and defineSessionStore owns session records.',
   check(filePath, configRoot) {
     if (webSourcePath(filePath, configRoot) === null) return null;
     const sourceFile = readSource(filePath);
@@ -202,7 +202,7 @@ export const webPluginNoModuleState: RuleDefinition = {
       for (const declaration of statement.declarationList.declarations) names.push(declaration.name.getText());
     }
     if (names.length === 0) return null;
-    return `web/ modules keep no mutable module state (${names.join(', ')}). Put it in a ${SESSION_STORE_HELPER} record or a const Store; components send through props.sendSessionFrame and read statuses from their props.`;
+    return `web/ modules keep no mutable module state (${names.join(', ')}). Put it in ${STORE_HELPERS} or a const Store; components send through props.sendSessionFrame and read statuses from their props.`;
   },
 };
 

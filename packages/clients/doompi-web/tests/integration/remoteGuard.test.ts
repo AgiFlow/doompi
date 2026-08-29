@@ -65,14 +65,20 @@ function tryUpgrade(route: string, headers: Record<string, string>): Promise<num
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('The upgrade neither opened nor was refused.')), 5000);
     socket.on('unexpected-response', (_request, response) => {
-      clearTimeout(timer);
-      socket.terminate();
-      resolve(response.statusCode ?? 0);
+      const status = response.statusCode ?? 0;
+      response.resume();
+      response.once('end', () => {
+        clearTimeout(timer);
+        socket.terminate();
+        resolve(status);
+      });
     });
     socket.on('open', () => {
-      clearTimeout(timer);
       socket.close();
-      resolve('open');
+      socket.once('close', () => {
+        clearTimeout(timer);
+        resolve('open');
+      });
     });
     socket.on('error', () => {
       // 'unexpected-response' fires first when the server answered; an error
@@ -116,6 +122,7 @@ describe('the loopback listener refuses cross-site mutations', () => {
       body: JSON.stringify({ cwd: process.cwd() }),
     });
     expect(response.status).toBe(403);
+    await response.text();
   });
 
   it('refuses a provider sign-out issued from a hostile page', async () => {
@@ -124,6 +131,7 @@ describe('the loopback listener refuses cross-site mutations', () => {
       headers: { origin: HOSTILE_ORIGIN },
     });
     expect(response.status).toBe(403);
+    await response.text();
   });
 
   it('still accepts a mutation from the cockpit', async () => {
@@ -135,6 +143,7 @@ describe('the loopback listener refuses cross-site mutations', () => {
     // 400 because the body has no cwd: the guard let it through to the handler,
     // which is what this asserts.
     expect(response.status).toBe(400);
+    await response.text();
   });
 
   it('still accepts a mutation from a client that sends no Origin', async () => {
@@ -144,6 +153,7 @@ describe('the loopback listener refuses cross-site mutations', () => {
       body: JSON.stringify({}),
     });
     expect(response.status).toBe(400);
+    await response.text();
   });
 });
 

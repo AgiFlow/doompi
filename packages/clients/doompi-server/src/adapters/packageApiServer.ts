@@ -21,6 +21,7 @@ export interface PackageApiServerOptions {
   sessionId: string;
   cwd: string;
   internalToken?: string;
+  hubToken?: string;
   apis: readonly DoomApi[];
   telemetry?: ServerTelemetry;
   onNotice: (message: string) => void;
@@ -89,6 +90,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     sessionId: options.sessionId,
     cwd: options.cwd,
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
+    ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
     onNotice: options.onNotice,
   };
   const handlers = new Map<string, DoomApiHandler>();

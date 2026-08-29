@@ -1,17 +1,28 @@
 import {
   configScopeOf,
   globalDoomConfigPath,
+  loadDomains,
   loadDoomConfigLayers,
+  loadMajorModesConfig,
+  loadProfiles,
   repositoryDoomConfigPath,
   setDoomConfigValue,
   unsetDoomConfigValue,
+  writeDoomConfigValues,
 } from '@agimon-ai/doompi-config';
+import { defaultDomainsForMajorMode } from '@agimon-ai/doompi-config/domains';
 import type { Hono } from 'hono';
 import {
   SETTINGS_CONFIG_API_ROUTE,
   SETTINGS_MODELS_API_ROUTE,
   SETTINGS_REPOSITORIES_API_ROUTE,
+  SETTINGS_REPOSITORY_API_ROUTE,
+  SETTINGS_REPOSITORY_SELECTION_API_ROUTE,
   SETTINGS_VALUE_API_ROUTE,
+  type RepositoryCatalogOption,
+  type RepositorySelectionChanges,
+  type RepositorySelectionWriteRequest,
+  type RepositorySettingsView,
   type SettingsConfigView,
   type SettingsModel,
   type SettingsRepository,
@@ -46,6 +57,14 @@ export interface SettingsRoutesOptions {
   /** Test seam; defaults to the real home directory. */
   homeDirectory?: string;
 }
+
+const SELECTION_KEYS = {
+  majorMode: ['selection', 'majorMode'],
+  domains: ['selection', 'domains'],
+  profile: ['selection', 'profile'],
+} as const;
+
+type SelectionKey = keyof typeof SELECTION_KEYS;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -87,10 +106,178 @@ function parseWrite(body: unknown): SettingsWriteRequest | undefined {
   return { repoRoot, scope, keyPath: keyPath as string[], value, expectedHash };
 }
 
+function repositoryById(options: SettingsRoutesOptions, repositoryId: string): SettingsRepository | undefined {
+  return options.repositories().find((repository) => repository.id === repositoryId);
+}
+
+function configuredSelectionValue<T>(
+  layers: ReturnType<typeof loadDoomConfigLayers>,
+  key: SelectionKey,
+  effective: T | undefined,
+): { effective?: T; repository?: T; origin: 'global' | 'repository' | 'default' } {
+  const origin = layers.originOf(SELECTION_KEYS[key]);
+  return {
+    ...(effective === undefined ? {} : { effective }),
+    ...(origin === 'repository' && effective !== undefined ? { repository: effective } : {}),
+    origin,
+  };
+}
+
+function repositorySettingsView(
+  repository: SettingsRepository,
+  homeDirectory: string | undefined,
+): RepositorySettingsView {
+  const repoRoot = repository.path;
+  const layers = loadDoomConfigLayers(repoRoot, homeDirectory);
+  const modes = loadMajorModesConfig(repoRoot, homeDirectory);
+  const domains = loadDomains(repoRoot, homeDirectory);
+  const profiles = loadProfiles(repoRoot, homeDirectory);
+  const configured = layers.effective.selection;
+  const effectiveMajorMode = configured?.majorMode ?? modes.defaultMajorMode;
+  const effectiveDomains =
+    configured?.domains ?? defaultDomainsForMajorMode(effectiveMajorMode, {}, domains.defaultDomains);
+  const majorModes: RepositoryCatalogOption[] = Object.entries(modes.majorMode)
+    .map(([name, definition]) => ({ name, description: definition.description, layers: definition.layers }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const domainOptions: RepositoryCatalogOption[] = [
+    ...Object.entries(domains.domains).map(([name, definition]) => ({
+      name,
+      ...(definition.description ? { description: definition.description } : {}),
+    })),
+    ...Object.entries(domains.aliases).map(([name, expandsTo]) => ({
+      name,
+      description: `Alias for ${expandsTo.join(', ') || 'no domains'}.`,
+      expandsTo,
+    })),
+  ].sort((left, right) => left.name.localeCompare(right.name));
+
+  return {
+    repository,
+    hash: layers.repositoryFile.hash,
+    catalogs: {
+      majorModes,
+      domains: domainOptions,
+      profiles: profiles.map((profile) => ({ name: profile.name })),
+    },
+    selection: {
+      majorMode: configuredSelectionValue(layers, 'majorMode', effectiveMajorMode),
+      domains: configuredSelectionValue(layers, 'domains', effectiveDomains),
+      profile: configuredSelectionValue(layers, 'profile', configured?.profile),
+    },
+  };
+}
+
+function parseSelectionChanges(value: unknown): RepositorySelectionChanges | undefined {
+  if (!isRecord(value)) return undefined;
+  const keys = Object.keys(value);
+  if (keys.length === 0 || keys.some((key) => !Object.hasOwn(SELECTION_KEYS, key))) return undefined;
+  const changes: RepositorySelectionChanges = {};
+  if (Object.hasOwn(value, 'majorMode')) {
+    if (value.majorMode !== null && (typeof value.majorMode !== 'string' || value.majorMode.trim() === ''))
+      return undefined;
+    changes.majorMode = value.majorMode === null ? null : value.majorMode.trim();
+  }
+  if (Object.hasOwn(value, 'domains')) {
+    if (
+      value.domains !== null &&
+      (!Array.isArray(value.domains) || value.domains.some((name) => typeof name !== 'string' || name.trim() === ''))
+    ) {
+      return undefined;
+    }
+    changes.domains =
+      value.domains === null ? null : [...new Set((value.domains as string[]).map((name) => name.trim()))];
+  }
+  if (Object.hasOwn(value, 'profile')) {
+    if (value.profile !== null && (typeof value.profile !== 'string' || value.profile.trim() === '')) return undefined;
+    changes.profile = value.profile === null ? null : value.profile.trim();
+  }
+  return changes;
+}
+
+function parseSelectionWrite(value: unknown): RepositorySelectionWriteRequest | undefined {
+  if (!isRecord(value) || typeof value.repositoryId !== 'string' || typeof value.expectedHash !== 'string')
+    return undefined;
+  const changes = parseSelectionChanges(value.changes);
+  return changes === undefined
+    ? undefined
+    : { repositoryId: value.repositoryId, expectedHash: value.expectedHash, changes };
+}
+
+function validateSelectionChanges(
+  view: RepositorySettingsView,
+  changes: RepositorySelectionChanges,
+): string | undefined {
+  if (changes.majorMode !== undefined && changes.majorMode !== null) {
+    if (!view.catalogs.majorModes.some((mode) => mode.name === changes.majorMode)) {
+      return `Unknown major mode '${changes.majorMode}'.`;
+    }
+  }
+  if (changes.domains !== undefined && changes.domains !== null) {
+    const known = new Set(view.catalogs.domains.map((domain) => domain.name));
+    const unknown = changes.domains.find((domain) => !known.has(domain));
+    if (unknown !== undefined) return `Unknown domain '${unknown}'.`;
+  }
+  if (changes.profile !== undefined && changes.profile !== null) {
+    if (!view.catalogs.profiles.some((profile) => profile.name === changes.profile)) {
+      return `Unknown profile '${changes.profile}'.`;
+    }
+  }
+  return undefined;
+}
+
+function selectionEdits(changes: RepositorySelectionChanges) {
+  return (Object.entries(changes) as Array<[SelectionKey, string | readonly string[] | null]>).map(([key, value]) => ({
+    keyPath: SELECTION_KEYS[key],
+    ...(value === null ? {} : { value }),
+  }));
+}
+
 export function registerSettingsRoutes(app: Hono, options: SettingsRoutesOptions): void {
   const { homeDirectory } = options;
 
   app.get(SETTINGS_REPOSITORIES_API_ROUTE, (context) => context.json({ repositories: options.repositories() }));
+
+  app.get(SETTINGS_REPOSITORY_API_ROUTE, (context) => {
+    const repositoryId = context.req.query('repository');
+    const repository = repositoryId === undefined ? undefined : repositoryById(options, repositoryId);
+    if (repository === undefined) return context.json({ error: 'Choose a repository the hub knows about.' }, 404);
+    try {
+      return context.json(repositorySettingsView(repository, homeDirectory));
+    } catch (error) {
+      return context.json({ error: describe(error) }, 422);
+    }
+  });
+
+  app.put(SETTINGS_REPOSITORY_SELECTION_API_ROUTE, async (context) => {
+    const body: unknown = await context.req.json().catch(() => undefined);
+    const request = parseSelectionWrite(body);
+    if (request === undefined) {
+      return context.json({ error: 'A selection write needs a repository, file hash, and typed changes.' }, 400);
+    }
+    const repository = repositoryById(options, request.repositoryId);
+    if (repository === undefined) return context.json({ error: 'Choose a repository the hub knows about.' }, 404);
+
+    let before: RepositorySettingsView;
+    try {
+      before = repositorySettingsView(repository, homeDirectory);
+    } catch (error) {
+      return context.json({ error: describe(error) }, 422);
+    }
+    if (before.hash !== request.expectedHash) {
+      return context.json({ error: 'The repository config changed since it was read.', hash: before.hash }, 409);
+    }
+    const invalid = validateSelectionChanges(before, request.changes);
+    if (invalid !== undefined) return context.json({ error: invalid }, 422);
+
+    try {
+      await writeDoomConfigValues(repositoryDoomConfigPath(repository.path), selectionEdits(request.changes), {
+        scope: 'repository',
+      });
+      return context.json(repositorySettingsView(repository, homeDirectory));
+    } catch (error) {
+      return context.json({ error: describe(error) }, 422);
+    }
+  });
 
   app.get(SETTINGS_MODELS_API_ROUTE, async (context) => {
     try {

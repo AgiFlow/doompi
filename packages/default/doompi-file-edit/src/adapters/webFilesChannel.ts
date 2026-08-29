@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import { filterDoomIgnoredFiles } from '../services/doomIgnore.ts';
 import { foldEntries, foldVersions, isDiffable, parseTimeline } from '../services/fileChanges.ts';
 import { filesChannelType, type FilesItemView } from '../types/webFiles.ts';
 import { FileEditPaths } from './FileEditPaths/FileEditPaths.ts';
@@ -57,7 +58,7 @@ export function readSessionFiles(timelinePath: string, cwd: string): FilesItemVi
     return [];
   }
   const events = parseTimeline(content);
-  return foldEntries(events)
+  const items = foldEntries(events)
     .filter((entry) => stillExists(entry.path))
     .map((entry) => ({
       path: entry.path,
@@ -67,6 +68,13 @@ export function readSessionFiles(timelinePath: string, cwd: string): FilesItemVi
       count: entry.count,
       diffable: isDiffable(foldVersions(events, entry.path)),
     }));
+
+  try {
+    const doomIgnore = fs.readFileSync(path.join(cwd, '.doomignore'), 'utf8');
+    return filterDoomIgnoredFiles(items, doomIgnore);
+  } catch {
+    return items;
+  }
 }
 
 /**

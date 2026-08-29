@@ -81,11 +81,12 @@
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "cross-spawn": "7.0.6",
-    "hono": "4.13.3"
+    "hono": "4.13.3",
+    "ignore": "7.0.6"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.3",
-    "@earendil-works/pi-tui": "0.84.3",
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/cross-spawn": "6.0.6",
@@ -100,8 +101,8 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.3",
-    "@earendil-works/pi-tui": "0.84.3"
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

@@ -77,6 +77,8 @@ export function hubChannelHarness(channel: WebHubChannel, options: HubChannelHar
     publish: (sessionId, payload) => {
       published.push({ type: channel.frameType, sessionId, payload });
     },
+    requestSessionApi: () =>
+      Promise.resolve(Response.json({ error: 'No session API in the channel harness.' }, { status: 501 })),
     onNotice: (message) => notices.push(message),
   };
   const source = channel.start(host);

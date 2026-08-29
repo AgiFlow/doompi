@@ -3,6 +3,7 @@ import type {
   LeaderBindingContribution,
   MinorModeContribution,
   PaletteCommandContribution,
+  RepositorySettingsPanelContribution,
   SettingsSectionContribution,
   SelectionAxisContribution,
   SessionChannelContribution,
@@ -421,6 +422,23 @@ export function webPluginDiagnostics(): readonly InstallDiagnostic[] {
 /** Every installed plugin definition, in install order; the settings page lists them. */
 export function installedWebPlugins(): readonly WebPluginDefinition[] {
   return state.plugins;
+}
+
+export interface InstalledRepositorySettingsPanel extends RepositorySettingsPanelContribution {
+  pluginId: string;
+}
+
+/** Package panels placed under the host's repository controls, in stable display order. */
+export function pluginRepositorySettingsPanels(): readonly InstalledRepositorySettingsPanel[] {
+  return state.plugins
+    .flatMap((plugin) =>
+      plugin.repositorySettingsPanel === undefined ? [] : [{ pluginId: plugin.id, ...plugin.repositorySettingsPanel }],
+    )
+    .sort(
+      (left, right) =>
+        (left.order ?? DEFAULT_FILL_ORDER) - (right.order ?? DEFAULT_FILL_ORDER) ||
+        left.pluginId.localeCompare(right.pluginId),
+    );
 }
 
 export function webTabs(): readonly TabContribution[] {

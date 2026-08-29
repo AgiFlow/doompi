@@ -253,7 +253,15 @@ describe('transcription adapters and registry', () => {
     const audioPath = path.join(workspace, 'audio.wav');
     fs.writeFileSync(audioPath, '');
     const openSpawner = new AdapterSpawner(() => fs.writeFileSync(path.join(workspace, 'audio.txt'), 'openai'));
-    const mlxSpawner = new AdapterSpawner(() => fs.writeFileSync(path.join(workspace, 'mlx-whisper.txt'), 'mlx'));
+    const mlxSpawner = new AdapterSpawner(() =>
+      fs.writeFileSync(
+        path.join(workspace, 'mlx-whisper.json'),
+        JSON.stringify({
+          text: 'mlx',
+          segments: [{ start: 0, end: 0.5, no_speech_prob: 0.1, avg_logprob: -0.25, compression_ratio: 1.2 }],
+        }),
+      ),
+    );
     const config: VoiceAdapterConfig = { model: { id: 'turbo' } };
     expect(
       await new OpenAiWhisperAdapter(resolver, openSpawner).transcribe({
@@ -265,13 +273,60 @@ describe('transcription adapters and registry', () => {
     ).toBe('openai');
     expect(
       await new MlxWhisperAdapter(resolver, mlxSpawner).transcribe({ audioPath, workspace, config, language: 'en' }),
-    ).toBe('mlx');
+    ).toEqual({
+      transcript: 'mlx',
+      evidence: {
+        noSpeechProbability: 0.1,
+        averageLogProbability: -0.25,
+        compressionRatio: 1.2,
+        segmentDurationMs: 500,
+        speechDurationMs: 450,
+      },
+    });
     expect(openSpawner.calls[0]?.args).toContain('--output_format');
     expect(mlxSpawner.calls[0]?.args).toContain('--output-name');
     // mlx_whisper rejects `--format` outright, so this spelling is the whole
     // difference between a transcription and a usage dump.
     expect(mlxSpawner.calls[0]?.args).toContain('--output-format');
     expect(mlxSpawner.calls[0]?.args).not.toContain('--format');
+  });
+  it('rejects out-of-range MLX decoding metadata instead of dropping it', async () => {
+    const workspace = temporaryRoot();
+    const audioPath = path.join(workspace, 'audio.wav');
+    fs.writeFileSync(audioPath, '');
+    const spawner = new AdapterSpawner(() =>
+      fs.writeFileSync(
+        path.join(workspace, 'mlx-whisper.json'),
+        JSON.stringify({ text: 'hallucinated text', segments: [{ start: 0, end: 1, no_speech_prob: 2 }] }),
+      ),
+    );
+
+    await expect(
+      new MlxWhisperAdapter(resolver, spawner).transcribe({
+        audioPath,
+        workspace,
+        config: { model: { id: 'turbo' } },
+        language: 'auto',
+      }),
+    ).rejects.toThrow('invalid no_speech_prob metadata');
+  });
+
+  it('supports MLX JSON output without optional segment metadata', async () => {
+    const workspace = temporaryRoot();
+    const audioPath = path.join(workspace, 'audio.wav');
+    fs.writeFileSync(audioPath, '');
+    const spawner = new AdapterSpawner(() =>
+      fs.writeFileSync(path.join(workspace, 'mlx-whisper.json'), JSON.stringify({ text: ' plain result ' })),
+    );
+
+    await expect(
+      new MlxWhisperAdapter(resolver, spawner).transcribe({
+        audioPath,
+        workspace,
+        config: { model: { id: 'turbo' } },
+        language: 'auto',
+      }),
+    ).resolves.toEqual({ transcript: 'plain result' });
   });
   it('selects the first usable configured adapter', () => {
     const unavailable: ITranscriberAdapter = {

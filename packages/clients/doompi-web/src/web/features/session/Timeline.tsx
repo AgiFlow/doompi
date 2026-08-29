@@ -13,7 +13,7 @@ import { memo, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
-import type { SessionState, TimelineEntry } from '../../lib/sessionModel.ts';
+import { isSupportedImageMimeType, type SessionState, type TimelineEntry } from '../../lib/sessionModel.ts';
 import { requestOlderHistory, sessionStoreFor, submitMessage, useHasOlderHistory } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
@@ -65,6 +65,21 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       <div data-testid="entry-user" className="flex items-center gap-3 pl-4 sm:pl-10">
         <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
           <Markdown text={entry.text} />
+          {entry.images && entry.images.length > 0 ? (
+            <div data-testid="user-attachments" className="flex flex-wrap gap-2">
+              {entry.images
+                .filter((image) => isSupportedImageMimeType(image.mimeType))
+                .map((image, index) => (
+                  <img
+                    key={`${image.mimeType}:${image.data.slice(0, 24)}:${String(index)}`}
+                    src={`data:${image.mimeType};base64,${image.data}`}
+                    alt={`Attached image ${String(index + 1)}`}
+                    data-testid="user-attached-image"
+                    className="h-auto max-h-80 max-w-full rounded-md object-contain"
+                  />
+                ))}
+            </div>
+          ) : null}
           {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
         </div>
         {/* The label trails what the reader said and the session's leads what

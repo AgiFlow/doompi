@@ -30,7 +30,10 @@ test('keeps the conversation full width and moves composition surfaces into mobi
   await expect(page.getByTestId('activity-dock')).toBeHidden();
 });
 
-test('stacks the settings navigation above contributed settings on a phone', async ({ page, cockpit }) => {
+test('opens settings navigation in a bottom sheet on a phone and restores the sidebar on wider screens', async ({
+  page,
+  cockpit,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
@@ -38,10 +41,56 @@ test('stacks the settings navigation above contributed settings on a phone', asy
   await page.getByTestId('mobile-sessions-open').click();
   await page.getByTestId('settings-open').click();
 
-  await expect(page.getByTestId('settings-menu')).toBeVisible();
-  await expect(page.getByTestId('settings-content')).toBeVisible();
+  await expect(page.getByTestId('settings-menu')).toBeHidden();
+  await expect(page.getByTestId('settings-menu-open')).toBeVisible();
+  await page.getByTestId('settings-menu-open').click();
+  const sheet = page.getByTestId('settings-menu-sheet');
+  await expect(sheet).toBeVisible();
+  const sheetBox = await sheet.boundingBox();
+  expect(sheetBox).not.toBeNull();
+  expect(Math.abs((sheetBox?.y ?? 0) + (sheetBox?.height ?? 0) - 844)).toBeLessThanOrEqual(1);
+
+  await sheet.getByTestId('settings-section-appearance').click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByTestId('appearance-settings')).toBeVisible();
   await expect(page.getByTestId('session-rail-panel')).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await page.setViewportSize({ width: 800, height: 844 });
+  await expect(page.getByTestId('settings-menu')).toBeHidden();
+  await expect(page.getByTestId('settings-menu-open')).toBeVisible();
+  await expect(page.getByTestId('appearance-settings')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(800);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.getByTestId('settings-menu')).toBeVisible();
+  await expect(page.getByTestId('settings-menu-open')).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
+});
+
+test.describe('responsive repository settings plugins', () => {
+  test.use({ assets: 'synced' });
+
+  test('keeps the MCP repository page within phone and tablet viewports', async ({ page, cockpit }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+
+    await page.getByTestId('mobile-sessions-open').click();
+    await page.getByTestId('settings-open').click();
+    await page.getByTestId('settings-workspace-repository').click();
+    await page.getByTestId('settings-menu-open').click();
+    await page.getByTestId('settings-menu-sheet').getByTestId('settings-section-repository-mcp').click();
+
+    await expect(page.getByText('Select a repository to inspect its synced MCP catalog.')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    await page.setViewportSize({ width: 800, height: 844 });
+    await expect(page.getByTestId('settings-menu')).toBeHidden();
+    await expect(page.getByTestId('settings-menu-open')).toBeVisible();
+    await expect(page.getByText('Select a repository to inspect its synced MCP catalog.')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(800);
+  });
 });
 
 test.describe('mobile composer actions', () => {

@@ -7,8 +7,8 @@ const expanded = { ...done, expanded: true };
 const texts = (lines: Array<{ text: string }>) => lines.map((entry) => entry.text);
 
 describe('voice tool call summaries', () => {
-  it('names discover, run, and narrate with what they target', () => {
-    expect(VOICE_TOOL_NAMES).toEqual(['describe_voice_tools', 'use_voice_tools', 'narrate']);
+  it('names discover, run, narrate, and handoff calls with what they target', () => {
+    expect(VOICE_TOOL_NAMES).toEqual(['describe_voice_tools', 'use_voice_tools', 'narrate', 'transfer_voice']);
     expect(voiceCallSummary('describe_voice_tools', {})).toEqual({
       glyph: '☰',
       action: 'discover',
@@ -37,6 +37,12 @@ describe('voice tool call summaries', () => {
     expect(voiceCallSummary('narrate', {})).toEqual({ action: 'narrate', detailIsName: false });
     expect(voiceCallSummary('narrate', { text: 'hello\n  there' }).detail).toBe('hello there');
     expect(voiceCallSummary('narrate', { text: 'x'.repeat(100) }).detail).toBe(`${'x'.repeat(69)}…`);
+    expect(voiceCallSummary('transfer_voice', {})).toEqual({
+      glyph: '↪',
+      action: 'hand off',
+      detailIsName: false,
+    });
+    expect(voiceCallSummary('transfer_voice', { target: 2 }).detail).toBe('target 2');
   });
 });
 

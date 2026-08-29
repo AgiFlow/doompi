@@ -187,6 +187,71 @@ describe('VoiceWorkerClient', () => {
     await client.shutdown('session-shutdown');
   });
 
+  it('stops replaying stale capture state after exhausting supervised restarts', async () => {
+    const workers: ClientWorker[] = [];
+    const exhausted = vi.fn();
+    const client = new VoiceWorkerClient({
+      spoolDirectory: '/private/voice',
+      shutdownTimeoutMs: 0,
+      workerFactory: () => {
+        const worker = new ClientWorker();
+        workers.push(worker);
+        return worker as unknown as VoiceWorkerHandle;
+      },
+      onEvent: vi.fn(),
+      onExhausted: exhausted,
+    });
+
+    const starting = client.start();
+    workers[0]!.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    await starting;
+    client.beginCapture({
+      sessionId: 'session-1',
+      captureId: 'capture-1',
+      turnId: 'turn-1',
+      mode: 'manual',
+      config: {
+        engine: 'mlx-whisper',
+        language: 'auto',
+        recorder: { device: 'none:default' },
+        adapters: { 'mlx-whisper': { model: { id: 'local-model' } } },
+      },
+      maxDurationMs: 300_000,
+      utteranceIdleMs: 3_000,
+    });
+
+    for (let index = 0; index < 4; index += 1) {
+      workers[index]!.emit('error', new Error(`crash ${String(index + 1)}`));
+      if (index < 3)
+        workers[index + 1]!.emit('message', {
+          version: VOICE_WORKER_PROTOCOL_VERSION,
+          sequence: 0,
+          kind: 'ready',
+          capabilities: ['capture', 'durable-spool'],
+        });
+    }
+
+    expect(workers).toHaveLength(4);
+    expect(exhausted).toHaveBeenCalledOnce();
+    const restarted = client.start();
+    expect(workers).toHaveLength(5);
+    expect(workers[4]!.posted).toEqual([expect.objectContaining({ kind: 'initialize' })]);
+    workers[4]!.emit('message', {
+      version: VOICE_WORKER_PROTOCOL_VERSION,
+      sequence: 0,
+      kind: 'ready',
+      capabilities: ['capture', 'durable-spool'],
+    });
+    await restarted;
+    expect(workers[4]!.posted.some((message) => (message as { kind: string }).kind === 'begin-capture')).toBe(false);
+    await client.shutdown('session-shutdown');
+  });
+
   it('resumes a frozen revision once and replays a pending acknowledgement without recapture', async () => {
     const workers = [new ClientWorker(), new ClientWorker(), new ClientWorker(), new ClientWorker()];
     let workerIndex = 0;

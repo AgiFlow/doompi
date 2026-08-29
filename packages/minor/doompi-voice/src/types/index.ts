@@ -178,10 +178,22 @@ export interface TranscriptionRequest {
   language: string;
   signal?: AbortSignal;
 }
+export interface AsrDecodingEvidence {
+  noSpeechProbability?: number;
+  averageLogProbability?: number;
+  compressionRatio?: number;
+  segmentDurationMs?: number;
+  speechDurationMs?: number;
+}
+export interface TranscriptionResult {
+  transcript: string;
+  evidence?: AsrDecodingEvidence;
+}
+export type TranscriptionAdapterOutput = string | TranscriptionResult;
 export interface ITranscriberAdapter {
   readonly engine: Exclude<VoiceEngine, 'auto'>;
   preflight(config: VoiceAdapterConfig): void;
-  transcribe(request: TranscriptionRequest): Promise<string>;
+  transcribe(request: TranscriptionRequest): Promise<TranscriptionAdapterOutput>;
 }
 export interface SelectedTranscriber {
   adapter: ITranscriberAdapter;

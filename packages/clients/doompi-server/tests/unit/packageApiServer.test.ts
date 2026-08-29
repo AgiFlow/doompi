@@ -83,6 +83,7 @@ describe('serving a session package APIs', () => {
       sessionId: 's1',
       cwd: '/repo',
       internalToken: 'agent-only-token',
+      hubToken: 'hub-only-token',
       apis: [echoApi('runner', seen)],
       onNotice: () => undefined,
     });
@@ -93,6 +94,7 @@ describe('serving a session package APIs', () => {
       sessionId: 's1',
       cwd: '/repo',
       internalToken: 'agent-only-token',
+      hubToken: 'hub-only-token',
     });
   });
 

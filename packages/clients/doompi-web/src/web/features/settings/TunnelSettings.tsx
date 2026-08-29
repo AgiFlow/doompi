@@ -58,7 +58,7 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
       <RadioGroup
         value={draft.kind}
         onValueChange={(kind) => setDraft(kind === 'named' ? namedTunnel(draft) : { kind: 'quick' })}
-        className="grid grid-cols-2"
+        className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2"
         aria-label="Cloudflare tunnel type"
       >
         <RadioGroupCard value="quick" data-testid="remote-tunnel-quick">
@@ -125,14 +125,17 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] text-doom-faint">Changes apply the next time remote access starts.</span>
+      <div className="flex flex-col items-stretch gap-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-between min-[480px]:gap-3">
+        <span className="text-[10px] leading-relaxed text-doom-faint">
+          Changes apply the next time remote access starts.
+        </span>
         <Button
           variant="outline"
           size="sm"
           data-testid="remote-tunnel-save"
           disabled={!changed || invalidHostname}
           onClick={() => void save()}
+          className="w-full min-[480px]:w-auto"
         >
           save tunnel
         </Button>

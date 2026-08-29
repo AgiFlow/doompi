@@ -11,6 +11,7 @@ export {
   type DoomApiContext,
   type DoomApiEntryDeclaration,
   type DoomApiHandler,
+  type DoomRepositorySyncView,
   DoomApiManifestError,
   type DoomApiScope,
   isDoomApi,
