@@ -25,6 +25,44 @@ function fakeChild(): ReturnType<typeof spawn> {
   vi.mocked(spawn).mockReturnValue(child);
   return child;
 }
+describe('cwd sync guard', () => {
+  it('stays inactive when the cockpit starts outside a repository', async () => {
+    const readDrift = vi.fn(() => drifted);
+    const runSync = vi.fn(async () => {});
+    const onSynced = vi.fn();
+    const subject = createSyncGuard({
+      cwd: '/workspace/plain-directory',
+      findRoot: () => {
+        throw new Error('no repository');
+      },
+      readDrift,
+      runSync,
+      intervalMs: 5,
+    });
+
+    await subject.ensureSynced();
+    subject.watch(onSynced);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    subject.close();
+
+    expect(readDrift).not.toHaveBeenCalled();
+    expect(runSync).not.toHaveBeenCalled();
+    expect(onSynced).not.toHaveBeenCalled();
+  });
+
+  it('guards the repository resolved from the cockpit launch directory', async () => {
+    const findRoot = vi.fn(() => REPO);
+    const readDrift = vi.fn(() => fresh);
+    const subject = createSyncGuard({ cwd: '/workspace/repo/packages/web', findRoot, readDrift });
+
+    await subject.ensureSynced();
+
+    expect(findRoot).toHaveBeenCalledWith('/workspace/repo/packages/web');
+    expect(readDrift).toHaveBeenCalledWith(REPO);
+    subject.close();
+  });
+});
+
 describe('sync guard', () => {
   it('leaves a synced repository alone', async () => {
     const { guard: subject, runSync } = guard(() => fresh);

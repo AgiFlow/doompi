@@ -365,7 +365,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
   // A session reads what sync produced, and nothing makes the person who
   // opened the cockpit run sync first. The hub keeps the repository current.
-  const syncGuard = createSyncGuard({ repoRoot: process.cwd(), onNotice: notice });
+  const syncGuard = createSyncGuard({ cwd: process.cwd(), onNotice: notice });
   await syncGuard.ensureSynced();
   /**
    * Every attached page, tagged with the listener it arrived on.

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describeSyncDrift, readSyncDrift } from '@agimon-ai/doompi/services';
+import { findRepositoryRoot } from '@agimon-ai/doompi/utils';
 
 const DOOMPI_PACKAGE = '@agimon-ai/doompi';
 const CLI_SEGMENTS = ['dist', 'bin', 'cli.mjs'];
@@ -10,15 +11,18 @@ const SYNC_ARGS = ['sync'];
 const WATCH_INTERVAL_MS = 2_000;
 
 export interface SyncGuardOptions {
-  repoRoot: string;
+  /** Known repository root, or a launch directory to discover one from. */
+  repoRoot?: string;
+  cwd?: string;
   onNotice?: (message: string) => void;
   /** Test seam for running the sync itself. */
   runSync?: (repoRoot: string) => Promise<void>;
   /** Test seam for the drift read. */
   readDrift?: (repoRoot: string) => { fresh: boolean; reasons: readonly string[] };
+  /** Test seam over repository discovery. */
+  findRoot?: (cwd: string) => string;
   intervalMs?: number;
 }
-
 export interface SyncGuard {
   /**
    * Syncs the repository when anything a session reads has drifted.
@@ -30,6 +34,14 @@ export interface SyncGuard {
   /** Re-syncs on drift and reports when artifacts changed under a running cockpit. */
   watch(onSynced: () => void): void;
   close(): void;
+}
+
+function inactiveSyncGuard(): SyncGuard {
+  return {
+    ensureSynced: async () => {},
+    watch: () => {},
+    close: () => {},
+  };
 }
 
 /** Runs the launcher's own sync, in its own process so the hub keeps serving. */
@@ -70,15 +82,23 @@ function spawnSync(repoRoot: string, onNotice: (message: string) => void): Promi
  */
 export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
   const notice = options.onNotice ?? ((): void => {});
-  const runSync = options.runSync ?? ((repoRoot: string) => spawnSync(repoRoot, notice));
-  const readDrift = options.readDrift ?? ((repoRoot: string) => readSyncDrift({ repoRoot }));
+  let repoRoot = options.repoRoot;
+  if (repoRoot === undefined) {
+    try {
+      repoRoot = (options.findRoot ?? findRepositoryRoot)(options.cwd ?? process.cwd());
+    } catch {
+      return inactiveSyncGuard();
+    }
+  }
+  const runSync = options.runSync ?? ((root: string) => spawnSync(root, notice));
+  const readDrift = options.readDrift ?? ((root: string) => readSyncDrift({ repoRoot: root }));
   let inFlight: Promise<void> | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
   let closed = false;
 
   const syncOnce = async (drift: { reasons: readonly string[] }): Promise<void> => {
     notice(`syncing: ${describeSyncDrift({ fresh: false, reasons: drift.reasons as never })}`);
-    await runSync(options.repoRoot);
+    await runSync(repoRoot);
     notice('sync complete');
   };
 
@@ -87,7 +107,7 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
     // Joining the run already in flight is what makes concurrent launches
     // wait for one sync instead of starting several.
     if (inFlight) return inFlight;
-    const drift = readDrift(options.repoRoot);
+    const drift = readDrift(repoRoot);
     if (drift.fresh) return;
     inFlight = syncOnce(drift).finally(() => {
       inFlight = undefined;
@@ -101,7 +121,7 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
       if (timer) return;
       timer = setInterval(() => {
         if (closed || inFlight) return;
-        const drift = readDrift(options.repoRoot);
+        const drift = readDrift(repoRoot);
         if (drift.fresh) return;
         void ensureSynced().then(() => {
           if (!closed) onSynced();
