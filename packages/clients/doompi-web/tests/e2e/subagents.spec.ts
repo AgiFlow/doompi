@@ -198,6 +198,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
     sessionFile: journal,
   });
 
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   // The runtime's footer status is what makes the group exist; the plugin
@@ -210,6 +211,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
     statusText: 'Agents ◑',
   });
 
+  await page.getByTestId('mobile-activity-open').click();
   const row = page.getByTestId('activity-run-run-dock');
   await expect(row).toBeVisible();
   await expect(row).toContainText('doompi-reviewer');
@@ -220,6 +222,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
   // The row opens the run's own conversation as a tab of its own, rendered
   // on the same transcript as the session: gutters, markdown, tool cards.
   await row.click();
+  await expect(page.getByTestId('activity-dock')).toBeHidden();
   await expect(page).toHaveURL(/\/session\/s1\/subagents-run-run-dock$/);
   const chip = page.getByTestId('tab-subagents-run-run-dock');
   await expect(chip).toHaveText('doompi-reviewer');
@@ -246,7 +249,9 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
   await expect(tool).toContainText('export function createSessionHub');
 
   // The same run again focuses the open tab rather than opening a second one.
+  await page.getByTestId('mobile-activity-open').click();
   await page.getByTestId('activity-run-run-dock').click();
+  await expect(page.getByTestId('activity-dock')).toBeHidden();
   await expect(page.getByTestId('tab-subagents-run-run-dock-chip')).toHaveCount(1);
   await page.getByTestId('tab-subagents-run-run-dock-close').click();
   await expect(page).toHaveURL(/\/session\/s1$/);

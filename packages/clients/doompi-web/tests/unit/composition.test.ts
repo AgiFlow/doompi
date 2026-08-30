@@ -280,6 +280,7 @@ describe('activityGroups', () => {
       const groups = activityGroups({}, ['workflow-mcp-follow']);
       expect(groups.map((group) => group.name)).toEqual(['workflows']);
       expect(groups[0]?.tab).toBe('workflows');
+      expect(groups[0]?.active).toBe(true);
     } finally {
       resetWebPlugins();
     }

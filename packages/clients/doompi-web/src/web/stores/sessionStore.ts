@@ -151,11 +151,13 @@ function mergeProtocolEntries(
   previous: TimelineEntry[],
   protocol: TimelineEntry[],
   pendingUserIds: ReadonlySet<string>,
+  reconciledUserIds: ReadonlySet<string>,
 ): TimelineEntry[] {
   const localByAnchor = new Map<string | null, TimelineEntry[]>();
   let anchor: string | null = null;
   for (const entry of previous) {
-    const protocolOwned = PROTOCOL_ENTRY_KINDS.has(entry.kind) && !pendingUserIds.has(entry.id);
+    const protocolOwned =
+      (PROTOCOL_ENTRY_KINDS.has(entry.kind) || reconciledUserIds.has(entry.id)) && !pendingUserIds.has(entry.id);
     if (protocolOwned) {
       anchor = entry.id;
       continue;
@@ -187,15 +189,45 @@ function mergeProtocolEntries(
 export function applyProtocolTranscript(sessionId: string, entries: TimelineEntry[], streaming: boolean): void {
   protocolTranscripts.add(sessionId);
   sessionStoreFor(sessionId).setState((state) => {
-    const publishedUserText = new Set(entries.filter((entry) => entry.kind === 'user').map((entry) => entry.text));
-    const pendingUserEntries = state.pendingUserEntries.filter((pending) => !publishedUserText.has(pending.text));
+    const pendingUserEntries = [...state.pendingUserEntries];
+    const pendingUserIdsBeforeReconciliation = new Set(pendingUserEntries.map((pending) => pending.id));
+    const knownProtocolIds = new Set(
+      state.entries
+        .filter((entry) => PROTOCOL_ENTRY_KINDS.has(entry.kind) && !pendingUserIdsBeforeReconciliation.has(entry.id))
+        .map((entry) => entry.id),
+    );
+    const protocolUserEntryIds = { ...state.protocolUserEntryIds };
+    const normalizedEntries = [...entries];
+
+    // Work backwards so repeated text binds to the newest matching prompt. The
+    // local id keeps React from mounting the same message again when Pi publishes
+    // its authoritative transcript copy at the end of a run.
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (entry?.kind !== 'user') continue;
+      const localId = protocolUserEntryIds[entry.id];
+      if (localId !== undefined) {
+        normalizedEntries[index] = { ...entry, id: localId };
+        continue;
+      }
+      if (knownProtocolIds.has(entry.id)) continue;
+      const pendingIndex = pendingUserEntries.findLastIndex((pending) => pending.text === entry.text);
+      if (pendingIndex === -1) continue;
+      const [pending] = pendingUserEntries.splice(pendingIndex, 1);
+      if (pending === undefined) continue;
+      protocolUserEntryIds[entry.id] = pending.id;
+      normalizedEntries[index] = { ...entry, id: pending.id };
+    }
+
     const pendingUserIds = new Set(pendingUserEntries.map((pending) => pending.id));
+    const reconciledUserIds = new Set(Object.values(protocolUserEntryIds));
     return {
       ...state,
-      entries: mergeProtocolEntries(state.entries, entries, pendingUserIds),
+      entries: mergeProtocolEntries(state.entries, normalizedEntries, pendingUserIds, reconciledUserIds),
       streaming,
       settled: !streaming,
       pendingUserEntries,
+      protocolUserEntryIds,
     };
   });
 }
@@ -212,6 +244,7 @@ export function resetSessionStore(sessionId: string): void {
       streaming: state.streaming,
       settled: state.settled,
       pendingUserEntries: state.pendingUserEntries,
+      protocolUserEntryIds: state.protocolUserEntryIds,
     };
   });
   history.delete(sessionId);

@@ -10,9 +10,16 @@ import {
 import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
+import { activityGroups } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import { isSupportedImageMimeType, type SessionState, type TimelineEntry } from '../../lib/sessionModel.ts';
-import { requestOlderHistory, sessionStoreFor, submitMessage, useHasOlderHistory } from '../../stores/sessionStore.ts';
+import {
+  requestOlderHistory,
+  sessionStoreFor,
+  submitMessage,
+  useActiveSession,
+  useHasOlderHistory,
+} from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
 import { ToolCard } from './ToolCard.tsx';
@@ -146,6 +153,20 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
   );
 });
 
+function BackgroundWorkNotice() {
+  return (
+    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center">
+      <div
+        role="status"
+        data-testid="background-work-notice"
+        className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel/95 px-3 py-2 text-center text-[10px] leading-relaxed text-doom-yellow shadow-lg backdrop-blur"
+      >
+        Background work is still running. The agent will resume when results are ready.
+      </div>
+    </div>
+  );
+}
+
 /**
  * One transcript, whichever fold it reads: the focused session's own, or a
  * thread of it. Owns the scroll pinning; the caller owns the empty state and
@@ -156,11 +177,13 @@ export function Transcript({
   sessionId,
   empty,
   testId = 'timeline',
+  backgroundWorkActive = false,
 }: {
   store: Store<SessionState>;
   sessionId: string | null;
   empty: ReactNode;
   testId?: string;
+  backgroundWorkActive?: boolean;
 }) {
   const entries = useStore(store, (state) => state.entries);
   const visibleEntries = useMemo(() => entries.filter((entry) => entry.kind !== 'queued'), [entries]);
@@ -265,7 +288,14 @@ export function Transcript({
     setUnread(true);
   }, [visibleEntries]);
 
-  if (visibleEntries.length === 0) return <>{empty}</>;
+  if (visibleEntries.length === 0) {
+    return (
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {empty}
+        {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -296,13 +326,14 @@ export function Transcript({
           </div>
         ))}
       </div>
+      {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       {unread ? (
         <Button
           variant="subtle"
           size="sm"
           data-testid="timeline-jump"
           onClick={jumpToLatest}
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 border border-doom-border shadow-lg animate-doom-rise"
+          className={`absolute left-1/2 -translate-x-1/2 border border-doom-border shadow-lg animate-doom-rise ${backgroundWorkActive ? 'bottom-14' : 'bottom-3'}`}
         >
           <ChevronDownIcon className="h-3 w-3" />
           new activity below
@@ -315,10 +346,14 @@ export function Transcript({
 /** The focused session's conversation; an empty one offers a few openers. */
 export function Timeline() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const statuses = useActiveSession((state) => state.statuses);
+  const widgets = useActiveSession((state) => state.widgets);
+  const backgroundWorkActive = activityGroups(statuses, widgets).some((group) => group.active);
   return (
     <Transcript
       store={sessionStoreFor(activeId)}
       sessionId={activeId}
+      backgroundWorkActive={backgroundWorkActive}
       empty={
         <EmptyState
           data-testid="timeline"

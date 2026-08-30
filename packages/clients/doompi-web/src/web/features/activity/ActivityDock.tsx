@@ -18,11 +18,11 @@ import { sessionsStore } from '../../stores/sessionsStore.ts';
  * there, in slot order, and a group nobody fills shows the one-line summary
  * the session's footer publishes.
  */
-export function ActivityDock({ onClose }: { onClose: () => void }) {
+export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; onOpenContent: () => void }) {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
-  const slotProps = usePluginSlotProps(activeId);
+  const slotProps = usePluginSlotProps(activeId, onOpenContent);
   const groups = activityGroups(statuses, widgets);
   const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
   const pinnedGroups = groups.filter((group) => group.placement === 'bottom');

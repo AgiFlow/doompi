@@ -230,7 +230,8 @@ export function activityGroups(statuses: Record<string, string>, widgets: readon
       continue;
     }
     if (source.widgetKeys !== undefined && source.widgetKeys.some((key) => widgets.includes(key))) {
-      groups.push({ name: source.name, keys: source.keys, summary: '', active: false, ...tab, ...placement });
+      // Widgets exist only while their owning background activity is present.
+      groups.push({ name: source.name, keys: source.keys, summary: '', active: true, ...tab, ...placement });
     }
   }
   return groups;

@@ -76,14 +76,27 @@ test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({
   expect(await pinned.evaluate((element) => element.getBoundingClientRect().top)).toBe(pinnedTop);
 });
 
-test('counts the groups whose session summary is busy', async ({ page, cockpit }) => {
+test('highlights background work and keeps its resume notice visible while busy', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+
+  const activityButton = page.getByTestId('mobile-activity-open');
+  await expect(activityButton).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 
   cockpit.session.emit(status('doom-runner-runners', 'Runners 2 ●'));
 
   await expect(page.getByTestId('activity-runners')).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('activity-busy')).toHaveText('1 running');
+  await expect(activityButton).toHaveAttribute('data-active', 'true');
+  await expect(activityButton).toHaveClass(/text-doom-yellow/);
+  await expect(page.getByTestId('background-work-notice')).toHaveText(
+    'Background work is still running. The agent will resume when results are ready.',
+  );
+
+  cockpit.session.emit(status('doom-runner-runners'));
+  await expect(activityButton).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
 test('the key chip opens the owning plugin tab, and is a label where there is none', async ({ page, cockpit }) => {

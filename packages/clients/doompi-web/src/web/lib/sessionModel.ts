@@ -151,6 +151,8 @@ export interface SessionState {
    * lets both appear exactly once.
    */
   pendingUserEntries: { id: string; text: string; images?: UserImage[] }[];
+  /** Stable local ids for optimistic prompts after Pi publishes their canonical transcript entries. */
+  protocolUserEntryIds: Record<string, string>;
   nextId: number;
 }
 
@@ -172,6 +174,7 @@ export const initialSessionState: SessionState = {
   toolsThisRun: 0,
   restoredIds: [],
   pendingUserEntries: [],
+  protocolUserEntryIds: {},
   nextId: 1,
 };
 

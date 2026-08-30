@@ -168,6 +168,7 @@ describe('transcript ownership', () => {
     const userImages = [{ data: 'bG9jYWw=', mimeType: 'image/png' }];
     setActiveSession('s1');
     submitMessage('stay visible', rpcImages);
+    const optimisticId = sessionStoreFor('s1').state.entries[0]?.id;
 
     applyProtocolTranscript('s1', [], false);
     expect(sessionStoreFor('s1').state.entries).toEqual([
@@ -181,7 +182,27 @@ describe('transcript ownership', () => {
       false,
     );
     expect(sessionStoreFor('s1').state.entries).toEqual([
-      { kind: 'user', id: 'protocol-user', text: 'stay visible', images: authoritativeImages },
+      { kind: 'user', id: optimisticId, text: 'stay visible', images: authoritativeImages },
+    ]);
+  });
+
+  it('keeps one stable prompt entry when the settled transcript publishes it', () => {
+    applyProtocolTranscript('s1', [], true);
+    setActiveSession('s1');
+    submitMessage('stay in place');
+    const optimisticId = sessionStoreFor('s1').state.entries[0]?.id;
+
+    applySessionFrame('s1', { type: 'agent_settled' });
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'stay in place' }], false);
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: optimisticId, text: 'stay in place' },
+      expect.objectContaining({ kind: 'settled' }),
+    ]);
+
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'stay in place' }], false);
+    expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'user')).toEqual([
+      { kind: 'user', id: optimisticId, text: 'stay in place' },
     ]);
   });
 
