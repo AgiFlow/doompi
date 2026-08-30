@@ -51,6 +51,37 @@ test('lists the groups whose packages report in, each rendered by its own plugin
   await expect(page.getByTestId('activity-summary-workflows')).toContainText('no runs yet');
 });
 
+test('shows Loop lifecycle rows and routes the single manage action through /loops', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const loop = (state: 'starting' | 'running' | 'stopping') =>
+    JSON.stringify([{ instanceId: 'loop-release', label: 'Release watcher', detail: 'every 60s · Check release status', state }]);
+
+  await expect(page.getByTestId('activity-loops')).toHaveCount(0);
+  cockpit.session.emit(status('doom-loop-instances', loop('starting')));
+
+  const row = page.getByTestId('activity-loop-loop-release');
+  await expect(page.getByTestId('activity-loops')).toBeVisible();
+  await expect(row).toContainText('Release watcher');
+  await expect(row).toContainText('every 60s · Check release status');
+  await expect(row).toHaveAttribute('data-loop-state', 'starting');
+  await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
+
+  cockpit.session.emit(status('doom-loop-instances', loop('running')));
+  await expect(row).toHaveAttribute('data-loop-state', 'running');
+
+  await page.getByTestId('activity-loops-manage').click();
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/loops');
+
+  cockpit.session.emit(status('doom-loop-instances', loop('stopping')));
+  await expect(row).toHaveAttribute('data-loop-state', 'stopping');
+
+  cockpit.session.emit(status('doom-loop-instances'));
+  await expect(page.getByTestId('activity-loops')).toHaveCount(0);
+});
+
 test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {
   await page.setViewportSize({ width: 1280, height: 280 });
   await page.goto(cockpit.url);

@@ -1,5 +1,6 @@
 import {
   DOOM_CORDIS_SESSION_SERVICE,
+  installDoomCordisHost,
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
@@ -21,6 +22,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { installLoopRuntime, loopExtension } from '../src/adapters/pi/extension.ts';
 import { STATUS_KEY } from '../src/adapters/pi/loopConstants.ts';
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../src/schemas/loopCommands.ts';
+import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView } from '../src/types/loopView.ts';
 
 type CommandDefinition = { handler: (args: string, ctx: ExtensionContext) => Promise<void> };
 type EventListener = (event: unknown, ctx: ExtensionContext) => void | Promise<void>;
@@ -255,6 +257,90 @@ describe('doom loop extension', () => {
     await extension.shutdown();
   });
 
+  it('publishes starting, running, stopping, and removal views for non-TUI sessions', async () => {
+    const extension = await harness('extension-loop-view');
+    await extension.startSession();
+    const controls: { finishLaunch?: () => void; finishStop?: () => void } = {};
+    const external = await extension.mountLauncher({
+      id: 'activity-test',
+      source: 'test',
+      label: 'Activity launcher',
+      launch: async ({ instanceId }) =>
+        new Promise((resolve) => {
+          controls.finishLaunch = () =>
+            resolve({
+              instanceId,
+              label: 'Release watcher',
+              detail: 'every 60s · Check release status',
+              stop: () =>
+                new Promise<void>((resolveStop) => {
+                  controls.finishStop = resolveStop;
+                }),
+            });
+        }),
+    });
+    const service = extension.activeLaunchers();
+    expect(service).toBeDefined();
+    const latestView = () => {
+      const call = extension.setStatus.mock.calls.filter(([key]) => key === LOOP_VIEW_STATUS_KEY).at(-1);
+      return parseLoopStatusView(call?.[1] as string | undefined);
+    };
+
+    const launch = service!.launch('activity-test', { instanceId: 'loop-release' });
+    await vi.waitFor(() =>
+      expect(latestView()).toEqual([
+        { instanceId: 'loop-release', label: 'Activity launcher', detail: 'loop-release', state: 'starting' },
+      ]),
+    );
+
+    const finishLaunch = controls.finishLaunch;
+    if (!finishLaunch) throw new Error('Expected the deferred launcher to be ready.');
+    finishLaunch();
+    await launch;
+    await vi.waitFor(() =>
+      expect(latestView()).toEqual([
+        {
+          instanceId: 'loop-release',
+          label: 'Release watcher',
+          detail: 'every 60s · Check release status',
+          state: 'running',
+        },
+      ]),
+    );
+
+    const stop = service!.stop('loop-release', 'test stop');
+    await vi.waitFor(() => expect(latestView()?.[0]?.state).toBe('stopping'));
+    const finishStop = controls.finishStop;
+    if (!finishStop) throw new Error('Expected the deferred stop to be ready.');
+    finishStop();
+    await expect(stop).resolves.toBe(true);
+    await vi.waitFor(() => {
+      const call = extension.setStatus.mock.calls.filter(([key]) => key === LOOP_VIEW_STATUS_KEY).at(-1);
+      expect(call).toEqual([LOOP_VIEW_STATUS_KEY, undefined]);
+    });
+
+    await external.dispose();
+    await extension.shutdown();
+  });
+
+  it('does not publish browser-only Loop views in TUI sessions', async () => {
+    const extension = await harness('extension-loop-view-tui', 'tui', true);
+    await extension.startSession();
+    const external = await extension.mountLauncher({
+      id: 'activity-test',
+      source: 'test',
+      label: 'Activity launcher',
+      launch: async ({ instanceId }) => ({ instanceId, stop: vi.fn() }),
+    });
+
+    await extension.activeLaunchers()!.launch('activity-test', { instanceId: 'loop-tui' });
+    await extension.activeLaunchers()!.stop('loop-tui', 'test stop');
+
+    expect(extension.setStatus.mock.calls.some(([key]) => key === LOOP_VIEW_STATUS_KEY)).toBe(false);
+    await external.dispose();
+    await extension.shutdown();
+  });
+
   it('routes minor-mode actions through the active session service', async () => {
     const extension = await harness('extension-mode-actions');
     await extension.startSession();
@@ -315,7 +401,7 @@ describe('doom loop extension', () => {
     await extension.shutdown();
   });
 
-  it('opens the list command and clears aggregate status on provider loss', async () => {
+  it('opens the list command and clears aggregate and browser statuses on provider loss', async () => {
     const extension = await harness('extension-list');
     await extension.startSession();
 
@@ -323,15 +409,17 @@ describe('doom loop extension', () => {
     await extension.endSession();
 
     expect(extension.select).toHaveBeenCalledWith('Stop loop scheduling', []);
-    expect(extension.setStatus).toHaveBeenLastCalledWith(STATUS_KEY, undefined);
+    expect(extension.setStatus).toHaveBeenCalledWith(STATUS_KEY, undefined);
+    expect(extension.setStatus).toHaveBeenCalledWith(LOOP_VIEW_STATUS_KEY, undefined);
     expect(extension.modeUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'inactive' }));
     await extension.shutdown();
   });
 
   it('keeps the standard factory shutdown idempotent', async () => {
     const listeners = new Map<string, EventListener[]>();
+    const events = testBus();
     const pi = {
-      events: testBus(),
+      events,
       registerCommand: vi.fn(),
       sendUserMessage: vi.fn(),
       on: vi.fn((event: string, listener: EventListener) => {
@@ -340,6 +428,7 @@ describe('doom loop extension', () => {
         listeners.set(event, current);
       }),
     } as unknown as ExtensionAPI;
+    const host = await installDoomCordisHost(pi, { mode: 'composed', source: 'loop-extension-test' });
     await loopExtension(pi);
 
     const shutdown = (): Promise<unknown[]> =>
@@ -349,5 +438,6 @@ describe('doom loop extension', () => {
       );
     await shutdown();
     await shutdown();
+    await host.shutdown();
   });
 });

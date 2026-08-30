@@ -30,6 +30,7 @@
     "web",
     "llms.txt",
     "src/prompts",
+    "src/types/loopView.ts",
     "README.md",
     "LICENSE",
     "package.json"
@@ -64,6 +65,7 @@
   "dependencies": {
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1"
   },
@@ -71,7 +73,11 @@
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@earendil-works/pi-tui": "0.84.4",
     "@types/node": "26.2.0",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"

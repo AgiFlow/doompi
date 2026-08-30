@@ -1842,6 +1842,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
@@ -1858,9 +1861,21 @@ importers:
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
