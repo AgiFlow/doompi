@@ -1,3 +1,18 @@
+## 0.0.1-alpha.21 (2026-08-30)
+
+### 🚀 Features
+
+- update cockpit security and client features ([0128b50](https://github.com/AgiFlow/doompi/commit/0128b50))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.43
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.41
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.20 (2026-08-29)
 
 ### 🚀 Features

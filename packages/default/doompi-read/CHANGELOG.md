@@ -1,3 +1,21 @@
+## 0.0.1-alpha.15 (2026-08-30)
+
+### 🚀 Features
+
+- improve DoomPi web sessions and tool output ([35c8f43](https://github.com/AgiFlow/doompi/commit/35c8f43))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.6
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.14 (2026-08-29)
 
 ### 🚀 Features
