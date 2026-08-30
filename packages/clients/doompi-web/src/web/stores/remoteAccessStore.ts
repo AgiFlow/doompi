@@ -32,6 +32,9 @@ export interface RemoteAccessState {
   pairUrl?: string;
   /** Short code accepted by the same pairing claim for manual entry. */
   pairCode?: string;
+  /** Signing-key fingerprint the user compares during manual pairing. */
+  pairFingerprint?: string;
+  pairRevision?: number;
   pairExpiresAt?: string;
   busy: boolean;
   error?: string;
@@ -128,16 +131,35 @@ export async function turnRemoteAccessOn(): Promise<void> {
 export async function turnRemoteAccessOff(): Promise<void> {
   begin();
   if (!settle(await disableRemoteAccess())) return;
-  set({ step: 'options', pairUrl: undefined, pairCode: undefined, pairExpiresAt: undefined });
+  set({
+    step: 'options',
+    pairUrl: undefined,
+    pairCode: undefined,
+    pairFingerprint: undefined,
+    pairRevision: undefined,
+    pairExpiresAt: undefined,
+  });
 }
 
 export async function newPairingCode(): Promise<void> {
   const minted = await mintPairingCode();
   if ('error' in minted) {
-    set({ error: minted.error, pairUrl: undefined, pairCode: undefined });
+    set({
+      error: minted.error,
+      pairUrl: undefined,
+      pairCode: undefined,
+      pairFingerprint: undefined,
+      pairRevision: undefined,
+    });
     return;
   }
-  set({ pairUrl: minted.pairUrl, pairCode: minted.manualCode, pairExpiresAt: minted.expiresAt });
+  set({
+    pairUrl: minted.pairUrl,
+    pairCode: minted.manualCode,
+    pairFingerprint: minted.fingerprint,
+    pairRevision: minted.revision,
+    pairExpiresAt: minted.expiresAt,
+  });
 }
 
 export async function approveDevice(requestId: string): Promise<void> {

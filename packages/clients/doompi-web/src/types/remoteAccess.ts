@@ -14,6 +14,9 @@ export const REMOTE_API_ROUTE = '/api/remote';
 export const REMOTE_CHANNEL_ROUTE = `${REMOTE_API_ROUTE}/channel`;
 /** The only authenticated HTTP gateway exposed on the tunnel listener. */
 export const REMOTE_HTTP_ROUTE = `${REMOTE_API_ROUTE}/request`;
+/** Device-bound, sealed routes for ephemeral live Web Push registration. */
+export const REMOTE_PUSH_ROUTE = `${REMOTE_API_ROUTE}/push`;
+export const REMOTE_PUSH_KEY_ROUTE = `${REMOTE_PUSH_ROUTE}/key`;
 export const SESSION_SOCKET_ROUTE = '/api/session';
 export const PROTOCOL_SOCKET_ROUTE = '/api/pi';
 /** The pairing page a scanned QR opens. Unauthenticated on the tunnel listener. */
@@ -24,6 +27,9 @@ export const PAIRING_CLAIM_ROUTE = '/api/remote/pair';
 export const PAIRING_STATUS_ROUTE = '/api/remote/pair/status';
 /** Query parameter naming the pairing request; a path parameter would force a wildcard into the allowlist. */
 export const PAIRING_STATUS_QUERY = 'request';
+/** URL-fragment fields authenticated by seeing the host's physical QR. */
+export const BUNDLE_SIGNING_KEY_PARAM = 's';
+export const BUNDLE_MINIMUM_REVISION_PARAM = 'r';
 
 /**
  * Session cookie base name. Rendered `__Host-doompi_device` by hono's `host`
@@ -113,6 +119,12 @@ export interface RemoteAccessSettings {
   absoluteHours: number;
   tunnel: TunnelConfig;
   sandbox: SandboxSettings;
+}
+
+export interface BundlePairingTrust {
+  publicKey: string;
+  fingerprint: string;
+  revision: number;
 }
 
 export type RemoteAccessStatus = 'off' | 'starting' | 'on' | 'failed';

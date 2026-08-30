@@ -7,6 +7,7 @@ import type { RemoteAccessSettings, TunnelLauncher } from '../../src/types/remot
 
 const START = 1_700_000_000_000;
 const ORIGIN = 'https://doom.example.com';
+const BUNDLE_PUBLIC_KEY = 'A'.repeat(90);
 
 function harness(
   overrides: {
@@ -49,6 +50,7 @@ function harness(
         closed += 1;
       },
     }),
+    bundleTrust: () => ({ publicKey: BUNDLE_PUBLIC_KEY, revision: 7 }),
     onNotice: (message) => notices.push(message),
     ...(overrides.contained === undefined ? {} : { contained: overrides.contained }),
     ...(overrides.onHandover === undefined ? {} : { requestHandover: overrides.onHandover }),
@@ -391,6 +393,9 @@ describe('what each side is told', () => {
     const params = new URLSearchParams(hash);
     expect(params.get('c')).toBe(minted.code);
     expect(params.get('k')).toBe(remote.channelPublicKey());
+    expect(params.get('s')).toBe(BUNDLE_PUBLIC_KEY);
+    expect(params.get('r')).toBe('7');
+    expect(minted.fingerprint).toMatch(/^[0-9a-f]{64}$/u);
     expect(new URL(minted.pairUrl).search).toBe('');
   });
 

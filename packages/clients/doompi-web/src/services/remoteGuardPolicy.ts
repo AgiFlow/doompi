@@ -59,20 +59,22 @@ export function listenerOf(socketLocalPort: number | undefined, loopbackPort: nu
 }
 
 /**
- * The exact pairing-surface routes the tunnel listener answers directly.
- *
- * Matched by string equality, because an allowlist is only as good as its
- * narrowest form. No prefix, no wildcard, no path parameter: the pairing status
- * endpoint takes its id in the query string precisely so this list never needs
- * one. A contract test pins the length, so an addition cannot arrive without a
- * reviewer noticing.
+ * The exact package-owned pairing and PWA bootstrap routes the tunnel listener
+ * answers directly. They are matched by string equality, never prefixes or
+ * wildcards. A contract test pins the list so additions require review.
  *
  * Passkey sign-in is public because it creates a session by proving a credential.
  * Registration is also direct so the self-contained pairing page can run it, but
  * its handlers require the paired device cookie issued only after host approval.
  */
 export const PUBLIC_PAIRING_ROUTES: readonly { method: string; path: string }[] = [
+  { method: METHOD_GET, path: '/' },
   { method: METHOD_GET, path: PAIRING_PAGE_ROUTE },
+  { method: METHOD_GET, path: '/manifest.webmanifest' },
+  { method: METHOD_GET, path: '/sw.js' },
+  { method: METHOD_GET, path: '/pwa/pwa.js' },
+  { method: METHOD_GET, path: '/pwa/icon-192.png' },
+  { method: METHOD_GET, path: '/pwa/icon-512.png' },
   { method: METHOD_POST, path: PAIRING_CLAIM_ROUTE },
   { method: METHOD_GET, path: PAIRING_STATUS_ROUTE },
   { method: METHOD_POST, path: PASSKEY_AUTH_BEGIN_ROUTE },

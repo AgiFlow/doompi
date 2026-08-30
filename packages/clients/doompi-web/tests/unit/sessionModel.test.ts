@@ -65,6 +65,23 @@ describe('reduceSession', () => {
     expect(reduceSession(initialSessionState, { type: 'something_new' })).toBe(initialSessionState);
   });
 
+  it('removes a widget when its session clears the widget lines', () => {
+    const visible = reduceSession(initialSessionState, {
+      type: 'extension_ui_request',
+      method: 'setWidget',
+      widgetKey: 'workflow-mcp-progress',
+      widgetLines: ['running'],
+    });
+    const cleared = reduceSession(visible, {
+      type: 'extension_ui_request',
+      method: 'setWidget',
+      widgetKey: 'workflow-mcp-progress',
+    });
+
+    expect(visible.widgets).toEqual(['workflow-mcp-progress']);
+    expect(cleared.widgets).toEqual([]);
+  });
+
   it('streams assistant text into one entry', () => {
     const state = fold([
       { type: 'agent_start' },

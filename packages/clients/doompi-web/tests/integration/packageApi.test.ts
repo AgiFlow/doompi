@@ -161,13 +161,25 @@ describe('a package API reached through the hub', () => {
     expect(await response.json()).toMatchObject({ error: 'No session nobody.' });
   });
 
-  it('leaves every other route alone, so the cockpit still serves itself', async () => {
+  it('recovers browser navigation without turning missing APIs into pages', async () => {
     const socketPath = await fakeSessionApi();
     const { server } = await hubWith(socketPath);
 
     expect((await fetch(`${server.url}/api/health`)).status).toBe(200);
     const fallback = await fetch(`${server.url}/some/page`);
-    expect(fallback.status).toBe(500);
-    expect(await fallback.text()).toContain('cockpit bundle is missing');
+    expect(fallback.status).toBe(404);
+
+    const navigation = await fetch(`${server.url}/some/page`, {
+      headers: { accept: 'text/html' },
+      redirect: 'manual',
+    });
+    expect(navigation.status).toBe(302);
+    expect(navigation.headers.get('location')).toBe('/');
+
+    const missingApi = await fetch(`${server.url}/api/missing`, {
+      headers: { accept: 'text/html' },
+      redirect: 'manual',
+    });
+    expect(missingApi.status).toBe(404);
   });
 });

@@ -34,14 +34,6 @@ export const webPlugin = defineWebPlugin({
   // The TUI's SPC v bindings, backed by the browser media runtime here.
   leaderBindings: [
     {
-      id: 'voice.capture',
-      path: [
-        { key: 'v', label: 'voice', detail: 'client voice capture' },
-        { key: 'v', label: 'capture', detail: 'start or stop one-shot dictation' },
-      ],
-      command: 'voice',
-    },
-    {
       id: 'voice.toggle',
       path: [
         { key: 'v', label: 'voice', detail: 'autonomous voice capture' },

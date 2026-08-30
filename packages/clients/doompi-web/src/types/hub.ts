@@ -202,12 +202,15 @@ export interface SessionRemovedFrame {
   sessionId: string;
 }
 
-/** Reply to subscribe: recent history from the hub's ring, then live frames follow. */
+/**
+ * Reply to subscribe: this session's latest status and widget projections first,
+ * then its bounded transient history. Live frames follow.
+ */
 export interface SessionBacklogFrame {
   type: typeof SESSION_BACKLOG_TYPE;
   sessionId: string;
   frames: SessionFrame[];
-  /** Frames the bounded ring had to discard before this page subscribed. */
+  /** Transient frames the bounded ring discarded; projections do not contribute. */
   dropped: number;
 }
 

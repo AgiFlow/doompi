@@ -186,11 +186,14 @@ describe('the hub bridge', () => {
     expect(unknown.status).toBe(404);
   });
 
-  it('explains itself when the bundle is missing instead of serving a blank page', async () => {
+  it('serves only the recovery shell when no signed bundle can be published', async () => {
     const { server } = await bridge();
-    const response = await fetch(server.url);
-    expect(response.status).toBe(500);
-    expect(await response.text()).toMatch(/bundle is missing/);
+    const manifest = await fetch(`${server.url}/bundle-manifest.json`);
+    expect(manifest.status).toBe(503);
+    expect(await manifest.text()).toMatch(/No signed cockpit bundle/);
+    const shell = await fetch(server.url);
+    expect(shell.status).toBe(200);
+    expect(await shell.text()).toContain('doompi-pairing-page');
   });
 
   it('greets a page with the protocol and the session set', async () => {

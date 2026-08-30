@@ -23,6 +23,7 @@ const SETTINGS = {
   tunnel: { kind: 'quick' as const },
   sandbox: { enabled: false, workspaces: [] },
 };
+const PAIRING_TRUST = { publicKey: 'A'.repeat(90), fingerprint: 'f'.repeat(64), revision: 1 };
 
 function view(overrides: Partial<RemoteAccessStateView> = {}): RemoteAccessStateView {
   return { status: 'off', devices: [], pending: [], settings: SETTINGS, ...overrides };
@@ -85,6 +86,7 @@ describe('turning it on', () => {
         manualCode: '12345678',
         pairUrl: 'https://x/pair#c=a',
         expiresAt: 'now',
+        ...PAIRING_TRUST,
       },
       '/api/remote/passkeys': { support: { supported: false, reason: 'quick tunnel' }, credentials: [] },
     });
@@ -199,6 +201,7 @@ describe('waiting out a handover', () => {
         manualCode: '12345678',
         pairUrl: 'https://x/pair#c=c',
         expiresAt: 'later',
+        ...PAIRING_TRUST,
       },
       '/api/remote/passkeys': { support: { supported: false }, credentials: [] },
     });
@@ -225,6 +228,7 @@ describe('waiting out a handover', () => {
         manualCode: '12345678',
         pairUrl: 'https://x/pair#c=c',
         expiresAt: 'later',
+        ...PAIRING_TRUST,
       },
       '/api/remote/passkeys': { support: { supported: false }, credentials: [] },
     });

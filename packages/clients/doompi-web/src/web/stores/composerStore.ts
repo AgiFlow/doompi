@@ -60,6 +60,17 @@ export function updateComposerState(
   composerStore.setState((state) => ({ ...state, [sessionId]: update(composerStateOf(state, sessionId)) }));
 }
 
+/** Appends non-empty text to the latest draft for one session. */
+export function appendComposerDraft(sessionId: string | null, text: string): void {
+  const transcript = text.trim();
+  if (sessionId === null || transcript === '') return;
+  updateComposerState(sessionId, (state) => {
+    const separator = state.draft === '' || /\s$/.test(state.draft) ? '' : ' ';
+    const draft = `${state.draft}${separator}${transcript}`;
+    return { ...state, draft, caret: draft.length, dismissedToken: null };
+  });
+}
+
 export function clearComposerState(sessionId: string | null): void {
   if (sessionId === null) return;
   composerStore.setState((state) => ({ ...state, [sessionId]: EMPTY_COMPOSER_SESSION }));

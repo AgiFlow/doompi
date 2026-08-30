@@ -5,7 +5,15 @@ export type StateResult = { state: RemoteAccessStateView } | { error: string };
 /** Enabling a contained cockpit moves the hub, so the answer says the address is about to change. */
 export type EnableResult = { state: RemoteAccessStateView; handingOver?: boolean } | { error: string };
 export type PairingResult =
-  | { code: string; manualCode: string; pairUrl: string; expiresAt: string }
+  | {
+      code: string;
+      manualCode: string;
+      pairUrl: string;
+      expiresAt: string;
+      publicKey: string;
+      fingerprint: string;
+      revision: number;
+    }
   | { error: string };
 
 const UNREACHABLE = 'The cockpit hub is unreachable.';
@@ -71,8 +79,19 @@ export async function mintPairingCode(): Promise<PairingResult> {
     typeof body.pairUrl === 'string' &&
     typeof body.code === 'string' &&
     typeof body.manualCode === 'string' &&
-    typeof body.expiresAt === 'string'
-      ? { code: body.code, manualCode: body.manualCode, pairUrl: body.pairUrl, expiresAt: body.expiresAt }
+    typeof body.expiresAt === 'string' &&
+    typeof body.publicKey === 'string' &&
+    typeof body.fingerprint === 'string' &&
+    typeof body.revision === 'number'
+      ? {
+          code: body.code,
+          manualCode: body.manualCode,
+          pairUrl: body.pairUrl,
+          expiresAt: body.expiresAt,
+          publicKey: body.publicKey,
+          fingerprint: body.fingerprint,
+          revision: body.revision,
+        }
       : undefined,
   );
 }

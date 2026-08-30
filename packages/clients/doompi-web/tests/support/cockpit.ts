@@ -124,6 +124,13 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
   spawnStub: ['ok', { option: true }],
   assets: ['packaged', { option: true }],
+  page: async ({ page, cockpit }, use) => {
+    await page.goto(`${cockpit.url}/pair`);
+    await page.waitForURL(`${cockpit.url}/`);
+    await page.getByTestId('cockpit').waitFor();
+    await page.goto('about:blank');
+    await use(page);
+  },
   cockpit: async ({ sessionCount, spawnStub, assets }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
     const registryDir = path.join(root, 'run');

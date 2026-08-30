@@ -230,7 +230,9 @@ describe('selectionAxes', () => {
 });
 
 describe('activityGroups', () => {
-  const installOwners = (): void =>
+  let activeWorkflowSession: string | null = null;
+  const installOwners = (): void => {
+    activeWorkflowSession = null;
     installWebPlugins([
       defineWebPlugin({
         id: 'subagents',
@@ -247,12 +249,17 @@ describe('activityGroups', () => {
             name: 'workflows',
             keys: 'w r',
             widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
+            activeSource: {
+              subscribe: () => () => undefined,
+              isActive: (sessionId) => sessionId !== null && sessionId === activeWorkflowSession,
+            },
             tab: 'workflows',
             order: 30,
           },
         ],
       }),
     ]);
+  };
 
   it('has no host-side table: a session signal with no owning package shows nothing', () => {
     expect(
@@ -260,13 +267,15 @@ describe('activityGroups', () => {
     ).toEqual([]);
   });
 
-  it('lists only the declared groups the session signals, with their tabs', () => {
+  it('keeps a package-owned launcher group visible before the session signals work', () => {
     installOwners();
     try {
-      expect(activityGroups({}, [])).toEqual([]);
+      const idle = activityGroups({}, []);
+      expect(idle.map((group) => group.name)).toEqual(['workflows']);
+      expect(idle[0]).toEqual({ name: 'workflows', keys: 'w r', summary: '', active: false, tab: 'workflows' });
 
       const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
-      expect(groups.map((group) => group.name)).toEqual(['agents', 'runners']);
+      expect(groups.map((group) => group.name)).toEqual(['agents', 'runners', 'workflows']);
       expect(groups[0]).toEqual({ name: 'agents', keys: 'a r', summary: '2 running', active: true, tab: 'subagents' });
       expect(groups[1]).toEqual({ name: 'runners', keys: 'r l', summary: '', active: false });
     } finally {
@@ -274,13 +283,16 @@ describe('activityGroups', () => {
     }
   });
 
-  it('adds workflows when the widget shows up', () => {
+  it('uses session-owned workflow state without marking another session as active', () => {
     installOwners();
     try {
-      const groups = activityGroups({}, ['workflow-mcp-follow']);
-      expect(groups.map((group) => group.name)).toEqual(['workflows']);
-      expect(groups[0]?.tab).toBe('workflows');
-      expect(groups[0]?.active).toBe(true);
+      const progress = activityGroups({}, ['workflow-mcp-progress'], 's1');
+      expect(progress.map((group) => group.name)).toEqual(['workflows']);
+      expect(progress[0]).toMatchObject({ tab: 'workflows', active: false });
+
+      activeWorkflowSession = 's1';
+      expect(activityGroups({}, [], 's1')[0]).toMatchObject({ tab: 'workflows', active: true });
+      expect(activityGroups({}, [], 's2')[0]).toMatchObject({ tab: 'workflows', active: false });
     } finally {
       resetWebPlugins();
     }

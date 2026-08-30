@@ -14,8 +14,12 @@ const UNKNOWN_PLUGIN_ID = 'unknown';
 
 /** The synced bundle's server registry, or an empty list when there is none to read. */
 function registryEntries(assetsDir: string, onNotice: (message: string) => void): RegistryEntry[] {
-  const registryPath = path.join(assetsDir, SERVER_REGISTRY_FILE);
-  if (!fs.existsSync(registryPath)) return [];
+  const candidates = [
+    path.join(path.dirname(assetsDir), SERVER_REGISTRY_FILE),
+    path.join(assetsDir, SERVER_REGISTRY_FILE),
+  ];
+  const registryPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (registryPath === undefined) return [];
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
     return Array.isArray(parsed) ? (parsed as RegistryEntry[]) : [];

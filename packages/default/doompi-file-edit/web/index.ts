@@ -22,8 +22,18 @@ export const webPlugin = defineWebPlugin({
   id: 'files',
   channels: [filesChannel],
   // hideWhenEmpty: a session that has changed nothing has no files to list,
-  // and the group returns as soon as it changes one.
-  activityGroups: [{ name: 'files', keys: 'e f', statusKey: filesStatusKey, hideWhenEmpty: true, order: 15 }],
+  // and the group returns as soon as it changes one. Changed files are session
+  // history, not background work, so their presence never marks the session busy.
+  activityGroups: [
+    {
+      name: 'files',
+      keys: 'e f',
+      statusKey: filesStatusKey,
+      hideWhenEmpty: true,
+      marksBackgroundWork: false,
+      order: 15,
+    },
+  ],
   // Same name as the group: the dock renders this inside it, in place of the
   // session's one-line summary.
   activitySections: [{ id: 'files', component: FilesActivitySection }],

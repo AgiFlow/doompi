@@ -60,22 +60,22 @@ so a guard added after a terminating handler never runs for that path.
 
 ### The unauthenticated allowlist
 
-Five routes, matched by exact string equality. No prefix, no wildcard, no path parameter: the
-pairing status endpoint takes its id in the query string precisely so the list never needs one. A
-contract test pins the count, so a sixth cannot arrive without a reviewer seeing it.
+Thirteen routes, matched by exact string equality. No wildcard or open static prefix is public. The pairing
+status endpoint takes its id in the query string precisely so the allowlist never needs a path parameter. A
+contract test pins the list so an addition cannot arrive without review.
 
-| Route                                           | Why it cannot require a session                  |
-| ----------------------------------------------- | ------------------------------------------------ |
-| `GET /pair`                                     | The page a scanned QR opens                      |
-| `POST /api/remote/pair`                         | Where that page posts the code                   |
-| `GET /api/remote/pair/status`                   | Polled until the host answers                    |
-| `POST /api/remote/passkeys/authenticate/begin`  | Hands out a challenge, which is public by design |
-| `POST /api/remote/passkeys/authenticate/finish` | Proving a passkey is how a device gets a session |
+| Route group                                             | Why it cannot require a session                               |
+| ------------------------------------------------------- | ------------------------------------------------------------- |
+| `GET /`, `GET /pair`                                    | Entry and package-owned pairing shell                         |
+| `GET /manifest.webmanifest`, `GET /sw.js`               | Install metadata and package-owned verifier worker            |
+| `GET /pwa/pwa.js`, `GET /pwa/icon-{192,512}.png`        | Exact package-owned scanner and icon assets                   |
+| `POST /api/remote/pair`, `GET /api/remote/pair/status`  | Claim and collect a host-approved pairing                     |
+| `POST /api/remote/passkeys/authenticate/{begin,finish}` | Passkey proof creates a session                               |
+| `POST /api/remote/passkeys/register/{begin,finish}`     | Direct pairing-page enrolment, still requires a device cookie |
 
-The two passkey routes are there of necessity. Requiring a session to reach them would mean a
-registered passkey could never be used and every return visit would need a fresh QR. Neither is a
-hole: the second succeeds only for a caller holding a registered credential's private key, which is
-the definition of authenticating rather than a way around it.
+The passkey authentication routes are public because proving a registered private key is how a returning
+device obtains a session. Registration is reachable from the shell but its handler still requires the paired
+device cookie. The PWA routes are package-owned bootstrap bytes, never host or plugin bundle bytes.
 
 The path compared is the value the router matched on, which Hono has already percent-decoded. A
 separately parsed pathname would let the guard and the router disagree about the same request, and
@@ -151,20 +151,27 @@ in `x-doompi-assertion` and its challenge is good for sixty seconds.
 Cloudflare terminates TLS at its edge. Without further work it reads, and can rewrite, everything
 the cockpit carries. Two layers narrow that, both in `@agimon-ai/doompi-web-security`.
 
-### The bundle is signed
+### The bundle is signed and verified before execution
 
-Every other guarantee here rests on the page being the page this hub built. A swapped bundle reads
-the session cookie, drives the socket, and completes a passkey ceremony on the attacker's behalf.
+Every other guarantee here rests on the cockpit JavaScript being what this hub built. The package-owned
+`/pair` shell, scanner, manifest, and `/sw.js` verifier are built separately from plugin-generated cockpit
+code. The QR fragment pins both the host's ECDSA P-256 SPKI (`s`) and the minimum signed revision (`r`).
 
-The hub holds an ECDSA P-256 key at `~/.doompi/web/signing.json`, mode `0600`, and serves a signed
-manifest of every asset with its SHA-256. The signature covers a hand-rolled canonical encoding,
-sorted and one line per asset, rather than `JSON.stringify` of an object whose key order is an
-implementation detail. The page verifies it and pins the key. A cockpit signed by a different key is
-refused with a full-screen stop rather than a dismissible warning, because if the page is not the
-page this hub built then nothing rendered under it can be trusted.
+The hub keeps `~/.doompi/web/signing.json` at mode `0600`. Manifest v2 signs a canonical list containing
+revision, path, SHA-256, byte length, and MIME type for every public asset, including `/index.html`.
+`webPlugins.server.json` remains outside the public asset root and is never signed or served.
 
-A check that could not run is not a failure. A browser without WebCrypto, or with storage denied,
-renders the cockpit without this verification rather than refusing to render at all.
+The worker fetches `/bundle-manifest.json`, rejects signer or revision conflicts, fetches only
+`/bundle-assets/<revision>/*`, and verifies every byte before writing a staging Cache Storage entry. Only
+after the complete bundle passes does it atomically commit the active revision in IndexedDB. Navigations
+and static requests then resolve only from that verified cache. A failed refresh retains the last-known-good
+bundle. Missing WebCrypto, IndexedDB, Cache Storage, a pinned signer, or a required asset is a stop, not a
+request to execute unverified host JavaScript.
+
+Signer loss, signer rotation, and host or container transitions require an explicit fingerprint confirmation
+and trust reset. Revision numbers are monotonic and a reused revision with different manifest bytes is
+refused. Session file assets never enter this pipeline: they use sealed `no-store` HTTP and ephemeral Blob
+URLs, not Cache Storage, IndexedDB, signatures, or Push payloads.
 
 ### The payload is sealed
 
@@ -187,6 +194,19 @@ chat, done automatically instead of by eye.
 **A plugin that calls `fetch` directly sends plaintext to the relay.** Plugins use
 `sealedTransport.fetch` from that package's `./browser` subpath, which the plugin import allowlist
 admits for exactly this reason. The host cannot enforce it, which is why it is written down here.
+
+### Closed-app Web Push is live and generic
+
+A paired installed PWA can register a Push subscription only through its device-bound sealed HTTP channel.
+The VAPID credential is stored at mode `0600`, but subscriptions live only in process memory. A host restart
+therefore requires an open page to re-register the browser's existing subscription. There is no database,
+outbox, replay, or historical delivery.
+
+The hub sends Push only for a notification frame arriving now and only when that device has no connected
+cockpit socket. The encrypted payload is fixed generic copy with `TTL: 0`; it contains no prompt, response,
+session id, file asset, or other mutable session data. Provider `404` and `410` responses remove the
+subscription. Browser disable, device revocation or expiry, remote shutdown, and key or process rotation
+also remove it.
 
 ## Narrowing what is in reach
 
@@ -279,16 +299,20 @@ than a boundary.
 
 Kept short on purpose: a security claim you cannot check is a slogan.
 
-| Concern                     | File                                                             |
-| --------------------------- | ---------------------------------------------------------------- |
-| Listener, origin, allowlist | `packages/clients/doompi-web/src/services/remoteGuardPolicy.ts`  |
-| The guard middleware        | `packages/clients/doompi-web/src/adapters/remoteGuard.ts`        |
-| Pairing handshake           | `packages/clients/doompi-web/src/services/pairingFlow.ts`        |
-| Device sessions             | `packages/clients/doompi-web/src/adapters/deviceAuth.ts`         |
-| Passkeys and step-up        | `packages/clients/doompi-web/src/services/webauthnPolicy.ts`     |
-| Bundle signing              | `packages/core/doompi-web-security/src/adapters/bundleSigner.ts` |
-| Sealed channel              | `packages/core/doompi-web-security/src/types/sealedChannel.ts`   |
-| Container plan              | `layers/sandbox/doompi-sandbox/src/services/cockpitPlan.ts`      |
+| Concern                      | File                                                             |
+| ---------------------------- | ---------------------------------------------------------------- |
+| Listener, origin, allowlist  | `packages/clients/doompi-web/src/services/remoteGuardPolicy.ts`  |
+| The guard middleware         | `packages/clients/doompi-web/src/adapters/remoteGuard.ts`        |
+| Pairing handshake            | `packages/clients/doompi-web/src/services/pairingFlow.ts`        |
+| Device sessions              | `packages/clients/doompi-web/src/adapters/deviceAuth.ts`         |
+| Passkeys and step-up         | `packages/clients/doompi-web/src/services/webauthnPolicy.ts`     |
+| Bundle signing               | `packages/core/doompi-web-security/src/adapters/bundleSigner.ts` |
+| Worker verification          | `packages/clients/doompi-web/src/pwa/serviceWorker.ts`           |
+| Signed publication routes    | `packages/clients/doompi-web/src/adapters/bundlePublication.ts`  |
+| Sealed channel               | `packages/core/doompi-web-security/src/types/sealedChannel.ts`   |
+| Live Web Push                | `packages/clients/doompi-web/src/adapters/webPush.ts`            |
+| Sealed session file delivery | `packages/clients/doompi-web/src/services/fileMedia.ts`          |
+| Container plan               | `layers/sandbox/doompi-sandbox/src/services/cockpitPlan.ts`      |
 
 The policy files are pure and have no I/O, so the whole trust boundary is readable in one sitting
 and testable without a server. That is why they are shaped that way.

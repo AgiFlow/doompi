@@ -49,14 +49,27 @@ describe('the workflows plugin surfaces', () => {
     expect(rendered.includes('blog-writing')).toBe(true);
   });
 
-  it('renders the activity section the dock puts inside the workflows group', () => {
+  it('keeps the idle activity section available as a workflow launcher', () => {
+    const group = webPlugin.activityGroups?.[0];
+    const section = webPlugin.activitySections?.[0];
+    const rendered = renderPlugin(section!.component, slotPropsFixture({ sessionId: 's1' }).props);
+
+    expect(group?.activeSource?.isActive('s1')).toBe(false);
+    expect(section?.id).toBe('workflows');
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('no runs yet')).toBe(true);
+    expect(rendered.includes('launch a workflow')).toBe(true);
+  });
+
+  it('renders the activity section with a run reported by the hub', () => {
     const section = webPlugin.activitySections?.[0];
     driveChannel(webPlugin.channels![0]!, 's1', { runs: [run] });
 
     const rendered = renderPlugin(section!.component, slotPropsFixture({ sessionId: 's1' }).props);
 
-    expect(section?.id).toBe('workflows');
     expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('blog-writing')).toBe(true);
+    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(true);
   });
 
   it('renders every surface with nothing focused', () => {

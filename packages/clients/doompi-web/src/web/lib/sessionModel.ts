@@ -415,7 +415,13 @@ function applyStatus(state: SessionState, frame: Frame): SessionState {
 
 function applyWidget(state: SessionState, frame: Frame): SessionState {
   const key = asString(frame.widgetKey);
-  if (!key || state.widgets.includes(key)) return state;
+  if (!key) return state;
+  const present = Array.isArray(frame.widgetLines) && frame.widgetLines.length > 0;
+  if (!present) {
+    if (!state.widgets.includes(key)) return state;
+    return { ...state, widgets: state.widgets.filter((widget) => widget !== key) };
+  }
+  if (state.widgets.includes(key)) return state;
   return { ...state, widgets: [...state.widgets, key] };
 }
 
@@ -671,6 +677,15 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
       return { ...marked, activeTools: [], streaming: false, settled: true };
     }
 
+    case 'queue_update': {
+      const steering = Array.isArray(frame.steering) ? frame.steering : [];
+      const followUp = Array.isArray(frame.followUp) ? frame.followUp : [];
+      const queue = [...steering, ...followUp]
+        .map((entry, index) => ({ kind: 'queued' as const, id: `queue-${index}`, text: asString(entry) }))
+        .filter((entry) => entry.text.length > 0);
+      return replaceQueuedEntries(state, queue);
+    }
+
     case 'extension_ui_request': {
       // Agent notifications carry the outcome a TUI user would see (a mode
       // switch pending a relaunch, a refused action); dropping them reads as
@@ -737,6 +752,40 @@ export function appendQueued(state: SessionState, text: string, images: UserImag
   const id = `q${state.nextId}`;
   const entry: QueuedEntry = { kind: 'queued', id, text, ...(images.length > 0 ? { images } : {}) };
   return withPendingUser(withEntry(state, entry), id, text, images);
+}
+
+/** Replaces visible queued rows while preserving optimistic ids and attachments. */
+export function replaceQueuedEntries(state: SessionState, queue: readonly QueuedEntry[]): SessionState {
+  const remaining = state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
+  const normalized = queue.map((entry) => {
+    const existingIndex = remaining.findIndex((candidate) => candidate.text === entry.text);
+    if (existingIndex === -1) return entry;
+    const [existing] = remaining.splice(existingIndex, 1);
+    return existing === undefined
+      ? entry
+      : { ...entry, id: existing.id, ...(existing.images ? { images: existing.images } : {}) };
+  });
+  const pendingUserEntries = [...state.pendingUserEntries];
+  for (const entry of normalized) {
+    if (!pendingUserEntries.some((pending) => pending.id === entry.id)) {
+      pendingUserEntries.push({ id: entry.id, text: entry.text, ...(entry.images ? { images: entry.images } : {}) });
+    }
+  }
+  return {
+    ...state,
+    entries: [...state.entries.filter((entry) => entry.kind !== 'queued'), ...normalized],
+    pendingUserEntries,
+  };
+}
+
+/** Removes queued rows and their reconciliation records after Pi clears the queue. */
+export function clearQueuedEntries(state: SessionState): SessionState {
+  const queuedIds = new Set(state.entries.filter((entry) => entry.kind === 'queued').map((entry) => entry.id));
+  return {
+    ...state,
+    entries: state.entries.filter((entry) => entry.kind !== 'queued'),
+    pendingUserEntries: state.pendingUserEntries.filter((entry) => !queuedIds.has(entry.id)),
+  };
 }
 
 export function clearDialog(state: SessionState): SessionState {

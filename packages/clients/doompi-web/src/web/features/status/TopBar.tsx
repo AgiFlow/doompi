@@ -3,7 +3,7 @@ import type { TabContribution, TransientTab } from '@agimon-ai/doompi-web-contra
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import { activityGroups } from '../../lib/composition.ts';
+import { useActivityGroups } from '../../lib/composition.ts';
 import { abbreviateCwd } from '../../lib/sessionSummary.ts';
 import { webTabs } from '../../lib/pluginRegistry.ts';
 import { renameSession, useActiveSession } from '../../stores/sessionStore.ts';
@@ -87,7 +87,9 @@ export function TopBar({
   const title = meta?.summary.name || session.agent?.sessionName || 'untitled';
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
-  const backgroundWorkActive = activityGroups(session.statuses, session.widgets).some((group) => group.active);
+  const backgroundWorkActive = useActivityGroups(session.statuses, session.widgets, activeId).some(
+    (group) => group.active,
+  );
   // The name lives in the agent, so the rail's rename and this one are the
   // same act through the same door; the new name arrives back on the socket.
   const commitRename = (): void => {

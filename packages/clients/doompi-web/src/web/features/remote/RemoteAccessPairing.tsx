@@ -7,14 +7,15 @@ import { PairedDeviceList } from './PairedDeviceList.tsx';
 /** The QR credential, a short manual code, and the direct address. */
 export function RemoteAccessPairing() {
   const state = useStore(remoteAccessStore);
-  if (state.pairUrl === undefined || state.pairCode === undefined) return <Spinner />;
+  if (state.pairUrl === undefined || state.pairCode === undefined || state.pairFingerprint === undefined)
+    return <Spinner />;
 
   return (
     <div className="flex flex-col items-center gap-4">
       {/* A light plate under the code: scanners want dark modules on a bright
           field, which is the one thing a dark theme cannot supply. */}
       <div className="rounded-lg bg-doom-hi p-3 text-doom-deep">
-        <QrCode value={state.pairUrl} size={196} label="Scan to pair this device" />
+        <QrCode value={state.pairUrl} size={288} label="Scan to pair this device" />
       </div>
       <div className="flex w-full flex-col gap-1">
         <SectionLabel>or enter this pairing code</SectionLabel>
@@ -24,6 +25,18 @@ export function RemoteAccessPairing() {
         >
           {state.pairCode}
         </code>
+      </div>
+      <div className="flex w-full flex-col gap-1">
+        <SectionLabel>signing-key fingerprint</SectionLabel>
+        <code
+          data-testid="remote-signing-fingerprint"
+          className="break-all rounded bg-doom-deep p-2 text-center font-mono text-[11px] text-doom-text"
+        >
+          {state.pairFingerprint.match(/.{1,8}/gu)?.join(' ') ?? state.pairFingerprint}
+        </code>
+        <p className="text-[11px] text-doom-faint">
+          Compare this on the phone when entering the manual code. Bundle revision {String(state.pairRevision)}.
+        </p>
       </div>
       <div className="flex w-full flex-col gap-1">
         <SectionLabel>or open this address</SectionLabel>

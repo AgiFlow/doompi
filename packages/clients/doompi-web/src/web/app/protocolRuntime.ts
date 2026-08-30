@@ -2,8 +2,8 @@ import { PiClient } from '@earendil-works/pi-client';
 import { RemoteSession } from '@earendil-works/pi-coding-agent/client';
 import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
 import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { toTimelineEntries } from '../lib/protocolTimeline.ts';
-import { applyProtocolTranscript, releaseProtocolTranscript } from '../stores/sessionStore.ts';
+import { toQueuedEntries, toTimelineEntries } from '../lib/protocolTimeline.ts';
+import { applyProtocolQueue, applyProtocolTranscript, releaseProtocolTranscript } from '../stores/sessionStore.ts';
 
 /** How long to wait before dialling again after the protocol socket drops. */
 const RECONNECT_MS = 700;
@@ -45,6 +45,7 @@ export function startProtocolRuntime(location: Location = window.location): Prot
     const state = remote.state;
     if (!state.snapshot) return;
     applyProtocolTranscript(sessionId, toTimelineEntries(state.transcript), state.snapshot.phase !== 'idle');
+    applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
   };
 
   const open = async (sessionId: string): Promise<void> => {

@@ -74,7 +74,7 @@ function startHub(
 
 async function startRegisteredSession(
   registryDir: string,
-  options: { id?: string; name?: string; pid?: number } = {},
+  options: { id?: string; name?: string; pid?: number; cwd?: string } = {},
 ): Promise<FakeSession> {
   const session = await startFakeSession({ ...options, registryDir });
   cleanups.push(() => session.close());
@@ -299,6 +299,101 @@ describe('the session hub over a registry', () => {
     expect(harness.hub.backlog('one')?.frames.some((frame) => frame.type === 'agent_start')).toBe(true);
     expect(harness.hub.backlog('two')?.frames.some((frame) => frame.type === 'agent_start')).toBe(false);
     expect(harness.hub.backlog('unknown')).toBeUndefined();
+  });
+
+  it("keeps each session's latest UI projections outside its bounded transient ring", async () => {
+    const registryDir = freshRegistryDir();
+    const cwd = path.dirname(registryDir);
+    const first = await startRegisteredSession(registryDir, { id: 'one', cwd });
+    const second = await startRegisteredSession(registryDir, { id: 'two', cwd });
+    const status = (id: string, statusKey: string, statusText: string) => ({
+      type: 'extension_ui_request',
+      id,
+      method: 'setStatus',
+      statusKey,
+      statusText,
+    });
+    const widget = (id: string, widgetLines: string[]) => ({
+      type: 'extension_ui_request',
+      id,
+      method: 'setWidget',
+      widgetKey: 'workflow-mcp-progress',
+      widgetLines,
+    });
+    const firstInitial = [
+      status('one-major-initial', 'doom-major-mode', '[minimal]'),
+      status('one-profile-initial', 'doom-profile', 'developer'),
+      status('one-domain-initial', 'doom-domain', 'development'),
+      widget('one-widget-initial', ['starting']),
+    ];
+    const secondInitial = [
+      status('two-major', 'doom-major-mode', '[review]'),
+      status('two-profile', 'doom-profile', 'reviewer'),
+      status('two-domain', 'doom-domain', 'testing'),
+      widget('two-widget', ['waiting']),
+    ];
+    for (const frame of firstInitial) first.emit(frame);
+    first.emit({ type: 'agent_start' });
+    for (const frame of secondInitial) second.emit(frame);
+    second.emit({ type: 'agent_start' });
+
+    const harness = startHub(registryDir, undefined, [], undefined, { ringLimit: 1 });
+    await first.waitForAttach();
+    await second.waitForAttach();
+    await waitFor(
+      () =>
+        harness.framesFor('one').filter((frame) => frame.type === 'replay').length >= 5 &&
+        harness.framesFor('two').filter((frame) => frame.type === 'replay').length >= 5,
+      'both sessions replaying their initial projections',
+    );
+
+    const firstCurrent = [
+      status('one-major-current', 'doom-major-mode', '[copilot]'),
+      status('one-profile-clear', 'doom-profile', ''),
+      status('one-domain-current', 'doom-domain', 'development,testing'),
+      widget('one-widget-clear', []),
+    ];
+    for (const frame of firstCurrent) first.emit(frame);
+    first.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'working' } });
+    first.emit({ type: 'agent_settled' });
+    await waitFor(
+      () => harness.framesFor('one').some((frame) => frame.type === 'agent_settled'),
+      'the latest transient frame',
+    );
+
+    expect(harness.hub.backlog('one')).toEqual({
+      type: 'session_backlog',
+      sessionId: 'one',
+      frames: [...firstCurrent, { type: 'agent_settled' }],
+      dropped: 2,
+    });
+    expect(harness.hub.backlog('two')).toEqual({
+      type: 'session_backlog',
+      sessionId: 'two',
+      frames: [
+        ...secondInitial.map((frame) => ({ type: 'replay', frame })),
+        { type: 'replay', frame: { type: 'agent_start' } },
+      ],
+      dropped: 0,
+    });
+
+    const afterReload = {
+      type: 'tool_execution_start',
+      toolCallId: 'after-reload',
+      toolName: 'test',
+      args: {},
+    };
+    first.emit(afterReload);
+    await waitFor(
+      () => harness.framesFor('one').some((frame) => frame.toolCallId === 'after-reload'),
+      'the transient frame after resubscription',
+    );
+    expect(harness.hub.backlog('one')).toEqual({
+      type: 'session_backlog',
+      sessionId: 'one',
+      frames: [...firstCurrent, afterReload],
+      dropped: 3,
+    });
   });
 
   it('records a synthetic close when a dialog answer passes through', async () => {

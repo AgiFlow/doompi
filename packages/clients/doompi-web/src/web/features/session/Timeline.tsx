@@ -10,7 +10,7 @@ import {
 import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
-import { activityGroups } from '../../lib/composition.ts';
+import { useActivityGroups } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import { isSupportedImageMimeType, type SessionState, type TimelineEntry } from '../../lib/sessionModel.ts';
 import {
@@ -155,12 +155,12 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
 function BackgroundWorkNotice() {
   return (
-    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center">
-      <div
-        role="status"
-        data-testid="background-work-notice"
-        className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel/95 px-3 py-2 text-center text-[10px] leading-relaxed text-doom-yellow shadow-lg backdrop-blur"
-      >
+    <div
+      role="status"
+      data-testid="background-work-notice"
+      className="mt-auto flex shrink-0 justify-center px-3 pt-2 pb-3"
+    >
+      <div className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel px-3 py-2 text-center text-[10px] leading-relaxed text-doom-yellow">
         Background work is still running. The agent will resume when results are ready.
       </div>
     </div>
@@ -290,7 +290,7 @@ export function Transcript({
 
   if (visibleEntries.length === 0) {
     return (
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
         {empty}
         {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       </div>
@@ -325,15 +325,15 @@ export function Transcript({
             <Entry entry={entry} sessionId={sessionId} />
           </div>
         ))}
+        {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       </div>
-      {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       {unread ? (
         <Button
           variant="subtle"
           size="sm"
           data-testid="timeline-jump"
           onClick={jumpToLatest}
-          className={`absolute left-1/2 -translate-x-1/2 border border-doom-border shadow-lg animate-doom-rise ${backgroundWorkActive ? 'bottom-14' : 'bottom-3'}`}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 border border-doom-border shadow-lg animate-doom-rise"
         >
           <ChevronDownIcon className="h-3 w-3" />
           new activity below
@@ -348,7 +348,7 @@ export function Timeline() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
-  const backgroundWorkActive = activityGroups(statuses, widgets).some((group) => group.active);
+  const backgroundWorkActive = useActivityGroups(statuses, widgets, activeId).some((group) => group.active);
   return (
     <Transcript
       store={sessionStoreFor(activeId)}

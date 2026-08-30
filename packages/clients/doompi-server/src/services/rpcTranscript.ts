@@ -304,7 +304,8 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
         }
         case 'queue_update': {
           const steering = Array.isArray(frame.steering) ? frame.steering : [];
-          const queuedSteer: UserTranscriptItem[] = steering.map((entry, index) => ({
+          const followUp = Array.isArray(frame.followUp) ? frame.followUp : [];
+          const queuedSteer: UserTranscriptItem[] = [...steering, ...followUp].map((entry, index) => ({
             id: `steer-${snapshot.revision}-${index}`,
             role: 'user',
             content: [{ type: 'text', text: text(entry) }],

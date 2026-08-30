@@ -2,6 +2,7 @@ import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 import {
   abortCommand,
+  clearQueueCommand,
   dialogCancelled,
   dialogConfirmed,
   dialogValue,
@@ -22,10 +23,13 @@ import {
   appendQueued,
   appendUserPrompt,
   clearDialog,
+  clearQueuedEntries,
   isSupportedImageMimeType,
   initialSessionState,
   prependHistory,
   reduceSession,
+  replaceQueuedEntries,
+  type QueuedEntry,
   type SessionState,
   type TimelineEntry,
 } from '../lib/sessionModel.ts';
@@ -232,6 +236,32 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
   });
 }
 
+function protocolQueueMatches(state: SessionState, queue: readonly QueuedEntry[]): boolean {
+  const current = state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
+  return (
+    current.length === queue.length &&
+    current.every((entry, index) => {
+      const next = queue[index];
+      if (next === undefined || entry.text !== next.text) return false;
+      const images = entry.images ?? [];
+      const nextImages = next.images ?? [];
+      return (
+        images.length === nextImages.length &&
+        images.every((image, imageIndex) => {
+          const nextImage = nextImages[imageIndex];
+          return nextImage !== undefined && image.data === nextImage.data && image.mimeType === nextImage.mimeType;
+        })
+      );
+    })
+  );
+}
+
+/** Replaces composer queue rows with the protocol server's authoritative queue. */
+export function applyProtocolQueue(sessionId: string, queue: readonly QueuedEntry[]): void {
+  sessionStoreFor(sessionId).setState((state) =>
+    protocolQueueMatches(state, queue) ? state : replaceQueuedEntries(state, queue),
+  );
+}
 export function resetSessionStore(sessionId: string): void {
   sessionStoreFor(sessionId).setState((state) => {
     if (!protocolTranscripts.has(sessionId)) return initialSessionState;
@@ -334,6 +364,12 @@ export function queueFollowUp(
     .map(({ data, mimeType }) => ({ data, mimeType }));
   sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed, userImages));
   sendFrame(sessionId, followUpCommand(trimmed, images));
+}
+
+export function clearQueuedMessages(sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  sessionStoreFor(sessionId).setState(clearQueuedEntries);
+  sendFrame(sessionId, clearQueueCommand());
 }
 
 /**

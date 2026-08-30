@@ -74,7 +74,8 @@ describe('the sync-time cockpit bundler', () => {
     ]);
     expect(bundledJsHas(result.assetsDir, 'no subagent runs yet')).toBe(true);
     expect(fs.existsSync(path.join(result.assetsDir, 'index.html'))).toBe(true);
-    expect(fs.existsSync(path.join(result.assetsDir, 'webPlugins.server.json'))).toBe(true);
+    expect(fs.existsSync(path.join(result.assetsDir, 'webPlugins.server.json'))).toBe(false);
+    expect(fs.existsSync(path.join(outDir, 'webPlugins.server.json'))).toBe(true);
     // The roots file beside the bundle is what the dev server reads to serve
     // the same composition with hot reload.
     expect(JSON.parse(fs.readFileSync(path.join(outDir, 'pluginRoots.json'), 'utf8'))).toEqual([

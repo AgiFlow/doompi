@@ -91,7 +91,9 @@ describe('starting a tunnel', () => {
     expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(true);
     const pidRecord = JSON.parse(fs.readFileSync(path.join(stateDir, 'tunnel.pid'), 'utf8')) as { ownerPid?: number };
     expect(pidRecord.ownerPid).toBe(process.pid);
-    await result.stop();
+    const stopping = result.stop();
+    expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(true);
+    await stopping;
     expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(false);
   });
 

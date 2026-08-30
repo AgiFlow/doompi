@@ -46,17 +46,18 @@ afterEach(async () => {
 
 const url = (route: string): string => `${server.url}${route}`;
 
-describe('static assets', () => {
-  it('serves a real file with its content type', async () => {
-    const response = await fetch(url('/assets/app.js'));
+describe('signed bundle assets', () => {
+  it('serves a real file only through its signed revision route', async () => {
+    const envelope = (await (await fetch(url('/bundle-manifest.json'))).json()) as { manifest: { revision: number } };
+    const response = await fetch(url(`/bundle-assets/${String(envelope.manifest.revision)}/assets/app.js`));
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/javascript');
+    expect((await fetch(url('/assets/app.js'))).status).toBe(404);
   });
 
-  it('falls back to the bundle for an unknown path, because the router is client side', async () => {
+  it('leaves client-side routing to the verified service-worker cache', async () => {
     const response = await fetch(url('/settings/providers'));
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain('cockpit');
+    expect(response.status).toBe(404);
   });
 
   it('refuses a traversal out of the asset root', async () => {

@@ -53,7 +53,6 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
   const sendCommand = (message: string): void => {
     if (sessionId !== null) sendSessionFrame(sessionId, { type: 'prompt', message });
   };
-  const stopManualRecording = (): void => sendCommand('/voice');
   const toggleAutonomousMicrophone = (): void => sendCommand(`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`);
   const showAutonomousMicrophoneControl =
     !mediaConflict && view.mode === 'auto' && view.phase !== 'starting' && view.phase !== 'draining';
@@ -72,17 +71,6 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
           <span data-testid="voice-elapsed" className="shrink-0 text-[10px] tabular-nums text-doom-yellow">
             {view.elapsed}
           </span>
-        ) : null}
-        {view.mode === 'manual' && view.phase === 'recording' ? (
-          <Button
-            variant="danger-outline"
-            size="xs"
-            data-testid="voice-recording-stop"
-            title="stop recording and fill the prompt"
-            onClick={stopManualRecording}
-          >
-            stop
-          </Button>
         ) : null}
         {showAutonomousMicrophoneControl ? (
           <Button

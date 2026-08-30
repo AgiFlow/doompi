@@ -1,4 +1,5 @@
 import type { SelectionAxisContribution } from '@agimon-ai/doompi-web-contracts';
+import { useSyncExternalStore } from 'react';
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
 import { pluginActivityGroups, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
@@ -205,20 +206,36 @@ export interface ActivityGroup {
   placement?: 'bottom';
 }
 
+/** Subscribe once to every package-owned source that can change a group's active state. */
+function subscribeActivitySources(listener: () => void): () => void {
+  const subscriptions = pluginActivityGroups().flatMap((source) =>
+    source.activeSource === undefined ? [] : [source.activeSource.subscribe(listener)],
+  );
+  return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+}
+
+function activitySourceFingerprint(sessionId: string | null): string {
+  return pluginActivityGroups()
+    .map((source) => (source.activeSource?.isActive(sessionId) === true ? '1' : '0'))
+    .join('');
+}
+
 /**
- * The declared groups the session actually signals. There is no host-side
- * fallback table: agents, runners, and workflows are each declared by the
- * package that owns them, so a composition without such a package shows no
- * group, and a session that never published a group's signal shows none
- * either.
+ * The groups available in this plugin composition. Status and widget signals
+ * reveal legacy groups. A package-owned active source also reveals its group,
+ * including while idle, so the section can remain a stable launcher.
  *
  * A group that declared `hideWhenEmpty` also goes away again once its session
  * stops reporting. Clearing a status reaches the page as an empty string
  * rather than as an absent key, because the same map tells the selection bar
  * which minor modes exist and an absent key means "not reported" there. So
- * emptiness is read here instead, where only the dock is looking.
+ * emptiness is read here, where only the dock is looking.
  */
-export function activityGroups(statuses: Record<string, string>, widgets: readonly string[]): ActivityGroup[] {
+export function activityGroups(
+  statuses: Record<string, string>,
+  widgets: readonly string[],
+  sessionId: string | null = null,
+): ActivityGroup[] {
   const groups: ActivityGroup[] = [];
   for (const source of pluginActivityGroups()) {
     const tab = source.tab === undefined ? {} : { tab: source.tab };
@@ -226,13 +243,43 @@ export function activityGroups(statuses: Record<string, string>, widgets: readon
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
       if (summary.length === 0 && source.hideWhenEmpty === true) continue;
-      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0, ...tab, ...placement });
+      const active =
+        source.activeSource?.isActive(sessionId) ?? (source.marksBackgroundWork !== false && summary.length > 0);
+      groups.push({ name: source.name, keys: source.keys, summary, active, ...tab, ...placement });
       continue;
     }
     if (source.widgetKeys !== undefined && source.widgetKeys.some((key) => widgets.includes(key))) {
-      // Widgets exist only while their owning background activity is present.
-      groups.push({ name: source.name, keys: source.keys, summary: '', active: true, ...tab, ...placement });
+      const activeKeys = source.activeWidgetKeys ?? source.widgetKeys;
+      const active =
+        source.activeSource?.isActive(sessionId) ??
+        (source.marksBackgroundWork !== false && activeKeys.some((key) => widgets.includes(key)));
+      groups.push({ name: source.name, keys: source.keys, summary: '', active, ...tab, ...placement });
+      continue;
+    }
+    if (source.activeSource !== undefined) {
+      groups.push({
+        name: source.name,
+        keys: source.keys,
+        summary: '',
+        active: source.activeSource.isActive(sessionId),
+        ...tab,
+        ...placement,
+      });
     }
   }
   return groups;
+}
+
+/** Activity groups that update when either host signals or a plugin's session store changes. */
+export function useActivityGroups(
+  statuses: Record<string, string>,
+  widgets: readonly string[],
+  sessionId: string | null,
+): ActivityGroup[] {
+  useSyncExternalStore(
+    subscribeActivitySources,
+    () => activitySourceFingerprint(sessionId),
+    () => activitySourceFingerprint(sessionId),
+  );
+  return activityGroups(statuses, widgets, sessionId);
 }

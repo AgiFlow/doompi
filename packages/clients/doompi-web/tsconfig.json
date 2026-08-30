@@ -23,6 +23,14 @@
     "outDir": "dist",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts", "vite.config.ts", "playwright.config.ts"],
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "tsdown.config.ts",
+    "vite.config.ts",
+    "vite.pwa.config.ts",
+    "playwright.config.ts"
+  ],
   "exclude": ["node_modules", "dist", "coverage"]
 }

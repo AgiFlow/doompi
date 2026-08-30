@@ -50,13 +50,20 @@ go on.
 
 ## The signed bundle-manifest primitive
 
-The signer can support a separately distributed verifier whose bootstrap and public key are already
-trusted. It hashes every asset and signs a canonical manifest with ECDSA P-256.
+The Node signer traverses a public asset root without following symlinks, requires `/index.html`, hashes each
+byte sequence, and signs a strict canonical manifest v2 with ECDSA P-256. Revision state and the private key
+are persisted atomically at mode `0600`; malformed or replaced state fails closed instead of rotating
+silently.
 
-It is not a self-protection mechanism for a browser SPA. A server or TLS edge that can replace the page
-can also remove an in-page verifier or replace the key it trusts. DoomPi's Cloudflare transport treats
-Cloudflare as a trusted code-delivery boundary, so the cockpit does not use this primitive to claim
-protection from a malicious edge.
+The browser verifier accepts only the public SPKI and minimum revision pinned by the physical QR. DoomPi's
+package-owned service worker verifies the envelope and every asset before committing a Cache Storage revision,
+then atomically records the active bundle in IndexedDB. A same-revision digest conflict, signer mismatch,
+missing cache, bad MIME metadata, length mismatch, or hash mismatch is refused. The last-known-good bundle
+remains active during a failed refresh.
+
+This does not make the package-owned bootstrap self-protecting. A TLS edge that replaces `/pair` or `/sw.js`
+could remove the verifier before it runs. Once the intended bootstrap is installed, however, host and plugin
+JavaScript cannot execute until its signed bytes pass verification.
 
 `canonicalManifest` is hand-rolled rather than `JSON.stringify` of the whole object, because a signature
 is only worth anything if signer and verifier agree byte for byte, and key order in a JSON object is an

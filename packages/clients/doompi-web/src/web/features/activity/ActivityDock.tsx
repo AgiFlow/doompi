@@ -1,7 +1,7 @@
 import { Button, EmptyState, Kbd, SectionLabel, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { activityGroups, type ActivityGroup } from '../../lib/composition.ts';
+import { type ActivityGroup, useActivityGroups } from '../../lib/composition.ts';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry.ts';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
@@ -23,7 +23,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
   const slotProps = usePluginSlotProps(activeId, onOpenContent);
-  const groups = activityGroups(statuses, widgets);
+  const groups = useActivityGroups(statuses, widgets, activeId);
   const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
   const pinnedGroups = groups.filter((group) => group.placement === 'bottom');
   const busy = groups.filter((group) => group.active).length;

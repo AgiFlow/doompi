@@ -34,6 +34,7 @@
     "src/types/clientMedia.ts",
     "src/types/voiceOwnership.ts",
     "src/types/clientCaptureActivity.ts",
+    "src/types/manualTranscription.ts",
     "README.md",
     "LICENSE",
     "package.json"

@@ -213,7 +213,12 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
   };
   app.get(PAIRING_PAGE_ROUTE, (context) => {
     const nonce = randomBytes(NONCE_BYTES).toString('base64');
-    return context.body(pairingPageHtml({ nonce }), 200, pairingPageHeaders(nonce));
+    const localTrust = options.listenerOf(context) === 'local' ? remote.bundleTrust() : undefined;
+    return context.body(
+      pairingPageHtml({ nonce, ...(localTrust === undefined ? {} : { localTrust }) }),
+      200,
+      pairingPageHeaders(nonce),
+    );
   });
 
   app.post(PAIRING_CLAIM_ROUTE, publicBudget, publicDeadline, limitedJsonBody(PAIRING_BODY_BYTES), async (context) => {
@@ -255,7 +260,11 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
       sameSite: 'Lax',
       maxAge: redeemed.maxAgeSeconds,
     });
-    return context.json({ status: 'approved' });
+    return context.json({
+      status: 'approved',
+      bundleTrust: remote.bundleTrust(),
+      hostPublicKey: remote.channelPublicKey(),
+    });
   });
 
   app.get(REMOTE_API_ROUTE, (context) => {
@@ -297,7 +306,8 @@ export function registerRemoteRoutes(app: Hono, options: RemoteRoutesOptions): v
     const refused = localOnly(context);
     if (refused) return refused;
     const minted = remote.mintPairing();
-    if (minted === undefined) return context.json({ error: 'Remote access is not on.' }, CONFLICT);
+    if (minted === undefined)
+      return context.json({ error: 'Remote access or signed bundle publication is unavailable.' }, CONFLICT);
     return context.json(minted, CREATED);
   });
 

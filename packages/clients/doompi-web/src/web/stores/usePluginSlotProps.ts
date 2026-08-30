@@ -1,6 +1,7 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { pluginSlotProps } from '../lib/pluginSlotProps.ts';
+import { appendComposerDraft } from './composerStore.ts';
 import { sessionStoreFor } from './sessionStore.ts';
 import { closeTransientTab, openTransientTab } from './transientTabsStore.ts';
 import { useOpenTab } from './useOpenTab.ts';
@@ -27,5 +28,6 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
         if (sessionId !== null) closeTransientTab(sessionId, tabId);
       },
     },
+    (text) => appendComposerDraft(sessionId, text),
   );
 }

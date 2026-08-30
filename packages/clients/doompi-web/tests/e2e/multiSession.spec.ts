@@ -42,6 +42,7 @@ test('renames the focused session by clicking its title in the top bar', async (
 test('leaves the name alone when a title edit is abandoned', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  await expect(page.getByTestId('session-title')).toHaveText('session-1');
   const before = await page.getByTestId('session-title').innerText();
 
   await page.getByTestId('session-title').click();

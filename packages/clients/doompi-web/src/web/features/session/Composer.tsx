@@ -25,7 +25,13 @@ import {
   updateComposerState,
   useComposerState,
 } from '../../stores/composerStore.ts';
-import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
+import {
+  abortRun,
+  clearQueuedMessages,
+  queueFollowUp,
+  submitMessage,
+  useActiveSession,
+} from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { openPalette } from '../../stores/paletteStore.ts';
 import { useToolPrompt } from '../../stores/useToolPrompt.ts';
@@ -398,7 +404,7 @@ export function Composer() {
   if (prompt !== null) {
     return (
       <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
-        <QueueSheet count={queued} entries={queuedEntries} />
+        <QueueSheet count={queued} entries={queuedEntries} onClear={() => clearQueuedMessages(sessionId)} />
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
           <ComposerPrompt claim={prompt} sessionId={sessionId} />
         </div>
@@ -408,7 +414,7 @@ export function Composer() {
 
   return (
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
-      <QueueSheet count={queued} entries={queuedEntries} />
+      <QueueSheet count={queued} entries={queuedEntries} onClear={() => clearQueuedMessages(sessionId)} />
       <Popover
         open={completion !== null}
         onOpenChange={(next) => {
@@ -648,7 +654,7 @@ export function Composer() {
                   abort
                 </Button>
               ) : null}
-              <span className="contents sm:hidden" data-testid="composer-mobile-actions">
+              <span className="contents" data-testid="composer-actions">
                 <PluginSurface slot={HOST_SLOTS.composerActions} sessionId={sessionId} />
               </span>
               <Button

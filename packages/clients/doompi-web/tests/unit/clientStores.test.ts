@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { SessionSummary } from '../../src/types/hub.ts';
 import {
   abortCommand,
+  clearQueueCommand,
   dialogCancelled,
   dialogConfirmed,
   dialogValue,
@@ -53,9 +54,11 @@ import {
   abortRun,
   answerDialogConfirm,
   answerDialogValue,
+  applyProtocolQueue,
   applyProtocolTranscript,
   applySessionFrame,
   cancelDialog,
+  clearQueuedMessages,
   dropSessionStore,
   loadModelChoices,
   queueFollowUp,
@@ -129,6 +132,7 @@ describe('command builders', () => {
     expect(steerCommand('look', images)).toEqual({ type: 'steer', message: 'look', images });
     expect(followUpCommand('look', images)).toEqual({ type: 'follow_up', message: 'look', images });
     expect(abortCommand()).toEqual({ type: 'abort' });
+    expect(clearQueueCommand()).toEqual({ type: 'clear_queue' });
     expect(getStateCommand()).toEqual({ type: 'get_state' });
     expect(getSessionStatsCommand()).toEqual({ type: 'get_session_stats' });
     expect(getCommandsCommand()).toEqual({ type: 'get_commands' });
@@ -580,10 +584,28 @@ describe('session actions', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('queue a follow-up', () => {
+  it('replaces local queue rows from legacy and protocol snapshots', () => {
+    applySessionFrame('s1', { type: 'queue_update', steering: ['interrupt'], followUp: ['later'] });
+    expect(sessionStoreFor('s1').state.entries).toMatchObject([
+      { kind: 'queued', text: 'interrupt' },
+      { kind: 'queued', text: 'later' },
+    ]);
+
+    applyProtocolQueue('s1', [{ kind: 'queued', id: 'server-q1', text: 'after that' }]);
+    expect(sessionStoreFor('s1').state.entries).toMatchObject([{ kind: 'queued', text: 'after that' }]);
+
+    const settled = sessionStoreFor('s1').state;
+    applyProtocolQueue('s1', [{ kind: 'queued', id: 'server-q2', text: 'after that' }]);
+    expect(sessionStoreFor('s1').state).toBe(settled);
+  });
+
+  it('clears queued rows and asks Pi to delete its queue', () => {
     setActiveSession('s1');
     queueFollowUp('later');
-    expect((sent[0].frame as Frame).type).toBe('follow_up');
+    clearQueuedMessages();
+
+    expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
+    expect(sent.map((item) => item.frame)).toEqual([{ type: 'follow_up', message: 'later' }, { type: 'clear_queue' }]);
   });
 
   it('ask for every fact the rail shows', () => {

@@ -392,10 +392,12 @@ function createSingleTunnelLauncher(options: TunnelProcessOptions): TunnelLaunch
     const stop = async (): Promise<void> => {
       if (stopped) return;
       stopped = true;
-      process.off('exit', onProcessExit);
-      fs.rmSync(pidPath, { force: true });
-      fs.rmSync(runtimeTokenPath, { force: true });
-      if (child.exitCode !== null || child.signalCode !== null) return;
+      if (child.exitCode !== null || child.signalCode !== null) {
+        process.off('exit', onProcessExit);
+        fs.rmSync(pidPath, { force: true });
+        fs.rmSync(runtimeTokenPath, { force: true });
+        return;
+      }
       await new Promise<void>((resolve) => {
         const escalate = setTimeout(() => {
           try {
@@ -410,6 +412,9 @@ function createSingleTunnelLauncher(options: TunnelProcessOptions): TunnelLaunch
         });
         killTree();
       });
+      process.off('exit', onProcessExit);
+      fs.rmSync(pidPath, { force: true });
+      fs.rmSync(runtimeTokenPath, { force: true });
     };
 
     try {

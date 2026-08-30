@@ -23,7 +23,7 @@ test('marks the end of a run with what it did', async ({ page, cockpit }) => {
   await expect(page.getByTestId('entry-settled')).toContainText('agent settled · 1 tool');
 });
 
-test('summarises queued follow-ups and opens their bottom sheet', async ({ page, cockpit }) => {
+test('views queued follow-ups and can delete the queue', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -42,6 +42,11 @@ test('summarises queued follow-ups and opens their bottom sheet', async ({ page,
   await expect(page.getByTestId('queue-sheet-item')).toHaveCount(2);
   await expect(page.getByTestId('queue-sheet')).toContainText('then run the packed-install gate');
   await expect(page.getByTestId('queue-sheet')).toContainText('then report the bundle size');
+
+  await page.getByTestId('queue-clear').click();
+  await cockpit.session.waitForCommand('clear_queue');
+  await expect(page.getByTestId('queue-sheet')).toBeHidden();
+  await expect(page.getByTestId('composer-queued')).toBeHidden();
 });
 
 test('places one-shot voice transcription into the browser composer', async ({ page, cockpit }) => {

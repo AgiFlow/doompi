@@ -11,7 +11,15 @@ import {
 import { useState } from 'react';
 import type { QueuedEntry } from '../../lib/sessionModel.ts';
 
-export function QueueSheet({ count, entries }: { count: number; entries: readonly QueuedEntry[] }) {
+export function QueueSheet({
+  count,
+  entries,
+  onClear,
+}: {
+  count: number;
+  entries: readonly QueuedEntry[];
+  onClear: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const unlisted = Math.max(0, count - entries.length);
   const label = `${String(count)} queued message${count === 1 ? '' : 's'}`;
@@ -85,6 +93,18 @@ export function QueueSheet({ count, entries }: { count: number; entries: readonl
                 </li>
               ) : null}
             </ol>
+            <Button
+              variant="danger"
+              size="sm"
+              data-testid="queue-clear"
+              className="mt-2 w-full"
+              onClick={() => {
+                onClear();
+                setOpen(false);
+              }}
+            >
+              delete all queued messages
+            </Button>
           </DialogBody>
         </DialogContent>
       </Dialog>

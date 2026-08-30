@@ -20,12 +20,14 @@ export function pluginSlotProps(
   openTab: (tabId: string | null) => void,
   statuses: Readonly<Record<string, string>>,
   tabs: TransientTabActions,
+  appendComposerDraft: (text: string) => void,
 ): WebPluginSlotProps {
   const props: WebPluginSlotProps = {
     sessionId,
     openTab,
     openTransientTab: tabs.open,
     closeTransientTab: tabs.close,
+    appendComposerDraft,
     sendSessionFrame: sendFrame,
     statuses,
     renderThread(threadId): ReactNode {
