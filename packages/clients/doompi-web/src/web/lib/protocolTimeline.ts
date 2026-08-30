@@ -9,6 +9,7 @@ import {
   imagesFromContent,
   summariseArgs,
   type AssistantEntry,
+  type QueuedEntry,
   type TimelineEntry,
   type ToolEntry,
   type UserEntry,
@@ -67,9 +68,24 @@ function toolEntry(item: ToolTranscriptItem): ToolEntry {
   };
 }
 
+const projectedEntries = new WeakMap<TranscriptItem, TimelineEntry>();
+
+/** Projects one immutable protocol item once, so updates do not rebuild settled history. */
+function timelineEntry(item: TranscriptItem): TimelineEntry {
+  const cached = projectedEntries.get(item);
+  if (cached !== undefined) return cached;
+  const projected =
+    item.role === 'user' ? userEntry(item) : item.role === 'assistant' ? assistantEntry(item) : toolEntry(item);
+  projectedEntries.set(item, projected);
+  return projected;
+}
+
 /** Projects the protocol transcript onto the timeline the cockpit renders. */
 export function toTimelineEntries(transcript: readonly TranscriptItem[]): TimelineEntry[] {
-  return transcript.map((item) =>
-    item.role === 'user' ? userEntry(item) : item.role === 'assistant' ? assistantEntry(item) : toolEntry(item),
-  );
+  return transcript.map(timelineEntry);
+}
+
+/** Projects the protocol's authoritative pending input queue onto composer rows. */
+export function toQueuedEntries(queue: readonly UserTranscriptItem[]): QueuedEntry[] {
+  return queue.map((item) => ({ ...userEntry(item), kind: 'queued' }));
 }

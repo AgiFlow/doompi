@@ -20,14 +20,17 @@ const widget = (widgetKey: string) => ({
   id: `wg-${widgetKey}`,
   method: 'setWidget',
   widgetKey,
+  widgetLines: ['running'],
 });
 
-test('says nothing is supervised until a package reports in', async ({ page, cockpit }) => {
+test('keeps the workflow launcher available before any package reports work', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
   await expect(page.getByTestId('activity-dock')).toBeVisible();
-  await expect(page.getByTestId('activity-empty')).toBeVisible();
+  await expect(page.getByTestId('activity-workflows')).toBeVisible();
+  await expect(page.getByTestId('activity-workflow-launch')).toBeVisible();
+  await expect(page.getByTestId('activity-empty')).toBeHidden();
 });
 
 test('lists the groups whose packages report in, each rendered by its own plugin', async ({ page, cockpit }) => {
@@ -49,6 +52,40 @@ test('lists the groups whose packages report in, each rendered by its own plugin
   await expect(page.getByTestId('activity-summary-agents')).toHaveText('idle');
   await expect(page.getByTestId('activity-summary-runners')).toHaveText('idle');
   await expect(page.getByTestId('activity-summary-workflows')).toContainText('no runs yet');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
+});
+
+test('shows Loop lifecycle rows and routes the single manage action through /loops', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const loop = (state: 'starting' | 'running' | 'stopping') =>
+    JSON.stringify([
+      { instanceId: 'loop-release', label: 'Release watcher', detail: 'every 60s · Check release status', state },
+    ]);
+
+  await expect(page.getByTestId('activity-loops')).toHaveCount(0);
+  cockpit.session.emit(status('doom-loop-instances', loop('starting')));
+
+  const row = page.getByTestId('activity-loop-loop-release');
+  await expect(page.getByTestId('activity-loops')).toBeVisible();
+  await expect(row).toContainText('Release watcher');
+  await expect(row).toContainText('every 60s · Check release status');
+  await expect(row).toHaveAttribute('data-loop-state', 'starting');
+  await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
+
+  cockpit.session.emit(status('doom-loop-instances', loop('running')));
+  await expect(row).toHaveAttribute('data-loop-state', 'running');
+
+  await page.getByTestId('activity-loops-manage').click();
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/loops');
+
+  cockpit.session.emit(status('doom-loop-instances', loop('stopping')));
+  await expect(row).toHaveAttribute('data-loop-state', 'stopping');
+
+  cockpit.session.emit(status('doom-loop-instances'));
+  await expect(page.getByTestId('activity-loops')).toHaveCount(0);
 });
 
 test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {
@@ -76,14 +113,28 @@ test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({
   expect(await pinned.evaluate((element) => element.getBoundingClientRect().top)).toBe(pinnedTop);
 });
 
-test('counts the groups whose session summary is busy', async ({ page, cockpit }) => {
+test('highlights background work and renders its resume notice as the transcript footer', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+
+  const activityButton = page.getByTestId('mobile-activity-open');
+  await expect(activityButton).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 
   cockpit.session.emit(status('doom-runner-runners', 'Runners 2 ●'));
 
   await expect(page.getByTestId('activity-runners')).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('activity-busy')).toHaveText('1 running');
+  await expect(activityButton).toHaveAttribute('data-active', 'true');
+  await expect(activityButton).toHaveClass(/text-doom-yellow/);
+  const notice = page.getByTestId('background-work-notice');
+  await expect(notice).toHaveText('Background work is still running. The agent will resume when results are ready.');
+  await expect.poll(() => notice.evaluate((element) => getComputedStyle(element).position)).toBe('static');
+  await expect.poll(() => notice.evaluate((element) => element.parentElement?.lastElementChild === element)).toBe(true);
+
+  cockpit.session.emit(status('doom-runner-runners'));
+  await expect(activityButton).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
 test('the key chip opens the owning plugin tab, and is a label where there is none', async ({ page, cockpit }) => {
@@ -219,6 +270,8 @@ test('the workflows group lists the session runs and opens one in the workflows 
   await expect(row).toContainText('Release Hardening');
   await expect(row).toContainText('build · edit src/routes/token.ts');
   await expect(page.getByTestId('activity-summary-workflows')).toBeHidden();
+  await expect(page.getByTestId('activity-workflows')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('background-work-notice')).toBeVisible();
 
   await row.click();
   await expect(page).toHaveURL(/\/session\/s1\/workflows$/);

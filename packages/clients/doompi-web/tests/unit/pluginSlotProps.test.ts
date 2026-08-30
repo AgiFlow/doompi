@@ -9,6 +9,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps.ts';
 import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer.ts';
+import {
+  appendComposerDraft,
+  composerStore,
+  resetComposerStore,
+  updateComposerState,
+} from '../../src/web/stores/composerStore.ts';
 
 function Panel(): null {
   return null;
@@ -19,9 +25,11 @@ function Nested(): null {
 }
 
 const noTabs = { open: (): void => undefined, close: (): void => undefined };
+const noAppend = (): void => undefined;
 
 afterEach(() => {
   resetWebPlugins();
+  resetComposerStore();
   releaseThreadRenderer();
 });
 
@@ -47,7 +55,7 @@ describe('pluginSlotProps', () => {
       }),
     ]);
     const opened: Array<string | null> = [];
-    const props = pluginSlotProps('s1', (tabId) => opened.push(tabId), {}, noTabs);
+    const props = pluginSlotProps('s1', (tabId) => opened.push(tabId), {}, noTabs, noAppend);
 
     const rendered = props.renderSlot('owner.items') as ReactElement<WebPluginSlotProps>[];
     expect(rendered.map((element) => [isValidElement(element), element.type, element.key])).toEqual([
@@ -70,6 +78,31 @@ describe('pluginSlotProps', () => {
     expect(props.renderSlot('owner.badges')).toEqual([]);
     expect(props.renderSlot('nobody.home')).toEqual([]);
   });
+
+  it('binds composer draft appends to the focused session', () => {
+    updateComposerState('s1', (state) => ({ ...state, draft: 'existing' }));
+    updateComposerState('s2', (state) => ({ ...state, draft: 'other' }));
+
+    const props = pluginSlotProps(
+      's1',
+      () => undefined,
+      {},
+      noTabs,
+      (text) => appendComposerDraft('s1', text),
+    );
+    props.appendComposerDraft(' transcript ');
+
+    expect(composerStore.state.s1?.draft).toBe('existing transcript');
+    expect(composerStore.state.s2?.draft).toBe('other');
+    pluginSlotProps(
+      null,
+      () => undefined,
+      {},
+      noTabs,
+      (text) => appendComposerDraft(null, text),
+    ).appendComposerDraft('detached');
+    expect(Object.keys(composerStore.state)).toEqual(['s1', 's2']);
+  });
 });
 
 describe('the statuses a plugin component receives', () => {
@@ -85,7 +118,7 @@ describe('the statuses a plugin component receives', () => {
     ]);
 
     const statuses = { 'doom-voice': 'voice auto: listening' };
-    const props = pluginSlotProps('s1', () => undefined, statuses, noTabs);
+    const props = pluginSlotProps('s1', () => undefined, statuses, noTabs, noAppend);
     expect(props.statuses).toBe(statuses);
 
     const rendered = props.renderSlot('owner.items') as ReactElement<WebPluginSlotProps>[];
@@ -105,6 +138,7 @@ describe('the runtime tabs and threads a plugin component may open', () => {
         open: (tab) => opened.push(tab),
         close: (tabId) => closed.push(tabId),
       },
+      noAppend,
     );
     const tab: TransientTab = { id: 'owner-thing-1', label: 'thing', panel: Panel };
     props.openTransientTab(tab);
@@ -118,6 +152,6 @@ describe('the runtime tabs and threads a plugin component may open', () => {
     const rendered = props.renderThread('run-1') as ReactElement;
     expect(isValidElement(rendered)).toBe(true);
     expect(rendered.key).toBe('s1/run-1');
-    expect(pluginSlotProps(null, () => undefined, {}, noTabs).renderThread('run-1')).toBeNull();
+    expect(pluginSlotProps(null, () => undefined, {}, noTabs, noAppend).renderThread('run-1')).toBeNull();
   });
 });

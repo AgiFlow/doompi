@@ -1,4 +1,4 @@
-import { DIRECTORIES_API_ROUTE, SESSIONS_API_ROUTE } from '../../types/hub.ts';
+import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, SESSIONS_API_ROUTE } from '../../types/hub.ts';
 import { sealedHttpSession } from './sealedSession.ts';
 import { fetchWithStepUp } from './stepUp.ts';
 
@@ -90,6 +90,54 @@ export async function restartSession(sessionId: string): Promise<RestartSessionR
   return { error };
 }
 
+export type SessionHistoryResult = { sessions: PiSessionHistoryItem[] } | { error: string };
+
+/** Lists the Pi threads saved for a live session's workspace. */
+export async function listSessionHistory(sessionId: string): Promise<SessionHistoryResult> {
+  try {
+    const response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/history`);
+    const body = (await response.json()) as unknown;
+    if (response.ok && isRecord(body) && Array.isArray(body.sessions)) {
+      return {
+        sessions: body.sessions.filter(
+          (session): session is PiSessionHistoryItem =>
+            isRecord(session) &&
+            typeof session.id === 'string' &&
+            (session.name === undefined || typeof session.name === 'string') &&
+            typeof session.firstMessage === 'string' &&
+            typeof session.createdAt === 'string' &&
+            typeof session.updatedAt === 'string' &&
+            typeof session.messageCount === 'number',
+        ),
+      };
+    }
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
+
+export type ResumeSessionResult = { sessionId: string } | { error: string };
+
+/** Replaces one live card with a selected Pi thread from the same workspace. */
+export async function resumeSession(sessionId: string, targetSessionId: string): Promise<ResumeSessionResult> {
+  try {
+    const response = await fetchWithStepUp(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetSessionId }),
+    });
+    const body = (await response.json()) as unknown;
+    if (response.ok && isRecord(body) && typeof body.sessionId === 'string') return { sessionId: body.sessionId };
+    return {
+      error: isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`,
+    };
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+}
 /** File paths under a session's cwd matching the query, for @ completion. */
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {

@@ -11,6 +11,7 @@ describe('the slot props a component receives', () => {
 
     fixture.props.openTab('runners');
     fixture.props.openTab(null);
+    fixture.props.appendComposerDraft('continue here');
     fixture.props.sendSessionFrame('s1', { type: 'prompt', text: 'go' });
     fixture.props.openTransientTab({ id: 'runner-log-7', label: 'Log', panel: () => null });
     fixture.props.closeTransientTab('runner-log-7');
@@ -18,6 +19,7 @@ describe('the slot props a component receives', () => {
     expect(fixture.actions).toEqual([
       { action: 'openTab', target: 'runners' },
       { action: 'openTab', target: null },
+      { action: 'appendComposerDraft', target: 's1', text: 'continue here' },
       { action: 'sendSessionFrame', target: 's1', frame: { type: 'prompt', text: 'go' } },
       { action: 'openTransientTab', target: 'runner-log-7' },
       { action: 'closeTransientTab', target: 'runner-log-7' },

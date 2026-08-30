@@ -118,6 +118,16 @@ describe('the workspace web plugin composition', () => {
     expect(pluginMinorModes().map(mode)).toEqual(PACKAGED_MINOR_MODES.map(mode));
   });
 
+  it('installs the Loop activity group and section from the workspace package', async () => {
+    const definitions = await installed();
+    const loop = definitions.find(({ id }) => id === 'loop');
+
+    expect(loop?.activityGroups).toEqual([
+      { name: 'loops', keys: 'l l', statusKey: 'doom-loop-instances', hideWhenEmpty: true, order: 40 },
+    ]);
+    expect(loop?.activitySections?.map(({ id }) => id)).toEqual(['loops']);
+  });
+
   /**
    * Every component every plugin contributes, mounted once.
    *

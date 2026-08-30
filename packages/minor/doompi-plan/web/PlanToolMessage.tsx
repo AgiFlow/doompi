@@ -21,15 +21,13 @@ export function PlanToolMessage({ toolName, args, result, running, isError }: To
     <MessageItem tone={toolTone({ running, isError })} expandable={full.length > collapsed.length}>
       {({ expanded }) => (
         <>
-          <MessageItemHeader title={toolName}>
-            <span data-testid={`tool-call-${toolName}`} className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="font-bold text-doom-hi">{summary.action}</span>
-              {summary.detail ? <span className="min-w-0 truncate text-doom-faint">{summary.detail}</span> : null}
-              {summary.metadata.map((value) => (
-                <span key={value} className="shrink-0 text-doom-dim">
-                  · {value}
-                </span>
-              ))}
+          <MessageItemHeader title={summary.action}>
+            <span
+              data-testid={`tool-call-${toolName}`}
+              title={[summary.detail, ...summary.metadata].filter(Boolean).join(' · ') || undefined}
+              className="min-w-0 flex-1 truncate text-doom-dim"
+            >
+              {[summary.detail, ...summary.metadata].filter(Boolean).join(' · ')}
             </span>
           </MessageItemHeader>
           {(expanded ? full : collapsed).length > 0 ? (

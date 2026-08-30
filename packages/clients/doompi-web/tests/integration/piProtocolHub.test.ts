@@ -98,7 +98,12 @@ beforeEach(async () => {
     }),
   );
 
-  web = await serveWeb({ port: 0, registryDir, assetsDir: workDir });
+  web = await serveWeb({
+    port: 0,
+    registryDir,
+    assetsDir: workDir,
+    remoteStateDir: path.join(workDir, 'remote-state'),
+  });
   // The registry is polled, so give the hub a moment to notice the session.
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const probe = await fetch(`${web.url}/api/health`).then(

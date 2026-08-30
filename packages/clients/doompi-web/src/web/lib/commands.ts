@@ -22,6 +22,10 @@ export function abortCommand(): Frame {
   return { type: 'abort' };
 }
 
+export function clearQueueCommand(): Frame {
+  return { type: 'clear_queue' };
+}
+
 export function getStateCommand(): Frame {
   return { type: 'get_state' };
 }

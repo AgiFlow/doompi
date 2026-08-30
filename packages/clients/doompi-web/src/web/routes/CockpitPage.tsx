@@ -15,6 +15,7 @@ import { WelcomePanel } from '../features/sessions/WelcomePanel.tsx';
 import { Timeline } from '../features/session/Timeline.tsx';
 import { TopBar } from '../features/status/TopBar.tsx';
 import { HOST_SLOTS, webTabs } from '../lib/pluginRegistry.ts';
+import { useActiveSession } from '../stores/sessionStore.ts';
 import { sessionsStore, setActiveSession, useNoSessions } from '../stores/sessionsStore.ts';
 import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore.ts';
 import { setDockOpen, uiStore } from '../stores/uiStore.ts';
@@ -29,16 +30,23 @@ export function CockpitPage() {
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
   const noSessions = useNoSessions();
+  const dialogId = useActiveSession((state) => state.dialog?.id ?? null);
   // A declared tab first, then one a plugin opened at runtime for this session.
   const transientTab = useStore(transientTabsStore, (state) => findTransientTab(state, sessionId, tabId));
   const tab = (tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId)) ?? transientTab;
 
-  // The rail is a temporary drawer on mobile. Route changes can also come from
-  // session removal or plugin navigation, so they dismiss it even when no rail
-  // item produced the navigation event directly.
+  // Both side panels are temporary drawers on mobile. Route changes can also
+  // come from plugin navigation, so they dismiss the drawers even when no
+  // drawer item produced the navigation event directly.
   useEffect(() => {
     setRailOpen(false);
+    setMobileActivityOpen(false);
   }, [sessionId, tabId]);
+
+  // A modal must not compete with the mobile activity drawer for the viewport.
+  useEffect(() => {
+    if (dialogId !== null) setMobileActivityOpen(false);
+  }, [dialogId]);
 
   // The route is the source of focus; the store follows it.
   useEffect(() => {
@@ -126,7 +134,7 @@ export function CockpitPage() {
       </main>
       {dockOpen || mobileActivityOpen ? (
         <div className={activityDockClass}>
-          <ActivityDock onClose={closeActivity} />
+          <ActivityDock onClose={closeActivity} onOpenContent={() => setMobileActivityOpen(false)} />
         </div>
       ) : (
         <Button

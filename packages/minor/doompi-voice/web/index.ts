@@ -14,9 +14,8 @@ export const webPlugin = defineWebPlugin({
   id: 'voice',
   channels: [voiceMediaWakeChannel, voiceOwnershipChannel],
   start: startVoiceMediaRuntime,
-  // `v e` drives autonomous capture, which the runtime registers as
-  // 'voice-auto'; 'voice' is the one-shot dictation command on `v v`. The row
-  // shows the package's name and reaches the mode the key reaches.
+  // `v e` drives autonomous capture through the browser runtime and leaves
+  // one-shot manual dictation exclusively on the visible Composer button.
   minorModes: [{ name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice', order: 60 }],
   // A microphone you cannot see is one you cannot trust, so voice earns a
   // group in the dock rather than a word inside a chip.
@@ -31,16 +30,8 @@ export const webPlugin = defineWebPlugin({
   composerActions: [{ id: 'voice', component: VoiceComposerAction }],
   // The voice tools' timeline cards, the web half of src/adapters/pi/voiceToolRender.ts.
   toolRenderers: [{ tools: [...VOICE_TOOL_NAMES], message: VoiceToolMessage }],
-  // The TUI's SPC v bindings, backed by the browser media runtime here.
+  // The browser leader binding controls autonomous capture only.
   leaderBindings: [
-    {
-      id: 'voice.capture',
-      path: [
-        { key: 'v', label: 'voice', detail: 'client voice capture' },
-        { key: 'v', label: 'capture', detail: 'start or stop one-shot dictation' },
-      ],
-      command: 'voice',
-    },
     {
       id: 'voice.toggle',
       path: [

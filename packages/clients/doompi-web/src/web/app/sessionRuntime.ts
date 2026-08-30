@@ -23,6 +23,7 @@ import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } fro
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
+import { dropComposerState } from '../stores/composerStore.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
@@ -47,6 +48,32 @@ import {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function refreshVerifiedBundle(): Promise<void> {
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const serviceWorker = registration.active ?? navigator.serviceWorker.controller;
+    if (serviceWorker === null) throw new Error('The trusted verifier is unavailable.');
+    const channel = new MessageChannel();
+    const result = await new Promise<unknown>((resolve) => {
+      const timer = window.setTimeout(() => resolve(undefined), 120_000);
+      channel.port1.addEventListener(
+        'message',
+        (event: MessageEvent<unknown>) => {
+          window.clearTimeout(timer);
+          resolve(event.data);
+        },
+        { once: true },
+      );
+      channel.port1.start();
+      serviceWorker.postMessage({ type: 'doompi:refresh-bundle' }, [channel.port2]);
+    });
+    if (!isRecord(result) || result.ok !== true) throw new Error('The refreshed bundle was refused.');
+    window.location.reload();
+  } catch {
+    window.location.replace('/pair');
+  }
 }
 
 /**
@@ -95,10 +122,10 @@ export function startSessionRuntime(): () => void {
   const socket = createSessionSocket(sessionSocketUrl(window.location), {
     onFrame(frame) {
       switch (frame.type) {
-        // Sync rebuilt the bundle this page is running. Nothing in a loaded
-        // bundle notices its source moved, so the page picks the new one up.
+        // Sync rebuilt the bundle this page is running. The trusted worker stages
+        // and verifies the replacement before this page is allowed to reload it.
         case HUB_RESYNCED_TYPE:
-          window.location.reload();
+          void refreshVerifiedBundle();
           return;
 
         // Remote-access state is pushed rather than polled. The pairing
@@ -125,6 +152,7 @@ export function startSessionRuntime(): () => void {
         case SESSION_REMOVED_TYPE: {
           if (typeof frame.sessionId !== 'string') return;
           applySessionRemoved(frame);
+          dropComposerState(frame.sessionId);
           dropSessionStore(frame.sessionId);
           dropPluginSessionData(frame.sessionId);
           dropThreads(frame.sessionId);

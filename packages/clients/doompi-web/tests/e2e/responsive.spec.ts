@@ -93,10 +93,10 @@ test.describe('responsive repository settings plugins', () => {
   });
 });
 
-test.describe('mobile composer actions', () => {
+test.describe('composer actions', () => {
   test.use({ assets: 'synced' });
 
-  test('places voice before queue and reflects manual and autonomous phases', async ({ page, cockpit }) => {
+  test('places voice before queue and reflects autonomous phases', async ({ page, cockpit }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(cockpit.url);
     await cockpit.session.waitForAttach();
@@ -118,19 +118,6 @@ test.describe('mobile composer actions', () => {
     expect(voiceBox).not.toBeNull();
     expect(queueBox).not.toBeNull();
     expect((voiceBox?.x ?? 0) + (voiceBox?.width ?? 0)).toBeLessThanOrEqual(queueBox?.x ?? 0);
-
-    await clickAndExpectPrompt('/voice');
-
-    cockpit.session.emit({
-      type: 'extension_ui_request',
-      id: 'voice-recording',
-      method: 'setStatus',
-      statusKey: 'doom-voice',
-      statusText: 'voice: recording 0:03',
-    });
-    await expect(voice).toHaveAttribute('data-voice-phase', 'recording');
-    await expect(voice).toHaveAttribute('aria-label', 'stop voice recording and fill the prompt');
-    await clickAndExpectPrompt('/voice');
 
     const phases = [
       ['listening', 'voice auto: listening'],
@@ -157,6 +144,6 @@ test.describe('mobile composer actions', () => {
     await clickAndExpectPrompt('/minor voice-auto deactivate');
 
     await page.setViewportSize({ width: 900, height: 844 });
-    await expect(voice).toBeHidden();
+    await expect(voice).toBeVisible();
   });
 });

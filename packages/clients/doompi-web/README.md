@@ -120,8 +120,27 @@ perform the handshake itself: `attach` frames sent from the browser are refused.
   them.
 - Subagent, workflow, and runner surfaces report summaries only; per-run detail has no RPC source
   to render from yet.
-- Browser notifications require a live, connected page. There is no service worker, Web Push, replay,
-  or durable queue, so notifications emitted while every page is closed are not delivered later.
+- Open pages show full live browser notifications. An installed paired PWA can also receive a generic
+  zero-TTL Web Push alert while closed. There is no durable subscription database, outbox, replay, or
+  historical delivery.
+
+## iPhone Home Screen app
+
+Use a stable named HTTPS tunnel such as `doompi.agimon.win`. Quick-tunnel hostnames rotate, so they cannot
+provide durable PWA identity, passkeys, or reliable Push subscriptions. Open `/pair` in Safari, add it to the
+Home Screen, then launch the installed app and scan the QR shown by the host.
+
+The install shell, scanner, manifest, and verifier worker are package-owned. The QR pins the host signing key
+and minimum bundle revision. The worker verifies every host and plugin asset before committing it to the
+active cache, and the host never serves its SPA directly. A failed update keeps the last-known-good bundle.
+Signer loss, signer rotation, or a host/container transition requires explicit fingerprint confirmation and
+re-pairing. Session file previews remain sealed `no-store` HTTP Blob URLs and never enter the application
+cache, IndexedDB, a signed manifest, or a Push payload.
+
+Closed-app alerts are opt-in under settings. The server keeps subscriptions only in memory and sends fixed
+generic copy with `TTL: 0` only when the device has no connected cockpit socket. Opening the app after a host
+restart re-registers the browser subscription. Disabling alerts, revoking or expiring the device, switching
+off remote access, or rotating process credentials removes it.
 
 ## Remote access
 
@@ -137,12 +156,13 @@ so the socket a connection arrived on is the only thing about it that cannot be 
 
 Pairing takes **two** things, not one:
 
-1. The host shows a QR encoding `https://<tunnel-host>/pair#c=<code>`. The code rides in the URL
-   fragment, which no browser sends to any server, so it never reaches Cloudflare's logs, this
-   process's log, or a `Referer`.
-2. Scanning it raises an approve or deny prompt **on the host**. Nothing is paired until someone at
-   the machine answers. A screen is visible over a shoulder and in a screenshare, so the code alone
-   is one factor for a credential that ends in shell access.
+1. The host shows a QR encoding `https://<tunnel-host>/pair#c=<code>&k=<channel-key>&s=<signer>&r=<revision>`.
+   Every value rides in the URL fragment, which no browser sends to a server, so the relay cannot replace the
+   channel or bundle key without changing what was shown on the host. Manual pairing requires comparing the
+   signing-key fingerprint shown on both devices.
+2. Scanning raises an approve or deny prompt **on the host**. Nothing is paired until someone at the machine
+   answers. A screen is visible over a shoulder and in a screenshare, so the code alone is one factor for a
+   credential that ends in shell access.
 
 A paired device then has the same powers as the person at the keyboard, with one exception: it
 cannot mint pairing codes, approve devices, or change these settings. A device able to approve
@@ -160,18 +180,24 @@ setting in force at the moment of the check rather than stamped onto a session w
 Turning expiry on therefore drops sessions that are already idle, and turning it off brings them
 back.
 
-With both off, the only expiry is you: a tunnel stays up until it is closed or the hub restarts, and
-a paired device keeps its session until it is revoked or remote access is switched off. Switching
-remote access off always revokes every paired session, and that is not a toggle.
+With both off, a paired device keeps its session until it is revoked, remote access is switched off, or
+the hub restarts. Switching remote access off always revokes every paired session, and that is not a
+toggle.
 
 Before reporting success, the tunnel is **self-tested through its own public URL**: the pairing page
 must answer 200 and `/api/health` must answer 401. Anything else means the agent is on the public
 internet unguarded, so the tunnel is killed immediately rather than warned about.
 
-Requires `cloudflared` on `PATH` (`brew install cloudflared`). A quick tunnel needs no account but
-gets a new hostname on every start, so every restart means scanning again, and Cloudflare does not
-support SSE on quick tunnels, which breaks the workflow and runner-log plugin surfaces. A named
-tunnel on your own domain has neither problem and is the mode to use if you do this daily.
+Requires `cloudflared` on `PATH` (`brew install cloudflared`). A quick tunnel needs no account but gets a new
+hostname on every start. It does not provide a durable PWA, passkey, or Push identity, and Cloudflare does not
+support SSE on quick tunnels, which breaks workflow and runner-log plugin surfaces. Use a stable named tunnel
+for the Home Screen app.
+
+If a named tunnel's connector exits unexpectedly, the hub makes three backoff restart attempts and
+self-tests every replacement. The existing listener and paired sessions stay valid while recovery is
+in progress. A quick tunnel cannot recover transparently because its origin changes, so it still fails
+closed immediately. Exhausting named-tunnel recovery also switches remote access off and revokes the
+paired sessions.
 
 ### Passkeys and step-up
 
@@ -187,18 +213,20 @@ so rather than letting the ceremony fail in the browser.
 
 ### Tunnel-provider trust and payload privacy
 
-Cloudflare is a trusted delivery boundary. It terminates TLS and delivers both the pairing page and the
-cockpit SPA. A browser cannot independently verify its first executable page against the same edge that
-served it: a malicious replacement could omit any in-page verifier, read the QR fragment, and control a
-paired agent. DoomPi therefore does not claim that browser-side bundle signing protects against a
-compromised Cloudflare edge.
+Cloudflare terminates TLS and delivers the package-owned pairing and verifier bootstrap. A browser cannot
+independently authenticate that first executable shell against the same edge that served it: a malicious
+replacement could omit the worker and steal a QR fragment. DoomPi does not claim protection from a malicious
+code-delivery edge.
 
-Within that trust model, **the payload is sealed**. A QR carries an ephemeral P-256 public key alongside the
-pairing code, in the URL fragment, which no browser sends to any server. A returning device that proves a
-passkey receives the current public key in the successful authentication response instead. Both paths then
-complete ECDH and derive AES-256-GCM keys, separate per direction. Socket frames and API bodies travel as
-ciphertext. This limits routine relay visibility, but it still depends on Cloudflare delivering the intended
-pairing page and SPA.
+After that bootstrap, **bundle signing is mandatory**. The QR pins the host ECDSA key and revision floor. The
+worker verifies the signed manifest plus every raw asset before any host JavaScript executes, serves only the
+atomically committed verified cache, and retains the last-known-good revision on failure. Cloudflare may
+alter the raw bytes, but altered bytes do not execute.
+
+**The payload is also sealed.** A QR carries an ephemeral P-256 public key in the fragment. A returning
+passkey device restores its channel only after the pinned bundle worker accepts the same signer. Both paths
+complete ECDH and derive separate AES-256-GCM keys per direction. Socket frames and API bodies travel as
+ciphertext.
 
 The channel implementation lives in `@agimon-ai/doompi-web-security`, which ships the envelope contract,
 a `node:crypto` half, and a WebCrypto half. **A web plugin that calls `fetch` directly sends plaintext to
@@ -343,9 +371,9 @@ and the host's own slot contributions) and an optional hub entry (`webHubChannel
 dist). This package's own bundle carries no plugins; the full set is assembled on your machine:
 `doompi sync` discovers the installed composition's manifests, generates the import entries, and
 rebuilds the SPA through the `./bundler` subpath into `~/.doompi/web/current`, which the server
-prefers over the packaged bundle (`--assets` and `DOOMPI_WEB_DIST` override it). The synced bundle
-carries `webPlugins.server.json` naming each plugin's built hub entry, imported lazily: a missing
-plugin package logs a notice and its tab shows an empty state. The subagents tab in
+prefers over the packaged bundle (`--assets` and `DOOMPI_WEB_DIST` override it). Server-only
+`webPlugins.server.json` sits beside the public `web/` directory, never inside the signed or served bundle.
+It names each plugin's built hub entry, imported lazily: a missing plugin package logs a notice and its tab
 `@agimon-ai/doompi-team` is the reference plugin; the workflows tab ships with
 `@agimon-ai/doompi-workflow`. Contracts come from `@agimon-ai/doompi-web-contracts`.
 

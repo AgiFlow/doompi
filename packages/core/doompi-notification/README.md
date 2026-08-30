@@ -51,10 +51,15 @@ subagent child, it does not install that wrapper and Pi's original `ui.notify` b
 
 ## Browser delivery
 
-`doompi-web` shows only entries received by a currently open page. Every connected page receives live
-notification entries for every attached session, not only the focused session. Permission is requested
-only when the user clicks **allow notifications** in web settings. There is no service worker, Web Push,
-replay, or durable notification queue, so a closed or disconnected page receives nothing later.
+`doompi-web` shows full notification text only for entries received by a currently open page. Every connected
+page receives live notification entries for every attached session, not only the focused session. Permission
+is requested only from an explicit settings action.
+
+A paired installed PWA may also opt into live Web Push while closed. That payload is fixed generic copy with
+`TTL: 0`; it contains no session, prompt, response, or file data. The host keeps subscriptions only in memory,
+so there is no durable database, outbox, replay, or delivery of historical entries. The open app re-registers
+a browser-held subscription after a host restart. Device revocation or expiry, remote shutdown, browser
+disable, and expired provider endpoints remove the live subscription.
 
 ## The shell title
 

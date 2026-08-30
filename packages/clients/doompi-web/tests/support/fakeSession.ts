@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createAgentServerService, serveProtocolSocket } from '@agimon-ai/doompi-server';
 import type { SessionSnapshot, TranscriptItem } from '@earendil-works/pi-protocol';
 export type Frame = Record<string, unknown>;
-
+type ToolContent = Extract<TranscriptItem, { role: 'tool' }>['content'];
 export interface FakeSession {
   readonly id: string;
   readonly socketPath: string;
@@ -232,10 +232,14 @@ function fixtureTranscript(id: string, cwd: string, name: string) {
         const result = (frame.type === 'tool_execution_update' ? frame.partialResult : frame.result) as
           | Frame
           | undefined;
-        const content = Array.isArray(result?.content)
-          ? (result.content as Frame[])
-              .filter((part) => part.type === 'text')
-              .map((part) => ({ type: 'text' as const, text: stringValue(part.text) }))
+        const content: ToolContent = Array.isArray(result?.content)
+          ? (result.content as Frame[]).flatMap<ToolContent[number]>((part) => {
+              if (part.type === 'text') return [{ type: 'text' as const, text: stringValue(part.text) }];
+              if (part.type === 'image' && typeof part.data === 'string' && typeof part.mimeType === 'string') {
+                return [{ type: 'image' as const, data: part.data, mimeType: part.mimeType }];
+              }
+              return [];
+            })
           : tool.content;
         if (frame.type === 'tool_execution_update') {
           transcript[index] = { ...tool, content, details: result as never };

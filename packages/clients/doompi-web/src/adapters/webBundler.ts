@@ -29,7 +29,7 @@ export interface BundleCockpitWebOptions {
 }
 
 export interface BundleCockpitWebResult {
-  /** The assets directory to serve (contains index.html and the server registry). */
+  /** Public assets directory. Server-only registry metadata remains beside it. */
   assetsDir: string;
   pluginIds: string[];
 }
@@ -84,6 +84,6 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
     },
   });
 
-  fs.writeFileSync(path.join(assetsDir, SERVER_REGISTRY_FILE), generated.serverRegistry);
+  fs.writeFileSync(path.join(options.outDir, SERVER_REGISTRY_FILE), generated.serverRegistry);
   return { assetsDir, pluginIds: plugins.map((plugin) => plugin.pluginId) };
 }

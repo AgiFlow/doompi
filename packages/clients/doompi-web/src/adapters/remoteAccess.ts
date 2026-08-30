@@ -1,17 +1,20 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { type OriginPolicy, tunnelOriginPolicy } from '../services/remoteGuardPolicy.ts';
 import { createPairingFlow, type PairingFlow } from '../services/pairingFlow.ts';
 import { parseRemoteAccessSettings, serializeRemoteAccessSettings } from '../services/remoteAccessSettings.ts';
 import { cookieMaxAgeSeconds } from '../services/deviceSessions.ts';
 import {
+  BUNDLE_MINIMUM_REVISION_PARAM,
+  BUNDLE_SIGNING_KEY_PARAM,
   PAIRING_PAGE_ROUTE,
   REMOTE_PAIRING_REQUEST_TYPE,
   REMOTE_STATE_TYPE,
+  type BundlePairingTrust,
   type PairingStatus,
-  type RemoteChannelScope,
   type RemoteAccessSettings,
   type RemoteAccessStateView,
   type RemoteAccessStatus,
+  type RemoteChannelScope,
   type TunnelLauncher,
   type TunnelStartResult,
 } from '../types/remoteAccess.ts';
@@ -38,6 +41,10 @@ export interface RemoteAccessOptions {
   launchTunnel: TunnelLauncher;
   /** Binds a fresh loopback listener for the tunnel to point at. */
   bindListener: () => Promise<TunnelListener>;
+  /** Current signed publication authenticated through the physical pairing display. */
+  bundleTrust?: () => { publicKey: string; revision: number } | undefined;
+  /** Removes ephemeral state owned by a paired device when its authorization ends. */
+  onDeviceDropped?: (deviceId: string) => void;
   onNotice?: (message: string) => void;
   /** Frames only the local cockpit may see, such as an approval prompt. */
   broadcastLocal?: (frame: object) => void;
@@ -73,8 +80,11 @@ export interface RemoteAccess {
   /** Runs that deferred handover, once the response asking for it is on the wire. */
   commitHandover(): void;
   disable(): Promise<void>;
-  /** Mints the code a QR carries, and the URL that encodes it. Undefined while the tunnel is down. */
-  mintPairing(): { code: string; pairUrl: string; expiresAt: string } | undefined;
+  /** Mints the QR credential, separate manual code, and URL. Undefined while unavailable. */
+  mintPairing():
+    | ({ code: string; manualCode: string; pairUrl: string; expiresAt: string } & BundlePairingTrust)
+    | undefined;
+  bundleTrust(): BundlePairingTrust | undefined;
   claim(input: {
     code: string;
     userAgent: string | undefined;
@@ -108,9 +118,20 @@ export interface RemoteAccess {
   openChannel(deviceId: string, scope: RemoteChannelScope, clientPublicKey: string): boolean;
   channelFor(deviceId: string, scope: RemoteChannelScope): SealedChannel | undefined;
   revokeDevice(id: string): boolean;
+  isDeviceConnected(deviceId: string): boolean;
   /** Registers a remote socket against its device so revocation closes it immediately. */
   trackSocket(deviceId: string, close: (code: number, reason: string) => void): () => void;
   close(): Promise<void>;
+}
+
+function bundlePairingTrust(
+  value: { publicKey: string; revision: number } | undefined,
+): BundlePairingTrust | undefined {
+  if (value === undefined) return undefined;
+  return {
+    ...value,
+    fingerprint: createHash('sha256').update(Buffer.from(value.publicKey, 'base64url')).digest('hex'),
+  };
 }
 
 export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
@@ -139,6 +160,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
   const channelKey = (deviceId: string, scope: RemoteChannelScope): string => `${deviceId}:${scope}`;
   const dropDeviceAccess = (deviceId: string, reason: 'revoked' | 'expired'): void => {
+    options.onDeviceDropped?.(deviceId);
     for (const scope of ['session', 'protocol', 'http'] as const) channels.delete(channelKey(deviceId, scope));
     const held = sockets.get(deviceId);
     sockets.delete(deviceId);
@@ -169,6 +191,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
   const pairing: PairingFlow = createPairingFlow({
     randomToken: () => randomBytes(TOKEN_BYTES).toString('base64url'),
+    randomManualCode: () => randomInt(100_000_000).toString().padStart(8, '0'),
     digest: (token) => createHash('sha256').update(token).digest('hex'),
     now,
     onNotice: notice,
@@ -397,19 +420,28 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
     disable,
 
     mintPairing() {
-      if (status !== 'on' || publicOrigin === undefined) return undefined;
-      const { code, expiresAt } = pairing.mintCode();
-      // Both the code and the channel key ride in the fragment, which no
-      // browser sends to any server. That keeps the code out of the edge's logs
-      // and, more importantly, means the channel key reaches the device without
-      // ever passing through the relay it is meant to keep out.
-      const key = handshake === undefined ? '' : `&${SEALED_KEY_PARAM}=${encodeURIComponent(handshake.publicKey)}`;
+      if (status !== 'on' || publicOrigin === undefined || handshake === undefined) return undefined;
+      const trust = bundlePairingTrust(options.bundleTrust?.());
+      if (trust === undefined) return undefined;
+      const { code, manualCode, expiresAt } = pairing.mintCode();
+      // The token, channel key, signer key, and publication floor ride in the fragment,
+      // so the relay never observes the values used to authenticate either channel.
+      const fragment = new URLSearchParams({
+        c: code,
+        [SEALED_KEY_PARAM]: handshake.publicKey,
+        [BUNDLE_SIGNING_KEY_PARAM]: trust.publicKey,
+        [BUNDLE_MINIMUM_REVISION_PARAM]: String(trust.revision),
+      });
       return {
         code,
-        pairUrl: `${publicOrigin}${PAIRING_PAGE_ROUTE}#c=${encodeURIComponent(code)}${key}`,
+        manualCode,
+        pairUrl: `${publicOrigin}${PAIRING_PAGE_ROUTE}#${fragment.toString()}`,
         expiresAt: new Date(expiresAt).toISOString(),
+        ...trust,
       };
     },
+
+    bundleTrust: () => bundlePairingTrust(options.bundleTrust?.()),
 
     claim(input) {
       const outcome = pairing.claim(input);
@@ -490,6 +522,8 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
       if (revoked) publish();
       return revoked;
     },
+
+    isDeviceConnected: (deviceId) => (sockets.get(deviceId)?.size ?? 0) > 0,
 
     trackSocket(deviceId, close) {
       const held = sockets.get(deviceId) ?? new Set();

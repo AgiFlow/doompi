@@ -23,6 +23,7 @@ const SETTINGS = {
   tunnel: { kind: 'quick' as const },
   sandbox: { enabled: false, workspaces: [] },
 };
+const PAIRING_TRUST = { publicKey: 'A'.repeat(90), fingerprint: 'f'.repeat(64), revision: 1 };
 
 function view(overrides: Partial<RemoteAccessStateView> = {}): RemoteAccessStateView {
   return { status: 'off', devices: [], pending: [], settings: SETTINGS, ...overrides };
@@ -57,10 +58,16 @@ describe('the dialog', () => {
   });
 
   it('closes without cancelling a code, so a mid-scan phone is not stranded', () => {
-    remoteAccessStore.setState((state) => ({ ...state, step: 'pairing', pairUrl: 'https://x/pair#c=a' }));
+    remoteAccessStore.setState((state) => ({
+      ...state,
+      step: 'pairing',
+      pairUrl: 'https://x/pair#c=a',
+      pairCode: '12345678',
+    }));
     closeRemoteDialog();
     expect(remoteAccessStore.state.step).toBe('closed');
     expect(remoteAccessStore.state.pairUrl).toBe('https://x/pair#c=a');
+    expect(remoteAccessStore.state.pairCode).toBe('12345678');
   });
 
   it('goes back to the options panel', () => {
@@ -74,12 +81,19 @@ describe('turning it on', () => {
   it('lands on the code, which is what the user came for', async () => {
     routes({
       '/api/remote/enable': { state: view({ status: 'on' }) },
-      '/api/remote/codes': { code: 'a', pairUrl: 'https://x/pair#c=a', expiresAt: 'now' },
+      '/api/remote/codes': {
+        code: 'a',
+        manualCode: '12345678',
+        pairUrl: 'https://x/pair#c=a',
+        expiresAt: 'now',
+        ...PAIRING_TRUST,
+      },
       '/api/remote/passkeys': { support: { supported: false, reason: 'quick tunnel' }, credentials: [] },
     });
     await turnRemoteAccessOn();
     expect(remoteAccessStore.state.step).toBe('pairing');
     expect(remoteAccessStore.state.pairUrl).toBe('https://x/pair#c=a');
+    expect(remoteAccessStore.state.pairCode).toBe('12345678');
     expect(remoteAccessStore.state.busy).toBe(false);
   });
 
@@ -94,20 +108,31 @@ describe('turning it on', () => {
 
 describe('turning it off', () => {
   it('returns to the options and forgets the code', async () => {
-    remoteAccessStore.setState((state) => ({ ...state, step: 'pairing', pairUrl: 'https://x/pair#c=a' }));
+    remoteAccessStore.setState((state) => ({
+      ...state,
+      step: 'pairing',
+      pairUrl: 'https://x/pair#c=a',
+      pairCode: '12345678',
+    }));
     routes({ '/api/remote/disable': { state: view() } });
     await turnRemoteAccessOff();
     expect(remoteAccessStore.state.step).toBe('options');
     expect(remoteAccessStore.state.pairUrl).toBeUndefined();
+    expect(remoteAccessStore.state.pairCode).toBeUndefined();
   });
 });
 
 describe('the pairing code', () => {
   it('clears a stale URL when a new code cannot be minted', async () => {
-    remoteAccessStore.setState((state) => ({ ...state, pairUrl: 'https://x/pair#c=old' }));
+    remoteAccessStore.setState((state) => ({
+      ...state,
+      pairUrl: 'https://x/pair#c=old',
+      pairCode: '87654321',
+    }));
     routes({ '/api/remote/codes': { error: 'Remote access is not on.' } }, 409);
     await newPairingCode();
     expect(remoteAccessStore.state.pairUrl).toBeUndefined();
+    expect(remoteAccessStore.state.pairCode).toBeUndefined();
     expect(remoteAccessStore.state.error).toContain('not on');
   });
 });
@@ -171,7 +196,13 @@ describe('waiting out a handover', () => {
 
   it('goes to the code once the cockpit that took over reports itself', async () => {
     routes({
-      '/api/remote/codes': { code: 'c', pairUrl: 'https://x/pair#c=c', expiresAt: 'later' },
+      '/api/remote/codes': {
+        code: 'c',
+        manualCode: '12345678',
+        pairUrl: 'https://x/pair#c=c',
+        expiresAt: 'later',
+        ...PAIRING_TRUST,
+      },
       '/api/remote/passkeys': { support: { supported: false }, credentials: [] },
     });
     remoteAccessStore.setState((state) => ({ ...state, step: 'handover' }));
@@ -180,6 +211,7 @@ describe('waiting out a handover', () => {
       expect(remoteAccessStore.state.step).toBe('pairing');
     });
     expect(remoteAccessStore.state.pairUrl).toBe('https://x/pair#c=c');
+    expect(remoteAccessStore.state.pairCode).toBe('12345678');
   });
 
   it('keeps waiting while the container is still coming up', () => {
@@ -191,7 +223,13 @@ describe('waiting out a handover', () => {
   it('goes straight to the code when the cockpit is not contained', async () => {
     routes({
       '/enable': { state: view({ status: 'on' }) },
-      '/api/remote/codes': { code: 'c', pairUrl: 'https://x/pair#c=c', expiresAt: 'later' },
+      '/api/remote/codes': {
+        code: 'c',
+        manualCode: '12345678',
+        pairUrl: 'https://x/pair#c=c',
+        expiresAt: 'later',
+        ...PAIRING_TRUST,
+      },
       '/api/remote/passkeys': { support: { supported: false }, credentials: [] },
     });
     await turnRemoteAccessOn();

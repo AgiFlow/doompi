@@ -20,6 +20,7 @@ export function sessionFileHeaders(filePath: string): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': media?.contentType ?? OCTET_STREAM,
     'Content-Disposition': `${media ? 'inline' : 'attachment'}; filename="${name}"`,
+    'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
   };
   if (media?.contentType === 'image/svg+xml') headers['Content-Security-Policy'] = "default-src 'none'; sandbox";

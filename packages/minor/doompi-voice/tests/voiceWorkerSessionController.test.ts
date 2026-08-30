@@ -70,16 +70,17 @@ function harness(config: DoomConfig = doomConfig) {
 }
 
 describe('VoiceWorkerSessionController', () => {
-  it('uses the worker for explicit-stop dictation and appends the exact final transcript', async () => {
+  it('uses the latest RPC UI bridge to append an explicit-stop transcript', async () => {
     const { controller, client, emit } = harness();
-    const ui = voiceUi('existing');
+    const startUi = voiceUi('stale draft');
+    const stopUi = voiceUi('existing');
 
-    await controller.toggle(ui);
+    await controller.toggle(startUi);
     expect(controller.state).toBe('recording');
     expect(client.beginCapture).toHaveBeenCalledTimes(1);
     const begin = vi.mocked(client.beginCapture).mock.calls[0]![0];
     expect(begin).toMatchObject({ mode: 'manual', maxDurationMs: 300_000, transcriptionTimeoutMs: 15_000 });
-    await controller.toggle(ui);
+    await controller.toggle(stopUi);
     expect(controller.state).toBe('transcribing');
     expect(client.finalizeCapture).toHaveBeenCalledWith(begin.sessionId, begin.captureId, 'explicit-stop');
 
@@ -95,7 +96,8 @@ describe('VoiceWorkerSessionController', () => {
       final: true,
     });
 
-    expect(ui.text).toBe('existing one, two, three');
+    expect(startUi.text).toBe('stale draft');
+    expect(stopUi.text).toBe('existing one, two, three');
     expect(client.acknowledgeCandidate).toHaveBeenCalledWith(begin.sessionId, begin.turnId, 1, 'committed');
     expect(controller.state).toBe('idle');
   });

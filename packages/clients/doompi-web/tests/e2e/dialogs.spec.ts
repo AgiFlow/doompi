@@ -1,8 +1,11 @@
 import { expect, test } from '../support/cockpit.ts';
 
 test('answers a select request, the shape a permission prompt uses', async ({ page, cockpit }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  await page.getByTestId('mobile-activity-open').click();
+  await expect(page.getByTestId('activity-dock')).toBeVisible();
 
   cockpit.session.emit({
     type: 'extension_ui_request',
@@ -15,6 +18,7 @@ test('answers a select request, the shape a permission prompt uses', async ({ pa
 
   const dialog = page.getByTestId('dialog');
   await expect(dialog).toHaveAttribute('data-dialog-method', 'select');
+  await expect(page.getByTestId('activity-dock')).toBeHidden();
   await expect(page.getByTestId('dialog-title')).toHaveText('permission required');
   await expect(page.getByTestId('dialog-message')).toContainText('rm -rf node_modules/.cache');
 

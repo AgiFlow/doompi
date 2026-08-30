@@ -27,8 +27,8 @@ describe('browser voice media', () => {
     expect(source).toContain('start: startVoiceMediaRuntime');
     expect(source).not.toContain('voice-media-runtime');
     expect(source).toContain("composerActions: [{ id: 'voice', component: VoiceComposerAction }]");
-    expect(source).toContain("id: 'voice.capture'");
-    expect(source).toContain("command: 'voice'");
+    expect(source).not.toContain("id: 'voice.capture'");
+    expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
   });
@@ -80,12 +80,15 @@ describe('browser voice media', () => {
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
 
-  it('fills the mobile composer action with manual controls and autonomous phase icons', async () => {
+  it('fills the global composer action with manual recording and preserves autonomous controls', async () => {
     const source = await readFile(new URL('../web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
-    expect(source).toContain("? '/voice'");
-    expect(source).toContain("? '/minor voice-auto deactivate'");
+    expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
+    expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
+    expect(source).toContain('recorder?.dispose()');
+    expect(source).not.toContain("message: '/voice'");
+    expect(source).toContain("'/minor voice-auto deactivate'");
     expect(source).toContain('AudioLinesIcon');
     expect(source).toContain('LoaderIcon');
     expect(source).toContain('MessageIcon');
@@ -112,20 +115,20 @@ describe('browser voice media', () => {
     ];
     expect(new Set(phases.map(iconFor)).size).toBe(phases.length);
 
-    const recording = renderPlugin(
+    const legacyManual = renderPlugin(
       VoiceComposerAction,
       slotPropsFixture({ statuses: { 'doom-voice': 'voice: recording 0:03' } }).props,
     );
-    expect(recording.html).toContain('aria-label="stop voice recording and fill the prompt"');
-    expect(recording.html).toContain('data-voice-phase="recording"');
+    expect(legacyManual.html).toContain('aria-label="start voice recording"');
+    expect(legacyManual.html).toContain('data-voice-phase="idle"');
   });
 
-  it('offers an explicit stop control while manual recording fills the prompt', async () => {
+  it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
     const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
 
-    expect(source).toContain('data-testid="voice-recording-stop"');
-    expect(source).toContain("sendCommand('/voice')");
-    expect(source).toContain('stop recording and fill the prompt');
+    expect(source).not.toContain("sendCommand('/voice')");
+    expect(source).not.toContain('voice-recording-stop');
+    expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
   it('shows an accessible autonomous microphone toggle only while autonomous voice is applicable', async () => {

@@ -10,9 +10,11 @@ interface PackageManifest {
   type: string;
   exports?: Record<string, unknown>;
   files?: string[];
+  dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiWeb?: { pluginId?: string; channels?: string[]; client?: string };
 }
 
 /** Release bumps rewrite the manifest version, so assert its shape rather than a fixed value. */
@@ -72,6 +74,8 @@ describe('doom-loop package boundary', () => {
         '@earendil-works/pi-tui': '0.84.4',
       }),
     );
+    expect(manifest.dependencies?.['@agimon-ai/doompi-web-components']).toBe('workspace:*');
+    expect(manifest.dependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
   });
 
   it('removes rig package dependencies and config imports', async () => {
@@ -91,6 +95,7 @@ describe('doom-loop package boundary', () => {
     expect(project.sourceRoot).toBe('packages/minor/doompi-loop/src');
     expect(project.sourceTemplate).toBe('doom-extension');
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+    expect(manifest.doompiWeb).toEqual({ pluginId: 'loop', channels: [], client: './web/index.ts' });
   });
 
   it('declares only closed ESM, CJS, and declaration targets for public entries', async () => {
@@ -117,6 +122,10 @@ describe('doom-loop package boundary', () => {
     expect(files.some((entry) => entry === 'dist' || entry === 'dist/**' || entry.startsWith('dist/'))).toBe(true);
     expect(files).not.toContain('src');
     expect(files).not.toContain('tests');
+    expect(files).toContain('src/prompts');
+    expect(files).toContain('src/types/loopView.ts');
+    expect(files).toContain('web');
+    expect(files).toContain('README.md');
     expect(files).toContain('package.json');
     for (const resource of files) {
       if (resource.includes('*')) continue;

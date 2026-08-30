@@ -1,6 +1,6 @@
-import type { TranscriptItem } from '@earendil-works/pi-protocol';
+import type { TranscriptItem, UserTranscriptItem } from '@earendil-works/pi-protocol';
 import { describe, expect, it } from 'vitest';
-import { toTimelineEntries } from '../../src/web/lib/protocolTimeline.ts';
+import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline.ts';
 
 const MODEL = { provider: 'anthropic', id: 'opus' };
 
@@ -150,5 +150,43 @@ describe('protocol transcript projection', () => {
     ];
 
     expect(toTimelineEntries(items).map((entry) => entry.kind)).toEqual(['user', 'assistant']);
+  });
+
+  it('reuses a projection while the protocol item is unchanged', () => {
+    const item: UserTranscriptItem = {
+      id: 'u1',
+      role: 'user',
+      content: [{ type: 'text', text: 'keep this settled row' }],
+      timestamp: 1,
+    };
+
+    const first = toTimelineEntries([item])[0];
+    expect(toTimelineEntries([item])[0]).toBe(first);
+
+    const updated: UserTranscriptItem = { ...item, content: [{ type: 'text', text: 'replace changed rows' }] };
+    expect(toTimelineEntries([updated])[0]).not.toBe(first);
+  });
+
+  it('projects the authoritative protocol queue with its text and images', () => {
+    const queue: UserTranscriptItem[] = [
+      {
+        id: 'queued-1',
+        role: 'user',
+        content: [
+          { type: 'text', text: 'run the release checks' },
+          { type: 'image', data: 'cG5n', mimeType: 'image/png' },
+        ],
+        timestamp: 3,
+      },
+    ];
+
+    expect(toQueuedEntries(queue)).toEqual([
+      {
+        kind: 'queued',
+        id: 'queued-1',
+        text: 'run the release checks',
+        images: [{ data: 'cG5n', mimeType: 'image/png' }],
+      },
+    ]);
   });
 });

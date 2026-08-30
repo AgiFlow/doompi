@@ -20,9 +20,11 @@ import type {
  */
 
 export interface RecordedSlotAction {
-  action: 'openTab' | 'openTransientTab' | 'closeTransientTab' | 'sendSessionFrame';
-  /** The tab id, the transient tab's id, or the target session of a frame. */
+  action: 'appendComposerDraft' | 'openTab' | 'openTransientTab' | 'closeTransientTab' | 'sendSessionFrame';
+  /** The tab id, the transient tab's id, or the target session of a frame or composer append. */
   target: string | null;
+  /** The text passed to `appendComposerDraft`. */
+  text?: string;
   /** The frame a component sent, for `sendSessionFrame`. */
   frame?: Record<string, unknown>;
 }
@@ -61,6 +63,9 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
     },
     closeTransientTab: (tabId: string) => {
       actions.push({ action: 'closeTransientTab', target: tabId });
+    },
+    appendComposerDraft: (text) => {
+      actions.push({ action: 'appendComposerDraft', target: props.sessionId, text });
     },
     sendSessionFrame: (sessionId, frame) => {
       actions.push({ action: 'sendSessionFrame', target: sessionId, frame });

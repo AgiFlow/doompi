@@ -2,6 +2,7 @@ import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 import {
   abortCommand,
+  clearQueueCommand,
   dialogCancelled,
   dialogConfirmed,
   dialogValue,
@@ -22,10 +23,13 @@ import {
   appendQueued,
   appendUserPrompt,
   clearDialog,
+  clearQueuedEntries,
   isSupportedImageMimeType,
   initialSessionState,
   prependHistory,
   reduceSession,
+  replaceQueuedEntries,
+  type QueuedEntry,
   type SessionState,
   type TimelineEntry,
 } from '../lib/sessionModel.ts';
@@ -146,12 +150,19 @@ export function seedHistoryCursor(sessionId: string, cursor: string | null): voi
   setHistory(sessionId, { ...NO_HISTORY, cursor });
 }
 
-/** Keeps DoomPi-only timeline entries beside the protocol items that preceded them. */
-function mergeProtocolEntries(previous: TimelineEntry[], protocol: TimelineEntry[]): TimelineEntry[] {
+/** Keeps DoomPi-only and optimistic entries beside the protocol items that preceded them. */
+function mergeProtocolEntries(
+  previous: TimelineEntry[],
+  protocol: TimelineEntry[],
+  pendingUserIds: ReadonlySet<string>,
+  reconciledUserIds: ReadonlySet<string>,
+): TimelineEntry[] {
   const localByAnchor = new Map<string | null, TimelineEntry[]>();
   let anchor: string | null = null;
   for (const entry of previous) {
-    if (PROTOCOL_ENTRY_KINDS.has(entry.kind)) {
+    const protocolOwned =
+      (PROTOCOL_ENTRY_KINDS.has(entry.kind) || reconciledUserIds.has(entry.id)) && !pendingUserIds.has(entry.id);
+    if (protocolOwned) {
       anchor = entry.id;
       continue;
     }
@@ -182,24 +193,75 @@ function mergeProtocolEntries(previous: TimelineEntry[], protocol: TimelineEntry
 export function applyProtocolTranscript(sessionId: string, entries: TimelineEntry[], streaming: boolean): void {
   protocolTranscripts.add(sessionId);
   sessionStoreFor(sessionId).setState((state) => {
-    const publishedUserText = new Set(entries.filter((entry) => entry.kind === 'user').map((entry) => entry.text));
-    const pendingUserEntries = state.pendingUserEntries.filter((pending) => !publishedUserText.has(pending.text));
-    const pendingTimeline: TimelineEntry[] = pendingUserEntries.map((pending) => ({
-      kind: 'user',
-      id: pending.id,
-      text: pending.text,
-      ...(pending.images ? { images: pending.images } : {}),
-    }));
+    const pendingUserEntries = [...state.pendingUserEntries];
+    const pendingUserIdsBeforeReconciliation = new Set(pendingUserEntries.map((pending) => pending.id));
+    const knownProtocolIds = new Set(
+      state.entries
+        .filter((entry) => PROTOCOL_ENTRY_KINDS.has(entry.kind) && !pendingUserIdsBeforeReconciliation.has(entry.id))
+        .map((entry) => entry.id),
+    );
+    const protocolUserEntryIds = { ...state.protocolUserEntryIds };
+    const normalizedEntries = [...entries];
+
+    // Work backwards so repeated text binds to the newest matching prompt. The
+    // local id keeps React from mounting the same message again when Pi publishes
+    // its authoritative transcript copy at the end of a run.
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const entry = entries[index];
+      if (entry?.kind !== 'user') continue;
+      const localId = protocolUserEntryIds[entry.id];
+      if (localId !== undefined) {
+        normalizedEntries[index] = { ...entry, id: localId };
+        continue;
+      }
+      if (knownProtocolIds.has(entry.id)) continue;
+      const pendingIndex = pendingUserEntries.findLastIndex((pending) => pending.text === entry.text);
+      if (pendingIndex === -1) continue;
+      const [pending] = pendingUserEntries.splice(pendingIndex, 1);
+      if (pending === undefined) continue;
+      protocolUserEntryIds[entry.id] = pending.id;
+      normalizedEntries[index] = { ...entry, id: pending.id };
+    }
+
+    const pendingUserIds = new Set(pendingUserEntries.map((pending) => pending.id));
+    const reconciledUserIds = new Set(Object.values(protocolUserEntryIds));
     return {
       ...state,
-      entries: mergeProtocolEntries(state.entries, [...entries, ...pendingTimeline]),
+      entries: mergeProtocolEntries(state.entries, normalizedEntries, pendingUserIds, reconciledUserIds),
       streaming,
       settled: !streaming,
       pendingUserEntries,
+      protocolUserEntryIds,
     };
   });
 }
 
+function protocolQueueMatches(state: SessionState, queue: readonly QueuedEntry[]): boolean {
+  const current = state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
+  return (
+    current.length === queue.length &&
+    current.every((entry, index) => {
+      const next = queue[index];
+      if (next === undefined || entry.text !== next.text) return false;
+      const images = entry.images ?? [];
+      const nextImages = next.images ?? [];
+      return (
+        images.length === nextImages.length &&
+        images.every((image, imageIndex) => {
+          const nextImage = nextImages[imageIndex];
+          return nextImage !== undefined && image.data === nextImage.data && image.mimeType === nextImage.mimeType;
+        })
+      );
+    })
+  );
+}
+
+/** Replaces composer queue rows with the protocol server's authoritative queue. */
+export function applyProtocolQueue(sessionId: string, queue: readonly QueuedEntry[]): void {
+  sessionStoreFor(sessionId).setState((state) =>
+    protocolQueueMatches(state, queue) ? state : replaceQueuedEntries(state, queue),
+  );
+}
 export function resetSessionStore(sessionId: string): void {
   sessionStoreFor(sessionId).setState((state) => {
     if (!protocolTranscripts.has(sessionId)) return initialSessionState;
@@ -212,6 +274,7 @@ export function resetSessionStore(sessionId: string): void {
       streaming: state.streaming,
       settled: state.settled,
       pendingUserEntries: state.pendingUserEntries,
+      protocolUserEntryIds: state.protocolUserEntryIds,
     };
   });
   history.delete(sessionId);
@@ -301,6 +364,12 @@ export function queueFollowUp(
     .map(({ data, mimeType }) => ({ data, mimeType }));
   sessionStoreFor(sessionId).setState((state) => appendQueued(state, trimmed, userImages));
   sendFrame(sessionId, followUpCommand(trimmed, images));
+}
+
+export function clearQueuedMessages(sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null) return;
+  sessionStoreFor(sessionId).setState(clearQueuedEntries);
+  sendFrame(sessionId, clearQueueCommand());
 }
 
 /**

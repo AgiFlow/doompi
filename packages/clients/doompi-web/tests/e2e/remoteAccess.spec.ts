@@ -1,7 +1,8 @@
 import { expect, test } from '../support/cockpit.ts';
 
-const PAIR_URL = 'https://calm-river-1234.trycloudflare.com/pair#c=Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo';
 const TUNNEL_HOST = 'calm-river-1234.trycloudflare.com';
+const SIGNER_PUBLIC_KEY = 'A'.repeat(90);
+const PAIR_URL = `https://${TUNNEL_HOST}/pair#c=${'C'.repeat(24)}&k=${'K'.repeat(43)}&s=${SIGNER_PUBLIC_KEY}&r=1`;
 
 /** The state the hub reports once a tunnel is up, so the UI can be driven without one. */
 function liveState(devices: unknown[] = [], pending: unknown[] = []) {
@@ -36,9 +37,19 @@ test('the header button opens remote access on its options, not on a code', asyn
   await expect(page.getByTestId('remote-banner')).toBeHidden();
 });
 
-test('the pairing step shows a scannable code and the address behind it', async ({ page, cockpit }) => {
+test('the pairing step shows a scannable code, manual code, and address', async ({ page, cockpit }) => {
   await page.route('**/api/remote/codes', async (route) => {
-    await route.fulfill({ json: { code: 'x', pairUrl: PAIR_URL, expiresAt: new Date().toISOString() } });
+    await route.fulfill({
+      json: {
+        code: 'x',
+        manualCode: '12345678',
+        pairUrl: PAIR_URL,
+        expiresAt: new Date().toISOString(),
+        publicKey: SIGNER_PUBLIC_KEY,
+        fingerprint: 'f'.repeat(64),
+        revision: 1,
+      },
+    });
   });
   await page.route('**/api/remote/enable', async (route) => await route.fulfill({ json: liveState() }));
 
@@ -46,6 +57,7 @@ test('the pairing step shows a scannable code and the address behind it', async 
   await page.getByTestId('remote-access-open').click();
   await page.getByTestId('remote-access-on').click();
 
+  await expect(page.getByTestId('remote-pair-code')).toHaveText('12345678');
   await expect(page.getByTestId('remote-pair-url')).toHaveText(PAIR_URL);
   await expect(page.locator('[data-testid="remote-access-dialog"] svg[role="img"]')).toBeVisible();
   // Unmissable while the tunnel is up, and it names the host so a forgotten

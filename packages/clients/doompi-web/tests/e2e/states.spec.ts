@@ -23,15 +23,30 @@ test('marks the end of a run with what it did', async ({ page, cockpit }) => {
   await expect(page.getByTestId('entry-settled')).toContainText('agent settled · 1 tool');
 });
 
-test('shows a queued follow-up as queued, not as sent', async ({ page, cockpit }) => {
+test('views queued follow-ups and can delete the queue', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
   await page.getByTestId('composer-input').fill('then run the packed-install gate');
   await page.getByTestId('composer-queue').click();
-
-  await expect(page.getByTestId('entry-queued')).toContainText('then run the packed-install gate');
   await cockpit.session.waitForCommand('follow_up');
+  await page.getByTestId('composer-input').fill('then report the bundle size');
+  await page.getByTestId('composer-queue').click();
+  await cockpit.session.waitForCommand('follow_up');
+
+  await expect(page.getByTestId('entry-queued')).toHaveCount(0);
+  await expect(page.getByTestId('composer-queued')).toContainText('2 queued messages');
+  await page.getByTestId('composer-queued').click();
+
+  await expect(page.getByTestId('queue-sheet')).toBeVisible();
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(2);
+  await expect(page.getByTestId('queue-sheet')).toContainText('then run the packed-install gate');
+  await expect(page.getByTestId('queue-sheet')).toContainText('then report the bundle size');
+
+  await page.getByTestId('queue-clear').click();
+  await cockpit.session.waitForCommand('clear_queue');
+  await expect(page.getByTestId('queue-sheet')).toBeHidden();
+  await expect(page.getByTestId('composer-queued')).toBeHidden();
 });
 
 test('places one-shot voice transcription into the browser composer', async ({ page, cockpit }) => {
@@ -64,7 +79,7 @@ test('explains a refused attach instead of sitting blank', async ({ page, cockpi
   intruder();
   // Recovery rides the hub's backoff, whose ceiling is 4s.
   await expect(page.getByTestId('refused-card')).toBeHidden({ timeout: 15_000 });
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/, { timeout: 15_000 });
+  await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 15_000 });
 });
 
 test('answers a permission prompt from the keyboard', async ({ page, cockpit }) => {

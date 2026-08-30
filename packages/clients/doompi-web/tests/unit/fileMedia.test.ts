@@ -15,6 +15,7 @@ describe('sessionFileHeaders', () => {
     expect(sessionFileHeaders('docs/shot.png')).toEqual({
       'Content-Type': 'image/png',
       'Content-Disposition': 'inline; filename="shot.png"',
+      'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
     });
   });

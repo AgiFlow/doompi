@@ -10,6 +10,7 @@ import { bindThreadRenderer } from '../lib/threadRenderer.ts';
 import { onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { routeTree } from '../routes/routeTree.tsx';
 import { restoreSealedSession } from '../lib/sealedSession.ts';
+import { restoreLivePushRegistration } from '../lib/livePush.ts';
 import { refreshRemoteState } from '../stores/remoteAccessStore.ts';
 import { startSessionRuntime } from './sessionRuntime.ts';
 import { webPlugins } from './webPlugins.generated.ts';
@@ -47,6 +48,7 @@ export function Providers() {
       stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame, onHubConnected });
       // One read at start; after that the hub pushes state, so nothing polls.
       void refreshRemoteState();
+      void restoreLivePushRegistration();
     });
     return () => {
       cancelled = true;

@@ -29,7 +29,7 @@ import {
   type SessionSummary,
 } from '../types/hub.ts';
 import type { SessionRecord } from '../types/registry.ts';
-import type { BridgeState, SessionFrame } from '../types/session.ts';
+import { REPLAY_TYPE, type BridgeState, type SessionFrame } from '../types/session.ts';
 import type { RecordSource } from './registryWatcher.ts';
 import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSpawner.ts';
 import { attachToSession } from './sessionSocketClient.ts';
@@ -58,6 +58,23 @@ const ENTRY_APPENDED_TYPE = 'entry_appended';
  */
 const DEFAULT_RESTART_WAIT_MS = 15_000;
 const DEFAULT_RESTART_POLL_MS = 100;
+
+/** One session-local extension projection, including a replay wrapper from its server. */
+function uiProjectionKey(frame: SessionFrame): string | undefined {
+  const replayed = frame.frame;
+  const projected =
+    frame.type === REPLAY_TYPE && typeof replayed === 'object' && replayed !== null && !Array.isArray(replayed)
+      ? (replayed as SessionFrame)
+      : frame;
+  if (projected.type !== 'extension_ui_request') return undefined;
+  if (projected.method === 'setStatus' && typeof projected.statusKey === 'string') {
+    return `status:${projected.statusKey}`;
+  }
+  if (projected.method === 'setWidget' && typeof projected.widgetKey === 'string') {
+    return `widget:${projected.widgetKey}`;
+  }
+  return undefined;
+}
 
 export type HubEvent =
   | { kind: 'upsert'; session: SessionSummary }
@@ -98,7 +115,7 @@ export interface SessionHub {
   stop(sessionId: string): StopOutcome;
   /** Streams every change; pages filter frame events by their subscriptions. */
   onEvent(listener: (event: HubEvent) => void): () => void;
-  /** Recent history for one session, or undefined for an unknown id. */
+  /** Current UI projections and recent transient history for one session, or undefined for an unknown id. */
   backlog(sessionId: string): SessionBacklogFrame | undefined;
   /** One older window of a session's transcript, for a page scrolling back. */
   history(sessionId: string, request: { before?: string; limit?: number }): HistoryPageFrame | undefined;
@@ -126,6 +143,12 @@ export interface SessionHub {
    * survives.
    */
   restart(sessionId: string, trace?: DoomTraceContext): Promise<SpawnOutcome>;
+  /** Replaces one live session with an inactive Pi thread from the same workspace. */
+  resume(
+    sessionId: string,
+    target: { sessionId: string; name: string },
+    trace?: DoomTraceContext,
+  ): Promise<SpawnOutcome>;
   close(): void;
 }
 
@@ -133,6 +156,8 @@ interface ManagedSession {
   record: SessionRecord;
   attachment?: SessionAttachment;
   ring: FrameRing;
+  /** Latest status and widget frames for rebuilding only this session's browser store. */
+  uiProjections: Map<string, SessionFrame>;
   presence: SessionPresence;
   attach: BridgeState;
   attachReason?: string;
@@ -456,7 +481,9 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
               return;
             }
             const wasPhase = managed.presence.phase;
-            managed.ring.record(frame);
+            const projectionKey = uiProjectionKey(frame);
+            if (projectionKey === undefined) managed.ring.record(frame);
+            else managed.uiProjections.set(projectionKey, frame);
             managed.frameCount += 1;
             const next = reducePresence(managed.presence, frame, new Date().toISOString());
             const changed = next !== managed.presence;
@@ -505,6 +532,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     const managed: ManagedSession = {
       record,
       ring: createFrameRing(options.ringLimit),
+      uiProjections: new Map<string, SessionFrame>(),
       journal: [],
       presence: initialPresence(new Date().toISOString()),
       attach: 'connecting',
@@ -586,7 +614,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     backlog(sessionId) {
       const managed = sessions.get(sessionId);
       if (!managed) return undefined;
-      const { frames, dropped } = managed.ring.snapshot();
+      const { frames: transientFrames, dropped } = managed.ring.snapshot();
+      const frames = [...managed.uiProjections.values(), ...transientFrames];
       emitTelemetry('web.session.backlog', { frames: frames.length, dropped });
       return { type: SESSION_BACKLOG_TYPE, sessionId, frames, dropped };
     },
@@ -707,6 +736,40 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       }
       options.onNotice?.(`restarting session ${sessionId}`);
       return spawner.spawn({ cwd, name, sessionId, sessionDir: path.dirname(socketPath), trace });
+    },
+    async resume(sessionId, target, trace) {
+      const spawner = options.spawner;
+      if (!spawner) {
+        return {
+          ok: false,
+          code: 'invalid_request',
+          error: 'This cockpit serves a fixed session and cannot resume another thread.',
+        };
+      }
+      const managed = sessions.get(sessionId);
+      if (!managed) return { ok: false, code: 'invalid_request', error: 'Unknown session.' };
+      if (target.sessionId === sessionId) return this.restart(sessionId, trace);
+      if (sessions.has(target.sessionId)) {
+        return { ok: false, code: 'invalid_request', error: 'That Pi thread is already running.' };
+      }
+      const { cwd, socketPath } = managed.record;
+      const stopped = stopSession(sessionId);
+      if (!stopped.ok) return { ok: false, code: 'invalid_request', error: stopped.error };
+      if (!(await awaitWithdrawal(sessionId))) {
+        return {
+          ok: false,
+          code: 'spawn_failed',
+          error: 'The session did not stop in time; the selected thread was not resumed.',
+        };
+      }
+      options.onNotice?.(`resuming Pi session ${target.sessionId} in place of ${sessionId}`);
+      return spawner.spawn({
+        cwd,
+        name: target.name,
+        sessionId: target.sessionId,
+        sessionDir: path.dirname(socketPath),
+        trace,
+      });
     },
     close() {
       closed = true;

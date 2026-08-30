@@ -49,11 +49,17 @@ describe('listenerOf', () => {
 });
 
 describe('isPublicPairingRoute', () => {
-  it('allows exactly the seven direct pairing-surface routes and no more', () => {
+  it('allows exactly the thirteen package bootstrap and pairing routes and no more', () => {
     // Pinned on purpose: an addition here widens the direct surface of a cockpit
     // that can run shell commands, and should not pass unnoticed.
-    expect(PUBLIC_PAIRING_ROUTES).toHaveLength(7);
+    expect(PUBLIC_PAIRING_ROUTES).toHaveLength(13);
+    expect(isPublicPairingRoute('GET', '/')).toBe(true);
     expect(isPublicPairingRoute('GET', '/pair')).toBe(true);
+    expect(isPublicPairingRoute('GET', '/manifest.webmanifest')).toBe(true);
+    expect(isPublicPairingRoute('GET', '/sw.js')).toBe(true);
+    expect(isPublicPairingRoute('GET', '/pwa/pwa.js')).toBe(true);
+    expect(isPublicPairingRoute('GET', '/pwa/icon-192.png')).toBe(true);
+    expect(isPublicPairingRoute('GET', '/pwa/icon-512.png')).toBe(true);
     expect(isPublicPairingRoute('POST', '/api/remote/pair')).toBe(true);
     expect(isPublicPairingRoute('GET', '/api/remote/pair/status')).toBe(true);
     // Sign-in must be reachable without a session; that is what signing in is.
@@ -84,7 +90,7 @@ describe('isPublicPairingRoute', () => {
       '/api/remote/pair/status/',
       '/api/remote/pair/status/../../health',
       '/api/health',
-      '/',
+      '/pwa/other.js',
     ]) {
       expect(isPublicPairingRoute('GET', path), path).toBe(false);
     }

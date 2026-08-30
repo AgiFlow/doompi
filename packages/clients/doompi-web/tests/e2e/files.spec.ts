@@ -59,6 +59,8 @@ test('files browser searches and opens the complete changed-file list', async ({
   await expect(compact.locator('[data-file-diffable]')).toHaveCount(5);
   await expect(compact).toContainText('src/Fifth.ts');
   await expect(compact).not.toContainText('HiddenTarget');
+  await expect(page.getByTestId('activity-files')).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 
   const showAll = page.getByTestId('activity-files-show-all');
   await expect(showAll).toHaveText('show all 6 files');

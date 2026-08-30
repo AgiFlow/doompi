@@ -124,9 +124,17 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
   spawnStub: ['ok', { option: true }],
   assets: ['packaged', { option: true }],
+  page: async ({ page, cockpit }, use) => {
+    await page.goto(`${cockpit.url}/pair`);
+    await page.waitForURL(`${cockpit.url}/`);
+    await page.getByTestId('cockpit').waitFor();
+    await page.goto('about:blank');
+    await use(page);
+  },
   cockpit: async ({ sessionCount, spawnStub, assets }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
     const registryDir = path.join(root, 'run');
+    const stateDir = path.join(root, 'state');
     const stub = path.join(root, 'fake-doompi-server');
     fs.writeFileSync(stub, spawnStub === 'ok' ? REGISTERING_SERVER : FAILING_SERVER, { mode: 0o755 });
 
@@ -164,7 +172,19 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const assetsDir = assets === 'synced' && syncedDist ? syncedDist : path.join(packageRoot, 'dist', 'web');
     const child: ChildProcess = spawn(
       process.execPath,
-      [binary, '--registry-dir', registryDir, '--spawn-command', stub, '--port', String(port), '--assets', assetsDir],
+      [
+        binary,
+        '--registry-dir',
+        registryDir,
+        '--state-dir',
+        stateDir,
+        '--spawn-command',
+        stub,
+        '--port',
+        String(port),
+        '--assets',
+        assetsDir,
+      ],
       {
         stdio: ['ignore', 'pipe', 'pipe'],
         env,

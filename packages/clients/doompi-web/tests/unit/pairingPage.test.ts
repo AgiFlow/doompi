@@ -13,20 +13,22 @@ describe('the pairing page', () => {
     expect(pairingPageHtml({ nonce: NONCE })).toContain(PAIRING_PAGE_MARKER);
   });
 
-  it('pulls in no subresources at all', () => {
-    // What keeps the unauthenticated allowlist at three exact paths: allowing a
-    // whole asset directory is how such a list rots into a bypass.
+  it('loads only the exact package-owned PWA bootstrap resources', () => {
     const html = pairingPageHtml({ nonce: NONCE });
-    expect(html).not.toMatch(/<link\b/u);
-    expect(html).not.toMatch(/<script[^>]+\bsrc=/u);
+    expect(html.match(/<link\b/gu)).toHaveLength(1);
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest">');
+    expect(html.match(/<script[^>]+\bsrc=/gu)).toHaveLength(1);
+    expect(html).toContain('<script type="module" src="/pwa/pwa.js"></script>');
     expect(html).not.toMatch(/<img\b/u);
     expect(html).not.toMatch(/@import/u);
   });
 
-  it('admits exactly the one inline script, by nonce', () => {
+  it('admits the nonce script and package-owned scripts only', () => {
     const html = pairingPageHtml({ nonce: NONCE });
     expect(html).toContain(`<script nonce="${NONCE}">`);
-    expect(pairingPageCsp(NONCE)).toContain(`script-src 'nonce-${NONCE}'`);
+    expect(pairingPageCsp(NONCE)).toContain(`script-src 'nonce-${NONCE}' 'self'`);
+    expect(pairingPageCsp(NONCE)).toContain("manifest-src 'self'");
+    expect(pairingPageCsp(NONCE)).toContain("worker-src 'self'");
   });
 
   it('denies everything by default and forbids being framed', () => {
@@ -38,11 +40,14 @@ describe('the pairing page', () => {
     expect(csp).toContain("connect-src 'self'");
   });
 
-  it('reads the code from the fragment and scrubs it', () => {
+  it('reads initial and in-page scanned codes from the fragment before scrubbing it', () => {
     // A fragment is never sent to any server, so the code stays out of the
     // edge's logs, this process's log, and any Referer.
     const html = pairingPageHtml({ nonce: NONCE });
     expect(html).toContain('location.hash');
+    expect(html).toContain("window.addEventListener('hashchange'");
+    expect(html).toContain('void claim(nextCode, nextTrust)');
+    expect(html).toContain('if (!fragmentClaimStarted)');
     expect(html).toContain('history.replaceState');
     expect(html).not.toContain('location.search');
   });
@@ -62,9 +67,37 @@ describe('the pairing page', () => {
     expect(html).toContain("fetch('/api/remote/passkeys/register/finish'");
   });
 
+  it('keeps inactive manual and passkey controls hidden', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('[hidden] { display: none !important; }');
+    expect(html).toContain('<form id="manual" hidden>');
+    expect(html).toContain('<div id="actions" class="actions" hidden>');
+  });
+
+  it('accepts an eight-digit code for manual entry', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('inputmode="numeric"');
+    expect(html).toContain('pattern="[0-9]{8}"');
+    expect(html).toContain('maxlength="8"');
+  });
+
+  it('continues when the device reports that the passkey already exists', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain("error?.name === 'InvalidStateError'");
+    expect(html).toContain('A passkey for this site already exists. Opening the cockpit.');
+  });
   it('claims a scanned code before trying passkey sign-in', () => {
     const html = pairingPageHtml({ nonce: NONCE });
-    expect(html).toContain("if (code !== '') { await claim(code); return; }");
+    expect(html).toContain("if (code !== '') { await claim(code, scannedTrust); return; }");
+  });
+
+  it('pins and verifies the QR signer before opening the cockpit', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain("params.get('s')");
+    expect(html).toContain("params.get('r')");
+    expect(html).toContain("type: 'doompi:activate-bundle'");
+    expect(html).toContain("type: 'doompi:reset-bundle-trust'");
+    expect(html).toContain('Compare this signing-key fingerprint');
   });
 
   it('warns rather than silently failing without JavaScript', () => {

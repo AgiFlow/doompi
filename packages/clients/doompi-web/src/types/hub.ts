@@ -13,8 +13,18 @@ export const HUB_PROTOCOL_VERSION = 1;
 /** Role marker in the health payload; doompi-server probes for it before binding the port. */
 export const HUB_ROLE = 'hub';
 
-/** REST endpoint for creating sessions; the page posts {cwd, name?} and receives {sessionId}. */
+/** REST endpoint for creating sessions and browsing resumable Pi history. */
 export const SESSIONS_API_ROUTE = '/api/sessions';
+
+/** One inactive Pi thread available to resume in a live session's workspace. */
+export interface PiSessionHistoryItem {
+  id: string;
+  name?: string;
+  firstMessage: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
 
 /**
  * REST endpoint behind the new-session directory picker; the page sends the
@@ -192,12 +202,15 @@ export interface SessionRemovedFrame {
   sessionId: string;
 }
 
-/** Reply to subscribe: recent history from the hub's ring, then live frames follow. */
+/**
+ * Reply to subscribe: this session's latest status and widget projections first,
+ * then its bounded transient history. Live frames follow.
+ */
 export interface SessionBacklogFrame {
   type: typeof SESSION_BACKLOG_TYPE;
   sessionId: string;
   frames: SessionFrame[];
-  /** Frames the bounded ring had to discard before this page subscribed. */
+  /** Transient frames the bounded ring discarded; projections do not contribute. */
   dropped: number;
 }
 

@@ -72,6 +72,8 @@ export interface WebPluginSlotProps {
    * plugin's hub source names the thread's journal (HubChannelSource.threadJournal).
    */
   renderThread: (threadId: string) => ReactNode;
+  /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */
+  appendComposerDraft: (text: string) => void;
   /** The same sender palette commands and `start` receive; components act through it. */
   sendSessionFrame: SessionFrameSender;
   /** The component fills of one slot, in slot order; the host resolves them, so this contract holds no state. */
@@ -278,13 +280,18 @@ export interface SelectionAxisContribution {
   /** Sort position in the bar; lower first, name breaks ties. */
   order?: number;
 }
+/** Reactive session activity owned by a plugin's session-scoped store. */
+export interface ActivityGroupActiveSource {
+  subscribe(listener: () => void): () => void;
+  isActive(sessionId: string | null): boolean;
+}
+
 /**
- * An activity-dock group, declared as data: the host renders the group's
- * frame when the session publishes its signal (the footer status key, or any
- * of the widget keys). The body is the status content as a one-line summary
- * unless some plugin fills the group's slot, `activity.<name>`, with an
- * activity section of the same name, in which case those sections render the
- * body themselves.
+ * An activity-dock group, declared as data. The host renders its frame when the
+ * session publishes a footer or widget signal, or whenever the contribution
+ * owns an active source. The latter keeps an idle group's launcher available.
+ * The body is the status content as a one-line summary unless some plugin fills
+ * the group's slot, `activity.<name>`, with a section of the same name.
  */
 export interface ActivityGroupContribution {
   name: string;
@@ -294,6 +301,16 @@ export interface ActivityGroupContribution {
   statusKey?: string;
   /** Widget keys any of which shows the group without a summary. */
   widgetKeys?: string[];
+  /**
+   * Widget keys that mean this session has active background work.
+   *
+   * Defaults to every widget key. Ignored when activeSource is present.
+   */
+  activeWidgetKeys?: string[];
+  /** Session-scoped activity state. Its presence also keeps the group visible while idle. */
+  activeSource?: ActivityGroupActiveSource;
+  /** Whether a non-empty signal represents background work. Defaults to true. */
+  marksBackgroundWork?: boolean;
   /** The plugin tab the group's key chip opens; without one the chip is a plain label. */
   tab?: string;
   /**

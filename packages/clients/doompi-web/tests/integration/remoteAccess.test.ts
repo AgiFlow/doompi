@@ -122,7 +122,7 @@ async function pair(): Promise<string> {
   const status = await fetch(tunnelUrl(`/api/remote/pair/status?request=${requestId}`), {
     headers: { origin: tunnelOrigin() },
   });
-  expect(await status.json()).toEqual({ status: 'approved' });
+  expect(await status.json()).toMatchObject({ status: 'approved', hostPublicKey: expect.any(String) });
   const setCookie = status.headers.get('set-cookie');
   if (setCookie === null) throw new Error('The approval did not set a session cookie.');
   return setCookie;
@@ -235,12 +235,15 @@ beforeEach(async () => {
   stopped = 0;
   registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-remote-'));
   stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-state-'));
+  const assetsDir = path.join(registryDir, 'web');
+  fs.mkdirSync(assetsDir);
+  fs.writeFileSync(path.join(assetsDir, 'index.html'), '<!doctype html><title>DoomPi test</title>');
   session = await startFakeSession({ id: SESSION, registryDir, cwd: process.cwd() });
   server = await serveWeb({
     registryDir,
     spawnCommand: path.join(registryDir, 'no-such-server'),
     port: 0,
-    assetsDir: '/nonexistent-assets',
+    assetsDir,
     remoteStateDir: stateDir,
     remoteAccess: { launchTunnel: fakeTunnel },
   });
@@ -261,6 +264,20 @@ describe('while remote access is off', () => {
   });
 });
 
+describe('signed cockpit publication', () => {
+  it('publishes the manifest and revision-scoped raw bytes without serving host assets directly', async () => {
+    const manifestResponse = await fetch(localUrl('/bundle-manifest.json'));
+    expect(manifestResponse.status).toBe(200);
+    expect(manifestResponse.headers.get('cache-control')).toBe('no-store');
+    const envelope = (await manifestResponse.json()) as { manifest: { revision: number } };
+    const raw = await fetch(localUrl(`/bundle-assets/${String(envelope.manifest.revision)}/index.html`));
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get('cache-control')).toBe('no-store');
+    expect(await raw.text()).toContain('<!doctype html>');
+    expect((await fetch(localUrl('/index.html'))).status).toBe(404);
+  });
+});
+
 describe('the tunnel listener refuses everything unpaired', () => {
   beforeEach(enable);
 
@@ -270,13 +287,18 @@ describe('the tunnel listener refuses everything unpaired', () => {
     ['GET', '/api/sessions/remote/files'],
     ['GET', '/api/auth/providers'],
     ['GET', '/api/plugin/anything'],
-    ['GET', '/'],
     ['GET', '/index.html'],
     ['GET', '/favicon.ico'],
     ['GET', '/api/remote'],
   ])('answers 401 to %s %s', async (method, route) => {
     const response = await fetch(tunnelUrl(route), { method, headers: { origin: tunnelOrigin() } });
     expect(response.status).toBe(UNAUTHORIZED);
+  });
+
+  it('routes the public root to the package-owned pairing shell', async () => {
+    const response = await fetch(tunnelUrl('/'), { headers: { origin: tunnelOrigin() }, redirect: 'manual' });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/pair');
   });
 
   it('answers 401 to a session spawn', async () => {
@@ -418,6 +440,21 @@ describe('pairing', () => {
     const cookie = cookieValue(await pair());
     const response = await sealedFetch(cookie, '/api/health');
     expect(response.status).toBe(200);
+  });
+
+  it('keeps live Push registration inside the device-bound sealed channel', async () => {
+    const cookie = cookieValue(await pair());
+    const key = await sealedFetch(cookie, '/api/remote/push/key');
+    expect(key.status).toBe(200);
+    expect((await key.json()) as object).toMatchObject({ publicKey: expect.stringMatching(/^[A-Za-z0-9_-]+$/u) });
+
+    const invalid = await sealedFetch(cookie, '/api/remote/push', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ endpoint: 'http://invalid.example', keys: {} }),
+    });
+    expect(invalid.status).toBe(400);
+    expect((await sealedFetch(cookie, '/api/remote/push', { method: 'DELETE' })).status).toBe(204);
   });
 
   it('gives a stolen session cookie no API or socket access without the host key', async () => {
@@ -1185,7 +1222,7 @@ describe('what the picker will name for a paired device', () => {
       registryDir,
       spawnCommand: path.join(registryDir, 'no-such-server'),
       port: 0,
-      assetsDir: '/nonexistent-assets',
+      assetsDir: path.join(registryDir, 'web'),
       remoteStateDir: stateDir,
       remoteAccess: { launchTunnel: fakeTunnel },
       browseRoot: registryDir,

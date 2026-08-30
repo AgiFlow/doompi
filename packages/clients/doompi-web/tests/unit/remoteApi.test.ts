@@ -51,9 +51,22 @@ describe('remoteApi', () => {
     ]);
   });
 
-  it('reads a minted pairing code', async () => {
-    answers({ code: 'abc', pairUrl: 'https://x/pair#c=abc', expiresAt: '2026-01-01T00:00:00.000Z' });
-    await expect(mintPairingCode()).resolves.toMatchObject({ code: 'abc' });
+  it('reports when enabling hands the cockpit over to its container', async () => {
+    answers({ ...STATE, handingOver: true });
+    await expect(enableRemoteAccess()).resolves.toEqual({ ...STATE, handingOver: true });
+  });
+
+  it('reads a minted QR token and manual pairing code', async () => {
+    answers({
+      code: 'abc',
+      manualCode: '12345678',
+      pairUrl: 'https://x/pair#c=abc',
+      expiresAt: '2026-01-01T00:00:00.000Z',
+      publicKey: 'A'.repeat(90),
+      fingerprint: 'f'.repeat(64),
+      revision: 7,
+    });
+    await expect(mintPairingCode()).resolves.toMatchObject({ code: 'abc', manualCode: '12345678' });
   });
 
   it('sends only the settings it was given', async () => {

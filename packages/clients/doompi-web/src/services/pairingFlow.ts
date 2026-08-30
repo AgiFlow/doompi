@@ -36,8 +36,10 @@ export interface PairingRequest {
 export type ClaimOutcome = { ok: true; requestId: string } | { ok: false; code: 'unknown_code' | 'rate_limited' };
 
 export interface PairingFlowOptions {
-  /** Returns a fresh high-entropy token; the adapter supplies node:crypto. */
+  /** Returns a fresh high-entropy token carried only by the QR fragment. */
   randomToken: () => string;
+  /** Returns a short numeric code intended for manual entry. */
+  randomManualCode: () => string;
   /** One-way digest of a token; only the digest is retained. */
   digest: (token: string) => string;
   now: () => number;
@@ -45,8 +47,8 @@ export interface PairingFlowOptions {
 }
 
 export interface PairingFlow {
-  /** Mints the code a QR carries. Replaces any previous one: only the newest is claimable. */
-  mintCode(): { code: string; expiresAt: number };
+  /** Mints a QR token and a separate manual code. Replaces the previous pair. */
+  mintCode(): { code: string; manualCode: string; expiresAt: number };
   claim(input: {
     code: string;
     userAgent: string | undefined;
@@ -66,8 +68,8 @@ export interface PairingFlow {
 }
 
 export function createPairingFlow(options: PairingFlowOptions): PairingFlow {
-  /** Only the newest code is live, so minting a second one retires the first. */
-  let liveCode: { hash: string; expiresAt: number } | undefined;
+  /** Only the newest code pair is live, so minting another retires both old codes. */
+  let liveCode: { hashes: readonly [string, string]; expiresAt: number } | undefined;
   const requests = new Map<string, PairingRequest>();
   const attemptsBySource = new Map<string, { windowStartedAt: number; failures: number }>();
 
@@ -101,17 +103,18 @@ export function createPairingFlow(options: PairingFlowOptions): PairingFlow {
   return {
     mintCode() {
       const code = options.randomToken();
+      const manualCode = options.randomManualCode();
       const expiresAt = options.now() + PAIRING_CODE_TTL_MS;
-      liveCode = { hash: options.digest(code), expiresAt };
-      return { code, expiresAt };
+      liveCode = { hashes: [options.digest(code), options.digest(manualCode)], expiresAt };
+      return { code, manualCode, expiresAt };
     },
 
     claim(input) {
       const now = options.now();
       const presented = options.digest(input.code);
-      // The code is single use and dies on the first claim, successful or not,
-      // so a leaked one cannot be replayed behind the legitimate scan.
-      if (liveCode === undefined || now >= liveCode.expiresAt || liveCode.hash !== presented) {
+      // The QR token and manual code are one logical credential. A successful
+      // claim retires both so neither representation can be replayed.
+      if (liveCode === undefined || now >= liveCode.expiresAt || !liveCode.hashes.includes(presented)) {
         const limit = countFailure(input.sourceAddress, now);
         if (limit !== 'ok') return { ok: false, code: limit };
         return { ok: false, code: 'unknown_code' };

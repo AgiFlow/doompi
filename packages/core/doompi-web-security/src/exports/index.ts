@@ -22,8 +22,10 @@ export {
   type BundleAsset,
   type BundleManifest,
   type SignedBundleManifest,
+  assetFor,
   canonicalManifest,
   digestFor,
   isBundleManifest,
+  isSignedBundleManifest,
 } from '../types/bundleManifest.ts';
 export { type SerialQueue, createSerialQueue } from '../services/serialQueue.ts';

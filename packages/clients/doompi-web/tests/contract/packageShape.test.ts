@@ -92,6 +92,7 @@ describe('doompi-web package contract', () => {
       '@tanstack/react-store',
       '@tanstack/store',
       '@vitejs/plugin-react',
+      '@zxing/browser',
       'hono',
       'qrcode-generator',
       'react',
@@ -100,6 +101,7 @@ describe('doompi-web package contract', () => {
       'remark-gfm',
       'tailwindcss',
       'vite',
+      'web-push',
     ]);
     expect(manifest.dependencies?.['@agimon-ai/doompi']).toBe('workspace:*');
     expect(manifest.dependencies?.['@agimon-ai/doompi-server']).toBe('workspace:*');
@@ -111,7 +113,9 @@ describe('doompi-web package contract', () => {
 
   it('builds the server before the client so the bundle survives the clean', async () => {
     const manifest = await readManifest();
-    expect(manifest.scripts?.build).toBe('tsdown && vite build');
+    expect(manifest.scripts?.build).toBe(
+      'tsdown && vite build && vite build --config vite.pwa.config.ts && vite build --config vite.pwa.config.ts --mode worker',
+    );
   });
 
   it('keeps the documents the manifest promises', async () => {

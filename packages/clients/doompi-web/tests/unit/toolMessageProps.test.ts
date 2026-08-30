@@ -6,7 +6,13 @@ import { toolMessageProps } from '../../src/web/lib/toolMessageProps.ts';
 describe('toolMessageProps', () => {
   it('hands a tool message the slot actions plus the call and its newest result', () => {
     const openTab = (): void => undefined;
-    const slotProps = pluginSlotProps('s1', openTab, {}, { open: () => undefined, close: () => undefined });
+    const slotProps = pluginSlotProps(
+      's1',
+      openTab,
+      {},
+      { open: () => undefined, close: () => undefined },
+      () => undefined,
+    );
     const entry: ToolEntry = {
       kind: 'tool',
       id: 'e1',

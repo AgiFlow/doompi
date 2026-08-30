@@ -7,18 +7,24 @@ const AGENT = 'Mozilla/5.0 (iPhone) Safari/604.1';
 
 let now: number;
 let issued: number;
+let issuedManual: number;
 let notices: string[];
 let flow: PairingFlow;
 
 beforeEach(() => {
   now = START;
   issued = 0;
+  issuedManual = 0;
   notices = [];
   flow = createPairingFlow({
-    // A counter rather than randomness, so a test can name the token it expects.
+    // Counters rather than randomness, so a test can name the credentials it expects.
     randomToken: () => {
       issued += 1;
       return `token-${String(issued)}`;
+    },
+    randomManualCode: () => {
+      issuedManual += 1;
+      return String(issuedManual).padStart(8, '0');
     },
     digest: (token) => `sha:${token}`,
     now: () => now,
@@ -41,6 +47,12 @@ describe('the pairing handshake', () => {
     expect(flow.pending()).toHaveLength(1);
   });
 
+  it('accepts the separate eight-digit manual code and retires the QR token', () => {
+    const { code, manualCode } = flow.mintCode();
+    expect(manualCode).toBe('00000001');
+    expect(claim(manualCode).ok).toBe(true);
+    expect(claim(code)).toEqual({ ok: false, code: 'unknown_code' });
+  });
   it('mints nothing until the host approves, then exactly once', () => {
     const { code } = flow.mintCode();
     const claimed = claim(code);

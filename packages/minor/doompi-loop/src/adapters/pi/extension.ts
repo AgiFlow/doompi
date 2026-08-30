@@ -25,6 +25,7 @@ import { registerCommands } from '../../commands/loopCommand.ts';
 import { createDoomLoopLaunchersService } from '../../services/loopLaunchers.ts';
 import { openLoopListOverlay } from '../../tui/loopListOverlay.ts';
 import { openStartLoopOverlay } from '../../tui/startLoopOverlay.ts';
+import { formatLoopStatusView, LOOP_VIEW_STATUS_KEY } from '../../types/loopView.ts';
 import { createDefaultLoopLauncher } from './defaultLoopLauncher.ts';
 import { registerLeaderContribution } from './leader.ts';
 import {
@@ -87,11 +88,18 @@ export function installLoopRuntime(cordis: Context, pi: ExtensionAPI): void {
     return binding;
   };
 
+  const clearStatuses = (binding: ActiveLoopSession): void => {
+    binding.context.ui?.setStatus(STATUS_KEY, undefined);
+    if (binding.context.mode !== 'tui') binding.context.ui?.setStatus(LOOP_VIEW_STATUS_KEY, undefined);
+  };
   const publishStatus = (binding: ActiveLoopSession): void => {
     if (!active || activeSession !== binding) return;
     const launchers = binding.launchers.listLaunchers();
     const instances = binding.launchers.listInstances();
     binding.context.ui?.setStatus(STATUS_KEY, instances.length ? `loops: ${instances.length}` : undefined);
+    if (binding.context.mode !== 'tui') {
+      binding.context.ui?.setStatus(LOOP_VIEW_STATUS_KEY, formatLoopStatusView(instances));
+    }
     mode?.publish(loopModeState(launchers, instances));
   };
 
@@ -100,7 +108,7 @@ export function installLoopRuntime(cordis: Context, pi: ExtensionAPI): void {
       active = false;
       const binding = activeSession;
       activeSession = undefined;
-      binding?.context.ui?.setStatus(STATUS_KEY, undefined);
+      if (binding) clearStatuses(binding);
       mode?.publish(loopModeState([], []));
       mode?.dispose();
       disposeLeader?.();
@@ -235,7 +243,7 @@ export function installLoopRuntime(cordis: Context, pi: ExtensionAPI): void {
     return async () => {
       if (activeSession === binding) activeSession = undefined;
       unsubscribe();
-      binding.context.ui?.setStatus(STATUS_KEY, undefined);
+      clearStatuses(binding);
       mode?.publish(loopModeState([], []));
       const cleanupErrors: unknown[] = [];
       try {

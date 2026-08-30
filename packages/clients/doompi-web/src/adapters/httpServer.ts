@@ -5,10 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
+import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { PiServer, PiServerError } from '@earendil-works/pi-server';
 import { readSyncDrift } from '@agimon-ai/doompi/services';
 import { readSyncState } from '@agimon-ai/doompi/services/syncState';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
+import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
@@ -64,14 +66,19 @@ import { registerSettingsRoutes } from './settingsRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
 import { createRemoteGuard } from './remoteGuard.ts';
 import { createRemoteAccess } from './remoteAccess.ts';
+import { createBundlePublication } from './bundlePublication.ts';
+import { createLiveWebPush, type LiveWebPush } from './webPush.ts';
 import { createRemoteAccessStore } from './remoteAccessStore.ts';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
 import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
 import {
   DEVICE_COOKIE,
+  PAIRING_PAGE_ROUTE,
   PROTOCOL_SOCKET_ROUTE,
   REMOTE_CHANNEL_ROUTE,
   REMOTE_HTTP_ROUTE,
+  REMOTE_PUSH_KEY_ROUTE,
+  REMOTE_PUSH_ROUTE,
   SESSION_SOCKET_ROUTE,
   type RemoteAccessSettings,
 } from '../types/remoteAccess.ts';
@@ -102,6 +109,8 @@ const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 /** Where `doompi sync` publishes the machine's cockpit bundle. */
 const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
+const RAW_BUNDLE_PREFIX = '/bundle-assets/';
+const PWA_ASSET_PREFIX = '/pwa/';
 const SEALED_HTTP_VERSION = 1;
 /** Upper bound for any body accepted from the tunnel before route-specific limits. */
 const TUNNEL_BODY_BYTES = 8 * 1024 * 1024;
@@ -194,14 +203,22 @@ function decodeSealedHttpBody(value: string | undefined): Buffer | undefined {
  * whether the code runs from `src` in development or from the unbundled `dist`
  * tree, whose depth is a build detail.
  */
-function packagedAssetsDir(): string {
+function packagedDirectory(name: 'web' | 'pwa'): string {
   let dir = path.dirname(fileURLToPath(import.meta.url));
   for (;;) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) return path.join(dir, 'dist', 'web');
+    if (fs.existsSync(path.join(dir, 'package.json'))) return path.join(dir, 'dist', name);
     const parent = path.dirname(dir);
     if (parent === dir) throw new Error('doompi-web could not locate its own package root.');
     dir = parent;
   }
+}
+
+function packagedAssetsDir(): string {
+  return packagedDirectory('web');
+}
+
+function packagedPwaDir(): string {
+  return packagedDirectory('pwa');
 }
 
 /**
@@ -234,6 +251,12 @@ function readAsset(filePath: string): Buffer | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** A compact rail name while Pi starts and reports the thread's persisted name. */
+function resumedSessionName(info: { name?: string; firstMessage: string }, cwd: string): string {
+  const firstLine = info.firstMessage.split('\n', 1)[0]?.trim();
+  return (info.name?.trim() || firstLine || path.basename(cwd) || 'untitled').slice(0, 80);
 }
 
 function describeError(error: unknown): string {
@@ -446,6 +469,9 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   /** Known once the listener binds; until then the guard treats every request as remote. */
   let loopbackPort: number | undefined;
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
+  const pwaDir = packagedPwaDir();
+  const publication = createBundlePublication({ assetsDir, stateDir: store.directory, onNotice: notice });
+  let livePush: LiveWebPush | undefined;
   reapStaleTunnel(store.directory, notice);
   /**
    * Stands the host's sessions down so the container can take them over.
@@ -520,12 +546,22 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         bounded.maxRequestsPerSocket = TUNNEL_REQUESTS_PER_SOCKET;
         tunnelServer.once('error', reject);
       }),
+    bundleTrust: () => publication.trust(),
+    onDeviceDropped: (deviceId) => livePush?.remove(deviceId),
     onNotice: notice,
     ...(handover === undefined ? {} : { requestHandover: handover }),
     contained: insideSandbox(process.env),
     broadcastLocal: (frame) => broadcast(frame, true),
     broadcastAll: (frame) => broadcast(frame, false),
     ...(options.remoteAccess?.now === undefined ? {} : { now: options.remoteAccess.now }),
+  });
+  livePush = createLiveWebPush({
+    stateDir: store.directory,
+    isConnected: (deviceId) => remote.isDeviceConnected(deviceId),
+    onNotice: notice,
+  });
+  const disconnectLivePush = hub.onEvent((event) => {
+    if (event.kind === 'frame' && parseDoomNotificationEntry(event.frame) !== undefined) void livePush?.notify();
   });
   // First route on the app, because Hono composes matching handlers in
   // registration order: a guard added after a terminating handler never runs
@@ -668,6 +704,36 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     if (!sealed.ok) return context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
     return context.json(sealed.envelope);
   });
+  const pushBodyLimit = bodyLimit({
+    maxSize: 8 * 1024,
+    onError: (context) => context.json({ error: 'The Push subscription is too large.' }, 413),
+  });
+  const pushDevice = (context: Context): string | undefined =>
+    (context.env as SealedRequestBindings | undefined)?.sealedDeviceId;
+  app.get(REMOTE_PUSH_KEY_ROUTE, (context) => {
+    if (pushDevice(context) === undefined) return context.json({ error: 'A sealed paired device is required.' }, 401);
+    return context.json({ publicKey: livePush?.publicKey() }, 200, { 'Cache-Control': 'no-store' });
+  });
+  app.post(REMOTE_PUSH_ROUTE, pushBodyLimit, async (context) => {
+    const deviceId = pushDevice(context);
+    if (deviceId === undefined) return context.json({ error: 'A sealed paired device is required.' }, 401);
+    let subscription: unknown;
+    try {
+      subscription = await context.req.json();
+    } catch {
+      return context.json({ error: 'The Push subscription must be JSON.' }, 400);
+    }
+    if (livePush?.subscribe(deviceId, subscription) !== true) {
+      return context.json({ error: 'The Push subscription is invalid.' }, 400);
+    }
+    return context.body(null, 204);
+  });
+  app.delete(REMOTE_PUSH_ROUTE, (context) => {
+    const deviceId = pushDevice(context);
+    if (deviceId === undefined) return context.json({ error: 'A sealed paired device is required.' }, 401);
+    livePush?.remove(deviceId);
+    return context.body(null, 204);
+  });
   // Every running session already serves Pi's protocol; the hub composes them
   // into one server so a browser sees a single endpoint with many sessions.
   // Remote clients get a distinct protocol service that can attach to existing
@@ -778,6 +844,48 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 404 : 502);
   });
 
+  app.get(`${SESSIONS_API_ROUTE}/:sessionId/history`, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    const sessions = await SessionManager.list(summary.cwd);
+    return context.json({
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        ...(session.name === undefined ? {} : { name: session.name }),
+        firstMessage: session.firstMessage,
+        createdAt: session.created.toISOString(),
+        updatedAt: session.modified.toISOString(),
+        messageCount: session.messageCount,
+      })),
+    });
+  });
+
+  app.post(`${SESSIONS_API_ROUTE}/:sessionId/resume`, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    let body: unknown;
+    try {
+      body = await context.req.json();
+    } catch {
+      return context.json({ error: 'The request body must be JSON.' }, 400);
+    }
+    if (!isRecord(body) || typeof body.targetSessionId !== 'string' || body.targetSessionId === '') {
+      return context.json({ error: 'A targetSessionId string is required.' }, 400);
+    }
+    const sessions = await SessionManager.list(summary.cwd);
+    const target = sessions.find((session) => session.id === body.targetSessionId);
+    if (!target) return context.json({ error: 'That Pi thread does not belong to this workspace.' }, 404);
+    await syncGuard.ensureSynced();
+    const outcome = await hub.resume(
+      sessionId,
+      { sessionId: target.id, name: resumedSessionName(target, summary.cwd) },
+      readTraceContext(context.req.raw.headers),
+    );
+    if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 202);
+    return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 409 : 502);
+  });
   app.delete(`${SESSIONS_API_ROUTE}/:sessionId`, (context) => {
     const sessionId = context.req.param('sessionId');
     const outcome = hub.stop(sessionId);
@@ -1094,21 +1202,78 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     }),
   );
 
-  app.get('*', (context) => {
+  app.get('/manifest.webmanifest', (context) => {
+    const file = path.join(pwaDir, 'manifest.webmanifest');
+    const body = readAsset(file);
+    if (body === undefined) return context.text('The PWA manifest is unavailable.', 404);
+    return context.body(new Uint8Array(body), 200, {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/manifest+json; charset=utf-8',
+    });
+  });
+  app.get('/sw.js', (context) => {
+    const file = path.join(pwaDir, 'sw.js');
+    const body = readAsset(file);
+    if (body === undefined) return context.text('The trusted service worker is unavailable.', 404);
+    return context.body(new Uint8Array(body), 200, {
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'text/javascript; charset=utf-8',
+      'Service-Worker-Allowed': '/',
+    });
+  });
+  app.get(`${PWA_ASSET_PREFIX}*`, (context) => {
+    const requested = new URL(context.req.url).pathname.slice(PWA_ASSET_PREFIX.length);
+    const file = resolveAssetPath(pwaDir, `/${requested}`);
+    const body = file === undefined ? undefined : readAsset(file);
+    if (file === undefined || body === undefined) return context.text('PWA asset not found.', 404);
+    return context.body(new Uint8Array(body), 200, {
+      'Cache-Control': 'no-store',
+      'Content-Type': contentTypeFor(file),
+      'X-Content-Type-Options': 'nosniff',
+    });
+  });
+  app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
+    const current = publication.current();
+    if (current === undefined) return context.json({ error: 'No signed cockpit bundle is available.' }, 503);
+    return context.json(current, 200, { 'Cache-Control': 'no-store' });
+  });
+  app.get(`${RAW_BUNDLE_PREFIX}*`, (context) => {
     const requested = new URL(context.req.url).pathname;
-    const direct = requested === '/' ? undefined : resolveAssetPath(assetsDir, requested);
-    const body = direct ? readAsset(direct) : undefined;
-    if (direct && body) {
-      return context.body(new Uint8Array(body), 200, { 'Content-Type': contentTypeFor(direct) });
+    const matched = /^\/bundle-assets\/([1-9][0-9]*)(\/.*)$/u.exec(requested);
+    const revision = matched === null ? undefined : Number(matched[1]);
+    const current = publication.current();
+    if (
+      matched === null ||
+      !Number.isSafeInteger(revision) ||
+      current === undefined ||
+      current.manifest.revision !== revision
+    ) {
+      return context.text('That signed bundle revision is unavailable.', 404);
     }
-    const index = readAsset(path.join(assetsDir, INDEX_FILE));
-    if (!index) return context.text('The cockpit bundle is missing. Run the package build.', 500);
-    return context.body(new Uint8Array(index), 200, { 'Content-Type': 'text/html; charset=utf-8' });
+    const asset = assetFor(current.manifest, matched[2] ?? '');
+    const file = asset === undefined ? undefined : resolveAssetPath(assetsDir, asset.path);
+    const body = file === undefined ? undefined : readAsset(file);
+    if (asset === undefined || file === undefined || body === undefined)
+      return context.text('Bundle asset not found.', 404);
+    return context.body(new Uint8Array(body), 200, {
+      'Cache-Control': 'no-store',
+      'Content-Length': String(body.byteLength),
+      'Content-Type': asset.contentType,
+      'X-Content-Type-Options': 'nosniff',
+    });
+  });
+  app.get('/', (context) => context.redirect(PAIRING_PAGE_ROUTE));
+  app.get('*', (context) => {
+    const pathname = new URL(context.req.url).pathname;
+    const acceptsHtml = context.req.header('accept')?.includes('text/html') === true;
+    if (!pathname.startsWith('/api/') && acceptsHtml) return context.redirect('/');
+    return context.text('Not found.', 404);
   });
 
   // A rebuilt bundle only changes on disk, so the page it replaced has to be
   // told; nothing about a loaded bundle notices that its source moved.
   syncGuard.watch(() => {
+    publication.refresh();
     broadcast({ type: HUB_RESYNCED_TYPE }, false);
   });
 
@@ -1130,6 +1295,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           syncGuard.close();
           void localProtocolServer.close();
           void remoteProtocolServer.close();
+          disconnectLivePush();
+          livePush?.close();
           hub.close();
           providerAuth.close();
           for (const handler of pluginApis) handler.close();
@@ -1151,6 +1318,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     });
     server.once('error', (error) => {
       threads.close();
+      disconnectLivePush();
+      livePush?.close();
       hub.close();
       providerAuth.close();
       void remote.close();

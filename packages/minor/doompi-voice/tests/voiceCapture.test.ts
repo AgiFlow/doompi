@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canRunVoice, voiceModeState } from '../src/adapters/pi/voice.ts';
+import { canRunVoice, voiceModeState, voiceOwnershipState } from '../src/adapters/pi/voice.ts';
 
 /** The disabled actions of a published state, as the /minor command reads them. */
 function blocked(state: ReturnType<typeof voiceModeState>): { id: string; reason?: string }[] {
@@ -7,6 +7,15 @@ function blocked(state: ReturnType<typeof voiceModeState>): { id: string; reason
     .filter((action) => action.enabled === false)
     .map((action) => ({ id: action.id, ...(action.disabledReason ? { reason: action.disabledReason } : {}) }));
 }
+
+describe('browser media ownership', () => {
+  it('holds the session lease through manual recording and transcription', () => {
+    expect(voiceOwnershipState('idle', 'disabled')).toBe('disabled');
+    expect(voiceOwnershipState('recording', 'disabled')).toBe('active');
+    expect(voiceOwnershipState('transcribing', 'disabled')).toBe('active');
+    expect(voiceOwnershipState('idle', 'starting')).toBe('starting');
+  });
+});
 
 describe('what a session must be for autonomous voice to run', () => {
   it('needs somewhere to show itself, and does not care how the session is driven', () => {

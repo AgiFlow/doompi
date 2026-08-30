@@ -243,13 +243,17 @@ describe('rpc transcript projection', () => {
     assertEncodable(result.snapshot);
   });
 
-  it('publishes the steering queue as protocol user items', () => {
+  it('publishes steering and follow-up queues as protocol user items', () => {
     const subject = transcript();
 
-    const result = subject.apply({ type: 'queue_update', steering: ['first', 'second'], followUp: [] });
+    const result = subject.apply({ type: 'queue_update', steering: ['interrupt'], followUp: ['first', 'second'] });
 
-    expect(result.snapshot?.queuedSteerCount).toBe(2);
-    expect(result.snapshot?.queuedSteer[0]).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'first' }] });
+    expect(result.snapshot?.queuedSteerCount).toBe(3);
+    expect(result.snapshot?.queuedSteer.map((entry) => entry.content)).toEqual([
+      [{ type: 'text', text: 'interrupt' }],
+      [{ type: 'text', text: 'first' }],
+      [{ type: 'text', text: 'second' }],
+    ]);
     assertEncodable(result.snapshot);
   });
 

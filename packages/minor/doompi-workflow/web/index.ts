@@ -16,6 +16,16 @@ export function useWorkflowsBadge(sessionId: string | null): number {
 
 const WORKFLOWS_GROUP = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };
 
+const workflowActivitySource = {
+  subscribe(listener: () => void) {
+    const subscription = workflows.store.subscribe(listener);
+    return () => subscription.unsubscribe();
+  },
+  isActive(sessionId: string | null) {
+    return workflows.select(workflows.store.state, sessionId).runs.some((run) => run.stage === 'running');
+  },
+};
+
 /** The named export the generated plugin registry imports. */
 export const webPlugin = defineWebPlugin({
   id: 'workflows',
@@ -27,6 +37,7 @@ export const webPlugin = defineWebPlugin({
       name: 'workflows',
       keys: 'w r',
       widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
+      activeSource: workflowActivitySource,
       tab: 'workflows',
       order: 30,
     },

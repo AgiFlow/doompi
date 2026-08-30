@@ -1,7 +1,10 @@
 import { access, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
+import { api } from '../src/exports/sessionApi.ts';
+import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription.ts';
 
 interface PackageManifest {
   name: string;
@@ -157,5 +160,47 @@ describe('doom voice package boundary', () => {
     await expectFile('models/silero_vad_v6.2.1.onnx');
     await expectFile('models/SILERO-LICENSE');
     await expectFile('models/README.md');
+  });
+
+  it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {
+    const manualFiles = [
+      'web/manualBrowserRecorder.ts',
+      'web/manualComposerRecorder.ts',
+      'web/manualTranscriptionClient.ts',
+    ];
+    const forbidden =
+      /CaptureSession|VoiceMediaClient|VoiceWorkerPipeline|voiceMediaWakeStore|voiceOwnership|sessionVoiceOwnership|playback/u;
+    for (const file of manualFiles) {
+      expect(await readFile(path.join(packageDirectory, file), 'utf8'), file).not.toMatch(forbidden);
+    }
+
+    const webEntry = await readFile(path.join(packageDirectory, 'web/index.ts'), 'utf8');
+    expect(webEntry).not.toContain("id: 'voice.capture'");
+    expect(webEntry).not.toContain("command: 'voice'");
+  });
+
+  it('mounts the manual route at the API path declared by the package', async () => {
+    expect(assertDeclaredApi({ packageRoot: packageDirectory, api, scope: 'session' })).toMatchObject({
+      basePath: 'voice-media',
+    });
+    const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: packageDirectory });
+    try {
+      const response = await mounted.fetch(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'audio/ogg',
+          [MANUAL_TRANSCRIPTION_DURATION_HEADER]: '125',
+        },
+        body: Buffer.from('audio'),
+      });
+      expect(response.status).toBe(415);
+      expect(await response.json()).toEqual({
+        code: 'unsupported_media_type',
+        error: 'Audio must be WebM/Opus or MP4/AAC.',
+      });
+      expect((await mounted.fetch('/api/plugin/elsewhere/manual/transcribe')).status).toBe(404);
+    } finally {
+      mounted.close();
+    }
   });
 });

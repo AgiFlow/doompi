@@ -43,18 +43,6 @@ test('shows context usage and cost the session reports', async ({ page, cockpit 
   await expect(page.getByTestId('top-context')).toHaveText('ctx 41%');
   await expect(page.getByTestId('top-cost')).toHaveText('$0.84');
 });
-
-test('folds the run state into the connection pill', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await cockpit.session.waitForAttach();
-
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/);
-  cockpit.session.emit({ type: 'agent_start' });
-  await expect(page.getByTestId('connection-status')).toHaveText(/running/);
-  cockpit.session.emit({ type: 'agent_settled' });
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/);
-});
-
 test('refreshes the facts once a run settles', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForCommand('get_session_stats');

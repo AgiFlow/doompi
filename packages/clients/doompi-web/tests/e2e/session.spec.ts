@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '../support/cockpit.ts';
 
 test('sends a prompt and shows it in the timeline', async ({ page, cockpit }) => {
@@ -131,7 +133,13 @@ test('surfaces an agent error in the timeline', async ({ page, cockpit }) => {
 test('previews the files a prompt mentions and renders the reply as markdown', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-
+  const record = JSON.parse(
+    fs.readFileSync(path.join(cockpit.registryDir, 'sessions', `${cockpit.session.id}.json`), 'utf8'),
+  ) as { cwd: string };
+  fs.mkdirSync(path.join(record.cwd, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(record.cwd, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(record.cwd, 'docs', 'happy-jump.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  fs.writeFileSync(path.join(record.cwd, 'notes', 'plan.md'), '# Plan\n');
   await page.getByTestId('composer-input').fill('@docs/happy-jump.svg and @notes/plan.md look');
   await page.getByTestId('composer-send').click();
   await cockpit.session.waitForCommand('prompt');
@@ -139,9 +147,9 @@ test('previews the files a prompt mentions and renders the reply as markdown', a
   const previews = page.getByTestId('mention-preview');
   await expect(previews).toHaveCount(2);
   await expect(previews.nth(0)).toHaveAttribute('data-kind', 'image');
-  await expect(previews.nth(0).locator('img')).toHaveAttribute('src', /\/file\?path=docs%2Fhappy-jump\.svg$/);
+  await expect(previews.nth(0).locator('img')).toHaveAttribute('src', /^blob:/u);
   await expect(previews.nth(1)).toHaveAttribute('data-kind', 'file');
-  await expect(previews.nth(1).locator('a')).toHaveAttribute('href', /\/file\?path=notes%2Fplan\.md$/);
+  await expect(previews.nth(1).locator('a')).toHaveAttribute('href', /^blob:/u);
 
   cockpit.session.emit({ type: 'agent_start' });
   cockpit.session.emit({
@@ -159,7 +167,6 @@ test('previews the files a prompt mentions and renders the reply as markdown', a
 test('follows the newest reply, and stops following once the reader scrolls back', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/);
 
   const timeline = page.getByTestId('timeline');
   const atBottom = () =>
