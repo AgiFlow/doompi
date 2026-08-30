@@ -5,7 +5,13 @@ import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/adapters/piExtensionAlias';
 import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/adapters/projectPiSettings';
-import { resolveSyncLocation } from '../../src/adapters/syncLocation';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import {
+  publishSyncRegistration,
+  readSyncRegistration,
+  SYNC_REGISTRATION_VERSION,
+  syncStateSha256,
+} from '../../src/adapters/syncRegistration.ts';
 import {
   collectDrift,
   formatSyncResult,
@@ -26,15 +32,24 @@ import {
   type SyncState,
   writeSyncState,
 } from '../../src/exports/services/syncState';
+import { createLayerResolvers } from '../../src/services/extensionAssembler.ts';
 import { testMcpProjection } from '../helpers/mcpProjection.ts';
 
 const mocks = vi.hoisted(() => ({
   readBootstrapStatus: vi.fn(() => ({ bootstrap: '/generated/bootstrap.mjs', fresh: true })),
-  buildSyncedRuntime: vi.fn(async () => ({
-    bootstrap: '/generated/bootstrap.mjs',
-    bundles: {},
-    bundleManifests: {},
-  })),
+  buildSyncedRuntime: vi.fn(
+    async (
+      _repoRoot: string,
+      _environment: NodeJS.ProcessEnv,
+      _homeDirectory: string,
+      options: { state: SyncState },
+    ) => ({
+      bootstrap: '/generated/bootstrap.mjs',
+      bundles: {},
+      bundleManifests: {},
+      state: options.state,
+    }),
+  ),
   ensureLayerPackages: vi.fn(async () => [] as string[]),
   missingLayerPackageSpecifiers: vi.fn(() => [] as string[]),
 }));
@@ -59,6 +74,7 @@ majorMode:
   minimal: []
 `;
 const SELECTION: SyncSelection = { majorMode: 'copilot', domains: ['default'], preset: 'default' };
+const WORKSPACE_ROOT = path.resolve(import.meta.dirname, '../../../../..');
 const temporaryRoots: string[] = [];
 
 function makeRepository(config = 'projectTrust: ask\n'): string {
@@ -71,6 +87,7 @@ function makeRepository(config = 'projectTrust: ask\n'): string {
     'defaultDomains: [default]\ndomains:\n  default:\n    plugins: []\n',
   );
   fs.writeFileSync(path.join(root, '.doom', 'config.yaml'), config);
+  initializePiFixture(root);
   return root;
 }
 
@@ -86,6 +103,7 @@ function makeGitRepositoryWithPersonalConfig(): string {
     'defaultDomains: [default]\ndomains:\n  default:\n    plugins: []\n',
   );
   fs.writeFileSync(path.join(configDirectory, 'config.yaml'), 'projectTrust: ask\n');
+  initializePiFixture(root);
   return root;
 }
 
@@ -101,31 +119,100 @@ function environmentFor(root: string, values: NodeJS.ProcessEnv = {}): NodeJS.Pr
   return { DOOMPI_ROOT: root, HOME: homeFor(root), PI_CODING_AGENT_DIR: agentDirectory(root), ...values };
 }
 
+function initializePiFixture(root: string): void {
+  const packageScope = path.join(root, 'node_modules', '@agimon-ai');
+  fs.mkdirSync(packageScope, { recursive: true });
+  const linkPackage = (packageDirectory: string): void => {
+    const manifestPath = path.join(packageDirectory, 'package.json');
+    if (!fs.existsSync(manifestPath)) return;
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { name?: unknown };
+    if (typeof manifest.name !== 'string' || !manifest.name.startsWith('@agimon-ai/')) return;
+    fs.symlinkSync(packageDirectory, path.join(packageScope, manifest.name.slice('@agimon-ai/'.length)), 'dir');
+  };
+  for (const group of ['core', 'default', 'minor', 'clients']) {
+    const groupDirectory = path.join(WORKSPACE_ROOT, 'packages', group);
+    for (const entry of fs.readdirSync(groupDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory()) linkPackage(path.join(groupDirectory, entry.name));
+    }
+  }
+  const layersDirectory = path.join(WORKSPACE_ROOT, 'layers');
+  for (const layer of fs.readdirSync(layersDirectory, { withFileTypes: true })) {
+    if (!layer.isDirectory()) continue;
+    const layerDirectory = path.join(layersDirectory, layer.name);
+    for (const entry of fs.readdirSync(layerDirectory, { withFileTypes: true })) {
+      if (entry.isDirectory()) linkPackage(path.join(layerDirectory, entry.name));
+    }
+  }
+  const userDirectory = agentDirectory(root);
+  const themePath = path.join(userDirectory, 'themes', `${DEFAULT_THEME_NAME}.json`);
+  fs.mkdirSync(path.dirname(themePath), { recursive: true });
+  fs.writeFileSync(themePath, `${JSON.stringify(DEFAULT_THEME, null, 2)}\n`);
+  writePiSettings(userDirectory, { themePath, themeName: DEFAULT_THEME_NAME });
+  writePiExtensionAlias(userDirectory);
+}
+
 /** State matching what a sync of this repository would have produced. */
 async function writeMatchingState(root: string): Promise<SyncState> {
   const userDirectory = agentDirectory(root);
+  const homeDirectory = homeFor(root);
+  const location = resolveSyncLocation(root, homeDirectory);
+  const generation = 'test-generation';
+  const generationRoot = syncGenerationDirectory(location, generation);
+  const apiDirectory = path.join(generationRoot, 'api');
   const themePath = path.join(userDirectory, 'themes', `${DEFAULT_THEME_NAME}.json`);
+  fs.mkdirSync(apiDirectory, { recursive: true });
   fs.mkdirSync(path.dirname(themePath), { recursive: true });
   fs.writeFileSync(themePath, `${JSON.stringify(DEFAULT_THEME, null, 2)}\n`);
   const state: SyncState = {
     version: SYNC_STATE_VERSION,
     root,
-    identity: resolveSyncLocation(root, homeFor(root)).identity,
-    inputsHash: computeInputsHash(root, SELECTION, homeFor(root)),
-    compositionFingerprint: selectionCompositionFingerprint(root, {
-      agents: true,
-      hooks: true,
-      majorMode: SELECTION.majorMode,
-      mcp: true,
-      preset: 'default',
-    }),
+    identity: location.identity,
+    inputsHash: computeInputsHash(root, SELECTION, homeDirectory),
+    compositionFingerprint: selectionCompositionFingerprint(
+      root,
+      {
+        agents: true,
+        hooks: true,
+        majorMode: SELECTION.majorMode,
+        mcp: true,
+        preset: 'default',
+      },
+      homeDirectory,
+    ),
     selection: SELECTION,
     env: {},
     fileState: { profileEnvironment: {}, pluginHooks: [], mcpProjection: testMcpProjection(root) },
-    resolved: recordResolvedEntries(loadMajorModesConfig(root)),
+    resolved: recordResolvedEntries(loadMajorModesConfig(root, homeDirectory), createLayerResolvers(root)),
     baseline: { themePath, themeName: DEFAULT_THEME_NAME },
   };
-  await writeSyncState(root, state, homeFor(root));
+  const statePath = await writeSyncState(root, state, homeDirectory, path.join(generationRoot, 'state.json'));
+  const packageRoot = fs.realpathSync(path.resolve(import.meta.dirname, '../..'));
+  const manifestPath = path.join(packageRoot, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+    version: string;
+    pi: { extensions: string[] };
+  };
+  publishSyncRegistration(
+    root,
+    {
+      version: SYNC_REGISTRATION_VERSION,
+      root,
+      identity: location.identity,
+      generation,
+      generationRoot,
+      statePath,
+      stateSha256: syncStateSha256(statePath),
+      webDirectory: null,
+      apiDirectory,
+      package: {
+        root: packageRoot,
+        version: manifest.version,
+        manifestPath,
+        entry: fs.realpathSync(path.resolve(packageRoot, manifest.pi.extensions[0])),
+      },
+    },
+    homeDirectory,
+  );
   writePiSettings(userDirectory, state.baseline);
   writePiExtensionAlias(userDirectory);
   return state;
@@ -276,8 +363,8 @@ describe('drift', () => {
     fs.writeFileSync(state.baseline.themePath, '{}\n');
 
     const drift = collectDrift(root, SELECTION, state, environmentFor(root));
-    expect(drift).toContain('Pi user settings are out of date');
-    expect(drift).toContain('Pi user theme is out of date');
+    expect(drift).toContain('Pi user settings are out of date; run doompi init');
+    expect(drift).toContain('Pi user theme is out of date; run doompi init');
   });
 
   it('notices a duplicate registration in the project settings', async () => {
@@ -293,10 +380,10 @@ describe('drift', () => {
   it('notices a missing user package alias', async () => {
     const root = makeRepository();
     const state = await writeMatchingState(root);
-    fs.rmSync(piExtensionAliasPath(agentDirectory(root)), { force: true });
+    fs.rmSync(piExtensionAliasPath(agentDirectory(root)), { recursive: true, force: true });
 
     expect(collectDrift(root, SELECTION, state, environmentFor(root))).toContain(
-      'Pi user extension alias is out of date',
+      'Pi user dispatcher is out of date; run doompi init',
     );
   });
 
@@ -340,28 +427,39 @@ describe('doompi sync', () => {
     const state = readSyncState(root, homeFor(root));
     expect(state?.selection).toEqual(SELECTION);
     expect(state?.env.DOOMPI_ROOT).toBe(root);
-    expect(mocks.ensureLayerPackages).toHaveBeenCalledWith({
-      repoRoot: root,
-      config: expect.any(Object),
-      layers: ['style-system'],
+    expect(mocks.ensureLayerPackages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoRoot: root,
+        layers: expect.arrayContaining(['style-system']),
+        environment,
+      }),
+    );
+    expect(mocks.buildSyncedRuntime).toHaveBeenCalledWith(
+      root,
       environment,
-    });
-    expect(mocks.buildSyncedRuntime).toHaveBeenCalledWith(root, environment, homeFor(root));
+      homeFor(root),
+      expect.objectContaining({ state: expect.any(Object), directory: expect.any(String) }),
+    );
     expect(state?.baseline.themePath).toBe(path.join(agentDirectory(root), 'themes', `${DEFAULT_THEME_NAME}.json`));
     expect(fs.existsSync(state?.baseline.themePath ?? '')).toBe(true);
     expect(fs.existsSync(path.join(root, '.pi', 'doom'))).toBe(false);
-    expect(fs.existsSync(resolveSyncLocation(root, homeFor(root)).statePath)).toBe(true);
+    const location = resolveSyncLocation(root, homeFor(root));
+    expect(fs.existsSync(location.registrationPath)).toBe(true);
+    expect(fs.existsSync(location.statePath)).toBe(false);
     expect(readPiSettings(agentDirectory(root))).toMatchObject({
       quietStartup: true,
       extensions: ['@agimon-ai/doompi', AMBIENT_EXTENSION_FILTER],
       themes: [`themes/${DEFAULT_THEME_NAME}.json`],
     });
-    const aliasPath = piExtensionAliasPath(agentDirectory(root));
-    expect(fs.lstatSync(aliasPath).isSymbolicLink()).toBe(true);
-    expect(fs.realpathSync(aliasPath)).toBe(fs.realpathSync(path.resolve(import.meta.dirname, '../..')));
+    const dispatcherPath = piExtensionAliasPath(agentDirectory(root));
+    expect(fs.lstatSync(dispatcherPath).isDirectory()).toBe(true);
+    expect(fs.lstatSync(dispatcherPath).isSymbolicLink()).toBe(false);
 
     const checked = capture();
-    expect(await new SyncCommand().execute(['sync', '--check'], environment, root, checked.output)).toBe(0);
+    expect({
+      code: await new SyncCommand().execute(['sync', '--check'], environment, root, checked.output),
+      output: checked.text(),
+    }).toEqual({ code: 0, output: 'doompi sync is up to date\n' });
     expect(mocks.buildSyncedRuntime).toHaveBeenCalledOnce();
   });
 
@@ -404,7 +502,9 @@ describe('doompi sync', () => {
         defaultModel: 'sonnet',
       })}\n`,
     );
-    writePiExtensionAlias(path.join(root, '.pi'));
+    const projectAliasPath = piExtensionAliasPath(path.join(root, '.pi'));
+    fs.mkdirSync(path.dirname(projectAliasPath), { recursive: true });
+    fs.symlinkSync(path.resolve(import.meta.dirname, '../..'), projectAliasPath, 'dir');
 
     const { output, text } = capture();
     await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
@@ -436,20 +536,61 @@ describe('doompi sync', () => {
     expect(await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, checked.output)).toBe(0);
   });
 
-  it('clears what a previous selection staged but leaves live sessions alone', async () => {
+  it('keeps published generations and live sessions while activating a replacement', async () => {
     const root = makeRepository();
     const { output } = capture();
+    const homeDirectory = homeFor(root);
     await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
-    const generatedDirectory = resolveSyncLocation(root, homeFor(root)).directory;
-    const stale = path.join(generatedDirectory, 'persona.md');
-    const live = path.join(generatedDirectory, 'run', '1234');
-    fs.writeFileSync(stale, 'from an earlier selection');
+    const first = readSyncRegistration(root, homeDirectory);
+    expect(first).toBeDefined();
+    const publishedMarker = path.join(first!.generationRoot, 'published-marker');
+    const live = path.join(resolveSyncLocation(root, homeDirectory).directory, 'run', '1234');
+    fs.writeFileSync(publishedMarker, 'from the published generation');
     fs.mkdirSync(live, { recursive: true });
 
     await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
 
-    expect(fs.existsSync(stale)).toBe(false);
+    const second = readSyncRegistration(root, homeDirectory);
+    expect(second?.generation).not.toBe(first?.generation);
+    expect(fs.existsSync(publishedMarker)).toBe(true);
     expect(fs.existsSync(live)).toBe(true);
+  });
+
+  it('keeps concurrent repositories isolated across a repeated sync', async () => {
+    const repoA = makeRepository();
+    const repoB = makeRepository();
+    fs.writeFileSync(
+      path.join(repoB, '.doom', 'modes.yaml'),
+      LAYERS.replace('defaultMajorMode: copilot', 'defaultMajorMode: minimal'),
+    );
+    const sharedHome = path.join(repoA, 'shared-home');
+    const sharedAgentDirectory = agentDirectory(repoA);
+    const environmentA = {
+      HOME: sharedHome,
+      PI_CODING_AGENT_DIR: sharedAgentDirectory,
+      DOOMPI_ROOT: repoA,
+    };
+    const environmentB = { ...environmentA, DOOMPI_ROOT: repoB };
+
+    await Promise.all([
+      new SyncCommand().execute(['sync'], environmentA, repoA, capture().output),
+      new SyncCommand().execute(['sync'], environmentB, repoB, capture().output),
+    ]);
+
+    const registrationA = readSyncRegistration(repoA, sharedHome);
+    const registrationB = readSyncRegistration(repoB, sharedHome);
+    expect(registrationA?.generationRoot).not.toBe(registrationB?.generationRoot);
+    expect(readSyncState(repoA, sharedHome)?.selection.majorMode).toBe('copilot');
+    expect(readSyncState(repoB, sharedHome)?.selection.majorMode).toBe('minimal');
+    const registrationBBytes = fs.readFileSync(resolveSyncLocation(repoB, sharedHome).registrationPath);
+    const stateBBytes = fs.readFileSync(registrationB!.statePath);
+
+    await new SyncCommand().execute(['sync'], environmentA, repoA, capture().output);
+
+    expect(fs.readFileSync(resolveSyncLocation(repoB, sharedHome).registrationPath)).toEqual(registrationBBytes);
+    expect(fs.readFileSync(registrationB!.statePath)).toEqual(stateBBytes);
+    expect(fs.existsSync(registrationB!.apiDirectory)).toBe(true);
+    if (registrationB!.webDirectory !== null) expect(fs.existsSync(registrationB!.webDirectory)).toBe(true);
   });
 });
 
@@ -481,19 +622,21 @@ describe('doompi sync --check', () => {
     expect(text()).toContain('up to date');
   });
 
-  it('exits non-zero when sync state belongs to another repository', async () => {
+  it('exits non-zero when the registration belongs to another repository', async () => {
     const root = makeRepository();
-    const state = await writeMatchingState(root);
-    fs.writeFileSync(
-      resolveSyncLocation(root, homeFor(root)).statePath,
-      JSON.stringify({ ...state, root: path.join(root, 'foreign-repository') }),
-    );
+    await writeMatchingState(root);
+    const registrationPath = resolveSyncLocation(root, homeFor(root)).registrationPath;
+    const registration = JSON.parse(fs.readFileSync(registrationPath, 'utf8')) as {
+      identity: { repositoryId: string };
+    };
+    registration.identity.repositoryId = 'foreign-repository';
+    fs.writeFileSync(registrationPath, JSON.stringify(registration));
     const { output, text } = capture();
 
     const code = await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, output);
 
     expect(code).toBe(1);
-    expect(text()).toContain('belongs to a different repository');
+    expect(text()).toContain('belongs to another repository or worktree');
   });
 
   it('exits non-zero and names the drift', async () => {

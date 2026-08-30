@@ -14,6 +14,17 @@ export interface RunnersSession {
 
 export const runners = defineSessionStore<RunnersSession>({ runs: [], stopRequested: [] });
 
+/** The runner channel keeps the dock's busy state aligned with its rendered run list. */
+export const runnerActivitySource = {
+  subscribe(listener: () => void) {
+    const subscription = runners.store.subscribe(listener);
+    return () => subscription.unsubscribe();
+  },
+  isActive(sessionId: string | null) {
+    return runners.select(runners.store.state, sessionId).runs.some((run) => run.state === 'running');
+  },
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

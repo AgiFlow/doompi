@@ -18,6 +18,7 @@ import {
 import { isRecord } from './serialization/json';
 import type { JsonObject } from './serialization/json';
 import { assertSyncLocationSafe, resolveSyncLocation, type SyncIdentity, type SyncLocation } from './syncLocation.ts';
+import { readSyncRegistration } from './syncRegistration.ts';
 import { PRECOMPILE_STATE_VERSION, SYNC_STATE_VERSION } from './syncStateContract.ts';
 
 export { SYNC_STATE_VERSION } from './syncStateContract.ts';
@@ -122,7 +123,9 @@ export function syncDirectory(repoRoot: string, homeDirectory: string = os.homed
 }
 
 export function syncStatePath(repoRoot: string, homeDirectory: string = os.homedir()): string {
-  return resolveSyncLocation(repoRoot, homeDirectory).statePath;
+  return (
+    readSyncRegistration(repoRoot, homeDirectory)?.statePath ?? resolveSyncLocation(repoRoot, homeDirectory).statePath
+  );
 }
 
 export function legacySyncDirectory(repoRoot: string): string {
@@ -434,35 +437,25 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
 export interface LocatedSyncState {
   state: SyncState;
   location: SyncLocation;
-  layout: 'global' | 'legacy';
+  layout: 'global';
 }
 
-/** Reads global state first, with a read-only fallback to validated legacy state. */
+/** Reads only state reached through this repository/worktree's validated registration. */
 export function readLocatedSyncState(
   repoRoot: string,
   homeDirectory: string = os.homedir(),
 ): LocatedSyncState | undefined {
   const location = resolveSyncLocation(repoRoot, homeDirectory);
-  if (fs.existsSync(location.statePath)) {
-    return {
-      state: parseSyncState(fs.readFileSync(location.statePath, 'utf8'), location.statePath, {
-        repoRoot,
-        location,
-        legacy: false,
-      }),
-      location,
-      layout: 'global',
-    };
-  }
-  if (!fs.existsSync(location.legacyStatePath)) return undefined;
+  const registration = readSyncRegistration(repoRoot, homeDirectory);
+  if (!registration) return undefined;
   return {
-    state: parseSyncState(fs.readFileSync(location.legacyStatePath, 'utf8'), location.legacyStatePath, {
+    state: parseSyncState(fs.readFileSync(registration.statePath, 'utf8'), registration.statePath, {
       repoRoot,
       location,
-      legacy: true,
+      legacy: false,
     }),
     location,
-    layout: 'legacy',
+    layout: 'global',
   };
 }
 
@@ -479,8 +472,10 @@ export async function writeSyncState(
   repoRoot: string,
   state: SyncState,
   homeDirectory: string = os.homedir(),
+  targetPath?: string,
 ): Promise<string> {
   const location = resolveSyncLocation(repoRoot, homeDirectory);
+  const statePath = targetPath ?? location.statePath;
   if (state.version !== SYNC_STATE_VERSION) {
     throw new Error(`Doom sync state writes require version ${SYNC_STATE_VERSION}`);
   }
@@ -497,22 +492,25 @@ export async function writeSyncState(
     throw new Error('Refusing to write Doom sync state for a different repository or worktree');
   }
   if (state.precompile) {
-    const precompile = parsePrecompileState(state.precompile, location.statePath);
+    const precompile = parsePrecompileState(state.precompile, statePath);
     if (!precompileMatchesBundles(precompile, state.bundles)) {
-      throw new Error(`Doom sync state at ${location.statePath} has an invalid precompile record`);
+      throw new Error(`Doom sync state at ${statePath} has an invalid precompile record`);
     }
   }
+  if (!isInside(location.directory, statePath)) {
+    throw new Error(`Refusing to write Doom sync state outside ${location.directory}`);
+  }
   assertSyncLocationSafe(location);
-  await fs.promises.mkdir(location.directory, { mode: PRIVATE_DIRECTORY_MODE, recursive: true });
-  const temporaryPath = `${location.statePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await fs.promises.mkdir(path.dirname(statePath), { mode: PRIVATE_DIRECTORY_MODE, recursive: true });
+  const temporaryPath = `${statePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
     await fs.promises.writeFile(temporaryPath, serializeSyncState(state), { mode: PRIVATE_FILE_MODE });
-    await fs.promises.rename(temporaryPath, location.statePath);
+    await fs.promises.rename(temporaryPath, statePath);
   } catch (error) {
     await fs.promises.rm(temporaryPath, { force: true });
     throw error;
   }
-  return location.statePath;
+  return statePath;
 }
 
 export function ownKey(name: string): string {

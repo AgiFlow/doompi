@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/adapters/piExtensionAlias.ts';
+import { piExtensionAliasPath } from '../../src/adapters/piExtensionAlias.ts';
 import {
   mergeProjectPiSettings,
   projectPiSettingsPath,
@@ -145,7 +145,9 @@ describe('writeProjectPiSettings', () => {
     const root = temporaryRoot();
     writeProjectSettings(root, { extensions: ['@agimon-ai/doompi'] });
     const piDirectory = path.join(root, '.pi');
-    writePiExtensionAlias(piDirectory);
+    const aliasPath = piExtensionAliasPath(piDirectory);
+    fs.mkdirSync(path.dirname(aliasPath), { recursive: true });
+    fs.symlinkSync(DOOM_PACKAGE_ROOT, aliasPath, 'dir');
 
     writeProjectPiSettings(root);
 

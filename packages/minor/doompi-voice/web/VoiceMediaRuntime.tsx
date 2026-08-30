@@ -16,6 +16,9 @@ class PageVoiceMediaRuntime {
   private closed = false;
 
   public constructor() {
+    // Ownership arrives after the command round trip. Arm now so the tap that
+    // requested voice can unlock Web Audio on mobile Safari before that reply.
+    this.device.armUserGesture();
     const subscription = activeVoiceSession.store.subscribe(() => this.select(activeVoiceSession.store.state));
     this.unsubscribe = () => subscription.unsubscribe();
     this.select(activeVoiceSession.store.state);

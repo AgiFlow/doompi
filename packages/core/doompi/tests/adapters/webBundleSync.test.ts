@@ -31,7 +31,7 @@ describe('the sync web bundle phase', () => {
       repoRoot: tempDir('doompi-repo-'),
       resolvedEntries: {},
       environment: {},
-      homeDirectory: tempDir('doompi-home-'),
+      outputDirectory: tempDir('doompi-generation-web-'),
       // Native require resolution consults machine-wide paths, so the
       // not-installed case is pinned through the seam.
       resolveWebRoot: () => undefined,
@@ -49,11 +49,12 @@ describe('the sync web bundle phase', () => {
     fs.writeFileSync(entry, '');
 
     const calls: Array<{ pluginRoots: readonly string[]; outDir: string }> = [];
+    const outputDirectory = path.join(home, 'generation', 'web-bundle');
     const result = await syncWebBundle({
       repoRoot: tempDir('doompi-repo-'),
       resolvedEntries: { a: entry, b: entry },
       environment: { DOOMPI_WEB_PACKAGE_ROOT: webRoot },
-      homeDirectory: home,
+      outputDirectory,
       importBundler: () =>
         Promise.resolve({
           bundleCockpitWeb: (options: { pluginRoots: readonly string[]; outDir: string }) => {
@@ -70,22 +71,23 @@ describe('the sync web bundle phase', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.pluginRoots).toEqual([pluginRoot]);
     expect(result).toMatchObject({ status: 'bundled', pluginIds: ['subagents', 'workflows'] });
-    const current = path.join(home, '.doompi', 'web', 'current', 'web', 'index.html');
-    expect(fs.existsSync(current)).toBe(true);
-    if (result.status === 'bundled') expect(result.assetsDir).toBe(path.dirname(current));
+    const generated = path.join(outputDirectory, 'web', 'index.html');
+    expect(fs.existsSync(generated)).toBe(true);
+    if (result.status === 'bundled') expect(result.assetsDir).toBe(path.dirname(generated));
   });
 
   it('reports a bundler failure without leaving a broken current bundle', async () => {
     const webRoot = fakeWebPackage();
     const home = tempDir('doompi-home-');
+    const outputDirectory = path.join(home, 'generation', 'web-bundle');
     const result = await syncWebBundle({
       repoRoot: tempDir('doompi-repo-'),
       resolvedEntries: {},
       environment: { DOOMPI_WEB_PACKAGE_ROOT: webRoot },
-      homeDirectory: home,
+      outputDirectory,
       importBundler: () => Promise.reject(new Error('vite exploded')),
     });
     expect(result).toEqual({ status: 'failed', reason: 'vite exploded' });
-    expect(fs.existsSync(path.join(home, '.doompi', 'web', 'current'))).toBe(false);
+    expect(fs.existsSync(outputDirectory)).toBe(false);
   });
 });

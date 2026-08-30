@@ -18,6 +18,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  doompiWeb?: { channels?: string[] };
 }
 
 interface ProjectConfiguration {
@@ -81,6 +82,12 @@ describe('doom voice package boundary', () => {
     expect(manifest.peerDependencies?.[piPackage]).toBe('0.84.4');
     expect(manifest.devDependencies?.[piPackage]).toBe('0.84.4');
     expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.6');
+  });
+
+  it('declares every browser media channel exported by its hub entry', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.doompiWeb?.channels).toEqual(['voice_media_wake', 'voice_ownership']);
   });
 
   it('does not depend on private rig packages from package-local configuration', async () => {

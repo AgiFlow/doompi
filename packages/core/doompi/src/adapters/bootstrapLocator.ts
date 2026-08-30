@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findRepositoryRoot } from './repository/repository.ts';
-import { resolveSyncLocation } from './syncLocation.ts';
-import { readLocatedSyncState } from './syncState.ts';
+import { readSyncRegistration } from './syncRegistration.ts';
+import { readSyncState } from './syncState.ts';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from './syncStateContract.ts';
 
 interface InputFingerprint {
@@ -78,8 +78,7 @@ function packagedDoomEntry(moduleUrl: string = import.meta.url): string {
 }
 
 function locationHasState(repoRoot: string, homeDirectory: string): boolean {
-  const location = resolveSyncLocation(repoRoot, homeDirectory);
-  return fs.existsSync(location.statePath) || fs.existsSync(location.legacyStatePath);
+  return readSyncRegistration(repoRoot, homeDirectory) !== undefined;
 }
 
 /** Finds the nearest configured repository with generated Doom sync state. */
@@ -94,34 +93,37 @@ export function findSyncedRoot(cwd: string, homeDirectory: string = os.homedir()
 }
 
 function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir()): BootstrapState | undefined {
-  const located = readLocatedSyncState(repoRoot, homeDirectory);
-  if (!located) return undefined;
-  const { state } = located;
-  const statePath = located.layout === 'global' ? located.location.statePath : located.location.legacyStatePath;
-  const generatedDirectory = path.dirname(statePath);
-  const bootstrap = state.bootstrap;
+  const registration = readSyncRegistration(repoRoot, homeDirectory);
+  if (!registration) return undefined;
+  const statePath = registration.statePath;
+  const generatedDirectory = registration.generationRoot;
+  const state = readSyncState(repoRoot, homeDirectory);
+  if (!state) return undefined;
+  const bootstrap = typeof state.bootstrap === 'string' ? state.bootstrap : undefined;
   if (bootstrap && !isInside(generatedDirectory, bootstrap)) {
     throw new Error(`Doom bootstrap must stay inside ${generatedDirectory}: ${bootstrap}`);
   }
 
   let precompile: BootstrapState['precompile'];
   if (state.precompile !== undefined) {
+    const value = state.precompile;
     if (
-      typeof state.precompile.version !== 'number' ||
-      state.precompile.strategy !== BUNDLED_PRECOMPILE_STRATEGY ||
-      typeof state.precompile.bootstrapEntry !== 'string' ||
-      typeof state.precompile.bootstrapManifest !== 'string' ||
-      !isRecord(state.precompile.bundleManifests) ||
-      Object.values(state.precompile.bundleManifests).some((manifest) => typeof manifest !== 'string')
+      !isRecord(value) ||
+      typeof value.version !== 'number' ||
+      value.strategy !== BUNDLED_PRECOMPILE_STRATEGY ||
+      typeof value.bootstrapEntry !== 'string' ||
+      typeof value.bootstrapManifest !== 'string' ||
+      !isRecord(value.bundleManifests) ||
+      Object.values(value.bundleManifests).some((manifest) => typeof manifest !== 'string')
     ) {
       throw new Error(`Doom sync state at ${statePath} has an invalid precompile record`);
     }
     precompile = {
-      version: state.precompile.version,
-      strategy: state.precompile.strategy,
-      bootstrapEntry: state.precompile.bootstrapEntry,
-      bootstrapManifest: state.precompile.bootstrapManifest,
-      bundleManifests: state.precompile.bundleManifests as Record<string, string>,
+      version: value.version,
+      strategy: value.strategy,
+      bootstrapEntry: value.bootstrapEntry,
+      bootstrapManifest: value.bootstrapManifest,
+      bundleManifests: value.bundleManifests as Record<string, string>,
     };
   }
 
@@ -211,14 +213,15 @@ function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: str
 /** Validates only the bootstrap graph needed before the generated bootstrap is imported. */
 export function readStartupBootstrapStatus(
   repoRoot: string,
-  expectedBootstrapEntry: string = packagedDoomEntry(),
+  expectedBootstrapEntry?: string,
   homeDirectory: string = os.homedir(),
 ): BootstrapStatus {
   const state = readBootstrapState(repoRoot, homeDirectory);
+  const expected = expectedBootstrapEntry ?? packagedDoomEntry();
   if (!state) return { bootstrap: undefined, fresh: false };
   return {
     bootstrap: state.bootstrap,
-    fresh: freshBootstrapRecord(state, expectedBootstrapEntry) !== undefined,
+    fresh: freshBootstrapRecord(state, expected) !== undefined,
   };
 }
 
@@ -244,11 +247,12 @@ export function readBundleStatus(
 /** Validates the bootstrap and every bundle for `doompi sync --check` diagnostics. */
 export function readBootstrapStatus(
   repoRoot: string,
-  expectedBootstrapEntry: string = packagedDoomEntry(),
+  expectedBootstrapEntry?: string,
   homeDirectory: string = os.homedir(),
 ): BootstrapStatus {
   const state = readBootstrapState(repoRoot, homeDirectory);
-  if (!state?.bootstrap || !state.precompile || !freshBootstrapRecord(state, expectedBootstrapEntry)) {
+  const expected = expectedBootstrapEntry ?? packagedDoomEntry();
+  if (!state?.bootstrap || !state.precompile || !freshBootstrapRecord(state, expected)) {
     return { bootstrap: state?.bootstrap, fresh: false };
   }
   const manifests = Object.values(state.precompile.bundleManifests);

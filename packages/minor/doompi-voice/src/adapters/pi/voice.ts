@@ -1057,7 +1057,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
               id: 'manual',
               label: 'Manual voice',
               description: 'Start one-shot dictation, then stop it to fill the current prompt.',
-              contexts: ['tui', 'headless'],
+              contexts: ['tui'],
               parameters: [],
             },
             {

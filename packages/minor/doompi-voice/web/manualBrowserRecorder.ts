@@ -24,7 +24,7 @@ interface ManualMediaRecorder {
 
 interface ManualRecorderDependencies {
   getUserMedia: () => Promise<ManualMediaStream>;
-  createRecorder: (stream: ManualMediaStream, options: { mimeType: string }) => ManualMediaRecorder;
+  createRecorder: (stream: ManualMediaStream, options?: { mimeType: string }) => ManualMediaRecorder;
   isTypeSupported: (type: string) => boolean;
   setTimer: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>;
   clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
@@ -32,7 +32,7 @@ interface ManualRecorderDependencies {
 }
 
 interface BrowserRecorderConstructor {
-  new (stream: ManualMediaStream, options: { mimeType: string }): ManualMediaRecorder;
+  new (stream: ManualMediaStream, options?: { mimeType: string }): ManualMediaRecorder;
   isTypeSupported(type: string): boolean;
 }
 
@@ -74,12 +74,10 @@ export async function startManualBrowserRecording(
   dependencies: ManualRecorderDependencies = browserDependencies(),
 ): Promise<ManualBrowserRecording> {
   const mimeType = MEDIA_TYPES.find((type) => dependencies.isTypeSupported(type));
-  if (mimeType === undefined) throw new Error('This browser cannot record WebM or MP4 audio.');
-
   const stream = await dependencies.getUserMedia();
   let recorder: ManualMediaRecorder;
   try {
-    recorder = dependencies.createRecorder(stream, { mimeType });
+    recorder = dependencies.createRecorder(stream, mimeType === undefined ? undefined : { mimeType });
   } catch (error) {
     for (const track of stream.getTracks()) track.stop();
     throw error;

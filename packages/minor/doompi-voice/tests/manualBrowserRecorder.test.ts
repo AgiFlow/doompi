@@ -223,7 +223,7 @@ describe('manual browser recording', () => {
     expect(fixture.stopTrack).toHaveBeenCalledOnce();
   });
 
-  it('cancels without returning audio and rejects unsupported recording formats', async () => {
+  it('cancels without returning audio and lets Safari choose its native fallback format', async () => {
     const fixture = recorderFixture();
     const recording = await startManualBrowserRecording(fixture.dependencies);
 
@@ -231,9 +231,10 @@ describe('manual browser recording', () => {
 
     await expect(recording.result).resolves.toBeUndefined();
     expect(fixture.stopTrack).toHaveBeenCalledOnce();
-    await expect(
-      startManualBrowserRecording({ ...recorderFixture().dependencies, isTypeSupported: () => false }),
-    ).rejects.toThrow('cannot record WebM or MP4');
+
+    const fallback = recorderFixture();
+    await startManualBrowserRecording({ ...fallback.dependencies, isTypeSupported: () => false });
+    expect(fallback.dependencies.createRecorder).toHaveBeenCalledWith(expect.anything(), undefined);
   });
 
   it('releases the microphone when recorder construction fails', async () => {

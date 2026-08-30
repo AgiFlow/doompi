@@ -368,14 +368,17 @@ package declares a `doompiWeb` block in its package.json naming a client entry (
 definition: tab, panel, badge, session data channels, tool renderers for the timeline cards of
 the tools the package registers, slots it opens for other plugins, fills into slots others open,
 and the host's own slot contributions) and an optional hub entry (`webHubChannels` plus its built
-dist). This package's own bundle carries no plugins; the full set is assembled on your machine:
-`doompi sync` discovers the installed composition's manifests, generates the import entries, and
-rebuilds the SPA through the `./bundler` subpath into `~/.doompi/web/current`, which the server
-prefers over the packaged bundle (`--assets` and `DOOMPI_WEB_DIST` override it). Server-only
-`webPlugins.server.json` sits beside the public `web/` directory, never inside the signed or served bundle.
-It names each plugin's built hub entry, imported lazily: a missing plugin package logs a notice and its tab
-`@agimon-ai/doompi-team` is the reference plugin; the workflows tab ships with
-`@agimon-ai/doompi-workflow`. Contracts come from `@agimon-ai/doompi-web-contracts`.
+dist). This package's own bundle carries no plugins; the full set is assembled on your machine.
+`doompi sync` discovers the installed composition's manifests, generates the import entries, and builds
+the SPA through the `./bundler` subpath inside the repository/worktree's immutable sync generation.
+The shared server uses the validated registration for its startup repository. `--assets` and
+`DOOMPI_WEB_DIST` override registered assets, then packaged assets provide the fallback. Server-only
+`webPlugins.server.json` sits beside the public `web/` directory, never inside the signed or served
+bundle. It names each plugin's built hub entry, imported lazily. A missing plugin package logs a notice
+and its tab is omitted. Session package API routes use the session `cwd` registration, while
+`DOOMPI_API_DIR` remains the explicit API override. `@agimon-ai/doompi-team` is the reference plugin;
+the workflows tab ships with `@agimon-ai/doompi-workflow`. Contracts come from
+`@agimon-ai/doompi-web-contracts`.
 
 A tool call's timeline item belongs to the plugin that registers the tool: its `toolRenderers`
 entry names the tool (or claims it with `matches` when the name is only known at runtime) and

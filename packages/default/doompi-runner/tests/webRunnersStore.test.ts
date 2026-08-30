@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isFollowingLive, logViewLines } from '../web/format.ts';
-import { requestRunnerStop, runnerRunsChannel, runners } from '../web/runnersStore.ts';
+import { requestRunnerStop, runnerActivitySource, runnerRunsChannel, runners } from '../web/runnersStore.ts';
 
 const run = (id: string, state: 'running' | 'completed') => ({ id, name: id, command: 'sleep 60', state });
 const session = (sessionId: string | null) => runners.select(runners.store.state, sessionId);
@@ -19,6 +19,19 @@ describe('the runners web store channel', () => {
     // Malformed payloads are rejected at the parse gate.
     expect(runnerRunsChannel.parse('junk')).toBeNull();
     expect(runnerRunsChannel.parse({ runs: 'no' })).toBeNull();
+    runners.reset();
+  });
+
+  it('reports running channel records through the activity source', () => {
+    runners.reset();
+    expect(runnerActivitySource.isActive('s1')).toBe(false);
+
+    runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'running')] })!);
+    expect(runnerActivitySource.isActive('s1')).toBe(true);
+    expect(runnerActivitySource.isActive('s2')).toBe(false);
+
+    runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('a', 'completed')] })!);
+    expect(runnerActivitySource.isActive('s1')).toBe(false);
     runners.reset();
   });
 

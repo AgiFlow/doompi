@@ -58,6 +58,7 @@ function extensionApi() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('DOOMPI_EXTENSIONS_PROVIDED', '');
   mocks.findSyncedRoot.mockReturnValue('/repo');
   mocks.acquireBootstrapClaim.mockImplementation(() => vi.fn());
 });

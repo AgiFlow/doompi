@@ -12,9 +12,14 @@ const DOOMPI_HOME = '.doompi';
 export const PACKAGE_API_DIR_ENV = 'DOOMPI_API_DIR';
 
 /** The directory holding the generated modules for this machine. */
-export function packageApiDirectory(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir()): string {
+export function packageApiDirectory(
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir = os.homedir(),
+  explicitDirectory?: string,
+): string {
   const override = env[PACKAGE_API_DIR_ENV];
   if (override !== undefined && override !== '') return path.resolve(override);
+  if (explicitDirectory !== undefined) return path.resolve(explicitDirectory);
   return path.join(homeDir, DOOMPI_HOME, API_DIR_NAME, CURRENT_DIR_NAME);
 }
 
@@ -23,13 +28,15 @@ export function packageApiModulePath(
   scope: DoomApiScope,
   env: NodeJS.ProcessEnv = process.env,
   homeDir = os.homedir(),
+  explicitDirectory?: string,
 ): string {
-  return path.join(packageApiDirectory(env, homeDir), `${scope}.routes.mjs`);
+  return path.join(packageApiDirectory(env, homeDir, explicitDirectory), `${scope}.routes.mjs`);
 }
 
 export interface LoadPackageApisOptions {
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
+  apiDirectory?: string;
   onNotice?: (message: string) => void;
 }
 
@@ -44,7 +51,10 @@ export interface LoadPackageApisOptions {
  */
 export async function loadPackageApis(scope: DoomApiScope, options: LoadPackageApisOptions = {}): Promise<DoomApi[]> {
   const notice = options.onNotice ?? ((): void => {});
-  const modulePath = packageApiModulePath(scope, options.env ?? process.env, options.homeDir ?? os.homedir());
+  const environment = options.env ?? process.env;
+  const override = environment[PACKAGE_API_DIR_ENV];
+  if (options.apiDirectory === undefined && (override === undefined || override === '')) return [];
+  const modulePath = packageApiModulePath(scope, environment, options.homeDir ?? os.homedir(), options.apiDirectory);
   if (!fs.existsSync(modulePath)) return [];
   let exported: unknown;
   try {

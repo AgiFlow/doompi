@@ -31,6 +31,17 @@ describe('browser voice media', () => {
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
+    const runtimeSource = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    expect(runtimeSource).toContain('this.device.armUserGesture()');
+  });
+
+  it('keeps process-local manual recording out of the browser minor-mode picker', async () => {
+    const source = await readFile(new URL('../src/adapters/pi/voice.ts', import.meta.url), 'utf8');
+    const start = source.indexOf("label: 'Manual voice'");
+    const manualAction = source.slice(start, source.indexOf("id: 'deactivate'", start));
+
+    expect(manualAction).toContain("contexts: ['tui']");
+    expect(manualAction).not.toContain("'headless'");
   });
 
   it('keeps the server-selected session in one reactive page-wide store', () => {
@@ -84,6 +95,7 @@ describe('browser voice media', () => {
     const source = await readFile(new URL('../web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
+    expect(source).toContain('data-testid="composer-voice-error"');
     expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
     expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
     expect(source).toContain('recorder?.dispose()');

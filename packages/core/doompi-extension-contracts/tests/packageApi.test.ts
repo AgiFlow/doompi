@@ -92,13 +92,13 @@ describe('narrowing a module export to an API', () => {
   });
 });
 
-function generated(source: string): { homeDir: string } {
+function generated(source: string): { homeDir: string; apiDirectory: string } {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-api-home-'));
   cleanups.push(() => fs.rmSync(homeDir, { recursive: true, force: true }));
-  const dir = path.join(homeDir, '.doompi', 'api', 'current');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'session.routes.mjs'), source);
-  return { homeDir };
+  const apiDirectory = path.join(homeDir, 'generation', 'api');
+  fs.mkdirSync(apiDirectory, { recursive: true });
+  fs.writeFileSync(path.join(apiDirectory, 'session.routes.mjs'), source);
+  return { homeDir, apiDirectory };
 }
 
 const validApi = (basePath: string): string =>
@@ -108,6 +108,13 @@ describe('loading the generated route module', () => {
   it('names the module a host of each scope imports', () => {
     expect(packageApiModulePath('session', {}, '/home/x')).toBe('/home/x/.doompi/api/current/session.routes.mjs');
     expect(packageApiModulePath('hub', {}, '/home/x')).toBe('/home/x/.doompi/api/current/hub.routes.mjs');
+  });
+
+  it('prefers the environment override over a registered API directory', () => {
+    expect(packageApiModulePath('hub', { DOOMPI_API_DIR: '/override' }, '/home/x', '/registered')).toBe(
+      '/override/hub.routes.mjs',
+    );
+    expect(packageApiModulePath('hub', {}, '/home/x', '/registered')).toBe('/registered/hub.routes.mjs');
   });
 
   it('mounts nothing before anything is synced, without complaining', async () => {
@@ -122,38 +129,55 @@ describe('loading the generated route module', () => {
   });
 
   it('loads what the module exports', async () => {
-    const { homeDir } = generated(`export const apis = [${validApi('runner')}];`);
-    const apis = await loadPackageApis('session', { homeDir, env: {} });
+    const { homeDir, apiDirectory } = generated(`export const apis = [${validApi('runner')}];`);
+    const apis = await loadPackageApis('session', { homeDir, apiDirectory, env: {} });
     expect(apis.map((api) => api.basePath)).toEqual(['runner']);
   });
 
   it('turns a module that fails to load into a notice, never a refusal to start', async () => {
-    const { homeDir } = generated('import "node:nonexistent-module";');
+    const { homeDir, apiDirectory } = generated('import "node:nonexistent-module";');
     const notices: string[] = [];
-    const apis = await loadPackageApis('session', { homeDir, env: {}, onNotice: (m) => notices.push(m) });
+    const apis = await loadPackageApis('session', {
+      homeDir,
+      apiDirectory,
+      env: {},
+      onNotice: (m) => notices.push(m),
+    });
     expect(apis).toEqual([]);
     expect(notices.join('\n')).toMatch(/session package APIs are unavailable/u);
   });
 
   it('skips an export that is not an API', async () => {
-    const { homeDir } = generated(`export const apis = [{ nope: true }, ${validApi('runner')}];`);
+    const { homeDir, apiDirectory } = generated(`export const apis = [{ nope: true }, ${validApi('runner')}];`);
     const notices: string[] = [];
-    const apis = await loadPackageApis('session', { homeDir, env: {}, onNotice: (m) => notices.push(m) });
+    const apis = await loadPackageApis('session', {
+      homeDir,
+      apiDirectory,
+      env: {},
+      onNotice: (m) => notices.push(m),
+    });
     expect(apis.map((api) => api.basePath)).toEqual(['runner']);
     expect(notices.join('\n')).toMatch(/is not a package API/u);
   });
 
   it('reports a module that exports no list at all', async () => {
-    const { homeDir } = generated('export const apis = "not a list";');
+    const { homeDir, apiDirectory } = generated('export const apis = "not a list";');
     const notices: string[] = [];
-    expect(await loadPackageApis('session', { homeDir, env: {}, onNotice: (m) => notices.push(m) })).toEqual([]);
+    expect(
+      await loadPackageApis('session', { homeDir, apiDirectory, env: {}, onNotice: (m) => notices.push(m) }),
+    ).toEqual([]);
     expect(notices.join('\n')).toMatch(/exports no apis array/u);
   });
 
   it('keeps the first claim on a base path, because a mount point is global', async () => {
-    const { homeDir } = generated(`export const apis = [${validApi('runner')}, ${validApi('runner')}];`);
+    const { homeDir, apiDirectory } = generated(`export const apis = [${validApi('runner')}, ${validApi('runner')}];`);
     const notices: string[] = [];
-    const apis = await loadPackageApis('session', { homeDir, env: {}, onNotice: (m) => notices.push(m) });
+    const apis = await loadPackageApis('session', {
+      homeDir,
+      apiDirectory,
+      env: {},
+      onNotice: (m) => notices.push(m),
+    });
     expect(apis).toHaveLength(1);
     expect(notices.join('\n')).toMatch(/duplicate package API base path 'runner'/u);
   });

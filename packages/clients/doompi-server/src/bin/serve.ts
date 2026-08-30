@@ -4,10 +4,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
+import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { createHarnessTelemetry } from '@agimon-ai/doompi/logSinkTelemetry';
+import { readSyncRegistration } from '@agimon-ai/doompi/services';
+import { findRepositoryRoot } from '@agimon-ai/doompi/utils/repository';
 import { superviseAgentRelaunches } from '../adapters/agentSupervisor.ts';
 import { createDoomAgentLauncher } from '../adapters/doomAgentLauncher.ts';
 import { createAgentServerService } from '../adapters/piSessionRuntime.ts';
@@ -37,6 +39,14 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
     notice(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (timeout) clearTimeout(timeout);
+  }
+}
+
+function sessionApiDirectory(cwd: string): string | undefined {
+  try {
+    return readSyncRegistration(findRepositoryRoot(cwd))?.apiDirectory;
+  } catch {
+    return undefined;
   }
 }
 
@@ -102,13 +112,18 @@ async function main(): Promise<number> {
       socket = serveSessionSocket({ socketPath: options.socketPath, token, agent, telemetry, onNotice: notice });
       process.stderr.write(`[doompi-server] listening on ${options.socketPath}\n`);
 
+      const apiDirectory = sessionApiDirectory(process.cwd());
+      const hasApiOverride = Boolean(process.env[PACKAGE_API_DIR_ENV]);
       apis = await serveSessionApis({
         socketDir: path.dirname(path.resolve(options.socketPath)),
         sessionId: resolved.identity.sessionId,
         cwd: process.cwd(),
         internalToken: apiInternalToken,
         hubToken: token,
-        apis: await loadPackageApis('session', { onNotice: notice }),
+        apis:
+          apiDirectory === undefined && !hasApiOverride
+            ? []
+            : await loadPackageApis('session', { apiDirectory, onNotice: notice }),
         telemetry,
         onNotice: notice,
       });

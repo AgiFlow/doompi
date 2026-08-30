@@ -118,7 +118,8 @@
   "doompiWeb": {
     "pluginId": "voice",
     "channels": [
-      "voice_media_wake"
+      "voice_media_wake",
+      "voice_ownership"
     ],
     "client": "./web/index.ts",
     "hub": {

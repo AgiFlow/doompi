@@ -118,34 +118,45 @@ export function VoiceComposerAction({
     : TONE_TEXT[manualError ? 'attention' : 'idle'];
 
   return (
-    <Button
-      variant={recording ? 'danger-outline' : 'outline'}
-      size="icon"
-      data-testid="composer-voice-action"
-      data-voice-mode={autonomous ? 'auto' : recording ? 'manual' : 'off'}
-      data-voice-phase={phase}
-      aria-label={label}
-      title={label}
-      disabled={
-        sessionId === null ||
-        (autonomous ? autonomousCommand === null : manualPhase === 'starting' || manualPhase === 'transcribing')
-      }
-      onClick={act}
-      className={`shrink-0 ${tone}`}
-    >
-      {mediaConflict && autonomous ? (
-        <AlertIcon className="h-3.5 w-3.5" />
-      ) : recording ? (
-        <StopIcon className="h-3 w-3 fill-current" />
-      ) : manualPhase === 'starting' || manualPhase === 'transcribing' ? (
-        <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
-      ) : autonomous ? (
-        <VoicePhaseIcon phase={view.phase} />
-      ) : manualError ? (
-        <AlertIcon className="h-3.5 w-3.5" />
-      ) : (
-        <MicIcon className="h-3.5 w-3.5" />
-      )}
-    </Button>
+    <>
+      <Button
+        variant={recording ? 'danger-outline' : 'outline'}
+        size="icon"
+        data-testid="composer-voice-action"
+        data-voice-mode={autonomous ? 'auto' : recording ? 'manual' : 'off'}
+        data-voice-phase={phase}
+        aria-label={label}
+        title={label}
+        disabled={
+          sessionId === null ||
+          (autonomous ? autonomousCommand === null : manualPhase === 'starting' || manualPhase === 'transcribing')
+        }
+        onClick={act}
+        className={`shrink-0 ${tone}`}
+      >
+        {mediaConflict && autonomous ? (
+          <AlertIcon className="h-3.5 w-3.5" />
+        ) : recording ? (
+          <StopIcon className="h-3 w-3 fill-current" />
+        ) : manualPhase === 'starting' || manualPhase === 'transcribing' ? (
+          <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
+        ) : autonomous ? (
+          <VoicePhaseIcon phase={view.phase} />
+        ) : manualError ? (
+          <AlertIcon className="h-3.5 w-3.5" />
+        ) : (
+          <MicIcon className="h-3.5 w-3.5" />
+        )}
+      </Button>
+      {manualError && !autonomous ? (
+        <span
+          role="status"
+          data-testid="composer-voice-error"
+          className="max-w-32 truncate text-[9px] text-doom-yellow"
+        >
+          {manualError}
+        </span>
+      ) : null}
+    </>
   );
 }

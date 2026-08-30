@@ -249,6 +249,11 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     playbackDucking: browserSpeechPlaybackAvailable() || browserPcmPlaybackAvailable(),
   };
   public constructor(private readonly rebindProtocolSupported = false) {}
+
+  /** Arms browser media while a real tap is still carrying mobile user activation. */
+  public armUserGesture(): void {
+    this.listenForMediaUnlock();
+  }
   private stream: MediaStream | undefined;
   private context: AudioContext | undefined;
   private workletInstalled = false;
@@ -278,7 +283,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     this.warmSpeechSynthesis();
   };
   public async prepare(): Promise<void> {
-    this.listenForMediaUnlock();
+    this.armUserGesture();
     this.speechPreparation ??= this.prepareSpeechDetector();
     await this.speechPreparation;
   }
