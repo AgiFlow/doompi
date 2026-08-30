@@ -66,6 +66,7 @@ describe('challengeIsFresh', () => {
 describe('stepUpActionFor', () => {
   it.each([
     ['POST', '/api/sessions', 'session.create'],
+    ['POST', '/api/sessions/live/resume', 'session.create'],
     ['POST', '/api/auth/logins/flow-1/answer', 'provider.login'],
     ['DELETE', '/api/auth/providers/anthropic', 'provider.logout'],
     ['PUT', '/api/settings/repository/selection', 'settings.write'],

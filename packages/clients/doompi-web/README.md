@@ -160,9 +160,9 @@ setting in force at the moment of the check rather than stamped onto a session w
 Turning expiry on therefore drops sessions that are already idle, and turning it off brings them
 back.
 
-With both off, the only expiry is you: a tunnel stays up until it is closed or the hub restarts, and
-a paired device keeps its session until it is revoked or remote access is switched off. Switching
-remote access off always revokes every paired session, and that is not a toggle.
+With both off, a paired device keeps its session until it is revoked, remote access is switched off, or
+the hub restarts. Switching remote access off always revokes every paired session, and that is not a
+toggle.
 
 Before reporting success, the tunnel is **self-tested through its own public URL**: the pairing page
 must answer 200 and `/api/health` must answer 401. Anything else means the agent is on the public
@@ -172,6 +172,12 @@ Requires `cloudflared` on `PATH` (`brew install cloudflared`). A quick tunnel ne
 gets a new hostname on every start, so every restart means scanning again, and Cloudflare does not
 support SSE on quick tunnels, which breaks the workflow and runner-log plugin surfaces. A named
 tunnel on your own domain has neither problem and is the mode to use if you do this daily.
+
+If a named tunnel's connector exits unexpectedly, the hub makes three backoff restart attempts and
+self-tests every replacement. The existing listener and paired sessions stay valid while recovery is
+in progress. A quick tunnel cannot recover transparently because its origin changes, so it still fails
+closed immediately. Exhausting named-tunnel recovery also switches remote access off and revokes the
+paired sessions.
 
 ### Passkeys and step-up
 

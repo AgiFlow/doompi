@@ -80,6 +80,7 @@ async function hubWith(apiSocketPath?: string): Promise<{ server: WebServer; ses
     registryDir,
     port: 0,
     assetsDir: '/nonexistent-assets',
+    remoteStateDir: path.join(registryDir, 'remote-state'),
   });
   cleanups.push(async () => {
     await server.close();

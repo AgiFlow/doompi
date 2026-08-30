@@ -146,12 +146,17 @@ export function seedHistoryCursor(sessionId: string, cursor: string | null): voi
   setHistory(sessionId, { ...NO_HISTORY, cursor });
 }
 
-/** Keeps DoomPi-only timeline entries beside the protocol items that preceded them. */
-function mergeProtocolEntries(previous: TimelineEntry[], protocol: TimelineEntry[]): TimelineEntry[] {
+/** Keeps DoomPi-only and optimistic entries beside the protocol items that preceded them. */
+function mergeProtocolEntries(
+  previous: TimelineEntry[],
+  protocol: TimelineEntry[],
+  pendingUserIds: ReadonlySet<string>,
+): TimelineEntry[] {
   const localByAnchor = new Map<string | null, TimelineEntry[]>();
   let anchor: string | null = null;
   for (const entry of previous) {
-    if (PROTOCOL_ENTRY_KINDS.has(entry.kind)) {
+    const protocolOwned = PROTOCOL_ENTRY_KINDS.has(entry.kind) && !pendingUserIds.has(entry.id);
+    if (protocolOwned) {
       anchor = entry.id;
       continue;
     }
@@ -184,15 +189,10 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
   sessionStoreFor(sessionId).setState((state) => {
     const publishedUserText = new Set(entries.filter((entry) => entry.kind === 'user').map((entry) => entry.text));
     const pendingUserEntries = state.pendingUserEntries.filter((pending) => !publishedUserText.has(pending.text));
-    const pendingTimeline: TimelineEntry[] = pendingUserEntries.map((pending) => ({
-      kind: 'user',
-      id: pending.id,
-      text: pending.text,
-      ...(pending.images ? { images: pending.images } : {}),
-    }));
+    const pendingUserIds = new Set(pendingUserEntries.map((pending) => pending.id));
     return {
       ...state,
-      entries: mergeProtocolEntries(state.entries, [...entries, ...pendingTimeline]),
+      entries: mergeProtocolEntries(state.entries, entries, pendingUserIds),
       streaming,
       settled: !streaming,
       pendingUserEntries,

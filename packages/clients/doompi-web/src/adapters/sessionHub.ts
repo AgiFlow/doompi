@@ -126,6 +126,12 @@ export interface SessionHub {
    * survives.
    */
   restart(sessionId: string, trace?: DoomTraceContext): Promise<SpawnOutcome>;
+  /** Replaces one live session with an inactive Pi thread from the same workspace. */
+  resume(
+    sessionId: string,
+    target: { sessionId: string; name: string },
+    trace?: DoomTraceContext,
+  ): Promise<SpawnOutcome>;
   close(): void;
 }
 
@@ -707,6 +713,40 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       }
       options.onNotice?.(`restarting session ${sessionId}`);
       return spawner.spawn({ cwd, name, sessionId, sessionDir: path.dirname(socketPath), trace });
+    },
+    async resume(sessionId, target, trace) {
+      const spawner = options.spawner;
+      if (!spawner) {
+        return {
+          ok: false,
+          code: 'invalid_request',
+          error: 'This cockpit serves a fixed session and cannot resume another thread.',
+        };
+      }
+      const managed = sessions.get(sessionId);
+      if (!managed) return { ok: false, code: 'invalid_request', error: 'Unknown session.' };
+      if (target.sessionId === sessionId) return this.restart(sessionId, trace);
+      if (sessions.has(target.sessionId)) {
+        return { ok: false, code: 'invalid_request', error: 'That Pi thread is already running.' };
+      }
+      const { cwd, socketPath } = managed.record;
+      const stopped = stopSession(sessionId);
+      if (!stopped.ok) return { ok: false, code: 'invalid_request', error: stopped.error };
+      if (!(await awaitWithdrawal(sessionId))) {
+        return {
+          ok: false,
+          code: 'spawn_failed',
+          error: 'The session did not stop in time; the selected thread was not resumed.',
+        };
+      }
+      options.onNotice?.(`resuming Pi session ${target.sessionId} in place of ${sessionId}`);
+      return spawner.spawn({
+        cwd,
+        name: target.name,
+        sessionId: target.sessionId,
+        sessionDir: path.dirname(socketPath),
+        trace,
+      });
     },
     close() {
       closed = true;

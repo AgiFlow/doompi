@@ -1,15 +1,13 @@
 import {
-  Badge,
   Button,
   ChevronDownIcon,
   EmptyState,
   ExternalLinkIcon,
   Markdown,
-  RefreshIcon,
   Separator,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
-import { memo, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
@@ -134,17 +132,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
     );
   }
 
-  if (entry.kind === 'queued') {
-    return (
-      <div data-testid="entry-queued" className="flex pl-[58px]">
-        <Badge size="md" className="self-start bg-doom-panel text-[10px]">
-          <RefreshIcon className="h-3 w-3 shrink-0 text-doom-cyan" />
-          queued follow-up: &quot;{entry.text}&quot;
-        </Badge>
-      </div>
-    );
-  }
-
+  if (entry.kind === 'queued') return null;
   // A notice: the agent's own aside (a mode switch, a refusal). Only an error
   // shouts; an informational one reads as a quiet system line.
   const isError = entry.tone === 'error';
@@ -175,6 +163,7 @@ export function Transcript({
   testId?: string;
 }) {
   const entries = useStore(store, (state) => state.entries);
+  const visibleEntries = useMemo(() => entries.filter((entry) => entry.kind !== 'queued'), [entries]);
   const scroller = useRef<HTMLDivElement>(null);
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
@@ -244,8 +233,9 @@ export function Transcript({
     // A prepended window grew the transcript upwards; hold the reader where
     // they were by moving down by exactly what appeared above them.
     const held = anchor.current;
-    const prepended = entries.length > 0 && firstId.current !== null && entries[0]?.id !== firstId.current;
-    firstId.current = entries[0]?.id ?? null;
+    const prepended =
+      visibleEntries.length > 0 && firstId.current !== null && visibleEntries[0]?.id !== firstId.current;
+    firstId.current = visibleEntries[0]?.id ?? null;
     if (held !== null && prepended) {
       anchor.current = null;
       const grew = element.scrollHeight - held.height;
@@ -273,9 +263,9 @@ export function Transcript({
       return;
     }
     setUnread(true);
-  }, [entries]);
+  }, [visibleEntries]);
 
-  if (entries.length === 0) return <>{empty}</>;
+  if (visibleEntries.length === 0) return <>{empty}</>;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -286,7 +276,7 @@ export function Transcript({
         data-testid={testId}
         className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 py-4 sm:px-[26px] sm:py-[22px]"
       >
-        {entries.map((entry, index) => (
+        {visibleEntries.map((entry, index) => (
           // Entries above the live tail are skipped for layout and paint until
           // they are scrolled near. A long transcript is thousands of markdown
           // blocks, diffs and tool cards, and laying all of them out on every
@@ -297,7 +287,7 @@ export function Transcript({
           <div
             key={entry.id}
             className={
-              index < entries.length - LIVE_TAIL_ENTRIES
+              index < visibleEntries.length - LIVE_TAIL_ENTRIES
                 ? '[contain-intrinsic-size:auto_64px] [content-visibility:auto]'
                 : undefined
             }

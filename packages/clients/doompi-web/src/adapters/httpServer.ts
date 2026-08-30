@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
+import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { PiServer, PiServerError } from '@earendil-works/pi-server';
 import { readSyncDrift } from '@agimon-ai/doompi/services';
 import { readSyncState } from '@agimon-ai/doompi/services/syncState';
@@ -234,6 +235,12 @@ function readAsset(filePath: string): Buffer | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** A compact rail name while Pi starts and reports the thread's persisted name. */
+function resumedSessionName(info: { name?: string; firstMessage: string }, cwd: string): string {
+  const firstLine = info.firstMessage.split('\n', 1)[0]?.trim();
+  return (info.name?.trim() || firstLine || path.basename(cwd) || 'untitled').slice(0, 80);
 }
 
 function describeError(error: unknown): string {
@@ -778,6 +785,48 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 404 : 502);
   });
 
+  app.get(`${SESSIONS_API_ROUTE}/:sessionId/history`, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    const sessions = await SessionManager.list(summary.cwd);
+    return context.json({
+      sessions: sessions.map((session) => ({
+        id: session.id,
+        ...(session.name === undefined ? {} : { name: session.name }),
+        firstMessage: session.firstMessage,
+        createdAt: session.created.toISOString(),
+        updatedAt: session.modified.toISOString(),
+        messageCount: session.messageCount,
+      })),
+    });
+  });
+
+  app.post(`${SESSIONS_API_ROUTE}/:sessionId/resume`, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    let body: unknown;
+    try {
+      body = await context.req.json();
+    } catch {
+      return context.json({ error: 'The request body must be JSON.' }, 400);
+    }
+    if (!isRecord(body) || typeof body.targetSessionId !== 'string' || body.targetSessionId === '') {
+      return context.json({ error: 'A targetSessionId string is required.' }, 400);
+    }
+    const sessions = await SessionManager.list(summary.cwd);
+    const target = sessions.find((session) => session.id === body.targetSessionId);
+    if (!target) return context.json({ error: 'That Pi thread does not belong to this workspace.' }, 404);
+    await syncGuard.ensureSynced();
+    const outcome = await hub.resume(
+      sessionId,
+      { sessionId: target.id, name: resumedSessionName(target, summary.cwd) },
+      readTraceContext(context.req.raw.headers),
+    );
+    if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 202);
+    return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 409 : 502);
+  });
   app.delete(`${SESSIONS_API_ROUTE}/:sessionId`, (context) => {
     const sessionId = context.req.param('sessionId');
     const outcome = hub.stop(sessionId);

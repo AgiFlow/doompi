@@ -184,6 +184,43 @@ describe('transcript ownership', () => {
       { kind: 'user', id: 'protocol-user', text: 'stay visible', images: authoritativeImages },
     ]);
   });
+
+  it('keeps an optimistic command where it was submitted as later protocol activity arrives', () => {
+    applyProtocolTranscript(
+      's1',
+      [{ kind: 'assistant', id: 'assistant-1', text: 'before', thinking: '', streaming: true }],
+      true,
+    );
+    setActiveSession('s1');
+    submitMessage('/minor voice-auto');
+
+    applyProtocolTranscript(
+      's1',
+      [
+        { kind: 'assistant', id: 'assistant-1', text: 'before', thinking: '', streaming: false },
+        {
+          kind: 'tool',
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'narrate',
+          args: {},
+          argSummary: '',
+          result: null,
+          output: '',
+          isError: false,
+          running: true,
+        },
+      ],
+      true,
+    );
+
+    expect(sessionStoreFor('s1').state.entries.map((entry) => entry.id)).toEqual([
+      'assistant-1',
+      expect.stringMatching(/^u/),
+      'tool-1',
+    ]);
+  });
+
   it('preserves a protocol transcript through a legacy backlog reset', () => {
     applyProtocolTranscript(
       's1',

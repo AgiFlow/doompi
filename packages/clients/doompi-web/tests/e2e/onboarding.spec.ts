@@ -15,10 +15,8 @@ test('says there is no session and offers the one thing there is to do', async (
   await expect(page.getByTestId('selection-bar')).toBeHidden();
   await expect(page.getByTestId('timeline-empty')).toBeHidden();
 
-  // …and the top bar reports no session state, rather than 'untitled' and 'offline'.
+  // The top bar has no session name to show.
   await expect(page.getByTestId('session-title')).toBeHidden();
-  await expect(page.getByTestId('connection-status')).toBeHidden();
-  await expect(page.getByTestId('sessions-running')).toBeHidden();
 
   // The rail is still the rail, with its own way in.
   await expect(page.getByTestId('new-session-empty')).toBeVisible();
@@ -52,5 +50,4 @@ test('starting a session hands the column back to the conversation', async ({ pa
   await expect(page).toHaveURL(/\/session\/[0-9a-f-]{36}$/, { timeout: 15_000 });
   await expect(page.getByTestId('welcome')).toBeHidden();
   await expect(page.getByTestId('composer-input')).toBeVisible();
-  await expect(page.getByTestId('connection-status')).toBeVisible();
 });

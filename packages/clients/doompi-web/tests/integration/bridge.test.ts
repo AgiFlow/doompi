@@ -44,6 +44,7 @@ async function bridge(overrides: { token?: string } = {}): Promise<{ session: Fa
     spawnCommand: path.join(registryDir, 'no-such-server'),
     port: 0,
     assetsDir: '/nonexistent-assets',
+    remoteStateDir: path.join(registryDir, 'remote-state'),
   });
   const pair = { server, session, registryDir };
   running.push(pair);

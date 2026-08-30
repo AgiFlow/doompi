@@ -88,6 +88,8 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
     enableTraces: true,
   });
 
+  private activeUi: VoiceUi | undefined;
+
   public constructor(
     private readonly configs: IDoomConfigLoader,
     private readonly clock: IClock,
@@ -99,6 +101,10 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
   }
 
   public async toggle(ui: VoiceUi): Promise<void> {
+    // Each RPC command receives a new UI bridge. Worker events arrive after the
+    // command that started capture has returned, so they must use the bridge from
+    // the latest toggle (normally the explicit stop) rather than the stale starter.
+    this.activeUi = ui;
     if (this.currentState === 'transcribing') {
       ui.notify('Voice transcription is already running', 'info');
       return;
@@ -130,7 +136,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
       const config = resolveVoiceConfig(loaded);
       const captureId = identifier('capture');
       const turnId = identifier('turn');
-      const client = this.client ?? this.createClient(ui);
+      const client = this.client ?? this.createClient();
       this.client = client;
       await client.start();
       if (generation !== this.generation) return;
@@ -173,14 +179,18 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
     });
   }
 
-  private createClient(ui: VoiceUi): VoiceWorkerSessionClient {
+  private createClient(): VoiceWorkerSessionClient {
+    const withUi = (action: (ui: VoiceUi) => void): void => {
+      if (this.activeUi !== undefined) action(this.activeUi);
+    };
     return this.clientFactory({
       spoolDirectory: spoolRoot(),
-      onEvent: (event) => this.receive(event, ui),
-      onExhausted: () => {
-        ui.notify('Voice worker stopped responding', 'error');
-        this.reset(ui);
-      },
+      onEvent: (event) => withUi((ui) => this.receive(event, ui)),
+      onExhausted: () =>
+        withUi((ui) => {
+          ui.notify('Voice worker stopped responding', 'error');
+          this.reset(ui);
+        }),
     });
   }
 

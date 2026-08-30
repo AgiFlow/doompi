@@ -149,6 +149,14 @@ export function canRunVoice(context: { hasUI?: boolean } | undefined): boolean {
   return context?.hasUI === true;
 }
 
+/** Manual capture needs the same browser media ownership as autonomous capture. */
+export function voiceOwnershipState(
+  manualState: VoiceState,
+  autonomousState: AutoCaptureActivationState,
+): AutoCaptureActivationState {
+  return manualState === 'idle' ? autonomousState : 'active';
+}
+
 export function voiceModeState(state: AutoCaptureActivationState, canRun = false): MinorModeState {
   const active = state !== 'disabled';
   const transitioning = state === 'starting' || state === 'draining' || state === 'shuttingDown';
@@ -1187,7 +1195,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         eligible: true,
         controller: {
           get state() {
-            return autoController.state;
+            return voiceOwnershipState(controller.state, autoController.state);
           },
           get activationError() {
             return autoController.activationError;

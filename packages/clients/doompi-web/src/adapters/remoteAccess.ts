@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { type OriginPolicy, tunnelOriginPolicy } from '../services/remoteGuardPolicy.ts';
 import { createPairingFlow, type PairingFlow } from '../services/pairingFlow.ts';
 import { parseRemoteAccessSettings, serializeRemoteAccessSettings } from '../services/remoteAccessSettings.ts';
@@ -73,8 +73,8 @@ export interface RemoteAccess {
   /** Runs that deferred handover, once the response asking for it is on the wire. */
   commitHandover(): void;
   disable(): Promise<void>;
-  /** Mints the code a QR carries, and the URL that encodes it. Undefined while the tunnel is down. */
-  mintPairing(): { code: string; pairUrl: string; expiresAt: string } | undefined;
+  /** Mints the QR credential, separate manual code, and URL. Undefined while the tunnel is down. */
+  mintPairing(): { code: string; manualCode: string; pairUrl: string; expiresAt: string } | undefined;
   claim(input: {
     code: string;
     userAgent: string | undefined;
@@ -169,6 +169,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
   const pairing: PairingFlow = createPairingFlow({
     randomToken: () => randomBytes(TOKEN_BYTES).toString('base64url'),
+    randomManualCode: () => randomInt(100_000_000).toString().padStart(8, '0'),
     digest: (token) => createHash('sha256').update(token).digest('hex'),
     now,
     onNotice: notice,
@@ -398,14 +399,15 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 
     mintPairing() {
       if (status !== 'on' || publicOrigin === undefined) return undefined;
-      const { code, expiresAt } = pairing.mintCode();
-      // Both the code and the channel key ride in the fragment, which no
-      // browser sends to any server. That keeps the code out of the edge's logs
+      const { code, manualCode, expiresAt } = pairing.mintCode();
+      // Both the QR token and the channel key ride in the fragment, which no
+      // browser sends to any server. That keeps the token out of the edge's logs
       // and, more importantly, means the channel key reaches the device without
       // ever passing through the relay it is meant to keep out.
       const key = handshake === undefined ? '' : `&${SEALED_KEY_PARAM}=${encodeURIComponent(handshake.publicKey)}`;
       return {
         code,
+        manualCode,
         pairUrl: `${publicOrigin}${PAIRING_PAGE_ROUTE}#c=${encodeURIComponent(code)}${key}`,
         expiresAt: new Date(expiresAt).toISOString(),
       };

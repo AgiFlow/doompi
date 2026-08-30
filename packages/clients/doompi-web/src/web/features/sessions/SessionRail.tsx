@@ -32,7 +32,7 @@ import { RemoteAccessButton } from '../../components/RemoteAccessButton.tsx';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { restartSession, stopSession } from '../../lib/hubApi.ts';
-import { abbreviateCwd, runningCount, sessionStatusLine } from '../../lib/sessionSummary.ts';
+import { abbreviateCwd, sessionStatusLine } from '../../lib/sessionSummary.ts';
 import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections.ts';
 import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore.ts';
 import { paletteStore } from '../../stores/paletteStore.ts';
@@ -40,14 +40,14 @@ import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
 import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
 import { openRemoteDialog, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
 import { NewSessionDialog } from './NewSessionDialog.tsx';
-
+import { ResumeSessionDialog } from './ResumeSessionDialog.tsx';
 const STATUS_REFRESH_MS = 30_000;
 
 /**
  * What the card is doing besides showing its session: nothing, showing its
- * action menu, taking a new name, or asking before a stop.
+ * action menu, taking a new name, browsing Pi history, or asking before a stop.
  */
-type CardMode = 'view' | 'menu' | 'rename' | 'confirm';
+type CardMode = 'view' | 'menu' | 'rename' | 'resume' | 'confirm';
 
 /** The confirmation that stands between the "remove" menu item and the stop. */
 function RemoveSessionDialog({
@@ -286,6 +286,9 @@ function SessionCard({
               <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
                 edit
               </DropdownMenuItem>
+              <DropdownMenuItem data-testid={`session-resume-${summary.id}`} onSelect={() => setMode('resume')}>
+                resume
+              </DropdownMenuItem>
               {/* Syncs, replaces the session's server under the same id, and
                   reloads the page: the one way a rebuilt extension or a newly
                   declared package API reaches a session that is already up. */}
@@ -307,6 +310,7 @@ function SessionCard({
           </DropdownMenu>
         </div>
       ) : null}
+      {mode === 'resume' ? <ResumeSessionDialog sessionId={summary.id} onClose={() => setMode('view')} /> : null}
       <RemoveSessionDialog
         sessionId={summary.id}
         name={summary.name}
@@ -369,8 +373,6 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [order, hasDialog, navigate, onDismiss]);
 
-  const running = runningCount(order.map((id) => byId[id].summary.phase));
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-doom-border px-4 pt-4 pb-3.5">
@@ -411,9 +413,6 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
         <SectionLabel>sessions</SectionLabel>
         <span className="flex items-center gap-2.5">
-          <span data-testid="sessions-running-rail" className="text-[9px] text-doom-faint">
-            {running} running
-          </span>
           {/* The rail's own action lives in its heading, where a heading's
               action belongs, instead of a full-width button competing with the
               cards for the eye. */}

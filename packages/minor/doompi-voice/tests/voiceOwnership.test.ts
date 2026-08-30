@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
+import { voiceOwnershipState } from '../src/adapters/pi/voice.ts';
 import {
   SessionVoiceOwnership,
   SessionVoiceOwnershipBridge,
@@ -22,6 +23,7 @@ import {
   type VoiceOwnershipRegistration,
   type VoiceOwnershipSessionSnapshot,
 } from '../src/types/voiceOwnership.ts';
+import type { VoiceState } from '../src/types/index.ts';
 
 function registration(leaseId: string, label: string, active: boolean): VoiceOwnershipRegistration {
   return {
@@ -236,6 +238,57 @@ describe('SessionVoiceOwnership', () => {
   it('derives a bounded session label from a working directory', () => {
     expect(voiceOwnershipLabel('/workspace/project/')).toBe('project');
     expect(voiceOwnershipLabel('/')).toBe('Voice session');
+  });
+
+  it('publishes manual capture as the selected browser media session until transcription settles', async () => {
+    let manualState: VoiceState = 'idle';
+    const selections: Array<string | null> = [];
+    const coordinator = new VoiceOwnershipCoordinator(
+      {
+        send: async () => {
+          throw new Error('No ownership command was expected.');
+        },
+      },
+      (payload) => selections.push(payload.activeSessionId),
+      { now: () => 0, createId: () => 'unused-command' },
+    );
+    const ownership = new SessionVoiceOwnership();
+    ownership.register({
+      label: 'Manual session',
+      eligible: true,
+      controller: {
+        get state() {
+          return voiceOwnershipState(manualState, 'disabled');
+        },
+        activateVoice: async () => undefined,
+        deactivateVoice: async () => undefined,
+      },
+    });
+    const bridge = new SessionVoiceOwnershipBridge(
+      ownership,
+      {
+        syncOwnership: async (snapshot) => {
+          if (snapshot.registration !== undefined) coordinator.update('manual-session', snapshot.registration);
+          return undefined;
+        },
+      },
+      { setTimeout, clear: clearTimeout },
+      250,
+    );
+
+    await bridge.synchronize();
+    expect(coordinator.payload().activeSessionId).toBeNull();
+    manualState = 'recording';
+    await bridge.synchronize();
+    expect(coordinator.payload().activeSessionId).toBe('manual-session');
+    manualState = 'transcribing';
+    await bridge.synchronize();
+    expect(coordinator.payload().activeSessionId).toBe('manual-session');
+    manualState = 'idle';
+    await bridge.synchronize();
+
+    expect(coordinator.payload().activeSessionId).toBeNull();
+    expect(selections).toEqual(['manual-session', null]);
   });
 
   it('owns activation, catalog, and handoff state for one session', async () => {

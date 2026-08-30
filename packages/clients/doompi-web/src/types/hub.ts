@@ -13,8 +13,18 @@ export const HUB_PROTOCOL_VERSION = 1;
 /** Role marker in the health payload; doompi-server probes for it before binding the port. */
 export const HUB_ROLE = 'hub';
 
-/** REST endpoint for creating sessions; the page posts {cwd, name?} and receives {sessionId}. */
+/** REST endpoint for creating sessions and browsing resumable Pi history. */
 export const SESSIONS_API_ROUTE = '/api/sessions';
+
+/** One inactive Pi thread available to resume in a live session's workspace. */
+export interface PiSessionHistoryItem {
+  id: string;
+  name?: string;
+  firstMessage: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
 
 /**
  * REST endpoint behind the new-session directory picker; the page sends the

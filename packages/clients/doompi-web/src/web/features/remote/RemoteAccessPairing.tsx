@@ -4,10 +4,10 @@ import { QrCode } from '../../components/QrCode.tsx';
 import { addPasskey, newPairingCode, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
 import { PairedDeviceList } from './PairedDeviceList.tsx';
 
-/** The code to scan, plus the address for anyone whose camera will not cooperate. */
+/** The QR credential, a short manual code, and the direct address. */
 export function RemoteAccessPairing() {
   const state = useStore(remoteAccessStore);
-  if (state.pairUrl === undefined) return <Spinner />;
+  if (state.pairUrl === undefined || state.pairCode === undefined) return <Spinner />;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -15,6 +15,15 @@ export function RemoteAccessPairing() {
           field, which is the one thing a dark theme cannot supply. */}
       <div className="rounded-lg bg-doom-hi p-3 text-doom-deep">
         <QrCode value={state.pairUrl} size={196} label="Scan to pair this device" />
+      </div>
+      <div className="flex w-full flex-col gap-1">
+        <SectionLabel>or enter this pairing code</SectionLabel>
+        <code
+          data-testid="remote-pair-code"
+          className="rounded bg-doom-deep p-2 text-center font-mono text-lg tracking-[0.25em] text-doom-text"
+        >
+          {state.pairCode}
+        </code>
       </div>
       <div className="flex w-full flex-col gap-1">
         <SectionLabel>or open this address</SectionLabel>

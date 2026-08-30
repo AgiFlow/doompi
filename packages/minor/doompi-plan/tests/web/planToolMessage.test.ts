@@ -28,6 +28,18 @@ describe('the plan tool timeline item', () => {
     expect(rendered.includes('docs/plan.md')).toBe(true);
   });
 
+  it('uses a readable evidence label and keeps its metadata on one truncatable line', () => {
+    const rendered = render({
+      toolName: 'record_debug_evidence',
+      args: { issue: 'intermittent failure', logs: ['one', 'two'], correlatedTraceEvidence: ['trace'] },
+      result: { content: [], details: { recorded: true } },
+    });
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('record evidence')).toBe(true);
+    expect(rendered.html).toContain('intermittent failure · 2 logs · 1 trace');
+    expect(rendered.html).toContain('class="min-w-0 flex-1 truncate text-doom-dim"');
+  });
   it('draws a call whose result the host has not sent yet', () => {
     // The host sends result: null for every tool before its first output, and a
     // renderer that reads through it crashes on its own opening frame.

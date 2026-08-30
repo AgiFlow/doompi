@@ -1,39 +1,13 @@
-import {
-  ActivityIcon,
-  Button,
-  CloseIcon,
-  Dot,
-  type DotTone,
-  Input,
-  NavTab,
-  NavTabBadge,
-  StatusBadge,
-  type StatusTone,
-} from '@agimon-ai/doompi-web-components';
+import { ActivityIcon, Button, CloseIcon, Input, NavTab, NavTabBadge } from '@agimon-ai/doompi-web-components';
 import type { TabContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import { abbreviateCwd, runningCount, type AttachPhase } from '../../lib/sessionSummary.ts';
+import { abbreviateCwd } from '../../lib/sessionSummary.ts';
 import { webTabs } from '../../lib/pluginRegistry.ts';
 import { renameSession, useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta, useNoSessions } from '../../stores/sessionsStore.ts';
 import { closeTransientTab, useTransientTabs } from '../../stores/transientTabsStore.ts';
-
-/**
- * The pill folds attach state and run state into one word, the way the mockup
- * does: a healthy idle session says "attached", a healthy busy one says
- * "running", and anything else names its trouble.
- */
-function pill(attach: AttachPhase, busy: boolean): { text: string; tone: StatusTone; dot: DotTone; pulse: boolean } {
-  if (attach === 'attached' && busy) return { text: 'running', tone: 'running', dot: 'yellow', pulse: true };
-  if (attach === 'attached') return { text: 'attached', tone: 'ok', dot: 'green', pulse: false };
-  if (attach === 'connecting' || attach === 'detached') {
-    return { text: attach, tone: 'running', dot: 'yellow', pulse: attach === 'connecting' };
-  }
-  return { text: attach, tone: 'error', dot: 'red', pulse: false };
-}
-
 /** One registry tab: the badge hook is stable per tab, so the call is unconditional. */
 function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId: string; active: boolean }) {
   const useBadge = tab.useBadge ?? noBadge;
@@ -106,15 +80,9 @@ export function TopBar({
 }) {
   const meta = useActiveSessionMeta();
   const session = useActiveSession((state) => state);
-  const running = useStore(sessionsStore, (state) =>
-    runningCount(state.order.map((id) => state.byId[id].summary.phase)),
-  );
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const noSessions = useNoSessions();
   const transientTabs = useTransientTabs(activeId);
-  const attach: AttachPhase = meta?.attach ?? 'offline';
-  const busy = session.streaming || (meta !== null && meta.summary.phase !== 'idle');
-  const state = pill(attach, busy);
   const title = meta?.summary.name || session.agent?.sessionName || 'untitled';
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -145,9 +113,8 @@ export function TopBar({
             <span aria-hidden>☰</span>
           </Button>
         ) : null}
-        {/* With no session there is no name to show and no state to report, so
-            the bar carries neither rather than reporting 'untitled' and
-            'offline' for something that was never started. */}
+        {/* With no session there is no name to show, so the bar does not report
+            'untitled' for something that was never started. */}
         {noSessions ? null : renaming && activeId !== null ? (
           <Input
             data-testid="session-title-input"
@@ -209,33 +176,7 @@ export function TopBar({
         ) : null}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        {noSessions ? null : (
-          <>
-            {meta && meta.dropped > 0 ? (
-              <span
-                data-testid="dropped-count"
-                title="frames the hub's ring lost before this page subscribed"
-                className="text-[10px] text-doom-yellow"
-              >
-                {meta.dropped} dropped
-              </span>
-            ) : null}
-            <StatusBadge
-              size="md"
-              tone={state.tone}
-              data-testid="connection-status"
-              className="font-normal max-sm:hidden"
-            >
-              <Dot tone={state.dot} pulse={state.pulse} />
-              {state.text}
-            </StatusBadge>
-            <StatusBadge size="md" tone="running" data-testid="sessions-running" className="font-normal max-lg:hidden">
-              <ActivityIcon className="h-[10px] w-[10px]" />
-              {running} running
-            </StatusBadge>
-          </>
-        )}
+      <div className="flex shrink-0 items-center">
         {onShowActivity ? (
           <Button
             variant="ghost"

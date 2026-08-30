@@ -47,6 +47,7 @@ export const CEREMONY_TTL_MS = 120_000;
  */
 const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAction }[] = [
   { method: 'POST', pattern: /^\/api\/sessions$/u, action: 'session.create' },
+  { method: 'POST', pattern: /^\/api\/sessions\/[^/]+\/resume$/u, action: 'session.create' },
   { method: 'POST', pattern: /^\/api\/auth\/logins\/[^/]+\/answer$/u, action: 'provider.login' },
   { method: 'DELETE', pattern: /^\/api\/auth\/providers\/[^/]+$/u, action: 'provider.logout' },
   { method: 'PUT', pattern: /^\/api\/settings\/(?:value|repository\/selection)$/u, action: 'settings.write' },

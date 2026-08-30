@@ -51,9 +51,14 @@ describe('remoteApi', () => {
     ]);
   });
 
-  it('reads a minted pairing code', async () => {
-    answers({ code: 'abc', pairUrl: 'https://x/pair#c=abc', expiresAt: '2026-01-01T00:00:00.000Z' });
-    await expect(mintPairingCode()).resolves.toMatchObject({ code: 'abc' });
+  it('reads a minted QR token and manual pairing code', async () => {
+    answers({
+      code: 'abc',
+      manualCode: '12345678',
+      pairUrl: 'https://x/pair#c=abc',
+      expiresAt: '2026-01-01T00:00:00.000Z',
+    });
+    await expect(mintPairingCode()).resolves.toMatchObject({ code: 'abc', manualCode: '12345678' });
   });
 
   it('sends only the settings it was given', async () => {

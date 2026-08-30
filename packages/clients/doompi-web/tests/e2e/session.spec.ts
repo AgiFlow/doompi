@@ -159,7 +159,6 @@ test('previews the files a prompt mentions and renders the reply as markdown', a
 test('follows the newest reply, and stops following once the reader scrolls back', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/);
 
   const timeline = page.getByTestId('timeline');
   const atBottom = () =>

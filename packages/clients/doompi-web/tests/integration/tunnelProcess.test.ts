@@ -89,6 +89,8 @@ describe('starting a tunnel', () => {
     expect(result.publicOrigin).toBe(PUBLIC_ORIGIN);
     expect(events).toEqual([`accept ${PUBLIC_ORIGIN}`, 'probe', 'probe']);
     expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(true);
+    const pidRecord = JSON.parse(fs.readFileSync(path.join(stateDir, 'tunnel.pid'), 'utf8')) as { ownerPid?: number };
+    expect(pidRecord.ownerPid).toBe(process.pid);
     await result.stop();
     expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(false);
   });
@@ -249,11 +251,67 @@ describe('reapStaleTunnel', () => {
     expect(notices).toEqual([]);
   });
 
-  it('removes a pid file it has considered', () => {
+  it('removes a legacy pid file it has considered', () => {
     const pidPath = path.join(stateDir, 'tunnel.pid');
     fs.writeFileSync(pidPath, JSON.stringify({ pid: 2 ** 30, startedAt: Date.now() }));
     reapStaleTunnel(stateDir, (message) => notices.push(message));
     expect(fs.existsSync(pidPath)).toBe(false);
+  });
+
+  it('preserves runtime files while the owning hub is alive', () => {
+    const pidPath = path.join(stateDir, 'tunnel.pid');
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(pidPath, JSON.stringify({ pid: 2 ** 30, ownerPid: process.pid, startedAt: 0 }));
+    fs.writeFileSync(runtimeTokenFile, 'secret-token');
+
+    reapStaleTunnel(stateDir, (message) => notices.push(message));
+
+    expect(fs.existsSync(pidPath)).toBe(true);
+    expect(fs.existsSync(runtimeTokenFile)).toBe(true);
+    expect(notices).toEqual([]);
+  });
+
+  it('treats an owner permission error as potentially alive', () => {
+    const pidPath = path.join(stateDir, 'tunnel.pid');
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(pidPath, JSON.stringify({ pid: 2 ** 30, ownerPid: 12345, startedAt: Date.now() }));
+    fs.writeFileSync(runtimeTokenFile, 'secret-token');
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EPERM' });
+    });
+
+    try {
+      reapStaleTunnel(stateDir, (message) => notices.push(message));
+    } finally {
+      kill.mockRestore();
+    }
+
+    expect(fs.existsSync(pidPath)).toBe(true);
+    expect(fs.existsSync(runtimeTokenFile)).toBe(true);
+  });
+
+  it('leaves a malformed ownership record untouched', () => {
+    const pidPath = path.join(stateDir, 'tunnel.pid');
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(pidPath, JSON.stringify({ pid: 2 ** 30, ownerPid: 'unknown', startedAt: Date.now() }));
+    fs.writeFileSync(runtimeTokenFile, 'secret-token');
+
+    reapStaleTunnel(stateDir, (message) => notices.push(message));
+
+    expect(fs.existsSync(pidPath)).toBe(true);
+    expect(fs.existsSync(runtimeTokenFile)).toBe(true);
+  });
+
+  it('cleans runtime files after their recorded owner is gone', () => {
+    const pidPath = path.join(stateDir, 'tunnel.pid');
+    const runtimeTokenFile = path.join(stateDir, 'tunnel.token');
+    fs.writeFileSync(pidPath, JSON.stringify({ pid: 2 ** 30, ownerPid: 2 ** 30, startedAt: Date.now() }));
+    fs.writeFileSync(runtimeTokenFile, 'secret-token');
+
+    reapStaleTunnel(stateDir, (message) => notices.push(message));
+
+    expect(fs.existsSync(pidPath)).toBe(false);
+    expect(fs.existsSync(runtimeTokenFile)).toBe(false);
   });
 
   it('removes a stale runtime token file even without a pid file', () => {
@@ -262,6 +320,7 @@ describe('reapStaleTunnel', () => {
     reapStaleTunnel(stateDir, (message) => notices.push(message));
     expect(fs.existsSync(runtimeTokenFile)).toBe(false);
   });
+
   it('ignores a pid recorded too long ago to trust', () => {
     // Past the window a recycled pid could belong to anything, so leaving it
     // alone beats killing an unrelated process.
@@ -309,6 +368,107 @@ describe('stopping a tunnel', () => {
     if (!result.ok) throw new Error(result.message);
     await new Promise((resolve) => setTimeout(resolve, 800));
     expect(exits[0]).toContain('stopped on its own');
+  });
+
+  it('recovers a named tunnel without telling the host to disable remote access', async () => {
+    const counterFile = path.join(binDir, 'recover-count');
+    const binary = script(
+      'cloudflared',
+      `counter=${JSON.stringify(counterFile)}
+count=0
+if [ -f "$counter" ]; then count=$(cat "$counter"); fi
+count=$((count + 1))
+echo "$count" > "$counter"
+echo "Registered tunnel connection"
+if [ "$count" -eq 1 ]; then sleep 0.1; exit 0; fi
+sleep 30`,
+    );
+    const exits: string[] = [];
+    let probes = 0;
+    const launch = createTunnelLauncher({
+      cloudflaredPath: binary,
+      stateDir,
+      restartBaseDelayMs: 0,
+      probe: async (url) => {
+        probes += 1;
+        return await goodProbe(url);
+      },
+      onNotice: (message) => notices.push(message),
+      onExit: (message) => exits.push(message),
+    });
+
+    const result = await launch({ port: 7999, config: { kind: 'named', hostname: 'doom.example.com' } });
+    if (!result.ok) throw new Error(result.message);
+    await vi.waitFor(() => expect(fs.readFileSync(counterFile, 'utf8').trim()).toBe('2'));
+    await vi.waitFor(() => expect(notices).toContain('named tunnel recovered at https://doom.example.com'));
+
+    expect(probes).toBe(4);
+    expect(exits).toEqual([]);
+    await result.stop();
+    expect(fs.existsSync(path.join(stateDir, 'tunnel.pid'))).toBe(false);
+  });
+
+  it('fails closed after a named tunnel exhausts its rapid-crash budget', async () => {
+    const counterFile = path.join(binDir, 'exhaust-count');
+    const binary = script(
+      'cloudflared',
+      `counter=${JSON.stringify(counterFile)}
+count=0
+if [ -f "$counter" ]; then count=$(cat "$counter"); fi
+count=$((count + 1))
+echo "$count" > "$counter"
+echo "Registered tunnel connection"
+sleep 0.05
+exit 0`,
+    );
+    const exits: string[] = [];
+    const launch = createTunnelLauncher({
+      cloudflaredPath: binary,
+      stateDir,
+      restartBaseDelayMs: 0,
+      probe: goodProbe,
+      onExit: (message) => exits.push(message),
+    });
+
+    const result = await launch({ port: 7999, config: { kind: 'named', hostname: 'doom.example.com' } });
+    if (!result.ok) throw new Error(result.message);
+    await vi.waitFor(() => expect(exits).toHaveLength(1), { timeout: 3000 });
+
+    expect(fs.readFileSync(counterFile, 'utf8').trim()).toBe('4');
+    expect(exits[0]).toContain('recovery failed after 3 attempts');
+    await result.stop();
+  });
+
+  it('cancels a pending named-tunnel restart when stopped', async () => {
+    const counterFile = path.join(binDir, 'cancel-count');
+    const binary = script(
+      'cloudflared',
+      `counter=${JSON.stringify(counterFile)}
+count=0
+if [ -f "$counter" ]; then count=$(cat "$counter"); fi
+count=$((count + 1))
+echo "$count" > "$counter"
+echo "Registered tunnel connection"
+if [ "$count" -eq 1 ]; then sleep 0.05; exit 0; fi
+sleep 30`,
+    );
+    const exits: string[] = [];
+    const launch = createTunnelLauncher({
+      cloudflaredPath: binary,
+      stateDir,
+      restartBaseDelayMs: 1000,
+      probe: goodProbe,
+      onNotice: (message) => notices.push(message),
+      onExit: (message) => exits.push(message),
+    });
+
+    const result = await launch({ port: 7999, config: { kind: 'named', hostname: 'doom.example.com' } });
+    if (!result.ok) throw new Error(result.message);
+    await vi.waitFor(() => expect(notices.some((message) => message.includes('attempt 1 of 3'))).toBe(true));
+    await result.stop();
+
+    expect(fs.readFileSync(counterFile, 'utf8').trim()).toBe('1');
+    expect(exits).toEqual([]);
   });
 
   it('passes a protected runtime token file and removes it on stop', async () => {

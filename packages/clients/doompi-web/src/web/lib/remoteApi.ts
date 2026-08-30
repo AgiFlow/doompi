@@ -4,7 +4,9 @@ import { sealedHttpSession } from './sealedSession.ts';
 export type StateResult = { state: RemoteAccessStateView } | { error: string };
 /** Enabling a contained cockpit moves the hub, so the answer says the address is about to change. */
 export type EnableResult = { state: RemoteAccessStateView; handingOver?: boolean } | { error: string };
-export type PairingResult = { code: string; pairUrl: string; expiresAt: string } | { error: string };
+export type PairingResult =
+  | { code: string; manualCode: string; pairUrl: string; expiresAt: string }
+  | { error: string };
 
 const UNREACHABLE = 'The cockpit hub is unreachable.';
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -66,8 +68,11 @@ export async function disableRemoteAccess(): Promise<StateResult> {
 /** Mints the code the QR encodes. Each call retires the previous one. */
 export async function mintPairingCode(): Promise<PairingResult> {
   return await request(`${REMOTE_API_ROUTE}/codes`, { method: 'POST' }, (body) =>
-    typeof body.pairUrl === 'string' && typeof body.code === 'string' && typeof body.expiresAt === 'string'
-      ? { code: body.code, pairUrl: body.pairUrl, expiresAt: body.expiresAt }
+    typeof body.pairUrl === 'string' &&
+    typeof body.code === 'string' &&
+    typeof body.manualCode === 'string' &&
+    typeof body.expiresAt === 'string'
+      ? { code: body.code, manualCode: body.manualCode, pairUrl: body.pairUrl, expiresAt: body.expiresAt }
       : undefined,
   );
 }

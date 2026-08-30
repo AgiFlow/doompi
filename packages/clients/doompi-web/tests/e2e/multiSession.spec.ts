@@ -81,14 +81,13 @@ test('stops a session from its card once the stop is confirmed', async ({ page, 
   }
 });
 
-test('lists every running session in the rail with its ordinal', async ({ page, cockpit }) => {
+test('lists every session in the rail with its ordinal', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
 
   await expect(page.getByTestId('session-card-s1')).toBeVisible();
   await expect(page.getByTestId('session-card-s2')).toBeVisible();
   await expect(page.getByTestId('session-card-s1')).toContainText('session-1');
   await expect(page.getByTestId('session-card-s2')).toContainText('session-2');
-  await expect(page.getByTestId('sessions-running-rail')).toHaveText('0 running');
 
   // The first session gets the focus, visibly.
   await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');
@@ -103,8 +102,6 @@ test('updates a card live while its session is not focused', async ({ page, cock
 
   const status = page.getByTestId('session-card-s2').getByTestId('session-status');
   await expect(status).toContainText('running ·');
-  await expect(page.getByTestId('sessions-running-rail')).toHaveText('1 running');
-  await expect(page.getByTestId('sessions-running')).toHaveText('1 running');
   // The focused timeline stays that of session one.
   await expect(page.getByTestId('timeline-empty')).toBeVisible();
 
@@ -150,7 +147,62 @@ test('keeps a refusal scoped to the session it hits', async ({ page, cockpit }) 
   release();
   // Recovery rides the hub's backoff, whose ceiling is 4s.
   await expect(page.getByTestId('refused-card')).toBeHidden({ timeout: 15_000 });
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/, { timeout: 15_000 });
+  await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 15_000 });
+});
+
+test('searches Pi history and replaces the card with the selected thread', async ({ page, cockpit }) => {
+  let resumed: Awaited<ReturnType<typeof startFakeSession>> | undefined;
+  await page.route('**/api/sessions/s1/history', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: 'history-id',
+            name: 'Earlier gate work',
+            firstMessage: 'Fix the release gate',
+            createdAt: '2026-08-01T10:00:00.000Z',
+            updatedAt: '2026-08-02T10:00:00.000Z',
+            messageCount: 8,
+          },
+          {
+            id: 'other-history',
+            firstMessage: 'Unrelated thread',
+            createdAt: '2026-07-01T10:00:00.000Z',
+            updatedAt: '2026-07-02T10:00:00.000Z',
+            messageCount: 2,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/sessions/s1/resume', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ targetSessionId: 'history-id' });
+    resumed = await startFakeSession({ id: 'history-id', name: 'Earlier gate work', registryDir: cockpit.registryDir });
+    await route.fulfill({
+      contentType: 'application/json',
+      status: 202,
+      body: JSON.stringify({ sessionId: 'history-id' }),
+    });
+  });
+
+  try {
+    await page.goto(cockpit.url);
+    await page.getByTestId('session-card-s1').hover();
+    await page.getByTestId('session-menu-s1').click();
+    await page.getByTestId('session-resume-s1').click();
+    await expect(page.getByTestId('session-resume-dialog-s1')).toBeVisible();
+
+    await page.getByTestId('session-history-search').fill('gate');
+    await expect(page.getByTestId('session-history-history-id')).toContainText('Earlier gate work');
+    await expect(page.getByTestId('session-history-other-history')).toHaveCount(0);
+    await page.getByTestId('session-history-history-id').click();
+    await page.getByTestId('session-resume-confirm').click();
+
+    await expect(page).toHaveURL(/\/session\/history-id$/, { timeout: 10_000 });
+  } finally {
+    await resumed?.close();
+  }
 });
 
 test('creates a session from the dialog and lands on it', async ({ page, cockpit }) => {

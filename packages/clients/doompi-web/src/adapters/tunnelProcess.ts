@@ -22,6 +22,10 @@ const START_TIMEOUT_MS = 45_000;
 const TERMINATE_GRACE_MS = 2000;
 const SELF_TEST_ATTEMPTS = 10;
 const SELF_TEST_RETRY_MS = 500;
+const NAMED_RESTART_ATTEMPTS = 3;
+const NAMED_RESTART_BASE_DELAY_MS = 500;
+const NAMED_RESTART_MAX_DELAY_MS = 4000;
+const NAMED_RESTART_STABLE_MS = 60_000;
 /** Lines of process output kept for a failure report. */
 const LOG_TAIL = 20;
 const UNAUTHORIZED = 401;
@@ -52,7 +56,11 @@ export interface TunnelProcessOptions {
   selfTestRetryMs?: number;
   /** Test seam: production bounds the complete startup, including its self-test. */
   startTimeoutMs?: number;
-  /** Called when cloudflared exits on its own, so the host can tear the listener down. */
+  /** Test seam: production backs named-tunnel restarts off from 500 ms. */
+  restartBaseDelayMs?: number;
+  /** Test seam: production resets the rapid-crash budget after one stable minute. */
+  restartStableMs?: number;
+  /** Called after a quick tunnel exits, or after named-tunnel recovery is exhausted. */
   onExit?: (message: string) => void;
 }
 
@@ -95,18 +103,52 @@ async function defaultProbe(url: string, signal: AbortSignal): Promise<ProbeResu
  * on Linux the command line is checked; macOS has no equally cheap check, so
  * there the window stands.
  */
+interface TunnelPidRecord {
+  pid?: unknown;
+  ownerPid?: unknown;
+  startedAt?: unknown;
+}
+
+function validPid(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+/** Only ESRCH proves the owner is gone; permission and platform errors fail safe. */
+function ownerMayBeAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
 export function reapStaleTunnel(stateDir: string, onNotice: (message: string) => void): void {
   const pidPath = path.join(stateDir, PID_FILE);
-  fs.rmSync(path.join(stateDir, TOKEN_FILE), { force: true });
-  let parsed: { pid?: unknown; startedAt?: unknown };
+  const tokenPath = path.join(stateDir, TOKEN_FILE);
+  let raw: string;
   try {
-    parsed = JSON.parse(fs.readFileSync(pidPath, 'utf8')) as typeof parsed;
-  } catch {
-    return; // No pid file is the normal case.
+    raw = fs.readFileSync(pidPath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') fs.rmSync(tokenPath, { force: true });
+    return; // No pid file is the normal case; other read failures are unsafe to guess through.
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return; // A malformed record cannot prove that its owner is gone.
+  }
+  if (typeof parsed !== 'object' || parsed === null) return;
+  const record = parsed as TunnelPidRecord;
+  if (Object.hasOwn(record, 'ownerPid')) {
+    if (!validPid(record.ownerPid) || ownerMayBeAlive(record.ownerPid)) return;
+  }
+
+  fs.rmSync(tokenPath, { force: true });
   fs.rmSync(pidPath, { force: true });
-  const pid = typeof parsed.pid === 'number' ? parsed.pid : undefined;
-  const startedAt = typeof parsed.startedAt === 'number' ? parsed.startedAt : 0;
+  const pid = validPid(record.pid) ? record.pid : undefined;
+  const startedAt = typeof record.startedAt === 'number' ? record.startedAt : 0;
   if (pid === undefined || Date.now() - startedAt > PID_FILE_MAX_AGE_MS) return;
   if (process.platform === 'linux') {
     try {
@@ -157,6 +199,132 @@ function writeTokenFile(config: TunnelConfig, stateDir: string): string | undefi
 }
 
 export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLauncher {
+  const notice = options.onNotice ?? ((): void => {});
+  const restartBaseDelayMs = options.restartBaseDelayMs ?? NAMED_RESTART_BASE_DELAY_MS;
+  const restartStableMs = options.restartStableMs ?? NAMED_RESTART_STABLE_MS;
+
+  return async function launch(input: TunnelStartInput): Promise<TunnelStartResult> {
+    let stopped = false;
+    let activeStop: (() => Promise<void>) | undefined;
+    let stopPromise: Promise<void> | undefined;
+    let recoveryPromise: Promise<void> | undefined;
+    let pendingExit: string | undefined;
+    let restartCount = 0;
+    let lastReadyAt = 0;
+    const recoveryAbort = new AbortController();
+    const signal =
+      input.signal === undefined ? recoveryAbort.signal : AbortSignal.any([input.signal, recoveryAbort.signal]);
+    const supervisedInput: TunnelStartInput = { ...input, signal };
+
+    function queueUnexpectedExit(message: string): void {
+      if (stopped) return;
+      if (input.config.kind === 'quick') {
+        options.onExit?.(message);
+        return;
+      }
+      if (recoveryPromise !== undefined) {
+        pendingExit = message;
+        return;
+      }
+      beginRecovery(message);
+    }
+
+    const single = createSingleTunnelLauncher({ ...options, onExit: queueUnexpectedExit });
+
+    async function waitForRestart(attempt: number): Promise<void> {
+      if (recoveryAbort.signal.aborted) return;
+      const delayMs = Math.min(restartBaseDelayMs * 2 ** (attempt - 1), NAMED_RESTART_MAX_DELAY_MS);
+      await new Promise<void>((resolve) => {
+        let timer: ReturnType<typeof setTimeout>;
+        const done = (): void => {
+          clearTimeout(timer);
+          recoveryAbort.signal.removeEventListener('abort', done);
+          resolve();
+        };
+        timer = setTimeout(done, delayMs);
+        recoveryAbort.signal.addEventListener('abort', done, { once: true });
+        if (recoveryAbort.signal.aborted) done();
+      });
+    }
+
+    async function recover(initialMessage: string): Promise<void> {
+      if (Date.now() - lastReadyAt >= restartStableMs) restartCount = 0;
+      let lastFailure = initialMessage;
+      while (!stopped && restartCount < NAMED_RESTART_ATTEMPTS) {
+        restartCount += 1;
+        notice(
+          `cloudflared stopped; restarting named tunnel (attempt ${String(restartCount)} of ${String(NAMED_RESTART_ATTEMPTS)})`,
+        );
+        await waitForRestart(restartCount);
+        if (stopped) return;
+
+        const outcome = await single(supervisedInput);
+        if (stopped) {
+          if (outcome.ok) await outcome.stop().catch(() => undefined);
+          return;
+        }
+        if (!outcome.ok) {
+          lastFailure = outcome.message;
+          continue;
+        }
+        activeStop = outcome.stop;
+        lastReadyAt = Date.now();
+        notice(`named tunnel recovered at ${outcome.publicOrigin}`);
+        return;
+      }
+
+      if (!stopped) {
+        options.onExit?.(
+          `${initialMessage}\nNamed tunnel recovery failed after ${String(NAMED_RESTART_ATTEMPTS)} attempts. Last failure: ${lastFailure}`,
+        );
+      }
+    }
+
+    function beginRecovery(message: string): void {
+      recoveryPromise = recover(message)
+        .catch((error: unknown) => {
+          if (!stopped) {
+            const cause = error instanceof Error ? error.message : String(error);
+            options.onExit?.(`${message}\nNamed tunnel recovery failed: ${cause}`);
+          }
+        })
+        .finally(() => {
+          recoveryPromise = undefined;
+          const queued = pendingExit;
+          pendingExit = undefined;
+          if (queued !== undefined && !stopped) beginRecovery(queued);
+        });
+    }
+
+    const initial = await single(supervisedInput);
+    if (!initial.ok) {
+      stopped = true;
+      recoveryAbort.abort();
+      return initial;
+    }
+    activeStop = initial.stop;
+    lastReadyAt = Date.now();
+
+    const stop = async (): Promise<void> => {
+      if (stopPromise !== undefined) return await stopPromise;
+      stopped = true;
+      recoveryAbort.abort();
+      const recovering = recoveryPromise;
+      stopPromise = (async () => {
+        await activeStop?.().catch(() => undefined);
+        await recovering?.catch(() => undefined);
+        fs.rmSync(path.join(options.stateDir, PID_FILE), { force: true });
+        fs.rmSync(path.join(options.stateDir, TOKEN_FILE), { force: true });
+      })();
+      return await stopPromise;
+    };
+
+    return { ok: true, publicOrigin: initial.publicOrigin, stop };
+  };
+}
+
+/** Starts one cloudflared child; the exported launcher supervises successive named-tunnel children. */
+function createSingleTunnelLauncher(options: TunnelProcessOptions): TunnelLauncher {
   const notice = options.onNotice ?? ((): void => {});
   const spawnProcess = options.spawnProcess ?? spawn;
   const probe = options.probe ?? defaultProbe;
@@ -246,9 +414,11 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
 
     try {
       fs.mkdirSync(options.stateDir, { recursive: true, mode: 0o700 });
-      fs.writeFileSync(pidPath, JSON.stringify({ pid: child.pid, startedAt: Date.now(), command: binary }), {
-        mode: FILE_MODE,
-      });
+      fs.writeFileSync(
+        pidPath,
+        JSON.stringify({ pid: child.pid, ownerPid: process.pid, startedAt: Date.now(), command: binary }),
+        { mode: FILE_MODE },
+      );
     } catch {
       // The reaper is a safety net, not a requirement; losing it does not stop
       // the tunnel from coming up.
@@ -363,9 +533,9 @@ export function createTunnelLauncher(options: TunnelProcessOptions): TunnelLaunc
           finish({ ok: false, failure: 'exited', message }, false);
           return;
         }
-        // It came up and then died: network loss, an edge rejection, a
-        // self-update. The host tears the listener down rather than leaving a
-        // cockpit that looks reachable and is not.
+        // It came up and then died: network loss, an edge rejection, or a
+        // self-update. The supervisor either replaces a named connector or tells
+        // the host to fail closed rather than leave an unreachable cockpit enabled.
         if (!stopped) options.onExit?.(message);
       });
 

@@ -1,10 +1,9 @@
 import { expect, test } from '../support/cockpit.ts';
 
-test('attaches to the session and says so', async ({ page, cockpit }) => {
+test('attaches to the session', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
 
   await expect(page.getByTestId('cockpit')).toBeVisible();
-  await expect(page.getByTestId('connection-status')).toHaveText(/attached/);
   await cockpit.session.waitForAttach();
 });
 

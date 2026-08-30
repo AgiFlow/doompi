@@ -160,6 +160,35 @@ describe('the session hub over a registry', () => {
     expect(spawned[0]?.sessionDir).toBe(path.dirname(session.socketPath));
   });
 
+  it('replaces a live session with the selected inactive Pi thread', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'live', name: 'live', pid: process.ppid });
+    const spawned: SpawnSessionInput[] = [];
+    const harness = startHub(
+      registryDir,
+      async (input) => {
+        spawned.push(input);
+        return { ok: true, sessionId: input.sessionId ?? 'fresh' };
+      },
+      [],
+      () => void session.close(),
+    );
+    await session.waitForAttach();
+    await waitFor(() => harness.latest('live') !== undefined, 'the live session listed');
+
+    const outcome = await harness.hub.resume('live', { sessionId: 'history-id', name: 'Earlier work' });
+
+    expect(outcome).toEqual({ ok: true, sessionId: 'history-id' });
+    expect(spawned).toEqual([
+      expect.objectContaining({
+        cwd: path.dirname(session.socketPath),
+        name: 'Earlier work',
+        sessionId: 'history-id',
+        sessionDir: path.dirname(session.socketPath),
+      }),
+    ]);
+  });
+
   it('does not start a replacement when the session refuses to go', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'stuck', pid: process.ppid });
@@ -182,6 +211,10 @@ describe('the session hub over a registry', () => {
 
     // Two servers on one socket is worse than a failed restart, so it reports.
     expect(outcome).toMatchObject({ ok: false, code: 'spawn_failed' });
+    await expect(harness.hub.resume('stuck', { sessionId: 'history', name: 'History' })).resolves.toMatchObject({
+      ok: false,
+      code: 'spawn_failed',
+    });
     expect(spawned).toEqual([]);
   });
 
@@ -189,12 +222,36 @@ describe('the session hub over a registry', () => {
     const registryDir = freshRegistryDir();
     const withSpawner = startHub(registryDir, async () => ({ ok: true, sessionId: 'x' }));
     await expect(withSpawner.hub.restart('nope')).resolves.toMatchObject({ ok: false, code: 'invalid_request' });
+    await expect(withSpawner.hub.resume('nope', { sessionId: 'history', name: 'History' })).resolves.toMatchObject({
+      ok: false,
+      code: 'invalid_request',
+    });
 
     const session = await startRegisteredSession(registryDir, { id: 'fixed' });
     const noSpawner = startHub(registryDir);
     await session.waitForAttach();
     await waitFor(() => noSpawner.latest('fixed') !== undefined, 'the session listed');
     await expect(noSpawner.hub.restart('fixed')).resolves.toMatchObject({ ok: false, code: 'invalid_request' });
+    await expect(noSpawner.hub.resume('fixed', { sessionId: 'history', name: 'History' })).resolves.toMatchObject({
+      ok: false,
+      code: 'invalid_request',
+    });
+  });
+
+  it('does not resume a Pi thread that another live card already owns', async () => {
+    const registryDir = freshRegistryDir();
+    const first = await startRegisteredSession(registryDir, { id: 'one' });
+    const second = await startRegisteredSession(registryDir, { id: 'two' });
+    const harness = startHub(registryDir, async () => ({ ok: true, sessionId: 'unexpected' }));
+    await first.waitForAttach();
+    await second.waitForAttach();
+    await waitFor(() => harness.hub.snapshot().length === 2, 'both sessions listed');
+
+    await expect(harness.hub.resume('one', { sessionId: 'two', name: 'Two' })).resolves.toMatchObject({
+      ok: false,
+      code: 'invalid_request',
+      error: expect.stringMatching(/already running/) as string,
+    });
   });
 
   it('picks up a session that registers mid-run and drops one that leaves', async () => {

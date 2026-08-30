@@ -1,6 +1,7 @@
 import { expect, test } from '../support/cockpit.ts';
 import { writeRunnerRecord } from '../support/runnerRuns.ts';
 
+const ONE_PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 // Tool renderers are plugin contributions, so this suite serves the
 // synced-style bundle global setup built from every workspace plugin that
 // renders a tool (plus the crash fixture): their tools carry web message
@@ -45,7 +46,7 @@ test('a plugin renders the call and result of the tool it owns', async ({ page, 
   await expect(page.getByTestId('tool-result-bash')).toContainText('11 passed');
 });
 
-test('the host card still renders a tool no plugin claims', async ({ page, cockpit }) => {
+test('the host card renders text and safe file previews for a tool no plugin claims', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -58,7 +59,21 @@ test('the host card still renders a tool no plugin claims', async ({ page, cockp
   cockpit.session.emit({
     type: 'tool_execution_end',
     toolCallId: 'call-2',
-    result: { content: [{ type: 'text', text: 'plain text' }] },
+    result: {
+      content: [
+        { type: 'text', text: 'plain text' },
+        { type: 'image', data: ONE_PIXEL_PNG, mimeType: 'image/png' },
+      ],
+      details: {
+        blocks: [
+          { type: 'audio', data: 'UklGRg==', mimeType: 'audio/wav', name: 'sample.wav' },
+          { type: 'video', data: 'AAAA', mimeType: 'video/mp4', name: 'clip.mp4' },
+          { type: 'resource', uri: 'file:///report.pdf', mimeType: 'application/pdf', blob: 'JVBERi0=' },
+          { type: 'resource', uri: 'file:///notes.txt', mimeType: 'text/plain', text: 'attached notes' },
+          { type: 'file', data: 'UEsDBA==', mimeType: 'application/zip', name: 'archive.zip' },
+        ],
+      },
+    },
     isError: false,
   });
 
@@ -66,6 +81,13 @@ test('the host card still renders a tool no plugin claims', async ({ page, cockp
   await expect(card).toHaveAttribute('data-tool-renderer', 'host');
   await expect(card).toContainText('anything');
   await expect(page.getByTestId('tool-output')).toContainText('plain text');
+  await expect(page.getByTestId('tool-output-image')).toBeVisible();
+  await expect(page.getByTestId('tool-output-image')).toHaveAttribute('src', `data:image/png;base64,${ONE_PIXEL_PNG}`);
+  await expect(page.getByTestId('tool-output-audio')).toBeVisible();
+  await expect(page.getByTestId('tool-output-video')).toBeVisible();
+  await expect(page.getByTestId('tool-output-pdf')).toBeVisible();
+  await expect(page.getByTestId('tool-output-text-file')).toContainText('attached notes');
+  await expect(page.getByTestId('tool-output-file')).toContainText('archive.zip');
 });
 
 test('the expand toggle hands the plugin renderer its expanded state', async ({ page, cockpit }) => {
@@ -94,7 +116,7 @@ test('the expand toggle hands the plugin renderer its expanded state', async ({ 
   await expect(result).toContainText(/\bline 1\b/);
 });
 
-test('the read plugin renders a hashline body with line anchors', async ({ page, cockpit }) => {
+test('the read plugin renders anchored text and attached images', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -110,13 +132,19 @@ test('the read plugin renders a hashline body with line anchors', async ({ page,
   cockpit.session.emit({
     type: 'tool_execution_end',
     toolCallId: 'call-4',
-    result: { content: [{ type: 'text', text: '3#abc|const x = 1;\n4#def|export { x };\n' }] },
+    result: {
+      content: [
+        { type: 'text', text: '3#abc|const x = 1;\n4#def|export { x };\n' },
+        { type: 'image', data: ONE_PIXEL_PNG, mimeType: 'image/png' },
+      ],
+    },
     isError: false,
   });
   const result = page.getByTestId('tool-result-read');
   await expect(result).toContainText('const x = 1;');
   await expect(result).toContainText('export { x };');
   await expect(result).not.toContainText('#abc|');
+  await expect(page.getByTestId('tool-result-read-image')).toBeVisible();
 });
 
 test('the edit plugin renders the diff its result details carry', async ({ page, cockpit }) => {
@@ -236,6 +264,39 @@ test('a throwing renderer falls back to the host item and the rest of the timeli
   await expect(items.nth(1).getByTestId('tool-output')).toContainText('crash output');
   await expect(items.nth(2)).toHaveAttribute('data-tool-renderer', 'plugin');
   await expect(items.nth(2).getByTestId('tool-call-bash')).toContainText('echo after');
+});
+
+test('keeps long plan evidence metadata inside its tool header', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'plan-evidence',
+    toolName: 'record_debug_evidence',
+    args: {
+      logs: ['one', 'two'],
+      correlatedTraceEvidence: ['one', 'two', 'three', 'four', 'five'],
+      timestamps: ['one'],
+      verifiedFacts: ['one', 'two', 'three', 'four', 'five', 'six'],
+      hypotheses: ['one', 'two'],
+      unavailableEvidence: ['one', 'two'],
+    },
+  });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'plan-evidence',
+    result: { content: [{ type: 'text', text: 'ok' }], details: { recorded: true } },
+    isError: false,
+  });
+
+  const card = page.getByTestId('entry-tool');
+  const summary = page.getByTestId('tool-call-record_debug_evidence');
+  await expect(card.locator('[data-slot="message-item-header"]')).toContainText('record evidence');
+  await expect(card.locator('[data-slot="message-item-header"]')).not.toContainText('record_debug_evidence');
+  await expect(summary).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(summary).toHaveCSS('overflow', 'hidden');
+  await expect(card.getByTestId('tool-status')).toBeVisible();
 });
 
 // One call per migrated tool: the plugin, not the host, renders every item.

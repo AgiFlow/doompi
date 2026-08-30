@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   CloseIcon,
   Kbd,
@@ -15,6 +14,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
+import type { QueuedEntry } from '../../lib/sessionModel.ts';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { registerPromptInput } from '../../lib/promptFocus.ts';
 import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
@@ -23,6 +23,7 @@ import { openPalette } from '../../stores/paletteStore.ts';
 import { useToolPrompt } from '../../stores/useToolPrompt.ts';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { ComposerPrompt } from './ComposerPrompt.tsx';
+import { QueueSheet } from './QueueSheet.tsx';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
 const MAX_INPUT_HEIGHT_PX = 192;
@@ -161,6 +162,9 @@ function triggerTokenAt(
 export function Composer() {
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
+  const queuedEntries = useActiveSession((state) =>
+    state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued'),
+  );
   const commands = useActiveSession((state) => state.commands);
   const editorTextRequest = useActiveSession((state) => state.editorTextRequest);
   const prompt = useToolPrompt();
@@ -178,7 +182,7 @@ export function Composer() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const attached = meta?.attach === 'attached';
-  const queued = meta?.summary.pendingMessageCount ?? 0;
+  const queued = Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length);
 
   // Overlays hand the keyboard back here when they close. Re-registered when
   // a tool prompt stands the input down and again when it gives it back:
@@ -391,6 +395,7 @@ export function Composer() {
   if (prompt !== null) {
     return (
       <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
+        <QueueSheet count={queued} entries={queuedEntries} />
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
           <ComposerPrompt claim={prompt} sessionId={activeSessionId()} />
         </div>
@@ -400,6 +405,7 @@ export function Composer() {
 
   return (
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
+      <QueueSheet count={queued} entries={queuedEntries} />
       <Popover
         open={completion !== null}
         onOpenChange={(next) => {
@@ -605,15 +611,6 @@ export function Composer() {
                   ? 'enter steers the run · esc aborts'
                   : 'enter sends · shift+enter for a new line · space opens leader'}
               </span>
-              {queued > 0 ? (
-                <Badge
-                  size="xs"
-                  data-testid="composer-queued"
-                  className="rounded-full border-transparent bg-doom-panel py-0.5 text-[9px] text-doom-dim"
-                >
-                  {queued} queued
-                </Badge>
-              ) : null}
               <Button
                 variant="ghost"
                 size="icon"
