@@ -1,3 +1,33 @@
+## 0.0.1-alpha.4 (2026-08-30)
+
+### 🚀 Features
+
+- update cockpit security and client features ([0128b50](https://github.com/AgiFlow/doompi/commit/0128b50))
+- **loop:** add web activity surface ([63b0745](https://github.com/AgiFlow/doompi/commit/63b0745))
+- improve pairing and composer drafts ([fbd3155](https://github.com/AgiFlow/doompi/commit/fbd3155))
+- improve DoomPi web sessions and tool output ([35c8f43](https://github.com/AgiFlow/doompi/commit/35c8f43))
+
+### 🩹 Fixes
+
+- **doompi-web:** stabilize voice and protocol handling ([ac739ab](https://github.com/AgiFlow/doompi/commit/ac739ab))
+- **doompi-web:** preserve session message order ([355dcf4](https://github.com/AgiFlow/doompi/commit/355dcf4))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.5
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.40
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.3 (2026-08-29)
 
 ### 🚀 Features

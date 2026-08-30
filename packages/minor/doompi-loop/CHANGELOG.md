@@ -1,3 +1,20 @@
+## 0.0.1-alpha.43 (2026-08-30)
+
+### 🚀 Features
+
+- **loop:** add web activity surface ([63b0745](https://github.com/AgiFlow/doompi/commit/63b0745))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.6
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.42 (2026-08-29)
 
 ### 🚀 Features

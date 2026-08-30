@@ -1,3 +1,13 @@
+## 0.0.1-alpha.6 (2026-08-30)
+
+### 🚀 Features
+
+- update cockpit security and client features ([0128b50](https://github.com/AgiFlow/doompi/commit/0128b50))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.5 (2026-08-29)
 
 ### 🚀 Features
