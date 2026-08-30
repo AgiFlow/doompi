@@ -85,7 +85,7 @@ describe('browser voice media', () => {
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
-    expect(source).toContain('manualRecorder.current?.toggle(sessionId !== null)');
+    expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
     expect(source).toContain('recorder?.dispose()');
     expect(source).not.toContain("message: '/voice'");
     expect(source).toContain("'/minor voice-auto deactivate'");

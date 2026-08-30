@@ -162,6 +162,23 @@ describe('doom voice package boundary', () => {
     await expectFile('models/README.md');
   });
 
+  it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {
+    const manualFiles = [
+      'web/manualBrowserRecorder.ts',
+      'web/manualComposerRecorder.ts',
+      'web/manualTranscriptionClient.ts',
+    ];
+    const forbidden =
+      /CaptureSession|VoiceMediaClient|VoiceWorkerPipeline|voiceMediaWakeStore|voiceOwnership|sessionVoiceOwnership|playback/u;
+    for (const file of manualFiles) {
+      expect(await readFile(path.join(packageDirectory, file), 'utf8'), file).not.toMatch(forbidden);
+    }
+
+    const webEntry = await readFile(path.join(packageDirectory, 'web/index.ts'), 'utf8');
+    expect(webEntry).not.toContain("id: 'voice.capture'");
+    expect(webEntry).not.toContain("command: 'voice'");
+  });
+
   it('mounts the manual route at the API path declared by the package', async () => {
     expect(assertDeclaredApi({ packageRoot: packageDirectory, api, scope: 'session' })).toMatchObject({
       basePath: 'voice-media',

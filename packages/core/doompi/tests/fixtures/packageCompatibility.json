@@ -836,7 +836,16 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-loop/SKILL.md"],
-    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "web",
+      "llms.txt",
+      "src/prompts",
+      "src/types/loopView.ts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -2120,6 +2129,7 @@
       "src/types/clientMedia.ts",
       "src/types/voiceOwnership.ts",
       "src/types/clientCaptureActivity.ts",
+      "src/types/manualTranscription.ts",
       "README.md",
       "LICENSE",
       "package.json"

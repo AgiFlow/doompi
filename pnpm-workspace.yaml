@@ -60,3 +60,7 @@ minimumReleaseAgeExclude:
   - "@tanstack/react-router@1.170.32"
   - "@tanstack/router-core@1.171.27"
   - "protobufjs@7.6.6"
+
+# Avoid repeated full-schema scans when Pi validates recursive JSON snapshot fields.
+patchedDependencies:
+  "@earendil-works/pi-protocol@0.84.4": patches/@earendil-works__pi-protocol@0.84.4.patch
