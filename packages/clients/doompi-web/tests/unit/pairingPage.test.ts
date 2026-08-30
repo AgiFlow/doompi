@@ -62,6 +62,25 @@ describe('the pairing page', () => {
     expect(html).toContain("fetch('/api/remote/passkeys/register/finish'");
   });
 
+  it('keeps inactive manual and passkey controls hidden', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('[hidden] { display: none !important; }');
+    expect(html).toContain('<form id="manual" hidden>');
+    expect(html).toContain('<div id="actions" class="actions" hidden>');
+  });
+
+  it('accepts an eight-digit code for manual entry', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain('inputmode="numeric"');
+    expect(html).toContain('pattern="[0-9]{8}"');
+    expect(html).toContain('maxlength="8"');
+  });
+
+  it('continues when the device reports that the passkey already exists', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain("error?.name === 'InvalidStateError'");
+    expect(html).toContain('A passkey for this site already exists. Opening the cockpit.');
+  });
   it('claims a scanned code before trying passkey sign-in', () => {
     const html = pairingPageHtml({ nonce: NONCE });
     expect(html).toContain("if (code !== '') { await claim(code); return; }");

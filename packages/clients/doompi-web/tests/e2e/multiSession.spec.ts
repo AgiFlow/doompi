@@ -130,6 +130,23 @@ test('switches focus by card click and by ordinal digit', async ({ page, cockpit
   await expect(page.getByTestId('timeline-empty')).toBeVisible();
 });
 
+test('keeps unfinished composer input scoped to each session', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  const input = page.getByTestId('composer-input');
+
+  await input.fill('draft for session one');
+  await page.getByTestId('session-card-s2').click();
+  await expect(page).toHaveURL(/\/session\/s2$/);
+  await expect(input).toHaveValue('');
+
+  await input.fill('draft for session two');
+  await page.getByTestId('session-card-s1').click();
+  await expect(input).toHaveValue('draft for session one');
+
+  await page.getByTestId('session-card-s2').click();
+  await expect(input).toHaveValue('draft for session two');
+});
+
 test('keeps a refusal scoped to the session it hits', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');

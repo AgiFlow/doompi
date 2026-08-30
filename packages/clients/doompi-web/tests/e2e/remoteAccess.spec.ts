@@ -36,9 +36,11 @@ test('the header button opens remote access on its options, not on a code', asyn
   await expect(page.getByTestId('remote-banner')).toBeHidden();
 });
 
-test('the pairing step shows a scannable code and the address behind it', async ({ page, cockpit }) => {
+test('the pairing step shows a scannable code, manual code, and address', async ({ page, cockpit }) => {
   await page.route('**/api/remote/codes', async (route) => {
-    await route.fulfill({ json: { code: 'x', pairUrl: PAIR_URL, expiresAt: new Date().toISOString() } });
+    await route.fulfill({
+      json: { code: 'x', manualCode: '12345678', pairUrl: PAIR_URL, expiresAt: new Date().toISOString() },
+    });
   });
   await page.route('**/api/remote/enable', async (route) => await route.fulfill({ json: liveState() }));
 
@@ -46,6 +48,7 @@ test('the pairing step shows a scannable code and the address behind it', async 
   await page.getByTestId('remote-access-open').click();
   await page.getByTestId('remote-access-on').click();
 
+  await expect(page.getByTestId('remote-pair-code')).toHaveText('12345678');
   await expect(page.getByTestId('remote-pair-url')).toHaveText(PAIR_URL);
   await expect(page.locator('[data-testid="remote-access-dialog"] svg[role="img"]')).toBeVisible();
   // Unmissable while the tunnel is up, and it names the host so a forgotten

@@ -23,6 +23,7 @@ import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } fro
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
+import { dropComposerState } from '../stores/composerStore.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
@@ -125,6 +126,7 @@ export function startSessionRuntime(): () => void {
         case SESSION_REMOVED_TYPE: {
           if (typeof frame.sessionId !== 'string') return;
           applySessionRemoved(frame);
+          dropComposerState(frame.sessionId);
           dropSessionStore(frame.sessionId);
           dropPluginSessionData(frame.sessionId);
           dropThreads(frame.sessionId);

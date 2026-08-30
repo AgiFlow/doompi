@@ -12,13 +12,21 @@ import {
   StopIcon,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
+import { useStore } from '@tanstack/react-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
 import type { QueuedEntry } from '../../lib/sessionModel.ts';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { registerPromptInput } from '../../lib/promptFocus.ts';
+import {
+  clearComposerState,
+  type ComposerAttachment,
+  type ComposerImageAttachment,
+  updateComposerState,
+  useComposerState,
+} from '../../stores/composerStore.ts';
 import { abortRun, queueFollowUp, submitMessage, useActiveSession } from '../../stores/sessionStore.ts';
-import { activeSessionId, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
+import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { openPalette } from '../../stores/paletteStore.ts';
 import { useToolPrompt } from '../../stores/useToolPrompt.ts';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
@@ -69,26 +77,6 @@ const TEXT_EXTENSIONS = new Set([
 ]);
 const FILE_INPUT_ACCEPT =
   'image/png,image/jpeg,image/gif,image/webp,text/*,.json,.jsonl,.md,.markdown,.yaml,.yml,.toml,.ini,.log,.csv,.tsv,.xml,.html,.css,.js,.jsx,.ts,.tsx,.sh,.py,.rb,.rs,.go,.java,.c,.h,.cpp,.hpp,.sql';
-
-interface ImageAttachment {
-  id: string;
-  kind: 'image';
-  name: string;
-  size: number;
-  dataUrl: string;
-  data: string;
-  mimeType: string;
-}
-
-interface TextAttachment {
-  id: string;
-  kind: 'text';
-  name: string;
-  size: number;
-  content: string;
-}
-
-type ComposerAttachment = ImageAttachment | TextAttachment;
 
 function isReadableText(file: File): boolean {
   const extension = file.name.toLowerCase().split('.').pop() ?? '';
@@ -160,6 +148,7 @@ function triggerTokenAt(
 }
 
 export function Composer() {
+  const sessionId = useStore(sessionsStore, (state) => state.activeId);
   const meta = useActiveSessionMeta();
   const streaming = useActiveSession((state) => state.streaming);
   const queuedEntries = useActiveSession((state) =>
@@ -168,21 +157,24 @@ export function Composer() {
   const commands = useActiveSession((state) => state.commands);
   const editorTextRequest = useActiveSession((state) => state.editorTextRequest);
   const prompt = useToolPrompt();
-  const [draft, setDraft] = useState('');
-  const [caret, setCaret] = useState(0);
-  const [dismissedToken, setDismissedToken] = useState<number | null>(null);
+  const { draft, caret, dismissedToken, attachments, attachmentError, nextAttachmentId } = useComposerState(sessionId);
   const [completion, setCompletion] = useState<CompletionState | null>(null);
-  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
-  const [attachmentError, setAttachmentError] = useState('');
   const [draggingFiles, setDraggingFiles] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const attachmentId = useRef(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const attached = meta?.attach === 'attached';
   const queued = Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length);
+
+  // Completion and drag state are transient. The draft and attachments below
+  // come from the newly focused session immediately after this reset.
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    setCompletion(null);
+    setDraggingFiles(false);
+  }, [sessionId]);
 
   // Overlays hand the keyboard back here when they close. Re-registered when
   // a tool prompt stands the input down and again when it gives it back:
@@ -191,14 +183,17 @@ export function Composer() {
 
   useEffect(() => {
     if (editorTextRequest === null) return;
-    setDraft(editorTextRequest.text);
-    setCaret(editorTextRequest.text.length);
-    setDismissedToken(null);
+    updateComposerState(sessionId, (state) => ({
+      ...state,
+      draft: editorTextRequest.text,
+      caret: editorTextRequest.text.length,
+      dismissedToken: null,
+    }));
     requestAnimationFrame(() => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(editorTextRequest.text.length, editorTextRequest.text.length);
     });
-  }, [editorTextRequest]);
+  }, [editorTextRequest, sessionId]);
 
   // Auto-grow: measure after every draft change so pasted stack traces are
   // actually visible instead of scrolling inside one line.
@@ -218,9 +213,9 @@ export function Composer() {
   /** Esc dismisses the popup for the token being typed; edits re-arm it. */
   const dismissCompletion = useCallback((): void => {
     const trigger = triggerTokenAt(draft, caret);
-    setDismissedToken(trigger?.start ?? null);
+    updateComposerState(sessionId, (state) => ({ ...state, dismissedToken: trigger?.start ?? null }));
     closeCompletion();
-  }, [draft, caret, closeCompletion]);
+  }, [draft, caret, closeCompletion, sessionId]);
 
   // The popup is derived state: any change to the draft, caret, session
   // commands, or attachment recomputes it, so data arriving after a keystroke
@@ -245,12 +240,16 @@ export function Composer() {
     }
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      const sessionId = activeSessionId();
       if (sessionId === null) return;
       void searchSessionFiles(sessionId, trigger.query).then((files) => {
-        // The draft may have moved on while the lookup ran.
+        // The session or draft may have moved on while the lookup ran.
         const input = inputRef.current;
-        if (!input || triggerTokenAt(input.value, input.selectionStart)?.query !== trigger.query) return;
+        if (
+          sessionsStore.state.activeId !== sessionId ||
+          !input ||
+          triggerTokenAt(input.value, input.selectionStart)?.query !== trigger.query
+        )
+          return;
         const items = files.slice(0, MAX_COMPLETION_ITEMS).map((file) => ({ insert: `@${file} `, label: `@${file}` }));
         setCompletion(
           items.length > 0
@@ -262,7 +261,7 @@ export function Composer() {
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
-  }, [draft, caret, commands, attached, dismissedToken, closeCompletion]);
+  }, [draft, caret, commands, attached, dismissedToken, closeCompletion, sessionId]);
 
   // Clicking anywhere outside the composer closes the popup.
   useEffect(() => {
@@ -280,10 +279,13 @@ export function Composer() {
     const item = state.items[index];
     if (!item) return;
     const next = draft.slice(0, state.tokenStart) + item.insert + draft.slice(caret);
-    setDraft(next);
     const position = state.tokenStart + item.insert.length;
-    setCaret(position);
-    setDismissedToken(state.tokenStart);
+    updateComposerState(sessionId, (current) => ({
+      ...current,
+      draft: next,
+      caret: position,
+      dismissedToken: state.tokenStart,
+    }));
     requestAnimationFrame(() => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(position, position);
@@ -296,13 +298,14 @@ export function Composer() {
       const rejected: string[] = [];
       let imageBytes = next.reduce((total, item) => total + (item.kind === 'image' ? item.size : 0), 0);
       let textBytes = next.reduce((total, item) => total + (item.kind === 'text' ? item.size : 0), 0);
+      let attachmentId = nextAttachmentId;
 
       for (const file of files) {
         if (next.length >= MAX_ATTACHMENTS) {
           rejected.push(`Only ${String(MAX_ATTACHMENTS)} attachments are allowed.`);
           break;
         }
-        const id = `attachment-${String(attachmentId.current++)}`;
+        const id = `attachment-${String(attachmentId++)}`;
         if (IMAGE_TYPES.has(file.type)) {
           if (file.size > MAX_IMAGE_BYTES) {
             rejected.push(`${file.name} exceeds the 10 MB image limit.`);
@@ -348,18 +351,18 @@ export function Composer() {
           rejected.push(`${file.name} could not be read.`);
         }
       }
-      setAttachments(next);
-      setAttachmentError(rejected.join(' '));
+      updateComposerState(sessionId, (state) => ({
+        ...state,
+        attachments: next,
+        attachmentError: rejected.join(' '),
+        nextAttachmentId: attachmentId,
+      }));
     },
-    [attachments],
+    [attachments, nextAttachmentId, sessionId],
   );
 
   const clearAfterSend = (): void => {
-    setDraft('');
-    setAttachments([]);
-    setAttachmentError('');
-    setCaret(0);
-    setDismissedToken(null);
+    clearComposerState(sessionId);
     closeCompletion();
   };
 
@@ -367,9 +370,9 @@ export function Composer() {
     if ((!draft.trim() && attachments.length === 0) || !attached) return;
     const message = attachmentPrompt(draft, attachments);
     const images = attachments
-      .filter((attachment): attachment is ImageAttachment => attachment.kind === 'image')
+      .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
       .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
-    submitMessage(message, images);
+    submitMessage(message, images, sessionId);
     clearAfterSend();
   };
 
@@ -377,9 +380,9 @@ export function Composer() {
     if ((!draft.trim() && attachments.length === 0) || !attached) return;
     const message = attachmentPrompt(draft, attachments);
     const images = attachments
-      .filter((attachment): attachment is ImageAttachment => attachment.kind === 'image')
+      .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
       .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
-    queueFollowUp(message, images);
+    queueFollowUp(message, images, sessionId);
     clearAfterSend();
   };
 
@@ -397,7 +400,7 @@ export function Composer() {
       <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
         <QueueSheet count={queued} entries={queuedEntries} />
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
-          <ComposerPrompt claim={prompt} sessionId={activeSessionId()} />
+          <ComposerPrompt claim={prompt} sessionId={sessionId} />
         </div>
       </div>
     );
@@ -505,18 +508,25 @@ export function Composer() {
                 value={draft}
                 disabled={!attached}
                 onChange={(event) => {
-                  setDraft(event.target.value);
-                  setCaret(event.target.selectionStart);
-                  setDismissedToken(null);
+                  updateComposerState(sessionId, (state) => ({
+                    ...state,
+                    draft: event.target.value,
+                    caret: event.target.selectionStart,
+                    dismissedToken: null,
+                  }));
                 }}
-                onClick={(event) => setCaret(event.currentTarget.selectionStart)}
+                onClick={(event) =>
+                  updateComposerState(sessionId, (state) => ({ ...state, caret: event.currentTarget.selectionStart }))
+                }
                 onPaste={(event) => {
                   const files = Array.from(event.clipboardData.files);
                   if (files.length === 0) return;
                   event.preventDefault();
                   void addFiles(files);
                 }}
-                onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
+                onKeyUp={(event) =>
+                  updateComposerState(sessionId, (state) => ({ ...state, caret: event.currentTarget.selectionStart }))
+                }
                 onKeyDown={(event) => {
                   // The TUI's leader key: space with nothing typed opens Leader Space.
                   if (event.key === ' ' && draft === '') {
@@ -558,7 +568,7 @@ export function Composer() {
                   }
                   if (event.key === 'Escape' && streaming) {
                     event.preventDefault();
-                    abortRun();
+                    abortRun(sessionId);
                   }
                 }}
                 rows={1}
@@ -586,8 +596,11 @@ export function Composer() {
                       aria-label={`remove ${attachment.name}`}
                       className="h-4 w-4 min-w-4 text-doom-faint hover:text-doom-text"
                       onClick={() => {
-                        setAttachments((current) => current.filter((item) => item.id !== attachment.id));
-                        setAttachmentError('');
+                        updateComposerState(sessionId, (state) => ({
+                          ...state,
+                          attachments: state.attachments.filter((item) => item.id !== attachment.id),
+                          attachmentError: '',
+                        }));
                       }}
                     >
                       <CloseIcon className="h-2.5 w-2.5" />
@@ -625,13 +638,18 @@ export function Composer() {
               </Button>
               <span className="min-w-0 flex-1" />
               {streaming ? (
-                <Button variant="danger-outline" size="md" data-testid="composer-abort" onClick={() => abortRun()}>
+                <Button
+                  variant="danger-outline"
+                  size="md"
+                  data-testid="composer-abort"
+                  onClick={() => abortRun(sessionId)}
+                >
                   <StopIcon className="h-2 w-2 fill-current" />
                   abort
                 </Button>
               ) : null}
               <span className="contents sm:hidden" data-testid="composer-mobile-actions">
-                <PluginSurface slot={HOST_SLOTS.composerActions} sessionId={activeSessionId()} />
+                <PluginSurface slot={HOST_SLOTS.composerActions} sessionId={sessionId} />
               </span>
               <Button
                 variant="outline"

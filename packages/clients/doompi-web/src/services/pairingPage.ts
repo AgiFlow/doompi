@@ -66,6 +66,7 @@ const STYLE = `
     font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
   }
   main { width: min(30rem, 100% - 2.5rem); text-align: center; }
+  [hidden] { display: none !important; }
   h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem; }
   p { margin: 0 0 1rem; color: #a2a8b4; }
   .state { font-weight: 600; color: #e6e8ec; }
@@ -267,6 +268,11 @@ const SCRIPT = `
       say('Passkey added. Opening the cockpit.', 'ok');
       setTimeout(openCockpit, ${String(POLL_INTERVAL_MS)});
     } catch (error) {
+      if (error?.name === 'InvalidStateError') {
+        say('A passkey for this site already exists. Opening the cockpit.', 'ok');
+        setTimeout(openCockpit, ${String(POLL_INTERVAL_MS)});
+        return;
+      }
       say(error?.name === 'NotAllowedError' ? 'Passkey setup was cancelled.' : (error?.message ?? 'Passkey setup failed.'), 'bad');
       addPasskey.disabled = false;
       skipPasskey.disabled = false;
@@ -305,7 +311,7 @@ export function pairingPageHtml(input: PairingPageInput): string {
   <p>This cockpit can run shell commands on the host machine. Pair only your own device.</p>
   <p id="state" class="state">Starting.</p>
   <form id="manual" hidden>
-    <input name="code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pairing code">
+    <input name="code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="one-time-code" placeholder="8-digit pairing code" aria-label="8-digit pairing code">
     <button type="submit">Pair</button>
   </form>
   <div id="actions" class="actions" hidden>
