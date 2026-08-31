@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-skill",
-  "version": "0.0.1-alpha.22",
+  "version": "0.0.1-alpha.23",
   "description": "Session skill catalogue, deferred skill discovery, and the skill browser for DoomPi.",
   "keywords": [
     "agent-skills",

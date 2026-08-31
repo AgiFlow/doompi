@@ -1,3 +1,19 @@
+## 0.0.1-alpha.6 (2026-08-31)
+
+### 🚀 Features
+
+- **root:** improve session voice queue and agent catalogs ([e253982](https://github.com/AgiFlow/doompi/commit/e253982))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.8
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.8
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.5 (2026-08-31)
 
 ### 🚀 Features

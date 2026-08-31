@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-runner",
-  "version": "0.0.1-alpha.44",
+  "version": "0.0.1-alpha.45",
   "description": "Supervised shell execution, background process control, and run logs for Pi coding agents.",
   "keywords": [
     "ai",

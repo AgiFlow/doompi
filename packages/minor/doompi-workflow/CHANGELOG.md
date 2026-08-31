@@ -1,3 +1,10 @@
+## 0.0.1-alpha.45 (2026-08-31)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.8
+
 ## 0.0.1-alpha.44 (2026-08-31)
 
 ### 🚀 Features

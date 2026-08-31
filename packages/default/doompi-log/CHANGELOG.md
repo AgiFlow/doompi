@@ -1,3 +1,9 @@
+## 0.0.1-alpha.45 (2026-08-31)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.45
+
 ## 0.0.1-alpha.44 (2026-08-31)
 
 ### 🧱 Updated Dependencies

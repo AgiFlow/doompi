@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-loop",
-  "version": "0.0.1-alpha.44",
+  "version": "0.0.1-alpha.45",
   "description": "Session-scoped recurring prompt scheduler and loop controls for Pi coding agents.",
   "keywords": [
     "ai",
