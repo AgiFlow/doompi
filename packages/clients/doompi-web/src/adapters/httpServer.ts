@@ -452,8 +452,20 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       notice(`synced registration is unavailable (${describeError(error)})`);
     }
   }
-  const assetsDir = resolveAssetsDir(options.assetsDir, startupRegistration, notice);
-  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice), telemetry);
+  /**
+   * The generation the hub is currently serving.
+   *
+   * Resolved once at startup and then re-read whenever the guard reports a
+   * rebuild. Capturing it for the process lifetime meant a hub that started
+   * before the first successful sync served the packaged, plugin-free bundle
+   * until it was restarted, and a hub that outlived a sync kept serving a
+   * generation that had already been superseded.
+   */
+  let served = {
+    assetsDir: resolveAssetsDir(options.assetsDir, startupRegistration, notice),
+    apiDirectory: startupRegistration?.apiDirectory,
+  };
+  const hub = buildHub(options, notice, await loadHubChannels(served.assetsDir, notice), telemetry);
   // Threads are journals the data channels can name (a subagent run's own
   // session file); the hub tails one only while a page follows it.
   const threads = createThreadJournals({
@@ -481,7 +493,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   let loopbackPort: number | undefined;
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
   const pwaDir = packagedPwaDir();
-  const publication = createBundlePublication({ assetsDir, stateDir: store.directory, onNotice: notice });
+  const publication = createBundlePublication({
+    assetsDir: () => served.assetsDir,
+    stateDir: store.directory,
+    onNotice: notice,
+  });
   let livePush: LiveWebPush | undefined;
   reapStaleTunnel(store.directory, notice);
   /**
@@ -807,7 +823,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // Package APIs, mounted before the SPA fallback so their routes are reachable
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
-  const apiDirectory = startupRegistration?.apiDirectory;
+  const apiDirectory = served.apiDirectory;
   const hubApis =
     apiDirectory === undefined && !process.env[PACKAGE_API_DIR_ENV]
       ? []
@@ -1245,7 +1261,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
     const current = publication.current();
     if (current === undefined) return context.json({ error: 'No signed cockpit bundle is available.' }, 503);
-    return context.json(current, 200, { 'Cache-Control': 'no-store' });
+    return context.json(current.signed, 200, { 'Cache-Control': 'no-store' });
   });
   app.get(`${RAW_BUNDLE_PREFIX}*`, (context) => {
     const requested = new URL(context.req.url).pathname;
@@ -1256,12 +1272,15 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       matched === null ||
       !Number.isSafeInteger(revision) ||
       current === undefined ||
-      current.manifest.revision !== revision
+      current.signed.manifest.revision !== revision
     ) {
       return context.text('That signed bundle revision is unavailable.', 404);
     }
-    const asset = assetFor(current.manifest, matched[2] ?? '');
-    const file = asset === undefined ? undefined : resolveAssetPath(assetsDir, asset.path);
+    const asset = assetFor(current.signed.manifest, matched[2] ?? '');
+    // Read through the directory this manifest was signed over, not whatever is
+    // current now: a generation that changed mid-request would otherwise serve
+    // bytes the page is about to reject as a digest mismatch.
+    const file = asset === undefined ? undefined : resolveAssetPath(current.assetsDir, asset.path);
     const body = file === undefined ? undefined : readAsset(file);
     if (asset === undefined || file === undefined || body === undefined)
       return context.text('Bundle asset not found.', 404);
@@ -1281,8 +1300,24 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
 
   // A rebuilt bundle only changes on disk, so the page it replaced has to be
-  // told; nothing about a loaded bundle notices that its source moved.
+  // told; nothing about a loaded bundle notices that its source moved. Sync
+  // publishes each rebuild as a new generation, so the paths resolved at
+  // startup have to be re-read before anything is served from them.
   syncGuard.watch(() => {
+    let rebuilt: SyncRegistration | undefined;
+    if (startupRoot !== undefined) {
+      try {
+        rebuilt = readSyncRegistration(startupRoot);
+      } catch (error) {
+        // An unreadable registration leaves the hub on the generation it is
+        // already serving, which still works, rather than on nothing at all.
+        notice(`the rebuilt registration is unavailable (${describeError(error)}); keeping the served bundle`);
+      }
+    }
+    if (rebuilt?.webDirectory != null && rebuilt.webDirectory !== served.assetsDir) {
+      served = { assetsDir: rebuilt.webDirectory, apiDirectory: rebuilt.apiDirectory };
+      notice(`serving the rebuilt cockpit bundle from ${served.assetsDir}`);
+    }
     publication.refresh();
     broadcast({ type: HUB_RESYNCED_TYPE }, false);
   });

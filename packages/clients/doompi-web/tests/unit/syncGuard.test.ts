@@ -156,8 +156,68 @@ describe('sync guard', () => {
     child.emit('exit', 1);
     await pending;
 
-    expect(notices).toContainEqual(expect.stringMatching(/sync exited 1: build failed/));
+    expect(notices).toContainEqual(expect.stringMatching(/sync failed \(exit 1: build failed\)/));
+    // Saying "complete" after a non-zero exit is what made a broken sync look
+    // like a rebuild, and every page reloaded on the strength of it.
+    expect(notices).not.toContainEqual('sync complete');
     subject.close();
+  });
+
+  it('does not tell pages to reload when the sync failed', async () => {
+    const notices: string[] = [];
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync: async () => ({ ok: false, detail: 'exit 1: build failed' }),
+      onNotice: (message) => notices.push(message),
+      intervalMs: 5,
+    });
+    const synced = vi.fn();
+
+    subject.watch(synced);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    subject.close();
+
+    expect(synced).not.toHaveBeenCalled();
+  });
+
+  it('backs off instead of retrying a failing sync every interval', async () => {
+    const attempts: number[] = [];
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync: async () => {
+        attempts.push(Date.now());
+        return { ok: false, detail: 'exit 1' };
+      },
+      intervalMs: 5,
+    });
+
+    subject.watch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    subject.close();
+
+    // Doubling from 5ms reaches past the window after a handful of tries; a
+    // fixed interval would have fired an order of magnitude more.
+    expect(attempts.length).toBeGreaterThan(0);
+    expect(attempts.length).toBeLessThan(8);
+  });
+
+  it('reports a repeated failure once rather than on every retry', async () => {
+    const notices: string[] = [];
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync: async () => ({ ok: false, detail: 'exit 1: build failed' }),
+      onNotice: (message) => notices.push(message),
+      intervalMs: 5,
+    });
+
+    subject.watch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    subject.close();
+
+    expect(notices.filter((message) => message.startsWith('sync failed'))).toHaveLength(1);
   });
 
   it('stops watching once closed', async () => {
