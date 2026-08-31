@@ -1,3 +1,13 @@
+## 0.0.1-alpha.8 (2026-08-31)
+
+### 🚀 Features
+
+- **root:** improve session voice queue and agent catalogs ([e253982](https://github.com/AgiFlow/doompi/commit/e253982))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.7 (2026-08-31)
 
 ### 🚀 Features

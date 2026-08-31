@@ -1,3 +1,17 @@
+## 0.0.1-alpha.8 (2026-08-31)
+
+### 🩹 Fixes
+
+- **doompi-server:** bundle patched Pi protocol ([ed8277d](https://github.com/AgiFlow/doompi/commit/ed8277d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.45
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.7 (2026-08-31)
 
 ### 🚀 Features

@@ -1,3 +1,9 @@
+## 0.0.1-alpha.28 (2026-08-31)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.8
+
 ## 0.0.1-alpha.27 (2026-08-31)
 
 ### 🧱 Updated Dependencies
