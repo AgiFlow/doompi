@@ -31,12 +31,12 @@ function writeChangedFiles(registryDir: string, agentDir: string): void {
       tool: index === 5 ? 'bash' : 'edit',
       at: 100 - index,
       origin: index === 5 ? 'scan' : 'tool',
-      ...(index === 5 ? {} : { before: 'before', after: 'after' }),
+      ...(index === 5 ? { verified: true } : { before: 'before', after: 'after' }),
     });
   });
 
   const hiddenPath = path.join(record.cwd, 'src/HiddenTarget.ts');
-  events.push({ version: 2, path: hiddenPath, tool: 'write', at: 1, origin: 'scan' });
+  events.push({ version: 2, path: hiddenPath, tool: 'write', at: 1, origin: 'scan', verified: true });
 
   const timelineDir = path.join(agentDir, 'doom-file-edit');
   fs.mkdirSync(timelineDir, { recursive: true });

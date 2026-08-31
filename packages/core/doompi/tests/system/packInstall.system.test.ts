@@ -558,7 +558,9 @@ function instrumentInstalledDoomPi(consumerRoot: string, source: string, version
   const original = entry.replace(/\.mjs$/u, '.original.mjs');
   fs.renameSync(entry, original);
   manifest.version = version;
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const instrumentedManifest = `${manifestPath}.instrumented`;
+  fs.writeFileSync(instrumentedManifest, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.renameSync(instrumentedManifest, manifestPath);
   fs.writeFileSync(
     entry,
     [
@@ -1783,7 +1785,16 @@ describe('DPI installed experiment runtime', () => {
     const markerB = path.join(fixtureB.root, 'package-b.jsonl');
     const packageA = instrumentInstalledDoomPi(packedA.root, 'repository-a', '1.0.0-repository-a', markerA);
     const packageB = instrumentInstalledDoomPi(packedB.root, 'repository-b', '2.0.0-repository-b', markerB);
+    for (const [fixture, packageRoot] of [
+      [fixtureA, packageA],
+      [fixtureB, packageB],
+    ] as const) {
+      const scope = path.join(fixture.root, 'node_modules', '@agimon-ai');
+      fs.mkdirSync(scope, { recursive: true });
+      fs.symlinkSync(packageRoot, path.join(scope, 'doompi'), 'dir');
+    }
     const environment = cleanRuntimeEnvironment(fixtureA.agentDirectory);
+    environment.DOOMPI_WEB_PACKAGE_ROOT = path.join(REPOSITORY_ROOT, 'packages/clients/doompi-web');
     await initializePackedIntegration(fixtureA.root, environment, packedA.root);
 
     const settingsPath = path.join(fixtureA.agentDirectory, 'settings.json');
@@ -1831,8 +1842,8 @@ describe('DPI installed experiment runtime', () => {
     expect(registrationB?.package).toMatchObject({ root: packageB, version: '2.0.0-repository-b' });
     expect(registrationA?.generationRoot).not.toBe(registrationB?.generationRoot);
     expect(registrationA?.apiDirectory).not.toBe(registrationB?.apiDirectory);
-    expect(registrationA?.webDirectory).not.toBeNull();
-    expect(registrationB?.webDirectory).not.toBeNull();
+    expect(registrationA?.webDirectory, syncA.stdout).not.toBeNull();
+    expect(registrationB?.webDirectory, syncB.stdout).not.toBeNull();
     expect(registrationA?.webDirectory).not.toBe(registrationB?.webDirectory);
     expect(fs.statSync(registrationA!.apiDirectory).isDirectory()).toBe(true);
     expect(fs.statSync(registrationB!.apiDirectory).isDirectory()).toBe(true);
