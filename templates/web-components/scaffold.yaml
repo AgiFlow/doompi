@@ -68,6 +68,7 @@ boilerplate:
       - src/components/Dot.tsx
       - src/components/DropdownMenu.tsx
       - src/components/EmptyState.tsx
+      - src/components/HashlineLines.tsx
       - src/components/Input.tsx
       - src/components/Kbd.tsx
       - src/components/Label.tsx
@@ -96,6 +97,7 @@ boilerplate:
       - src/icons/icons.ts
       - src/lib/cn.ts
       - src/lib/collapse.ts
+      - src/lib/hashlineView.ts
       - src/lib/optionList.ts
       - src/lib/tone.ts
       - src/theme/apply.ts
@@ -109,6 +111,7 @@ boilerplate:
       - styles/tokens.css
       - tests/components/render.test.tsx
       - tests/components/variants.test.tsx
+      - tests/lib/hashlineView.test.ts
       - tests/lib/optionList.test.ts
       - tests/packageContract.test.ts
       - tests/theme/piTheme.test.ts

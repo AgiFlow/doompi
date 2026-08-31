@@ -22,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   EmptyState,
+  HashlineLines,
   Input,
   Kbd,
   Label,
@@ -52,6 +53,10 @@ import {
   SelectTrigger,
   SelectValue,
   Separator,
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
   Skeleton,
   Spinner,
   STATUS_EDGE,
@@ -232,6 +237,25 @@ describe('primitives', () => {
     expect(toolTone({ running: false, isError: false })).toBe('ok');
   });
 
+  it('draws hashline results with a file heading, a gutter, and a match marker', () => {
+    const out = html(
+      <HashlineLines
+        gutter={2}
+        lines={[
+          { type: 'file', path: 'src/a.ts' },
+          { type: 'tagged', value: { line: 12, content: 'hit', marker: 'match' } },
+          { type: 'tagged', value: { line: 13, content: 'near', marker: 'context' } },
+          { type: 'plain', text: 'native row' },
+        ]}
+      />,
+    );
+    expect(out).toContain('src/a.ts');
+    expect(out).toContain('&gt;&gt;');
+    expect(out).toContain('width:2ch');
+    expect(out).toContain('text-doom-hi');
+    expect(out).toContain('native row');
+  });
+
   it('lends its styling to another element wherever asChild is offered', () => {
     expect(
       html(
@@ -367,6 +391,16 @@ describe('primitives', () => {
         </Dialog>,
       ),
     ).toBe('');
+    expect(
+      html(
+        <Sheet>
+          <SheetTrigger>detail</SheetTrigger>
+          <SheetContent>
+            <SheetTitle>t</SheetTitle>
+          </SheetContent>
+        </Sheet>,
+      ),
+    ).toContain('detail');
     expect(
       html(
         <Popover>

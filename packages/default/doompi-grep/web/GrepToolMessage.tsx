@@ -1,14 +1,15 @@
 import {
+  HashlineLines,
+  hashlineBody,
   MessageItem,
   MessageItemBody,
   MessageItemHeader,
   MessageItemStatus,
+  resultTextLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
 import { grepCallView } from './grepToolView.ts';
-import { HashlineLines } from './HashlineLines.tsx';
-import { hashlineBody, resultTextLines } from './hashlineView.ts';
 
 /**
  * The grep tool's timeline item, the web half of its renderCall and
