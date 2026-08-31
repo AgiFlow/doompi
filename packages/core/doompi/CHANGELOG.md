@@ -1,3 +1,31 @@
+## 0.0.1-alpha.44 (2026-08-31)
+
+### 🩹 Fixes
+
+- skip and prune redundant sync generations ([85f7600](https://github.com/AgiFlow/doompi/commit/85f7600))
+- judge sync freshness by content, not timestamps ([6e50ebe](https://github.com/AgiFlow/doompi/commit/6e50ebe))
+- isolate runtime state by repository ([1a0847d](https://github.com/AgiFlow/doompi/commit/1a0847d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.11
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.44
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.43 (2026-08-30)
 
 ### 🩹 Fixes

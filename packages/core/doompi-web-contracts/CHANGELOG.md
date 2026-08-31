@@ -1,3 +1,14 @@
+## 0.0.1-alpha.7 (2026-08-31)
+
+### 🚀 Features
+
+- **doompi-web:** open the files a message names ([5e9d612](https://github.com/AgiFlow/doompi/commit/5e9d612))
+- verify scanned file changes and tidy web surfaces ([445b94a](https://github.com/AgiFlow/doompi/commit/445b94a))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.6 (2026-08-30)
 
 ### 🚀 Features

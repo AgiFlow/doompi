@@ -1,3 +1,30 @@
+## 0.0.1-alpha.44 (2026-08-31)
+
+### 🩹 Fixes
+
+- isolate runtime state by repository ([1a0847d](https://github.com/AgiFlow/doompi/commit/1a0847d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.5
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.6
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.43 (2026-08-30)
 
 ### 🧱 Updated Dependencies

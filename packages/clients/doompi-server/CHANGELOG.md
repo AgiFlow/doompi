@@ -1,3 +1,25 @@
+## 0.0.1-alpha.7 (2026-08-31)
+
+### 🚀 Features
+
+- verify scanned file changes and tidy web surfaces ([445b94a](https://github.com/AgiFlow/doompi/commit/445b94a))
+
+### 🩹 Fixes
+
+- isolate runtime state by repository ([1a0847d](https://github.com/AgiFlow/doompi/commit/1a0847d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.44
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.42
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.6 (2026-08-30)
 
 ### 🚀 Features

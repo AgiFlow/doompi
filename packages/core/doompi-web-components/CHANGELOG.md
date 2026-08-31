@@ -1,3 +1,17 @@
+## 0.0.1-alpha.5 (2026-08-31)
+
+### 🚀 Features
+
+- **doompi-web:** open the files a message names ([5e9d612](https://github.com/AgiFlow/doompi/commit/5e9d612))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.41
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.4 (2026-08-30)
 
 ### 🧱 Updated Dependencies

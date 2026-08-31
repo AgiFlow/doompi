@@ -1,3 +1,33 @@
+## 0.0.1-alpha.5 (2026-08-31)
+
+### 🚀 Features
+
+- **doompi-web:** open the files a message names ([5e9d612](https://github.com/AgiFlow/doompi/commit/5e9d612))
+- verify scanned file changes and tidy web surfaces ([445b94a](https://github.com/AgiFlow/doompi/commit/445b94a))
+
+### 🩹 Fixes
+
+- **doompi-web:** let the transcript use the full width on a phone ([f557caf](https://github.com/AgiFlow/doompi/commit/f557caf))
+- let the hub adopt rebuilt cockpit generations ([d5cf91c](https://github.com/AgiFlow/doompi/commit/d5cf91c))
+- isolate runtime state by repository ([1a0847d](https://github.com/AgiFlow/doompi/commit/1a0847d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.5
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.6
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.41
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.4 (2026-08-30)
 
 ### 🚀 Features

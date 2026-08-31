@@ -1,3 +1,13 @@
+## 0.0.1-alpha.44 (2026-08-31)
+
+### 🩹 Fixes
+
+- isolate runtime state by repository ([1a0847d](https://github.com/AgiFlow/doompi/commit/1a0847d))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.43 (2026-08-30)
 
 This was a version bump only for @agimon-ai/doompi-extension-contracts to align it with other projects, there were no code changes.
