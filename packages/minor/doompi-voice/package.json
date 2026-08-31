@@ -86,9 +86,9 @@
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
-    "onnxruntime-web": "1.23.2",
+    "onnxruntime-web": "1.29.0",
     "sherpa-onnx-node": "1.13.6",
-    "xstate": "5.32.5"
+    "xstate": "5.32.6"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.4",
