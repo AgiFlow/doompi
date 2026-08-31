@@ -112,6 +112,16 @@ export const HUB_RESYNCED_TYPE = 'hub_resynced';
  */
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
+/**
+ * The custom session entry doompi-domain journals once Pi has rebuilt its
+ * resource catalog for a reload; it mirrors DOOM_RESOURCE_CATALOG_ENTRY_TYPE in
+ * doompi-extension-contracts.
+ *
+ * A reload is what changes the skills the composer offers under `$`, and Pi
+ * reports nothing else for one, so this entry is the cockpit's only notice that
+ * the command list it cached belongs to the previous selection.
+ */
+export const RESOURCE_CATALOG_ENTRY_TYPE = 'doom-resource-catalog';
 export interface MinorModeActionProjection {
   id: string;
   label: string;

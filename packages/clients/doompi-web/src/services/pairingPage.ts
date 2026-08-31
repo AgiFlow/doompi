@@ -176,6 +176,21 @@ const SCRIPT = `
     });
   }
 
+  /**
+   * Names the refusal in terms of what the person has to do about it.
+   *
+   * A rotated host key reaches the verifier as untrusted-public-key rather than
+   * signer-mismatch, because a refresh always re-sends the pinned key and only
+   * the signature check can notice the host moved on.
+   */
+  function bundleRefusalMessage(result) {
+    if (result.code === 'untrusted-public-key')
+      return 'This host now signs with a different key. Scan a fresh pairing QR so you can confirm the new fingerprint.';
+    if (result.code === 'stale-revision')
+      return 'This host offers an older cockpit build than this device already verified. Clear this site data to accept it.';
+    return result.message ?? 'The signed cockpit bundle was refused.';
+  }
+
   async function activateTrust(trust, alreadyConfirmed = false) {
     say('Verifying every cockpit file before it can run.');
     let result = await requestWorker({ type: 'doompi:activate-bundle', publicKey: trust.publicKey, minimumRevision: trust.revision });
@@ -187,7 +202,7 @@ const SCRIPT = `
       result = await requestWorker({ type: 'doompi:activate-bundle', publicKey: trust.publicKey, minimumRevision: trust.revision });
     }
     if (!result.ok) {
-      say(result.message ?? 'The signed cockpit bundle was refused.', 'bad');
+      say(bundleRefusalMessage(result), 'bad');
       return false;
     }
     return true;
@@ -335,6 +350,15 @@ const SCRIPT = `
       const result = await finished.json();
       if (!rememberChannelKey(result.hostPublicKey)) return false;
       const refreshed = await requestWorker({ type: 'doompi:refresh-bundle' });
+      // A host this device cannot reach is not a trust decision. The pin is the
+      // last bundle this device verified for itself, so it stays usable while
+      // the host is away. Every other refusal is a trust decision and still
+      // blocks entry.
+      if (!refreshed.ok && refreshed.code === 'manifest-fetch') {
+        say('Could not check for a newer cockpit build. Opening the last verified one.');
+        return true;
+      }
+      if (!refreshed.ok) say(bundleRefusalMessage(refreshed), 'bad');
       return refreshed.ok;
     } catch {
       return false;

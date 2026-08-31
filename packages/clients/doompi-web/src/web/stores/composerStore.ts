@@ -86,6 +86,55 @@ export function dropComposerState(sessionId: string): void {
   });
 }
 
+const DRAFT_STORAGE_KEY = 'doompi:composer-drafts';
+
+interface StoredDraft {
+  draft: string;
+  caret: number;
+}
+
+/**
+ * Holds unsent text across a reload the person did not ask for.
+ *
+ * A verified bundle update reloads the page underneath whoever is typing, so
+ * the text has to outlive the document. Only the draft and the caret travel:
+ * attachments carry base64 image payloads that would not fit a storage quota,
+ * and re-attaching a file is a smaller loss than losing a written message.
+ */
+export function saveComposerDrafts(): void {
+  try {
+    const drafts: Record<string, StoredDraft> = {};
+    for (const [sessionId, state] of Object.entries(composerStore.state)) {
+      if (state !== undefined && state.draft !== '') drafts[sessionId] = { draft: state.draft, caret: state.caret };
+    }
+    if (Object.keys(drafts).length === 0) window.sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    else window.sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+  } catch {
+    // Losing a draft is not worth breaking the reload that was already decided.
+  }
+}
+
+/** Seeds the store from the last save, then forgets it so a later reload starts clean. */
+export function restoreComposerDrafts(): void {
+  let stored: unknown;
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_STORAGE_KEY);
+    window.sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    if (raw === null) return;
+    stored = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return;
+  for (const [sessionId, value] of Object.entries(stored as Record<string, unknown>)) {
+    if (typeof value !== 'object' || value === null) continue;
+    const entry = value as Record<string, unknown>;
+    if (typeof entry.draft !== 'string' || entry.draft === '' || !Number.isSafeInteger(entry.caret)) continue;
+    const caret = Math.max(0, Math.min(Number(entry.caret), entry.draft.length));
+    updateComposerState(sessionId, (state) => ({ ...state, draft: entry.draft as string, caret }));
+  }
+}
+
 /** Test seam. */
 export function resetComposerStore(): void {
   composerStore.setState(() => ({}));

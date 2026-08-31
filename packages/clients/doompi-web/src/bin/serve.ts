@@ -3,8 +3,8 @@
 import os from 'node:os';
 import { createCockpitContainer } from '../adapters/cockpitContainer.ts';
 import { handOffRemoteAccess } from '../adapters/cockpitHandoff.ts';
-import { hubAnswers } from '../adapters/hubProbe.ts';
-import { serveWeb } from '../adapters/httpServer.ts';
+import { hubAnswers, probeHub } from '../adapters/hubProbe.ts';
+import { packagedVersion, serveWeb } from '../adapters/httpServer.ts';
 import { defaultRemoteStateDir } from '../adapters/remoteAccessStore.ts';
 import { relaunchSessions } from '../adapters/sessionRelaunch.ts';
 import { REGISTRY_DIR_ENV, resolveRegistryDir } from '../services/registryStore.ts';
@@ -13,9 +13,31 @@ import type { WebServer } from '../types/bridge.ts';
 import type { MigratingSession, RemoteAccessSettings } from '../types/remoteAccess.ts';
 
 const ADDRESS_IN_USE = 'EADDRINUSE';
+const STOP_POLL_MS = 100;
+const STOP_TIMEOUT_MS = 10_000;
 
 function notice(message: string): void {
   process.stderr.write(`[doompi-web] ${message}\n`);
+}
+
+/**
+ * Signals the running hub and waits for the address to go quiet.
+ *
+ * Only ever called for a loopback address, because the pid on the other end of
+ * the probe is only this machine's pid when the hub is on this machine.
+ */
+async function stopRunningHub(pid: number, host: string, port: number): Promise<boolean> {
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // Already gone, or not ours to signal. The probe below settles it either way.
+  }
+  const deadline = Date.now() + STOP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, STOP_POLL_MS));
+    if (!(await hubAnswers(host, port))) return true;
+  }
+  return false;
 }
 
 async function main(): Promise<void> {
@@ -36,11 +58,34 @@ async function main(): Promise<void> {
     notice('WARNING: turn on remote access in settings instead, which requires a paired device.');
   }
 
-  // One hub serves every session, so a second start is a request to use the
-  // running one, not an error worth a stack trace.
-  if (await hubAnswers(options.host, options.port)) {
-    notice(`cockpit already running at ${url}`);
-    return;
+  // One hub serves every session, so a second start is normally a request to
+  // use the running one. A second start from a *different* version is not: a
+  // long-lived hub signs its asset directory once, so handing back to it would
+  // serve the older cockpit for as long as it lives, and a browser that already
+  // verified that bundle would never be offered a newer one.
+  const running = await probeHub(options.host, options.port);
+  if (running !== undefined) {
+    const mine = packagedVersion();
+    const theirs = running.version ?? 'an older build';
+    if (running.version === mine) {
+      notice(`cockpit already running at ${url}`);
+      return;
+    }
+    if (running.sessions > 0) {
+      notice(`WARNING: ${theirs} is already running at ${url} with ${String(running.sessions)} live session(s).`);
+      notice(`WARNING: stop it and run again to serve ${mine}; refusing to interrupt running work.`);
+      return;
+    }
+    if (running.pid === undefined || !isLoopbackHost(options.host)) {
+      notice(`WARNING: ${theirs} is already running at ${url} and cannot be replaced automatically.`);
+      notice(`WARNING: stop it and run again to serve ${mine}.`);
+      return;
+    }
+    notice(`replacing ${theirs} at ${url} with ${mine}`);
+    if (!(await stopRunningHub(running.pid, options.host, options.port))) {
+      notice(`WARNING: the hub at ${url} did not stop; serve ${mine} on another port with --port.`);
+      return;
+    }
   }
 
   /**

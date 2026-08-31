@@ -6,6 +6,7 @@ import {
   verifyBundleAsset,
   verifySignedBundleManifest,
 } from '@agimon-ai/doompi-web-security/browser';
+import { BUNDLE_UPDATED_MESSAGE, type BundleUpdatedMessage } from '../types/bundle.ts';
 import { clearActiveBundle, commitActiveBundle, readActiveBundle, type ActiveBundleState } from './bundleCache.ts';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
@@ -217,9 +218,61 @@ worker.addEventListener('message', (event) => {
   );
 });
 
+/**
+ * The revalidation in flight, so several tabs opening at once ask one question.
+ *
+ * Cleared when it settles rather than cached: the next navigation is a new
+ * moment and deserves a fresh answer.
+ */
+let revalidation: Promise<void> | undefined;
+
+async function announceRevision(revision: number): Promise<void> {
+  const windows = await worker.clients.matchAll({ type: 'window' });
+  for (const client of windows) {
+    client.postMessage({ type: BUNDLE_UPDATED_MESSAGE, revision } satisfies BundleUpdatedMessage);
+  }
+}
+
+/**
+ * Asks the host whether the pinned bundle is still the current one.
+ *
+ * Runs through `activateBundle` unchanged, so signer pinning, the monotonic
+ * revision floor, revision-reuse detection and per-asset verification all still
+ * decide the outcome. Every failure is deliberately silent: the page is already
+ * being served the last verified bundle, and a refused update must not disturb
+ * a cockpit that works.
+ */
+function revalidatePinnedBundle(state: ActiveBundleState): Promise<void> {
+  revalidation ??= (async () => {
+    try {
+      const reply = await activateBundle(state.signerPublicKey, state.revision);
+      if (reply.ok && reply.revision !== undefined && reply.revision > state.revision) {
+        await announceRevision(reply.revision);
+      }
+    } catch {
+      // A revalidation that throws leaves the pin and the cache untouched.
+    } finally {
+      revalidation = undefined;
+    }
+  })();
+  return revalidation;
+}
+
+/** Reads the pin itself, so scheduling never has to wait on the response path. */
+async function revalidateOnNavigation(): Promise<void> {
+  const state = await readActiveBundle();
+  if (state === undefined) return;
+  await revalidatePinnedBundle(state);
+}
+
 worker.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== worker.location.origin || trustedNetworkPath(url.pathname)) return;
+  // A navigation is the one moment a returning device is reliably online and
+  // between pages, so it is where the pin gets questioned. Scheduled here, while
+  // the event is certainly still extendable, and kept off the response path: a
+  // refused or impossible update must never cost the page its bundle.
+  if (event.request.mode === 'navigate') event.waitUntil(revalidateOnNavigation());
   event.respondWith(
     readActiveBundle().then(async (state) =>
       state === undefined ? await fetch(event.request) : await verifiedResponse(state, event.request),

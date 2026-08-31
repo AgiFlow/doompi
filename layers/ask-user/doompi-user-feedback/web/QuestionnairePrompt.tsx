@@ -10,7 +10,7 @@ import {
   Textarea,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolPromptRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeAnswerEnvelope } from '../src/types/askUserWire.ts';
 import {
   chooseOption,
@@ -70,6 +70,23 @@ function StepBar({
   );
 }
 
+/**
+ * The frame's shortcuts stop at a text field: while the caret is in one the
+ * arrows and Enter belong to the field, so they are kept from bubbling. Enter
+ * commits the field the way the terminal editor does, Shift+Enter writes a
+ * newline, and Escape and Cmd/Ctrl+Enter still reach the frame.
+ */
+function fieldKeys(commit: () => void) {
+  return (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key === 'Escape') return;
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) return;
+    event.stopPropagation();
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    commit();
+  };
+}
+
 /** One question's options, its typed-answer row, and the preview of whatever is focused. */
 function QuestionBody({
   question,
@@ -78,6 +95,7 @@ function QuestionBody({
   cursor,
   onCursor,
   onDraft,
+  onCommit,
 }: {
   question: PromptQuestion;
   index: number;
@@ -86,6 +104,8 @@ function QuestionBody({
   onCursor: (cursor: number) => void;
   /** `settles` is true only for an edit that finishes the question, which is what may move on. */
   onDraft: (draft: QuestionnaireDraft, settles: boolean) => void;
+  /** Enter in a text field: hands the keyboard back to the frame, settling the question or not. */
+  onCommit: (settles: boolean) => void;
 }) {
   const entry = draftEntry(draft, index);
   const typing = entry.custom !== null;
@@ -152,6 +172,7 @@ function QuestionBody({
             value={entry.custom ?? ''}
             placeholder="type your answer…"
             onChange={(event) => onDraft(setCustom(draft, index, event.target.value), false)}
+            onKeyDown={fieldKeys(() => onCommit(true))}
             className="text-[12px]"
           />
         </div>
@@ -174,6 +195,7 @@ function QuestionBody({
           value={entry.notes}
           placeholder="anything the options do not cover"
           onChange={(event) => onDraft(setNotes(draft, index, event.target.value), false)}
+          onKeyDown={fieldKeys(() => onCommit(false))}
           className="text-[11px]"
         />
       </div>
@@ -262,6 +284,11 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
           cancel();
           return;
         }
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          submit();
+          return;
+        }
         // While typing an answer the arrows belong to the textarea.
         if (typing) return;
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -279,7 +306,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
         if (event.key === 'Enter') {
           event.preventDefault();
           const option = question.options[cursor];
-          if (event.metaKey || event.ctrlKey || option === undefined) {
+          if (option === undefined) {
             submit();
             return;
           }
@@ -305,6 +332,10 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
           cursor={cursor}
           onCursor={setCursor}
           onDraft={(next, settles) => move(next, current, settles)}
+          onCommit={(settles) => {
+            frame.current?.focus();
+            move(draft, current, settles);
+          }}
         />
       </div>
 

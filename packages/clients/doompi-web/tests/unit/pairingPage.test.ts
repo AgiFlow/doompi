@@ -114,4 +114,35 @@ describe('the pairing page', () => {
     expect(headers['Referrer-Policy']).toBe('no-referrer');
     expect(headers['X-Frame-Options']).toBe('DENY');
   });
+
+  it('opens the last verified cockpit when the host cannot be reached', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    // A host this device cannot reach is the one refusal that is not a trust
+    // decision, so it is the only one allowed to fall through to the pin.
+    expect(html).toContain("refreshed.code === 'manifest-fetch'");
+    expect(html).toContain('Could not check for a newer cockpit build. Opening the last verified one.');
+  });
+
+  it('still blocks entry on every refusal that is a trust decision', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    // The recoverable branch must name exactly one code. Anything else, including
+    // no-pin, has to keep returning false and stay on the pairing page.
+    expect(html.match(/refreshed\.code === '[a-z-]+'/gu)).toEqual(["refreshed.code === 'manifest-fetch'"]);
+    expect(html).toContain('return refreshed.ok;');
+  });
+
+  it('tells a device that the host rotated its signing key', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    // A refresh re-sends the pinned key, so a rotated host reaches the verifier
+    // as untrusted-public-key and never as signer-mismatch.
+    expect(html).toContain("result.code === 'untrusted-public-key'");
+    expect(html).toContain('This host now signs with a different key.');
+    expect(html).toContain('confirm the new fingerprint');
+  });
+
+  it('explains a host that offers an older build than the device pinned', () => {
+    const html = pairingPageHtml({ nonce: NONCE });
+    expect(html).toContain("result.code === 'stale-revision'");
+    expect(html).toContain('older cockpit build than this device already verified');
+  });
 });
