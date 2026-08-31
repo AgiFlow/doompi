@@ -5,11 +5,14 @@ import { ensureLayerPackages, type LayerPackageResult } from '../adapters/layerP
 import { findRepositoryRoot } from '../adapters/repository/repository';
 import type { HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
 import { acquireSyncLocationLock, resolveSyncLocation } from '../adapters/syncLocation.ts';
+import { readSyncDrift } from '../adapters/syncDrift.ts';
 import { BuildCommand } from './buildCommand.ts';
 import { SyncCommand, type SyncSettingsMode } from './syncCommand.ts';
 import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
 
 const CHECK_OPTION = '--check';
+/** Rebuilds and republishes even when nothing drifted. */
+const FORCE_OPTION = '--force';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const BUILD_COMMAND = 'build';
 const PACKAGES_LABEL = 'packages';
@@ -56,6 +59,18 @@ export class SyncPipeline {
     const inheritedRoot = environment[HARNESS_ROOT_ENV];
     const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
     const homeDirectory = environment.HOME ?? os.homedir();
+
+    // Nothing drifted means the packages are current, the mode extension is
+    // compiled from these exact bytes, and the published generation already
+    // describes them. Refreshing and rebuilding anyway costs seconds per call
+    // and, worse, ends in a republished generation that reloads every attached
+    // cockpit for no change at all. The cockpit calls this before every session
+    // launch, so the cheap answer has to be the common one.
+    if (!args.includes(FORCE_OPTION) && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+      output.write('doompi sync is already up to date\n');
+      return 0;
+    }
+
     const releaseLock = await acquireSyncLocationLock(resolveSyncLocation(repoRoot, homeDirectory));
     try {
       const progress = new SyncProgress(output);

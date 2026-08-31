@@ -1,12 +1,14 @@
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { buildHarnessContext } from '../adapters/harnessContext.ts';
 import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../adapters/layerPackageInstaller.ts';
 import { readBootstrapStatus } from '../adapters/bootstrapLocator.ts';
+import { DOOM_PACKAGE_NAME } from '../adapters/doomPackage.ts';
 import { doomPiPackageRoot, piExtensionAliasIsCurrent } from '../adapters/piExtensionAlias.ts';
 import {
   mergePiSettings,
@@ -28,10 +30,12 @@ import {
   syncStateSha256,
   type SyncPackageRegistration,
 } from '../adapters/syncRegistration.ts';
+import { readSyncDrift } from '../adapters/syncDrift.ts';
 import { syncApiRoutes } from '../adapters/apiRoutesSync.ts';
 import { syncWebBundle } from '../adapters/webBundleSync.ts';
 import {
   computeInputsHash,
+  computeWebSourcesHash,
   readLocatedSyncState,
   readMcpServerNames,
   recordResolvedEntries,
@@ -64,10 +68,15 @@ import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
 
 const SYNC_COMMAND = 'sync';
 const CHECK_OPTION = '--check';
+/** Republishes even when nothing drifted, for a generation suspected of being damaged. */
+const FORCE_OPTION = '--force';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const PERSONA_FILE_ENV = 'DOOMPI_PERSONA_FILE';
 const HOOK_EMITTER = path.join('tools', 'harness', 'emit-hooks.mjs');
 const NONE = '(none)';
+const PRIVATE_DIRECTORY_MODE = 0o700;
+/** Published generations kept behind the current one, so a running hub mid-read survives a prune. */
+const RETAINED_GENERATIONS = 1;
 const SYNC_LABEL = 'sync';
 const RUNTIME_LABEL = 'runtime';
 const WEB_LABEL = 'web';
@@ -295,8 +304,28 @@ export function formatSyncResult(result: SyncResult, runner = 'pi'): string {
   ].join('\n');
 }
 
-function executingPackageRegistration(): SyncPackageRegistration {
-  const root = fs.realpathSync(doomPiPackageRoot());
+/**
+ * The DoomPi package a repository pins for itself, if it pins one.
+ *
+ * Extensions are version-coupled to the harness that loads them, so the
+ * registration must name the copy the repository resolves rather than whichever
+ * copy happened to run sync. A globally installed DoomPi syncing a repository
+ * that pins its own would otherwise record itself, and the dispatcher would
+ * then load the wrong harness for every session in that repository.
+ */
+function repositoryPackageRoot(repoRoot: string): string | undefined {
+  try {
+    return path.dirname(
+      createRequire(path.join(repoRoot, 'package.json')).resolve(`${DOOM_PACKAGE_NAME}/package.json`),
+    );
+  } catch {
+    // Not pinned here, which is normal; the executing package stands in.
+    return undefined;
+  }
+}
+
+function packageRegistrationFor(repoRoot: string): SyncPackageRegistration {
+  const root = fs.realpathSync(repositoryPackageRoot(repoRoot) ?? doomPiPackageRoot());
   const manifestPath = path.join(root, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
     version?: unknown;
@@ -314,6 +343,49 @@ function executingPackageRegistration(): SyncPackageRegistration {
     manifestPath,
     entry: fs.realpathSync(path.resolve(root, extension)),
   };
+}
+
+/**
+ * Removes generations the published one replaced.
+ *
+ * Each generation holds a full cockpit bundle and runtime, so keeping every one
+ * ever built grows without bound. One superseded generation is retained because
+ * a hub that resolved its assets a moment ago may still be reading them; older
+ * ones have no reader left. Ordered by directory name, whose leading timestamp
+ * makes publication order recoverable without reading each state file.
+ */
+function pruneSupersededGenerations(
+  generationsDirectory: string,
+  published: string,
+  onNotice: (message: string) => void,
+): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(generationsDirectory, { withFileTypes: true });
+  } catch (error) {
+    // Nothing to prune is indistinguishable from an unreadable directory here,
+    // and neither is worth failing a sync that already published.
+    onNotice(`could not list generations to prune: ${describeError(error)}`);
+    return;
+  }
+  const superseded = entries
+    .filter((entry) => entry.isDirectory() && entry.name !== published)
+    .map((entry) => entry.name)
+    .sort();
+  const removable = superseded.slice(0, Math.max(0, superseded.length - RETAINED_GENERATIONS));
+  for (const name of removable) {
+    try {
+      fs.rmSync(path.join(generationsDirectory, name), { recursive: true, force: true });
+    } catch (error) {
+      // A generation still held open elsewhere stays; the next sync retries it.
+      onNotice(`could not remove superseded generation ${name}: ${describeError(error)}`);
+    }
+  }
+  if (removable.length > 0) onNotice(`pruned ${String(removable.length)} superseded generation(s)`);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** Resolves the matrix, stages it into home-scoped worktree storage, and publishes one generation. */
@@ -340,7 +412,8 @@ export class SyncCommand {
     output: SyncOutput = process.stdout,
   ): Promise<number> {
     const check = args.includes(CHECK_OPTION);
-    const rest = args.slice(1).filter((argument) => argument !== CHECK_OPTION);
+    const force = args.includes(FORCE_OPTION);
+    const rest = args.slice(1).filter((argument) => argument !== CHECK_OPTION && argument !== FORCE_OPTION);
     const inheritedRoot = environment[HARNESS_ROOT_ENV];
     const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
     const homeDirectory = this.homeDirectory ?? environment.HOME ?? os.homedir();
@@ -412,6 +485,14 @@ export class SyncCommand {
       return 1;
     }
 
+    // Publishing an identical generation is not a no-op: it moves the
+    // registration, so every attached cockpit reloads and the previous
+    // generation becomes garbage. Same inputs, same published result.
+    if (!force && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+      output.write('doompi sync is already up to date\n');
+      return 0;
+    }
+
     const progress = new SyncProgress(output);
     const releaseLock = this.lockHeld
       ? undefined
@@ -437,7 +518,12 @@ export class SyncCommand {
     const location = resolveSyncLocation(repoRoot, homeDirectory);
     const generation = `${Date.now().toString(36)}-${crypto.randomUUID()}`;
     const directory = syncGenerationDirectory(location, generation);
-    await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
+    await fs.promises.mkdir(location.generationsDirectory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+    // The leaf is created without `recursive`, so an existing path is an error
+    // rather than something to adopt: the cockpit signs and serves whatever the
+    // published generation holds, and sync must only ever publish bytes it
+    // wrote itself into a directory it just created.
+    await fs.promises.mkdir(directory, { mode: PRIVATE_DIRECTORY_MODE });
 
     try {
       const staged = progress.start(SYNC_LABEL, 'resolving the matrix and staging resources');
@@ -467,6 +553,7 @@ export class SyncCommand {
         root: location.root,
         identity: location.identity,
         inputsHash: computeInputsHash(location.root, selection, homeDirectory),
+        webSourcesHash: computeWebSourcesHash(resolved),
         compositionFingerprint,
         selection,
         env: recordedEnvironment(context.environment),
@@ -525,9 +612,12 @@ export class SyncCommand {
           stateSha256: syncStateSha256(statePath),
           webDirectory: web.status === 'bundled' ? web.assetsDir : null,
           apiDirectory: api.directory,
-          package: executingPackageRegistration(),
+          package: packageRegistrationFor(location.root),
         },
         homeDirectory,
+      );
+      pruneSupersededGenerations(location.generationsDirectory, generation, (message) =>
+        progress.line(SYNC_LABEL, message),
       );
       const projectSettingsPath = this.settingsMode === 'persisted' ? writeProjectPiSettings(location.root) : undefined;
 

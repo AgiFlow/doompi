@@ -548,12 +548,45 @@ describe('doompi sync', () => {
     fs.writeFileSync(publishedMarker, 'from the published generation');
     fs.mkdirSync(live, { recursive: true });
 
-    await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
+    await new SyncCommand().execute(['sync', '--force'], environmentFor(root), root, output);
 
     const second = readSyncRegistration(root, homeDirectory);
     expect(second?.generation).not.toBe(first?.generation);
     expect(fs.existsSync(publishedMarker)).toBe(true);
     expect(fs.existsSync(live)).toBe(true);
+  });
+
+  it('publishes nothing when a second sync finds the same inputs', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output);
+    const first = readSyncRegistration(root, homeDirectory);
+
+    const { output, text } = capture();
+    await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
+
+    // Republishing an identical generation moves the registration, so every
+    // attached cockpit reloads and the previous generation becomes garbage.
+    const second = readSyncRegistration(root, homeDirectory);
+    expect(second?.generation).toBe(first?.generation);
+    expect(text()).toContain('already up to date');
+  });
+
+  it('prunes generations the published one replaced', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    const generations: string[] = [];
+    for (let run = 0; run < 3; run += 1) {
+      await new SyncCommand().execute(['sync', '--force'], environmentFor(root), root, capture().output);
+      const registration = readSyncRegistration(root, homeDirectory);
+      if (registration) generations.push(registration.generationRoot);
+    }
+
+    // The published generation and the one before it survive, because a hub
+    // that resolved its assets a moment ago may still be reading them.
+    expect(fs.existsSync(generations[2] ?? '')).toBe(true);
+    expect(fs.existsSync(generations[1] ?? '')).toBe(true);
+    expect(fs.existsSync(generations[0] ?? '')).toBe(false);
   });
 
   it('keeps concurrent repositories isolated across a repeated sync', async () => {
