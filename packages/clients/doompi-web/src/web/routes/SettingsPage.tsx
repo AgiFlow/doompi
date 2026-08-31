@@ -33,7 +33,11 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (current) return;
-    void navigate({ to: '/settings/$section', params: { section: DEFAULT_SETTINGS_SECTION }, replace: true });
+    void navigate({
+      to: '/settings/$section',
+      params: { section: DEFAULT_SETTINGS_SECTION },
+      replace: true,
+    });
   }, [current, navigate]);
 
   return (
@@ -129,7 +133,9 @@ export function SettingsPage() {
               {current?.id === 'notifications' ? <NotificationSettings /> : null}
               {current?.id === 'remote' ? <RemoteControlSettings /> : null}
               {current?.id === 'plugins' ? <PluginSettings /> : null}
-              {current?.contribution === undefined ? null : <ContributedSettings section={current.contribution} />}
+              {current?.contribution === undefined ? null : (
+                <ContributedSettings section={current.contribution} scope="global" />
+              )}
             </section>
           </div>
         )}

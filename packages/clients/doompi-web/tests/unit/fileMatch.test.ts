@@ -26,4 +26,15 @@ describe('rankFileMatches', () => {
     expect(rankFileMatches(FILES, '', 2)).toHaveLength(2);
     expect(rankFileMatches(FILES, 'nope', 10)).toEqual([]);
   });
+
+  it('ranks a folder by its own name, not by the empty segment after its slash', () => {
+    const paths = ['src/services/sessionPresence.ts', 'src/services/', 'notes/about-services.md'];
+    // 'services/' would rank last on a path substring if the trailing slash
+    // were left on, because its basename would be empty.
+    expect(rankFileMatches(paths, 'services', 10)).toEqual([
+      'src/services/',
+      'notes/about-services.md',
+      'src/services/sessionPresence.ts',
+    ]);
+  });
 });

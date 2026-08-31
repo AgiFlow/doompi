@@ -36,6 +36,7 @@ export type {
   SettingsSectionContribution,
   SurfaceContribution,
   TabContribution,
+  ThreadViewOptions,
   ToolMessageRenderProps,
   ToolPromptContribution,
   ToolPromptDialog,

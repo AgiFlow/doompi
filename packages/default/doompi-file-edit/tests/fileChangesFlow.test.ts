@@ -11,6 +11,7 @@ import { readSessionFiles } from '../src/adapters/webFilesChannel.ts';
 import { TimelineStore } from '../src/adapters/TimelineStore/TimelineStore.ts';
 import type { FileEditsDetailView } from '../src/types/fileEditsApi.ts';
 import { detailUrl } from '../src/types/fileEditsApi.ts';
+import type { GitStatusPort } from '../src/types/gitStatus.ts';
 
 /**
  * The three halves meeting on disk.
@@ -44,7 +45,7 @@ afterEach(() => {
 });
 
 /** The extension half: what the Pi adapter wires up at session_start. */
-function startExtension() {
+function startExtension(options: { git?: GitStatusPort } = {}) {
   const sessionKey = paths.sessionKey(SESSION_ID);
   const timelinePath = paths.timelinePath(cwd, sessionKey);
   const snapshotsPath = paths.snapshotsPath(cwd, sessionKey);
@@ -52,7 +53,7 @@ function startExtension() {
   timeline.initialize(timelinePath);
   const snapshots = new NodeSnapshotStoreAdapter();
   snapshots.initialize(snapshotsPath);
-  const tracker = new EditTracker(timeline, snapshots, new NodeTreeManifestAdapter());
+  const tracker = new EditTracker(timeline, snapshots, new NodeTreeManifestAdapter(), options);
   tracker.reset({ exclude: [timelinePath, `${timelinePath}.lock`, snapshotsPath] });
   return { timeline, snapshots, tracker, timelinePath };
 }
@@ -124,6 +125,43 @@ describe('a session’s file changes, end to end', () => {
     expect(detail.working.content).toBe('after the script ran');
   });
 
+  it('leaves out a file a command only touched, once it has the content to compare', async () => {
+    const { tracker } = startExtension();
+    const filePath = path.join(cwd, 'generated.txt');
+    fs.writeFileSync(filePath, 'before');
+
+    await tracker.start('call-1', 'bash', { command: 'node scripts/codemod.mjs' }, cwd);
+    fs.writeFileSync(filePath, 'after the script ran');
+    await tracker.end('call-1', false, cwd);
+
+    // The second call rewrites the identical bytes, which moves the modification
+    // time the walk reads and nothing a reader would call an edit.
+    await tracker.start('call-2', 'bash', { command: 'touch generated.txt' }, cwd);
+    fs.writeFileSync(filePath, 'after the script ran');
+    await tracker.end('call-2', false, cwd);
+
+    expect(readHubRows()).toEqual([
+      { path: filePath, relPath: 'generated.txt', tool: 'bash', at: expect.any(Number), count: 1, diffable: false },
+    ]);
+  });
+
+  it('leaves out a first-seen file git reports as unmodified', async () => {
+    const clean = path.join(cwd, 'committed.txt');
+    const ignored = path.join(cwd, 'temp.log');
+    // Git knows the tracked file and says its bytes never moved; it has nothing
+    // to say about the ignored one, so that one is still recorded.
+    const git: GitStatusPort = { unchanged: async () => new Set([clean]) };
+    const { tracker } = startExtension({ git });
+    fs.writeFileSync(clean, 'committed');
+    fs.writeFileSync(ignored, 'log');
+
+    await tracker.start('call-1', 'bash', { command: 'git checkout . && ./run.sh' }, cwd);
+    fs.writeFileSync(clean, 'committed');
+    fs.writeFileSync(ignored, 'log line two');
+    await tracker.end('call-1', false, cwd);
+
+    expect(readHubRows().map((row) => row.relPath)).toEqual(['temp.log']);
+  });
   it('shows a file edited twice as two changes with one cumulative diff', async () => {
     const { tracker } = startExtension();
     const filePath = path.join(cwd, 'app.ts');

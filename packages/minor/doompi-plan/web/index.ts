@@ -18,7 +18,9 @@ export const webPlugin = defineWebPlugin({
   // which is when a reader most wants it open. There is no `tab`, so the chip
   // stays the label for the TUI's SPC p e; the section's row is the way in,
   // and a leader binding could not open a transient tab anyway.
-  activityGroups: [{ name: 'plan', keys: 'p e', statusKey: PLAN_STATUS_KEY, order: 25 }],
+  // `marksBackgroundWork: false`: a saved plan is a document, not a running
+  // process, so it must not count toward the dock's "N running" badge.
+  activityGroups: [{ name: 'plan', keys: 'p e', statusKey: PLAN_STATUS_KEY, marksBackgroundWork: false, order: 25 }],
   // Same name as the group: the dock renders this inside it, in place of the
   // raw status line the session publishes for a terminal footer.
   activitySections: [{ id: 'plan', component: PlanActivitySection }],

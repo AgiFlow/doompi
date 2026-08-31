@@ -2,13 +2,22 @@ import {
   Badge,
   Button,
   cn,
-  CloseIcon,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   EmptyState,
+  KebabIcon,
   Kbd,
   Panel,
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
   STATUS_EDGE,
   StatusBadge,
-  StreamCursor,
 } from '@agimon-ai/doompi-web-components';
 import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
@@ -21,9 +30,24 @@ import { abbreviateCwd } from './format.ts';
 import { LaunchAgentDialog } from './LaunchAgentDialog.tsx';
 import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
 import { elapsedRun, RUN_BADGE, RunControl } from './RunControl.tsx';
-import { clearAutoOpen, openRun, subagents, visibleRuns } from './subagentsStore.ts';
+import {
+  clearAutoOpen,
+  dismissRun,
+  isTerminalRun,
+  openRun,
+  requestRunStop,
+  subagents,
+  visibleRuns,
+} from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
+
+/**
+ * How much of a run's own conversation a card carries: enough to read what it
+ * is doing right now, not enough to read the run. The whole thread is one
+ * click away in the run's tab.
+ */
+const CARD_THREAD_ENTRIES = 8;
 
 /** The card's work line: a task binding wins; otherwise the delegation prompt. */
 function WorkLine({ run }: { run: SubagentRun }) {
@@ -50,111 +74,202 @@ function WorkLine({ run }: { run: SubagentRun }) {
   );
 }
 
-/** What fills the tail: live output while running, the report when done, the error when failed. */
-function tailLines(run: SubagentRun): { text: string; className: string }[] {
-  if (run.state === 'failed' && run.error) {
-    return [
-      ...run.tail.map((line) => ({ text: line, className: 'text-doom-dim' })),
-      { text: run.error, className: 'text-doom-red' },
-    ];
-  }
-  if (run.summary) {
-    return run.summary
-      .split('\n')
-      .filter((line) => line.trim() !== '')
-      .slice(0, 6)
-      .map((line) => ({ text: line, className: 'text-doom-text' }));
-  }
-  const lines = run.tail.map((line) => ({ text: line, className: 'text-doom-dim' }));
-  if (run.currentTool) lines.push({ text: run.currentTool, className: 'text-doom-dim' });
-  return lines;
+/**
+ * Everything a card can do, behind one control.
+ *
+ * A card already spends its width on the run's own stream, and stop, clear,
+ * detail and the run's tab are four verbs: as buttons they crowd the footer
+ * and each one has to defend itself from the card's own click.
+ */
+function RunMenu({
+  sessionId,
+  run,
+  stopping,
+  send,
+  onOpenThread,
+  onOpenDetail,
+}: {
+  sessionId: string;
+  run: SubagentRun;
+  stopping: boolean;
+  send: SessionFrameSender;
+  onOpenThread: () => void;
+  onOpenDetail: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid={`run-menu-${run.runId}`}
+          title="what this run can do"
+          aria-label="run actions"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <KebabIcon className="h-3 w-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent data-testid={`run-menu-content-${run.runId}`}>
+        <DropdownMenuItem data-testid={`run-open-${run.runId}`} onSelect={onOpenThread}>
+          open thread
+        </DropdownMenuItem>
+        <DropdownMenuItem data-testid={`run-detail-${run.runId}`} onSelect={onOpenDetail}>
+          details
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {isTerminalRun(run) ? (
+          <DropdownMenuItem data-testid={`run-clear-${run.runId}`} onSelect={() => dismissRun(sessionId, run.runId)}>
+            clear from the grid
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            variant="destructive"
+            data-testid={`run-stop-${run.runId}`}
+            data-stopping={stopping}
+            disabled={stopping}
+            onSelect={() => requestRunStop(send, sessionId, run.runId)}
+          >
+            {stopping ? 'stopping…' : 'stop'}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
+/**
+ * One run in the grid: its live conversation under a header, on the host's own
+ * transcript so a tool call reads the same here as in the session.
+ *
+ * The body is a glance, so it takes the newest entries only and does not take
+ * the pointer: the whole card is the way into the run's tab.
+ */
 function RunCard({
   sessionId,
   run,
   now,
   stopping,
   send,
-  onOpen,
+  renderThread,
+  onOpenThread,
+  onOpenDetail,
 }: {
   sessionId: string;
   run: SubagentRun;
   now: number;
   stopping: boolean;
   send: SessionFrameSender;
-  onOpen: () => void;
+  renderThread: WebPluginSlotProps['renderThread'];
+  onOpenThread: () => void;
+  onOpenDetail: () => void;
 }) {
   const badge = RUN_BADGE[run.state];
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onOpen();
+      onOpenThread();
     }
   };
-  // A div rather than a button: the card carries buttons of its own, and a
+  // A div rather than a button: the card carries a menu of its own, and a
   // button cannot contain another.
   return (
     <Panel
       asChild
       className={cn(
-        'flex min-h-[210px] min-w-0 cursor-pointer flex-col text-left transition-colors outline-none hover:border-doom-blue/50 focus-visible:border-doom-blue',
+        'flex h-[280px] min-w-0 flex-col text-left transition-colors outline-none hover:border-doom-blue/50 focus-within:border-doom-blue',
         STATUS_EDGE[badge.tone],
       )}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        data-testid={`run-card-${run.runId}`}
-        data-run-state={run.state}
-        onClick={onOpen}
-        onKeyDown={onKeyDown}
-      >
-        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
-          <span data-testid="run-agent" className="truncate text-[12px] font-bold text-doom-hi">
-            {run.agent}
-          </span>
-          <span className="min-w-0 flex-1" />
-          <span className="shrink-0 text-[9px] text-doom-faint">{elapsedRun(run, now)}</span>
-          <StatusBadge tone={badge.tone} data-testid="run-state">
-            {badge.label}
-          </StatusBadge>
-        </div>
-        <WorkLine run={run} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden border-t border-doom-border-soft bg-doom-deep px-3 py-2.5">
-          {tailLines(run).map((line, index) => (
-            <span key={index} className={`truncate text-[10px] ${line.className}`}>
-              {line.text}
+      <div data-testid={`run-card-${run.runId}`} data-run-state={run.state}>
+        <div
+          role="button"
+          tabIndex={0}
+          data-testid={`run-open-card-${run.runId}`}
+          className="flex min-h-0 flex-1 cursor-pointer flex-col outline-none"
+          title="open this run's own thread in a tab"
+          onClick={onOpenThread}
+          onKeyDown={onKeyDown}
+        >
+          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+            <span data-testid="run-agent" className="truncate text-[12px] font-bold text-doom-hi">
+              {run.agent}
             </span>
-          ))}
-          {run.state === 'running' ? <StreamCursor className="mt-0.5 ml-0 h-[11px] w-1.5 translate-y-0" /> : null}
+            <span className="min-w-0 flex-1" />
+            <span className="shrink-0 text-[9px] text-doom-faint">{elapsedRun(run, now)}</span>
+            <StatusBadge tone={badge.tone} data-testid="run-state">
+              {badge.label}
+            </StatusBadge>
+          </div>
+          <WorkLine run={run} />
+          {/* The run's own journal, drawn by the host's timeline: the newest
+              entries only, and inert, so the card stays one click. */}
+          <div
+            data-testid="run-stream"
+            className="pointer-events-none flex min-h-0 flex-1 flex-col overflow-hidden border-t border-doom-border-soft bg-doom-deep"
+          >
+            {renderThread(run.runId, { limit: CARD_THREAD_ENTRIES, compact: true })}
+          </div>
+          {run.state === 'failed' && run.error ? (
+            <span
+              data-testid="run-error"
+              className="truncate border-t border-doom-border-soft px-3 py-1.5 text-[10px] text-doom-red"
+            >
+              {run.error}
+            </span>
+          ) : null}
         </div>
-        <div className="flex items-center gap-3 px-3 py-2">
+        <div className="flex shrink-0 items-center gap-3 border-t border-doom-border-soft px-3 py-1.5">
           <span className="truncate text-[9px] text-doom-faint">
             {run.toolCount !== undefined ? `${run.toolCount} tools` : '—'}
             {run.tokens !== undefined ? ` · ${run.tokens.toLocaleString()} tk` : ''}
             {run.model ? ` · ${run.model.split('/').pop() ?? run.model}` : ''}
           </span>
           <span className="min-w-0 flex-1" />
-          <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
-          <span className="text-[9px] font-bold text-doom-blue">detail</span>
+          <RunMenu
+            sessionId={sessionId}
+            run={run}
+            stopping={stopping}
+            send={send}
+            onOpenThread={onOpenThread}
+            onOpenDetail={onOpenDetail}
+          />
         </div>
       </div>
     </Panel>
   );
 }
 
-function DrawerRow({ label, value, tone = 'text-doom-dim' }: { label: string; value: string; tone?: string }) {
+function SheetRow({ label, value, tone = 'text-doom-dim' }: { label: string; value: string; tone?: string }) {
   return (
     <div className="flex gap-2.5">
       <span className="w-11 shrink-0 text-[9px] text-doom-faint">{label}</span>
-      <span className={`min-w-0 truncate text-[10px] ${tone}`}>{value}</span>
+      <span className={`min-w-0 break-words text-[10px] ${tone}`}>{value}</span>
     </div>
   );
 }
 
-function RunDrawer({
+function SheetBlock({ label, text, testId, tone }: { label: string; text: string; testId: string; tone?: string }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2.5">
+      <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint">{label}</span>
+      <pre
+        data-testid={testId}
+        className={`overflow-x-auto whitespace-pre-wrap break-words text-[10px] leading-relaxed ${tone ?? 'text-doom-text'}`}
+      >
+        {text}
+      </pre>
+    </div>
+  );
+}
+
+/**
+ * What the run was asked to do and what it was given to do it with, over the
+ * grid rather than beside it: the conversation is on the card and in the run's
+ * tab, so this reads as a definition and takes no width from the fleet.
+ */
+function RunDetailSheet({
   sessionId,
   run,
   now,
@@ -172,60 +287,45 @@ function RunDrawer({
   onClose: () => void;
 }) {
   const badge = RUN_BADGE[run.state];
-  const output = run.summary ?? run.tail.join('\n');
   return (
-    <aside
-      data-testid="run-drawer"
-      className="flex w-[min(440px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail"
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border px-4">
-        <span data-testid="drawer-agent" className="truncate text-[13px] font-bold text-doom-hi">
-          {run.agent}
-        </span>
-        <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
-        <span className="min-w-0 flex-1" />
-        <span className="text-[10px] text-doom-faint">{elapsedRun(run, now)}</span>
-        {renderSlot(RUN_ACTIONS_SLOT.slot)}
-        <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
-        <Button variant="ghost" size="icon" data-testid="drawer-close" title="close the run detail" onClick={onClose}>
-          <CloseIcon className="h-3 w-3" />
-        </Button>
-      </div>
-      <div className="flex flex-col gap-1.5 px-4 py-2.5">
-        <DrawerRow label="run" value={run.runId.slice(0, 8)} />
-        {run.taskRef ? <DrawerRow label="task" value={run.taskRef} tone="text-doom-violet" /> : null}
-        {run.model ? <DrawerRow label="model" value={run.model} /> : null}
-        <DrawerRow label="cwd" value={abbreviateCwd(run.cwd)} />
-      </div>
-      <div className="px-4 pb-2.5">
-        <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2.5">
-          <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint">PROMPT FROM THE MAIN AGENT</span>
-          <pre
-            data-testid="drawer-task"
-            className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-[10px] leading-relaxed text-doom-text"
-          >
-            {run.task || '(no prompt recorded)'}
-          </pre>
-        </div>
-      </div>
-      <div className="flex items-center justify-between px-4 pb-1.5">
-        <span className="text-[9px] font-bold tracking-[0.14em] text-doom-faint">
-          {run.summary ? 'REPORT' : run.state === 'failed' ? 'FAILURE' : 'OUTPUT · live'}
-        </span>
-        <span className="text-[9px] text-doom-faint">
-          {run.toolCount !== undefined ? `${run.toolCount} tools` : ''}
-        </span>
-      </div>
-      <div className="flex-1 overflow-y-auto border-t border-doom-border-soft bg-doom-deep px-4 py-3">
-        <pre
-          data-testid="drawer-output"
-          className="whitespace-pre-wrap break-words text-[10px] leading-relaxed text-doom-text"
-        >
-          {run.state === 'failed' && run.error ? run.error : output || run.currentTool || '(nothing reported yet)'}
-        </pre>
-        {run.state === 'running' ? <StreamCursor className="mt-1 ml-0 h-[11px] w-1.5 translate-y-0" /> : null}
-      </div>
-    </aside>
+      <SheetContent data-testid="run-sheet" aria-describedby={undefined}>
+        <SheetHeader closeLabel="close the run detail">
+          <SheetTitle data-testid="sheet-agent">{run.agent}</SheetTitle>
+          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+          <span className="min-w-0 flex-1" />
+          <span className="text-[10px] text-doom-faint">{elapsedRun(run, now)}</span>
+          {renderSlot(RUN_ACTIONS_SLOT.slot)}
+          <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
+        </SheetHeader>
+        <SheetBody>
+          <div className="flex flex-col gap-1.5">
+            <SheetRow label="run" value={run.runId} />
+            {run.taskRef ? <SheetRow label="task" value={run.taskRef} tone="text-doom-violet" /> : null}
+            <SheetRow label="model" value={run.model ?? 'the runtime default'} />
+            <SheetRow label="cwd" value={abbreviateCwd(run.cwd)} />
+            <SheetRow
+              label="work"
+              value={`${run.toolCount === undefined ? 'no' : String(run.toolCount)} tools${
+                run.tokens === undefined ? '' : ` · ${run.tokens.toLocaleString()} tk`
+              }`}
+            />
+          </div>
+          <SheetBlock
+            label="PROMPT FROM THE MAIN AGENT"
+            testId="sheet-task"
+            text={run.task || '(no prompt recorded)'}
+          />
+          {run.summary ? <SheetBlock label="REPORT" testId="sheet-summary" text={run.summary} /> : null}
+          {run.error ? <SheetBlock label="FAILURE" testId="sheet-error" text={run.error} tone="text-doom-red" /> : null}
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -233,12 +333,19 @@ function RunDrawer({
  * The subagents tab: the focused session's fleet as a computed grid.
  *
  * Columns come from the available width (auto-fill over a 420px minimum), and
- * every card keeps a 210px minimum height with the tail absorbing the slack,
- * so short runs read as calmly as busy ones. The drawer on the right shows one
- * thing at a time: a card's run detail, or the agent catalog to launch from.
- * A launch that produced a run opens that run's own tab once it appears.
+ * every card is the same height with the run's own live conversation
+ * absorbing the slack, so the grid reads as a fleet rather than a ragged list.
+ * A card opens the run's tab; its menu opens the detail sheet over the grid.
+ * The catalog to launch from still takes the right rail, because picking an
+ * agent is a list beside the fleet rather than a thing about one run.
  */
-export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTransientTab }: WebPluginSlotProps) {
+export function SubagentsPanel({
+  sessionId,
+  sendSessionFrame,
+  renderSlot,
+  renderThread,
+  openTransientTab,
+}: WebPluginSlotProps) {
   const runs = useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)));
   const { openRunId, stopRequested, autoOpenRunId } = useStore(subagents.store, (state) =>
     subagents.select(state, sessionId),
@@ -317,7 +424,12 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTr
                       now={now}
                       stopping={stopping(run)}
                       send={sendSessionFrame}
-                      onOpen={() => {
+                      renderThread={renderThread}
+                      onOpenThread={() => {
+                        closeCatalog(sessionId);
+                        openTransientTab(agentThreadTab(run));
+                      }}
+                      onOpenDetail={() => {
                         closeCatalog(sessionId);
                         openRun(sessionId, run.runId);
                       }}
@@ -325,7 +437,7 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTr
                   ))}
             </div>
             <span className="pt-3 text-[9px] text-doom-faint">
-              click a card for the run detail · stop asks the runtime · clear hides a finished run · finished runs leave
+              click a card to open the run's thread · the card menu holds details, stop and clear · finished runs leave
               the grid after 10m
             </span>
           </>
@@ -337,8 +449,9 @@ export function SubagentsPanel({ sessionId, sendSessionFrame, renderSlot, openTr
           onClose={() => closeCatalog(sessionId)}
           onLaunch={(agent, fork) => openLaunch(sessionId, agent.name, fork)}
         />
-      ) : shownRun && sessionId !== null ? (
-        <RunDrawer
+      ) : null}
+      {shownRun && sessionId !== null ? (
+        <RunDetailSheet
           sessionId={sessionId}
           run={shownRun}
           now={now}

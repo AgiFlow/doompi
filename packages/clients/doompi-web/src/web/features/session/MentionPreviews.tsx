@@ -96,10 +96,13 @@ function MentionPreview({ sessionId, mention }: { sessionId: string; mention: Fi
 
 /** The cwd-scoped files mentioned by a message, fetched through the sealed HTTP channel. */
 export function MentionPreviews({ sessionId, mentions }: { sessionId: string; mentions: FileMention[] }) {
-  if (mentions.length === 0) return null;
+  // A folder has no asset to fetch, so it is named in the message and left out
+  // of the previews rather than fetched and reported as unloadable.
+  const previewable = mentions.filter((mention) => mention.kind !== 'directory');
+  if (previewable.length === 0) return null;
   return (
     <div data-testid="mention-previews" className="flex flex-col gap-2">
-      {mentions.map((mention) => (
+      {previewable.map((mention) => (
         <div key={mention.path} data-testid="mention-preview" data-kind={mention.kind} data-path={mention.path}>
           <MentionPreview sessionId={sessionId} mention={mention} />
         </div>

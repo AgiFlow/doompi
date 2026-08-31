@@ -1,5 +1,6 @@
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 import { DIALOG_ANSWERED_TYPE, MINOR_MODE_ENTRY_TYPE, type MinorModeProjection } from '../../types/hub.ts';
+import { BUILTIN_COMMANDS } from './commands.ts';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
 
@@ -151,6 +152,17 @@ export interface SessionState {
    * lets both appear exactly once.
    */
   pendingUserEntries: { id: string; text: string; images?: UserImage[] }[];
+  /**
+   * Prompts an authoritative transcript already folded into the entry this page
+   * rendered, newest last.
+   *
+   * A prompt reaches the timeline from two directions, Pi's protocol snapshot
+   * and the session journal, and whichever lands first consumes the pending
+   * record. Without this the second arrival has nothing to match and appends a
+   * second copy of the message, which is what a reader sees when transcript
+   * ownership returns to the journal mid-session.
+   */
+  reconciledUserEntries: { id: string; text: string; images?: UserImage[] }[];
   /** Stable local ids for optimistic prompts after Pi publishes their canonical transcript entries. */
   protocolUserEntryIds: Record<string, string>;
   nextId: number;
@@ -174,6 +186,7 @@ export const initialSessionState: SessionState = {
   toolsThisRun: 0,
   restoredIds: [],
   pendingUserEntries: [],
+  reconciledUserEntries: [],
   protocolUserEntryIds: {},
   nextId: 1,
 };
@@ -395,10 +408,15 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
 
   if (command === 'get_commands') {
     const raw = Array.isArray(data.commands) ? data.commands : [];
-    const commands = raw
+    const reported = raw
       .filter(isRecord)
       .map((entry) => ({ name: asString(entry.name), description: asString(entry.description) }))
       .filter((entry) => entry.name.length > 0);
+    // Pi does not report its own built-ins here, so the cockpit adds the ones
+    // it can run. An extension that claims the same name keeps it: that one
+    // reaches the session through the prompt path and is what the user gets.
+    const claimed = new Set(reported.map((entry) => entry.name));
+    const commands = [...reported, ...BUILTIN_COMMANDS.filter((entry) => !claimed.has(entry.name))];
     return { ...state, commands };
   }
 
@@ -471,12 +489,21 @@ function withPendingUser(state: SessionState, id: string, text: string, images: 
  * queued one is on screen as queued until the run picks it up. Both are the
  * same message the journal later reports, so it settles the entry that stands
  * rather than adding a second copy of the text.
+ *
+ * A prompt Pi's protocol snapshot already claimed is matched here too. That
+ * claim consumed the pending record, so without the second list a journalled
+ * copy arriving after the run, which is what happens when transcript
+ * ownership falls back to the journal, would read as a new message and be
+ * appended below the settled divider.
  */
 function reconcilePendingUser(state: SessionState, text: string, images: UserImage[]): SessionState | undefined {
   const index = state.pendingUserEntries.findIndex((pending) => pending.text === text);
-  if (index === -1) return undefined;
-  const pending = state.pendingUserEntries[index] as { id: string; images?: UserImage[] };
-  const pendingUserEntries = state.pendingUserEntries.filter((_, at) => at !== index);
+  const reconciledIndex = index === -1 ? state.reconciledUserEntries.findIndex((claimed) => claimed.text === text) : -1;
+  if (index === -1 && reconciledIndex === -1) return undefined;
+  const source = index === -1 ? state.reconciledUserEntries : state.pendingUserEntries;
+  const at = index === -1 ? reconciledIndex : index;
+  const pending = source[at] as { id: string; images?: UserImage[] };
+  const remaining = source.filter((_, position) => position !== at);
   const entries = state.entries.map((entry) => {
     if (entry.id !== pending.id) return entry;
     const reconciledImages = images.length > 0 ? images : pending.images;
@@ -490,7 +517,9 @@ function reconcilePendingUser(state: SessionState, text: string, images: UserIma
     }
     return entry.kind === 'user' && images.length > 0 ? { ...entry, images } : entry;
   });
-  return { ...state, entries, pendingUserEntries };
+  return index === -1
+    ? { ...state, entries, reconciledUserEntries: remaining }
+    : { ...state, entries, pendingUserEntries: remaining };
 }
 
 /**

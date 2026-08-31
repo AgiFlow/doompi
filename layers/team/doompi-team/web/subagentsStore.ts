@@ -19,7 +19,7 @@ export interface SubagentsSession {
   dismissed: string[];
   /** Runs a stop was asked for and that have not yet reported a final state. */
   stopRequested: string[];
-  /** The run whose drawer the subagents tab shows. */
+  /** The run whose detail sheet the subagents tab shows. */
   openRunId: string | undefined;
   /** A launch this page asked for, until a run of that agent it had not seen shows up. */
   pendingLaunch: { agent: string; knownRunIds: string[] } | undefined;

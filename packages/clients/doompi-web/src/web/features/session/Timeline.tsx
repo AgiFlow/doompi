@@ -102,7 +102,10 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
           {entry.thinking ? (
             <div
               data-testid="entry-thinking"
-              className="text-[11px] text-doom-violet/80 [&_strong]:text-doom-violet [&_p]:whitespace-pre-wrap"
+              // Grey, one step below the answer on the neutral ramp. Thinking is
+              // context for the reply, not a second voice, and a coloured one
+              // read as loudly as the reply it was only leading up to.
+              className="text-[11px] text-doom-dim [&_strong]:text-doom-text [&_p]:whitespace-pre-wrap"
             >
               <Markdown text={entry.thinking} />
             </div>
@@ -171,6 +174,10 @@ function BackgroundWorkNotice() {
  * One transcript, whichever fold it reads: the focused session's own, or a
  * thread of it. Owns the scroll pinning; the caller owns the empty state and
  * the session the entries' tool cards act on.
+ *
+ * `limit` and `compact` are for a fold that is not a whole surface, such as a
+ * grid card: only the newest entries, drawn tighter, with no history paging
+ * and no jump control, because a card is a glance and not a place to read.
  */
 export function Transcript({
   store,
@@ -178,15 +185,22 @@ export function Transcript({
   empty,
   testId = 'timeline',
   backgroundWorkActive = false,
+  limit,
+  compact = false,
 }: {
   store: Store<SessionState>;
   sessionId: string | null;
   empty: ReactNode;
   testId?: string;
   backgroundWorkActive?: boolean;
+  limit?: number;
+  compact?: boolean;
 }) {
   const entries = useStore(store, (state) => state.entries);
-  const visibleEntries = useMemo(() => entries.filter((entry) => entry.kind !== 'queued'), [entries]);
+  const visibleEntries = useMemo(() => {
+    const shown = entries.filter((entry) => entry.kind !== 'queued');
+    return limit === undefined ? shown : shown.slice(-limit);
+  }, [entries, limit]);
   const scroller = useRef<HTMLDivElement>(null);
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
@@ -230,7 +244,9 @@ export function Transcript({
     const bottom = atBottom(element, element.scrollHeight);
     following.current = bottom;
     if (bottom) setUnread(false);
-    if (element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
+    // A compact fold shows a fixed tail of a live thread; asking for the
+    // window above it would page history nobody can read there.
+    if (!compact && element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
       anchor.current = { height: element.scrollHeight, top: element.scrollTop };
       requestOlderHistory(sessionId);
     }
@@ -304,7 +320,11 @@ export function Transcript({
         onScroll={onScroll}
         onWheel={onWheel}
         data-testid={testId}
-        className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 py-4 sm:px-[26px] sm:py-[22px]"
+        className={
+          compact
+            ? 'flex flex-1 flex-col gap-2 overflow-y-auto px-2.5 py-2'
+            : 'flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 py-4 sm:px-[26px] sm:py-[22px]'
+        }
       >
         {visibleEntries.map((entry, index) => (
           // Entries above the live tail are skipped for layout and paint until
@@ -327,7 +347,7 @@ export function Transcript({
         ))}
         {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       </div>
-      {unread ? (
+      {unread && !compact ? (
         <Button
           variant="subtle"
           size="sm"
@@ -348,7 +368,11 @@ export function Timeline() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
-  const backgroundWorkActive = useActivityGroups(statuses, widgets, activeId).some((group) => group.active);
+  const settled = useActiveSession((state) => state.settled);
+  // Only worth saying once the agent has stopped: while it is still running the
+  // transcript already shows the work, and the notice would just be noise.
+  const hasActiveWork = useActivityGroups(statuses, widgets, activeId).some((group) => group.active);
+  const backgroundWorkActive = settled && hasActiveWork;
   return (
     <Transcript
       store={sessionStoreFor(activeId)}

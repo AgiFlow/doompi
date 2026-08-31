@@ -15,6 +15,7 @@ import type { SettingsSection } from '../../lib/settingsSections.ts';
 import { sealedHttpSession } from '../../lib/sealedSession.ts';
 import { fetchWithStepUp } from '../../lib/stepUp.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
+import { ContributedSettings } from './ContributedSettings.tsx';
 import { RepositorySettings } from './RepositorySettings.tsx';
 import { SettingsMenu } from './SettingsMenu.tsx';
 
@@ -128,6 +129,9 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
           className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"
         >
           {current.id === 'repositories' ? <RepositorySettings repository={repository} /> : null}
+          {current.contribution === undefined ? null : (
+            <ContributedSettings section={current.contribution} scope="repository" repoRoot={repository?.path ?? ''} />
+          )}
           {panel === undefined || Panel === undefined ? null : (
             <div className="flex flex-col gap-3" data-testid={`repository-settings-panel-${panel.pluginId}`}>
               <header className="flex min-w-0 flex-wrap items-center gap-2">

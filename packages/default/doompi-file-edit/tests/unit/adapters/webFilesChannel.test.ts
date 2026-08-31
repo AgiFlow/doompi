@@ -40,7 +40,7 @@ describe('readSessionFiles', () => {
       [
         line({ version: 2, path: edited, tool: 'edit', at: 10, origin: 'tool', before: 'b' }),
         line({ version: 2, path: edited, tool: 'edit', at: 30, origin: 'tool', before: 'b' }),
-        line({ version: 2, path: scanned, tool: 'bash', at: 20, origin: 'scan' }),
+        line({ version: 2, path: scanned, tool: 'bash', at: 20, origin: 'scan', verified: true }),
       ].join(''),
     );
     expect(readSessionFiles(timelinePath, root)).toEqual([
@@ -50,6 +50,21 @@ describe('readSessionFiles', () => {
     ]);
   });
 
+  it('leaves out a scan the tracker could not confirm, and every version 1 bash line', () => {
+    const edited = place('src/a.ts');
+    const touched = place('touched.txt');
+    const legacy = place('legacy.txt');
+    fs.writeFileSync(
+      timelinePath,
+      [
+        line({ version: 2, path: edited, tool: 'edit', at: 10, origin: 'tool', before: 'b' }),
+        // A command moved the modification time; nothing proved the bytes moved.
+        line({ version: 2, path: touched, tool: 'bash', at: 20, origin: 'scan' }),
+        line({ version: 1, path: legacy, tool: 'bash', at: 30 }),
+      ].join(''),
+    );
+    expect(readSessionFiles(timelinePath, root).map((row) => row.relPath)).toEqual([path.join('src', 'a.ts')]);
+  });
   it('leaves out a file the session changed and then deleted', () => {
     const kept = place('kept.ts');
     const removed = place('removed.ts');
@@ -57,7 +72,7 @@ describe('readSessionFiles', () => {
       timelinePath,
       [
         line({ version: 2, path: kept, tool: 'edit', at: 10, origin: 'tool', before: 'b' }),
-        line({ version: 2, path: removed, tool: 'bash', at: 20, origin: 'scan' }),
+        line({ version: 2, path: removed, tool: 'bash', at: 20, origin: 'scan', verified: true }),
       ].join(''),
     );
     fs.rmSync(removed);
@@ -70,7 +85,7 @@ describe('readSessionFiles', () => {
     fs.mkdirSync(path.join(root, 'a-directory'));
     fs.writeFileSync(
       timelinePath,
-      line({ version: 2, path: path.join(root, 'a-directory'), tool: 'bash', at: 10, origin: 'scan' }),
+      line({ version: 2, path: path.join(root, 'a-directory'), tool: 'bash', at: 10, origin: 'scan', verified: true }),
     );
     expect(readSessionFiles(timelinePath, root)).toEqual([]);
   });
@@ -82,7 +97,7 @@ describe('readSessionFiles', () => {
       timelinePath,
       [
         line({ version: 2, path: kept, tool: 'edit', at: 10, origin: 'tool', before: 'before' }),
-        line({ version: 2, path: ignored, tool: 'bash', at: 20, origin: 'scan' }),
+        line({ version: 2, path: ignored, tool: 'bash', at: 20, origin: 'scan', verified: true }),
       ].join(''),
     );
     fs.writeFileSync(path.join(root, '.doomignore'), '*.log\n');

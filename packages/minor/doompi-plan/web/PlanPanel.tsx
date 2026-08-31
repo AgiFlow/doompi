@@ -1,4 +1,4 @@
-import { Button, Markdown, Textarea } from '@agimon-ai/doompi-web-components';
+import { Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useState } from 'react';
 import { PLAN_STATUS_KEY, type PlanDetailView } from '../src/types/planApi.ts';
@@ -8,8 +8,9 @@ import { fetchPlan, savePlan } from './planApi.ts';
  * The plan's tab: what the agent decided, and what the reader wants changed.
  *
  * Two views over the same file. A plan is read, not diffed, so preview is
- * where it opens; source is where a reader corrects a step themselves rather
- * than spending a turn asking for it. The save goes to the plan file the
+ * where it opens; source is a real editor, line numbers and markdown colour
+ * and all, because a reader who corrects a step themselves is cheaper than a
+ * turn spent asking for it. The save goes to the plan file the
  * session recorded, and the next turn reads that file, so a correction made
  * here is the plan the agent implements.
  *
@@ -22,6 +23,9 @@ type View = 'preview' | 'source';
 
 /** One tab per session; the plan is singular, so the id needs nothing else. */
 export const PLAN_TAB_ID = 'plan-document';
+
+/** The one note that is not an error: anything else in that slot failed. */
+const SAVED_NOTE = 'saved';
 
 export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginSlotProps) {
   const [detail, setDetail] = useState<PlanDetailView | undefined>(undefined);
@@ -68,7 +72,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
     const result = await savePlan(sessionId, detail.hash, draft);
     setSaving(false);
     if (result.ok) {
-      setSaveNote('saved');
+      setSaveNote(SAVED_NOTE);
       setDraft(undefined);
       const refreshed = await fetchPlan(sessionId);
       if (refreshed.ok) setDetail(refreshed.detail);
@@ -120,26 +124,30 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
         </p>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-1 flex-col">
         {detail === undefined ? null : detail.unavailable ? (
           <p data-testid="plan-unavailable" className="px-4 py-3 text-[11px] text-doom-faint">
             {detail.reason ?? 'this plan cannot be shown'}
           </p>
         ) : view === 'preview' ? (
-          <div data-testid="plan-preview" className="flex flex-col gap-2 p-4 text-[12px] text-doom-text">
+          <div
+            data-testid="plan-preview"
+            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-4 text-[12px] text-doom-text"
+          >
             <Markdown text={content} />
           </div>
         ) : (
-          <div className="flex flex-col gap-2 p-3">
-            <Textarea
+          <>
+            {/* The editor owns the scrolling: its gutter has to stay put while
+                the text moves, which an outer scroll container would break. */}
+            <CodeEditor
               data-testid="plan-source"
               value={content}
-              spellCheck={false}
-              rows={24}
-              onChange={(event) => setDraft(event.target.value)}
-              className="min-h-[24rem] font-mono text-[11px] leading-[1.5]"
+              path={detail.path}
+              onChange={setDraft}
+              className="min-h-0 flex-1"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2 border-t border-doom-border px-3 py-2">
               <Button
                 variant="outline"
                 size="xs"
@@ -165,13 +173,13 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
               {saveNote === undefined ? null : (
                 <span
                   data-testid="plan-save-note"
-                  className={saveNote === 'saved' ? 'text-[9px] text-doom-green' : 'text-[9px] text-doom-red'}
+                  className={saveNote === SAVED_NOTE ? 'text-[9px] text-doom-green' : 'text-[9px] text-doom-red'}
                 >
                   {saveNote}
                 </span>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
 

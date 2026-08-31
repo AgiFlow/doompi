@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
@@ -20,6 +21,7 @@ import { removeStaleSocket, serveSessionSocket } from '../adapters/socketServer.
 import { createServerTelemetry } from '../adapters/serverTelemetry.ts';
 import { startWebCockpit } from '../adapters/webCockpit.ts';
 import { REGISTRY_DIR_ENV, resolveRegistryDir } from '../services/registryPaths.ts';
+import { resolveSessionApiDirectory } from '../services/sessionApiDirectory.ts';
 import { parseServeOptions, resolveSessionIdentity } from '../services/serveOptions.ts';
 import { SESSION_RECORD_VERSION } from '../types/registry.ts';
 
@@ -42,9 +44,9 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
   }
 }
 
-function sessionApiDirectory(cwd: string): string | undefined {
+function registeredApiDirectory(from: string): string | undefined {
   try {
-    return readSyncRegistration(findRepositoryRoot(cwd))?.apiDirectory;
+    return readSyncRegistration(findRepositoryRoot(from))?.apiDirectory;
   } catch {
     return undefined;
   }
@@ -112,7 +114,11 @@ async function main(): Promise<number> {
       socket = serveSessionSocket({ socketPath: options.socketPath, token, agent, telemetry, onNotice: notice });
       process.stderr.write(`[doompi-server] listening on ${options.socketPath}\n`);
 
-      const apiDirectory = sessionApiDirectory(process.cwd());
+      const apiDirectory = resolveSessionApiDirectory({
+        cwd: process.cwd(),
+        installationDir: path.dirname(fileURLToPath(import.meta.url)),
+        registeredApiDirectory,
+      });
       const hasApiOverride = Boolean(process.env[PACKAGE_API_DIR_ENV]);
       apis = await serveSessionApis({
         socketDir: path.dirname(path.resolve(options.socketPath)),

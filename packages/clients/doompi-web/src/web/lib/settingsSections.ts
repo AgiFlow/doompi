@@ -28,15 +28,30 @@ export interface SettingsSection {
 }
 
 const GENERAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
-  { id: 'providers', label: 'providers', detail: 'sign in to the model providers Pi can use', workspace: 'general' },
-  { id: 'appearance', label: 'appearance', detail: 'pick the theme the cockpit renders with', workspace: 'general' },
+  {
+    id: 'providers',
+    label: 'providers',
+    detail: 'sign in to the model providers Pi can use',
+    workspace: 'general',
+  },
+  {
+    id: 'appearance',
+    label: 'appearance',
+    detail: 'pick the theme the cockpit renders with',
+    workspace: 'general',
+  },
   {
     id: 'notifications',
     label: 'notifications',
     detail: 'allow live session notifications in this browser',
     workspace: 'general',
   },
-  { id: 'remote', label: 'remote control', detail: 'save a named tunnel for remote access', workspace: 'general' },
+  {
+    id: 'remote',
+    label: 'remote control',
+    detail: 'save a named tunnel for remote access',
+    workspace: 'general',
+  },
   {
     id: 'plugins',
     label: 'plugins',
@@ -54,6 +69,9 @@ const REPOSITORY_DEFAULTS_SECTION: SettingsSection = {
 
 const DEFAULT_CONTRIBUTED_ORDER = 1000;
 
+/** Repository-workspace copies need their own route id, since the id is the route param. */
+const REPOSITORY_SECTION_PREFIX = 'repository-';
+
 export const DEFAULT_SETTINGS_SECTION = GENERAL_SETTINGS_SECTIONS[0]!.id;
 export const DEFAULT_REPOSITORY_SETTINGS_SECTION = REPOSITORY_DEFAULTS_SECTION.id;
 
@@ -70,21 +88,38 @@ function byMenuOrder(left: SettingsSectionContribution, right: SettingsSectionCo
  * evaluated at import time would freeze the list before that happened.
  */
 export function settingsSections(workspace?: SettingsWorkspace): readonly SettingsSection[] {
-  const contributed = [...pluginSettingsSections()].sort(byMenuOrder).map((contribution) => ({
+  const contributions = [...pluginSettingsSections()].sort(byMenuOrder);
+  // The same page is offered in both workspaces. Scope comes from the workspace
+  // the reader is in, so the general copy edits the global file and the
+  // repository copy edits whichever repository the workspace picker holds.
+  const contributed = contributions.map((contribution) => ({
     id: contribution.id,
     label: contribution.label,
     detail: contribution.detail,
     workspace: 'general' as const,
     contribution,
   }));
+  const contributedForRepository = contributions.map((contribution) => ({
+    id: `${REPOSITORY_SECTION_PREFIX}${contribution.id}`,
+    label: contribution.label,
+    detail: contribution.detail,
+    workspace: 'repository' as const,
+    contribution,
+  }));
   const repositoryPanels = pluginRepositorySettingsPanels().map((repositoryPanel) => ({
-    id: `repository-${repositoryPanel.pluginId}`,
+    id: `${REPOSITORY_SECTION_PREFIX}${repositoryPanel.pluginId}`,
     label: repositoryPanel.label,
     detail: repositoryPanel.detail,
     workspace: 'repository' as const,
     repositoryPanel,
   }));
-  const all = [...GENERAL_SETTINGS_SECTIONS, ...contributed, REPOSITORY_DEFAULTS_SECTION, ...repositoryPanels];
+  const all = [
+    ...GENERAL_SETTINGS_SECTIONS,
+    ...contributed,
+    REPOSITORY_DEFAULTS_SECTION,
+    ...repositoryPanels,
+    ...contributedForRepository,
+  ];
   return workspace === undefined ? all : all.filter((section) => section.workspace === workspace);
 }
 

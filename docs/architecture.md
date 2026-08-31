@@ -103,7 +103,7 @@ doompi could not read its synchronized state. Run doompi sync.
 
 `doompi init` alone owns the global Pi dispatcher, settings integration, and default theme. `doompi sync` requires that integration for normal persisted mode, but does not rewrite it. DPI supplies its overlay in memory and uses the same repository-isolated publication without requiring persisted settings.
 
-The shared hub pins web assets and package APIs to its startup repository. Session API requests resolve through the session `cwd`, so concurrent sessions can use different repositories without changing the hub registration. Outside a synchronized repository, the server uses packaged web assets and exposes no repository package APIs. Explicit `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` overrides retain precedence.
+The shared hub pins web assets and package APIs to its startup repository. Session API requests resolve through the session `cwd`, so concurrent sessions can use different repositories without changing the hub registration. Outside a synchronized repository, the server uses packaged web assets and inherits the package APIs of the installation running it, so a session in an unsynchronized checkout still mounts the cockpit's own APIs instead of none. Explicit `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` overrides retain precedence.
 
 Configuration drift and missing synchronization are diagnosed separately. `doompi sync --check` is read-only: it re-resolves configuration and package paths, compares the active fingerprint, and validates the registration, bootstrap, and full bundle map.
 

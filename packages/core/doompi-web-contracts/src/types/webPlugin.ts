@@ -58,6 +58,17 @@ export interface TransientTab {
   label: string;
   panel: ComponentType<WebPluginSlotProps>;
 }
+/**
+ * How a thread is drawn where it is not the whole surface: a card body wants
+ * the last few entries at card scale, not a full transcript with its own
+ * paging. Omitting both draws the thread exactly as the conversation does.
+ */
+export interface ThreadViewOptions {
+  /** Draw only the newest entries, at most this many. */
+  limit?: number;
+  /** Card scale: tighter spacing, no history paging, no jump control. */
+  compact?: boolean;
+}
 /** Every slot component receives the focused session; null while nothing is focused. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
@@ -71,7 +82,7 @@ export interface WebPluginSlotProps {
    * rendered like the session's own timeline and subscribed while mounted. A
    * plugin's hub source names the thread's journal (HubChannelSource.threadJournal).
    */
-  renderThread: (threadId: string) => ReactNode;
+  renderThread: (threadId: string, options?: ThreadViewOptions) => ReactNode;
   /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */
   appendComposerDraft: (text: string) => void;
   /** The same sender palette commands and `start` receive; components act through it. */

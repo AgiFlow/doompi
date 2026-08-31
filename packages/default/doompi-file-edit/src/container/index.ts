@@ -2,6 +2,7 @@ import { EditorConfigService } from '../adapters/EditorConfigService/EditorConfi
 import { EditorLauncher } from '../adapters/EditorLauncher/EditorLauncher';
 import { EditTracker } from '../adapters/EditTracker/EditTracker';
 import { FileEditPaths } from '../adapters/FileEditPaths/FileEditPaths';
+import { NodeGitStatusAdapter } from '../adapters/node/gitStatus';
 import { NodeSnapshotStoreAdapter } from '../adapters/node/snapshotStore';
 import { NodeTreeManifestAdapter } from '../adapters/node/treeManifest';
 import { FileEditWorkflow } from '../tui/fileEditWorkflow';
@@ -23,7 +24,8 @@ export function createFileEditContainer(overrides: Partial<FileEditDependencies>
   const manifests = overrides.manifests ?? new NodeTreeManifestAdapter();
   const diffs = overrides.diffs ?? new GitDiffService();
   const editorConfig = overrides.editorConfig ?? new EditorConfigService();
-  const editTracker = overrides.editTracker ?? new EditTracker(timeline, snapshots, manifests);
+  const editTracker =
+    overrides.editTracker ?? new EditTracker(timeline, snapshots, manifests, { git: new NodeGitStatusAdapter() });
   const editorLauncher = overrides.editorLauncher ?? new EditorLauncher(editorConfig);
   const workflow = overrides.workflow ?? new FileEditWorkflow(timeline, diffs, editorConfig, editorLauncher);
 

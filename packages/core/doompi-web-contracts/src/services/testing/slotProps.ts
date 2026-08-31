@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type {
   SlotDataFill,
   SlotDeclaration,
+  ThreadViewOptions,
   ToolMessageRenderProps,
   ToolResultView,
   TransientTab,
@@ -45,7 +46,7 @@ export interface SlotPropsOptions {
   /** Data fills this slot owner should read back, keyed by slot name. */
   slotData?: Readonly<Record<string, readonly SlotDataFill[]>>;
   /** What `renderThread` returns for a plugin that renders one. */
-  thread?: (threadId: string) => ReactNode;
+  thread?: (threadId: string, options?: ThreadViewOptions) => ReactNode;
 }
 
 const DEFAULT_SESSION_ID = 's1';
@@ -70,7 +71,7 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
     sendSessionFrame: (sessionId, frame) => {
       actions.push({ action: 'sendSessionFrame', target: sessionId, frame });
     },
-    renderThread: (threadId) => options.thread?.(threadId) ?? null,
+    renderThread: (threadId, threadOptions) => options.thread?.(threadId, threadOptions) ?? null,
     renderSlot: (slot) => options.slotContent?.[slot] ?? null,
     // The host resolves fills by slot name and hands the owner its own typed
     // view, so a test declares them by name too.

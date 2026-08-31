@@ -33,6 +33,15 @@ describe('mediaKindFor', () => {
     expect(mediaKindFor('Makefile')).toBe('file');
     expect(mediaKindFor('src/x.ts')).toBe('file');
   });
+
+  it('reads a trailing slash as a directory, whatever the last segment looks like', () => {
+    expect(mediaKindFor('packages/clients/doompi-web/')).toBe('directory');
+    expect(mediaKindFor('assets/logo.png/')).toBe('directory');
+    expect(parseFileMentions('check @packages/clients/doompi-web/ and @src/a.ts')).toEqual([
+      { path: 'packages/clients/doompi-web/', kind: 'directory' },
+      { path: 'src/a.ts', kind: 'file' },
+    ]);
+  });
 });
 
 describe('sessionFileUrl', () => {

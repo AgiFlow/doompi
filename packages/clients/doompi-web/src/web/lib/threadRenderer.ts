@@ -1,6 +1,7 @@
+import type { ThreadViewOptions } from '@agimon-ai/doompi-web-contracts';
 import type { ReactNode } from 'react';
 
-type ThreadRenderer = (sessionId: string, threadId: string) => ReactNode;
+type ThreadRenderer = (sessionId: string, threadId: string, options?: ThreadViewOptions) => ReactNode;
 
 let render: ThreadRenderer | undefined;
 
@@ -20,6 +21,6 @@ export function releaseThreadRenderer(): void {
 }
 
 /** The bound view, or nothing while none is bound (before the app mounts, and in unit tests). */
-export function renderThread(sessionId: string, threadId: string): ReactNode {
-  return render?.(sessionId, threadId) ?? null;
+export function renderThread(sessionId: string, threadId: string, options?: ThreadViewOptions): ReactNode {
+  return render?.(sessionId, threadId, options) ?? null;
 }

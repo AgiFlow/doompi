@@ -408,7 +408,20 @@ describe('reduceSession', () => {
       data: { commands: [{ name: 'mode', description: 'pick' }, { description: 'no name' }, 'junk'] },
     });
 
-    expect(state.commands).toEqual([{ name: 'mode', description: 'pick' }]);
+    expect(state.commands).toEqual([
+      { name: 'mode', description: 'pick' },
+      { name: 'compact', description: 'Manually compact the session context' },
+    ]);
+  });
+
+  it('lets an extension keep a name a built-in also claims', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'get_commands',
+      data: { commands: [{ name: 'compact', description: 'the extension one' }] },
+    });
+
+    expect(state.commands).toEqual([{ name: 'compact', description: 'the extension one' }]);
   });
 
   it('ignores responses with no data and unknown commands', () => {

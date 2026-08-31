@@ -30,8 +30,8 @@ export function pluginSlotProps(
     appendComposerDraft,
     sendSessionFrame: sendFrame,
     statuses,
-    renderThread(threadId): ReactNode {
-      return sessionId === null ? null : renderThread(sessionId, threadId);
+    renderThread(threadId, options): ReactNode {
+      return sessionId === null ? null : renderThread(sessionId, threadId, options);
     },
     renderSlot(slot): ReactNode {
       return slotFills(slot).flatMap((fill) =>

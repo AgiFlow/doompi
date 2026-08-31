@@ -1,5 +1,11 @@
 import fs from 'node:fs/promises';
-import { type AnyTimelineEvent, foldEntries, foldVersions, parseTimeline } from '../../services/fileChanges.ts';
+import {
+  type AnyTimelineEvent,
+  confirmedChanges,
+  foldEntries,
+  foldVersions,
+  parseTimeline,
+} from '../../services/fileChanges.ts';
 import type { FileEditEntry, FileEditVersion, TimelineEvent } from '../../types/domain';
 import type { ITimelineStore } from '../../types/timelineStore';
 
@@ -22,7 +28,8 @@ export class TimelineStore implements ITimelineStore {
   }
 
   async list(): Promise<FileEditEntry[]> {
-    return foldEntries(await this.events());
+    // Listing shows what was edited, so a path a command only touched is left out.
+    return foldEntries(confirmedChanges(await this.events()));
   }
 
   async versions(filePath: string): Promise<FileEditVersion[]> {

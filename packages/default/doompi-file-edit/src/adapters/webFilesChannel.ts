@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { filterDoomIgnoredFiles } from '../services/doomIgnore.ts';
-import { foldEntries, foldVersions, isDiffable, parseTimeline } from '../services/fileChanges.ts';
+import { confirmedChanges, foldEntries, foldVersions, isDiffable, parseTimeline } from '../services/fileChanges.ts';
 import { filesChannelType, type FilesItemView } from '../types/webFiles.ts';
 import { FileEditPaths } from './FileEditPaths/FileEditPaths.ts';
 
@@ -45,10 +45,12 @@ function stillExists(filePath: string): boolean {
 /**
  * Reads one session's timeline and presents it as the rows the dock lists.
  *
- * A file the session changed and then removed is left out. The dock is a list
- * of things to open, and a row that can only ever answer "this is gone" is a
- * dead end; the timeline still holds the change, so a tab already open on the
- * file keeps working and says so.
+ * A file the session changed and then removed is left out, and so is a path a
+ * bash call only touched: a command that moves a modification time without
+ * changing a byte is not an edit, and listing it buries the ones that are. The
+ * dock is a list of things to open, and a row that can only ever answer "this
+ * is gone" is a dead end; the timeline still holds the change, so a tab already
+ * open on the file keeps working and says so.
  */
 export function readSessionFiles(timelinePath: string, cwd: string): FilesItemView[] {
   let content: string;
@@ -57,7 +59,7 @@ export function readSessionFiles(timelinePath: string, cwd: string): FilesItemVi
   } catch {
     return [];
   }
-  const events = parseTimeline(content);
+  const events = confirmedChanges(parseTimeline(content));
   const items = foldEntries(events)
     .filter((entry) => stillExists(entry.path))
     .map((entry) => ({
