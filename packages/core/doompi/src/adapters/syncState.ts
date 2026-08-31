@@ -47,6 +47,9 @@ const LOCAL_PACKAGE_NAME_PREFIX = 'local-package-name:';
 const ENTRY_INDEX_SEPARATOR = ':entry:';
 const COMPOSITION_FINGERPRINT = /^[a-f0-9]{64}$/u;
 const PLUGIN_MCP_CONFIG_FILES = ['.mcp.json', 'mcp.json'] as const;
+const PACKAGE_MANIFEST_FILE = 'package.json';
+/** Folder the cockpit bundler compiles straight from each installed package. */
+const WEB_PLUGIN_DIRECTORY = 'web';
 
 /** Config that feeds a sync, in the order the hash reads it. */
 const HASHED_CONFIG_FILES = ['config.yaml', 'modes.yaml', 'domains.yaml', 'profiles.yaml', 'hooks.yaml'] as const;
@@ -85,6 +88,14 @@ export interface SyncState {
   identity: SyncIdentity;
   /** Hash of the config that produced this state, for the staleness warning. */
   inputsHash: string;
+  /**
+   * Hash of the cockpit sources and package versions this state was built from.
+   *
+   * Absent in a state written before cockpit sources were tracked, which reads
+   * as "cannot be compared" rather than as a change, so an old state does not
+   * force a resync on sight.
+   */
+  webSourcesHash?: string;
   /** Canonical composition selected when this state was recorded. */
   compositionFingerprint: string;
   selection: SyncSelection;
@@ -207,6 +218,71 @@ function updateFileInputHash(hash: ReturnType<typeof crypto.createHash>, filePat
   }
   updateFramedHash(hash, 'state', 'present');
   updateFramedHash(hash, 'contents', fs.readFileSync(absolutePath));
+}
+
+/** Package root owning a resolved entry, or undefined when it sits outside one. */
+function owningPackageRoot(entryPath: string): string | undefined {
+  let directory = path.dirname(path.resolve(entryPath));
+  for (;;) {
+    if (fs.existsSync(path.join(directory, PACKAGE_MANIFEST_FILE))) return directory;
+    const parent = path.dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}
+
+/** Every regular file under a directory, as absolute paths in a stable order. */
+function filesUnder(directory: string): string[] {
+  if (!fs.existsSync(directory)) return [];
+  const found: string[] = [];
+  const walk = (current: string): void => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) found.push(full);
+    }
+  };
+  walk(directory);
+  return found;
+}
+
+/**
+ * Hashes the cockpit sources and package versions a sync compiled.
+ *
+ * The cockpit bundle is built from each installed package's `web/` folder by
+ * `syncWebBundle`, straight from source, with no compiler manifest recording
+ * what went in. Nothing else in the drift check reads those files, so editing a
+ * plugin surface and rebuilding left the hub serving the previously bundled
+ * cockpit with nothing reporting a reason. Compiled entries are covered
+ * elsewhere, by the content digests in their compiler manifests, so only the
+ * entry identity and its package version are folded in here.
+ *
+ * Bounded on purpose: the web sources of a full composition are a few hundred
+ * small files, which is cheap enough for the hub to poll.
+ */
+export function computeWebSourcesHash(resolved: Record<string, string>): string {
+  const hash = crypto.createHash('sha256');
+  const roots = [...new Set(Object.values(resolved).flatMap((entry) => owningPackageRoot(entry) ?? []))].sort();
+  for (const root of roots) {
+    updateFramedHash(hash, 'package', root);
+    const manifestPath = path.join(root, PACKAGE_MANIFEST_FILE);
+    let manifest: { name?: unknown; version?: unknown } = {};
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { name?: unknown; version?: unknown };
+    } catch {
+      // An unreadable manifest still contributes its path above, so the package
+      // is not silently dropped from the hash; the version simply reads empty
+      // and any later repair shows up as a change.
+      manifest = {};
+    }
+    updateFramedHash(hash, 'name', typeof manifest.name === 'string' ? manifest.name : '');
+    updateFramedHash(hash, 'version', typeof manifest.version === 'string' ? manifest.version : '');
+    for (const file of filesUnder(path.join(root, WEB_PLUGIN_DIRECTORY))) updateFileInputHash(hash, file);
+  }
+  for (const [name, entry] of Object.entries(resolved).sort(([left], [right]) => left.localeCompare(right))) {
+    updateFramedHash(hash, 'entry', `${name} ${entry}`);
+  }
+  return hash.digest('hex');
 }
 
 /**
@@ -410,6 +486,7 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
     root: parsed.root,
     identity,
     inputsHash: parsed.inputsHash,
+    webSourcesHash: typeof parsed.webSourcesHash === 'string' ? parsed.webSourcesHash : undefined,
     compositionFingerprint: parsed.compositionFingerprint,
     selection: {
       majorMode,

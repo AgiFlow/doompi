@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +16,11 @@ import {
   SYNC_STATE_VERSION,
 } from '../../src/adapters/syncStateContract.ts';
 import { testMcpProjection } from '../helpers/mcpProjection.ts';
+
+/** Digest a compiler manifest must now record so freshness is judged by content. */
+function sha256Of(file: string): string {
+  return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
 
 const roots: string[] = [];
 const TEST_COMPOSITION_FINGERPRINT = 'a'.repeat(64);
@@ -103,7 +109,7 @@ function writeFreshBuild(root: string): { artifact: string; input: string; manif
       entries: [input],
       output: artifact,
       artifacts: [artifact],
-      inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs }],
+      inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
     }),
   );
   writeState(root, {

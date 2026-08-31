@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,6 +42,11 @@ import {
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract.ts';
 import { assembleExtensions, PERSONA_ENTRY, resolveExtensionComposition } from '../../src/services/extensionAssembler';
 import { testMcpProjection } from '../helpers/mcpProjection.ts';
+
+/** Digest a compiler manifest must now record so freshness is judged by content. */
+function sha256Of(file: string): string {
+  return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
 
 const REPO_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
 const TEST_COMPOSITION_FINGERPRINT = 'a'.repeat(64);
@@ -151,7 +157,7 @@ function writeCompiledBundle(
       output: bundle,
       artifacts: [bundle],
       entries: [input],
-      inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs }],
+      inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
     }),
   );
   return { bundle, input, manifest };

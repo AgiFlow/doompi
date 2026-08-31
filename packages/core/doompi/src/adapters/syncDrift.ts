@@ -1,12 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { computeInputsHash, readSyncState, type SyncState } from './syncState.ts';
+import { readBootstrapStatus } from './bootstrapLocator.ts';
+import { computeInputsHash, computeWebSourcesHash, readSyncState, type SyncState } from './syncState.ts';
 import { readSyncRegistration } from './syncRegistration.ts';
 
 export type SyncDriftReason =
   | 'never-synced'
   | 'configuration-changed'
+  | 'code-changed'
+  | 'runtime-stale'
   | 'cockpit-bundle-missing'
   | 'package-apis-missing';
 
@@ -65,6 +68,22 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   if (currentInputsHash !== undefined && currentInputsHash !== state.inputsHash) {
     reasons.push('configuration-changed');
   }
+  // Cockpit sources are compiled straight from each package's web/ folder, so a
+  // rebuilt plugin surface is a real change that no configuration hash sees. A
+  // state recorded before this was tracked has nothing to compare and is left
+  // alone rather than being called stale on sight.
+  if (state.webSourcesHash !== undefined && computeWebSourcesHash(state.resolved) !== state.webSourcesHash) {
+    reasons.push('code-changed');
+  }
+  // The same question the `--check` path asks, so the cockpit and the CLI
+  // cannot disagree about whether one repository is synced.
+  try {
+    if (!readBootstrapStatus(options.repoRoot, undefined, homeDirectory).fresh) reasons.push('runtime-stale');
+  } catch {
+    // An unreadable bootstrap record is exactly as unusable as a stale one, and
+    // syncing is what reports the underlying cause.
+    reasons.push('runtime-stale');
+  }
   if (registration.webDirectory !== null && !fs.existsSync(path.join(registration.webDirectory, 'index.html'))) {
     reasons.push('cockpit-bundle-missing');
   }
@@ -84,6 +103,8 @@ export function describeSyncDrift(drift: SyncDrift): string {
   const detail: Record<SyncDriftReason, string> = {
     'never-synced': 'it has never been synced',
     'configuration-changed': 'its configuration changed since the last sync',
+    'code-changed': 'its cockpit sources changed since the last sync',
+    'runtime-stale': 'its precompiled runtime is out of date',
     'cockpit-bundle-missing': 'the cockpit bundle is missing',
     'package-apis-missing': 'the package API routes are missing',
   };

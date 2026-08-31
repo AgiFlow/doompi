@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +21,11 @@ import {
   SYNC_STATE_VERSION,
 } from '../../src/adapters/syncStateContract.ts';
 import { testMcpProjection } from '../helpers/mcpProjection.ts';
+
+/** Digest a compiler manifest must now record so freshness is judged by content. */
+function sha256Of(file: string): string {
+  return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
 
 /**
  * The sync-state contract, read from the side that has to survive a bad file.
@@ -162,7 +168,7 @@ describe('readBootstrapStatus freshness', () => {
       entries,
       inputs: entries.map((input) => {
         const stat = fs.statSync(input);
-        return { path: input, size: stat.size, mtimeMs: stat.mtimeMs };
+        return { path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) };
       }),
     };
   }
