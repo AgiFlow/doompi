@@ -1,3 +1,25 @@
+## 0.0.1-alpha.44 (2026-08-31)
+
+### 🩹 Fixes
+
+- **doompi-voice:** stop manual recording on silence ([d79b871](https://github.com/AgiFlow/doompi/commit/d79b871))
+- align voice controls across tui and web ([9a067a8](https://github.com/AgiFlow/doompi/commit/9a067a8))
+- isolate runtime state by repository ([1a0847d](https://github.com/AgiFlow/doompi/commit/1a0847d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.44
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.5
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.6
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.43 (2026-08-30)
 
 ### 🚀 Features
