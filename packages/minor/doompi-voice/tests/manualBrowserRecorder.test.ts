@@ -6,6 +6,7 @@ import {
   MANUAL_TRANSCRIPTION_ROUTE,
 } from '../src/types/manualTranscription.ts';
 import {
+  ManualRecordingSilenceGate,
   startManualBrowserRecording,
   type ManualBrowserRecording,
   type ManualBrowserRecordingResult,
@@ -15,7 +16,9 @@ import { transcribeManualRecording } from '../web/manualTranscriptionClient.ts';
 
 function recorderFixture() {
   const stopTrack = vi.fn();
+  const stopSilenceMonitor = vi.fn();
   let autoStop: (() => void) | undefined;
+  let silenceStop: ((speechDetected: boolean) => void) | undefined;
   const recorder = {
     mimeType: 'audio/webm;codecs=opus',
     state: 'inactive' as 'inactive' | 'recording' | 'paused',
@@ -43,8 +46,19 @@ function recorderFixture() {
     }),
     clearTimer: vi.fn((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)),
     now: vi.fn().mockReturnValueOnce(100).mockReturnValue(225),
+    watchSilence: vi.fn((_stream, onSilence: (speechDetected: boolean) => void) => {
+      silenceStop = onSilence;
+      return stopSilenceMonitor;
+    }),
   };
-  return { dependencies, recorder, stopTrack, autoStop: () => autoStop?.() };
+  return {
+    dependencies,
+    recorder,
+    stopTrack,
+    stopSilenceMonitor,
+    autoStop: () => autoStop?.(),
+    silenceStop: (speechDetected: boolean) => silenceStop?.(speechDetected),
+  };
 }
 
 function deferred<T>() {
@@ -223,6 +237,42 @@ describe('manual browser recording', () => {
     expect(fixture.stopTrack).toHaveBeenCalledOnce();
   });
 
+  it('stops after trailing silence and discards a recording that never contained speech', async () => {
+    const spoken = recorderFixture();
+    const spokenRecording = await startManualBrowserRecording(spoken.dependencies);
+
+    spoken.silenceStop(true);
+
+    await expect(spokenRecording.result).resolves.toMatchObject({ durationMs: 125 });
+    expect(spoken.recorder.stop).toHaveBeenCalledOnce();
+    expect(spoken.stopSilenceMonitor).toHaveBeenCalledOnce();
+
+    const silent = recorderFixture();
+    const silentRecording = await startManualBrowserRecording(silent.dependencies);
+
+    silent.silenceStop(false);
+
+    await expect(silentRecording.result).resolves.toBeUndefined();
+    expect(silent.recorder.stop).toHaveBeenCalledOnce();
+    expect(silent.stopSilenceMonitor).toHaveBeenCalledOnce();
+  });
+
+  it('requires sustained initial or trailing silence before stopping', () => {
+    const silence = new Float32Array(32);
+    const speech = new Float32Array(32).fill(0.1);
+    const initial = new ManualRecordingSilenceGate();
+
+    expect(initial.observe(silence, 0)).toBe(false);
+    expect(initial.observe(silence, 9_999)).toBe(false);
+    expect(initial.observe(silence, 10_000)).toBe(true);
+    expect(initial.speechDetected).toBe(false);
+
+    const trailing = new ManualRecordingSilenceGate();
+    expect(trailing.observe(speech, 0)).toBe(false);
+    expect(trailing.observe(silence, 2_999)).toBe(false);
+    expect(trailing.observe(silence, 3_000)).toBe(true);
+    expect(trailing.speechDetected).toBe(true);
+  });
   it('cancels without returning audio and lets Safari choose its native fallback format', async () => {
     const fixture = recorderFixture();
     const recording = await startManualBrowserRecording(fixture.dependencies);

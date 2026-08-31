@@ -4,7 +4,35 @@ import {
 } from '../src/types/manualTranscription.ts';
 
 const DATA_TIMESLICE_MS = 1_000;
+const SILENCE_SAMPLE_INTERVAL_MS = 100;
+const INITIAL_SILENCE_TIMEOUT_MS = 10_000;
+const TRAILING_SILENCE_TIMEOUT_MS = 3_000;
+const SPEECH_RMS_THRESHOLD = 0.01;
 const MEDIA_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const;
+
+/** Tracks speech and reports when initial or trailing silence should finish a manual recording. */
+export class ManualRecordingSilenceGate {
+  private startedAt: number | undefined;
+  private lastSpeechAt: number | undefined;
+
+  public get speechDetected(): boolean {
+    return this.lastSpeechAt !== undefined;
+  }
+
+  public observe(samples: Float32Array, observedAt: number): boolean {
+    this.startedAt ??= observedAt;
+    let squareSum = 0;
+    for (const sample of samples) squareSum += sample * sample;
+    const rms = samples.length === 0 ? 0 : Math.sqrt(squareSum / samples.length);
+    if (rms >= SPEECH_RMS_THRESHOLD) {
+      this.lastSpeechAt = observedAt;
+      return false;
+    }
+    const silenceStartedAt = this.lastSpeechAt ?? this.startedAt;
+    const timeout = this.speechDetected ? TRAILING_SILENCE_TIMEOUT_MS : INITIAL_SILENCE_TIMEOUT_MS;
+    return observedAt - silenceStartedAt >= timeout;
+  }
+}
 
 type RecorderState = 'inactive' | 'recording' | 'paused';
 
@@ -29,6 +57,25 @@ interface ManualRecorderDependencies {
   setTimer: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>;
   clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
   now: () => number;
+  watchSilence?: (stream: ManualMediaStream, onSilence: (speechDetected: boolean) => void) => () => void;
+}
+
+interface ManualAudioAnalyser {
+  fftSize: number;
+  smoothingTimeConstant: number;
+  getFloatTimeDomainData(samples: Float32Array): void;
+}
+
+interface ManualAudioSource {
+  connect(analyser: ManualAudioAnalyser): void;
+  disconnect(): void;
+}
+
+interface ManualAudioContext {
+  createMediaStreamSource(stream: ManualMediaStream): ManualAudioSource;
+  createAnalyser(): ManualAudioAnalyser;
+  resume(): Promise<void>;
+  close(): Promise<void>;
 }
 
 interface BrowserRecorderConstructor {
@@ -36,7 +83,12 @@ interface BrowserRecorderConstructor {
   isTypeSupported(type: string): boolean;
 }
 
+interface BrowserAudioContextConstructor {
+  new (): ManualAudioContext;
+}
+
 interface BrowserMediaGlobals {
+  AudioContext?: BrowserAudioContextConstructor;
   MediaRecorder?: BrowserRecorderConstructor;
   navigator?: { mediaDevices?: { getUserMedia(options: { audio: boolean }): Promise<ManualMediaStream> } };
 }
@@ -50,6 +102,39 @@ export interface ManualBrowserRecording {
   readonly result: Promise<ManualBrowserRecordingResult | undefined>;
   stop(): void;
   cancel(): void;
+}
+
+function watchBrowserSilence(stream: ManualMediaStream, onSilence: (speechDetected: boolean) => void): () => void {
+  const AudioContextConstructor = (globalThis as unknown as BrowserMediaGlobals).AudioContext;
+  if (AudioContextConstructor === undefined) return () => undefined;
+  let context: ManualAudioContext | undefined;
+  let source: ManualAudioSource | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  try {
+    context = new AudioContextConstructor();
+    source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2_048;
+    analyser.smoothingTimeConstant = 0.2;
+    source.connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    const gate = new ManualRecordingSilenceGate();
+    timer = setInterval(() => {
+      analyser.getFloatTimeDomainData(samples);
+      if (!gate.observe(samples, Date.now())) return;
+      onSilence(gate.speechDetected);
+    }, SILENCE_SAMPLE_INTERVAL_MS);
+    void context.resume().catch(() => undefined);
+  } catch {
+    source?.disconnect();
+    void context?.close().catch(() => undefined);
+    return () => undefined;
+  }
+  return () => {
+    if (timer !== undefined) clearInterval(timer);
+    source?.disconnect();
+    void context?.close().catch(() => undefined);
+  };
 }
 
 function browserDependencies(): ManualRecorderDependencies {
@@ -66,6 +151,7 @@ function browserDependencies(): ManualRecorderDependencies {
     setTimer: (callback, delay) => setTimeout(callback, delay),
     clearTimer: (timer) => clearTimeout(timer),
     now: () => Date.now(),
+    watchSilence: watchBrowserSilence,
   };
 }
 
@@ -90,6 +176,7 @@ export async function startManualBrowserRecording(
   let cancelled = false;
   let stopping = false;
   let startedAt = 0;
+  let stopSilenceMonitor = (): void => undefined;
   let resolveResult: (result: ManualBrowserRecordingResult | undefined) => void = () => undefined;
   let rejectResult: (error: Error) => void = () => undefined;
   const result = new Promise<ManualBrowserRecordingResult | undefined>((resolve, reject) => {
@@ -98,6 +185,7 @@ export async function startManualBrowserRecording(
   });
   const cleanup = (): void => {
     dependencies.clearTimer(timer);
+    stopSilenceMonitor();
     recorder.ondataavailable = null;
     recorder.onerror = null;
     recorder.onstop = null;
@@ -155,6 +243,14 @@ export async function startManualBrowserRecording(
   try {
     startedAt = dependencies.now();
     recorder.start(DATA_TIMESLICE_MS);
+    const stopWatching = dependencies.watchSilence?.(stream, (speechDetected) => {
+      if (!speechDetected) cancelled = true;
+      stopRecorder();
+    });
+    if (stopWatching !== undefined) {
+      stopSilenceMonitor = stopWatching;
+      if (finished) stopSilenceMonitor();
+    }
   } catch (error) {
     settle(undefined, error instanceof Error ? error : new Error('Browser audio recording failed.'));
     await result;
