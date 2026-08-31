@@ -19,5 +19,10 @@ export default defineConfig({
   },
   platform: 'node',
   sourcemap: true,
-  unbundle: true,
+  deps: {
+    // Pi Server invokes Pi Protocol's hot-path validators. Bundle both so the
+    // published executable retains our patched protocol codec.
+    alwaysBundle: [/^@earendil-works\/pi-(?:protocol|server)(?:\/|$)/u],
+  },
+  unbundle: false,
 });
