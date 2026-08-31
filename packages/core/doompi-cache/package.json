@@ -68,7 +68,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
-    "pi-cache-optimizer": "2.8.3"
+    "pi-cache-optimizer": "2.8.6"
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",

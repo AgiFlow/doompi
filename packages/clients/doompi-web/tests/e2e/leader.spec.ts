@@ -51,8 +51,11 @@ test.describe('with the package bundle, which installs no plugins', () => {
     cockpit.session.emit(COMMANDS);
 
     await page.keyboard.press('Control+k');
+    await expect(page.getByTestId('palette')).toBeVisible();
     await page.keyboard.press('/');
+    await expect(page.getByTestId('palette-filter')).toBeFocused();
     await page.keyboard.type('pro');
+    await expect(page.getByTestId('palette-count')).toHaveText('1');
     await page.keyboard.press('Enter');
 
     const sent = await cockpit.session.waitForCommand('prompt');
@@ -120,7 +123,9 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     cockpit.session.emit(COMMANDS);
 
     await page.keyboard.press('Control+k');
+    await expect(page.getByTestId('palette')).toBeVisible();
     await page.keyboard.press('w');
+    await expect(page.getByTestId('palette')).toHaveAttribute('data-path', 'w');
     await page.keyboard.press('e');
 
     const sent = await cockpit.session.waitForCommand('prompt');

@@ -81,7 +81,7 @@
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "cross-spawn": "7.0.6",
-    "hono": "4.13.3",
+    "hono": "4.13.5",
     "ignore": "7.0.6"
   },
   "devDependencies": {
