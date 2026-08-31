@@ -16,16 +16,10 @@ import type {
   SettingsConfigView,
   SettingsModel,
   SettingsOrigin,
-  SettingsRepository,
   SettingsScope,
   SettingsValueView,
 } from '../../../types/settings.ts';
-import {
-  listSettingsModels,
-  listSettingsRepositories,
-  readSettingsConfig,
-  writeSettingsValue,
-} from '../../lib/settingsApi.ts';
+import { listSettingsModels, readSettingsConfig, writeSettingsValue } from '../../lib/settingsApi.ts';
 import {
   canSaveSettings,
   plannedSettingsWrites,
@@ -43,7 +37,8 @@ import { sessionsStore } from '../../stores/sessionsStore.ts';
  * globally and per repository, the merge picks a winner per field, and some
  * keys are only ever read from one side. A page that got that wrong would
  * write bytes the runtime then ignores, which looks exactly like nothing
- * happening. So scope lives here, once, and every contributed field inherits it.
+ * happening. So scope is the workspace the page is opened in, once, and every
+ * contributed field inherits it.
  *
  * Edits are held as drafts until Save. A settings page is read as much as it is
  * written, and a control that committed on every keystroke or menu pick would
@@ -88,7 +83,11 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
   const value = draft === undefined ? (view?.value ?? '') : (draft ?? '');
   const options = useMemo(() => {
     if (field.optionsFrom !== 'models') return field.options ?? [];
-    return models.map((model) => ({ value: model.value, label: model.label, group: model.group }));
+    return models.map((model) => ({
+      value: model.value,
+      label: model.label,
+      group: model.group,
+    }));
   }, [field.options, field.optionsFrom, models]);
   const groups = useMemo(() => [...new Set(options.map((option) => option.group ?? ''))], [options]);
   // A select with nothing to offer is a dead control, so it degrades to text
@@ -188,10 +187,15 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
   );
 }
 
-export function ContributedSettings({ section }: { section: SettingsSectionContribution }) {
-  const [repositories, setRepositories] = useState<readonly SettingsRepository[]>([]);
-  const [repoRoot, setRepoRoot] = useState('');
-  const [scope, setScope] = useState<SettingsScope>('global');
+interface ContributedSettingsProps {
+  section: SettingsSectionContribution;
+  /** Which config file edits land in; the workspace the page sits in decides it. */
+  scope: SettingsScope;
+  /** The repository whose config is being edited; empty at global scope. */
+  repoRoot?: string;
+}
+
+export function ContributedSettings({ section, scope, repoRoot = '' }: ContributedSettingsProps) {
   const [models, setModels] = useState<readonly SettingsModel[]>([]);
   const [config, setConfig] = useState<SettingsConfigView | undefined>(undefined);
   const [drafts, setDrafts] = useState<Record<string, string | null>>({});
@@ -203,10 +207,12 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
   const wantsModels = useMemo(() => section.fields.some((field) => field.optionsFrom === 'models'), [section.fields]);
   const dirtyFields = useMemo(() => section.fields.filter((field) => keyOf(field) in drafts), [drafts, section.fields]);
 
+  // Drafts belong to the file they were typed against, so switching repository
+  // discards them rather than replaying them onto another config.
   useEffect(() => {
-    void listSettingsRepositories().then(setRepositories);
-  }, []);
-
+    setDrafts({});
+    setNote('');
+  }, [repoRoot, scope]);
   useEffect(() => {
     if (!wantsModels) return;
     void listSettingsModels().then(setModels);
@@ -290,62 +296,11 @@ export function ContributedSettings({ section }: { section: SettingsSectionContr
           <span className="min-w-0 basis-full text-[10px] leading-relaxed text-doom-faint min-[560px]:basis-auto min-[560px]:flex-1">
             {section.detail}
           </span>
-          <nav
-            data-testid="settings-scope"
-            className="flex w-full shrink-0 items-center justify-between gap-1 min-[480px]:w-auto min-[480px]:justify-start"
-          >
-            <span className="text-[9px] text-doom-faint">editing</span>
-            {(['global', 'repository'] as SettingsScope[]).map((entry) => (
-              <Button
-                key={entry}
-                variant={scope === entry ? 'outline' : 'ghost'}
-                size="xs"
-                data-testid={`settings-scope-${entry}`}
-                data-active={scope === entry}
-                disabled={busy || (entry === 'repository' && repoRoot === '')}
-                title={entry === 'repository' && repoRoot === '' ? 'pick a repository to edit its config' : undefined}
-                onClick={() => {
-                  // Drafts belong to the file they were typed against.
-                  setDrafts({});
-                  setNote('');
-                  setScope(entry);
-                }}
-                className="text-[9px]"
-              >
-                {entry === 'global' ? 'global' : 'this repo'}
-              </Button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="shrink-0 text-[9px] text-doom-faint">repository</span>
-          {repositories.length === 0 ? (
-            <span data-testid="settings-no-repositories" className="text-[10px] text-doom-faint">
-              no repository is open, so only global settings can be edited
+          {scope === 'repository' && repoRoot === '' ? (
+            <span data-testid="settings-no-repositories" className="shrink-0 text-[9px] text-doom-faint">
+              pick a repository above to edit its config
             </span>
-          ) : (
-            <Select
-              value={repoRoot}
-              disabled={busy}
-              onValueChange={(next) => {
-                setDrafts({});
-                setNote('');
-                setRepoRoot(next);
-              }}
-            >
-              <SelectTrigger data-testid="settings-repository" className="w-full text-[10px] min-[480px]:w-auto">
-                <SelectValue placeholder="pick a repository" />
-              </SelectTrigger>
-              <SelectContent>
-                {repositories.map((repository) => (
-                  <SelectItem key={repository.path} value={repository.path}>
-                    {repository.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          ) : null}
         </div>
       </header>
 

@@ -13,6 +13,7 @@ export type {
 } from '../types/webHub.ts';
 export type {
   ActivityGroupContribution,
+  FileLinkSource,
   GlobalStore,
   LeaderBindingContribution,
   LeaderKeyContribution,
@@ -36,6 +37,7 @@ export type {
   SettingsSectionContribution,
   SurfaceContribution,
   TabContribution,
+  ThreadViewOptions,
   ToolMessageRenderProps,
   ToolPromptContribution,
   ToolPromptDialog,

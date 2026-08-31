@@ -1,5 +1,6 @@
 import type {
   ActivityGroupContribution,
+  FileLinkSource,
   LeaderBindingContribution,
   MinorModeContribution,
   PaletteCommandContribution,
@@ -101,6 +102,7 @@ interface RegistryState {
   toolMatchers: ToolRendererContribution[];
   slots: Map<string, SlotDeclaration>;
   fills: Map<string, ResolvedFill[]>;
+  fileLinks: FileLinkSource[];
   diagnostics: InstallDiagnostic[];
 }
 
@@ -119,6 +121,7 @@ function emptyState(): RegistryState {
     toolMatchers: [],
     slots: new Map(),
     fills: new Map(),
+    fileLinks: [],
     diagnostics: [],
   };
 }
@@ -385,6 +388,7 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
       pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.composerActions, surface) });
     }
     for (const section of plugin.activitySections ?? []) pendingSections.push({ pluginId: plugin.id, section });
+    if (plugin.fileLinks !== undefined) state.fileLinks.push(plugin.fileLinks);
   }
 
   // Phase 2: resolve by name, now that every declaration is known.
@@ -480,6 +484,18 @@ export function pluginMinorModes(): readonly MinorModeContribution[] {
 /** Activity-dock group declarations from every installed plugin, in display order. */
 export function pluginActivityGroups(): readonly ActivityGroupContribution[] {
   return state.activityGroups;
+}
+
+/**
+ * The file-link sources installed plugins contribute, in install order.
+ *
+ * More than one is allowed and the first to claim a path wins, the same way a
+ * runtime tool matcher does: the host has no way to choose between two
+ * packages that both recognise a path, and the alternative is two tabs for one
+ * file.
+ */
+export function pluginFileLinks(): readonly FileLinkSource[] {
+  return state.fileLinks;
 }
 
 /**

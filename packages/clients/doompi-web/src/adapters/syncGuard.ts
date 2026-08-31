@@ -3,20 +3,29 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describeSyncDrift, readSyncDrift } from '@agimon-ai/doompi/services';
 import { findRepositoryRoot } from '@agimon-ai/doompi/utils';
+import { repositoryDoomPiCli } from './bundledServer.ts';
 
 const DOOMPI_PACKAGE = '@agimon-ai/doompi';
 const CLI_SEGMENTS = ['dist', 'bin', 'cli.mjs'];
 const SYNC_ARGS = ['sync'];
 /** How often the watcher re-reads the drift inputs. */
 const WATCH_INTERVAL_MS = 2_000;
+/** Ceiling for the retry delay after a sync that keeps failing. */
+const MAX_RETRY_INTERVAL_MS = 60_000;
+
+/** What one sync attempt did, so a failure is never reported as a rebuild. */
+export interface SyncRunOutcome {
+  ok: boolean;
+  detail?: string;
+}
 
 export interface SyncGuardOptions {
   /** Known repository root, or a launch directory to discover one from. */
   repoRoot?: string;
   cwd?: string;
   onNotice?: (message: string) => void;
-  /** Test seam for running the sync itself. */
-  runSync?: (repoRoot: string) => Promise<void>;
+  /** Test seam for running the sync itself; returning nothing reads as success. */
+  runSync?: (repoRoot: string) => Promise<SyncRunOutcome | void>;
   /** Test seam for the drift read. */
   readDrift?: (repoRoot: string) => { fresh: boolean; reasons: readonly string[] };
   /** Test seam over repository discovery. */
@@ -44,12 +53,23 @@ function inactiveSyncGuard(): SyncGuard {
   };
 }
 
-/** Runs the launcher's own sync, in its own process so the hub keeps serving. */
-function spawnSync(repoRoot: string, onNotice: (message: string) => void): Promise<void> {
-  const cli = path.join(
-    path.dirname(createRequire(import.meta.url).resolve(`${DOOMPI_PACKAGE}/package.json`)),
-    ...CLI_SEGMENTS,
+/**
+ * The DoomPi CLI this repository should sync with.
+ *
+ * A repository that pins its own DoomPi must be synced by that one: extensions
+ * are version-coupled to the harness that resolves them, and the copy sitting
+ * in the hub's dependency tree may not be the copy the repository runs.
+ */
+function syncCliFor(repoRoot: string): string {
+  return (
+    repositoryDoomPiCli(repoRoot) ??
+    path.join(path.dirname(createRequire(import.meta.url).resolve(`${DOOMPI_PACKAGE}/package.json`)), ...CLI_SEGMENTS)
   );
+}
+
+/** Runs the launcher's own sync, in its own process so the hub keeps serving. */
+function spawnSync(repoRoot: string): Promise<SyncRunOutcome> {
+  const cli = syncCliFor(repoRoot);
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cli, ...SYNC_ARGS], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
     const tail: string[] = [];
@@ -59,15 +79,13 @@ function spawnSync(repoRoot: string, onNotice: (message: string) => void): Promi
     };
     child.stdout?.on('data', keep);
     child.stderr?.on('data', keep);
-    child.once('error', (error) => {
-      onNotice(`sync could not start: ${error.message}`);
-      resolve();
-    });
+    // A failed sync is reported, not thrown: the session the caller wanted still
+    // starts, and it starts against whatever the last good sync left. What it
+    // must not do is claim the artifacts were rebuilt.
+    child.once('error', (error) => resolve({ ok: false, detail: `it could not start: ${error.message}` }));
     child.once('exit', (code) => {
-      // A failed sync is reported, not thrown: the session the caller wanted
-      // still starts, and it starts against whatever the last good sync left.
-      if (code !== 0) onNotice(`sync exited ${String(code)}: ${tail.join('').trim().slice(-400)}`);
-      resolve();
+      if (code === 0) resolve({ ok: true });
+      else resolve({ ok: false, detail: `exit ${String(code)}: ${tail.join('').trim().slice(-400)}` });
     });
   });
 }
@@ -90,25 +108,48 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
       return inactiveSyncGuard();
     }
   }
-  const runSync = options.runSync ?? ((root: string) => spawnSync(root, notice));
+  const runSync = options.runSync ?? ((root: string) => spawnSync(root));
   const readDrift = options.readDrift ?? ((root: string) => readSyncDrift({ repoRoot: root }));
-  let inFlight: Promise<void> | undefined;
-  let timer: ReturnType<typeof setInterval> | undefined;
+  const baseInterval = options.intervalMs ?? WATCH_INTERVAL_MS;
+  let inFlight: Promise<boolean> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
+  let consecutiveFailures = 0;
+  let lastFailureNotice: string | undefined;
 
-  const syncOnce = async (drift: { reasons: readonly string[] }): Promise<void> => {
+  /**
+   * One sync attempt, reporting whether it actually rebuilt anything.
+   *
+   * A sync that exits non-zero published nothing, so saying "complete" and
+   * telling every attached page to reload is two lies and a reload storm: the
+   * repository is still drifted, so the next poll tries again immediately.
+   */
+  const syncOnce = async (drift: { reasons: readonly string[] }): Promise<boolean> => {
     notice(`syncing: ${describeSyncDrift({ fresh: false, reasons: drift.reasons as never })}`);
-    await runSync(repoRoot);
+    const outcome = (await runSync(repoRoot)) ?? { ok: true };
+    if (!outcome.ok) {
+      consecutiveFailures += 1;
+      const message = `sync failed (${outcome.detail ?? 'no detail'})`;
+      // The same failure every few seconds buries everything else in the log.
+      if (message !== lastFailureNotice) {
+        notice(message);
+        lastFailureNotice = message;
+      }
+      return false;
+    }
+    consecutiveFailures = 0;
+    lastFailureNotice = undefined;
     notice('sync complete');
+    return true;
   };
 
-  const ensureSynced = async (): Promise<void> => {
-    if (closed) return;
+  const ensureSynced = async (): Promise<boolean> => {
+    if (closed) return false;
     // Joining the run already in flight is what makes concurrent launches
     // wait for one sync instead of starting several.
     if (inFlight) return inFlight;
     const drift = readDrift(repoRoot);
-    if (drift.fresh) return;
+    if (drift.fresh) return false;
     inFlight = syncOnce(drift).finally(() => {
       inFlight = undefined;
     });
@@ -116,23 +157,41 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
   };
 
   return {
-    ensureSynced,
+    async ensureSynced() {
+      await ensureSynced();
+    },
     watch(onSynced) {
       if (timer) return;
-      timer = setInterval(() => {
-        if (closed || inFlight) return;
+      const schedule = (): void => {
+        if (closed) return;
+        // Backing off after a failure: a repository that cannot sync will not
+        // start syncing because it was asked again two seconds later, and the
+        // retries drown the reason in the log.
+        const delay = Math.min(baseInterval * 2 ** consecutiveFailures, MAX_RETRY_INTERVAL_MS);
+        timer = setTimeout(tick, delay);
+        // The hub should not be held open by its own watcher.
+        timer.unref?.();
+      };
+      const tick = (): void => {
+        if (closed || inFlight) {
+          schedule();
+          return;
+        }
         const drift = readDrift(repoRoot);
-        if (drift.fresh) return;
-        void ensureSynced().then(() => {
-          if (!closed) onSynced();
+        if (drift.fresh) {
+          schedule();
+          return;
+        }
+        void ensureSynced().then((rebuilt) => {
+          if (!closed && rebuilt) onSynced();
+          schedule();
         });
-      }, options.intervalMs ?? WATCH_INTERVAL_MS);
-      // The hub should not be held open by its own watcher.
-      timer.unref?.();
+      };
+      schedule();
     },
     close() {
       closed = true;
-      if (timer) clearInterval(timer);
+      if (timer) clearTimeout(timer);
       timer = undefined;
     },
   };

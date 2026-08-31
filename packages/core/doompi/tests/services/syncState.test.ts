@@ -3,7 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveSyncLocation } from '../../src/adapters/syncLocation';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import {
+  publishSyncRegistration,
+  SYNC_REGISTRATION_VERSION,
+  syncStateSha256,
+} from '../../src/adapters/syncRegistration.ts';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract';
 import {
   computeInputsHash,
@@ -24,7 +29,6 @@ import {
   type SyncSelection,
   type SyncState,
   settingsRelativePath,
-  syncStatePath as statePath,
   runDirectory as stateRunDirectory,
   writeSyncState as writeState,
 } from '../../src/exports/services/syncState';
@@ -54,16 +58,60 @@ function homeFor(root: string): string {
   return path.join(root, 'home');
 }
 
+const TEST_GENERATION = 'test-generation';
+
 function syncStatePath(root: string): string {
-  return statePath(root, homeFor(root));
+  const location = resolveSyncLocation(root, homeFor(root));
+  return path.join(syncGenerationDirectory(location, TEST_GENERATION), 'state.json');
 }
 
 function readSyncState(root: string): SyncState | undefined {
   return readState(root, homeFor(root));
 }
 
-function writeSyncState(root: string, value: SyncState): Promise<string> {
-  return writeState(root, value, homeFor(root));
+function publishTestRegistration(root: string, target: string): void {
+  const home = homeFor(root);
+  const location = resolveSyncLocation(root, home);
+  const generationRoot = syncGenerationDirectory(location, TEST_GENERATION);
+  const apiDirectory = path.join(generationRoot, 'api');
+  const packageRoot = path.join(root, '.doompi-package');
+  const manifestPath = path.join(packageRoot, 'package.json');
+  const entry = path.join(packageRoot, 'pi.mjs');
+  fs.mkdirSync(apiDirectory, { recursive: true });
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(entry, 'export default () => undefined;\n');
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./pi.mjs'] } })}\n`,
+  );
+  publishSyncRegistration(
+    root,
+    {
+      version: SYNC_REGISTRATION_VERSION,
+      root: location.root,
+      identity: location.identity,
+      generation: TEST_GENERATION,
+      generationRoot,
+      statePath: target,
+      stateSha256: syncStateSha256(target),
+      webDirectory: null,
+      apiDirectory,
+      package: {
+        root: fs.realpathSync(packageRoot),
+        version: 'test',
+        manifestPath,
+        entry,
+      },
+    },
+    home,
+  );
+}
+
+async function writeSyncState(root: string, value: SyncState): Promise<string> {
+  const target = syncStatePath(root);
+  const written = await writeState(root, value, homeFor(root), target);
+  publishTestRegistration(root, written);
+  return written;
 }
 
 function runDirectory(root: string, processId: number): string {
@@ -169,6 +217,7 @@ describe('sync state file', () => {
         }
       : contents;
     fs.writeFileSync(target, typeof normalized === 'string' ? normalized : JSON.stringify(normalized));
+    publishTestRegistration(root, target);
   }
 
   it('refuses a state file that is not valid JSON', async () => {
@@ -383,7 +432,7 @@ describe('sync state file', () => {
 
     expect(() => readSyncState(root)).toThrow(/removed native graph state/);
   });
-  it('prefers validated global state over repository-local legacy state', async () => {
+  it('prefers validated registered state over repository-local legacy state', async () => {
     const root = makeRoot();
     const home = homeFor(root);
     const globalState = state(root);
@@ -398,20 +447,20 @@ describe('sync state file', () => {
     expect(located?.state.inputsHash).toBe(globalState.inputsHash);
   });
 
-  it('fails closed when global state is malformed instead of falling back to legacy state', async () => {
+  it('fails closed when registered state changes instead of falling back to legacy state', async () => {
     const root = makeRoot();
     const home = homeFor(root);
-    const globalPath = syncStatePath(root);
+    const registeredPath = syncStatePath(root);
     await writeSyncState(root, state(root));
     const legacyPath = legacySyncStatePath(root);
     fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
     fs.writeFileSync(legacyPath, JSON.stringify(state(root, { inputsHash: 'legacy' })));
-    fs.writeFileSync(globalPath, '{ malformed');
+    fs.writeFileSync(registeredPath, '{ malformed');
 
-    expect(() => readLocatedSyncState(root, home)).toThrow(/not valid JSON/);
+    expect(() => readLocatedSyncState(root, home)).toThrow(/mismatched state hash/);
   });
 
-  it('rejects legacy version-8 state without writing or migrating it', async () => {
+  it('ignores legacy state without writing or migrating it', () => {
     const root = makeRoot();
     const home = homeFor(root);
     const legacyPath = legacySyncStatePath(root);
@@ -420,7 +469,7 @@ describe('sync state file', () => {
     fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
     fs.writeFileSync(legacyPath, serialized);
 
-    expect(() => readLocatedSyncState(root, home)).toThrow(/version 8/);
+    expect(readLocatedSyncState(root, home)).toBeUndefined();
     expect(fs.existsSync(syncStatePath(root))).toBe(false);
     expect(fs.readFileSync(legacyPath, 'utf8')).toBe(serialized);
   });

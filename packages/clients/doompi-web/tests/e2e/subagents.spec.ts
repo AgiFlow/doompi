@@ -21,7 +21,20 @@ test.afterEach(() => removeRunsScope('s1'));
 
 test('shows the session fleet in the subagents tab', async ({ page, cockpit }) => {
   const now = Date.now();
+  // The card and the sheet both work off the run's own transcript now, so
+  // run-a needs a journal and a status that names it.
+  const journalA = writeRunJournal('s1', 'run-a', [
+    journalEntry('d1', { role: 'user', content: [{ type: 'text', text: 'Review the diff before the cut.' }] }),
+    journalEntry('d2', {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'Reading the hub adapter first.' },
+        { type: 'toolCall', id: 'call-d', name: 'read', arguments: { path: 'src/adapters/sessionHub.ts' } },
+      ],
+    }),
+  ]);
   writeRunStatus('s1', {
+    sessionFile: journalA,
     version: 1,
     runId: 'run-a',
     agent: 'reviewer',
@@ -47,7 +60,6 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
     toolCount: 4,
     tokens: 85_380,
   });
-
   await page.goto(cockpit.url);
   await expect(page.getByTestId('tab-subagents-count')).toHaveText('2');
 
@@ -56,15 +68,34 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
   await expect(page.getByTestId('run-card-run-a')).toHaveAttribute('data-run-state', 'running');
   await expect(page.getByTestId('run-card-run-b')).toHaveAttribute('data-run-state', 'done');
   await expect(page.getByTestId('subagents-tally')).toHaveText('1 running · 1 done · 0 failed');
-  await expect(page.getByTestId('run-card-run-b')).toContainText('Total: 1,652 files.');
-  await expect(page.getByTestId('run-card-run-a')).toContainText('working: reading the hub adapter');
+  // The card body is the run's own conversation, not a flattened tail: the
+  // same timeline the main session draws, tool cards and all.
+  const cardThread = page.getByTestId('run-card-run-a').getByTestId('thread-timeline');
+  await expect(cardThread.getByTestId('entry-assistant')).toContainText('Reading the hub adapter first.');
+  await expect(cardThread.getByTestId('entry-tool')).toHaveAttribute('data-tool-name', 'read');
 
-  await page.getByTestId('run-card-run-a').click();
-  await expect(page.getByTestId('run-drawer')).toBeVisible();
-  await expect(page.getByTestId('drawer-agent')).toHaveText('reviewer');
-  await expect(page.getByTestId('drawer-task')).toContainText('Review the diff before the cut.');
-  await page.getByTestId('drawer-close').click();
-  await expect(page.getByTestId('run-drawer')).toBeHidden();
+  // Details is in the card's menu, and it opens over the grid rather than
+  // beside it.
+  await page.getByTestId('run-menu-run-a').click();
+  await page.getByTestId('run-detail-run-a').click();
+  await expect(page.getByTestId('run-sheet')).toBeVisible();
+  await expect(page.getByTestId('sheet-agent')).toHaveText('reviewer');
+  await expect(page.getByTestId('sheet-task')).toContainText('Review the diff before the cut.');
+  await expect(page.getByTestId('run-sheet').getByTestId('thread-timeline')).toHaveCount(0);
+  await page.getByTestId('run-sheet').getByLabel('close the run detail').click();
+  await expect(page.getByTestId('run-sheet')).toBeHidden();
+
+  // The finished run's report is a sheet fact, not a card one.
+  await page.getByTestId('run-menu-run-b').click();
+  await page.getByTestId('run-detail-run-b').click();
+  await expect(page.getByTestId('sheet-summary')).toContainText('Total: 1,652 files.');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('run-sheet')).toBeHidden();
+
+  // The card itself is the way into the run's own thread.
+  await page.getByTestId('run-open-card-run-a').click();
+  await expect(page).toHaveURL(/\/session\/s1\/subagents-run-run-a$/);
+  await expect(page.getByTestId('agent-thread-agent')).toHaveText('reviewer');
 
   await page.getByTestId('tab-conversation').click();
   await expect(page.getByTestId('timeline-empty')).toBeVisible();
@@ -144,14 +175,17 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
   await cockpit.session.waitForAttach();
   await page.getByTestId('tab-subagents').click();
 
+  await page.getByTestId('run-menu-run-stop').click();
   await page.getByTestId('run-stop-run-stop').click();
   const sent = await cockpit.session.waitForCommand('prompt');
   expect(sent.message).toBe('/subagents-stop run-stop');
   // The click is a request; the card waits for the run's own word.
+  await page.getByTestId('run-menu-run-stop').click();
   await expect(page.getByTestId('run-stop-run-stop')).toHaveText('stopping…');
   await expect(page.getByTestId('run-stop-run-stop')).toBeDisabled();
-  // Clicking the control must not open the drawer.
-  await expect(page.getByTestId('run-drawer')).toBeHidden();
+  await page.keyboard.press('Escape');
+  // Acting through the menu must not open the detail sheet.
+  await expect(page.getByTestId('run-sheet')).toBeHidden();
 
   writeRunStatus('s1', {
     version: 1,
@@ -166,6 +200,7 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
   });
   await expect(page.getByTestId('run-card-run-stop')).toHaveAttribute('data-run-state', 'stopped', { timeout: 5000 });
 
+  await page.getByTestId('run-menu-run-stop').click();
   await page.getByTestId('run-clear-run-stop').click();
   await expect(page.getByTestId('run-card-run-stop')).toBeHidden();
   await expect(page.getByTestId('subagents-empty')).toBeVisible();

@@ -30,6 +30,12 @@ export interface TimelineEvent {
   after?: string;
   additions?: number;
   removals?: number;
+  /**
+   * Set on a scan change whose content was proven to have moved, rather than
+   * only its modification time. Absent on a scan recorded by an older build,
+   * which could not tell an edit from a file a command merely touched.
+   */
+  verified?: boolean;
 }
 
 /** A version 1 event, still accepted from a timeline opened by an older build. */
@@ -58,6 +64,7 @@ export interface FileEditVersion {
   after?: string;
   additions?: number;
   removals?: number;
+  verified?: boolean;
 }
 
 export interface FileDiff {

@@ -10,6 +10,7 @@ const COMMANDS = {
       { name: 'mode', description: 'switch the major mode' },
       { name: 'model', description: 'pick the agent model' },
       { name: 'profile', description: 'switch the profile' },
+      { name: 'skill:playwriter', description: 'drive a browser' },
     ],
   },
 };
@@ -60,6 +61,25 @@ test('typing / completes the session commands', async ({ page, cockpit }) => {
   expect(prompt.message).toBe('/model');
 });
 
+test('typing $ completes the skills, and / leaves them out', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForCommand('get_commands');
+  cockpit.session.emit(COMMANDS);
+
+  const input = page.getByTestId('composer-input');
+  await input.fill('$play');
+  await expect(page.getByTestId('composer-completion')).toBeVisible();
+  await expect(page.getByTestId('composer-completion-item-0')).toContainText('$playwriter');
+
+  // Pi only answers to the real command name, so that is what lands in the draft.
+  await input.press('Tab');
+  await expect(input).toHaveValue('/skill:playwriter ');
+
+  // The / list is commands only now that $ owns the skills.
+  await input.fill('/');
+  await expect(page.getByTestId('composer-completion')).toBeVisible();
+  await expect(page.getByTestId('composer-completion')).not.toContainText('skill:playwriter');
+});
 test('typing @ completes files from the session working directory', async ({ page, cockpit }) => {
   const cwd = sessionCwd(cockpit.registryDir, cockpit.session.id);
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });

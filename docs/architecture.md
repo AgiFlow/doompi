@@ -89,17 +89,23 @@ Parent and child activation lists are derived together and are both included in 
 
 The `doompi` launcher provisions the defaults plus the active mode layers. It builds an aggregate runtime bundle from the canonical activation plan and falls back to the individual ordered entries if bundling is unavailable.
 
-`doompi sync` provisions the defaults plus every declared named layer, stages resources, records resolved entries, and writes versioned state to the canonical home-scoped, worktree-scoped namespace. It attempts a bundle for each supported major-mode composition variant, while requiring the active composition to succeed. Immutable build artifacts may be reused through the shared cache.
+`doompi sync` provisions the defaults plus every declared named layer and stages one complete immutable generation in the canonical home-scoped repository/worktree namespace. State, bootstraps, mode bundles, resources, web assets, and API routes all live beneath that generation. A validated registration is written atomically only after every artifact succeeds, so readers observe either the previous complete generation or the replacement. Failed unpublished generations are removed. Published generations are retained rather than mutated in place.
 
-Synchronized state maps composition fingerprints to bundles and compiler manifests. The bootstrap has its own manifest. Manifest validation checks output confinement, artifact presence, source fingerprints, and the expected bootstrap entry.
+Repository and worktree identities are the routing boundary. Consumers accept state only through the exact validated registration for the nearest repository. Registration validation confines paths to the generation, verifies the state hash and repository identity, and pins the DoomPi package root, version, manifest, and Pi entry that produced it. Missing, malformed, foreign, traversing, symlinked, stale, and unsupported registrations fail closed. Consumers do not fall back to another repository, a source checkout, an unregistered legacy state file, or a global `current` directory.
 
-The package bootstrap is inert outside a synchronized repository. Inside one, it imports only a validated bootstrap and never compiles during startup. When a selected composition has a recorded bundle, synchronized startup validates that bundle before importing it. An unusable bootstrap or recorded bundle reports:
+Synchronized state maps composition fingerprints to bundles and compiler manifests. The bootstrap has its own manifest. Manifest validation checks output confinement, artifact presence, source fingerprints, and the expected bootstrap entry. Immutable compiler artifacts may still be reused through the shared cache, but publication and runtime selection remain repository-isolated.
+
+The package bootstrap is inert outside a synchronized repository. Inside one, it imports only the package and bootstrap pinned by the validated registration and never compiles during startup. When a selected composition has a recorded bundle, synchronized startup validates that bundle before importing it. An unusable registration, bootstrap, or recorded bundle reports:
 
 ```text
 doompi could not read its synchronized state. Run doompi sync.
 ```
 
-Configuration drift and missing synchronization are diagnosed separately. `doompi sync --check` is read-only: it re-resolves configuration and package paths, compares the active fingerprint, and validates the bootstrap plus the full bundle map.
+`doompi init` alone owns the global Pi dispatcher, settings integration, and default theme. `doompi sync` requires that integration for normal persisted mode, but does not rewrite it. DPI supplies its overlay in memory and uses the same repository-isolated publication without requiring persisted settings.
+
+The shared hub pins web assets and package APIs to its startup repository. Session API requests resolve through the session `cwd`, so concurrent sessions can use different repositories without changing the hub registration. Outside a synchronized repository, the server uses packaged web assets and inherits the package APIs of the installation running it, so a session in an unsynchronized checkout still mounts the cockpit's own APIs instead of none. Explicit `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` overrides retain precedence.
+
+Configuration drift and missing synchronization are diagnosed separately. `doompi sync --check` is read-only: it re-resolves configuration and package paths, compares the active fingerprint, and validates the registration, bootstrap, and full bundle map.
 
 ## Runtime services and lifecycle
 

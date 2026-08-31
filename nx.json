@@ -13,7 +13,12 @@
       "!{projectRoot}/vitest.config.ts",
       "!{projectRoot}/vitest.system.config.ts"
     ],
-    "sharedGlobals": ["{workspaceRoot}/nx.json", "{workspaceRoot}/package.json"]
+    "sharedGlobals": ["{workspaceRoot}/nx.json", "{workspaceRoot}/package.json"],
+    "lintConfig": [
+      "{workspaceRoot}/configs/oxlint/node.json",
+      "{workspaceRoot}/.oxlintrc.json",
+      "{workspaceRoot}/.oxfmtrc.json"
+    ]
   },
   "targetDefaults": {
     "build": {
@@ -38,7 +43,7 @@
       "cache": true
     },
     "lint": {
-      "inputs": ["default"],
+      "inputs": ["default", "lintConfig"],
       "dependsOn": ["^build"],
       "cache": true
     }

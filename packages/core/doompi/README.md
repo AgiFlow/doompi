@@ -68,29 +68,32 @@ pi                                         # run your existing Pi setup for comp
 `.doom/profiles.yaml` in the current repository. It preserves existing files unless you pass
 `--force` and does not create or change `.pi/settings.json`.
 
-`dpi sync` installs missing configured feature packages, writes DoomPi's generated state,
-package alias, and theme resource, but it does not register DoomPi in either normal Pi
-settings file. It prepares every declared layer so switching modes does not depend on the
-root package's dependency closure.
+`dpi sync` installs missing configured feature packages and publishes a generated runtime, web bundle,
+and API route set for the current repository and worktree. It does not change either normal Pi settings
+file. It prepares every declared layer so switching modes does not depend on the root package's
+dependency closure.
 
 ### Sync storage and worktrees
 
-DoomPi stores generated sync state under `~/.pi/.doom/sync`, outside the repository. Each
-Git worktree gets isolated runtime state while immutable build artifacts may be shared.
+DoomPi stores generated sync data under `~/.pi/.doom/sync`, outside the repository. Repository and
+worktree identities select separate namespaces. Each successful sync writes a new immutable generation,
+then atomically publishes that generation's registration as the final commit step. A failed sync removes
+its unpublished generation and leaves the previous registration active. Syncing one repository never
+rewrites another repository's registration or generation.
 
-`dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension
-and theme settings in memory. It never writes those values to `.pi/settings.json`.
+`dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension and theme
+settings in memory. It never writes those values to `.pi/settings.json`.
 
-Run `doompi sync --check` to detect stale or legacy state. Run `doompi sync` to rebuild it
-in the current home-scoped layout.
+Run `doompi sync --check` to detect missing, invalid, or stale registered state. Unregistered legacy state
+is not loaded. Run `doompi sync` in that repository to publish a current generation.
 
-When you are comfortable with DoomPi and no longer need the side-by-side experiment, register
-it for normal Pi:
+When you are comfortable with DoomPi and no longer need the side-by-side experiment, initialize the
+normal Pi integration and synchronize each repository you use:
 
 ```bash
-doompi init                                  # seed ~/.pi/.doom and Pi integration resources
-doompi sync                                  # register DoomPi in normal Pi settings
-pi                                           # DoomPi now starts through the regular Pi command
+doompi init                                  # seed ~/.pi/.doom and register the managed Pi integration
+doompi sync                                  # publish this repository and worktree's generated runtime
+pi                                           # resolve the nearest synchronized repository at startup
 ```
 
 `doompi` remains available as an explicit harness when you want per-run matrix flags:
@@ -684,17 +687,18 @@ its owning package's controls; values supplied by callers are not automatically 
 
 ## CLI reference
 
-| Command or option                            | What it does                                                                     |
-| -------------------------------------------- | -------------------------------------------------------------------------------- |
-| `dpi init`, `dpi sync`, `dpi`                | Creates, synchronizes, and runs the repository-scoped comparison setup           |
-| `doompi init`, `doompi sync`                 | Seeds personal config, builds synchronized state, and registers DoomPi with Pi   |
-| `doompi sync --check`                        | Exits non-zero when synchronized state is stale or legacy state needs migration  |
-| `doompi compat <codex\|claude\|antigravity>` | Resolves the selected matrix and launches the compatibility adapter              |
-| `doom-runner`                                | Inspects and controls supervised Runner processes and logs                       |
-| `--explain`                                  | Prints the resolved matrix and estimated prompt cost without launching Pi        |
-| `--emit-mcp <dir>`, `--no-mcp`               | Writes the resolved MCP config or disables MCP for one run                       |
-| `--cwd <path>`, `--auto-stop`                | Chooses the working directory or exits after an interactive agent settles        |
-| `--` and remaining arguments                 | Forwards provider or Pi arguments unchanged where the selected command allows it |
+| Command or option                            | What it does                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------- |
+| `dpi init`, `dpi sync`, `dpi`                | Creates, synchronizes, and runs the repository-scoped comparison setup            |
+| `doompi init`                                | Seeds personal config and installs the managed Pi dispatcher, settings, and theme |
+| `doompi sync`                                | Atomically publishes state, web, and API artifacts for one repository/worktree    |
+| `doompi sync --check`                        | Exits non-zero when the repository's registered generation is missing or stale    |
+| `doompi compat <codex\|claude\|antigravity>` | Resolves the selected matrix and launches the compatibility adapter               |
+| `doom-runner`                                | Inspects and controls supervised Runner processes and logs                        |
+| `--explain`                                  | Prints the resolved matrix and estimated prompt cost without launching Pi         |
+| `--emit-mcp <dir>`, `--no-mcp`               | Writes the resolved MCP config or disables MCP for one run                        |
+| `--cwd <path>`, `--auto-stop`                | Chooses the working directory or exits after an interactive agent settles         |
+| `--` and remaining arguments                 | Forwards provider or Pi arguments unchanged where the selected command allows it  |
 
 ## Troubleshooting and direct use
 

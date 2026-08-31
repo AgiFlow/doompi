@@ -58,6 +58,35 @@ export interface TransientTab {
   label: string;
   panel: ComponentType<WebPluginSlotProps>;
 }
+/**
+ * Which paths a message names can be opened, and what tab each one opens.
+ *
+ * The host renders the conversation but knows nothing about files: the package
+ * that receives the session's file reports holds the set, and it owns the
+ * panel a file opens in. So the host asks this source about each path-shaped
+ * token it finds, and links only the ones the source claims. A token it does
+ * not recognise stays plain text, which is what keeps a class name or a glob
+ * from becoming a dead link.
+ */
+export interface FileLinkSource {
+  /** Notifies while a message is on screen and the linkable set changes. */
+  subscribe(listener: () => void): () => void;
+  /** Changes only when the session's linkable set does; the host re-reads on a change. */
+  fingerprint(sessionId: string | null): string;
+  /** The tab this path opens, or undefined when the source does not recognise it. */
+  resolve(sessionId: string | null, path: string): TransientTab | undefined;
+}
+/**
+ * How a thread is drawn where it is not the whole surface: a card body wants
+ * the last few entries at card scale, not a full transcript with its own
+ * paging. Omitting both draws the thread exactly as the conversation does.
+ */
+export interface ThreadViewOptions {
+  /** Draw only the newest entries, at most this many. */
+  limit?: number;
+  /** Card scale: tighter spacing, no history paging, no jump control. */
+  compact?: boolean;
+}
 /** Every slot component receives the focused session; null while nothing is focused. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
@@ -71,7 +100,7 @@ export interface WebPluginSlotProps {
    * rendered like the session's own timeline and subscribed while mounted. A
    * plugin's hub source names the thread's journal (HubChannelSource.threadJournal).
    */
-  renderThread: (threadId: string) => ReactNode;
+  renderThread: (threadId: string, options?: ThreadViewOptions) => ReactNode;
   /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */
   appendComposerDraft: (text: string) => void;
   /** The same sender palette commands and `start` receive; components act through it. */
@@ -516,7 +545,10 @@ export interface WebPluginDefinition {
   /** The slots this plugin opens for others, each named '<this plugin id>.<name>'. */
   slots?: SlotDeclaration[];
   /** This plugin's contributions into slots other plugins (or the host) declare. */
+  /** This plugin's contributions into slots other plugins (or the host) declare. */
   fills?: SlotFillContribution[];
+  /** Makes the paths this plugin tracks clickable where the host renders a message. */
+  fileLinks?: FileLinkSource;
   /** Started after the host runtime, for page-lifetime needs such as hub frames; the return value disposes. */
   start?(runtime: WebPluginRuntime): (() => void) | void;
 }

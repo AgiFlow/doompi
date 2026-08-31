@@ -4,6 +4,7 @@ import { builtinModules, createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { LogLevel, LogOrStringHandler, OutputAsset, OutputChunk, RolldownLog, RolldownOutput } from 'rolldown';
+import { fingerprintInput, inputsAreFresh, type InputFingerprint } from './bootstrapLocator.ts';
 import { optionalPackageEntry } from './modules/moduleResolution';
 import {
   contentSha256,
@@ -35,7 +36,9 @@ import {
 
 const TYPESCRIPT_SUFFIXES = ['.ts', '.mts', '.cts'] as const;
 const COMPILED_SUFFIX = '.mjs';
-const SET_CACHE_VERSION = 'v14';
+// v15 records a content digest per input; a v14 manifest cannot be confirmed
+// by content and is discarded rather than trusted on timestamps alone.
+const SET_CACHE_VERSION = 'v15';
 const HASH_LENGTH = 16;
 const SET_DIRECTORY = 'sets';
 const MANIFEST_SUFFIX = '.json';
@@ -151,12 +154,6 @@ const STARTUP_EXTERNAL_PACKAGES = new Set([
 ]);
 const NODE_BUILTINS = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
 
-interface InputFingerprint {
-  path: string;
-  size: number;
-  mtimeMs: number;
-}
-
 interface CompiledExtensionManifest {
   version: string;
   output: string;
@@ -166,6 +163,15 @@ interface CompiledExtensionManifest {
 interface ExtensionSetManifest extends CompiledExtensionManifest {
   entries: string[];
   inputs: InputFingerprint[];
+  /**
+   * The produced files, by content.
+   *
+   * Existence alone used to be the whole check, and an artifact corrupted in
+   * place was only ever repaired by accident, when an unrelated timestamp moved
+   * and forced the set to compile again. Judging inputs by content removes that
+   * accident, so the output has to answer for itself.
+   */
+  artifactInputs?: InputFingerprint[];
 }
 
 export interface CompileExtensionSetOptions {
@@ -265,16 +271,6 @@ function resolveLogicalInputPath(input: SharedBuildInput, repositoryRoot: string
   return undefined;
 }
 
-function fingerprint(target: string): InputFingerprint | undefined {
-  try {
-    const stat = fs.statSync(target);
-    if (!stat.isFile()) return undefined;
-    return { path: target, size: stat.size, mtimeMs: stat.mtimeMs };
-  } catch {
-    return undefined;
-  }
-}
-
 function artifactsAreFresh(manifest: CompiledExtensionManifest, version: string, output: string): boolean {
   return (
     manifest.version === version &&
@@ -289,10 +285,12 @@ function manifestIsFresh(manifest: ExtensionSetManifest, entries: string[]): boo
   if (JSON.stringify(manifest.entries) !== JSON.stringify(entries)) {
     return false;
   }
-  return manifest.inputs.every((previous) => {
-    const current = fingerprint(previous.path);
-    return current?.size === previous.size && current.mtimeMs === previous.mtimeMs;
-  });
+  // A manifest written before outputs were recorded by content cannot vouch for
+  // them, so it is rebuilt once rather than trusted.
+  if (manifest.artifactInputs === undefined || !inputsAreFresh(manifest.artifactInputs)) return false;
+  // Content, not timestamps: a build cache that restored byte-identical inputs
+  // must not force this set to be compiled again.
+  return inputsAreFresh(manifest.inputs);
 }
 
 function readCompiledExtensionManifest(manifestPath: string): CompiledExtensionManifest | undefined {
@@ -452,14 +450,23 @@ function writeLocalSetManifest(
   artifacts: string[],
   inputs: ReadonlySet<string>,
 ): void {
-  const inputFingerprints = [...inputs]
-    .map(fingerprint)
-    .filter((value): value is InputFingerprint => value !== undefined)
-    .sort((left, right) => left.path.localeCompare(right.path));
+  const fingerprintAll = (paths: readonly string[]): InputFingerprint[] =>
+    [...paths]
+      .map((target) => fingerprintInput(target))
+      .filter((value): value is InputFingerprint => value !== undefined)
+      .sort((left, right) => left.path.localeCompare(right.path));
+  const sortedArtifacts = [...artifacts].sort();
   writeAtomic(
     manifestPath,
     `${JSON.stringify(
-      { version: SET_CACHE_VERSION, entries, output, artifacts: [...artifacts].sort(), inputs: inputFingerprints },
+      {
+        version: SET_CACHE_VERSION,
+        entries,
+        output,
+        artifacts: sortedArtifacts,
+        inputs: fingerprintAll([...inputs]),
+        artifactInputs: fingerprintAll([output, ...sortedArtifacts]),
+      },
       null,
       2,
     )}\n`,

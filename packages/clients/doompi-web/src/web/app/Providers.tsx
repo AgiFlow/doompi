@@ -24,7 +24,9 @@ for (const diagnostic of webPluginDiagnostics()) {
 }
 // The thread view a plugin panel renders through its props; bound here, where
 // the feature and the props builder can both be seen.
-bindThreadRenderer((sessionId, threadId) => <ThreadView sessionId={sessionId} threadId={threadId} />);
+bindThreadRenderer((sessionId, threadId, options) => (
+  <ThreadView sessionId={sessionId} threadId={threadId} options={options} />
+));
 
 const router = createRouter({ routeTree });
 

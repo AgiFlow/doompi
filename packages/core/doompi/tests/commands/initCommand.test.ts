@@ -66,7 +66,8 @@ describe('InitCommand', () => {
       themes: ['themes/doom-pi-dark.json'],
       theme: 'doom-pi-dark',
     });
-    expect(fs.lstatSync(piExtensionAliasPath(agentDirectory)).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(piExtensionAliasPath(agentDirectory)).isDirectory()).toBe(true);
+    expect(fs.lstatSync(piExtensionAliasPath(agentDirectory)).isSymbolicLink()).toBe(false);
     expect(fs.existsSync(path.join(agentDirectory, 'themes', 'doom-pi-dark.json'))).toBe(true);
     expect(fs.existsSync(path.join(doomDirectory, 'hooks.yaml'))).toBe(false);
     const domainsTemplate = fs.readFileSync(path.join(doomDirectory, 'domains.yaml'), 'utf8');

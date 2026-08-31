@@ -2,6 +2,7 @@ import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 import {
   abortCommand,
+  builtinCommandFrame,
   clearQueueCommand,
   dialogCancelled,
   dialogConfirmed,
@@ -202,6 +203,10 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
     );
     const protocolUserEntryIds = { ...state.protocolUserEntryIds };
     const normalizedEntries = [...entries];
+    // Claimed prompts are remembered rather than dropped: the journal reports
+    // the same message on its own channel, and that copy has to fold into this
+    // entry instead of arriving as a new one.
+    const reconciledUserEntries = [...state.reconciledUserEntries];
 
     // Work backwards so repeated text binds to the newest matching prompt. The
     // local id keeps React from mounting the same message again when Pi publishes
@@ -220,6 +225,7 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
       const [pending] = pendingUserEntries.splice(pendingIndex, 1);
       if (pending === undefined) continue;
       protocolUserEntryIds[entry.id] = pending.id;
+      reconciledUserEntries.push(pending);
       normalizedEntries[index] = { ...entry, id: pending.id };
     }
 
@@ -231,6 +237,7 @@ export function applyProtocolTranscript(sessionId: string, entries: TimelineEntr
       streaming,
       settled: !streaming,
       pendingUserEntries,
+      reconciledUserEntries,
       protocolUserEntryIds,
     };
   });
@@ -274,6 +281,7 @@ export function resetSessionStore(sessionId: string): void {
       streaming: state.streaming,
       settled: state.settled,
       pendingUserEntries: state.pendingUserEntries,
+      reconciledUserEntries: state.reconciledUserEntries,
       protocolUserEntryIds: state.protocolUserEntryIds,
     };
   });
@@ -344,6 +352,14 @@ export function submitMessage(
   const trimmed = text.trim();
   if (!trimmed || sessionId === null) return;
   const store = sessionStoreFor(sessionId);
+  // A built-in is an action, not something to say: steering the run with the
+  // text, or prompting with it, would reach the model as literal characters.
+  const builtin = builtinCommandFrame(trimmed);
+  if (builtin) {
+    store.setState((state) => appendUserPrompt(state, trimmed));
+    sendFrame(sessionId, builtin);
+    return;
+  }
   const streaming = store.state.streaming;
   const userImages = images
     .filter((image) => isSupportedImageMimeType(image.mimeType))
@@ -393,7 +409,7 @@ export function runCommand(name: string, sessionId: string | null = activeSessio
   if (sessionId === null) return;
   const slashed = name.startsWith('/') ? name : `/${name}`;
   sessionStoreFor(sessionId).setState((state) => appendUserPrompt(state, slashed));
-  sendFrame(sessionId, promptCommand(slashed));
+  sendFrame(sessionId, builtinCommandFrame(slashed) ?? promptCommand(slashed));
 }
 
 export function answerDialogValue(id: string, value: string, sessionId: string | null = activeSessionId()): void {

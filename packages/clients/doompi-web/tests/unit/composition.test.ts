@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { activityGroups, minorModes, selectionAxes } from '../../src/web/lib/composition.ts';
+import { activityGroups, fileLinkFor, minorModes, selectionAxes } from '../../src/web/lib/composition.ts';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
 
@@ -393,5 +393,51 @@ describe('a catalog mode that cannot run here', () => {
     // An active mode with every action disabled is still active, and saying
     // otherwise would hide a mode that is doing something right now.
     expect(minorModes({}, [], running)[0].availability).toBe('on');
+  });
+});
+
+describe('fileLinkFor', () => {
+  const tabFor = (id: string) => ({ id, label: id, panel: () => null });
+
+  it('answers nothing while no plugin tracks files', () => {
+    try {
+      installWebPlugins([defineWebPlugin({ id: 'quiet' })]);
+      expect(fileLinkFor('s1', 'src/app.ts')).toBeUndefined();
+    } finally {
+      resetWebPlugins();
+    }
+  });
+
+  it('takes the first source that claims the path, and leaves the rest plain', () => {
+    try {
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'first',
+          fileLinks: {
+            subscribe: () => () => undefined,
+            fingerprint: () => 'src/app.ts',
+            resolve: (_sessionId, path) => (path === 'src/app.ts' ? tabFor('first-app') : undefined),
+          },
+        }),
+        defineWebPlugin({
+          id: 'second',
+          fileLinks: {
+            subscribe: () => () => undefined,
+            fingerprint: () => 'src/app.ts docs/README.md',
+            resolve: (_sessionId, path) =>
+              path === 'src/app.ts'
+                ? tabFor('second-app')
+                : path === 'docs/README.md'
+                  ? tabFor('second-readme')
+                  : undefined,
+          },
+        }),
+      ]);
+      expect(fileLinkFor('s1', 'src/app.ts')?.id).toBe('first-app');
+      expect(fileLinkFor('s1', 'docs/README.md')?.id).toBe('second-readme');
+      expect(fileLinkFor('s1', 'flex gap-3')).toBeUndefined();
+    } finally {
+      resetWebPlugins();
+    }
   });
 });

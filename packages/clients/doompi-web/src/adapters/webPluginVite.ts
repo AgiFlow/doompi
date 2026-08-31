@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { readSyncRegistration } from '@agimon-ai/doompi/services';
 import type { Alias, Plugin } from 'vite';
 import { devPluginRoots, PLUGIN_ROOTS_ENV, PLUGIN_ROOTS_FILE } from '../services/webDevRoots.ts';
 import type { SyncGeneratedModules } from './webPluginGenerate.ts';
 
-/** Where `doompi sync` publishes the bundle the server prefers; the roots file sits beside its assets. */
-const SYNCED_BUNDLE_DIRECTORY = ['.doompi', 'web', 'current'];
+const DOOMPI_ROOT_ENV = 'DOOMPI_ROOT';
 
 /**
  * Swaps the committed builtin registry modules for generated ones. A
@@ -40,12 +40,27 @@ export function webPluginCssAlias(generated: SyncGeneratedModules): Alias {
   return { find: /^\.\/webPluginSources\.generated\.css$/, replacement: generated.cssModulePath };
 }
 
-/** The plugin package roots the dev server should serve, from the environment or the last sync. */
+/** The plugin package roots the dev server should serve, from an explicit override or DOOMPI_ROOT. */
 export function readDevPluginRoots(environment: NodeJS.ProcessEnv, homeDirectory: string): string[] {
-  const rootsFile = path.join(homeDirectory, ...SYNCED_BUNDLE_DIRECTORY, PLUGIN_ROOTS_FILE);
-  return devPluginRoots({
-    envValue: environment[PLUGIN_ROOTS_ENV],
-    rootsFileText: fs.existsSync(rootsFile) ? fs.readFileSync(rootsFile, 'utf8') : undefined,
-    delimiter: path.delimiter,
-  });
+  const explicit = environment[PLUGIN_ROOTS_ENV];
+  if (explicit !== undefined && explicit !== '') {
+    return devPluginRoots({ envValue: explicit, rootsFileText: undefined, delimiter: path.delimiter });
+  }
+  const repoRoot = environment[DOOMPI_ROOT_ENV];
+  if (repoRoot === undefined || repoRoot === '') return [];
+  try {
+    const webDirectory = readSyncRegistration(repoRoot, homeDirectory)?.webDirectory;
+    const rootsFile =
+      webDirectory === null || webDirectory === undefined
+        ? undefined
+        : path.join(path.dirname(webDirectory), PLUGIN_ROOTS_FILE);
+    return devPluginRoots({
+      envValue: undefined,
+      rootsFileText:
+        rootsFile !== undefined && fs.existsSync(rootsFile) ? fs.readFileSync(rootsFile, 'utf8') : undefined,
+      delimiter: path.delimiter,
+    });
+  } catch {
+    return [];
+  }
 }

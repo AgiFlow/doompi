@@ -74,7 +74,9 @@ describe('SyncPipeline', () => {
       '/repo',
       expect.any(Object),
     );
-    expect(mocks.syncOptions).toHaveBeenCalledWith({ settingsMode: 'embedded' });
+    expect(mocks.syncOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ settingsMode: 'embedded', lockHeld: true }),
+    );
     expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--major-mode', 'minimal'], environment, '/repo', output);
   });
 

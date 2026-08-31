@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +7,12 @@ import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acquireCompositionClaim } from '../../src/adapters/compositionState';
-import { resolveSyncLocation } from '../../src/adapters/syncLocation';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import {
+  publishSyncRegistration,
+  SYNC_REGISTRATION_VERSION,
+  syncStateSha256,
+} from '../../src/adapters/syncRegistration.ts';
 import { HARNESS_STATE_POINTER, readHarnessState, resetHarnessStore } from '../../src/exports/config/harnessState';
 import {
   alreadyComposed,
@@ -36,6 +42,11 @@ import {
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract.ts';
 import { assembleExtensions, PERSONA_ENTRY, resolveExtensionComposition } from '../../src/services/extensionAssembler';
 import { testMcpProjection } from '../helpers/mcpProjection.ts';
+
+/** Digest a compiler manifest must now record so freshness is judged by content. */
+function sha256Of(file: string): string {
+  return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
 
 const REPO_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
 const TEST_COMPOSITION_FINGERPRINT = 'a'.repeat(64);
@@ -80,6 +91,42 @@ function syncedState(root: string, overrides: Partial<SyncState> = {}): SyncStat
   };
 }
 
+async function writeRegisteredState(root: string, value: SyncState = syncedState(root)): Promise<string> {
+  const homeDirectory = path.join(root, 'home');
+  const location = resolveSyncLocation(root, homeDirectory);
+  const generation = 'test-generation';
+  const generationRoot = syncGenerationDirectory(location, generation);
+  const statePath = await writeSyncState(root, value, homeDirectory, path.join(generationRoot, 'state.json'));
+  const apiDirectory = path.join(generationRoot, 'api');
+  const packageRoot = path.join(root, '.doompi-package');
+  const manifestPath = path.join(packageRoot, 'package.json');
+  const entry = path.join(packageRoot, 'pi.mjs');
+  fs.mkdirSync(apiDirectory, { recursive: true });
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(entry, 'export default () => undefined;\n');
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./pi.mjs'] } })}\n`,
+  );
+  publishSyncRegistration(
+    root,
+    {
+      version: SYNC_REGISTRATION_VERSION,
+      root: location.root,
+      identity: location.identity,
+      generation,
+      generationRoot,
+      statePath,
+      stateSha256: syncStateSha256(statePath),
+      webDirectory: null,
+      apiDirectory,
+      package: { root: fs.realpathSync(packageRoot), version: 'test', manifestPath, entry },
+    },
+    homeDirectory,
+  );
+  return homeDirectory;
+}
+
 /** A real module on disk, because the loader imports rather than requires. */
 function writeExtensionModule(directory: string, name: string, body: string): string {
   const modulePath = path.join(directory, `${name}.mjs`);
@@ -87,8 +134,12 @@ function writeExtensionModule(directory: string, name: string, body: string): st
   return modulePath;
 }
 
-function writeCompiledBundle(root: string, name: string): { bundle: string; input: string; manifest: string } {
-  const generatedDirectory = resolveSyncLocation(root).directory;
+function writeCompiledBundle(
+  root: string,
+  name: string,
+  homeDirectory: string,
+): { bundle: string; input: string; manifest: string } {
+  const generatedDirectory = syncGenerationDirectory(resolveSyncLocation(root, homeDirectory), 'test-generation');
   const bundle = path.join(generatedDirectory, 'dist', `${name}.mjs`);
   const input = path.join(root, `${name}-source.mjs`);
   const manifest = path.join(generatedDirectory, 'cache', `${name}.json`);
@@ -106,7 +157,7 @@ function writeCompiledBundle(root: string, name: string): { bundle: string; inpu
       output: bundle,
       artifacts: [bundle],
       entries: [input],
-      inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs }],
+      inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
     }),
   );
   return { bundle, input, manifest };
@@ -115,6 +166,7 @@ function writeCompiledBundle(root: string, name: string): { bundle: string; inpu
 async function writeModeBundles(root: string): Promise<{
   copilot: ReturnType<typeof writeCompiledBundle>;
   minimal: ReturnType<typeof writeCompiledBundle>;
+  homeDirectory: string;
 }> {
   fs.mkdirSync(path.join(root, '.doom'), { recursive: true });
   fs.writeFileSync(
@@ -158,10 +210,11 @@ async function writeModeBundles(root: string): Promise<{
   };
   const copilotFingerprint = fingerprintFor('copilot');
   const minimalFingerprint = fingerprintFor('minimal');
-  const copilot = writeCompiledBundle(root, 'copilot');
-  const minimal = writeCompiledBundle(root, 'minimal');
-  const generatedDirectory = resolveSyncLocation(root).directory;
-  await writeSyncState(root, {
+  const homeDirectory = path.join(root, 'home');
+  const copilot = writeCompiledBundle(root, 'copilot', homeDirectory);
+  const minimal = writeCompiledBundle(root, 'minimal', homeDirectory);
+  const generatedDirectory = syncGenerationDirectory(resolveSyncLocation(root, homeDirectory), 'test-generation');
+  await writeRegisteredState(root, {
     ...state,
     compositionFingerprint: copilotFingerprint,
     bundles: {
@@ -179,7 +232,7 @@ async function writeModeBundles(root: string): Promise<{
       },
     },
   });
-  return { copilot, minimal };
+  return { copilot, minimal, homeDirectory };
 }
 
 function environmentFor(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
@@ -200,9 +253,9 @@ afterEach(() => {
 describe('findSyncedRoot', () => {
   it('prefers the working directory, the only place Pi reads .pi from', async () => {
     const root = makeRoot();
-    await writeSyncState(root, syncedState(root));
+    const homeDirectory = await writeRegisteredState(root);
 
-    expect(findSyncedRoot(root)).toBe(root);
+    expect(findSyncedRoot(root, homeDirectory)).toBe(root);
   });
 
   it('reports nothing for a directory that was never synced', () => {
@@ -671,13 +724,13 @@ describe('composeDoomSession', () => {
       resolved: { 'own:domains': entry },
       env: { DOOMPI_ROOT: root },
     });
-    await writeSyncState(root, state);
+    const homeDirectory = await writeRegisteredState(root, state);
     const registerCommand = vi.fn();
 
     const outcome = await composeDoomSession({ registerCommand } as unknown as ExtensionAPI, {
       cwd: root,
       argv: ['--extension', entry],
-      environment: {},
+      environment: { HOME: homeDirectory },
     });
 
     expect(outcome.loaded).toEqual([]);
@@ -701,7 +754,7 @@ describe('composeDoomSession', () => {
     const builds = await writeModeBundles(root);
     fs.appendFileSync(builds.copilot.input, '// stale inactive mode\n');
     const registerCommand = vi.fn();
-    const environment: NodeJS.ProcessEnv = {};
+    const environment: NodeJS.ProcessEnv = { HOME: builds.homeDirectory };
     vi.spyOn(process, 'env', 'get').mockReturnValue(environment);
 
     const outcome = await composeDoomSession({ registerCommand } as unknown as ExtensionAPI, {
@@ -714,7 +767,7 @@ describe('composeDoomSession', () => {
     expect(outcome.loaded).toEqual([builds.minimal.bundle]);
     expect(registerCommand).toHaveBeenCalledWith('minimal-loaded');
     vi.restoreAllMocks();
-    await cleanupRunDirectory(root);
+    await cleanupRunDirectory(root, environment);
   });
 
   it('fails closed before importing a stale selected bundle', async () => {
@@ -723,16 +776,17 @@ describe('composeDoomSession', () => {
     fs.appendFileSync(builds.copilot.input, '// stale selected mode\n');
     const registerCommand = vi.fn();
 
+    const environment = { HOME: builds.homeDirectory };
     const outcome = await composeDoomSession({ registerCommand } as unknown as ExtensionAPI, {
       cwd: root,
       argv: [],
-      environment: {},
+      environment,
     });
 
     expect(outcome.loaded).toEqual([]);
     expect(outcome.problems).toEqual(['doompi could not read its synchronized state. Run doompi sync.']);
     expect(registerCommand).not.toHaveBeenCalled();
-    await cleanupRunDirectory(root);
+    await cleanupRunDirectory(root, environment);
   });
 
   it('hydrates, loads the set, and reports a config that moved on since the sync', async () => {
@@ -746,7 +800,7 @@ describe('composeDoomSession', () => {
       optionalPackageEntry: () => entry,
       localEntry: () => entry,
     };
-    await writeSyncState(
+    const homeDirectory = await writeRegisteredState(
       root,
       syncedState(root, {
         env: { DOOMPI_ROOT: root, DOOMPI_MAJOR_MODE: 'copilot' },
@@ -754,7 +808,7 @@ describe('composeDoomSession', () => {
         inputsHash: 'recorded-before-an-edit',
       }),
     );
-    const environment: NodeJS.ProcessEnv = {};
+    const environment: NodeJS.ProcessEnv = { HOME: homeDirectory };
     const registerCommand = vi.fn();
     const pi = { registerCommand } as unknown as ExtensionAPI;
 
@@ -765,8 +819,8 @@ describe('composeDoomSession', () => {
     expect(outcome.stale).toBe(true);
     expect(environment[COMPOSED_ENV]).toBe('1');
     expect(environment[MUTE_ENV]).toBe('1');
-    expect(environment.DOOMPI_TEMP_DIR).toBe(runDirectory(root));
-    await cleanupRunDirectory(root);
+    expect(environment.DOOMPI_TEMP_DIR).toBe(runDirectory(root, process.pid, homeDirectory));
+    await cleanupRunDirectory(root, environment);
   });
 
   it('marks the process so a reload does not re-apply the command line', () => {

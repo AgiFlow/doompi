@@ -40,6 +40,6 @@ export const webPlugin = defineWebPlugin({
   // footer's one-line summary.
   activitySections: [{ id: 'agents', component: AgentsActivitySection }],
   toolRenderers: teamToolRenderers,
-  // The run drawer's action row is open to independent plugins.
+  // The run detail sheet's action row is open to independent plugins.
   slots: [RUN_ACTIONS_SLOT],
 });

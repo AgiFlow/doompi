@@ -127,7 +127,7 @@ describe('browser media device recovery guards', () => {
     vi.stubGlobal('Worker', undefined);
     const device = new BrowserVoiceMediaDevice();
 
-    await device.prepare();
+    device.armUserGesture();
     expect(contexts).toHaveLength(0);
     listeners.get('pointerdown')?.({} as Event);
     await Promise.resolve();

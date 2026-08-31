@@ -1,11 +1,16 @@
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+import { collapseLines } from './collapse.ts';
 
 /**
  * The hashline wire format, parsed the way the TUI's hashlineRendering does:
  * `@file path#tag` opens a file, `N#abc|content` is an anchored line, and a
- * `>> ` or three-space prefix marks grep matches and their context. The
- * patterns are copied from doompi-hashline because a cockpit plugin may only
- * import its own pure modules and the web contract.
+ * `>> ` or three-space prefix marks grep matches and their context.
+ *
+ * It lives here rather than in each tool package because the read and grep
+ * cards render the same bytes and had drifted into byte-identical copies of
+ * this module. The patterns are still a transcription of doompi-hashline: a
+ * cockpit plugin may import this library and the web contract, but not a
+ * runtime package, so the format is stated twice on purpose and only once per
+ * side of that line.
  */
 const FILE_HEADER_PATTERN = /^@file (.+)#([A-Za-z0-9_-]{8})$/u;
 const TAGGED_LINE_PATTERN = /^(>> | {3})?(\d+)#[a-z]{3}\|(.*)$/u;
@@ -18,6 +23,17 @@ export const GREP_COLLAPSED_LINES = 15;
 
 export type HashlineResultKind = 'read' | 'grep';
 export type TaggedLineMarker = 'match' | 'context';
+
+/**
+ * The part of a tool result this parser reads.
+ *
+ * Named structurally rather than imported: the component library sits below
+ * the web contract and must not depend on it, so it states the shape it needs
+ * and any `ToolResultView` satisfies it.
+ */
+export interface HashlineResult {
+  readonly content: readonly unknown[];
+}
 
 export interface TaggedLine {
   readonly line: number;
@@ -54,7 +70,7 @@ function isTextBlock(block: unknown): block is TextBlock {
  * dropped. A result with no text but an image block reads as the TUI's
  * placeholder. The joined `output` stands in when no result view exists.
  */
-export function resultTextLines(result: ToolResultView | null, output: string): string[] {
+export function resultTextLines(result: HashlineResult | null, output: string): string[] {
   const blocks = result?.content.filter(isTextBlock) ?? [];
   const text =
     result === null ? output : blocks.flatMap((block) => (block.type === 'text' ? [block.text ?? ''] : [])).join('\n');
@@ -115,7 +131,7 @@ export function presentHashlineLines(lines: readonly string[], kind: HashlineRes
 
 /** The body a card shows for one result, collapsed to the kind's line budget unless expanded. */
 export function hashlineBody(
-  result: ToolResultView | null,
+  result: HashlineResult | null,
   output: string,
   kind: HashlineResultKind,
   expanded: boolean,
@@ -124,12 +140,12 @@ export function hashlineBody(
   const notice = takeTrailingNotice(lines);
   const presented = presentHashlineLines(lines, kind);
   const budget = kind === 'read' ? READ_COLLAPSED_LINES : GREP_COLLAPSED_LINES;
-  const shown = expanded ? presented : presented.slice(0, budget);
+  const { shown, hidden } = collapseLines(presented, budget, expanded);
   const gutter = shown.reduce(
     (widest, line) => (line.type === 'tagged' ? Math.max(widest, String(line.value.line).length) : widest),
     1,
   );
-  return { shown, hidden: presented.length - shown.length, notice, gutter };
+  return { shown, hidden, notice, gutter };
 }
 
 /** The `key · key` detail list beside a call's primary argument, with absent values dropped. */

@@ -276,6 +276,34 @@ describe('transcript ownership', () => {
       expect.objectContaining({ kind: 'assistant', text: 'live again' }),
     ]);
   });
+
+  it('folds the journalled copy of a published prompt after ownership returns to the journal', () => {
+    // The protocol claims the optimistic prompt, then its socket drops and the
+    // journal reports the same message. Without the claim record that copy
+    // reads as a new prompt and lands below the settled divider, which is the
+    // reader's own message recapped after the agent has finished.
+    applyProtocolTranscript('s1', [], true);
+    setActiveSession('s1');
+    submitMessage('say it once');
+    const optimisticId = sessionStoreFor('s1').state.entries[0]?.id;
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'say it once' }], true);
+    applySessionFrame('s1', { type: 'agent_settled' });
+
+    releaseProtocolTranscript('s1');
+    applySessionFrame('s1', {
+      type: 'entry_appended',
+      entry: {
+        id: 'journal-1',
+        type: 'message',
+        message: { role: 'user', content: [{ type: 'text', text: 'say it once' }] },
+      },
+    });
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: optimisticId, text: 'say it once' },
+      expect.objectContaining({ kind: 'settled' }),
+    ]);
+  });
 });
 describe('transport', () => {
   it('envelopes session commands with the session id', () => {
@@ -640,6 +668,33 @@ describe('session actions', () => {
     runCommand('domains');
     runCommand('/mode');
     expect(sent.map((frame) => (frame.frame as Frame).message)).toEqual(['/domains', '/mode']);
+  });
+
+  it('send a built-in as its own frame rather than as prompt text', () => {
+    setActiveSession('s1');
+    runCommand('compact');
+    submitMessage('/compact keep the API decisions');
+    submitMessage('/compact\n\nfolded attachment text');
+    submitMessage('/compaction is a word');
+    submitMessage('/mode');
+    submitMessage('read @src/a.ts and summarise it');
+    expect(sent.map((frame) => frame.frame)).toEqual([
+      { type: 'compact' },
+      { type: 'compact', customInstructions: 'keep the API decisions' },
+      { type: 'compact', customInstructions: 'folded attachment text' },
+      { type: 'prompt', message: '/compaction is a word' },
+      { type: 'prompt', message: '/mode' },
+      { type: 'prompt', message: 'read @src/a.ts and summarise it' },
+    ]);
+    // The command is still echoed into the timeline, so the run has a cause.
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      expect.objectContaining({ kind: 'user', text: '/compact' }),
+      expect.objectContaining({ kind: 'user', text: '/compact keep the API decisions' }),
+      expect.objectContaining({ kind: 'user', text: '/compact\n\nfolded attachment text' }),
+      expect.objectContaining({ kind: 'user', text: '/compaction is a word' }),
+      expect.objectContaining({ kind: 'user', text: '/mode' }),
+      expect.objectContaining({ kind: 'user', text: 'read @src/a.ts and summarise it' }),
+    ]);
   });
 
   it('answer dialogs on the session that asked', () => {

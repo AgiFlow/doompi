@@ -54,14 +54,35 @@ function walkFiles(cwd: string): string[] {
 }
 
 /**
- * Repository-relative files under a session's working directory matching a
- * query, for the composer's @ completion. Git's index is the source when
- * available (it already understands ignores); a bounded walk covers plain
- * directories.
+ * The directories a file list implies, each with a trailing separator.
+ *
+ * Derived from the paths rather than read off disk: `git ls-files` has no
+ * directory entries at all, and the walk already paid for this information on
+ * its way to the files. It also inherits the ignore rules for free, so a
+ * folder only appears when something inside it was worth listing. The cost is
+ * that an empty directory is never suggested, which is not what an @ mention
+ * is reaching for.
+ */
+function directoriesOf(files: readonly string[]): string[] {
+  const directories = new Set<string>();
+  for (const file of files) {
+    for (let cut = file.indexOf('/'); cut !== -1; cut = file.indexOf('/', cut + 1)) {
+      directories.add(file.slice(0, cut + 1));
+    }
+  }
+  return [...directories];
+}
+
+/**
+ * Repository-relative files and folders under a session's working directory
+ * matching a query, for the composer's @ completion. Git's index is the source
+ * when available (it already understands ignores); a bounded walk covers plain
+ * directories. Folders carry a trailing slash, which is what tells a reader,
+ * and the agent, that the mention is a directory.
  */
 export async function listSessionFiles(cwd: string, query: string, limit: number): Promise<string[]> {
   const files = (await gitFiles(cwd)) ?? walkFiles(cwd);
-  return rankFileMatches(files, query, limit);
+  return rankFileMatches([...files, ...directoriesOf(files)], query, limit);
 }
 
 export type SessionFileResult =

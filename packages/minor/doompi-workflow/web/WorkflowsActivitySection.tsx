@@ -58,13 +58,15 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
   const groups = workflowActivityGroups(workflowActivityRows(runs, now));
   if (groups.length === 0) {
     return (
-      <div data-testid="activity-summary-workflows" className="flex flex-col gap-1 px-1">
-        <span className="text-[10px] text-doom-faint">no runs yet</span>
+      <div className="flex items-center gap-2 px-1">
+        <p data-testid="activity-summary-workflows" className="text-[10px] text-doom-faint">
+          idle
+        </p>
         <Button
           variant="link"
           size="xs"
           data-testid="activity-workflow-launch"
-          className="justify-start px-0 text-[10px]"
+          className="px-0"
           onClick={() => {
             if (sessionId === null) return;
             openCatalog(sessionId);

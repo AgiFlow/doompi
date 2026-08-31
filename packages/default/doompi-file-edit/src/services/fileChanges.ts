@@ -52,6 +52,7 @@ export function parseTimelineEvent(value: unknown): AnyTimelineEvent | null {
     ...(optionalString(value.after) === undefined ? {} : { after: value.after as string }),
     ...(optionalCount(value.additions) === undefined ? {} : { additions: value.additions as number }),
     ...(optionalCount(value.removals) === undefined ? {} : { removals: value.removals as number }),
+    ...(value.verified === true ? { verified: true } : {}),
   };
 }
 
@@ -74,6 +75,24 @@ export function parseTimeline(content: string, onMalformed?: (line: string) => v
   return events;
 }
 
+/**
+ * Whether a recorded change is evidence that the file's content actually moved.
+ *
+ * A tool change names its file and reads both sides, so it always is. A scan
+ * change is a tree comparison of size and modification time, which a checkout,
+ * an install, or a command that merely touched a file moves as readily as an
+ * edit does; only a scan the tracker confirmed carries `verified`. Version 1
+ * lines predate the distinction entirely, so a bash one cannot be trusted.
+ */
+export function isConfirmedChange(event: AnyTimelineEvent): boolean {
+  if (event.version !== 2) return event.tool !== 'bash';
+  return event.origin !== 'scan' || event.verified === true;
+}
+
+/** The recorded changes worth listing, which is every change but an unconfirmed touch. */
+export function confirmedChanges(events: readonly AnyTimelineEvent[]): AnyTimelineEvent[] {
+  return events.filter(isConfirmedChange);
+}
 /** One row per file, newest change first, which is the order both docks list in. */
 export function foldEntries(events: readonly AnyTimelineEvent[]): FileEditEntry[] {
   const folded = new Map<string, FileEditEntry>();
@@ -108,6 +127,7 @@ export function foldVersions(events: readonly AnyTimelineEvent[], filePath: stri
         ...(event.after === undefined ? {} : { after: event.after }),
         ...(event.additions === undefined ? {} : { additions: event.additions }),
         ...(event.removals === undefined ? {} : { removals: event.removals }),
+        ...(event.verified === true ? { verified: true } : {}),
       };
     });
 }

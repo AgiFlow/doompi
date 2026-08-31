@@ -7,6 +7,8 @@ const PI_DIRECTORY = '.pi';
 const DOOM_CONFIG_DIRECTORY = '.doom';
 const SYNC_DIRECTORY = 'sync';
 const WORKTREES_DIRECTORY = 'worktrees';
+const GENERATIONS_DIRECTORY = 'generations';
+const REGISTRATIONS_DIRECTORY = 'registrations';
 const SHARED_CACHE_DIRECTORY = 'shared-cache';
 const LEGACY_DOOM_DIRECTORY = 'doom';
 const GIT_DIRECTORY = '.git';
@@ -26,12 +28,17 @@ export interface SyncIdentity {
 }
 
 export interface SyncLocation {
+  root: string;
   identity: SyncIdentity;
   repositoryLabel: string;
   worktreeLabel: string;
+  generatedRoot: string;
+  registrationsDirectory: string;
+  registrationPath: string;
   repositoryDirectory: string;
   sharedCacheDirectory: string;
   directory: string;
+  generationsDirectory: string;
   statePath: string;
   legacyDirectory: string;
   legacyStatePath: string;
@@ -103,20 +110,36 @@ export function resolveSyncLocation(repositoryRoot: string, homeDirectory: strin
   const repoLabel = repositoryLabel(commonDirectory, root);
   const worktreeLabel = sanitizeSyncLabel(path.basename(root), DEFAULT_WORKTREE_LABEL);
   const generatedRoot = path.join(path.resolve(homeDirectory), PI_DIRECTORY, DOOM_CONFIG_DIRECTORY, SYNC_DIRECTORY);
+  const registrationsDirectory = path.join(generatedRoot, REGISTRATIONS_DIRECTORY);
   const repositoryDirectory = path.join(generatedRoot, `${repoLabel}--${identity.repositoryId}`);
   const directory = path.join(repositoryDirectory, WORKTREES_DIRECTORY, `${worktreeLabel}--${identity.worktreeId}`);
   const legacyDirectory = path.join(root, PI_DIRECTORY, LEGACY_DOOM_DIRECTORY);
   return {
+    root,
     identity,
     repositoryLabel: repoLabel,
     worktreeLabel,
+    generatedRoot,
+    registrationsDirectory,
+    registrationPath: path.join(registrationsDirectory, identity.repositoryId, `${identity.worktreeId}.json`),
     repositoryDirectory,
     sharedCacheDirectory: path.join(repositoryDirectory, SHARED_CACHE_DIRECTORY),
     directory,
+    generationsDirectory: path.join(directory, GENERATIONS_DIRECTORY),
     statePath: path.join(directory, 'state.json'),
     legacyDirectory,
     legacyStatePath: path.join(legacyDirectory, 'state.json'),
   };
+}
+
+const GENERATION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+
+/** Resolves one immutable generation below its worktree namespace. */
+export function syncGenerationDirectory(location: SyncLocation, generation: string): string {
+  if (!GENERATION_ID.test(generation) || generation === '.' || generation === '..') {
+    throw new Error(`Invalid Doom sync generation id: ${generation}`);
+  }
+  return path.join(location.generationsDirectory, generation);
 }
 
 function rejectSymlink(target: string): void {
@@ -130,10 +153,38 @@ function rejectSymlink(target: string): void {
   }
 }
 
+interface SyncLockRecord {
+  pid: number;
+  token: string;
+}
+
+function readLockRecord(lockPath: string): SyncLockRecord | undefined {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as { pid?: unknown; token?: unknown };
+    return typeof parsed.pid === 'number' && typeof parsed.token === 'string'
+      ? { pid: parsed.pid, token: parsed.token }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function processIsAlive(processId: number): boolean {
+  try {
+    process.kill(processId, 0);
+    return true;
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'EPERM';
+  }
+}
+
 function removeStaleLock(lockPath: string): void {
   try {
     const stat = fs.statSync(lockPath);
-    if (Date.now() - stat.mtimeMs > STALE_LOCK_MS) fs.rmSync(lockPath, { force: true });
+    if (Date.now() - stat.mtimeMs <= STALE_LOCK_MS) return;
+    const record = readLockRecord(lockPath);
+    if (record && processIsAlive(record.pid)) return;
+    fs.rmSync(lockPath, { force: true });
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
   }
@@ -146,6 +197,7 @@ export async function acquireSyncLocationLock(location: SyncLocation): Promise<(
   await fs.promises.chmod(location.directory, PRIVATE_DIRECTORY_MODE);
   const lockPath = path.join(location.directory, LOCK_FILE);
   removeStaleLock(lockPath);
+  const record: SyncLockRecord = { pid: process.pid, token: crypto.randomUUID() };
   let handle: fs.promises.FileHandle;
   try {
     handle = await fs.promises.open(lockPath, 'wx', PRIVATE_FILE_MODE);
@@ -155,10 +207,22 @@ export async function acquireSyncLocationLock(location: SyncLocation): Promise<(
     }
     throw error;
   }
-  await handle.writeFile(`${process.pid}\n`);
+  await handle.writeFile(`${JSON.stringify(record)}\n`);
+  const heartbeat = setInterval(
+    () => {
+      if (readLockRecord(lockPath)?.token !== record.token) return;
+      const now = new Date();
+      fs.utimesSync(lockPath, now, now);
+    },
+    Math.floor(STALE_LOCK_MS / 3),
+  );
+  heartbeat.unref();
   return async () => {
+    clearInterval(heartbeat);
     await handle.close();
-    await fs.promises.rm(lockPath, { force: true });
+    if (readLockRecord(lockPath)?.token === record.token) {
+      await fs.promises.rm(lockPath, { force: true });
+    }
   };
 }
 

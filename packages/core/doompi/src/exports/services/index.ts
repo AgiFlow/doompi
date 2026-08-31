@@ -49,6 +49,7 @@ export {
   type SyncDrift,
   type SyncDriftReason,
 } from '../../adapters/syncDrift';
+export { readSyncRegistration, type SyncRegistration } from '../../adapters/syncRegistration';
 export {
   ensureElicitationSessionId,
   overridePiThemes,

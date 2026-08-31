@@ -8,7 +8,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { resolveSyncLocation } from '../../src/adapters/syncLocation.ts';
+import { readSyncRegistration } from '../../src/adapters/syncRegistration.ts';
 import {
   FORBIDDEN_PACK_CONTENT,
   PACKAGE_MATRIX,
@@ -545,6 +545,43 @@ function writeRegistrationProbePackage(packageRoot: string, source: string, mark
   );
 }
 
+function instrumentInstalledDoomPi(consumerRoot: string, source: string, version: string, marker: string): string {
+  const packageRoot = installedPackageRoot(consumerRoot, '@agimon-ai/doompi');
+  const manifestPath = path.join(packageRoot, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+    version: string;
+    pi?: { extensions?: string[] };
+  };
+  const entryRelative = manifest.pi?.extensions?.[0];
+  if (!entryRelative) throw new Error('Installed DoomPi manifest has no Pi extension entry');
+  const entry = path.resolve(packageRoot, entryRelative);
+  const original = entry.replace(/\.mjs$/u, '.original.mjs');
+  fs.renameSync(entry, original);
+  manifest.version = version;
+  const instrumentedManifest = `${manifestPath}.instrumented`;
+  fs.writeFileSync(instrumentedManifest, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.renameSync(instrumentedManifest, manifestPath);
+  fs.writeFileSync(
+    entry,
+    [
+      "import fs from 'node:fs';",
+      `import doomPi from ${JSON.stringify(pathToFileURL(original).href)};`,
+      `const marker = ${JSON.stringify(marker)};`,
+      `const source = ${JSON.stringify(source)};`,
+      "export default async function registeredDoomPi(pi) { fs.appendFileSync(marker, JSON.stringify({ source, event: 'factory' }) + '\\n'); await doomPi(pi); }",
+      '',
+    ].join('\n'),
+  );
+  return fs.realpathSync(packageRoot);
+}
+
+function readRegistrationFactories(marker: string): string[] {
+  if (!fs.existsSync(marker)) return [];
+  return readRegistrationProbe(marker)
+    .filter((record) => record.event === 'factory')
+    .map((record) => record.source);
+}
+
 function readRegistrationProbe(marker: string): RegistrationProbeRecord[] {
   return fs
     .readFileSync(marker, 'utf8')
@@ -556,7 +593,20 @@ function readRegistrationProbe(marker: string): RegistrationProbeRecord[] {
 function packedSyncStatePath(root: string, environment: NodeJS.ProcessEnv): string {
   const homeDirectory = environment.HOME;
   if (!homeDirectory) throw new Error('Packed runtime environment requires HOME');
-  return resolveSyncLocation(root, homeDirectory).statePath;
+  const registration = readSyncRegistration(root, homeDirectory);
+  if (!registration) throw new Error(`Packed runtime has no sync registration for ${root}`);
+  return registration.statePath;
+}
+
+async function initializePackedIntegration(
+  root: string,
+  environment: NodeJS.ProcessEnv,
+  consumerRoot: string = consumer.root,
+): Promise<void> {
+  const initialized = await runCommand(process.execPath, [installedDoomPiCli(consumerRoot), 'init'], root, environment);
+  if (initialized.code !== 0) {
+    throw new Error(`Packed doompi init failed: ${initialized.stderr || initialized.stdout}`);
+  }
 }
 
 function createRuntimeFixture(root = fs.mkdtempSync(path.join(consumer.root, 'doom-pi-runtime-'))): RuntimeFixture {
@@ -684,6 +734,7 @@ async function createStartupFixture(
   );
   const syncEnvironment = cleanRuntimeEnvironment(fixture.agentDirectory);
   syncEnvironment.DOOMPI_ROOT = root;
+  await initializePackedIntegration(root, syncEnvironment);
   const sync = await runCommand(
     process.execPath,
     [
@@ -1579,6 +1630,7 @@ describe('consumer ownership boundaries', () => {
         ].join('\n'),
       );
       const environment = cleanRuntimeEnvironment(fixture.agentDirectory);
+      await initializePackedIntegration(root, environment);
       const sync = await runCommand(
         process.execPath,
         [
@@ -1664,7 +1716,7 @@ describe('DPI installed experiment runtime', () => {
       expect(check.code, check.stderr || check.stdout).toBe(0);
       expect(fs.readFileSync(projectSettingsPath, 'utf8')).toBe(projectSettings);
       expect(fs.readFileSync(userSettingsPath, 'utf8')).toBe(userSettings);
-      expect(fs.existsSync(path.join(fixture.agentDirectory, 'themes', 'doom-pi-dark.json'))).toBe(true);
+      expect(fs.existsSync(path.join(fixture.agentDirectory, 'themes', 'doom-pi-dark.json'))).toBe(false);
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
@@ -1714,6 +1766,192 @@ describe('DPI installed experiment runtime', () => {
     },
     RUNTIME_TEST_TIMEOUT_MS,
   );
+
+  it('keeps packed repository versions, registrations, assets, APIs, and raw Pi startup isolated', async () => {
+    assertConsumerInstall();
+    const fixtureA = createRuntimeFixture();
+    const fixtureB = createRuntimeFixture();
+    const packedA = createConsumerRoot();
+    const packedB = createConsumerRoot();
+    runtimeRoots.push(packedA.root, packedB.root);
+    const [installA, installB] = await Promise.all([
+      installLocalPackages(packedA, packedPackages),
+      installLocalPackages(packedB, packedPackages),
+    ]);
+    expect(installA.code, installA.stderr || installA.stdout).toBe(0);
+    expect(installB.code, installB.stderr || installB.stdout).toBe(0);
+
+    const markerA = path.join(fixtureA.root, 'package-a.jsonl');
+    const markerB = path.join(fixtureB.root, 'package-b.jsonl');
+    const packageA = instrumentInstalledDoomPi(packedA.root, 'repository-a', '1.0.0-repository-a', markerA);
+    const packageB = instrumentInstalledDoomPi(packedB.root, 'repository-b', '2.0.0-repository-b', markerB);
+    for (const [fixture, packageRoot] of [
+      [fixtureA, packageA],
+      [fixtureB, packageB],
+    ] as const) {
+      const scope = path.join(fixture.root, 'node_modules', '@agimon-ai');
+      fs.mkdirSync(scope, { recursive: true });
+      fs.symlinkSync(packageRoot, path.join(scope, 'doompi'), 'dir');
+    }
+    const environment = cleanRuntimeEnvironment(fixtureA.agentDirectory);
+    environment.DOOMPI_WEB_PACKAGE_ROOT = path.join(REPOSITORY_ROOT, 'packages/clients/doompi-web');
+    await initializePackedIntegration(fixtureA.root, environment, packedA.root);
+
+    const settingsPath = path.join(fixtureA.agentDirectory, 'settings.json');
+    const themePath = path.join(fixtureA.agentDirectory, 'themes', 'doom-pi-dark.json');
+    const dispatcherRoot = path.join(fixtureA.agentDirectory, '@agimon-ai', 'doompi');
+    const initOwned = {
+      settings: fs.readFileSync(settingsPath),
+      theme: fs.readFileSync(themePath),
+      manifest: fs.readFileSync(path.join(dispatcherRoot, 'package.json')),
+      dispatcher: fs.readFileSync(path.join(dispatcherRoot, 'dispatcher.mjs')),
+    };
+    const syncOptions = [
+      '--major-mode',
+      RUNTIME_MAJOR_MODE,
+      '--no-domains',
+      '--no-mcp',
+      '--agents',
+      '--preset',
+      'ollama',
+    ];
+    const syncRepository = (consumerRoot: string, root: string, extra: string[] = []) =>
+      runCommand(
+        process.execPath,
+        [installedDoomPiCli(consumerRoot), 'sync', ...extra, ...syncOptions],
+        root,
+        environment,
+      );
+
+    const syncA = await syncRepository(packedA.root, fixtureA.root);
+    const syncB = await syncRepository(packedB.root, fixtureB.root);
+    expect(syncA.code, syncA.stderr || syncA.stdout).toBe(0);
+    expect(syncB.code, syncB.stderr || syncB.stdout).toBe(0);
+    const [overlapA, overlapB] = await Promise.all([
+      syncRepository(packedA.root, fixtureA.root),
+      syncRepository(packedB.root, fixtureB.root),
+    ]);
+    expect(overlapA.code, overlapA.stderr || overlapA.stdout).toBe(0);
+    expect(overlapB.code, overlapB.stderr || overlapB.stdout).toBe(0);
+
+    const homeDirectory = environment.HOME;
+    if (!homeDirectory) throw new Error('Packed runtime environment requires HOME');
+    const registrationA = readSyncRegistration(fixtureA.root, homeDirectory);
+    const registrationB = readSyncRegistration(fixtureB.root, homeDirectory);
+    expect(registrationA?.package).toMatchObject({ root: packageA, version: '1.0.0-repository-a' });
+    expect(registrationB?.package).toMatchObject({ root: packageB, version: '2.0.0-repository-b' });
+    expect(registrationA?.generationRoot).not.toBe(registrationB?.generationRoot);
+    expect(registrationA?.apiDirectory).not.toBe(registrationB?.apiDirectory);
+    expect(registrationA?.webDirectory, syncA.stdout).not.toBeNull();
+    expect(registrationB?.webDirectory, syncB.stdout).not.toBeNull();
+    expect(registrationA?.webDirectory).not.toBe(registrationB?.webDirectory);
+    expect(fs.statSync(registrationA!.apiDirectory).isDirectory()).toBe(true);
+    expect(fs.statSync(registrationB!.apiDirectory).isDirectory()).toBe(true);
+    expect(fs.statSync(registrationA!.webDirectory!).isDirectory()).toBe(true);
+    expect(fs.statSync(registrationB!.webDirectory!).isDirectory()).toBe(true);
+
+    const registrationBPath = path.join(
+      homeDirectory,
+      '.pi',
+      '.doom',
+      'sync',
+      'registrations',
+      registrationB!.identity.repositoryId,
+      `${registrationB!.identity.worktreeId}.json`,
+    );
+    const registrationBBytes = fs.readFileSync(registrationBPath);
+    const stateBBytes = fs.readFileSync(registrationB!.statePath);
+    const repeatedA = await syncRepository(packedA.root, fixtureA.root);
+    expect(repeatedA.code, repeatedA.stderr || repeatedA.stdout).toBe(0);
+    expect(fs.readFileSync(registrationBPath)).toEqual(registrationBBytes);
+    expect(fs.readFileSync(registrationB!.statePath)).toEqual(stateBBytes);
+
+    for (const [consumerRoot, root] of [
+      [packedA.root, fixtureA.root],
+      [packedB.root, fixtureB.root],
+    ] as const) {
+      const check = await syncRepository(consumerRoot, root, ['--check']);
+      expect(check.code, check.stderr || check.stdout).toBe(0);
+    }
+    expect(fs.readFileSync(settingsPath)).toEqual(initOwned.settings);
+    expect(fs.readFileSync(themePath)).toEqual(initOwned.theme);
+    expect(fs.readFileSync(path.join(dispatcherRoot, 'package.json'))).toEqual(initOwned.manifest);
+    expect(fs.readFileSync(path.join(dispatcherRoot, 'dispatcher.mjs'))).toEqual(initOwned.dispatcher);
+
+    const launchRawPi = async (fixture: RuntimeFixture, marker: string, source: string) => {
+      const runtime = startRuntime(
+        installedPiCli(packedA.root),
+        [
+          '--mode',
+          'rpc',
+          '--no-session',
+          '--approve',
+          '--provider',
+          'scripted',
+          '--model',
+          'scripted/system-test',
+          '--extension',
+          fixture.providerPath,
+        ],
+        fixture.root,
+        { ...environment, PI_OFFLINE: '1' },
+      );
+      try {
+        runtime.send({ id: `commands-${source}`, type: 'get_commands' });
+        const response = await runtime.waitForRecord(
+          (record) => record.type === 'response' && record.id === `commands-${source}` && record.success === true,
+        );
+        const names = ((response.data as { commands?: Array<{ name?: string }> } | undefined)?.commands ?? []).map(
+          (command) => command.name,
+        );
+        expect(names).toContain('mode');
+        await waitForFile(marker);
+        expect(readRegistrationFactories(marker)).toEqual([source]);
+        expect(runtime.nonJsonOutput).toEqual([]);
+      } finally {
+        await shutdownRuntime(runtime);
+      }
+    };
+    await launchRawPi(fixtureA, markerA, 'repository-a');
+    expect(readRegistrationFactories(markerB)).toEqual([]);
+    await launchRawPi(fixtureB, markerB, 'repository-b');
+    expect(readRegistrationFactories(markerA)).toEqual(['repository-a']);
+
+    const registrationAPath = path.join(
+      homeDirectory,
+      '.pi',
+      '.doom',
+      'sync',
+      'registrations',
+      registrationA!.identity.repositoryId,
+      `${registrationA!.identity.worktreeId}.json`,
+    );
+    const validRegistrationA = fs.readFileSync(registrationAPath);
+    const malformed = JSON.parse(validRegistrationA.toString('utf8')) as { version: number };
+    malformed.version += 1;
+    fs.writeFileSync(registrationAPath, `${JSON.stringify(malformed, null, 2)}\n`);
+    const invalidRuntime = startRuntime(
+      installedPiCli(packedA.root),
+      ['--mode', 'rpc', '--no-session', '--extension', fixtureA.providerPath],
+      fixtureA.root,
+      { ...environment, PI_OFFLINE: '1' },
+    );
+    try {
+      invalidRuntime.send({ id: 'invalid-registration', type: 'get_commands' });
+      const response = await invalidRuntime.waitForRecord(
+        (record) => record.type === 'response' && record.id === 'invalid-registration' && record.success === true,
+      );
+      const names = ((response.data as { commands?: Array<{ name?: string }> } | undefined)?.commands ?? []).map(
+        (command) => command.name,
+      );
+      expect(names).not.toContain('mode');
+      expect(readRegistrationFactories(markerA)).toEqual(['repository-a']);
+      expect(readRegistrationFactories(markerB)).toEqual(['repository-b']);
+    } finally {
+      await shutdownRuntime(invalidRuntime);
+      fs.writeFileSync(registrationAPath, validRegistrationA);
+    }
+  }, 180_000);
 });
 
 describe('DOOM-PI-LAUNCH installed runtime modes', () => {
@@ -1835,6 +2073,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       const fixture = createRuntimeFixture();
       const environment = cleanRuntimeEnvironment(fixture.agentDirectory);
       environment.DOOMPI_ROOT = fixture.root;
+      await initializePackedIntegration(fixture.root, environment);
       const sync = await runCommand(
         process.execPath,
         [
@@ -1865,9 +2104,14 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       });
       expect(settings.extensions?.some((entry) => entry.includes('bootstrap.'))).toBe(false);
       expect(fs.existsSync(path.join(fixture.root, '.pi', 'settings.json'))).toBe(false);
-      const alias = path.join(fixture.agentDirectory, '@agimon-ai', 'doompi');
-      expect(fs.lstatSync(alias).isSymbolicLink()).toBe(true);
-      expect(fs.realpathSync(alias)).toBe(fs.realpathSync(installedPackageRoot(consumer.root, '@agimon-ai/doompi')));
+      const dispatcher = path.join(fixture.agentDirectory, '@agimon-ai', 'doompi');
+      expect(fs.lstatSync(dispatcher).isDirectory()).toBe(true);
+      expect(fs.lstatSync(dispatcher).isSymbolicLink()).toBe(false);
+      expect(JSON.parse(fs.readFileSync(path.join(dispatcher, 'package.json'), 'utf8'))).toMatchObject({
+        name: '@agimon-ai/doompi',
+        doompiDispatcher: 1,
+      });
+      expect(fs.statSync(path.join(dispatcher, 'dispatcher.mjs')).isFile()).toBe(true);
       const statePath = packedSyncStatePath(fixture.root, environment);
       const syncedState = JSON.parse(fs.readFileSync(statePath, 'utf8')) as PackedSyncState;
       expect(fs.existsSync(path.join(fixture.root, '.pi', 'doom'))).toBe(false);
@@ -1943,6 +2187,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
 
       const environment = cleanRuntimeEnvironment(fixture.agentDirectory);
       environment.DOOMPI_ROOT = fixture.root;
+      await initializePackedIntegration(fixture.root, environment);
       const sync = await runCommand(
         process.execPath,
         [
@@ -2027,6 +2272,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       const environment = cleanRuntimeEnvironment(fixture.agentDirectory);
       environment.DOOMPI_ROOT = fixture.root;
       environment.DOOM_TASK_STORE = taskStore;
+      await initializePackedIntegration(fixture.root, environment);
 
       const sync = await runCommand(
         process.execPath,

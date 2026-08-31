@@ -1,14 +1,52 @@
-import type { ComponentProps } from 'react';
+import { createContext, type ComponentProps, useContext } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const REMARK_PLUGINS = [remarkGfm];
 
+const CODE_CLASS = 'rounded bg-doom-deep px-1 py-px font-mono text-[12px] text-doom-green';
+
+/**
+ * What a piece of inline code opens, when the host knows.
+ *
+ * Returning undefined leaves the span as plain code, which is the answer for
+ * everything a message quotes that is not a file: a class name, a flag, a
+ * command. The caller decides what counts, because only it knows which files
+ * the session has.
+ */
+export type FileLinkHandler = (text: string) => (() => void) | undefined;
+
+/**
+ * Passed by context rather than as a component prop so the component map stays
+ * a module constant. Rebuilding that map per render gives react-markdown new
+ * component identities, which remounts the whole rendered tree on every frame
+ * of a streaming reply.
+ */
+const FileLinkContext = createContext<FileLinkHandler | undefined>(undefined);
+
 function Code({ className, children, ...rest }: ComponentProps<'code'>) {
+  const onFileLink = useContext(FileLinkContext);
+  // Only a single-line span with no language class is a candidate: a fenced
+  // block is content, not a reference, and its own renderer owns it.
+  const label = typeof children === 'string' && !children.includes('\n') ? children : undefined;
+  const open = label === undefined || className !== undefined ? undefined : onFileLink?.(label);
+  if (open !== undefined && label !== undefined) {
+    return (
+      <button
+        type="button"
+        data-testid="markdown-file-link"
+        title={`open ${label}`}
+        onClick={open}
+        className={`${CODE_CLASS} cursor-pointer underline decoration-doom-green/40 underline-offset-2 hover:text-doom-hi hover:decoration-doom-hi`}
+      >
+        {label}
+      </button>
+    );
+  }
   return (
     <code
       {...rest}
-      className={`${className ?? ''} rounded bg-doom-deep px-1 py-px font-mono text-[12px] text-doom-green [pre_&]:bg-transparent [pre_&]:p-0 [pre_&]:text-doom-hi`}
+      className={`${className ?? ''} ${CODE_CLASS} [pre_&]:bg-transparent [pre_&]:p-0 [pre_&]:text-doom-hi`}
     >
       {children}
     </code>
@@ -57,12 +95,14 @@ const COMPONENTS: Components = {
 };
 
 /** GitHub-flavored Markdown using the cockpit's safe, shared presentation. */
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, onFileLink }: { text: string; onFileLink?: FileLinkHandler }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
-        {text}
-      </ReactMarkdown>
-    </div>
+    <FileLinkContext.Provider value={onFileLink}>
+      <div className="flex min-w-0 flex-col gap-2">
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
+          {text}
+        </ReactMarkdown>
+      </div>
+    </FileLinkContext.Provider>
   );
 }

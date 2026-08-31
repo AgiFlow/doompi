@@ -1,14 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { computeInputsHash, readSyncState } from './syncState.ts';
-
-const WEB_BUNDLE_PATH = ['.doompi', 'web', 'current'];
-const API_ROUTES_PATH = ['.doompi', 'api', 'current'];
+import { readBootstrapStatus } from './bootstrapLocator.ts';
+import { computeInputsHash, computeWebSourcesHash, readSyncState, type SyncState } from './syncState.ts';
+import { readSyncRegistration } from './syncRegistration.ts';
 
 export type SyncDriftReason =
   | 'never-synced'
   | 'configuration-changed'
+  | 'code-changed'
+  | 'runtime-stale'
   | 'cockpit-bundle-missing'
   | 'package-apis-missing';
 
@@ -44,15 +45,18 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   const homeDirectory = options.homeDirectory ?? os.homedir();
   const reasons: SyncDriftReason[] = [];
 
-  let state: ReturnType<typeof readSyncState>;
+  let state: SyncState | undefined;
+  let registration: ReturnType<typeof readSyncRegistration>;
   try {
-    state = readSyncState(options.repoRoot, homeDirectory);
+    registration = readSyncRegistration(options.repoRoot, homeDirectory);
+    state = registration ? readSyncState(options.repoRoot, homeDirectory) : undefined;
   } catch {
-    // Unreadable state is indistinguishable from absent for this purpose:
-    // either way the next session needs a sync before it can be trusted.
+    // Unreadable or invalid registration is indistinguishable from absent for
+    // this purpose: the next session needs a sync before it can be trusted.
     state = undefined;
+    registration = undefined;
   }
-  if (!state) return { fresh: false, reasons: ['never-synced'] };
+  if (!state || !registration) return { fresh: false, reasons: ['never-synced'] };
 
   let currentInputsHash: string | undefined;
   try {
@@ -64,8 +68,26 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   if (currentInputsHash !== undefined && currentInputsHash !== state.inputsHash) {
     reasons.push('configuration-changed');
   }
-  if (!fs.existsSync(path.join(homeDirectory, ...WEB_BUNDLE_PATH))) reasons.push('cockpit-bundle-missing');
-  if (!fs.existsSync(path.join(homeDirectory, ...API_ROUTES_PATH))) reasons.push('package-apis-missing');
+  // Cockpit sources are compiled straight from each package's web/ folder, so a
+  // rebuilt plugin surface is a real change that no configuration hash sees. A
+  // state recorded before this was tracked has nothing to compare and is left
+  // alone rather than being called stale on sight.
+  if (state.webSourcesHash !== undefined && computeWebSourcesHash(state.resolved) !== state.webSourcesHash) {
+    reasons.push('code-changed');
+  }
+  // The same question the `--check` path asks, so the cockpit and the CLI
+  // cannot disagree about whether one repository is synced.
+  try {
+    if (!readBootstrapStatus(options.repoRoot, undefined, homeDirectory).fresh) reasons.push('runtime-stale');
+  } catch {
+    // An unreadable bootstrap record is exactly as unusable as a stale one, and
+    // syncing is what reports the underlying cause.
+    reasons.push('runtime-stale');
+  }
+  if (registration.webDirectory !== null && !fs.existsSync(path.join(registration.webDirectory, 'index.html'))) {
+    reasons.push('cockpit-bundle-missing');
+  }
+  if (!fs.existsSync(registration.apiDirectory)) reasons.push('package-apis-missing');
 
   return {
     fresh: reasons.length === 0,
@@ -81,6 +103,8 @@ export function describeSyncDrift(drift: SyncDrift): string {
   const detail: Record<SyncDriftReason, string> = {
     'never-synced': 'it has never been synced',
     'configuration-changed': 'its configuration changed since the last sync',
+    'code-changed': 'its cockpit sources changed since the last sync',
+    'runtime-stale': 'its precompiled runtime is out of date',
     'cockpit-bundle-missing': 'the cockpit bundle is missing',
     'package-apis-missing': 'the package API routes are missing',
   };

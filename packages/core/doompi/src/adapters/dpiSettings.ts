@@ -1,14 +1,24 @@
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { SettingsManager, SettingsManagerCreateOptions } from '@earendil-works/pi-coding-agent';
 import { piCliPath } from './modules/moduleResolution.ts';
 import { piAgentDirectory } from './piSettings.ts';
+import { findRepositoryRoot } from './repository/repository.ts';
+import { readSyncRegistration } from './syncRegistration.ts';
 
 const GLOBAL_SCOPE = 'global';
 const PROJECT_SCOPE = 'project';
 const MANAGED_KEYS = ['extensions', 'themes', 'theme', 'quietStartup'] as const;
 
-export const DPI_MANAGED_SETTINGS = {
+export interface DpiManagedSettings {
+  extensions: string[];
+  themes: string[];
+  theme: string;
+  quietStartup: boolean;
+}
+
+export const DPI_MANAGED_SETTINGS: DpiManagedSettings = {
   extensions: ['@agimon-ai/doompi', '!extensions/**'],
   themes: ['themes/doom-pi-dark.json'],
   theme: 'doom-pi-dark',
@@ -46,10 +56,14 @@ function parseSettings(content: string | undefined): Record<string, unknown> {
   return parsed;
 }
 
-function managedView(scope: DpiSettingsScope, current: string | undefined): string | undefined {
+function managedView(
+  scope: DpiSettingsScope,
+  current: string | undefined,
+  managedSettings: DpiManagedSettings,
+): string | undefined {
   if (scope === PROJECT_SCOPE && current === undefined) return undefined;
   const settings = parseSettings(current);
-  if (scope === GLOBAL_SCOPE) Object.assign(settings, DPI_MANAGED_SETTINGS);
+  if (scope === GLOBAL_SCOPE) Object.assign(settings, managedSettings);
   else for (const key of MANAGED_KEYS) delete settings[key];
   return JSON.stringify(settings, null, 2);
 }
@@ -70,14 +84,16 @@ function restorePersistedSettings(current: string | undefined, next: string): st
  */
 export class DpiSettingsStorage implements DpiSettingsStorageBackend {
   private readonly backend: DpiSettingsStorageBackend;
+  private readonly managedSettings: DpiManagedSettings;
 
-  constructor(backend: DpiSettingsStorageBackend) {
+  constructor(backend: DpiSettingsStorageBackend, managedSettings: DpiManagedSettings = DPI_MANAGED_SETTINGS) {
     this.backend = backend;
+    this.managedSettings = managedSettings;
   }
 
   withLock(scope: DpiSettingsScope, callback: (current: string | undefined) => string | undefined): void {
     this.backend.withLock(scope, (current) => {
-      const next = callback(managedView(scope, current));
+      const next = callback(managedView(scope, current, this.managedSettings));
       return next === undefined ? undefined : restorePersistedSettings(current, next);
     });
   }
@@ -101,6 +117,22 @@ export async function loadPiSettingsRuntime(): Promise<PiSettingsRuntime> {
   return loaded;
 }
 
+/** Selects the package recorded by sync so embedded DPI does not depend on init's global dispatcher. */
+export function resolveDpiManagedSettings(
+  cwd: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): DpiManagedSettings {
+  try {
+    const root = findRepositoryRoot(cwd);
+    const homeDirectory = environment.HOME?.trim() || os.homedir();
+    const registration = readSyncRegistration(root, homeDirectory);
+    if (!registration) return DPI_MANAGED_SETTINGS;
+    return { ...DPI_MANAGED_SETTINGS, extensions: [registration.package.root, '!extensions/**'] };
+  } catch {
+    return { ...DPI_MANAGED_SETTINGS, extensions: ['!extensions/**'] };
+  }
+}
+
 /** Installs the process-local create() hook used by upstream Pi startup and reloads. */
 export function installDpiSettingsOverlay(
   runtime: PiSettingsRuntime,
@@ -110,7 +142,8 @@ export function installDpiSettingsOverlay(
   runtime.SettingsManager.create = (cwd, agentDir, options) => {
     const resolvedAgentDirectory = agentDir ?? piAgentDirectory(environment);
     const storage = new runtime.FileSettingsStorage(cwd, resolvedAgentDirectory);
-    return runtime.SettingsManager.fromStorage(new DpiSettingsStorage(storage), options);
+    const managedSettings = resolveDpiManagedSettings(cwd, environment);
+    return runtime.SettingsManager.fromStorage(new DpiSettingsStorage(storage, managedSettings), options);
   };
 
   return () => {

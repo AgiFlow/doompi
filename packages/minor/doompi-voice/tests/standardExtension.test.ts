@@ -125,11 +125,16 @@ describe('standard Voice extension', () => {
     runtimeOptions?.footer?.update({ value: 'activity' });
     expect(extensionMocks.footerUpdate).toHaveBeenCalledWith({ value: 'activity' });
     expect(runtimeOptions?.container).toBeDefined();
-    // Registered for the mode off, so `e` is the way in; the runtime republishes
-    // the exit variant through the leader proxy when capture starts.
+    // Manual dictation is SPC v m. Autonomous voice remains the `e` toggle and
+    // republishes the exit variant through the leader proxy when capture starts.
     expect(extensionMocks.registerLeader).toHaveBeenCalledWith(
       expect.objectContaining({
         bindings: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'voice.toggle',
+            path: expect.arrayContaining([expect.objectContaining({ key: 'm', label: 'manual' })]),
+            command: { name: 'voice' },
+          }),
           expect.objectContaining({
             id: 'voice.auto-toggle',
             path: expect.arrayContaining([expect.objectContaining({ key: 'e', label: 'enter' })]),

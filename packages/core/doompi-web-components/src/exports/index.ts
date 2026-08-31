@@ -67,6 +67,7 @@ export {
   CommandList,
 } from '../components/Command.tsx';
 export { EmptyState, type EmptyStateProps } from '../components/EmptyState.tsx';
+export { HashlineLines, type HashlineLinesProps } from '../components/HashlineLines.tsx';
 export { type FieldSize, type FieldVariant, fieldVariants, Input, type InputProps } from '../components/Input.tsx';
 export { Kbd } from '../components/Kbd.tsx';
 export { Label } from '../components/Label.tsx';
@@ -130,6 +131,20 @@ export {
   SelectValue,
 } from '../components/Select.tsx';
 export { Separator } from '../components/Separator.tsx';
+export {
+  Sheet,
+  SheetBody,
+  SheetClose,
+  SheetContent,
+  type SheetContentProps,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  type SheetHeaderProps,
+  SheetOverlay,
+  SheetTitle,
+  SheetTrigger,
+} from '../components/Sheet.tsx';
 export { Skeleton } from '../components/Skeleton.tsx';
 export { Spinner, type SpinnerProps } from '../components/Spinner.tsx';
 export {
@@ -168,6 +183,23 @@ export * from '../icons/icons.ts';
 export { cn } from '../lib/cn.ts';
 export { type CollapsedLines, collapseLines } from '../lib/collapse.ts';
 export { type GrammarKey, grammarKeyOf } from '../lib/editorLanguage.ts';
+export {
+  compactDetails,
+  GREP_COLLAPSED_LINES,
+  type HashlineBody,
+  hashlineBody,
+  type HashlineResult,
+  type HashlineResultKind,
+  parseFileHeader,
+  parseTaggedLine,
+  type PresentedLine,
+  presentHashlineLines,
+  READ_COLLAPSED_LINES,
+  resultTextLines,
+  type TaggedLine,
+  type TaggedLineMarker,
+  takeTrailingNotice,
+} from '../lib/hashlineView.ts';
 export { mediaKindOf } from '../lib/media.ts';
 export { handleOptionListKey, MAX_DIGIT_SHORTCUT, optionListHint, optionMarker } from '../lib/optionList.ts';
 export { CHIP_TO_STATUS, LINE_TONE_TO_STATUS, STATUS_TO_CHIP, STATUS_TO_DOT } from '../lib/tone.ts';

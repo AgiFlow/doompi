@@ -18,6 +18,14 @@ export interface SyncedRuntimeBuild {
   bootstrap: string;
   bundles: Record<string, string>;
   bundleManifests: Record<string, string>;
+  state: SyncState;
+}
+
+export interface SyncedRuntimeBuildOptions {
+  /** In-memory state being staged into a not-yet-published generation. */
+  state?: SyncState;
+  /** Generation root for cache and compiled outputs. */
+  directory?: string;
 }
 
 function mergedEnvironment(recorded: Record<string, string>, current: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -59,8 +67,9 @@ export async function buildSyncedRuntime(
   repoRoot: string,
   environment: NodeJS.ProcessEnv = process.env,
   homeDirectory: string = environment.HOME ?? os.homedir(),
+  options: SyncedRuntimeBuildOptions = {},
 ): Promise<SyncedRuntimeBuild> {
-  const state = readSyncState(repoRoot, homeDirectory);
+  const state = options.state ?? readSyncState(repoRoot, homeDirectory);
   if (!state) throw new Error(`DoomPi is not synchronized at ${repoRoot}. Run doompi sync.`);
 
   const runtimeEnvironment = mergedEnvironment(state.env, environment);
@@ -77,7 +86,7 @@ export async function buildSyncedRuntime(
   };
 
   const location = resolveSyncLocation(repoRoot, homeDirectory);
-  const directory = syncDirectory(repoRoot, homeDirectory);
+  const directory = options.directory ?? syncDirectory(repoRoot, homeDirectory);
   const cacheDirectory = path.join(directory, EXTENSION_CACHE_DIRECTORY);
   const outputDirectory = path.join(directory, MODE_DIST_DIRECTORY);
   const bundles: Record<string, string> = {};
@@ -131,32 +140,31 @@ export async function buildSyncedRuntime(
   });
   const bootstrapManifest = extensionSetManifestPath(bootstrapEntries, cacheDirectory, bootstrapOptions);
 
-  const current = readSyncState(repoRoot, homeDirectory);
-  if (!current) throw new Error(`DoomPi synchronization disappeared while compiling ${repoRoot}`);
-  if (compilationStateChanged(state, current)) {
-    throw new Error(`DoomPi synchronization changed while compiling ${repoRoot}; restart Pi to use the new state.`);
-  }
-
-  await writeSyncState(
-    repoRoot,
-    {
-      ...current,
-      compiled: undefined,
-      bundles,
-      bootstrap,
-      precompile: {
-        version: PRECOMPILE_STATE_VERSION,
-        strategy: BUNDLED_PRECOMPILE_STRATEGY,
-        bootstrapEntry: bootstrapEntries[0],
-        bootstrapManifest,
-        bundleManifests,
-      },
+  const nextState: SyncState = {
+    ...state,
+    compiled: undefined,
+    bundles,
+    bootstrap,
+    precompile: {
+      version: PRECOMPILE_STATE_VERSION,
+      strategy: BUNDLED_PRECOMPILE_STRATEGY,
+      bootstrapEntry: bootstrapEntries[0],
+      bootstrapManifest,
+      bundleManifests,
     },
-    homeDirectory,
-  );
+  };
+  if (options.state === undefined) {
+    const current = readSyncState(repoRoot, homeDirectory);
+    if (!current) throw new Error(`DoomPi synchronization disappeared while compiling ${repoRoot}`);
+    if (compilationStateChanged(state, current)) {
+      throw new Error(`DoomPi synchronization changed while compiling ${repoRoot}; restart Pi to use the new state.`);
+    }
+    await writeSyncState(repoRoot, nextState, homeDirectory);
+  }
   return {
     bootstrap,
     bundles,
     bundleManifests,
+    state: nextState,
   };
 }

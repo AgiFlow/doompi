@@ -91,4 +91,11 @@ describe('the plan plugin declaration', () => {
 
     expect(group?.statusKey).not.toBe('plan-mode');
   });
+
+  it('does not count a saved plan as background work, so the dock badge stays honest', () => {
+    // Only agents, workflows and runners actually run; a plan is a document.
+    const group = webPlugin.activityGroups?.find((entry) => entry.name === 'plan');
+
+    expect(group?.marksBackgroundWork).toBe(false);
+  });
 });

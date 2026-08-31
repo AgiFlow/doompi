@@ -51,7 +51,7 @@ test('lists the groups whose packages report in, each rendered by its own plugin
   // Each plugin's section renders its own empty state in place of the host summary.
   await expect(page.getByTestId('activity-summary-agents')).toHaveText('idle');
   await expect(page.getByTestId('activity-summary-runners')).toHaveText('idle');
-  await expect(page.getByTestId('activity-summary-workflows')).toContainText('no runs yet');
+  await expect(page.getByTestId('activity-summary-workflows')).toHaveText('idle');
   await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
@@ -113,28 +113,28 @@ test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({
   expect(await pinned.evaluate((element) => element.getBoundingClientRect().top)).toBe(pinnedTop);
 });
 
-test('highlights background work and renders its resume notice as the transcript footer', async ({ page, cockpit }) => {
+test('highlights background work and renders its resume notice once the agent settles', async ({ page, cockpit }) => {
+  // The dock's busy state is the runner channel's, so the run has to exist.
+  writeRunnerRecord(cockpit.runnerStore, 's1', { id: 'runner-web', name: 'web', command: 'pnpm dev' });
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
   const activityButton = page.getByTestId('mobile-activity-open');
-  await expect(activityButton).toHaveAttribute('data-active', 'false');
-  await expect(page.getByTestId('background-work-notice')).toBeHidden();
-
-  cockpit.session.emit(status('doom-runner-runners', 'Runners 2 ●'));
+  const notice = page.getByTestId('background-work-notice');
 
   await expect(page.getByTestId('activity-runners')).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('activity-busy')).toHaveText('1 running');
   await expect(activityButton).toHaveAttribute('data-active', 'true');
   await expect(activityButton).toHaveClass(/text-doom-yellow/);
-  const notice = page.getByTestId('background-work-notice');
+
+  // While the agent is still working the transcript already shows the work.
+  cockpit.session.emit({ type: 'agent_start' });
+  await expect(notice).toBeHidden();
+
+  cockpit.session.emit({ type: 'agent_settled' });
   await expect(notice).toHaveText('Background work is still running. The agent will resume when results are ready.');
   await expect.poll(() => notice.evaluate((element) => getComputedStyle(element).position)).toBe('static');
   await expect.poll(() => notice.evaluate((element) => element.parentElement?.lastElementChild === element)).toBe(true);
-
-  cockpit.session.emit(status('doom-runner-runners'));
-  await expect(activityButton).toHaveAttribute('data-active', 'false');
-  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
 test('the key chip opens the owning plugin tab, and is a label where there is none', async ({ page, cockpit }) => {

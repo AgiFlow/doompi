@@ -2,6 +2,7 @@ import path from 'node:path';
 import { lineDiff } from '../../services/lineDiff.ts';
 import type { FileEditTool, TimelineEvent } from '../../types/domain';
 import type { IEditTracker } from '../../types/editTracker';
+import type { GitStatusPort } from '../../types/gitStatus.ts';
 import type { SnapshotStorePort } from '../../types/snapshotStore.ts';
 import type { ITimelineStore } from '../../types/timelineStore';
 import type { TreeManifest, TreeManifestPort } from '../../types/treeManifest.ts';
@@ -24,6 +25,15 @@ const BASH_TOOL = 'bash';
  * A manifest-found path is recorded without a baseline, because it was only
  * identified after it had already changed. That is a real limit and the wire
  * carries it as `origin: 'scan'` rather than pretending a diff exists.
+ *
+ * A manifest compares size and modification time, which a checkout, an install,
+ * or a formatter rewriting identical bytes moves without changing a single
+ * byte of content. So a candidate is confirmed before it is recorded: its
+ * content hash is compared against the last one this session saw, and a path
+ * this session has never captured is put to git. Neither answer is available
+ * for every file, an ignored temporary file is unknown to git and a first
+ * sighting has no earlier hash, so an unconfirmable candidate is still
+ * recorded; only a proven non-change is dropped.
  */
 interface PendingEdit {
   tool: 'edit' | 'write';
@@ -40,6 +50,11 @@ function objectValue(value: unknown, key: string): string | undefined {
 export interface EditTrackerOptions {
   /** Injectable so a test can pin the recorded timestamps. */
   now?: () => number;
+  /**
+   * Decides whether a first-seen scan candidate actually changed. Optional:
+   * without it the tracker keeps recording every candidate it cannot disprove.
+   */
+  git?: GitStatusPort;
 }
 
 export class EditTracker implements IEditTracker {
@@ -58,7 +73,13 @@ export class EditTracker implements IEditTracker {
    * them would make every change cause another one.
    */
   private excluded: readonly string[] = [];
+  /**
+   * The last content hash this session saw per path, from either mechanism.
+   * A candidate whose hash has not moved was touched, not edited.
+   */
+  private readonly contents = new Map<string, string>();
   private readonly now: () => number;
+  private readonly git: GitStatusPort | undefined;
 
   constructor(
     private readonly timeline: ITimelineStore,
@@ -67,6 +88,7 @@ export class EditTracker implements IEditTracker {
     options: EditTrackerOptions = {},
   ) {
     this.now = options.now ?? Date.now;
+    this.git = options.git;
   }
 
   /**
@@ -76,6 +98,7 @@ export class EditTracker implements IEditTracker {
   reset(options: { exclude?: readonly string[] } = {}): void {
     this.pending.clear();
     this.bracketed.clear();
+    this.contents.clear();
     this.manifest = undefined;
     this.excluded = options.exclude ?? [];
   }
@@ -111,6 +134,7 @@ export class EditTracker implements IEditTracker {
   private async recordTool(pending: PendingEdit): Promise<void> {
     const after = await this.snapshots.capture(pending.filePath);
     const counts = await this.countChanges(pending.before, after);
+    if (after !== undefined) this.contents.set(pending.filePath, after);
     await this.append({
       version: 2,
       path: pending.filePath,
@@ -126,28 +150,41 @@ export class EditTracker implements IEditTracker {
     await this.remember(pending.filePath);
   }
 
-  /** Whatever moved while a bash call ran, however the command wrote it. */
+  /** Whatever a bash call actually edited, however the command wrote it. */
   private async recordScan(cwd: string): Promise<void> {
     const before = this.manifest;
     if (before === undefined) return;
     const after = await this.manifests.take(cwd, this.excluded);
     this.manifest = after;
-    for (const filePath of this.manifests.changed(before, after)) {
+    const candidates = this.manifests.changed(before, after);
+    if (candidates.length === 0) return;
+    const unchanged = await this.unchangedInGit(cwd, candidates);
+    for (const filePath of candidates) {
+      const captured = await this.snapshots.capture(filePath);
+      const known = this.contents.get(filePath);
+      if (captured !== undefined) this.contents.set(filePath, captured);
+      // The bytes are the ones this session already recorded: the call moved the
+      // modification time and nothing else.
+      if (captured !== undefined && captured === known) continue;
+      // Never captured here, but git still holds the file and says it matches.
+      if (known === undefined && unchanged.has(filePath)) continue;
       await this.append({
         version: 2,
         path: filePath,
         tool: BASH_TOOL,
         at: this.now(),
         origin: 'scan',
-        ...(await this.captured(filePath)),
+        verified: true,
+        ...(captured === undefined ? {} : { after: captured }),
       });
     }
   }
 
-  /** The after-snapshot of a scan-found path, when it still exists and fits. */
-  private async captured(filePath: string): Promise<{ after?: string }> {
-    const after = await this.snapshots.capture(filePath);
-    return after === undefined ? {} : { after };
+  /** Which candidates git tracks and reports as untouched; empty when it cannot say. */
+  private async unchangedInGit(cwd: string, candidates: readonly string[]): Promise<ReadonlySet<string>> {
+    const unseen = candidates.filter((filePath) => !this.contents.has(filePath));
+    if (this.git === undefined || unseen.length === 0) return new Set();
+    return this.git.unchanged(cwd, unseen);
   }
 
   /** How many lines moved, when both sides were captured. */

@@ -31,6 +31,17 @@ describe('browser voice media', () => {
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
+    const runtimeSource = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    expect(runtimeSource).toContain('this.device.armUserGesture()');
+  });
+
+  it('keeps process-local manual recording out of the browser minor-mode picker', async () => {
+    const source = await readFile(new URL('../src/adapters/pi/voice.ts', import.meta.url), 'utf8');
+    const start = source.indexOf("label: 'Manual voice'");
+    const manualAction = source.slice(start, source.indexOf("id: 'deactivate'", start));
+
+    expect(manualAction).toContain("contexts: ['tui']");
+    expect(manualAction).not.toContain("'headless'");
   });
 
   it('keeps the server-selected session in one reactive page-wide store', () => {
@@ -80,47 +91,40 @@ describe('browser voice media', () => {
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
 
-  it('fills the global composer action with manual recording and preserves autonomous controls', async () => {
+  it('fills the composer action with manual recording and blocks it during autonomous voice', async () => {
     const source = await readFile(new URL('../web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
+    expect(source).toContain('data-testid="composer-voice-error"');
     expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
     expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
+    expect(source).toContain('sessionId === null || autonomous');
+    expect(source).toContain('manual voice is unavailable while autonomous voice is active');
     expect(source).toContain('recorder?.dispose()');
-    expect(source).not.toContain("message: '/voice'");
-    expect(source).toContain("'/minor voice-auto deactivate'");
-    expect(source).toContain('AudioLinesIcon');
-    expect(source).toContain('LoaderIcon');
-    expect(source).toContain('MessageIcon');
-    expect(source).toContain('SendIcon');
-    expect(source).toContain('VolumeIcon');
+    expect(source).not.toContain('sendSessionFrame');
+    expect(source).not.toContain('/minor voice-auto deactivate');
   });
 
-  it('renders distinct accessible icons for autonomous voice phases', () => {
-    const iconFor = (status: string): string => {
-      const fixture = slotPropsFixture({ statuses: { 'doom-voice': status } });
-      const rendered = renderPlugin(VoiceComposerAction, fixture.props);
-      expect(rendered.error).toBeUndefined();
-      return /class="lucide lucide-([^ ]+)/u.exec(rendered.html)?.[1] ?? '';
-    };
-
-    const phases = [
+  it('renders the manual record button as unavailable throughout autonomous capture', () => {
+    for (const status of [
+      'voice auto: starting',
       'voice auto: listening',
       'voice auto: hearing speech',
-      'voice auto: processing while listening',
       'voice auto: composing, listening',
-      'voice auto: sending composed prompt',
       'voice auto: narrating and listening',
-      'voice auto: confirmation needed',
-    ];
-    expect(new Set(phases.map(iconFor)).size).toBe(phases.length);
+    ]) {
+      const rendered = renderPlugin(
+        VoiceComposerAction,
+        slotPropsFixture({ statuses: { 'doom-voice': status } }).props,
+      );
+      expect(rendered.error).toBeUndefined();
+      expect(rendered.html).toContain('aria-label="manual voice is unavailable while autonomous voice is active"');
+      expect(rendered.html).toContain('disabled=""');
+    }
 
-    const legacyManual = renderPlugin(
-      VoiceComposerAction,
-      slotPropsFixture({ statuses: { 'doom-voice': 'voice: recording 0:03' } }).props,
-    );
-    expect(legacyManual.html).toContain('aria-label="start voice recording"');
-    expect(legacyManual.html).toContain('data-voice-phase="idle"');
+    const manual = renderPlugin(VoiceComposerAction, slotPropsFixture({ statuses: {} }).props);
+    expect(manual.html).toContain('aria-label="start voice recording"');
+    expect(manual.html).not.toContain('disabled=""');
   });
 
   it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
@@ -169,8 +173,8 @@ describe('browser voice media', () => {
     expect(activity.html).toContain('data-voice-phase="conflict"');
     expect(activity.html).toContain('microphone unavailable');
     expect(activity.html).toContain('another browser tab owns voice capture');
-    expect(composer.html).toContain('data-voice-phase="conflict"');
-    expect(composer.html).toContain('microphone unavailable: another browser tab owns voice capture');
+    expect(composer.html).toContain('data-voice-phase="blocked"');
+    expect(composer.html).toContain('manual voice is unavailable while autonomous voice is active');
   });
   it('switches browser media from the server-selected global value without acknowledgements', async () => {
     const source = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');

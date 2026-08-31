@@ -1,16 +1,111 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findRepositoryRoot } from './repository/repository.ts';
-import { resolveSyncLocation } from './syncLocation.ts';
-import { readLocatedSyncState } from './syncState.ts';
+import { readSyncRegistration } from './syncRegistration.ts';
+import { readSyncState } from './syncState.ts';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from './syncStateContract.ts';
 
-interface InputFingerprint {
+/**
+ * One recorded build input: the stat pair for speed, the digest for truth.
+ *
+ * Comparing only `size` and `mtimeMs` makes every rebuild look like a change,
+ * including one that restored byte-identical output from a build cache, and a
+ * sync triggered that way republishes a generation nobody asked for. Comparing
+ * content alone is correct but reads every input on every check, and the
+ * cockpit polls this. Recording both lets the stat pair answer the common
+ * "nothing was touched" case without opening a file, while the digest stays the
+ * authority for anything whose stat moved.
+ */
+export interface InputFingerprint {
   path: string;
   size: number;
   mtimeMs: number;
+  sha256: string;
+}
+
+/**
+ * Verdicts already reached, so a rebuild that rewrote every input without
+ * changing it does not re-hash the whole graph on every poll.
+ *
+ * Keyed by the stats actually found on disk, so it can never answer for a set
+ * it did not see. Bounded by the compiler manifests in one composition, which
+ * is single digits.
+ */
+const freshnessVerdicts = new Map<string, boolean>();
+
+function digestOf(filePath: string): string | undefined {
+  try {
+    return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  } catch {
+    // Unreadable is indistinguishable from absent here: either way the recorded
+    // digest cannot be confirmed, so the caller must treat the build as stale.
+    return undefined;
+  }
+}
+
+/** Records one build input, or undefined when it is not a readable regular file. */
+export function fingerprintInput(target: string): InputFingerprint | undefined {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(target);
+  } catch {
+    // A path that vanished between discovery and recording is simply not an
+    // input; the compiler records the set it could read.
+    return undefined;
+  }
+  if (!stat.isFile()) return undefined;
+  const sha256 = digestOf(target);
+  if (sha256 === undefined) return undefined;
+  return { path: target, size: stat.size, mtimeMs: stat.mtimeMs, sha256 };
+}
+
+/** Parses one recorded input, rejecting a record written before digests existed. */
+export function parseInputFingerprint(value: unknown): InputFingerprint | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    typeof value.path !== 'string' ||
+    typeof value.size !== 'number' ||
+    typeof value.mtimeMs !== 'number' ||
+    typeof value.sha256 !== 'string'
+  ) {
+    return undefined;
+  }
+  return { path: value.path, size: value.size, mtimeMs: value.mtimeMs, sha256: value.sha256 };
+}
+
+/** Whether every recorded input still holds the bytes it was recorded with. */
+export function inputsAreFresh(inputs: readonly InputFingerprint[]): boolean {
+  const moved: InputFingerprint[] = [];
+  const key = crypto.createHash('sha256');
+  for (const input of inputs) {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(input.path);
+    } catch {
+      // A recorded input that is gone cannot be confirmed, and no digest will
+      // bring it back; the build it describes is stale.
+      return false;
+    }
+    if (!stat.isFile()) return false;
+    key.update(`${input.path} ${String(stat.size)} ${String(stat.mtimeMs)} `);
+    if (stat.size !== input.size || stat.mtimeMs !== input.mtimeMs) moved.push(input);
+  }
+  if (moved.length === 0) return true;
+
+  const cacheKey = key.digest('hex');
+  const remembered = freshnessVerdicts.get(cacheKey);
+  if (remembered !== undefined) return remembered;
+  const fresh = moved.every((input) => digestOf(input.path) === input.sha256);
+  freshnessVerdicts.set(cacheKey, fresh);
+  return fresh;
+}
+
+/** Test seam: the memo is process-local and must not leak between cases. */
+export function resetInputFreshnessCache(): void {
+  freshnessVerdicts.clear();
 }
 
 interface CompilerManifest {
@@ -78,8 +173,7 @@ function packagedDoomEntry(moduleUrl: string = import.meta.url): string {
 }
 
 function locationHasState(repoRoot: string, homeDirectory: string): boolean {
-  const location = resolveSyncLocation(repoRoot, homeDirectory);
-  return fs.existsSync(location.statePath) || fs.existsSync(location.legacyStatePath);
+  return readSyncRegistration(repoRoot, homeDirectory) !== undefined;
 }
 
 /** Finds the nearest configured repository with generated Doom sync state. */
@@ -94,34 +188,37 @@ export function findSyncedRoot(cwd: string, homeDirectory: string = os.homedir()
 }
 
 function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir()): BootstrapState | undefined {
-  const located = readLocatedSyncState(repoRoot, homeDirectory);
-  if (!located) return undefined;
-  const { state } = located;
-  const statePath = located.layout === 'global' ? located.location.statePath : located.location.legacyStatePath;
-  const generatedDirectory = path.dirname(statePath);
-  const bootstrap = state.bootstrap;
+  const registration = readSyncRegistration(repoRoot, homeDirectory);
+  if (!registration) return undefined;
+  const statePath = registration.statePath;
+  const generatedDirectory = registration.generationRoot;
+  const state = readSyncState(repoRoot, homeDirectory);
+  if (!state) return undefined;
+  const bootstrap = typeof state.bootstrap === 'string' ? state.bootstrap : undefined;
   if (bootstrap && !isInside(generatedDirectory, bootstrap)) {
     throw new Error(`Doom bootstrap must stay inside ${generatedDirectory}: ${bootstrap}`);
   }
 
   let precompile: BootstrapState['precompile'];
   if (state.precompile !== undefined) {
+    const value = state.precompile;
     if (
-      typeof state.precompile.version !== 'number' ||
-      state.precompile.strategy !== BUNDLED_PRECOMPILE_STRATEGY ||
-      typeof state.precompile.bootstrapEntry !== 'string' ||
-      typeof state.precompile.bootstrapManifest !== 'string' ||
-      !isRecord(state.precompile.bundleManifests) ||
-      Object.values(state.precompile.bundleManifests).some((manifest) => typeof manifest !== 'string')
+      !isRecord(value) ||
+      typeof value.version !== 'number' ||
+      value.strategy !== BUNDLED_PRECOMPILE_STRATEGY ||
+      typeof value.bootstrapEntry !== 'string' ||
+      typeof value.bootstrapManifest !== 'string' ||
+      !isRecord(value.bundleManifests) ||
+      Object.values(value.bundleManifests).some((manifest) => typeof manifest !== 'string')
     ) {
       throw new Error(`Doom sync state at ${statePath} has an invalid precompile record`);
     }
     precompile = {
-      version: state.precompile.version,
-      strategy: state.precompile.strategy,
-      bootstrapEntry: state.precompile.bootstrapEntry,
-      bootstrapManifest: state.precompile.bootstrapManifest,
-      bundleManifests: state.precompile.bundleManifests as Record<string, string>,
+      version: value.version,
+      strategy: value.strategy,
+      bootstrapEntry: value.bootstrapEntry,
+      bootstrapManifest: value.bootstrapManifest,
+      bundleManifests: value.bundleManifests as Record<string, string>,
     };
   }
 
@@ -151,15 +248,11 @@ function readCompilerManifest(manifestPath: string, generatedDirectory: string):
     }
     const inputs: InputFingerprint[] = [];
     for (const input of parsed.inputs) {
-      if (
-        !isRecord(input) ||
-        typeof input.path !== 'string' ||
-        typeof input.size !== 'number' ||
-        typeof input.mtimeMs !== 'number'
-      ) {
-        return undefined;
-      }
-      inputs.push({ path: input.path, size: input.size, mtimeMs: input.mtimeMs });
+      // A manifest written before digests were recorded cannot be confirmed by
+      // content, so it reads as absent and the next sync rewrites it.
+      const fingerprint = parseInputFingerprint(input);
+      if (fingerprint === undefined) return undefined;
+      inputs.push(fingerprint);
     }
     const artifacts = parsed.artifacts as string[];
     const entries = parsed.entries as string[];
@@ -177,14 +270,7 @@ function readCompilerManifest(manifestPath: string, generatedDirectory: string):
 
 function compilerManifestIsFresh(manifest: CompilerManifest): boolean {
   if (!fs.existsSync(manifest.output) || manifest.artifacts.some((artifact) => !fs.existsSync(artifact))) return false;
-  return manifest.inputs.every((input) => {
-    try {
-      const stat = fs.statSync(input.path);
-      return stat.isFile() && stat.size === input.size && stat.mtimeMs === input.mtimeMs;
-    } catch {
-      return false;
-    }
-  });
+  return inputsAreFresh(manifest.inputs);
 }
 
 function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: string): CompilerManifest | undefined {
@@ -211,14 +297,15 @@ function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: str
 /** Validates only the bootstrap graph needed before the generated bootstrap is imported. */
 export function readStartupBootstrapStatus(
   repoRoot: string,
-  expectedBootstrapEntry: string = packagedDoomEntry(),
+  expectedBootstrapEntry?: string,
   homeDirectory: string = os.homedir(),
 ): BootstrapStatus {
   const state = readBootstrapState(repoRoot, homeDirectory);
+  const expected = expectedBootstrapEntry ?? packagedDoomEntry();
   if (!state) return { bootstrap: undefined, fresh: false };
   return {
     bootstrap: state.bootstrap,
-    fresh: freshBootstrapRecord(state, expectedBootstrapEntry) !== undefined,
+    fresh: freshBootstrapRecord(state, expected) !== undefined,
   };
 }
 
@@ -244,11 +331,12 @@ export function readBundleStatus(
 /** Validates the bootstrap and every bundle for `doompi sync --check` diagnostics. */
 export function readBootstrapStatus(
   repoRoot: string,
-  expectedBootstrapEntry: string = packagedDoomEntry(),
+  expectedBootstrapEntry?: string,
   homeDirectory: string = os.homedir(),
 ): BootstrapStatus {
   const state = readBootstrapState(repoRoot, homeDirectory);
-  if (!state?.bootstrap || !state.precompile || !freshBootstrapRecord(state, expectedBootstrapEntry)) {
+  const expected = expectedBootstrapEntry ?? packagedDoomEntry();
+  if (!state?.bootstrap || !state.precompile || !freshBootstrapRecord(state, expected)) {
     return { bootstrap: state?.bootstrap, fresh: false };
   }
   const manifests = Object.values(state.precompile.bundleManifests);

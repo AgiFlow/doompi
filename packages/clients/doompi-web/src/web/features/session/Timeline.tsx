@@ -3,7 +3,6 @@ import {
   ChevronDownIcon,
   EmptyState,
   ExternalLinkIcon,
-  Markdown,
   Separator,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
@@ -22,6 +21,7 @@ import {
 } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
+import { MessageMarkdown } from './MessageMarkdown.tsx';
 import { ToolCard } from './ToolCard.tsx';
 
 const SUGGESTIONS = [
@@ -48,17 +48,20 @@ const LIVE_TAIL_ENTRIES = 40;
 /**
  * The speaker's label.
  *
- * Leading, it holds a fixed column so every entry's text starts at the same
- * left edge and the labels line up down the page. Trailing, that column would
- * only push the label away from the block it names, so it sizes to its own
- * text and sits beside it.
+ * From `sm` up it holds a fixed column so every entry's text starts at the
+ * same left edge and the labels line up down the page; trailing, that column
+ * would only push the label away from the block it names, so it sizes to its
+ * own text and sits beside it.
+ *
+ * Below `sm` there is no column at all. A phone has no width to spend on a
+ * permanent left margin, so the label becomes a caption on its own line and
+ * the entry runs the full width of the screen.
  */
 function Gutter({ label, tone, trailing = false }: { label: string; tone: string; trailing?: boolean }) {
-  return (
-    <span className={`shrink-0 text-[10px] font-bold ${trailing ? 'text-left' : 'w-11 pt-0.5 text-right'} ${tone}`}>
-      {label}
-    </span>
-  );
+  const placement = trailing
+    ? 'w-full text-right sm:w-auto sm:text-left'
+    : 'w-full text-left sm:w-11 sm:pt-0.5 sm:text-right';
+  return <span className={`shrink-0 text-[10px] font-bold ${placement} ${tone}`}>{label}</span>;
 }
 
 const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
@@ -67,9 +70,14 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       // What the reader said sits inboard of what the session said, on its own
       // surface: the transcript is a conversation, and two lanes tell the two
       // voices apart faster than a gutter label alone.
-      <div data-testid="entry-user" className="flex items-center gap-3 pl-4 sm:pl-10">
+      // Column-reverse below `sm` keeps the trailing label reading as a
+      // caption above the block, the same place the other voices' labels sit.
+      <div
+        data-testid="entry-user"
+        className="flex flex-col-reverse gap-1 sm:flex-row sm:items-center sm:gap-3 sm:pl-10"
+      >
         <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
-          <Markdown text={entry.text} />
+          <MessageMarkdown sessionId={sessionId} text={entry.text} />
           {entry.images && entry.images.length > 0 ? (
             <div data-testid="user-attachments" className="flex flex-wrap gap-2">
               {entry.images
@@ -96,19 +104,26 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'assistant') {
     return (
-      <div data-testid="entry-assistant" data-streaming={entry.streaming} className="flex gap-3">
+      <div
+        data-testid="entry-assistant"
+        data-streaming={entry.streaming}
+        className="flex flex-col gap-1 sm:flex-row sm:gap-3"
+      >
         <Gutter label="pi" tone="text-doom-magenta" />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {entry.thinking ? (
             <div
               data-testid="entry-thinking"
-              className="text-[11px] text-doom-violet/80 [&_strong]:text-doom-violet [&_p]:whitespace-pre-wrap"
+              // Grey, one step below the answer on the neutral ramp. Thinking is
+              // context for the reply, not a second voice, and a coloured one
+              // read as loudly as the reply it was only leading up to.
+              className="text-[11px] text-doom-dim [&_strong]:text-doom-text [&_p]:whitespace-pre-wrap"
             >
-              <Markdown text={entry.thinking} />
+              <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
             </div>
           ) : null}
           <div className="text-[13px] text-doom-text">
-            <Markdown text={entry.text} />
+            <MessageMarkdown sessionId={sessionId} text={entry.text} />
             {entry.streaming ? <StreamCursor /> : null}
           </div>
         </div>
@@ -118,7 +133,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'tool') {
     return (
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
         <Gutter label="tool" tone="text-doom-faint" />
         <div className="min-w-0 flex-1">
           <ToolCard entry={entry} sessionId={sessionId} />
@@ -129,7 +144,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'settled') {
     return (
-      <div data-testid="entry-settled" className="flex items-center gap-3 pl-14">
+      <div data-testid="entry-settled" className="flex items-center gap-3 sm:pl-14">
         <Separator className="flex-1" />
         <span className="text-[10px] text-doom-faint">
           agent settled{entry.tools > 0 ? ` · ${entry.tools} tool${entry.tools === 1 ? '' : 's'}` : ''}
@@ -144,8 +159,13 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
   // shouts; an informational one reads as a quiet system line.
   const isError = entry.tone === 'error';
   return (
-    <div data-testid="entry-notice" data-tone={entry.tone} className="flex gap-3">
-      <Gutter label={isError ? '!' : '·'} tone={isError ? 'text-doom-red' : 'text-doom-faint'} />
+    <div data-testid="entry-notice" data-tone={entry.tone} className="flex gap-2 sm:gap-3">
+      {/* One character wide, so it stays beside its line even on a phone. */}
+      <span
+        className={`shrink-0 pt-0.5 text-[10px] font-bold sm:w-11 sm:text-right ${isError ? 'text-doom-red' : 'text-doom-faint'}`}
+      >
+        {isError ? '!' : '·'}
+      </span>
       <p className={`min-w-0 flex-1 break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}>
         {entry.text}
       </p>
@@ -171,6 +191,10 @@ function BackgroundWorkNotice() {
  * One transcript, whichever fold it reads: the focused session's own, or a
  * thread of it. Owns the scroll pinning; the caller owns the empty state and
  * the session the entries' tool cards act on.
+ *
+ * `limit` and `compact` are for a fold that is not a whole surface, such as a
+ * grid card: only the newest entries, drawn tighter, with no history paging
+ * and no jump control, because a card is a glance and not a place to read.
  */
 export function Transcript({
   store,
@@ -178,15 +202,22 @@ export function Transcript({
   empty,
   testId = 'timeline',
   backgroundWorkActive = false,
+  limit,
+  compact = false,
 }: {
   store: Store<SessionState>;
   sessionId: string | null;
   empty: ReactNode;
   testId?: string;
   backgroundWorkActive?: boolean;
+  limit?: number;
+  compact?: boolean;
 }) {
   const entries = useStore(store, (state) => state.entries);
-  const visibleEntries = useMemo(() => entries.filter((entry) => entry.kind !== 'queued'), [entries]);
+  const visibleEntries = useMemo(() => {
+    const shown = entries.filter((entry) => entry.kind !== 'queued');
+    return limit === undefined ? shown : shown.slice(-limit);
+  }, [entries, limit]);
   const scroller = useRef<HTMLDivElement>(null);
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
@@ -230,7 +261,9 @@ export function Transcript({
     const bottom = atBottom(element, element.scrollHeight);
     following.current = bottom;
     if (bottom) setUnread(false);
-    if (element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
+    // A compact fold shows a fixed tail of a live thread; asking for the
+    // window above it would page history nobody can read there.
+    if (!compact && element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
       anchor.current = { height: element.scrollHeight, top: element.scrollTop };
       requestOlderHistory(sessionId);
     }
@@ -304,7 +337,11 @@ export function Transcript({
         onScroll={onScroll}
         onWheel={onWheel}
         data-testid={testId}
-        className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 py-4 sm:px-[26px] sm:py-[22px]"
+        className={
+          compact
+            ? 'flex flex-1 flex-col gap-2 overflow-y-auto px-2.5 py-2'
+            : 'flex flex-1 flex-col gap-[18px] overflow-y-auto px-2 py-4 sm:px-[26px] sm:py-[22px]'
+        }
       >
         {visibleEntries.map((entry, index) => (
           // Entries above the live tail are skipped for layout and paint until
@@ -327,7 +364,7 @@ export function Transcript({
         ))}
         {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       </div>
-      {unread ? (
+      {unread && !compact ? (
         <Button
           variant="subtle"
           size="sm"
@@ -348,7 +385,11 @@ export function Timeline() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
-  const backgroundWorkActive = useActivityGroups(statuses, widgets, activeId).some((group) => group.active);
+  const settled = useActiveSession((state) => state.settled);
+  // Only worth saying once the agent has stopped: while it is still running the
+  // transcript already shows the work, and the notice would just be noise.
+  const hasActiveWork = useActivityGroups(statuses, widgets, activeId).some((group) => group.active);
+  const backgroundWorkActive = settled && hasActiveWork;
   return (
     <Transcript
       store={sessionStoreFor(activeId)}

@@ -55,13 +55,20 @@ describe('TimelineStore', () => {
   it('deduplicates by path, counts repeats, and orders by the latest edit', async () => {
     await store.append(event({ path: '/a.ts', tool: 'edit', at: 10 }));
     await store.append(event({ path: '/b.ts', tool: 'write', at: 20 }));
-    await store.append(event({ path: '/a.ts', tool: 'bash', at: 30, origin: 'scan' }));
+    await store.append(event({ path: '/a.ts', tool: 'bash', at: 30, origin: 'scan', verified: true }));
     expect(await store.list()).toEqual([
       { path: '/a.ts', tool: 'bash', at: 30, count: 2 },
       { path: '/b.ts', tool: 'write', at: 20, count: 1 },
     ]);
   });
 
+  it('leaves a scan nothing confirmed out of the list', async () => {
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 10 }));
+    // A command touched this one: the walk saw its modification time move and
+    // neither the content hash nor git could show the bytes had changed.
+    await store.append(event({ path: '/touched.ts', tool: 'bash', at: 20, origin: 'scan' }));
+    expect((await store.list()).map((entry) => entry.path)).toEqual(['/a.ts']);
+  });
   it('still reads a version 1 line written before the package learned to snapshot', async () => {
     // A session already running when the package updates keeps appending to the
     // file it opened, so dropping its earlier lines would blank a list mid-session.

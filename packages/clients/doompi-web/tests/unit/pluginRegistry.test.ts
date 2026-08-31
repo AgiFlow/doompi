@@ -161,7 +161,13 @@ describe('the web plugin registry', () => {
       'plugins',
       'planning',
     ]);
-    expect(settingsSections('repository').map((section) => section.id)).toEqual(['repositories', 'repository-mcp']);
+    // A contributed page is offered in both workspaces: the repository copy edits
+    // the same keys in the selected repository's config.
+    expect(settingsSections('repository').map((section) => section.id)).toEqual([
+      'repositories',
+      'repository-mcp',
+      'repository-planning',
+    ]);
   });
 
   it('collects leader bindings in install order and refuses keys the TUI would', () => {

@@ -18,7 +18,11 @@ export function rankFileMatches(files: readonly string[], query: string, limit: 
   const ranked: RankedMatch[] = [];
   for (const file of files) {
     const lower = file.toLowerCase();
-    const base = lower.slice(lower.lastIndexOf('/') + 1);
+    // A folder arrives with a trailing slash, so the basename is taken from the
+    // path without it. Left in, every folder would have an empty basename and
+    // sink to the weakest rank however exactly its name was typed.
+    const bare = lower.endsWith('/') ? lower.slice(0, -1) : lower;
+    const base = bare.slice(bare.lastIndexOf('/') + 1);
     let rank: number;
     if (needle === '') rank = 3;
     else if (base.startsWith(needle)) rank = 0;

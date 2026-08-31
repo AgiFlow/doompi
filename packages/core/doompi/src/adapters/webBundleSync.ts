@@ -1,13 +1,10 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const WEB_PACKAGE = '@agimon-ai/doompi-web';
 const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
-const WEB_BUNDLE_DIRECTORY = ['.doompi', 'web'];
-const CURRENT_BUNDLE = 'current';
 const BUNDLER_ENTRY = ['dist', 'bundler.mjs'];
 
 export interface WebBundleSyncInput {
@@ -15,7 +12,8 @@ export interface WebBundleSyncInput {
   /** Resolved extension entry paths from the sync state; package roots derive from them. */
   resolvedEntries: Record<string, string>;
   environment?: NodeJS.ProcessEnv;
-  homeDirectory?: string;
+  /** Immutable generation directory that receives web/, generated/, and registries. */
+  outputDirectory: string;
   onNotice?: (message: string) => void;
   /** Test seam over the dynamic import of the doompi-web bundler module. */
   importBundler?: (url: string) => Promise<unknown>;
@@ -57,20 +55,9 @@ function resolveWebPackageRoot(repoRoot: string, environment: NodeJS.ProcessEnv)
   }
 }
 
-/**
- * The web phase of `doompi sync`: rebuild the cockpit bundle against the
- * composition's installed plugin packages.
- *
- * Plugins are discovered from doompiWeb manifests in the resolved packages;
- * nothing here or in doompi-web names a plugin package. The bundle is
- * published machine-wide at ~/.doompi/web/current, where the cockpit server
- * looks before falling back to its own prebuilt assets, and the swap is a
- * rename so a running hub never serves a half-written bundle. doompi-web
- * being absent is a normal composition, reported as skipped.
- */
+/** Builds the cockpit bundle directly inside an unpublished sync generation. */
 export async function syncWebBundle(input: WebBundleSyncInput): Promise<WebBundleSyncResult> {
   const environment = input.environment ?? process.env;
-  const homeDirectory = input.homeDirectory ?? os.homedir();
   const notice = input.onNotice ?? ((): void => {});
   const webRoot = (input.resolveWebRoot ?? resolveWebPackageRoot)(input.repoRoot, environment);
   if (webRoot === undefined) {
@@ -95,17 +82,16 @@ export async function syncWebBundle(input: WebBundleSyncInput): Promise<WebBundl
     if (typeof bundler.bundleCockpitWeb !== 'function') {
       return { status: 'failed', reason: `${bundlerPath} exports no bundleCockpitWeb` };
     }
-    const bundleRoot = path.join(homeDirectory, ...WEB_BUNDLE_DIRECTORY);
-    const stagingDir = path.join(bundleRoot, `next-${String(process.pid)}`);
-    fs.rmSync(stagingDir, { recursive: true, force: true });
-    fs.mkdirSync(stagingDir, { recursive: true });
-    const result = await bundler.bundleCockpitWeb({ pluginRoots, outDir: stagingDir, onNotice: notice });
-    const currentDir = path.join(bundleRoot, CURRENT_BUNDLE);
-    fs.rmSync(currentDir, { recursive: true, force: true });
-    fs.renameSync(stagingDir, currentDir);
+    fs.rmSync(input.outputDirectory, { recursive: true, force: true });
+    fs.mkdirSync(input.outputDirectory, { recursive: true });
+    const result = await bundler.bundleCockpitWeb({
+      pluginRoots,
+      outDir: input.outputDirectory,
+      onNotice: notice,
+    });
     return {
       status: 'bundled',
-      assetsDir: path.join(currentDir, path.basename(result.assetsDir)),
+      assetsDir: result.assetsDir,
       pluginIds: result.pluginIds,
     };
   } catch (error) {

@@ -1,4 +1,4 @@
-import { compactDetails } from './hashlineView.ts';
+import { compactDetails } from '@agimon-ai/doompi-web-components';
 
 export interface ReadCallView {
   readonly path: string;

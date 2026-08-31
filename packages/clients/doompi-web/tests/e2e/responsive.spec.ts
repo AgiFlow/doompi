@@ -96,21 +96,13 @@ test.describe('responsive repository settings plugins', () => {
 test.describe('composer actions', () => {
   test.use({ assets: 'synced' });
 
-  test('places voice before queue and reflects autonomous phases', async ({ page, cockpit }) => {
+  test('places manual voice before queue and disables it during autonomous voice', async ({ page, cockpit }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(cockpit.url);
     await cockpit.session.waitForAttach();
 
     const voice = page.getByTestId('composer-voice-action');
     const queue = page.getByTestId('composer-queue');
-    const promptMessages = () =>
-      cockpit.session.received.filter((frame) => frame.type === 'prompt').map((frame) => frame.message);
-    const clickAndExpectPrompt = async (message: string) => {
-      const count = promptMessages().length;
-      await voice.click();
-      await expect.poll(() => promptMessages().length).toBe(count + 1);
-      expect(promptMessages().at(-1)).toBe(message);
-    };
     await expect(voice).toBeVisible();
     await expect(voice).toHaveAttribute('aria-label', 'start voice recording');
     const voiceBox = await voice.boundingBox();
@@ -119,29 +111,17 @@ test.describe('composer actions', () => {
     expect(queueBox).not.toBeNull();
     expect((voiceBox?.x ?? 0) + (voiceBox?.width ?? 0)).toBeLessThanOrEqual(queueBox?.x ?? 0);
 
-    const phases = [
-      ['listening', 'voice auto: listening'],
-      ['hearing', 'voice auto: hearing speech'],
-      ['processing', 'voice auto: processing while listening'],
-      ['composing', 'voice auto: composing, listening'],
-      ['sending', 'voice auto: sending composed prompt'],
-      ['narrating', 'voice auto: narrating and listening'],
-      ['confirming', 'voice auto: confirmation needed'],
-    ] as const;
-    const icons = new Set<string>();
-    for (const [phase, statusText] of phases) {
-      cockpit.session.emit({
-        type: 'extension_ui_request',
-        id: `voice-${phase}`,
-        method: 'setStatus',
-        statusKey: 'doom-voice',
-        statusText,
-      });
-      await expect(voice).toHaveAttribute('data-voice-phase', phase);
-      icons.add((await voice.locator('svg').getAttribute('class')) ?? '');
-    }
-    expect(icons.size).toBe(phases.length);
-    await clickAndExpectPrompt('/minor voice-auto deactivate');
+    cockpit.session.emit({
+      type: 'extension_ui_request',
+      id: 'voice-listening',
+      method: 'setStatus',
+      statusKey: 'doom-voice',
+      statusText: 'voice auto: listening',
+    });
+    await expect(voice).toHaveAttribute('data-voice-mode', 'auto');
+    await expect(voice).toHaveAttribute('data-voice-phase', 'blocked');
+    await expect(voice).toBeDisabled();
+    await expect(voice).toHaveAttribute('aria-label', 'manual voice is unavailable while autonomous voice is active');
 
     await page.setViewportSize({ width: 900, height: 844 });
     await expect(voice).toBeVisible();

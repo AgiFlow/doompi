@@ -41,7 +41,7 @@ describe('generating the package API routes', () => {
     const homeDirectory = temporary('doompi-api-home-');
     const pkg = installedPackage({ doompiApi: sessionBlock('runner') });
 
-    const result = syncApiRoutes({ resolvedEntries: { runner: pkg.entry }, homeDirectory });
+    const result = syncApiRoutes({ resolvedEntries: { runner: pkg.entry }, outputDirectory: homeDirectory });
 
     expect(result.mounted).toEqual({ session: ['runner'], hub: [] });
     const session = readModule(result.directory, 'session');
@@ -57,7 +57,7 @@ describe('generating the package API routes', () => {
     const homeDirectory = temporary('doompi-api-home-');
     const pkg = installedPackage({});
 
-    const result = syncApiRoutes({ resolvedEntries: { plain: pkg.entry }, homeDirectory });
+    const result = syncApiRoutes({ resolvedEntries: { plain: pkg.entry }, outputDirectory: homeDirectory });
 
     expect(result.mounted).toEqual({ session: [], hub: [] });
     expect(readModule(result.directory, 'session')).toContain('export const apis = [];');
@@ -73,7 +73,7 @@ describe('generating the package API routes', () => {
       },
     });
 
-    const result = syncApiRoutes({ resolvedEntries: { both: both.entry }, homeDirectory });
+    const result = syncApiRoutes({ resolvedEntries: { both: both.entry }, outputDirectory: homeDirectory });
 
     expect(result.mounted).toEqual({ session: ['both'], hub: ['both'] });
     expect(readModule(result.directory, 'session')).toContain('dist/a.mjs');
@@ -90,7 +90,7 @@ describe('generating the package API routes', () => {
 
     const result = syncApiRoutes({
       resolvedEntries: { good: good.entry, bad: bad.entry },
-      homeDirectory,
+      outputDirectory: homeDirectory,
       onNotice: (message) => notices.push(message),
     });
 
@@ -106,7 +106,7 @@ describe('generating the package API routes', () => {
 
     const result = syncApiRoutes({
       resolvedEntries: { a: first.entry, b: second.entry },
-      homeDirectory,
+      outputDirectory: homeDirectory,
       onNotice: (message) => notices.push(message),
     });
 
@@ -117,10 +117,10 @@ describe('generating the package API routes', () => {
   it('replaces a previous generation rather than merging into it', () => {
     const homeDirectory = temporary('doompi-api-home-');
     const first = installedPackage({ doompiApi: sessionBlock('gone') });
-    syncApiRoutes({ resolvedEntries: { a: first.entry }, homeDirectory });
+    syncApiRoutes({ resolvedEntries: { a: first.entry }, outputDirectory: homeDirectory });
 
     const second = installedPackage({ doompiApi: sessionBlock('kept') });
-    const result = syncApiRoutes({ resolvedEntries: { b: second.entry }, homeDirectory });
+    const result = syncApiRoutes({ resolvedEntries: { b: second.entry }, outputDirectory: homeDirectory });
 
     const session = readModule(result.directory, 'session');
     expect(session).toContain('keptApi');
@@ -137,7 +137,7 @@ describe('generating the package API routes', () => {
 
     const result = syncApiRoutes({
       resolvedEntries: { broken: entry },
-      homeDirectory,
+      outputDirectory: homeDirectory,
       onNotice: (m) => notices.push(m),
     });
 

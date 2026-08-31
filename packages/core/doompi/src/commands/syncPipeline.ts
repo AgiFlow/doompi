@@ -1,23 +1,22 @@
+import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { ensureLayerPackages, type LayerPackageResult } from '../adapters/layerPackageInstaller.ts';
 import { findRepositoryRoot } from '../adapters/repository/repository';
 import type { HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
-import { readLocatedSyncState } from '../adapters/syncState.ts';
-import { DOOM_API_SCOPES } from '@agimon-ai/doompi-extension-contracts/package-api';
-import { syncApiRoutes } from '../adapters/apiRoutesSync.ts';
-import { syncWebBundle } from '../adapters/webBundleSync.ts';
+import { acquireSyncLocationLock, resolveSyncLocation } from '../adapters/syncLocation.ts';
+import { readSyncDrift } from '../adapters/syncDrift.ts';
 import { BuildCommand } from './buildCommand.ts';
 import { SyncCommand, type SyncSettingsMode } from './syncCommand.ts';
 import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
 
 const CHECK_OPTION = '--check';
+/** Rebuilds and republishes even when nothing drifted. */
+const FORCE_OPTION = '--force';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const BUILD_COMMAND = 'build';
 const PACKAGES_LABEL = 'packages';
 const BUILD_LABEL = 'build';
-const WEB_LABEL = 'web';
-const API_LABEL = 'api';
 
 export interface SyncPipelineOptions {
   settingsMode?: SyncSettingsMode;
@@ -57,103 +56,54 @@ export class SyncPipeline {
       return new SyncCommand({ settingsMode: this.settingsMode }).execute(args, environment, currentDirectory, output);
     }
 
-    const progress = new SyncProgress(output);
-    // Packages move before anything reads them: the build compiles the resolved
-    // extension files and the sync stages their skills, agents, and MCP servers,
-    // so an update landing after either phase would only take effect one sync later.
-    await this.refreshPackages(environment, currentDirectory, progress);
-
-    const captured: string[] = [];
-    const done = progress.start(BUILD_LABEL, 'compiling the mode extension');
-    const buildCode = await new BuildCommand(this.telemetry).execute(
-      [BUILD_COMMAND, ...args.slice(1).filter((argument) => argument !== CHECK_OPTION)],
-      environment,
-      currentDirectory,
-      {
-        write: (chunk: unknown) => {
-          captured.push(String(chunk));
-          return true;
-        },
-      },
-    );
-    if (buildCode !== 0) {
-      done('failed');
-      // The build phase stays quiet while it succeeds. A failure is the one case
-      // where its own report is the only explanation the user has.
-      output.write(captured.join(''));
-      return buildCode;
-    }
-    done('mode extension compiled');
-
-    const syncCode = await new SyncCommand({ settingsMode: this.settingsMode }).execute(
-      args,
-      environment,
-      currentDirectory,
-      output,
-    );
-    if (syncCode !== 0) return syncCode;
-
-    // The cockpit bundle rides the committed state: the resolved composition
-    // names every installed package whose doompiWeb manifest contributes a
-    // web plugin. A bundle failure never fails the sync; the cockpit keeps
-    // serving its previous or packaged bundle.
-    await this.refreshWebBundle(environment, currentDirectory, progress);
-    // The route modules a session server and the hub import. Cheap next to the
-    // bundle, and independent of it: a composition with no cockpit installed
-    // still serves its packages' session APIs.
-    this.refreshApiRoutes(environment, currentDirectory, progress);
-    return 0;
-  }
-
-  /** Writes the generated per-scope route modules the API hosts import. */
-  private refreshApiRoutes(environment: NodeJS.ProcessEnv, currentDirectory: string, progress: SyncProgress): void {
     const inheritedRoot = environment[HARNESS_ROOT_ENV];
     const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
-    const done = progress.start(API_LABEL, 'generating the package API routes');
-    const state = readLocatedSyncState(repoRoot);
-    if (!state) {
-      done('skipped: no sync state to read the composition from');
-      return;
+    const homeDirectory = environment.HOME ?? os.homedir();
+
+    // Nothing drifted means the packages are current, the mode extension is
+    // compiled from these exact bytes, and the published generation already
+    // describes them. Refreshing and rebuilding anyway costs seconds per call
+    // and, worse, ends in a republished generation that reloads every attached
+    // cockpit for no change at all. The cockpit calls this before every session
+    // launch, so the cheap answer has to be the common one.
+    if (!args.includes(FORCE_OPTION) && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+      output.write('doompi sync is already up to date\n');
+      return 0;
     }
+
+    const releaseLock = await acquireSyncLocationLock(resolveSyncLocation(repoRoot, homeDirectory));
     try {
-      const result = syncApiRoutes({
-        resolvedEntries: state.state.resolved,
-        onNotice: (message) => progress.line(API_LABEL, message),
-      });
-      const summary = DOOM_API_SCOPES.map((scope) => `${scope}: ${result.mounted[scope].join(', ') || 'none'}`);
-      done(`routes written to ${result.directory} (${summary.join('; ')})`);
-    } catch (error) {
-      // A composition still works without them; only the extra HTTP surface is
-      // missing, and the next sync tries again.
-      done(`failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
+      const progress = new SyncProgress(output);
+      await this.refreshPackages(environment, currentDirectory, progress);
 
-  /** Rebuilds the machine's cockpit bundle from the synced composition's plugin manifests. */
-  private async refreshWebBundle(
-    environment: NodeJS.ProcessEnv,
-    currentDirectory: string,
-    progress: SyncProgress,
-  ): Promise<void> {
-    const inheritedRoot = environment[HARNESS_ROOT_ENV];
-    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
-    const done = progress.start(WEB_LABEL, 'bundling the web cockpit plugins');
-    const state = readLocatedSyncState(repoRoot);
-    if (!state) {
-      done('skipped: no sync state to read the composition from');
-      return;
+      const captured: string[] = [];
+      const done = progress.start(BUILD_LABEL, 'compiling the mode extension');
+      const buildCode = await new BuildCommand(this.telemetry).execute(
+        [BUILD_COMMAND, ...args.slice(1).filter((argument) => argument !== CHECK_OPTION)],
+        environment,
+        currentDirectory,
+        {
+          write: (chunk: unknown) => {
+            captured.push(String(chunk));
+            return true;
+          },
+        },
+      );
+      if (buildCode !== 0) {
+        done('failed');
+        output.write(captured.join(''));
+        return buildCode;
+      }
+      done('mode extension compiled');
+
+      return await new SyncCommand({
+        settingsMode: this.settingsMode,
+        homeDirectory,
+        lockHeld: true,
+      }).execute(args, environment, currentDirectory, output);
+    } finally {
+      await releaseLock();
     }
-    const result = await syncWebBundle({
-      repoRoot,
-      resolvedEntries: state.state.resolved,
-      environment,
-      // A plugin package the bundler skips, or two packages wanting one
-      // plugin id, is a notice: the bundle still builds, and this is where
-      // the person running sync learns which package needs a look.
-      onNotice: (message) => progress.line(WEB_LABEL, message),
-    });
-    if (result.status === 'bundled') done(`cockpit bundled with plugins: ${result.pluginIds.join(', ')}`);
-    else done(`${result.status}: ${result.reason}`);
   }
 
   /** Moves every package sync owns to its newest published version. */

@@ -1,14 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { PiServer, PiServerError } from '@earendil-works/pi-server';
-import { readSyncDrift } from '@agimon-ai/doompi/services';
-import { readSyncState } from '@agimon-ai/doompi/services/syncState';
+import { readSyncDrift, readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi/services';
+import { readSyncState, type SyncState } from '@agimon-ai/doompi/services/syncState';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
 import { createPiHubService } from './piHubService.ts';
@@ -24,7 +23,7 @@ import {
   type DoomApiHandler,
   type DoomRepositorySyncView,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
-import { loadPackageApis } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
+import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import { findRepositoryRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
@@ -107,8 +106,6 @@ const INDEX_FILE = 'index.html';
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 /** Comma-separated origins the operator allows past the guard, for dev setups this package cannot guess. */
 const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
-/** Where `doompi sync` publishes the machine's cockpit bundle. */
-const SYNCED_WEB_DIRECTORY = ['.doompi', 'web', 'current', 'web'];
 const RAW_BUNDLE_PREFIX = '/bundle-assets/';
 const PWA_ASSET_PREFIX = '/pwa/';
 const SEALED_HTTP_VERSION = 1;
@@ -221,18 +218,17 @@ function packagedPwaDir(): string {
   return packagedDirectory('pwa');
 }
 
-/**
- * The assets to serve, in preference order: an explicit option, the env
- * override, the bundle `doompi sync` published for this machine (which
- * carries the installed plugin set), then the package's own prebuilt bundle
- * (built-in plugins only).
- */
-function resolveAssetsDir(explicit: string | undefined, notice: (message: string) => void): string {
+/** The assets to serve, with explicit overrides ahead of this hub's registration. */
+function resolveAssetsDir(
+  explicit: string | undefined,
+  registration: SyncRegistration | undefined,
+  notice: (message: string) => void,
+): string {
   if (explicit !== undefined) return explicit;
   const fromEnv = process.env[WEB_DIST_ENV];
   if (fromEnv !== undefined && fromEnv !== '') return fromEnv;
-  const synced = path.join(os.homedir(), ...SYNCED_WEB_DIRECTORY);
-  if (fs.existsSync(path.join(synced, INDEX_FILE))) {
+  const synced = registration?.webDirectory;
+  if (synced !== undefined && synced !== null && fs.existsSync(path.join(synced, INDEX_FILE))) {
     notice(`serving the synced cockpit bundle from ${synced}`);
     return synced;
   }
@@ -437,18 +433,45 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const host = options.host ?? '127.0.0.1';
   const notice = options.onNotice ?? ((): void => {});
   const telemetry = createWebTelemetry();
-  const assetsDir = resolveAssetsDir(options.assetsDir, notice);
-  const hub = buildHub(options, notice, await loadHubChannels(assetsDir, notice), telemetry);
+  let startupRoot: string | undefined;
+  try {
+    startupRoot = findRepositoryRoot(process.cwd());
+  } catch {
+    startupRoot = undefined;
+  }
+  const syncGuard = createSyncGuard({
+    ...(startupRoot === undefined ? { cwd: process.cwd() } : { repoRoot: startupRoot }),
+    onNotice: notice,
+  });
+  await syncGuard.ensureSynced();
+  let startupRegistration: SyncRegistration | undefined;
+  if (startupRoot !== undefined) {
+    try {
+      startupRegistration = readSyncRegistration(startupRoot);
+    } catch (error) {
+      notice(`synced registration is unavailable (${describeError(error)})`);
+    }
+  }
+  /**
+   * The generation the hub is currently serving.
+   *
+   * Resolved once at startup and then re-read whenever the guard reports a
+   * rebuild. Capturing it for the process lifetime meant a hub that started
+   * before the first successful sync served the packaged, plugin-free bundle
+   * until it was restarted, and a hub that outlived a sync kept serving a
+   * generation that had already been superseded.
+   */
+  let served = {
+    assetsDir: resolveAssetsDir(options.assetsDir, startupRegistration, notice),
+    apiDirectory: startupRegistration?.apiDirectory,
+  };
+  const hub = buildHub(options, notice, await loadHubChannels(served.assetsDir, notice), telemetry);
   // Threads are journals the data channels can name (a subagent run's own
   // session file); the hub tails one only while a page follows it.
   const threads = createThreadJournals({
     resolve: (sessionId, threadId) => hub.threadJournal(sessionId, threadId),
     onNotice: notice,
   });
-  // A session reads what sync produced, and nothing makes the person who
-  // opened the cockpit run sync first. The hub keeps the repository current.
-  const syncGuard = createSyncGuard({ cwd: process.cwd(), onNotice: notice });
-  await syncGuard.ensureSynced();
   /**
    * Every attached page, tagged with the listener it arrived on.
    *
@@ -470,7 +493,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   let loopbackPort: number | undefined;
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
   const pwaDir = packagedPwaDir();
-  const publication = createBundlePublication({ assetsDir, stateDir: store.directory, onNotice: notice });
+  const publication = createBundlePublication({
+    assetsDir: () => served.assetsDir,
+    stateDir: store.directory,
+    onNotice: notice,
+  });
   let livePush: LiveWebPush | undefined;
   reapStaleTunnel(store.directory, notice);
   /**
@@ -777,9 +804,9 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     const root = resolveRepository(repositoryId);
     if (root === undefined) return undefined;
     const drift = readSyncDrift({ repoRoot: root });
-    let state: ReturnType<typeof readSyncState>;
+    let state: SyncState | undefined;
     try {
-      state = readSyncState(root);
+      state = readSyncRegistration(root) ? readSyncState(root) : undefined;
     } catch {
       state = undefined;
     }
@@ -796,13 +823,12 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // Package APIs, mounted before the SPA fallback so their routes are reachable
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
-  const pluginApis = mountHubApis(
-    app,
-    await loadPackageApis('hub', { onNotice: notice }),
-    notice,
-    resolveRepository,
-    readRepositorySync,
-  );
+  const apiDirectory = served.apiDirectory;
+  const hubApis =
+    apiDirectory === undefined && !process.env[PACKAGE_API_DIR_ENV]
+      ? []
+      : await loadPackageApis('hub', { apiDirectory, onNotice: notice });
+  const pluginApis = mountHubApis(app, hubApis, notice, resolveRepository, readRepositorySync);
   mountSessionApiProxy(app, hub, notice, telemetry);
 
   app.get('/api/health', (context) =>
@@ -1235,7 +1261,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
     const current = publication.current();
     if (current === undefined) return context.json({ error: 'No signed cockpit bundle is available.' }, 503);
-    return context.json(current, 200, { 'Cache-Control': 'no-store' });
+    return context.json(current.signed, 200, { 'Cache-Control': 'no-store' });
   });
   app.get(`${RAW_BUNDLE_PREFIX}*`, (context) => {
     const requested = new URL(context.req.url).pathname;
@@ -1246,12 +1272,15 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       matched === null ||
       !Number.isSafeInteger(revision) ||
       current === undefined ||
-      current.manifest.revision !== revision
+      current.signed.manifest.revision !== revision
     ) {
       return context.text('That signed bundle revision is unavailable.', 404);
     }
-    const asset = assetFor(current.manifest, matched[2] ?? '');
-    const file = asset === undefined ? undefined : resolveAssetPath(assetsDir, asset.path);
+    const asset = assetFor(current.signed.manifest, matched[2] ?? '');
+    // Read through the directory this manifest was signed over, not whatever is
+    // current now: a generation that changed mid-request would otherwise serve
+    // bytes the page is about to reject as a digest mismatch.
+    const file = asset === undefined ? undefined : resolveAssetPath(current.assetsDir, asset.path);
     const body = file === undefined ? undefined : readAsset(file);
     if (asset === undefined || file === undefined || body === undefined)
       return context.text('Bundle asset not found.', 404);
@@ -1271,8 +1300,24 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   });
 
   // A rebuilt bundle only changes on disk, so the page it replaced has to be
-  // told; nothing about a loaded bundle notices that its source moved.
+  // told; nothing about a loaded bundle notices that its source moved. Sync
+  // publishes each rebuild as a new generation, so the paths resolved at
+  // startup have to be re-read before anything is served from them.
   syncGuard.watch(() => {
+    let rebuilt: SyncRegistration | undefined;
+    if (startupRoot !== undefined) {
+      try {
+        rebuilt = readSyncRegistration(startupRoot);
+      } catch (error) {
+        // An unreadable registration leaves the hub on the generation it is
+        // already serving, which still works, rather than on nothing at all.
+        notice(`the rebuilt registration is unavailable (${describeError(error)}); keeping the served bundle`);
+      }
+    }
+    if (rebuilt?.webDirectory != null && rebuilt.webDirectory !== served.assetsDir) {
+      served = { assetsDir: rebuilt.webDirectory, apiDirectory: rebuilt.apiDirectory };
+      notice(`serving the rebuilt cockpit bundle from ${served.assetsDir}`);
+    }
     publication.refresh();
     broadcast({ type: HUB_RESYNCED_TYPE }, false);
   });

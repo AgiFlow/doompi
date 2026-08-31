@@ -41,7 +41,16 @@ import { QueueSheet } from './QueueSheet.tsx';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
 const MAX_INPUT_HEIGHT_PX = 192;
-const MAX_COMPLETION_ITEMS = 8;
+/**
+ * The popup does not scroll, so this is also how tall it can get: high enough
+ * that a bare `/` or `$` lists what the session actually has rather than the
+ * first handful, low enough to stay on screen.
+ */
+const MAX_COMPLETION_ITEMS = 20;
+/** Pi names skill commands `skill:<name>`; the cockpit browses them under `$`. */
+const SKILL_PREFIX = 'skill:';
+type CompletionKind = 'command' | 'skill' | 'file';
+const TRIGGER_CHARS: Record<CompletionKind, string> = { command: '/', skill: '$', file: '@' };
 const FILE_SEARCH_DEBOUNCE_MS = 150;
 const MAX_ATTACHMENTS = 8;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -122,7 +131,7 @@ interface CompletionItem {
 }
 
 interface CompletionState {
-  kind: 'command' | 'file';
+  kind: CompletionKind;
   /** Index of the trigger character in the draft. */
   tokenStart: number;
   query: string;
@@ -137,18 +146,16 @@ interface CompletionState {
  */
 function isCompletionRedundant(state: CompletionState): boolean {
   const item = state.items[state.selected];
-  return item !== undefined && item.insert.trimEnd() === `${state.kind === 'command' ? '/' : '@'}${state.query}`;
+  return item !== undefined && item.insert.trimEnd() === `${TRIGGER_CHARS[state.kind]}${state.query}`;
 }
 
-/** The /command or @file token the caret sits in, or null when there is none. */
-function triggerTokenAt(
-  draft: string,
-  caret: number,
-): { kind: 'command' | 'file'; start: number; query: string } | null {
+/** The /command, $skill or @file token the caret sits in, or null when there is none. */
+function triggerTokenAt(draft: string, caret: number): { kind: CompletionKind; start: number; query: string } | null {
   const before = draft.slice(0, caret);
   const start = Math.max(before.lastIndexOf(' '), before.lastIndexOf('\n')) + 1;
   const token = before.slice(start);
   if (token.startsWith('/') && start === 0) return { kind: 'command', start, query: token.slice(1) };
+  if (token.startsWith('$') && start === 0) return { kind: 'skill', start, query: token.slice(1) };
   if (token.startsWith('@') && token.length <= 64) return { kind: 'file', start, query: token.slice(1) };
   return null;
 }
@@ -232,14 +239,28 @@ export function Composer() {
       closeCompletion();
       return;
     }
-    if (trigger.kind === 'command') {
+    if (trigger.kind === 'command' || trigger.kind === 'skill') {
+      const query = trigger.query.toLowerCase();
       const items = commands
-        .filter((command) => command.name.toLowerCase().startsWith(trigger.query.toLowerCase()))
-        .slice(0, MAX_COMPLETION_ITEMS)
-        .map((command) => ({ insert: `/${command.name} `, label: `/${command.name}`, detail: command.description }));
+        .flatMap((command) => {
+          const skill = command.name.startsWith(SKILL_PREFIX);
+          if (skill !== (trigger.kind === 'skill')) return [];
+          const shown = skill ? command.name.slice(SKILL_PREFIX.length) : command.name;
+          if (!shown.toLowerCase().startsWith(query)) return [];
+          // Skills are browsed as `$name` but Pi only answers to the real
+          // `/skill:name`, so the label and the insert differ for them.
+          return [
+            {
+              insert: `/${command.name} `,
+              label: `${TRIGGER_CHARS[trigger.kind]}${shown}`,
+              detail: command.description,
+            },
+          ];
+        })
+        .slice(0, MAX_COMPLETION_ITEMS);
       setCompletion(
         items.length > 0
-          ? { kind: 'command', tokenStart: trigger.start, query: trigger.query, items, selected: 0 }
+          ? { kind: trigger.kind, tokenStart: trigger.start, query: trigger.query, items, selected: 0 }
           : null,
       );
       return;
@@ -396,7 +417,7 @@ export function Composer() {
     ? 'waiting for the session…'
     : streaming
       ? 'steer the run without stopping it…'
-      : 'ask anything · / for commands · @ for files…';
+      : 'ask anything · / for commands · $ for skills · @ for files…';
 
   // A tool waiting on an answer takes the input's place rather than opening
   // over the conversation: the transcript is what the reader needs in order

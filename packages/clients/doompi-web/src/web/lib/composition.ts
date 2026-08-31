@@ -1,7 +1,7 @@
-import type { SelectionAxisContribution } from '@agimon-ai/doompi-web-contracts';
-import { useSyncExternalStore } from 'react';
+import type { SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
+import { useCallback, useSyncExternalStore } from 'react';
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
-import { pluginActivityGroups, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
+import { pluginActivityGroups, pluginFileLinks, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
 
 export interface SelectionAxis {
@@ -282,4 +282,54 @@ export function useActivityGroups(
     () => activitySourceFingerprint(sessionId),
   );
   return activityGroups(statuses, widgets, sessionId);
+}
+
+/** The tab one path opens, or undefined when no installed plugin recognises it. */
+export type FileLinkResolver = (path: string) => TransientTab | undefined;
+
+function subscribeFileLinks(listener: () => void): () => void {
+  const subscriptions = pluginFileLinks().map((source) => source.subscribe(listener));
+  return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+}
+
+function fileLinkFingerprint(sessionId: string | null): string {
+  return pluginFileLinks()
+    .map((source) => source.fingerprint(sessionId))
+    .join('\n');
+}
+
+/**
+ * The tab a path opens, from the first source that claims it.
+ *
+ * A path no source claims is not a link. The host cannot tell a file name from
+ * a class name, and the plugin that tracks the session's files can, so the
+ * decision belongs there rather than in a heuristic here.
+ */
+export function fileLinkFor(sessionId: string | null, path: string): TransientTab | undefined {
+  for (const source of pluginFileLinks()) {
+    const tab = source.resolve(sessionId, path);
+    if (tab !== undefined) return tab;
+  }
+  return undefined;
+}
+
+/**
+ * Resolves the paths a message names against the plugins that track them.
+ *
+ * The resolver's identity is stable while the linkable set is, so a component
+ * that hands it to a renderer does not rebuild that renderer on every frame of
+ * a streaming reply.
+ */
+export function useFileLinks(sessionId: string | null): FileLinkResolver {
+  const fingerprint = useSyncExternalStore(
+    subscribeFileLinks,
+    () => fileLinkFingerprint(sessionId),
+    () => fileLinkFingerprint(sessionId),
+  );
+  return useCallback(
+    (path: string) => fileLinkFor(sessionId, path),
+    // The fingerprint is the dependency: the same path resolves differently
+    // once the session's set of tracked files changes.
+    [sessionId, fingerprint],
+  );
 }

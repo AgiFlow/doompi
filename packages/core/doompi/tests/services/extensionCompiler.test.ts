@@ -375,9 +375,9 @@ describe('compiled extension sets', () => {
     );
     const cache = path.join(directory, 'cache');
     const output = await compileExtensionSet([entry], cache);
+    // The artifact is corrupted where it stands. Nothing about the graph moved,
+    // so only the recorded output digest can notice.
     fs.writeFileSync(output, 'export default () => { throw new Error("stale artifact"); };');
-    const invalidatedAt = new Date(Date.now() + 10_000);
-    fs.utimesSync(dependency, invalidatedAt, invalidatedAt);
 
     const repaired = await compileExtensionSet([entry], cache);
     const values: string[] = [];
@@ -387,6 +387,30 @@ describe('compiled extension sets', () => {
     expect(repaired).toBe(output);
     expect(values).toEqual(['current']);
     expect(fs.readFileSync(repaired, 'utf8')).not.toContain('stale artifact');
+    expect(dependency).toContain('value.mjs');
+  });
+
+  it('does not recompile a set whose inputs were rewritten with the same bytes', async () => {
+    const directory = temporaryDirectory();
+    const dependency = writeModule(directory, 'value', 'export default "current";');
+    const entry = writeModule(
+      directory,
+      'entry',
+      'import value from "./value.mjs"; export default (api) => api.push(value);',
+    );
+    const cache = path.join(directory, 'cache');
+    const output = await compileExtensionSet([entry], cache);
+    const compiled = fs.readFileSync(output, 'utf8');
+    // What a build cache restore looks like: identical content, new timestamp.
+    const touchedAt = new Date(Date.now() + 10_000);
+    fs.utimesSync(dependency, touchedAt, touchedAt);
+
+    const again = await compileExtensionSet([entry], cache);
+
+    // Recompiling here is what made sync publish a fresh generation, and the
+    // cockpit reload every page, after a build that changed nothing.
+    expect(again).toBe(output);
+    expect(fs.readFileSync(again, 'utf8')).toBe(compiled);
   });
 
   it('requires the same default factory contract as the host loader', async () => {

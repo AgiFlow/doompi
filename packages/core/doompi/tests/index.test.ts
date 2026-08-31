@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findSyncedRoot = vi.hoisted(() => vi.fn());
 const readStartupBootstrapStatus = vi.hoisted(() => vi.fn());
@@ -38,6 +38,11 @@ function syncedRoot(): string {
 describe('DoomPi package extension', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('DOOMPI_EXTENSIONS_PROVIDED', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('shares one callable factory between the public root and dedicated Pi entry', () => {

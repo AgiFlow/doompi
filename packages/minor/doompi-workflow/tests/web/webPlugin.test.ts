@@ -57,7 +57,7 @@ describe('the workflows plugin surfaces', () => {
     expect(group?.activeSource?.isActive('s1')).toBe(false);
     expect(section?.id).toBe('workflows');
     expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('no runs yet')).toBe(true);
+    expect(rendered.includes('idle')).toBe(true);
     expect(rendered.includes('launch a workflow')).toBe(true);
   });
 
