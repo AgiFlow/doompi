@@ -3,7 +3,6 @@ import {
   ChevronDownIcon,
   EmptyState,
   ExternalLinkIcon,
-  Markdown,
   Separator,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
@@ -22,6 +21,7 @@ import {
 } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
+import { MessageMarkdown } from './MessageMarkdown.tsx';
 import { ToolCard } from './ToolCard.tsx';
 
 const SUGGESTIONS = [
@@ -77,7 +77,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
         className="flex flex-col-reverse gap-1 sm:flex-row sm:items-center sm:gap-3 sm:pl-10"
       >
         <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
-          <Markdown text={entry.text} />
+          <MessageMarkdown sessionId={sessionId} text={entry.text} />
           {entry.images && entry.images.length > 0 ? (
             <div data-testid="user-attachments" className="flex flex-wrap gap-2">
               {entry.images
@@ -119,11 +119,11 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
               // read as loudly as the reply it was only leading up to.
               className="text-[11px] text-doom-dim [&_strong]:text-doom-text [&_p]:whitespace-pre-wrap"
             >
-              <Markdown text={entry.thinking} />
+              <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
             </div>
           ) : null}
           <div className="text-[13px] text-doom-text">
-            <Markdown text={entry.text} />
+            <MessageMarkdown sessionId={sessionId} text={entry.text} />
             {entry.streaming ? <StreamCursor /> : null}
           </div>
         </div>

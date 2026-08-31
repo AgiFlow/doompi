@@ -13,6 +13,7 @@ export type {
 } from '../types/webHub.ts';
 export type {
   ActivityGroupContribution,
+  FileLinkSource,
   GlobalStore,
   LeaderBindingContribution,
   LeaderKeyContribution,

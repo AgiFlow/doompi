@@ -118,3 +118,35 @@ test('files browser searches and opens the complete changed-file list', async ({
   await expect(browser).toHaveCount(0);
   await expect(page.getByTestId('files-breadcrumb')).toContainText('src/HiddenTarget.ts');
 });
+
+test('a message opens the files this session changed, and leaves other code alone', async ({ page, cockpit }) => {
+  writeChangedFiles(cockpit.registryDir, cockpit.agentDir);
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'files-status',
+    method: 'setStatus',
+    statusKey: 'doom-file-edit-files',
+    statusText: '6 files',
+  });
+  await expect(page.getByTestId('activity-file-edits')).toContainText('src/Newest.ts');
+
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: {
+      type: 'text_delta',
+      delta: 'Changed `src/Newest.ts` at `src/Newest.ts:12`; left `flex gap-3` and `src/Untouched.ts` alone.',
+    },
+  });
+
+  const links = page.getByTestId('markdown-file-link');
+  await expect(links).toHaveCount(2);
+  await expect(links.nth(1)).toHaveText('src/Newest.ts:12');
+  // A class name and a file this session never changed stay plain code.
+  await expect(page.getByTestId('entry-assistant').locator('code')).toHaveCount(2);
+
+  await links.first().click();
+  await expect(page.getByTestId('files-file-panel')).toBeVisible();
+  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Newest.ts');
+});

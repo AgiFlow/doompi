@@ -59,6 +59,24 @@ export interface TransientTab {
   panel: ComponentType<WebPluginSlotProps>;
 }
 /**
+ * Which paths a message names can be opened, and what tab each one opens.
+ *
+ * The host renders the conversation but knows nothing about files: the package
+ * that receives the session's file reports holds the set, and it owns the
+ * panel a file opens in. So the host asks this source about each path-shaped
+ * token it finds, and links only the ones the source claims. A token it does
+ * not recognise stays plain text, which is what keeps a class name or a glob
+ * from becoming a dead link.
+ */
+export interface FileLinkSource {
+  /** Notifies while a message is on screen and the linkable set changes. */
+  subscribe(listener: () => void): () => void;
+  /** Changes only when the session's linkable set does; the host re-reads on a change. */
+  fingerprint(sessionId: string | null): string;
+  /** The tab this path opens, or undefined when the source does not recognise it. */
+  resolve(sessionId: string | null, path: string): TransientTab | undefined;
+}
+/**
  * How a thread is drawn where it is not the whole surface: a card body wants
  * the last few entries at card scale, not a full transcript with its own
  * paging. Omitting both draws the thread exactly as the conversation does.
@@ -527,7 +545,10 @@ export interface WebPluginDefinition {
   /** The slots this plugin opens for others, each named '<this plugin id>.<name>'. */
   slots?: SlotDeclaration[];
   /** This plugin's contributions into slots other plugins (or the host) declare. */
+  /** This plugin's contributions into slots other plugins (or the host) declare. */
   fills?: SlotFillContribution[];
+  /** Makes the paths this plugin tracks clickable where the host renders a message. */
+  fileLinks?: FileLinkSource;
   /** Started after the host runtime, for page-lifetime needs such as hub frames; the return value disposes. */
   start?(runtime: WebPluginRuntime): (() => void) | void;
 }

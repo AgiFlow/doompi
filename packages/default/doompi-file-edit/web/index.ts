@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { fileLinks } from './fileLinks.ts';
 import { FilesActivitySection } from './FilesActivitySection.tsx';
 import { filesChannel } from './filesStore.ts';
 import { filesStatusKey } from '../src/types/webFiles.ts';
@@ -37,6 +38,9 @@ export const webPlugin = defineWebPlugin({
   // Same name as the group: the dock renders this inside it, in place of the
   // session's one-line summary.
   activitySections: [{ id: 'files', component: FilesActivitySection }],
+  // The same files, where a message names one: the dock is not the only place
+  // a reader meets a path.
+  fileLinks,
   leaderBindings: [
     {
       id: 'file-edit.files',
