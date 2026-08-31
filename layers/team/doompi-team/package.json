@@ -108,6 +108,13 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiApi": {
+    "basePath": "team",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
+  },
   "doompiWeb": {
     "pluginId": "subagents",
     "channels": [

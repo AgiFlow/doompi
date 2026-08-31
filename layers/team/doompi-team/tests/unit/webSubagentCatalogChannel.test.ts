@@ -57,6 +57,7 @@ describe('the subagent catalog hub channel', () => {
     expect(channel.frameType).toBe('subagent_catalog');
 
     source.sessionAdded?.({ sessionId: 's1', cwd: '/w' });
+    await waitFor(() => host.published.length === 1, 'the arrival catalog');
     expect(host.published).toHaveLength(1);
     expect(host.published[0]).toMatchObject({ sessionId: 's1', payload: { cwd: '/w', models: ['t1'] } });
     expect(host.published[0]?.payload.agents.map((row) => row.name)).toEqual(['reviewer']);
@@ -77,7 +78,7 @@ describe('the subagent catalog hub channel', () => {
     expect(source.payloadFor({ sessionId: 's1', cwd: '/w' })).toBeUndefined();
   });
 
-  it('publishes an empty catalog with the reason when discovery fails, noticing once', () => {
+  it('publishes an empty catalog with the reason when discovery fails, noticing once', async () => {
     const host = fakeHost();
     const channel = createSubagentCatalogChannel(() => {
       throw new Error('bad frontmatter');
@@ -86,9 +87,31 @@ describe('the subagent catalog hub channel', () => {
     cleanups.push(() => source.close());
 
     source.sessionAdded?.({ sessionId: 's1', cwd: '/w' });
+    await waitFor(() => host.published.length === 1, 'the failed catalog');
     expect(host.published[0]?.payload).toEqual({ cwd: '/w', agents: [], models: [], warning: 'bad frontmatter' });
     expect(host.notices).toHaveLength(1);
     source.payloadFor({ sessionId: 's1', cwd: '/w' });
+    await sleep(0);
     expect(host.notices).toHaveLength(1);
+  });
+
+  it('reads plugin agents from the session API that owns the active domains', async () => {
+    const host = fakeHost();
+    host.requestSessionApi = async (scope, request) => {
+      expect(scope).toEqual({ sessionId: 's1', cwd: '/w' });
+      expect(request).toMatchObject({ basePath: 'team', path: '/catalog', method: 'GET' });
+      return Response.json({ agents: [agent('plugins.reviewer', 'plugin')], models: ['team/model'] });
+    };
+    const source = createSubagentCatalogChannel(undefined, 1_000_000).start(host);
+    cleanups.push(() => source.close());
+
+    source.sessionAdded?.({ sessionId: 's1', cwd: '/w' });
+    await waitFor(() => host.published.length === 1, 'the session API catalog');
+
+    expect(host.published[0]?.payload).toMatchObject({
+      cwd: '/w',
+      agents: [{ name: 'plugins.reviewer', source: 'plugin' }],
+      models: ['team/model'],
+    });
   });
 });

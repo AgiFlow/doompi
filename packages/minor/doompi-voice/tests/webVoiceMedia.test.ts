@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership.ts';
 import { browserVoiceMediaClientId } from '../web/browserMediaIdentity.ts';
 import { VoiceActivitySection } from '../web/VoiceActivitySection.tsx';
 import { VoiceComposerAction } from '../web/VoiceComposerAction.tsx';
+import { VoiceToolMessage } from '../web/VoiceToolMessage.tsx';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
@@ -33,6 +34,83 @@ describe('browser voice media', () => {
     expect(source).toContain("command: 'minor voice-auto'");
     const runtimeSource = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
     expect(runtimeSource).toContain('this.device.armUserGesture()');
+  });
+
+  it('does not classify autonomous voice capture as background work', async () => {
+    const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
+
+    expect(source).toContain('marksBackgroundWork: false');
+  });
+
+  it('presents narration as readable conversational output', async () => {
+    const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
+    const rendered = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({
+        toolName: 'narrate',
+        args: { text: 'The migration is complete.' },
+        running: false,
+      }).props,
+    );
+
+    expect(source).toContain('tools: [VOICE_NARRATE_TOOL]');
+    expect(source).toContain("timelinePresentation: 'message'");
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('data-testid="narration-message"');
+    expect(rendered.html).toContain('aria-label="narration"');
+    expect(rendered.html).toContain('The migration is complete.');
+    expect(rendered.html).not.toContain('data-slot="message-item"');
+  });
+
+  it('keeps narration state readable without changing facade calls into messages', () => {
+    const playing = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({ toolName: 'narrate', args: { text: 'Still working.' }, running: true }).props,
+    );
+    const failed = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({ toolName: 'narrate', args: {}, running: false, isError: true }).props,
+    );
+    const facade = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({
+        toolName: 'describe_voice_tools',
+        args: { names: ['minor_mode'] },
+        running: false,
+        result: { content: [{ type: 'text', text: 'Catalog ready.' }], details: null },
+      }).props,
+    );
+    const batch = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({
+        toolName: 'use_voice_tools',
+        args: { calls: [{ name: 'one' }, { name: 'two' }] },
+        running: false,
+      }).props,
+    );
+    const idleFacade = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({ toolName: 'describe_voice_tools', running: false }).props,
+    );
+    const runningFacade = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({ toolName: 'describe_voice_tools', running: true }).props,
+    );
+    const failedFacade = renderPlugin(
+      VoiceToolMessage,
+      toolMessagePropsFixture({ toolName: 'describe_voice_tools', running: false, isError: true }).props,
+    );
+
+    expect(playing.html).toContain('data-narration-state="playing"');
+    expect(failed.html).toContain('data-narration-state="failed"');
+    expect(failed.html).toContain('Narration unavailable.');
+    expect(facade.html).toContain('data-slot="message-item"');
+    expect(facade.html).toContain('minor_mode');
+    expect(facade.html).toContain('Catalog ready.');
+    expect(batch.html).toContain('2 capabilities');
+    expect(idleFacade.html).toContain('discover');
+    expect(runningFacade.html).toContain('Working');
+    expect(failedFacade.html).toContain('ERROR');
   });
 
   it('keeps process-local manual recording out of the browser minor-mode picker', async () => {

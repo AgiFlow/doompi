@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   RefreshIcon,
+  TrashIcon,
 } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
 import type { QueuedEntry } from '../../lib/sessionModel.ts';
@@ -15,10 +16,12 @@ export function QueueSheet({
   count,
   entries,
   onClear,
+  onDelete,
 }: {
   count: number;
   entries: readonly QueuedEntry[];
   onClear: () => void;
+  onDelete: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const unlisted = Math.max(0, count - entries.length);
@@ -81,6 +84,20 @@ export function QueueSheet({
                       </p>
                     ) : null}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    data-testid={`queue-delete-${String(index)}`}
+                    aria-label={`delete queued message ${String(index + 1)}`}
+                    title={
+                      unlisted > 0 ? 'Wait for the complete queue before deleting one message' : 'Delete this message'
+                    }
+                    disabled={unlisted > 0}
+                    onClick={() => onDelete(entry.id)}
+                    className="h-7 w-7 shrink-0 text-doom-faint hover:text-doom-red"
+                  >
+                    <TrashIcon className="h-3.5 w-3.5" />
+                  </Button>
                 </li>
               ))}
               {unlisted > 0 ? (

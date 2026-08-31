@@ -59,6 +59,7 @@ import {
   applySessionFrame,
   cancelDialog,
   clearQueuedMessages,
+  deleteQueuedMessage,
   dropSessionStore,
   loadModelChoices,
   queueFollowUp,
@@ -615,8 +616,8 @@ describe('session actions', () => {
   it('replaces local queue rows from legacy and protocol snapshots', () => {
     applySessionFrame('s1', { type: 'queue_update', steering: ['interrupt'], followUp: ['later'] });
     expect(sessionStoreFor('s1').state.entries).toMatchObject([
-      { kind: 'queued', text: 'interrupt' },
-      { kind: 'queued', text: 'later' },
+      { kind: 'queued', text: 'interrupt', delivery: 'steer' },
+      { kind: 'queued', text: 'later', delivery: 'followUp' },
     ]);
 
     applyProtocolQueue('s1', [{ kind: 'queued', id: 'server-q1', text: 'after that' }]);
@@ -634,6 +635,30 @@ describe('session actions', () => {
 
     expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
     expect(sent.map((item) => item.frame)).toEqual([{ type: 'follow_up', message: 'later' }, { type: 'clear_queue' }]);
+  });
+
+  it('deletes one known queue row and restores the others through Pi clear_queue', () => {
+    setActiveSession('s1');
+    const images = [{ type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' }];
+    queueFollowUp('first');
+    queueFollowUp('second', images);
+    const queued = sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued');
+    const first = queued[0];
+    if (first === undefined) throw new Error('Expected the first queued entry.');
+
+    deleteQueuedMessage(first.id, 3);
+    expect(sent).toHaveLength(2);
+    deleteQueuedMessage(first.id, 2);
+
+    expect(sessionStoreFor('s1').state.entries.filter((entry) => entry.kind === 'queued')).toMatchObject([
+      { text: 'second', delivery: 'followUp', images: [{ data: 'aGVsbG8=', mimeType: 'image/png' }] },
+    ]);
+    expect(sent.map((item) => item.frame)).toEqual([
+      { type: 'follow_up', message: 'first' },
+      { type: 'follow_up', message: 'second', images },
+      { type: 'clear_queue' },
+      { type: 'follow_up', message: 'second', images },
+    ]);
   });
 
   it('ask for every fact the rail shows', () => {
