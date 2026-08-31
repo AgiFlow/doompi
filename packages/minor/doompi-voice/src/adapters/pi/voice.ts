@@ -259,14 +259,14 @@ const VOICE_GROUP_SEGMENT = {
  *
  * `e` carries the mode the way every other minor mode publishes its toggle, and
  * the same command name serves both directions because the handler already
- * branches on the controller's state. `v` stays a one-shot action: dictating
+ * branches on the controller's state. `m` stays a one-shot action: dictating
  * once is not entering anything, so it never flips.
  */
 export function voiceLeaderBindings(autoActive: boolean): LeaderBinding[] {
   return [
     {
       id: 'voice.toggle',
-      path: [VOICE_GROUP_SEGMENT, { key: 'v', label: 'dictate', detail: 'one-shot manual dictation' }],
+      path: [VOICE_GROUP_SEGMENT, { key: 'm', label: 'manual', detail: 'one-shot manual dictation' }],
       command: { name: COMMAND_NAME },
     },
     {
