@@ -89,9 +89,9 @@
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
-    "@types/node": "26.2.0",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.4",
+    "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
     "@vitest/coverage-v8": "4.1.11",
     "react": "19.2.8",
     "react-dom": "19.2.8",

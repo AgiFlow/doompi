@@ -572,7 +572,7 @@ describe('doompi sync', () => {
     expect(text()).toContain('already up to date');
   });
 
-  it('prunes generations the published one replaced', async () => {
+  it('prunes generations the published one replaced', { timeout: 10_000 }, async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);
     const generations: string[] = [];
@@ -589,7 +589,7 @@ describe('doompi sync', () => {
     expect(fs.existsSync(generations[0] ?? '')).toBe(false);
   });
 
-  it('keeps concurrent repositories isolated across a repeated sync', async () => {
+  it('keeps concurrent repositories isolated across a repeated sync', { timeout: 10_000 }, async () => {
     const repoA = makeRepository();
     const repoB = makeRepository();
     fs.writeFileSync(

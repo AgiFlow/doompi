@@ -74,7 +74,7 @@
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.84.4",
-    "@types/node": "26.2.0",
+    "@types/node": "26.4.0",
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
