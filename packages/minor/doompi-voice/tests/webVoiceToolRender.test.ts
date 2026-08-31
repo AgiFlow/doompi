@@ -145,6 +145,10 @@ describe('voice tool result lines', () => {
     expect(texts(voiceResultLines('use_voice_tools', text('', { error: {} }), done))).toEqual([
       '✗ Voice capability failed.',
     ]);
+    expect(texts(voiceResultLines('use_voice_tools', text('', { results: [{}] }), done))).toEqual([
+      '✗ Voice batch failed · 1 call',
+      '✗ capability · failed',
+    ]);
   });
 
   it('falls back to the text with the outcome glyph', () => {

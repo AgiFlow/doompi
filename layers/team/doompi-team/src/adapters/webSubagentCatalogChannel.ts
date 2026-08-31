@@ -1,83 +1,140 @@
-import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type { HubChannelHost, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { type CatalogAgentInput, catalogModels, presentCatalog } from '../services/webSubagentCatalog.ts';
 import { SUBAGENT_CATALOG_TYPE, type SubagentCatalogPayload } from '../types/webSubagents.ts';
 import { AgentDiscoveryService, resolveActiveTeamModelSpecs } from './agents/discovery.ts';
+import { TEAM_API_BASE_PATH, TEAM_CATALOG_ROUTE, type TeamCatalogSnapshot } from './teamCatalogApi.ts';
 
 /** Agent files change rarely; discovery's own cache makes each look cheap. */
 const CATALOG_REFRESH_MS = 15_000;
 
-/** Reads the launchable agents for one directory; injectable so a test needs no agent files on disk. */
-export type CatalogReader = (cwd: string) => { agents: CatalogAgentInput[]; models: string[] };
+/** Injectable catalog read for tests and alternate hosts. Production reads through the session API. */
+export type CatalogReader = (cwd: string) => TeamCatalogSnapshot | Promise<TeamCatalogSnapshot>;
 
-export function defaultCatalogReader(): CatalogReader {
-  const discovery = new AgentDiscoveryService();
-  return (cwd) => ({
-    agents: discovery.discover(cwd, 'both').agents,
-    models: resolveActiveTeamModelSpecs() ?? [],
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCatalogSnapshot(value: unknown): TeamCatalogSnapshot {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.agents) ||
+    !value.agents.every(isRecord) ||
+    !Array.isArray(value.models)
+  ) {
+    throw new Error('Session catalog API returned an invalid payload.');
+  }
+  return {
+    agents: value.agents as unknown as CatalogAgentInput[],
+    models: value.models.filter((model): model is string => typeof model === 'string'),
+  };
+}
+
+async function readSessionCatalog(
+  host: HubChannelHost,
+  scope: HubSessionScope,
+  signal: AbortSignal,
+  fallback: CatalogReader,
+): Promise<TeamCatalogSnapshot> {
+  const response = await host.requestSessionApi(scope, {
+    basePath: TEAM_API_BASE_PATH,
+    path: TEAM_CATALOG_ROUTE,
+    method: 'GET',
+    signal,
   });
+  if (response.status === 404) return await fallback(scope.cwd);
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    const reason =
+      isRecord(payload) && typeof payload.error === 'string' ? payload.error : `HTTP ${String(response.status)}`;
+    throw new Error(`Session catalog API failed: ${reason}`);
+  }
+  return parseCatalogSnapshot(payload);
 }
 
 /**
- * The subagent catalog data channel: what each managed session's directory
- * can launch, published as 'subagent_catalog' payloads. Discovery runs once
- * per session on arrival, again at every subscribe, and on a slow tick so an
- * agent file written while the page is open shows up without a reload. A
- * failed read publishes an empty list with the reason rather than nothing.
+ * The subagent catalog data channel: what each managed session can launch.
+ *
+ * Discovery runs inside the session API because that process owns the active
+ * domain projection and its plugin agent directories. The hub refreshes and
+ * publishes that result, with local discovery only for older sessions lacking
+ * the API route.
  */
-export function createSubagentCatalogChannel(
-  read: CatalogReader = defaultCatalogReader(),
-  refreshMs = CATALOG_REFRESH_MS,
-): WebHubChannel {
+export function createSubagentCatalogChannel(read?: CatalogReader, refreshMs = CATALOG_REFRESH_MS): WebHubChannel {
   return {
     frameType: SUBAGENT_CATALOG_TYPE,
     start(host) {
       const scopes = new Map<string, HubSessionScope>();
-      const latest = new Map<string, string>();
+      const latestJson = new Map<string, string>();
+      const latestPayload = new Map<string, SubagentCatalogPayload>();
+      const generations = new Map<string, number>();
+      const abort = new AbortController();
+      const fallbackDiscovery = new AgentDiscoveryService();
+      const fallback: CatalogReader = (cwd) => ({
+        agents: fallbackDiscovery.discover(cwd, 'both').agents,
+        models: resolveActiveTeamModelSpecs() ?? [],
+      });
+      let closed = false;
 
-      const compute = (scope: HubSessionScope): SubagentCatalogPayload => {
-        try {
-          const { agents, models } = read(scope.cwd);
-          return { cwd: scope.cwd, agents: presentCatalog(agents), models: catalogModels(agents, models) };
-        } catch (error) {
-          const warning = error instanceof Error ? error.message : String(error);
-          return { cwd: scope.cwd, agents: [], models: [], warning };
-        }
-      };
-
-      /** Recomputes and remembers; publishes only what changed, so the tick stays quiet. */
-      const refresh = (scope: HubSessionScope, publish: boolean): SubagentCatalogPayload => {
-        const payload = compute(scope);
+      const commit = (scope: HubSessionScope, generation: number, payload: SubagentCatalogPayload): void => {
+        const active = scopes.get(scope.sessionId);
+        if (closed || active?.cwd !== scope.cwd || generations.get(scope.sessionId) !== generation) return;
         const json = JSON.stringify(payload);
-        if (latest.get(scope.sessionId) === json) return payload;
-        latest.set(scope.sessionId, json);
+        if (latestJson.get(scope.sessionId) === json) return;
+        latestJson.set(scope.sessionId, json);
+        latestPayload.set(scope.sessionId, payload);
         if (payload.warning !== undefined) {
           host.onNotice(`subagent catalog for ${scope.cwd} is unavailable (${payload.warning})`);
         }
-        if (publish) host.publish(scope.sessionId, payload);
-        return payload;
+        host.publish(scope.sessionId, payload);
+      };
+
+      const refresh = async (scope: HubSessionScope): Promise<void> => {
+        const generation = (generations.get(scope.sessionId) ?? 0) + 1;
+        generations.set(scope.sessionId, generation);
+        try {
+          const snapshot = await (read === undefined
+            ? readSessionCatalog(host, scope, abort.signal, fallback)
+            : read(scope.cwd));
+          commit(scope, generation, {
+            cwd: scope.cwd,
+            agents: presentCatalog(snapshot.agents),
+            models: catalogModels(snapshot.agents, snapshot.models),
+          });
+        } catch (error) {
+          if (closed || abort.signal.aborted) return;
+          const warning = error instanceof Error ? error.message : String(error);
+          commit(scope, generation, { cwd: scope.cwd, agents: [], models: [], warning });
+        }
       };
 
       const timer = setInterval(() => {
-        for (const scope of scopes.values()) refresh(scope, true);
+        for (const scope of scopes.values()) void refresh(scope);
       }, refreshMs);
 
       const source: HubChannelSource = {
         payloadFor(scope) {
-          // The snapshot travels on its own, so a fresh read is remembered but not also published.
-          return scopes.has(scope.sessionId) ? refresh(scope, false) : undefined;
+          if (!scopes.has(scope.sessionId)) return undefined;
+          void refresh(scope);
+          return latestPayload.get(scope.sessionId);
         },
         sessionAdded(scope) {
           scopes.set(scope.sessionId, scope);
-          refresh(scope, true);
+          void refresh(scope);
         },
         sessionRemoved(sessionId) {
           scopes.delete(sessionId);
-          latest.delete(sessionId);
+          latestJson.delete(sessionId);
+          latestPayload.delete(sessionId);
+          generations.delete(sessionId);
         },
         close() {
+          closed = true;
+          abort.abort();
           clearInterval(timer);
           scopes.clear();
-          latest.clear();
+          latestJson.clear();
+          latestPayload.clear();
+          generations.clear();
         },
       };
       return source;

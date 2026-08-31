@@ -28,6 +28,7 @@ import {
 import {
   abortRun,
   clearQueuedMessages,
+  deleteQueuedMessage,
   queueFollowUp,
   submitMessage,
   useActiveSession,
@@ -425,7 +426,12 @@ export function Composer() {
   if (prompt !== null) {
     return (
       <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
-        <QueueSheet count={queued} entries={queuedEntries} onClear={() => clearQueuedMessages(sessionId)} />
+        <QueueSheet
+          count={queued}
+          entries={queuedEntries}
+          onClear={() => clearQueuedMessages(sessionId)}
+          onDelete={(id) => deleteQueuedMessage(id, queued, sessionId)}
+        />
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
           <ComposerPrompt claim={prompt} sessionId={sessionId} />
         </div>
@@ -435,7 +441,12 @@ export function Composer() {
 
   return (
     <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
-      <QueueSheet count={queued} entries={queuedEntries} onClear={() => clearQueuedMessages(sessionId)} />
+      <QueueSheet
+        count={queued}
+        entries={queuedEntries}
+        onClear={() => clearQueuedMessages(sessionId)}
+        onDelete={(id) => deleteQueuedMessage(id, queued, sessionId)}
+      />
       <Popover
         open={completion !== null}
         onOpenChange={(next) => {

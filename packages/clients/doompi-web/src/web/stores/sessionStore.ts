@@ -30,6 +30,7 @@ import {
   prependHistory,
   reduceSession,
   replaceQueuedEntries,
+  removeQueuedEntry,
   type QueuedEntry,
   type SessionState,
   type TimelineEntry,
@@ -386,6 +387,34 @@ export function clearQueuedMessages(sessionId: string | null = activeSessionId()
   if (sessionId === null) return;
   sessionStoreFor(sessionId).setState(clearQueuedEntries);
   sendFrame(sessionId, clearQueueCommand());
+}
+
+/**
+ * Deletes one queued message through Pi's clear-only RPC queue contract.
+ *
+ * Clearing and replaying is safe only with a complete browser snapshot. The UI
+ * passes the authoritative count and disables this action while any rows are
+ * unlisted, so an unseen message is never lost during reconstruction.
+ */
+export function deleteQueuedMessage(
+  id: string,
+  knownQueueCount: number,
+  sessionId: string | null = activeSessionId(),
+): void {
+  if (sessionId === null) return;
+  const store = sessionStoreFor(sessionId);
+  const queued = store.state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
+  if (queued.length !== knownQueueCount || !queued.some((entry) => entry.id === id)) return;
+  const remaining = queued.filter((entry) => entry.id !== id);
+  store.setState((state) => removeQueuedEntry(state, id));
+  sendFrame(sessionId, clearQueueCommand());
+  for (const entry of remaining) {
+    const images: RpcImage[] = (entry.images ?? []).map((image) => ({ type: 'image', ...image }));
+    sendFrame(
+      sessionId,
+      entry.delivery === 'steer' ? steerCommand(entry.text, images) : followUpCommand(entry.text, images),
+    );
+  }
 }
 
 /**

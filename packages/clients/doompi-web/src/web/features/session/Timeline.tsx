@@ -11,6 +11,7 @@ import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
 import { useActivityGroups } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
+import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
 import { isSupportedImageMimeType, type SessionState, type TimelineEntry } from '../../lib/sessionModel.ts';
 import {
   requestOlderHistory,
@@ -64,6 +65,28 @@ function Gutter({ label, tone, trailing = false }: { label: string; tone: string
   return <span className={`shrink-0 text-[10px] font-bold ${placement} ${tone}`}>{label}</span>;
 }
 
+function ToolEntryRow({
+  entry,
+  sessionId,
+}: {
+  entry: Extract<TimelineEntry, { kind: 'tool' }>;
+  sessionId: string | null;
+}) {
+  const statuses = useActiveSession((state) => state.statuses);
+  const presentation = pluginToolRenderer(entry.name, statuses)?.timelinePresentation ?? 'tool';
+  return (
+    <div
+      data-testid="entry-tool-row"
+      data-tool-presentation={presentation}
+      className="flex flex-col gap-1 sm:flex-row sm:gap-3"
+    >
+      {presentation === 'tool' ? <Gutter label="tool" tone="text-doom-faint" /> : null}
+      <div className="min-w-0 flex-1">
+        <ToolCard entry={entry} sessionId={sessionId} />
+      </div>
+    </div>
+  );
+}
 const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
   if (entry.kind === 'user') {
     return (
@@ -131,16 +154,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
     );
   }
 
-  if (entry.kind === 'tool') {
-    return (
-      <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-        <Gutter label="tool" tone="text-doom-faint" />
-        <div className="min-w-0 flex-1">
-          <ToolCard entry={entry} sessionId={sessionId} />
-        </div>
-      </div>
-    );
-  }
+  if (entry.kind === 'tool') return <ToolEntryRow entry={entry} sessionId={sessionId} />;
 
   if (entry.kind === 'settled') {
     return (

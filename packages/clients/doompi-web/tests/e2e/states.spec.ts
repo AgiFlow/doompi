@@ -32,7 +32,7 @@ test('views queued follow-ups and can delete the queue', async ({ page, cockpit 
   await cockpit.session.waitForCommand('follow_up');
   await page.getByTestId('composer-input').fill('then report the bundle size');
   await page.getByTestId('composer-queue').click();
-  await cockpit.session.waitForCommand('follow_up');
+  await expect.poll(() => cockpit.session.received.filter((frame) => frame.type === 'follow_up').length).toBe(2);
 
   await expect(page.getByTestId('entry-queued')).toHaveCount(0);
   await expect(page.getByTestId('composer-queued')).toContainText('2 queued messages');
@@ -43,8 +43,16 @@ test('views queued follow-ups and can delete the queue', async ({ page, cockpit 
   await expect(page.getByTestId('queue-sheet')).toContainText('then run the packed-install gate');
   await expect(page.getByTestId('queue-sheet')).toContainText('then report the bundle size');
 
-  await page.getByTestId('queue-clear').click();
+  await page.getByTestId('queue-delete-0').click();
   await cockpit.session.waitForCommand('clear_queue');
+  await expect
+    .poll(() => cockpit.session.received.filter((frame) => frame.type === 'follow_up').at(-1)?.message)
+    .toBe('then report the bundle size');
+  await expect(page.getByTestId('queue-sheet-item')).toHaveCount(1);
+  await expect(page.getByTestId('queue-sheet')).not.toContainText('then run the packed-install gate');
+  await expect(page.getByTestId('queue-sheet')).toContainText('then report the bundle size');
+  await page.getByTestId('queue-clear').click();
+  await expect.poll(() => cockpit.session.received.filter((frame) => frame.type === 'clear_queue').length).toBe(2);
   await expect(page.getByTestId('queue-sheet')).toBeHidden();
   await expect(page.getByTestId('composer-queued')).toBeHidden();
 });

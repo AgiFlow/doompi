@@ -185,6 +185,7 @@ describe('protocol transcript projection', () => {
         kind: 'queued',
         id: 'queued-1',
         text: 'run the release checks',
+        delivery: 'steer',
         images: [{ data: 'cG5n', mimeType: 'image/png' }],
       },
     ]);

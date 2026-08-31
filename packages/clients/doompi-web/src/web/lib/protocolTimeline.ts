@@ -85,7 +85,7 @@ export function toTimelineEntries(transcript: readonly TranscriptItem[]): Timeli
   return transcript.map(timelineEntry);
 }
 
-/** Projects the protocol's authoritative pending input queue onto composer rows. */
+/** Projects the protocol's authoritative pending steer queue onto composer rows. */
 export function toQueuedEntries(queue: readonly UserTranscriptItem[]): QueuedEntry[] {
-  return queue.map((item) => ({ ...userEntry(item), kind: 'queued' }));
+  return queue.map((item) => ({ ...userEntry(item), kind: 'queued', delivery: 'steer' }));
 }

@@ -56,6 +56,8 @@ export interface QueuedEntry {
   kind: 'queued';
   id: string;
   text: string;
+  /** How Pi must receive this entry when the browser rebuilds the queue after deleting one item. */
+  delivery?: 'steer' | 'followUp';
   images?: UserImage[];
 }
 
@@ -709,8 +711,11 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
     case 'queue_update': {
       const steering = Array.isArray(frame.steering) ? frame.steering : [];
       const followUp = Array.isArray(frame.followUp) ? frame.followUp : [];
-      const queue = [...steering, ...followUp]
-        .map((entry, index) => ({ kind: 'queued' as const, id: `queue-${index}`, text: asString(entry) }))
+      const queue = [
+        ...steering.map((entry) => ({ text: asString(entry), delivery: 'steer' as const })),
+        ...followUp.map((entry) => ({ text: asString(entry), delivery: 'followUp' as const })),
+      ]
+        .map((entry, index) => ({ kind: 'queued' as const, id: `queue-${index}`, ...entry }))
         .filter((entry) => entry.text.length > 0);
       return replaceQueuedEntries(state, queue);
     }
@@ -779,7 +784,13 @@ export function appendUserPrompt(state: SessionState, text: string, images: User
 /** A follow-up waits for the current run, so it is marked rather than shown as sent. */
 export function appendQueued(state: SessionState, text: string, images: UserImage[] = []): SessionState {
   const id = `q${state.nextId}`;
-  const entry: QueuedEntry = { kind: 'queued', id, text, ...(images.length > 0 ? { images } : {}) };
+  const entry: QueuedEntry = {
+    kind: 'queued',
+    id,
+    text,
+    delivery: 'followUp',
+    ...(images.length > 0 ? { images } : {}),
+  };
   return withPendingUser(withEntry(state, entry), id, text, images);
 }
 
@@ -792,7 +803,12 @@ export function replaceQueuedEntries(state: SessionState, queue: readonly Queued
     const [existing] = remaining.splice(existingIndex, 1);
     return existing === undefined
       ? entry
-      : { ...entry, id: existing.id, ...(existing.images ? { images: existing.images } : {}) };
+      : {
+          ...entry,
+          id: existing.id,
+          ...(entry.delivery === undefined && existing.delivery !== undefined ? { delivery: existing.delivery } : {}),
+          ...(existing.images ? { images: existing.images } : {}),
+        };
   });
   const pendingUserEntries = [...state.pendingUserEntries];
   for (const entry of normalized) {
@@ -817,6 +833,14 @@ export function clearQueuedEntries(state: SessionState): SessionState {
   };
 }
 
+/** Removes one queued row and the optimistic reconciliation record tied to it. */
+export function removeQueuedEntry(state: SessionState, id: string): SessionState {
+  return {
+    ...state,
+    entries: state.entries.filter((entry) => entry.kind !== 'queued' || entry.id !== id),
+    pendingUserEntries: state.pendingUserEntries.filter((entry) => entry.id !== id),
+  };
+}
 export function clearDialog(state: SessionState): SessionState {
   return { ...state, dialog: null };
 }

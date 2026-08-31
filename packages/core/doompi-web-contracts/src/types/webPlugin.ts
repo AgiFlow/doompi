@@ -494,6 +494,8 @@ export interface ToolPromptContribution {
 export interface ToolRendererContribution {
   /** Tool names as registered with Pi (registerTool's `name`). */
   tools: string[];
+  /** Render outside the host's tool gutter when the item is conversational content rather than implementation detail. */
+  timelinePresentation?: 'tool' | 'message';
   /**
    * Claims a tool named only at runtime (an MCP server's tools) when no
    * plugin lists the name. The session's footer statuses come along so the
