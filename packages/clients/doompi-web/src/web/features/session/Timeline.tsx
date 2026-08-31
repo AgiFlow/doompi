@@ -48,17 +48,20 @@ const LIVE_TAIL_ENTRIES = 40;
 /**
  * The speaker's label.
  *
- * Leading, it holds a fixed column so every entry's text starts at the same
- * left edge and the labels line up down the page. Trailing, that column would
- * only push the label away from the block it names, so it sizes to its own
- * text and sits beside it.
+ * From `sm` up it holds a fixed column so every entry's text starts at the
+ * same left edge and the labels line up down the page; trailing, that column
+ * would only push the label away from the block it names, so it sizes to its
+ * own text and sits beside it.
+ *
+ * Below `sm` there is no column at all. A phone has no width to spend on a
+ * permanent left margin, so the label becomes a caption on its own line and
+ * the entry runs the full width of the screen.
  */
 function Gutter({ label, tone, trailing = false }: { label: string; tone: string; trailing?: boolean }) {
-  return (
-    <span className={`shrink-0 text-[10px] font-bold ${trailing ? 'text-left' : 'w-11 pt-0.5 text-right'} ${tone}`}>
-      {label}
-    </span>
-  );
+  const placement = trailing
+    ? 'w-full text-right sm:w-auto sm:text-left'
+    : 'w-full text-left sm:w-11 sm:pt-0.5 sm:text-right';
+  return <span className={`shrink-0 text-[10px] font-bold ${placement} ${tone}`}>{label}</span>;
 }
 
 const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
@@ -67,7 +70,12 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       // What the reader said sits inboard of what the session said, on its own
       // surface: the transcript is a conversation, and two lanes tell the two
       // voices apart faster than a gutter label alone.
-      <div data-testid="entry-user" className="flex items-center gap-3 pl-4 sm:pl-10">
+      // Column-reverse below `sm` keeps the trailing label reading as a
+      // caption above the block, the same place the other voices' labels sit.
+      <div
+        data-testid="entry-user"
+        className="flex flex-col-reverse gap-1 sm:flex-row sm:items-center sm:gap-3 sm:pl-10"
+      >
         <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
           <Markdown text={entry.text} />
           {entry.images && entry.images.length > 0 ? (
@@ -96,7 +104,11 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'assistant') {
     return (
-      <div data-testid="entry-assistant" data-streaming={entry.streaming} className="flex gap-3">
+      <div
+        data-testid="entry-assistant"
+        data-streaming={entry.streaming}
+        className="flex flex-col gap-1 sm:flex-row sm:gap-3"
+      >
         <Gutter label="pi" tone="text-doom-magenta" />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {entry.thinking ? (
@@ -121,7 +133,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'tool') {
     return (
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
         <Gutter label="tool" tone="text-doom-faint" />
         <div className="min-w-0 flex-1">
           <ToolCard entry={entry} sessionId={sessionId} />
@@ -132,7 +144,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'settled') {
     return (
-      <div data-testid="entry-settled" className="flex items-center gap-3 pl-14">
+      <div data-testid="entry-settled" className="flex items-center gap-3 sm:pl-14">
         <Separator className="flex-1" />
         <span className="text-[10px] text-doom-faint">
           agent settled{entry.tools > 0 ? ` · ${entry.tools} tool${entry.tools === 1 ? '' : 's'}` : ''}
@@ -147,8 +159,13 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
   // shouts; an informational one reads as a quiet system line.
   const isError = entry.tone === 'error';
   return (
-    <div data-testid="entry-notice" data-tone={entry.tone} className="flex gap-3">
-      <Gutter label={isError ? '!' : '·'} tone={isError ? 'text-doom-red' : 'text-doom-faint'} />
+    <div data-testid="entry-notice" data-tone={entry.tone} className="flex gap-2 sm:gap-3">
+      {/* One character wide, so it stays beside its line even on a phone. */}
+      <span
+        className={`shrink-0 pt-0.5 text-[10px] font-bold sm:w-11 sm:text-right ${isError ? 'text-doom-red' : 'text-doom-faint'}`}
+      >
+        {isError ? '!' : '·'}
+      </span>
       <p className={`min-w-0 flex-1 break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}>
         {entry.text}
       </p>
@@ -323,7 +340,7 @@ export function Transcript({
         className={
           compact
             ? 'flex flex-1 flex-col gap-2 overflow-y-auto px-2.5 py-2'
-            : 'flex flex-1 flex-col gap-[18px] overflow-y-auto px-3 py-4 sm:px-[26px] sm:py-[22px]'
+            : 'flex flex-1 flex-col gap-[18px] overflow-y-auto px-2 py-4 sm:px-[26px] sm:py-[22px]'
         }
       >
         {visibleEntries.map((entry, index) => (
