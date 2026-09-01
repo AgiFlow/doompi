@@ -814,7 +814,9 @@ describe('doom autocompact extension', () => {
     harness.setUsage(115_000);
     await harness.emit('agent_settled');
     expect(harness.generationRequests).toHaveLength(1);
-    expect(harness.notify).toHaveBeenCalledWith('Doom autocompact baseline captured at 30000 tokens.', 'info');
+    expect(
+      harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
+    ).toMatchObject({ data: { baselineTokens: 30_000, baselinePending: false } });
   });
 
   it('records delegation failures and retries only after the parent branch advances', async () => {
@@ -1212,10 +1214,6 @@ describe('doom autocompact extension', () => {
 
     harness.setUsage(319_395);
     await harness.emit('agent_settled');
-    expect(harness.notify).not.toHaveBeenCalledWith(
-      expect.stringContaining('baseline captured at 319395'),
-      expect.anything(),
-    );
     expect(
       harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
     ).toMatchObject({ data: { checkpointQueue: [], baselinePending: true } });
@@ -1224,7 +1222,6 @@ describe('doom autocompact extension', () => {
     harness.setUsage(30_000);
     await harness.emit('agent_settled');
 
-    expect(harness.notify).toHaveBeenCalledWith('Doom autocompact baseline captured at 30000 tokens.', 'info');
     expect(
       harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
     ).toMatchObject({ data: { baselineTokens: 30_000, baselinePending: false, checkpointQueue: [] } });
@@ -1239,7 +1236,9 @@ describe('doom autocompact extension', () => {
     harness.setUsage(150_000);
     await harness.emit('session_start', { reason: 'startup' });
 
-    expect(harness.notify).toHaveBeenCalledWith('Doom autocompact baseline captured at 150000 tokens.', 'info');
+    expect(
+      harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
+    ).toMatchObject({ data: { baselineTokens: 150_000, baselinePending: false } });
   });
 
   it('aborts in-flight summarization whenever the session generation is replaced', async () => {

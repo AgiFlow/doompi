@@ -630,7 +630,6 @@ export function installAutocompactRuntime(
       retainedMessages: retainedMessagesAfterSnapshot(branch, state.snapshotLeafId),
     };
 
-    notify(ctx, `Doom autocompact pass ${pass} context commit started.`);
     const committedWhileIdle = ctx.isIdle();
     pi.sendMessage({ customType: CONTEXT_MESSAGE_TYPE, content: summary, display: false, details });
     const contextMessageLeafId = workingLeafId(ctx);
@@ -671,7 +670,6 @@ export function installAutocompactRuntime(
         ...runtimeTelemetryAttributes(runtimeSnapshot),
       }),
     );
-    notify(ctx, `Doom autocompact context committed. Baseline will be captured from the next settled context.`);
     // A mid-run commit needs no resume steer: the agent is already continuing.
     if (committedWhileIdle) resumeAgent('Asynchronous compaction completed.');
     return true;
@@ -709,7 +707,6 @@ export function installAutocompactRuntime(
     checkpointController?.abort();
     checkpointController = new AbortController();
     const checkpointSignal = checkpointController.signal;
-    notify(ctx, `Doom autocompact summarization pass ${pass} started.`);
     const operation = telemetry
       .runInSpan('doom_autocompact.checkpoint', attributes, async () => {
         await telemetry.recordEvent(AUTOCOMPACT_EVENT.checkpointStarted, attributes);
@@ -754,7 +751,6 @@ export function installAutocompactRuntime(
         state.phase = STATE_PHASE.checkpointReady;
         state.pendingCheckpoint = checkpoint.trim();
         persist();
-        notify(currentContext, `Doom autocompact summarization pass ${pass} completed.`);
         if (currentContext) processProgress(currentContext);
       })
       .catch((error: unknown) => {
@@ -780,7 +776,6 @@ export function installAutocompactRuntime(
       state.baselineTokens = usage.tokens;
       state.baselinePending = false;
       persist();
-      notify(ctx, `Doom autocompact baseline captured at ${state.baselineTokens} tokens.`);
       return false;
     }
     const leafId = workingLeafId(ctx);
@@ -1001,10 +996,6 @@ export function installAutocompactRuntime(
         'autocompact.tokens_before': event.compactionEntry.tokensBefore,
         ...runtimeTelemetryAttributes(runtimeSnapshot),
       }),
-    );
-    notify(
-      ctx,
-      `Doom autocompact completed. Baseline will be captured from the next settled context. Next pass: ${state.pass}.`,
     );
   });
 }
