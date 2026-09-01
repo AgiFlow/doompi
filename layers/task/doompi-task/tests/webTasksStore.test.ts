@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { WebTask } from '../src/types/webTasks.ts';
 import {
-  requestTaskInstruction,
+  requestTaskEdit,
+  requestTaskMessage,
   requestTaskRemoval,
-  taskInstruction,
+  taskEditDraft,
+  taskEditInstruction,
+  taskMessageInstruction,
   tasks,
   tasksChannel,
 } from '../src/web/tasksStore.ts';
@@ -31,18 +35,38 @@ describe('task cockpit store', () => {
     tasks.reset();
   });
 
-  it('builds explicit prompts for edits, notes, and dependency-safe removal', () => {
-    expect(taskInstruction(4, 'edit', ' change owner ')).toContain('Update task #4');
-    expect(taskInstruction(4, 'note', ' use the API ')).toContain('note to the agent working on task #4');
+  it('names only the changed fields in an edit prompt', () => {
+    const task: WebTask = { id: 4, subject: 'Ship it', description: 'old plan', status: 'pending', blockedBy: [] };
+    expect(taskEditInstruction(task, taskEditDraft(task))).toBeNull();
 
+    const instruction = taskEditInstruction(task, { subject: 'Ship it', description: 'old plan', status: 'failed' });
+    expect(instruction).toContain('Update task #4');
+    expect(instruction).toContain('set status to failed');
+    expect(instruction).not.toContain('subject');
+
+    const cleared = taskEditInstruction(task, { subject: 'Ship it later', description: '  ', status: 'pending' });
+    expect(cleared).toContain('set subject to "Ship it later"');
+    expect(cleared).toContain('clear the description');
+  });
+
+  it('sends edits, agent messages, and dependency-safe removal as prompt frames', () => {
+    const task: WebTask = { id: 4, subject: 'Ship it', status: 'pending', blockedBy: [] };
     const frames: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
     const send = (sessionId: string, frame: Record<string, unknown>): void => {
       frames.push({ sessionId, frame });
     };
-    requestTaskInstruction(send, 's1', 4, 'note', 'use the API');
+
+    expect(requestTaskEdit(send, 's1', task, taskEditDraft(task))).toBe(false);
+    expect(requestTaskEdit(send, 's1', task, { subject: 'Ship it', description: '', status: 'in_progress' })).toBe(
+      true,
+    );
+    requestTaskMessage(send, 's1', 4, 'doompi-developer', ' use the API ');
     requestTaskRemoval(send, 's1', 4);
-    expect(frames).toHaveLength(2);
-    expect(frames[0]?.frame.message).toContain('use the API');
-    expect(frames[1]?.frame.message).toContain('repair every dependency');
+
+    expect(frames).toHaveLength(3);
+    expect(frames[0]?.frame.message).toContain('set status to in_progress');
+    expect(frames[1]?.frame.message).toBe(taskMessageInstruction(4, 'doompi-developer', 'use the API'));
+    expect(frames[1]?.frame.message).toContain('doompi-developer');
+    expect(frames[2]?.frame.message).toContain('repair every dependency');
   });
 });

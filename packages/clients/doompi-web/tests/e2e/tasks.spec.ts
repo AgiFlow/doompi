@@ -21,6 +21,7 @@ function writeTasks(agentDir: string): void {
           description: 'original detail',
           activeForm: 'working now',
           status: 'in_progress',
+          delegation: { agent: 'worker' },
           blockedBy: [],
         },
         { id: 3, subject: 'Completed task', status: 'completed', blockedBy: [] },
@@ -37,7 +38,7 @@ async function expectLatestPrompt(cockpit: { session: { received: Array<Record<s
     .toBe(message);
 }
 
-test('task actions use an accessible menu without changing their commands', async ({ page, cockpit }) => {
+test('task actions use an accessible menu and leave one prompt per command', async ({ page, cockpit }) => {
   writeTasks(cockpit.agentDir);
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
@@ -52,39 +53,48 @@ test('task actions use an accessible menu without changing their commands', asyn
   ]);
   if (titleBox === null || menuBox === null) throw new Error('Task title and menu must be measurable.');
   expect(Math.abs(titleBox.y + titleBox.height / 2 - (menuBox.y + menuBox.height / 2))).toBeLessThanOrEqual(2);
-  await expect(page.getByRole('button', { name: /^(edit|note|remove)$/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^(edit|message agent|remove)$/i })).toHaveCount(0);
 
+  // Task #1 is undelegated, so there is no run to steer and the menu omits the message action.
   await pendingMenu.focus();
   await page.keyboard.press('Enter');
   const menu = page.getByTestId('activity-task-menu-list-1');
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem').allTextContents()).resolves.toEqual(['Edit', 'Note', 'Remove']);
+  await expect(menu.getByRole('menuitem').allTextContents()).resolves.toEqual(['Edit', 'Remove']);
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
   await expect(pendingMenu).toBeFocused();
 
   await page.keyboard.press('Space');
   await page.keyboard.press('Enter');
-  const edit = page.getByPlaceholder('what should change');
-  await expect(edit).toBeFocused();
-  await edit.fill('use the public API');
-  await page.getByTestId('activity-task-1').getByRole('button', { name: 'send' }).click();
+  const dialog = page.getByTestId('task-detail-dialog');
+  await expect(dialog).toHaveAttribute('data-mode', 'edit');
+  await expect(page.getByTestId('task-detail-subject-input')).toBeFocused();
+  await page.getByTestId('task-detail-description-input').fill('use the public API');
+  await page.getByTestId('task-detail-save').click();
   await expectLatestPrompt(
     cockpit,
-    'Update task #1 according to this instruction. Preserve a valid dependency graph: use the public API',
+    'Update task #1: set description to "use the public API". Change nothing else and keep the dependency graph valid.',
   );
-  await expect(edit).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
 
-  await pendingMenu.click();
-  await page.getByTestId('activity-task-note-1').click();
-  const note = page.getByPlaceholder('note for the agent');
-  await expect(note).toBeFocused();
-  await note.fill('check the edge case');
-  await page.getByTestId('activity-task-1').getByRole('button', { name: 'send' }).click();
+  await runningMenu.click();
+  await expect(page.getByTestId('activity-task-menu-list-2').getByRole('menuitem').allTextContents()).resolves.toEqual([
+    'Edit',
+    'Message agent',
+    'Remove',
+  ]);
+  await page.getByTestId('activity-task-message-2').click();
+  await expect(dialog).toHaveAttribute('data-mode', 'message');
+  const message = page.getByTestId('task-detail-message-input');
+  await expect(message).toBeFocused();
+  await message.fill('check the edge case');
+  await page.getByTestId('task-detail-send').click();
   await expectLatestPrompt(
     cockpit,
-    'Send this note to the agent working on task #1, then update the task if needed: check the edge case',
+    'Steer the worker run working on task #2 with this message, then update the task if its plan changed: check the edge case',
   );
+  await expect(dialog).toHaveCount(0);
 
   await runningMenu.click();
   await page.getByTestId('activity-task-remove-2').click();

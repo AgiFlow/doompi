@@ -10,15 +10,15 @@ import {
   EditIcon,
   KebabIcon,
   MessageIcon,
-  Textarea,
   TrashIcon,
   type DotTone,
 } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { WebTask } from '../types/webTasks.ts';
-import { requestTaskInstruction, requestTaskRemoval, tasks, type TaskInstructionKind } from './tasksStore.ts';
+import { TaskDetailDialog, type TaskDialogMode } from './TaskDetailDialog.tsx';
+import { requestTaskRemoval, tasks } from './tasksStore.ts';
 
 const STATUS_TONE: Readonly<Record<WebTask['status'], DotTone>> = {
   pending: 'muted',
@@ -28,29 +28,24 @@ const STATUS_TONE: Readonly<Record<WebTask['status'], DotTone>> = {
   deleted: 'muted',
 };
 
-interface EditorState {
+interface DialogState {
   taskId: number;
-  kind: TaskInstructionKind;
-  value: string;
+  mode: TaskDialogMode;
 }
 
 function TaskRow({
   task,
   sessionId,
   sendSessionFrame,
-  editor,
-  setEditor,
+  openDialog,
 }: {
   task: WebTask;
   sessionId: string;
   sendSessionFrame: WebPluginSlotProps['sendSessionFrame'];
-  editor: EditorState | undefined;
-  setEditor: (editor: EditorState | undefined) => void;
+  openDialog: (mode: TaskDialogMode) => void;
 }) {
-  const editing = editor?.taskId === task.id;
-  const editorRequested = useRef(false);
-  const editorInput = useRef<HTMLTextAreaElement>(null);
   const detail = task.status === 'in_progress' ? task.activeForm : task.description;
+  const agent = task.delegation?.agent;
   return (
     <div
       data-testid={`activity-task-${task.id}`}
@@ -59,12 +54,15 @@ function TaskRow({
     >
       <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-1.5">
         <Dot tone={STATUS_TONE[task.status]} pulse={task.status === 'in_progress'} />
-        <span
+        <button
+          type="button"
           data-testid={`activity-task-title-${task.id}`}
-          className={`min-w-0 truncate text-[10px] font-bold ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
+          title={task.subject}
+          onClick={() => openDialog('view')}
+          className={`min-w-0 truncate text-left text-[10px] font-bold hover:underline ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
         >
           <span className="text-doom-faint">#{task.id}</span> {task.subject}
-        </span>
+        </button>
         <span className="shrink-0 text-[8px] text-doom-faint">{task.status.replace('_', ' ')}</span>
         {task.status !== 'completed' && task.status !== 'deleted' ? (
           <DropdownMenu>
@@ -80,35 +78,20 @@ function TaskRow({
                 <KebabIcon className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              data-testid={`activity-task-menu-list-${task.id}`}
-              onCloseAutoFocus={(event) => {
-                if (!editorRequested.current) return;
-                editorRequested.current = false;
-                event.preventDefault();
-                editorInput.current?.focus();
-              }}
-            >
-              <DropdownMenuItem
-                data-testid={`activity-task-edit-${task.id}`}
-                onSelect={() => {
-                  editorRequested.current = true;
-                  setEditor({ taskId: task.id, kind: 'edit', value: '' });
-                }}
-              >
+            <DropdownMenuContent data-testid={`activity-task-menu-list-${task.id}`}>
+              <DropdownMenuItem data-testid={`activity-task-edit-${task.id}`} onSelect={() => openDialog('edit')}>
                 <EditIcon className="h-3 w-3" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                data-testid={`activity-task-note-${task.id}`}
-                onSelect={() => {
-                  editorRequested.current = true;
-                  setEditor({ taskId: task.id, kind: 'note', value: '' });
-                }}
-              >
-                <MessageIcon className="h-3 w-3" />
-                Note
-              </DropdownMenuItem>
+              {agent ? (
+                <DropdownMenuItem
+                  data-testid={`activity-task-message-${task.id}`}
+                  onSelect={() => openDialog('message')}
+                >
+                  <MessageIcon className="h-3 w-3" />
+                  Message agent
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 variant="destructive"
                 data-testid={`activity-task-remove-${task.id}`}
@@ -121,48 +104,12 @@ function TaskRow({
           </DropdownMenu>
         ) : null}
       </div>
-      {detail || task.delegation?.agent || task.blockedBy.length > 0 ? (
+      {detail || agent || task.blockedBy.length > 0 ? (
         <span className="truncate pl-3 text-[9px] text-doom-faint">
-          {task.delegation?.agent ? `[${task.delegation.agent}] ` : ''}
+          {agent ? `[${agent}] ` : ''}
           {detail ?? ''}
           {task.blockedBy.length > 0 ? ` · blocked by ${task.blockedBy.map((id) => `#${id}`).join(', ')}` : ''}
         </span>
-      ) : null}
-      {editing ? (
-        <form
-          className="flex flex-col gap-1 pl-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!editor.value.trim()) return;
-            requestTaskInstruction(sendSessionFrame, sessionId, task.id, editor.kind, editor.value);
-            setEditor(undefined);
-          }}
-        >
-          <Textarea
-            ref={editorInput}
-            autoFocus
-            rows={2}
-            size="sm"
-            value={editor.value}
-            placeholder={editor.kind === 'note' ? 'note for the agent' : 'what should change'}
-            onChange={(event) => setEditor({ ...editor, value: event.target.value })}
-            className="text-[9px]"
-          />
-          <div className="flex gap-2">
-            <Button type="submit" variant="link" size="xs" className="h-auto px-0 text-[8px]">
-              send
-            </Button>
-            <Button
-              type="button"
-              variant="link"
-              size="xs"
-              className="h-auto px-0 text-[8px] text-doom-faint"
-              onClick={() => setEditor(undefined)}
-            >
-              cancel
-            </Button>
-          </div>
-        </form>
       ) : null}
     </div>
   );
@@ -172,11 +119,12 @@ function TaskRow({
 export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginSlotProps) {
   const sessionTasks = useStore(tasks.store, (state) => tasks.select(state, sessionId).tasks);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [editor, setEditor] = useState<EditorState>();
+  const [dialog, setDialog] = useState<DialogState>();
   if (sessionId === null || sessionTasks.length === 0) return null;
 
   const active = sessionTasks.filter((task) => task.status === 'pending' || task.status === 'in_progress');
   const history = sessionTasks.filter((task) => task.status === 'completed' || task.status === 'failed');
+  const dialogTask = dialog ? sessionTasks.find((task) => task.id === dialog.taskId) : undefined;
   return (
     <section data-testid="activity-tasks" className="flex flex-col gap-2 border-b border-doom-border-soft px-3 py-3">
       <div className="flex items-center gap-2 px-1">
@@ -201,8 +149,7 @@ export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginS
               task={task}
               sessionId={sessionId}
               sendSessionFrame={sendSessionFrame}
-              editor={editor}
-              setEditor={setEditor}
+              openDialog={(mode) => setDialog({ taskId: task.id, mode })}
             />
           ))}
         </div>
@@ -232,13 +179,22 @@ export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginS
                   task={task}
                   sessionId={sessionId}
                   sendSessionFrame={sendSessionFrame}
-                  editor={editor}
-                  setEditor={setEditor}
+                  openDialog={(mode) => setDialog({ taskId: task.id, mode })}
                 />
               ))}
             </div>
           ) : null}
         </div>
+      ) : null}
+      {dialog && dialogTask ? (
+        <TaskDetailDialog
+          key={`${dialogTask.id}-${dialog.mode}`}
+          task={dialogTask}
+          sessionId={sessionId}
+          mode={dialog.mode}
+          send={sendSessionFrame}
+          onClose={() => setDialog(undefined)}
+        />
       ) : null}
     </section>
   );
