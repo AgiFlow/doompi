@@ -14,6 +14,7 @@ import {
 import type {
   AutocompactContextDetails,
   AutocompactFileDetails,
+  AutocompactRatioOverrides,
   AutocompactMessage,
   AutocompactPass,
   AutocompactState,
@@ -96,11 +97,35 @@ export function createInitialState(): AutocompactState {
   };
 }
 
-export function thresholdTokens(pass: AutocompactPass, contextWindow: number, baselineTokens = 0): number {
+/**
+ * The ratios each pass fires at, with configured values folded in.
+ *
+ * The ladder only works if it climbs, so a configured pass never sits below the
+ * one before it: a file that says pass 2 fires earlier than pass 1 gets pass 1's
+ * ratio for pass 2 rather than a pass that can never contribute.
+ */
+export function compactionRatios(configured: AutocompactRatioOverrides = {}): Record<AutocompactPass, number> {
+  let previous = 0;
+  const ratios = {} as Record<AutocompactPass, number>;
+  for (const pass of [1, 2, 3] as const) {
+    const ratio = Math.max(configured[pass] ?? COMPACTION_THRESHOLDS[pass].ratio, previous);
+    ratios[pass] = ratio;
+    previous = ratio;
+  }
+  return ratios;
+}
+
+export function thresholdTokens(
+  pass: AutocompactPass,
+  contextWindow: number,
+  baselineTokens = 0,
+  configured: AutocompactRatioOverrides = {},
+): number {
   const threshold = COMPACTION_THRESHOLDS[pass];
+  const ratio = compactionRatios(configured)[pass];
   const baseline = Math.max(0, Math.min(baselineTokens, contextWindow));
   const remaining = contextWindow - baseline;
-  const staged = baseline + Math.min(Math.floor(remaining * threshold.ratio), threshold.capTokens);
+  const staged = baseline + Math.min(Math.floor(remaining * ratio), threshold.capTokens);
   // Pi compacts natively above `contextWindow - reserveTokens`. A staged threshold above that
   // point can never fire, so the ladder would silently degrade into native compaction: on a
   // 200k window the raw pass 3 ratio lands at 190_000, while Pi already compacted at 183_616.

@@ -17,6 +17,24 @@ export interface PlanningModeConfig {
   subagents?: PlanningAgentConfig;
   plansDirectory?: string;
 }
+/**
+ * Ratios of the context window at which each autocompact pass fires.
+ *
+ * Held as plain numbers so a reader can see the ladder in one place. The
+ * package owns the defaults and the ordering rule; this only carries what the
+ * file said.
+ */
+export interface AutocompactThresholdConfig {
+  pass1?: number;
+  pass2?: number;
+  pass3?: number;
+}
+export interface AutocompactModeConfig {
+  enabled?: boolean;
+  model?: string;
+  thinking?: PlanningThinkingLevel;
+  thresholds?: AutocompactThresholdConfig;
+}
 export interface EditorConfig {
   command?: string;
 }
@@ -116,7 +134,7 @@ export interface DoomConfigTransitionRecord {
 export type DoomConfigPendingSelection = DoomConfigTransitionRecord & { readonly phase: 'pending' };
 
 export interface DoomConfig {
-  modes?: { planning?: PlanningModeConfig };
+  modes?: { planning?: PlanningModeConfig; autocompact?: AutocompactModeConfig };
   projectTrust: ProjectTrust;
   editor?: EditorConfig;
   voice?: VoiceConfig;

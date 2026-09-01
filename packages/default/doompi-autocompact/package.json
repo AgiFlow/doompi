@@ -26,7 +26,10 @@
     "directory": "packages/default/doompi-autocompact"
   },
   "files": [
-    "dist"
+    "dist",
+    "web",
+    "src/types/autocompactSettings.ts",
+    "src/types/constants.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -51,7 +54,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -59,6 +62,7 @@
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
@@ -78,6 +82,11 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiWeb": {
+    "pluginId": "autocompact",
+    "channels": [],
+    "client": "./web/index.ts"
   },
   "pi": {
     "extensions": [

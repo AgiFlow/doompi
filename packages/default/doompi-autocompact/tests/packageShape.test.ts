@@ -31,8 +31,14 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
       type: 'module',
     });
     expect(packageJson.private).toBeUndefined();
-    expect(packageJson.files).toEqual(expect.arrayContaining(['dist']));
-    expect(packageJson.files?.some((entry) => /^(src|tests|coverage|\.env)/u.test(entry))).toBe(false);
+    expect(packageJson.files).toEqual(expect.arrayContaining(['dist', 'web']));
+    // The cockpit client is TypeScript the host bundles, so `web/` and the
+    // descriptor table it imports ship as source. Nothing else under src/ does.
+    expect(packageJson.files?.filter((entry) => entry.startsWith('src/'))).toEqual([
+      'src/types/autocompactSettings.ts',
+      'src/types/constants.ts',
+    ]);
+    expect(packageJson.files?.some((entry) => /^(tests|coverage|\.env)/u.test(entry))).toBe(false);
   });
 
   it('uses local package tooling instead of rig-backed configuration', () => {

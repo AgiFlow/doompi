@@ -946,6 +946,53 @@ describe('Doom configuration', () => {
       'non-empty string',
     );
   });
+  it('parses autocompact settings in both the typed and the cockpit-written string form', () => {
+    const typed = parseDoomConfig(
+      'modes:\n  autocompact:\n    enabled: false\n    model: openai/gpt-5\n    thinking: low\n    thresholds:\n      pass1: 0.4\n',
+      '/config.yaml',
+    );
+    expect(typed.modes?.autocompact).toEqual({
+      enabled: false,
+      model: 'openai/gpt-5',
+      thinking: 'low',
+      thresholds: { pass1: 0.4 },
+    });
+
+    const written = parseDoomConfig(
+      "modes:\n  autocompact:\n    enabled: 'true'\n    thresholds:\n      pass2: '0.8'\n      pass3: '0.9'\n",
+      '/config.yaml',
+    );
+    expect(written.modes?.autocompact).toEqual({ enabled: true, thresholds: { pass2: 0.8, pass3: 0.9 } });
+  });
+  it('rejects autocompact values the runtime could not act on', () => {
+    expect(() => parseDoomConfig('modes:\n  autocompact:\n    enabled: sometimes\n', '/config.yaml')).toThrow(
+      'modes.autocompact.enabled to be true or false',
+    );
+    expect(() =>
+      parseDoomConfig('modes:\n  autocompact:\n    thresholds:\n      pass1: 1.5\n', '/config.yaml'),
+    ).toThrow('modes.autocompact.thresholds.pass1 to be a number');
+    expect(() => parseDoomConfig('modes:\n  autocompact:\n    thinking: turbo\n', '/config.yaml')).toThrow(
+      'modes.autocompact.thinking to be one of',
+    );
+    expect(() => parseDoomConfig('modes:\n  autocompact:\n    passes: 4\n', '/config.yaml')).toThrow(
+      'unsupported modes.autocompact field(s): passes',
+    );
+  });
+  it('merges autocompact per key so a repository can pin one axis', () => {
+    const globalConfig = parseDoomConfig(
+      'modes:\n  autocompact:\n    model: openai/gpt-5\n    thresholds:\n      pass1: 0.4\n      pass2: 0.7\n',
+      '/global.yaml',
+    );
+    const repositoryConfig = parseDoomConfig(
+      'modes:\n  autocompact:\n    thresholds:\n      pass2: 0.8\n',
+      '/repo.yaml',
+    );
+
+    expect(mergeDoomConfigs(globalConfig, repositoryConfig).modes?.autocompact).toEqual({
+      model: 'openai/gpt-5',
+      thresholds: { pass1: 0.4, pass2: 0.8 },
+    });
+  });
   it('publishes the config service and merges planning, editor, and adapter fallbacks', () => {
     const probe = new Context();
     new DoomConfigService(probe, configContext('/missing'), loadDoomConfig);

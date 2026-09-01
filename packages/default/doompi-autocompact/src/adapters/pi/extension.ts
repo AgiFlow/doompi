@@ -56,7 +56,12 @@ import { AUTOCOMPACT_EVENT, createAutocompactTelemetry } from '../telemetry/logS
 export type { ModelReference, SummarizationModel } from '../../services/summarizationModel.ts';
 export { parseModelReference, resolveSummarizationModel } from '../../services/summarizationModel.ts';
 
-import type { AutocompactContextDetails, AutocompactPass, AutocompactState } from '../../types/index.ts';
+import type {
+  AutocompactContextDetails,
+  AutocompactPass,
+  AutocompactRatioOverrides,
+  AutocompactState,
+} from '../../types/index.ts';
 
 const ROOT_WORKING_LEAF = '@root';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-autocompact';
@@ -375,20 +380,55 @@ function runCheckpointWorker(workerInput: Record<string, unknown>, signal: Abort
   });
 }
 
-function subagentModelConfig(cwd: string): PlanningAgentConfig | undefined {
-  try {
-    return loadDoomConfig(getHarnessState().root ?? cwd).modes?.planning?.subagents;
-  } catch {
-    process.emitWarning(
-      'Doom autocompact planning configuration could not be loaded; using the active session model instead.',
-    );
-    return undefined;
-  }
+interface AutocompactRuntimeConfig {
+  /** Off leaves compaction to Pi; unset is on. */
+  enabled: boolean;
+  /** The agent that writes the summaries, from autocompact's own keys or planning's. */
+  agent?: PlanningAgentConfig;
+  ratios: AutocompactRatioOverrides;
 }
 
-/** Explicit Doom model selection honors the configured planning subagent model. */
+const DEFAULT_RUNTIME_CONFIG: AutocompactRuntimeConfig = { enabled: true, ratios: {} };
+
+/**
+ * What the Doom config says about this package.
+ *
+ * `modes.autocompact` is read first and `modes.planning.subagents` is the
+ * fallback, because summarization borrowed the planning subagent model before
+ * it had keys of its own and existing files still spell it that way.
+ */
+export function autocompactRuntimeConfig(cwd: string): AutocompactRuntimeConfig {
+  let modes: ReturnType<typeof loadDoomConfig>['modes'];
+  try {
+    modes = loadDoomConfig(getHarnessState().root ?? cwd).modes;
+  } catch {
+    process.emitWarning('Doom autocompact configuration could not be loaded; using the active session model instead.');
+    return DEFAULT_RUNTIME_CONFIG;
+  }
+  const configured = modes?.autocompact;
+  const ownAgent: PlanningAgentConfig | undefined =
+    configured && (configured.model !== undefined || configured.thinking !== undefined)
+      ? {
+          ...(configured.model ? { model: configured.model } : {}),
+          ...(configured.thinking ? { thinking: configured.thinking } : {}),
+        }
+      : undefined;
+  const agent = ownAgent ?? modes?.planning?.subagents;
+  const thresholds = configured?.thresholds;
+  return {
+    enabled: configured?.enabled ?? true,
+    ...(agent ? { agent } : {}),
+    ratios: {
+      ...(thresholds?.pass1 === undefined ? {} : { 1: thresholds.pass1 }),
+      ...(thresholds?.pass2 === undefined ? {} : { 2: thresholds.pass2 }),
+      ...(thresholds?.pass3 === undefined ? {} : { 3: thresholds.pass3 }),
+    },
+  };
+}
+
+/** Explicit Doom model selection honors the configured summarization model. */
 export function resolveDoomSummarizationModel(ctx: ExtensionContext): SummarizationModel | undefined {
-  const configured = subagentModelConfig(ctx.cwd);
+  const configured = autocompactRuntimeConfig(ctx.cwd).agent;
   const reference = configured?.model ? parseModelReference(configured.model) : undefined;
   const configuredModel = reference ? ctx.modelRegistry.find(reference.provider, reference.modelId) : undefined;
   const model = configuredModel ?? ctx.model;
@@ -763,6 +803,11 @@ export function installAutocompactRuntime(
 
   const evaluateUsage = (ctx: ExtensionContext): boolean => {
     if (!active || state.phase !== STATE_PHASE.waiting || ctx.hasPendingMessages()) return false;
+    // Read per evaluation rather than once at install, so turning the ladder off
+    // or moving a threshold in settings takes effect on the next turn instead of
+    // the next session.
+    const configured = autocompactRuntimeConfig(ctx.cwd);
+    if (!configured.enabled) return false;
     const usage = ctx.getContextUsage();
     if (!usage || usage.tokens === null) return false;
     if (state.baselinePending) {
@@ -780,7 +825,7 @@ export function installAutocompactRuntime(
 
     for (const pass of [1, 2, 3] as const) {
       if (pass < state.pass || state.checkpointQueue.includes(pass) || state.exhaustedPasses.includes(pass)) continue;
-      if (usage.tokens >= thresholdTokens(pass, usage.contextWindow, state.baselineTokens)) {
+      if (usage.tokens >= thresholdTokens(pass, usage.contextWindow, state.baselineTokens, configured.ratios)) {
         state.checkpointQueue.push(pass);
       }
     }

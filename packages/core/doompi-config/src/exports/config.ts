@@ -16,6 +16,7 @@ export {
   DOOM_VOICE_ENGINES,
   DOOM_VOICE_TTS_ENGINES,
   mergeDoomConfigs,
+  parseAutocompactModeConfig,
   parseDoomConfig,
   parsePlanningModeConfig,
   resolveVoiceConfig,
