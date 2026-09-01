@@ -1,3 +1,25 @@
+## 0.0.1-alpha.8 (2026-09-01)
+
+### 🩹 Fixes
+
+- **doompi:** resolve global and web compositions ([3a6fd14](https://github.com/AgiFlow/doompi/commit/3a6fd14))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.10
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.7
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.10
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.8
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.43
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.7 (2026-09-01)
 
 ### 🚀 Features

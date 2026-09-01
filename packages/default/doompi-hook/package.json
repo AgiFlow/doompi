@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-hook",
-  "version": "0.0.1-alpha.23",
+  "version": "0.0.1-alpha.24",
   "description": "Claude-Code-compatible repository and plugin hook runner for DoomPi sessions.",
   "keywords": [
     "ai",
