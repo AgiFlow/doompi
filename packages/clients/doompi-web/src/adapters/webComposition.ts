@@ -11,7 +11,7 @@ const INDEX_FILE = 'index.html';
 const HUB_ROUTES_FILE = 'hub.routes.mjs';
 const SESSION_ROUTES_FILE = 'session.routes.mjs';
 const COMPOSITIONS_DIRECTORY = 'compositions';
-const COMPOSITION_CACHE_VERSION = 2;
+const COMPOSITION_CACHE_VERSION = 3;
 export interface ResolvedWebComposition {
   /** The synchronized repositories represented in this cockpit bundle. */
   repositoryRoots: readonly string[];

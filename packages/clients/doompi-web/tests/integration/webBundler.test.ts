@@ -9,6 +9,8 @@ import { loadHubChannels } from '../../src/adapters/webHubPluginLoader.ts';
 const workflowRoot = fileURLToPath(new URL('../../../../minor/doompi-workflow', import.meta.url));
 const planRoot = fileURLToPath(new URL('../../../../minor/doompi-plan', import.meta.url));
 const teamRoot = fileURLToPath(new URL('../../../../../layers/team/doompi-team', import.meta.url));
+const securityPackageRoot = fileURLToPath(new URL('../../../../core/doompi-web-security', import.meta.url));
+const securitySingletonFixtureRoot = fileURLToPath(new URL('../fixtures/security-singleton-plugin', import.meta.url));
 
 function bundledJsHas(assetsDir: string, needle: string): boolean {
   return fs
@@ -33,6 +35,55 @@ function brokenPackage(manifest: Record<string, unknown>): string {
   cleanups.push(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(manifest));
   return root;
+}
+
+interface InstalledSecuritySingletonPlugin {
+  pluginRoot: string;
+  physicalSecurityRoot: string;
+  publicSecurityRoot: string;
+}
+
+/** Reproduces an installed plugin resolving its own physical security package copy. */
+function installedSecuritySingletonPlugin(): InstalledSecuritySingletonPlugin {
+  const pluginRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-security-singleton-'));
+  cleanups.push(() => fs.rmSync(pluginRoot, { recursive: true, force: true }));
+  fs.cpSync(securitySingletonFixtureRoot, pluginRoot, { recursive: true });
+
+  const sourceManifestPath = path.join(securityPackageRoot, 'package.json');
+  const sourceManifest = JSON.parse(fs.readFileSync(sourceManifestPath, 'utf8')) as {
+    version?: unknown;
+    exports?: Record<string, unknown>;
+  };
+  if (typeof sourceManifest.version !== 'string') throw new Error('The security fixture needs a package version.');
+  const physicalSecurityRoot = path.join(
+    pluginRoot,
+    'node_modules',
+    '.pnpm',
+    `@agimon-ai+doompi-web-security@${sourceManifest.version}`,
+    'node_modules',
+    '@agimon-ai',
+    'doompi-web-security',
+  );
+  fs.mkdirSync(physicalSecurityRoot, { recursive: true });
+  fs.copyFileSync(sourceManifestPath, path.join(physicalSecurityRoot, 'package.json'));
+  fs.cpSync(path.join(securityPackageRoot, 'dist'), path.join(physicalSecurityRoot, 'dist'), { recursive: true });
+
+  const wrapperPath = path.join(physicalSecurityRoot, 'dist', 'browser-probe.mjs');
+  fs.writeFileSync(
+    wrapperPath,
+    "globalThis['__doompi_physical_security_copy__'] = true;\nexport * from './browser.mjs';\n",
+  );
+  const browserExport = sourceManifest.exports?.['./browser'];
+  if (typeof browserExport !== 'object' || browserExport === null || Array.isArray(browserExport)) {
+    throw new Error('The security fixture needs the ./browser export.');
+  }
+  (browserExport as Record<string, unknown>).import = './dist/browser-probe.mjs';
+  fs.writeFileSync(path.join(physicalSecurityRoot, 'package.json'), `${JSON.stringify(sourceManifest, null, 2)}\n`);
+
+  const publicSecurityRoot = path.join(pluginRoot, 'node_modules', '@agimon-ai', 'doompi-web-security');
+  fs.mkdirSync(path.dirname(publicSecurityRoot), { recursive: true });
+  fs.symlinkSync(physicalSecurityRoot, publicSecurityRoot, 'dir');
+  return { pluginRoot, physicalSecurityRoot, publicSecurityRoot };
 }
 
 afterEach(() => {
@@ -99,6 +150,22 @@ describe('the sync-time cockpit bundler', () => {
       'workflow_runs',
       'workflow_catalog',
     ]);
+  });
+
+  it('resolves an installed plugin to the host sealed transport singleton', { timeout: 120_000 }, async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-security-bundle-'));
+    cleanups.push(() => fs.rmSync(outDir, { recursive: true, force: true }));
+    const installed = installedSecuritySingletonPlugin();
+
+    expect(fs.realpathSync(installed.publicSecurityRoot)).toBe(fs.realpathSync(installed.physicalSecurityRoot));
+    expect(fs.realpathSync(installed.physicalSecurityRoot)).not.toBe(fs.realpathSync(securityPackageRoot));
+
+    const result = await bundleCockpitWeb({ pluginRoots: [installed.pluginRoot], outDir });
+
+    expect(result.pluginIds).toContain('security-singleton-probe');
+    expect(bundledJsHas(result.assetsDir, 'security-singleton-probe')).toBe(true);
+    expect(bundledJsHas(result.assetsDir, '__doompi_physical_security_copy__')).toBe(false);
+    expect(bundledJsHas(result.assetsDir, '@agimon-ai/doompi-web-security/browser')).toBe(false);
   });
 
   it('serves zero channels for assets without a registry, since nothing is built in', async () => {

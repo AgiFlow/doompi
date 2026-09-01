@@ -1,0 +1,12 @@
+{
+  "name": "@agimon-ai/doompi-security-singleton-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@agimon-ai/doompi-web-security": "0.0.1-alpha.7"
+  },
+  "doompiWeb": {
+    "pluginId": "security-singleton-probe",
+    "client": "./src/exports/webClient.ts"
+  }
+}

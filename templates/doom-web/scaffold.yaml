@@ -182,6 +182,8 @@ boilerplate:
       - tests/e2e/workflows.spec.ts
       - tests/fixtures/crash-plugin/package.json
       - tests/fixtures/crash-plugin/web/index.tsx
+      - tests/fixtures/security-singleton-plugin/package.json
+      - tests/fixtures/security-singleton-plugin/src/exports/webClient.ts
       - tests/integration/bridge.test.ts
       - tests/integration/hub.test.ts
       - tests/integration/packageApi.test.ts
