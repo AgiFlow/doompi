@@ -175,7 +175,9 @@ describe('serving a session package APIs', () => {
     expect((await request(server.socketPath!, '/api/plugin/runner/x')).status).toBe(200);
   });
 
-  it('records package API completion after a streamed body ends', async () => {
+  // A fast success is fully described by the request span, so the completion span is skipped.
+  // Emitting both per call made package API traffic 99.65% of all recorded spans.
+  it('skips the completion span for a fast successful streamed body', async () => {
     const spans: string[] = [];
     const telemetry = {
       runInSpan: async <T>(name: string, _attributes: Record<string, unknown>, callback: () => Promise<T> | T) => {
@@ -210,7 +212,42 @@ describe('serving a session package APIs', () => {
     cleanups.push(() => server.close());
 
     expect(await request(server.socketPath!, '/api/plugin/stream/read')).toEqual({ status: 200, body: 'done' });
+    expect(spans).toEqual(['doompi_server.package_api.request']);
+  });
+
+  // A failing status is exactly the case the completion span exists for: the request span ends
+  // at headers and never learns the status code.
+  it('records package API completion when the response fails', async () => {
+    const spans: string[] = [];
+    const attributes: Array<Record<string, unknown>> = [];
+    const telemetry = {
+      runInSpan: async <T>(name: string, spanAttributes: Record<string, unknown>, callback: () => Promise<T> | T) => {
+        spans.push(name);
+        attributes.push(spanAttributes);
+        return callback();
+      },
+    } as unknown as ServerTelemetry;
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      telemetry,
+      apis: [
+        {
+          basePath: 'stream',
+          start: () => ({
+            fetch: () => Response.json({ error: 'nope' }, { status: 503 }),
+            close: () => undefined,
+          }),
+        },
+      ],
+      onNotice: () => undefined,
+    });
+    cleanups.push(() => server.close());
+
+    expect((await request(server.socketPath!, '/api/plugin/stream/read')).status).toBe(503);
     expect(spans).toEqual(['doompi_server.package_api.request', 'doompi_server.package_api.complete']);
+    expect(attributes.at(-1)).toMatchObject({ status_code: 503 });
   });
 
   it('removes its socket when it closes, so a relaunch is not blocked by a stale one', async () => {
