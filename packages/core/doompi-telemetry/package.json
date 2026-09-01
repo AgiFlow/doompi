@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-telemetry",
-  "version": "0.0.1-alpha.44",
+  "version": "0.0.1-alpha.45",
   "description": "Host-neutral telemetry, OpenTelemetry controls, and Log Sink adapters for DoomPi sessions.",
   "keywords": [
     "agent-observability",

@@ -1,3 +1,31 @@
+## 0.0.1-alpha.7 (2026-09-01)
+
+### 🚀 Features
+
+- **doompi-task:** edit tasks from the cockpit detail dialog ([2e9822b](https://github.com/AgiFlow/doompi/commit/2e9822b))
+- **root:** lint browser code with oxlint react and jsx-a11y ([84a1b21](https://github.com/AgiFlow/doompi/commit/84a1b21))
+- **doompi-web:** refresh skill catalog on reload, restart hub on port clash ([7b8aabd](https://github.com/AgiFlow/doompi/commit/7b8aabd))
+
+### 🩹 Fixes
+
+- **doompi-web:** satisfy jsx-a11y rules in the client surfaces ([f23b79b](https://github.com/AgiFlow/doompi/commit/f23b79b))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.7
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.42
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.6 (2026-08-31)
 
 ### 🚀 Features

@@ -1,3 +1,22 @@
+## 0.0.1-alpha.24 (2026-09-01)
+
+### 🚀 Features
+
+- **doompi-web:** refresh skill catalog on reload, restart hub on port clash ([7b8aabd](https://github.com/AgiFlow/doompi/commit/7b8aabd))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.9
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.43
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.23 (2026-08-31)
 
 ### 🧱 Updated Dependencies
