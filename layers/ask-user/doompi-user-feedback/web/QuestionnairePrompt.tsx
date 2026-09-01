@@ -221,6 +221,9 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
 
   // A new request is a new questionnaire; nothing from the last one carries over.
   useEffect(() => {
+    // Remounting on dialog.id would be the alternative, but the prompt host owns the
+    // element, so the reset lives here.
+    // oxlint-disable-next-line react/set-state-in-effect
     setDraft(emptyDraft(questions.length));
     setCurrent(0);
     setCursor(0);

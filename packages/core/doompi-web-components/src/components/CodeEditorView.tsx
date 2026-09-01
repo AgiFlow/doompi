@@ -103,6 +103,9 @@ export function CodeEditorView({
   // a ref is what lets the editor be built once and still call the current
   // pair, rather than being rebuilt whenever the parent re-renders.
   const handlers = useRef({ onChange, onSelect });
+  // The document is seeded once from the value of the first render; the sync effect
+  // below owns every later change.
+  const initialValue = useRef(value);
   const compartments = useRef({
     language: new Compartment(),
     readOnly: new Compartment(),
@@ -122,7 +125,7 @@ export function CodeEditorView({
       state: EditorState.create({
         // The initial document only; every later change arrives as a
         // transaction from the effect below.
-        doc: value,
+        doc: initialValue.current,
         extensions: [
           ...FIXED_EXTENSIONS,
           language.of([]),
@@ -148,7 +151,7 @@ export function CodeEditorView({
       editor.destroy();
       view.current = null;
     };
-    // Built once. `value` seeds the document and the sync effect owns it after that.
+    // Built once.
   }, []);
 
   useEffect(() => {

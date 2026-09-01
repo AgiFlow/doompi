@@ -80,9 +80,13 @@ export function FilesBrowser({
   const shown = filterFileItems(items, query);
   const selected = shown[selectedIndex];
 
-  useEffect(() => {
+  // A shrinking filter can strand the cursor past the end, so the clamp happens
+  // while rendering the shorter list rather than in a pass after it paints.
+  const [lastShownLength, setLastShownLength] = useState(shown.length);
+  if (lastShownLength !== shown.length) {
+    setLastShownLength(shown.length);
     setSelectedIndex((current) => Math.min(current, Math.max(0, shown.length - 1)));
-  }, [shown.length]);
+  }
 
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });

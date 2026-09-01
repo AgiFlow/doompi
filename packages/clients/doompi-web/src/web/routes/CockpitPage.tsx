@@ -37,16 +37,23 @@ export function CockpitPage() {
 
   // Both side panels are temporary drawers on mobile. Route changes can also
   // come from plugin navigation, so they dismiss the drawers even when no
-  // drawer item produced the navigation event directly.
-  useEffect(() => {
+  // drawer item produced the navigation event directly. A modal must not
+  // compete with the mobile activity drawer for the viewport either, so an
+  // opening dialog closes it. Both are adjustments made while rendering the
+  // change rather than in an effect, so no extra pass paints the open drawer.
+  const routeKey = `${sessionId ?? ''}\u0000${tabId ?? ''}`;
+  const [lastRouteKey, setLastRouteKey] = useState(routeKey);
+  if (lastRouteKey !== routeKey) {
+    setLastRouteKey(routeKey);
     setRailOpen(false);
     setMobileActivityOpen(false);
-  }, [sessionId, tabId]);
+  }
 
-  // A modal must not compete with the mobile activity drawer for the viewport.
-  useEffect(() => {
+  const [lastDialogId, setLastDialogId] = useState(dialogId);
+  if (lastDialogId !== dialogId) {
+    setLastDialogId(dialogId);
     if (dialogId !== null) setMobileActivityOpen(false);
-  }, [dialogId]);
+  }
 
   // The route is the source of focus; the store follows it.
   useEffect(() => {

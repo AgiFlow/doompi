@@ -231,9 +231,18 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
     setError(result.error);
   }, [repositoryId]);
 
-  useEffect(() => {
+  // Drafts belong to the repository they were typed against, so switching
+  // discards them rather than replaying them onto another repository. Clearing
+  // while rendering the change keeps the stale drafts from painting once more.
+  const [lastRepositoryId, setLastRepositoryId] = useState(repositoryId);
+  if (lastRepositoryId !== repositoryId) {
+    setLastRepositoryId(repositoryId);
     setDrafts({});
     setNote('');
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- reads the repository settings over HTTP; the state is the response.
     void reload();
   }, [reload]);
 

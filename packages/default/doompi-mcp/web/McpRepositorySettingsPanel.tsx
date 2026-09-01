@@ -30,18 +30,26 @@ export function McpRepositorySettingsPanel({ repository, request, requestWithSte
   const repositoryId = repository?.id;
 
   useEffect(() => {
+    // Loading a repository's catalog is the external sync; the two resets clear the
+    // confirmations that belonged to the repository being navigated away from.
+    // oxlint-disable-next-line react/set-state-in-effect
     setConfirmDiscovery(false);
     setConfirmAuthorization(undefined);
     if (repositoryId) void loadMcpSettings(request, repositoryId);
   }, [repositoryId, request]);
 
   const authorization = state.repositoryId === repositoryId ? state.authorization : undefined;
+  // Only the id and status decide the subscription, so the effect reads those two
+  // primitives rather than the authorization object it belongs to.
+  const authorizationId = authorization?.id;
+  const authorizationStatus = authorization?.status;
   useEffect(() => {
-    if (!repositoryId || !authorization || TERMINAL_AUTHORIZATION.has(authorization.status)) return;
-    return followMcpAuthorization(request, repositoryId, authorization.id, () => {
+    if (!repositoryId || authorizationId === undefined) return;
+    if (authorizationStatus !== undefined && TERMINAL_AUTHORIZATION.has(authorizationStatus)) return;
+    return followMcpAuthorization(request, repositoryId, authorizationId, () => {
       void loadMcpSettings(request, repositoryId);
     });
-  }, [authorization?.id, authorization?.status, repositoryId, request]);
+  }, [authorizationId, authorizationStatus, repositoryId, request]);
 
   if (!repository) {
     return <p className="py-3 text-[10px] text-doom-faint">Select a repository to inspect its synced MCP catalog.</p>;

@@ -9,7 +9,7 @@ import {
   Input,
   Spinner,
 } from '@agimon-ai/doompi-web-components';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { AuthMethodType, LoginEvent, LoginFlowSnapshot, LoginPromptView } from '../../../types/auth.ts';
 
 export const METHOD_LABEL: Readonly<Record<AuthMethodType, string>> = { api_key: 'api key', oauth: 'oauth' };
@@ -141,10 +141,13 @@ export function LoginFlowDialog({
   const promptId = prompt?.id;
   const running = flow.status === 'running';
 
-  // A new question starts from an empty field.
-  useEffect(() => {
+  // A new question starts from an empty field, cleared while rendering the
+  // change so the new prompt never paints with the previous answer.
+  const [lastPromptId, setLastPromptId] = useState(promptId);
+  if (lastPromptId !== promptId) {
+    setLastPromptId(promptId);
     setValue('');
-  }, [promptId]);
+  }
 
   const submit = (): void => {
     if (!prompt || value.trim() === '') return;

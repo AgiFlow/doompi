@@ -1,7 +1,7 @@
 import { AlertIcon, Button, LoaderIcon, MicIcon, StopIcon } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useRef, useState } from 'react';
-import { ManualComposerRecorder } from './manualComposerRecorder.ts';
+import { ManualComposerRecorder, type ManualComposerRecorderState } from './manualComposerRecorder.ts';
 import { voiceActivityView } from './voiceActivityView.ts';
 
 const MANUAL_UNAVAILABLE_LABEL = 'manual voice is unavailable while autonomous voice is active';
@@ -9,12 +9,13 @@ const MANUAL_UNAVAILABLE_LABEL = 'manual voice is unavailable while autonomous v
 /** Voice control in the composer action slot on desktop and mobile. */
 export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
-  const [, renderManualState] = useState(0);
+  // The recorder publishes into state rather than being read during render, so the
+  // button re-renders from the phase it last announced.
+  const [manualState, setManualState] = useState<ManualComposerRecorderState>({ phase: 'idle' });
   const manualRecorder = useRef<ManualComposerRecorder | undefined>(undefined);
-  manualRecorder.current ??= new ManualComposerRecorder(appendComposerDraft, () =>
-    renderManualState((version) => version + 1),
-  );
-  const manualState = manualRecorder.current.snapshot();
+  manualRecorder.current ??= new ManualComposerRecorder(appendComposerDraft, () => {
+    setManualState(manualRecorder.current?.snapshot() ?? { phase: 'idle' });
+  });
   const manualPhase = manualState.phase;
   const manualError = manualState.error;
   const autonomous = view.mode === 'auto';

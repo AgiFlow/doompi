@@ -43,6 +43,8 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
   useEffect(() => {
     if (sessionId === null) return;
     let cancelled = false;
+    // The fetch below is the external system; this marks it in flight before it starts.
+    // oxlint-disable-next-line react/set-state-in-effect
     setLoading(true);
     void fetchPlan(sessionId).then((result) => {
       if (cancelled) return;

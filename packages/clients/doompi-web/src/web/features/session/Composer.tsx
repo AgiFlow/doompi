@@ -183,11 +183,17 @@ export function Composer() {
   const queued = Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length);
 
   // Completion and drag state are transient. The draft and attachments below
-  // come from the newly focused session immediately after this reset.
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
+  // come from the newly focused session immediately after this reset, so the
+  // reset is done during render rather than in an effect: a frame of the
+  // previous session's popup would otherwise be painted over the new draft.
+  const [shownSession, setShownSession] = useState(sessionId);
+  if (shownSession !== sessionId) {
+    setShownSession(sessionId);
     setCompletion(null);
     setDraggingFiles(false);
+  }
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
   }, [sessionId]);
 
   // Overlays hand the keyboard back here when they close. Re-registered when
@@ -237,6 +243,7 @@ export function Composer() {
   useEffect(() => {
     const trigger = triggerTokenAt(draft, caret);
     if (!trigger || !attached || dismissedToken === trigger.start) {
+      // eslint-disable-next-line react/set-state-in-effect -- the popup tracks an async, debounced search; closing it is the synchronous arm of that same effect.
       closeCompletion();
       return;
     }

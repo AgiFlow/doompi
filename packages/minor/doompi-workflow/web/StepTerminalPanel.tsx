@@ -91,6 +91,8 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
   const screenRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // A new run's screen has not ended yet; the subscription below is the external system.
+    // oxlint-disable-next-line react/set-state-in-effect
     setEnded(false);
     return followScreen(target.workspace, target.runKey, (event) => {
       setLines(event.lines);

@@ -1,5 +1,5 @@
 import { Button, Input, RadioGroup, RadioGroupCard } from '@agimon-ai/doompi-web-components';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { TunnelConfig } from '../../../types/remoteAccess.ts';
 import { updateRemoteSettings } from '../../stores/remoteAccessStore.ts';
 
@@ -19,7 +19,13 @@ function optional(value: string): string | undefined {
 export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
   const [draft, setDraft] = useState<TunnelConfig>(tunnel);
 
-  useEffect(() => setDraft(tunnel), [tunnel]);
+  // A saved or externally changed tunnel replaces the draft. Adjusting while
+  // rendering the change avoids a pass that still shows the old draft.
+  const [lastTunnel, setLastTunnel] = useState(tunnel);
+  if (lastTunnel !== tunnel) {
+    setLastTunnel(tunnel);
+    setDraft(tunnel);
+  }
 
   const hostname = draft.kind === 'named' ? draft.hostname.trim() : '';
   const invalidHostname = draft.kind === 'named' && !PUBLIC_HOSTNAME.test(hostname);

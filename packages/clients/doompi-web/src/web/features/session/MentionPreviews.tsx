@@ -62,11 +62,12 @@ export function MentionPreviewAsset({ mention, asset }: { mention: FileMention; 
 }
 
 function MentionPreview({ sessionId, mention }: { sessionId: string; mention: FileMention }) {
+  // Mounted under a key that carries the session and the path, so a different
+  // file arrives as a fresh component already in its loading state.
   const [asset, setAsset] = useState<SessionAsset | null>();
   useEffect(() => {
     let active = true;
     let held: SessionAsset | undefined;
-    setAsset(undefined);
     void loadSessionAsset(sessionId, mention.path)
       .then((loaded) => {
         if (!active) {
@@ -104,7 +105,7 @@ export function MentionPreviews({ sessionId, mentions }: { sessionId: string; me
     <div data-testid="mention-previews" className="flex flex-col gap-2">
       {previewable.map((mention) => (
         <div key={mention.path} data-testid="mention-preview" data-kind={mention.kind} data-path={mention.path}>
-          <MentionPreview sessionId={sessionId} mention={mention} />
+          <MentionPreview key={`${sessionId}\u0000${mention.path}`} sessionId={sessionId} mention={mention} />
         </div>
       ))}
     </div>

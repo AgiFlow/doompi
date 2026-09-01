@@ -288,13 +288,19 @@ export function Transcript({
     following.current = false;
   };
 
-  // A different fold starts at the bottom of its transcript.
+  // A different fold starts at the bottom of its transcript. The unread badge
+  // is cleared during render so the new fold never paints the old fold's badge;
+  // the scroll bookkeeping stays in the layout effect, where refs belong.
+  const [shownStore, setShownStore] = useState(store);
+  if (shownStore !== store) {
+    setShownStore(store);
+    setUnread(false);
+  }
   useLayoutEffect(() => {
     lastHeight.current = 0;
     firstId.current = null;
     anchor.current = null;
     following.current = true;
-    setUnread(false);
   }, [store]);
 
   useLayoutEffect(() => {

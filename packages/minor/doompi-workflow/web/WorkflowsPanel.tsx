@@ -367,6 +367,9 @@ function InlineStepOutput({
   const screenRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Clearing the mirror of the previous run before subscribing to the new one; the
+    // screen subscription below is the external system.
+    // oxlint-disable-next-line react/set-state-in-effect
     setLines([]);
     setCapabilities(undefined);
     setEnded(false);
