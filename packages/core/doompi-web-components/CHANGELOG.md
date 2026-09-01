@@ -1,3 +1,21 @@
+## 0.0.1-alpha.6 (2026-09-01)
+
+### 🚀 Features
+
+- **root:** lint browser code with oxlint react and jsx-a11y ([84a1b21](https://github.com/AgiFlow/doompi/commit/84a1b21))
+
+### 🩹 Fixes
+
+- **doompi-web-components:** satisfy jsx-a11y rules in shared components ([816f650](https://github.com/AgiFlow/doompi/commit/816f650))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.42
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.5 (2026-08-31)
 
 ### 🚀 Features

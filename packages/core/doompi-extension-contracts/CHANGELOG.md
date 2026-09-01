@@ -1,3 +1,13 @@
+## 0.0.1-alpha.45 (2026-09-01)
+
+### 🚀 Features
+
+- **doompi-web:** refresh skill catalog on reload, restart hub on port clash ([7b8aabd](https://github.com/AgiFlow/doompi/commit/7b8aabd))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.44 (2026-08-31)
 
 ### 🩹 Fixes

@@ -1,3 +1,13 @@
+## 0.0.1-alpha.42 (2026-09-01)
+
+### 🚀 Features
+
+- **root:** promote prefer-shared-primitive to error ([2b31b3c](https://github.com/AgiFlow/doompi/commit/2b31b3c))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.41 (2026-08-31)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-web to align it with other projects, there were no code changes.

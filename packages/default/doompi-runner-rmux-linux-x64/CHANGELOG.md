@@ -1,3 +1,7 @@
+## 0.0.1-alpha.45 (2026-09-01)
+
+This was a version bump only for @agimon-ai/doompi-runner-rmux-linux-x64 to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.44 (2026-08-31)
 
 This was a version bump only for @agimon-ai/doompi-runner-rmux-linux-x64 to align it with other projects, there were no code changes.

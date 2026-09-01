@@ -1,3 +1,30 @@
+## 0.0.1-alpha.46 (2026-09-01)
+
+### 🚀 Features
+
+- **doompi-team:** tag extension errors with the owning package ([d68f206](https://github.com/AgiFlow/doompi/commit/d68f206))
+- **doompi-team:** read the subagent catalog the session publishes ([978c823](https://github.com/AgiFlow/doompi/commit/978c823))
+- **root:** lint browser code with oxlint react and jsx-a11y ([84a1b21](https://github.com/AgiFlow/doompi/commit/84a1b21))
+
+### 🩹 Fixes
+
+- **doompi-team:** keep async job sessions that a concurrent track created ([51095a2](https://github.com/AgiFlow/doompi/commit/51095a2))
+- **doompi-team:** capture the fork source when the delegation runs ([5ee294e](https://github.com/AgiFlow/doompi/commit/5ee294e))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.12
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.9
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.45 (2026-08-31)
 
 ### 🚀 Features

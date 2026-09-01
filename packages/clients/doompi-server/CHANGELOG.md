@@ -1,3 +1,20 @@
+## 0.0.1-alpha.9 (2026-09-01)
+
+### 🔥 Performance
+
+- **doompi-server:** emit package API completion spans only when they say something ([d885c3a](https://github.com/AgiFlow/doompi/commit/d885c3a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.45
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.43
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.8 (2026-08-31)
 
 ### 🩹 Fixes

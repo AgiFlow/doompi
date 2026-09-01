@@ -1,3 +1,25 @@
+## 0.0.1-alpha.45 (2026-09-01)
+
+### 🚀 Features
+
+- **doompi-autocompact:** configurable summarization model and pass ladder ([1886c30](https://github.com/AgiFlow/doompi/commit/1886c30))
+
+### 🩹 Fixes
+
+- **doompi-autocompact:** stop announcing every context commit ([5b124ae](https://github.com/AgiFlow/doompi/commit/5b124ae))
+- **doompi-autocompact:** summarize on the session provider ([575ca44](https://github.com/AgiFlow/doompi/commit/575ca44))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.9
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.44 (2026-08-31)
 
 ### 🧱 Updated Dependencies

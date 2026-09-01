@@ -1,3 +1,20 @@
+## 0.0.1-alpha.35 (2026-09-01)
+
+### 🚀 Features
+
+- **root:** lint browser code with oxlint react and jsx-a11y ([84a1b21](https://github.com/AgiFlow/doompi/commit/84a1b21))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.9
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.34 (2026-08-31)
 
 ### 🧱 Updated Dependencies

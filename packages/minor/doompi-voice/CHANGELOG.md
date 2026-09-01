@@ -1,3 +1,27 @@
+## 0.0.1-alpha.46 (2026-09-01)
+
+### 🚀 Features
+
+- **root:** lint browser code with oxlint react and jsx-a11y ([84a1b21](https://github.com/AgiFlow/doompi/commit/84a1b21))
+
+### 🩹 Fixes
+
+- **doompi-voice:** announce the composer error as a live status ([4a7a603](https://github.com/AgiFlow/doompi/commit/4a7a603))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.45
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.7
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.45 (2026-08-31)
 
 ### 🚀 Features
