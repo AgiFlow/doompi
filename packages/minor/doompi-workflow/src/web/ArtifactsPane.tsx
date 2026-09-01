@@ -191,14 +191,28 @@ function ArtifactPreview({
     );
   }
   if (mimeType === 'application/pdf') {
-    return <object data-testid="artifact-pdf" data={rawUrl} type="application/pdf" className="min-h-[600px] w-full" />;
+    return (
+      <object
+        data-testid="artifact-pdf"
+        data={rawUrl}
+        type="application/pdf"
+        aria-label="PDF artifact"
+        className="min-h-[600px] w-full"
+      />
+    );
   }
   if (mimeType.startsWith('audio/')) {
-    return <audio data-testid="artifact-audio" src={rawUrl} controls preload="metadata" className="w-full" />;
+    return (
+      <audio data-testid="artifact-audio" src={rawUrl} controls preload="metadata" className="w-full">
+        <track kind="captions" />
+      </audio>
+    );
   }
   if (mimeType.startsWith('video/')) {
     return (
-      <video data-testid="artifact-video" src={rawUrl} controls preload="metadata" className="max-h-full max-w-full" />
+      <video data-testid="artifact-video" src={rawUrl} controls preload="metadata" className="max-h-full max-w-full">
+        <track kind="captions" />
+      </video>
     );
   }
   if (content.text !== undefined) {
