@@ -49,28 +49,22 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     }
   });
 
-  it('declares ESM, CJS, declarations, and the private worker build entry', () => {
+  it('declares ESM, CJS, and declaration build entries for the public exports only', () => {
     const config = readConfig('tsdown.config.ts');
     expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
     expect(config).toContain("'*': 'src/exports/**/*.ts'");
-    expect(config).toContain('src/adapters/process/checkpointWorker.ts');
+    expect(config).not.toContain('src/adapters/');
   });
 
-  it('keeps the standalone worker independent from package-local Pi resolution', () => {
-    const worker = readConfig('src/adapters/process/checkpointWorker.ts');
-
-    expect(worker).toContain('await import(input.piModuleUrl)');
-    expect(worker).not.toMatch(/import\s+\{[^}]*generateSummary[^}]*\}\s+from/u);
-  });
-  it('resolves the private worker by walking from the emitted adapter', () => {
+  it('summarizes through the session provider instead of a separate thread', () => {
     const adapter = readConfig('src/adapters/pi/extension.ts');
 
-    expect(adapter).toContain('findCheckpointWorkerUrl(import.meta.url)');
-    expect(adapter).not.toMatch(/new URL\(['"]\.\.\//u);
+    expect(adapter).toContain('provider.streamSimple(model, context, options)');
+    expect(adapter).not.toContain('node:worker_threads');
   });
 
-  it('keeps public exports closed while retaining the worker as a private artifact', () => {
+  it('keeps public exports closed to the built entry points', () => {
     const exportsMap = packageJson.exports ?? {};
     expect(Object.keys(exportsMap)).not.toContain('./*');
     for (const [subpath, target] of Object.entries(exportsMap)) {
@@ -84,6 +78,6 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     }
     expect(exportsMap['.']).toMatchObject({ import: './dist/index.mjs', require: './dist/index.cjs' });
     expect(exportsMap['./extensions/pi']).toMatchObject({ import: './dist/extensions/pi.mjs' });
-    expect(Object.keys(exportsMap).some((subpath) => subpath.includes('checkpointWorker'))).toBe(false);
+    expect(Object.keys(exportsMap).some((subpath) => subpath.includes('adapters'))).toBe(false);
   });
 });

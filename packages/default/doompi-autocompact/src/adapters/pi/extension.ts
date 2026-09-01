@@ -1,8 +1,3 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Worker } from 'node:worker_threads';
-
 import { getHarnessState, loadDoomConfig, type PlanningAgentConfig } from '@agimon-ai/doompi-config';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
@@ -20,6 +15,7 @@ import type { ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-wor
 import {
   buildSessionContext,
   DEFAULT_COMPACTION_SETTINGS,
+  generateSummary,
   sessionEntryToContextMessages,
 } from '@earendil-works/pi-coding-agent';
 import {
@@ -65,8 +61,6 @@ import type {
 
 const ROOT_WORKING_LEAF = '@root';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-autocompact';
-const PI_PACKAGE = '@earendil-works/pi-coding-agent';
-const PACKAGE_MANIFEST = 'package.json';
 const PLAN_DOCUMENT_ENTRY = 'agent-harness-plan-document';
 const FOOTER_SOURCE = 'doom-autocompact';
 const FOOTER_ORDER = 20;
@@ -104,11 +98,6 @@ interface CheckpointGenerationInput {
   previousCheckpoint?: string;
   context: ExtensionContext;
   signal: AbortSignal;
-}
-
-interface CheckpointWorkerResult {
-  checkpoint?: string;
-  error?: string;
 }
 
 export interface AutocompactDependencies {
@@ -297,89 +286,6 @@ function messagesForCheckpoint(
     .flatMap((entry) => sessionEntryToContextMessages(entry));
 }
 
-export function findCheckpointWorkerUrl(importFileUrl: string | URL): URL {
-  const importFilePath = fileURLToPath(importFileUrl);
-  let directory = dirname(importFilePath);
-
-  while (true) {
-    const workerPath = join(directory, 'checkpointWorker.mjs');
-    if (existsSync(workerPath)) return pathToFileURL(workerPath);
-
-    const parent = dirname(directory);
-    if (parent === directory) break;
-    directory = parent;
-  }
-
-  throw new Error(`Cannot find checkpointWorker.mjs by walking from ${importFilePath}.`);
-}
-
-export function findInstalledPiModuleUrl(
-  anchors: readonly string[] = [
-    ...(process.argv[1] ? [process.argv[1]] : []),
-    fileURLToPath(import.meta.url),
-    join(process.cwd(), PACKAGE_MANIFEST),
-  ],
-): string {
-  for (const anchor of anchors) {
-    const canonicalAnchor = existsSync(anchor) ? realpathSync(anchor) : resolve(anchor);
-    let directory = dirname(canonicalAnchor);
-
-    while (true) {
-      const packageRoot = join(directory, 'node_modules', PI_PACKAGE);
-      const manifestPath = join(packageRoot, PACKAGE_MANIFEST);
-      if (existsSync(manifestPath)) {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { main?: unknown };
-        if (typeof manifest.main === 'string') {
-          const entry = resolve(packageRoot, manifest.main);
-          if (existsSync(entry)) return pathToFileURL(entry).href;
-        }
-      }
-
-      const parent = dirname(directory);
-      if (parent === directory) break;
-      directory = parent;
-    }
-  }
-
-  throw new Error(`Cannot resolve ${PI_PACKAGE} from the DoomPi or host module trees.`);
-}
-
-function runCheckpointWorker(workerInput: Record<string, unknown>, signal: AbortSignal): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(findCheckpointWorkerUrl(import.meta.url), {
-      workerData: { ...workerInput, piModuleUrl: findInstalledPiModuleUrl() },
-    });
-    let settled = false;
-
-    const settle = (complete: () => void): void => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener('abort', abort);
-      complete();
-    };
-    const abort = (): void => {
-      settle(() => {
-        void worker.terminate();
-        reject(signal.reason instanceof Error ? signal.reason : new Error('Autocompact summarization aborted.'));
-      });
-    };
-
-    worker.once('message', (result: CheckpointWorkerResult) => {
-      settle(() => {
-        if (typeof result.checkpoint === 'string') resolve(result.checkpoint);
-        else reject(new Error(result.error ?? 'Autocompact summarization worker returned no checkpoint.'));
-      });
-    });
-    worker.once('error', (error) => settle(() => reject(error)));
-    worker.once('exit', (code) => {
-      if (code !== 0) settle(() => reject(new Error(`Autocompact summarization worker exited with code ${code}.`)));
-    });
-    signal.addEventListener('abort', abort, { once: true });
-    worker.unref();
-    if (signal.aborted) abort();
-  });
-}
-
 interface AutocompactRuntimeConfig {
   /** Off leaves compaction to Pi; unset is on. */
   enabled: boolean;
@@ -438,7 +344,16 @@ export function resolveDoomSummarizationModel(ctx: ExtensionContext): Summarizat
   return { model, ...(thinkingLevel ? { thinkingLevel } : {}) };
 }
 
-async function generateCheckpointWithPi(
+/**
+ * Summarization borrows the session's own provider instead of re-resolving one.
+ *
+ * The selected model can come from a Pi provider extension, and that extension's
+ * `streamSimple` closure lives only in this process: it is never in Pi's global api
+ * registry, so any other thread or process sees `No API provider registered for api`.
+ * Passing the composed provider in as `generateSummary`'s stream function keeps
+ * summarization on exactly the path the agent's own requests take.
+ */
+export async function generateCheckpointWithPi(
   input: CheckpointGenerationInput,
   resolveModel: (context: ExtensionContext) => SummarizationModel | undefined,
 ): Promise<string> {
@@ -446,19 +361,24 @@ async function generateCheckpointWithPi(
   if (!selection) throw new Error('No active model is available for autocompact summarization.');
   const auth = await input.context.modelRegistry.getApiKeyAndHeaders(selection.model);
   if (!auth.ok) throw new Error(auth.error);
-  return runCheckpointWorker(
-    {
-      messages: input.messages,
-      model: selection.model,
-      reserveTokens: DEFAULT_COMPACTION_SETTINGS.reserveTokens,
-      apiKey: auth.apiKey,
-      headers: auth.headers,
-      instructions: input.instructions,
-      previousCheckpoint: input.previousCheckpoint,
-      thinkingLevel: selection.thinkingLevel,
-      env: auth.env,
-    },
+  const provider = input.context.modelRegistry.getProvider(selection.model.provider);
+  if (!provider) {
+    throw new Error(`No provider is registered for "${selection.model.provider}" in this session.`);
+  }
+  return generateSummary(
+    input.messages,
+    selection.model,
+    DEFAULT_COMPACTION_SETTINGS.reserveTokens,
+    auth.apiKey,
+    // A null header value suppresses a provider default, which the narrower
+    // `generateSummary` signature does not model but every provider honors.
+    auth.headers as Record<string, string> | undefined,
     input.signal,
+    input.instructions,
+    input.previousCheckpoint,
+    selection.thinkingLevel,
+    (model, context, options) => provider.streamSimple(model, context, options),
+    auth.env,
   );
 }
 

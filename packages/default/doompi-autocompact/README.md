@@ -35,7 +35,8 @@ subject to token caps and Pi's native-compaction clamp:
 2. combine it with later messages and allow the model to decide whether compaction is ready;
 3. combine again and force compaction on the final pass.
 
-Summarization runs in a worker thread so the foreground session can continue. Checkpoints are
+Summarization runs asynchronously in the background, on the session's own provider, so a model
+registered by a Pi provider extension summarizes through that extension. Checkpoints are
 persisted as hidden session entries and used for later steering.
 
 DoomPi uses the configured planning subagent model and thinking level when available, then falls
