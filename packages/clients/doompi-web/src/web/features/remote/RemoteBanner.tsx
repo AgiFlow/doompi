@@ -20,13 +20,12 @@ export function RemoteBanner() {
 
   return (
     <div
-      role="status"
       data-testid="remote-banner"
       className={`flex items-center justify-between gap-3 px-4 py-1.5 text-[11px] ${
         failed ? 'bg-doom-tint-red text-doom-red' : 'bg-doom-tint-yellow text-doom-yellow'
       }`}
     >
-      <span className="flex min-w-0 items-center gap-2">
+      <output className="flex min-w-0 items-center gap-2">
         <Dot tone={failed ? 'red' : 'yellow'} />
         {failed ? (
           <span className="truncate">remote access failed: {view.error ?? 'the tunnel stopped'}</span>
@@ -37,7 +36,7 @@ export function RemoteBanner() {
             {` \u00b7 ${String(count)} device${count === 1 ? '' : 's'} paired`}
           </span>
         )}
-      </span>
+      </output>
       <span className="flex shrink-0 items-center gap-1">
         <Button variant="ghost" size="sm" data-testid="remote-banner-open" onClick={openRemoteDialog}>
           manage

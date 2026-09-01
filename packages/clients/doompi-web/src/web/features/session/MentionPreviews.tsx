@@ -38,7 +38,9 @@ export function MentionPreviewAsset({ mention, asset }: { mention: FileMention; 
         controls
         preload="metadata"
         className="max-h-[360px] max-w-full rounded border border-doom-border"
-      />
+      >
+        <track kind="captions" />
+      </video>
     );
   }
   if (mention.kind === 'pdf') {

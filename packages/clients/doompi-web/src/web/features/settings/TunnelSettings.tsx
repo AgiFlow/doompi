@@ -79,9 +79,10 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
 
       {draft.kind === 'named' ? (
         <div className="flex flex-col gap-2 rounded-md border border-doom-border bg-doom-deep p-3">
-          <label className="flex flex-col gap-1 text-[11px] text-doom-faint">
+          <label htmlFor="remote-tunnel-hostname" className="flex flex-col gap-1 text-[11px] text-doom-faint">
             hostname
             <Input
+              id="remote-tunnel-hostname"
               data-testid="remote-tunnel-hostname"
               value={draft.hostname}
               placeholder="doom.example.com"
@@ -92,9 +93,10 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
           {invalidHostname ? (
             <p className="text-[10px] text-doom-red">Enter a hostname only, without https://, a port, or a path.</p>
           ) : null}
-          <label className="flex flex-col gap-1 text-[11px] text-doom-faint">
+          <label htmlFor="remote-tunnel-token-file" className="flex flex-col gap-1 text-[11px] text-doom-faint">
             token file
             <Input
+              id="remote-tunnel-token-file"
               data-testid="remote-tunnel-token-file"
               value={draft.tokenFile ?? ''}
               placeholder="/Users/you/.cloudflared/doompi.token"
@@ -108,18 +110,20 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
           <details className="text-[11px] text-doom-faint">
             <summary className="cursor-pointer text-doom-text">locally managed tunnel options</summary>
             <div className="mt-2 flex flex-col gap-2">
-              <label className="flex flex-col gap-1">
+              <label htmlFor="remote-tunnel-name" className="flex flex-col gap-1">
                 tunnel name
                 <Input
+                  id="remote-tunnel-name"
                   data-testid="remote-tunnel-name"
                   value={draft.name ?? ''}
                   placeholder="doompi"
                   onChange={(event) => updateNamed({ name: event.target.value })}
                 />
               </label>
-              <label className="flex flex-col gap-1">
+              <label htmlFor="remote-tunnel-config-file" className="flex flex-col gap-1">
                 config file
                 <Input
+                  id="remote-tunnel-config-file"
                   data-testid="remote-tunnel-config-file"
                   value={draft.configFile ?? ''}
                   placeholder="/Users/you/.cloudflared/config.yml"

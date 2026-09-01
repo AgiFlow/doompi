@@ -109,7 +109,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
                   <img
                     key={`${image.mimeType}:${image.data.slice(0, 24)}:${String(index)}`}
                     src={`data:${image.mimeType};base64,${image.data}`}
-                    alt={`Attached image ${String(index + 1)}`}
+                    alt={`Attachment ${String(index + 1)}`}
                     data-testid="user-attached-image"
                     className="h-auto max-h-80 max-w-full rounded-md object-contain"
                   />
@@ -189,15 +189,11 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
 function BackgroundWorkNotice() {
   return (
-    <div
-      role="status"
-      data-testid="background-work-notice"
-      className="mt-auto flex shrink-0 justify-center px-3 pt-2 pb-3"
-    >
-      <div className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel px-3 py-2 text-center text-[10px] leading-relaxed text-doom-yellow">
+    <output data-testid="background-work-notice" className="mt-auto flex shrink-0 justify-center px-3 pt-2 pb-3">
+      <span className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel px-3 py-2 text-center text-[10px] leading-relaxed text-doom-yellow">
         Background work is still running. The agent will resume when results are ready.
-      </div>
-    </div>
+      </span>
+    </output>
   );
 }
 

@@ -21,7 +21,7 @@ export function RemoteAccessOptions() {
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex items-start justify-between gap-4">
+      <label htmlFor="remote-autoclose-switch" className="flex items-start justify-between gap-4">
         <span className="flex flex-col gap-0.5">
           <span className="text-xs text-doom-hi">close the tunnel automatically</span>
           <span className="text-[11px] text-doom-faint">
@@ -29,15 +29,17 @@ export function RemoteAccessOptions() {
           </span>
         </span>
         <Switch
+          id="remote-autoclose-switch"
           data-testid="remote-autoclose-switch"
           checked={settings.autoCloseEnabled}
           onCheckedChange={(checked) => void updateRemoteSettings({ autoCloseEnabled: checked })}
         />
       </label>
       {settings.autoCloseEnabled ? (
-        <label className="flex items-center justify-between gap-4 pl-4">
+        <label htmlFor="remote-autoclose-minutes" className="flex items-center justify-between gap-4 pl-4">
           <span className="text-[11px] text-doom-faint">after this many minutes</span>
           <Input
+            id="remote-autoclose-minutes"
             data-testid="remote-autoclose-minutes"
             type="number"
             min={1}
@@ -49,7 +51,7 @@ export function RemoteAccessOptions() {
         </label>
       ) : null}
 
-      <label className="flex items-start justify-between gap-4">
+      <label htmlFor="remote-expiry-switch" className="flex items-start justify-between gap-4">
         <span className="flex flex-col gap-0.5">
           <span className="text-xs text-doom-hi">expire paired sessions</span>
           <span className="text-[11px] text-doom-faint">
@@ -57,6 +59,7 @@ export function RemoteAccessOptions() {
           </span>
         </span>
         <Switch
+          id="remote-expiry-switch"
           data-testid="remote-expiry-switch"
           checked={settings.sessionExpiryEnabled}
           onCheckedChange={(checked) => void updateRemoteSettings({ sessionExpiryEnabled: checked })}
@@ -64,9 +67,10 @@ export function RemoteAccessOptions() {
       </label>
       {settings.sessionExpiryEnabled ? (
         <div className="flex items-center justify-between gap-4 pl-4">
-          <label className="flex items-center gap-2 text-[11px] text-doom-faint">
+          <label htmlFor="remote-idle-minutes" className="flex items-center gap-2 text-[11px] text-doom-faint">
             idle minutes
             <Input
+              id="remote-idle-minutes"
               data-testid="remote-idle-minutes"
               type="number"
               min={1}
@@ -76,9 +80,10 @@ export function RemoteAccessOptions() {
               onChange={(event) => void updateRemoteSettings({ idleMinutes: Number(event.target.value) })}
             />
           </label>
-          <label className="flex items-center gap-2 text-[11px] text-doom-faint">
+          <label htmlFor="remote-absolute-hours" className="flex items-center gap-2 text-[11px] text-doom-faint">
             total hours
             <Input
+              id="remote-absolute-hours"
               data-testid="remote-absolute-hours"
               type="number"
               min={1}
@@ -91,7 +96,7 @@ export function RemoteAccessOptions() {
         </div>
       ) : null}
 
-      <label className="flex items-start justify-between gap-4">
+      <label htmlFor="remote-sandbox-switch" className="flex items-start justify-between gap-4">
         <span className="flex flex-col gap-0.5">
           <span className="text-xs text-doom-hi">run the cockpit in a container</span>
           <span className="text-[11px] text-doom-faint">
@@ -99,6 +104,7 @@ export function RemoteAccessOptions() {
           </span>
         </span>
         <Switch
+          id="remote-sandbox-switch"
           data-testid="remote-sandbox-switch"
           checked={settings.sandbox.enabled}
           onCheckedChange={(checked) =>

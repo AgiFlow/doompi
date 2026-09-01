@@ -1,4 +1,5 @@
 import {
+  AlertIcon,
   BranchIcon,
   Button,
   buttonVariants,
@@ -141,7 +142,9 @@ function SessionCard({
     },
     now,
   );
-
+  // The same priority the status copy uses: a refusal outranks the question,
+  // and a restarting card is describing the restart, not the run it ended.
+  const awaitingInput = summary.awaitingInput && meta.attach !== 'refused' && !restarting;
   const beginRename = (): void => {
     setDraft(summary.name);
     setError('');
@@ -177,11 +180,23 @@ function SessionCard({
   const menuOpen = mode === 'menu';
   const details = (
     <>
-      <span
-        data-testid="session-status"
-        className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
-      >
-        {restarting ? 'restarting…' : status}
+      {/* The status line already says it, but it says it in the same dim voice
+          as the branch and the cwd. A blocked session is the one thing in this
+          list a reader must act on, so it gets a colour of its own. */}
+      <span className="flex items-start gap-1">
+        {awaitingInput ? (
+          <AlertIcon
+            data-testid="session-awaiting-input"
+            aria-label="waiting for your input"
+            className="mt-[2px] h-[11px] w-[11px] shrink-0 text-doom-red"
+          />
+        ) : null}
+        <span
+          data-testid="session-status"
+          className={`text-[11px] leading-snug ${awaitingInput ? 'text-doom-red' : active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
+        >
+          {restarting ? 'restarting…' : status}
+        </span>
       </span>
       {summary.git ? (
         <span

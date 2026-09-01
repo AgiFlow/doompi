@@ -139,11 +139,12 @@ export function NewSessionDialog({
           <DialogTitle>new session</DialogTitle>
         </DialogHeader>
         <DialogBody>
-          <label className="flex flex-col gap-1">
+          <label htmlFor="new-session-cwd" className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">
               working directory <span className="text-doom-faint/70">(type a folder name or paste a path)</span>
             </span>
             <Input
+              id="new-session-cwd"
               ref={cwdInput}
               data-testid="new-session-cwd"
               value={cwd}
@@ -194,9 +195,10 @@ export function NewSessionDialog({
               ))}
             </div>
           ) : null}
-          <label className="flex flex-col gap-1">
+          <label htmlFor="new-session-name" className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">name (optional)</span>
             <Input
+              id="new-session-name"
               data-testid="new-session-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
