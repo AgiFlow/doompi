@@ -54,7 +54,7 @@ export default defineConfig(({ command }) => {
         '@agimon-ai/doompi-web-components',
         // The sealed transport is a module singleton whose nonce counters every
         // plugin shares; a second copy would start counting at zero.
-        '@agimon-ai/doompi-web-security/browser',
+        '@agimon-ai/doompi-web-security',
         // CodeMirror's state and view are singletons in all but name: a
         // document built against one copy is rejected by an editor from the
         // other.
