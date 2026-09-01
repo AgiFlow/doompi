@@ -48,6 +48,41 @@ describe('extension error telemetry', () => {
     );
   });
 
+  // Every built Doom extension entry is named pi.mjs, so without the owning package the sink
+  // cannot say which extension failed. Three headless-child failures were recorded as bare
+  // 'pi.mjs' and were undiagnosable for exactly this reason.
+  it('names the owning package for a Doom extension whose entry basename is shared', () => {
+    const recordError = vi.fn(async () => undefined);
+
+    recordNonBlockingExtensionError(
+      { recordError },
+      { ...failure, extensionPath: '/repo/packages/minor/doompi-plan/dist/adapters/pi/pi.mjs' },
+    );
+
+    expect(recordError).toHaveBeenCalledWith(
+      EXTENSION_ERROR_EVENT,
+      expect.anything(),
+      expect.objectContaining({ 'extension.name': 'pi.mjs', 'extension.package': 'doompi-plan' }),
+      { includeException: true },
+    );
+  });
+
+  it('names the owning package for a layer extension', () => {
+    const recordError = vi.fn(async () => undefined);
+
+    recordNonBlockingExtensionError(
+      { recordError },
+      { ...failure, extensionPath: '/repo/layers/team/doompi-team/dist/adapters/pi/pi.mjs' },
+    );
+
+    expect(recordError).toHaveBeenCalledWith(
+      EXTENSION_ERROR_EVENT,
+      expect.anything(),
+      expect.objectContaining({ 'extension.package': 'doompi-team' }),
+      { includeException: true },
+    );
+  });
+
   it('does not turn telemetry transport rejection into a job failure', async () => {
     const recordError = vi.fn(async () => Promise.reject(new Error('telemetry unavailable')));
 
