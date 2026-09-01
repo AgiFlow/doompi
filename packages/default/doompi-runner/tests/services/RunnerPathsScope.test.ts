@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunnerPaths } from '../../src/adapters/RunnerPaths';
+import { MAX_COMPLETED_RUNNERS_ENV } from '../../src/exports/config';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 /** A pid no live process can hold, so liveness checks read as "owner gone". */
@@ -31,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.PI_CODING_AGENT_DIR;
+  delete process.env[MAX_COMPLETED_RUNNERS_ENV];
   fs.rmSync(agentDirectory, { recursive: true, force: true });
 });
 
@@ -261,9 +263,7 @@ describe('RunnerPaths session scoping', () => {
     const result = paths.sweepHistory(ONE_DAY_MS);
 
     expect(result.errors).toEqual([]);
-    expect(result.removed).toEqual(
-      [3, 4, 5, 6, 7, 8, 9].map((index) => paths.statePathFor(`done-${index}`)),
-    );
+    expect(result.removed).toEqual([3, 4, 5, 6, 7, 8, 9].map((index) => paths.statePathFor(`done-${index}`)));
     expect(fs.existsSync(paths.statePathFor('done-0'))).toBe(true);
     expect(fs.existsSync(paths.statePathFor('done-2'))).toBe(true);
     expect(fs.existsSync(paths.statePathFor('busy'))).toBe(true);

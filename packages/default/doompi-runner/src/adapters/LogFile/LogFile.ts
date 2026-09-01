@@ -17,6 +17,7 @@ export class LogFile implements ILogFile {
     // both unreadable.
     let handle = fs.openSync(logPath, 'w');
     let written = 0;
+    let closed = false;
 
     /**
      * A run that keeps producing output for hours would otherwise grow one file
@@ -29,8 +30,10 @@ export class LogFile implements ILogFile {
       fs.closeSync(handle);
       try {
         fs.renameSync(logPath, rotatedPath);
-      } catch {
-        // Holding the ceiling matters more than keeping the previous window.
+      } catch (error) {
+        // Holding the ceiling matters more than keeping the previous window,
+        // so the new file is opened either way and the loss is reported.
+        process.emitWarning(`Could not rotate runner log ${logPath}: ${String(error)}`);
       }
       handle = fs.openSync(logPath, 'w');
       written = 0;
@@ -50,10 +53,14 @@ export class LogFile implements ILogFile {
         return written;
       },
       close(): void {
+        // Closing twice is normal: a launch that fails closes the log before
+        // the exit handler does. Only a first close that fails is news.
+        if (closed) return;
+        closed = true;
         try {
           fs.closeSync(handle);
-        } catch {
-          // Closing twice is not worth reporting: the log is already flushed.
+        } catch (error) {
+          process.emitWarning(`Could not close runner log ${logPath}: ${String(error)}`);
         }
       },
     };
