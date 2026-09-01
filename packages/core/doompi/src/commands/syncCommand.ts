@@ -52,7 +52,7 @@ import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 import { loadDoomConfig } from '../services/config/projectTrust';
 import { createLayerResolvers, PERSONA_ENTRY, resolveExtensionComposition } from '../services/extensionAssembler.ts';
 import type { HarnessOptions } from '../types/interfaces/harness';
-import { findRepositoryRoot } from '../adapters/repository/repository';
+import { resolveDoomConfigurationRoot } from '../adapters/repository/repository';
 import { DOOMPI_DOMAINS_ENV, DOOMPI_MAJOR_MODE_ENV, DOOMPI_PROFILE_ENV } from './cli/matrixOptions.ts';
 import { parseHarnessArgs } from './cli/options.ts';
 import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
@@ -414,9 +414,11 @@ export class SyncCommand {
     const check = args.includes(CHECK_OPTION);
     const force = args.includes(FORCE_OPTION);
     const rest = args.slice(1).filter((argument) => argument !== CHECK_OPTION && argument !== FORCE_OPTION);
-    const inheritedRoot = environment[HARNESS_ROOT_ENV];
-    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
     const homeDirectory = this.homeDirectory ?? environment.HOME ?? os.homedir();
+    const inheritedRoot = environment[HARNESS_ROOT_ENV];
+    const repoRoot = inheritedRoot
+      ? path.resolve(inheritedRoot)
+      : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
     const defaultMajorMode = loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode;
     const defaultDomains = loadDomains(repoRoot, homeDirectory).defaultDomains;
     const parsed = parseHarnessArgs(

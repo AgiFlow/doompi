@@ -40,7 +40,9 @@ vi.mock('../../src/adapters/syncState.ts', () => ({
 vi.mock('../../src/services/extensionAssembler.ts', () => ({
   createLayerResolvers: mocks.createLayerResolvers,
 }));
-vi.mock('../../src/adapters/repository/repository.ts', () => ({ findRepositoryRoot: mocks.findRepositoryRoot }));
+vi.mock('../../src/adapters/repository/repository.ts', () => ({
+  resolveDoomConfigurationRoot: mocks.findRepositoryRoot,
+}));
 vi.mock('../../src/commands/syncCommand.ts', () => ({ selectionEnvironment: mocks.selectionEnvironment }));
 vi.mock('../../src/adapters/projectPiSettings.ts', () => ({
   DUPLICATE_REGISTRATION_DRIFT: 'duplicate DoomPi registration in .pi/settings.json',
@@ -165,7 +167,7 @@ describe('BuildCommand', () => {
 
     await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
 
-    expect(mocks.computeInputsHash).toHaveBeenCalledWith('/repo', syncedState.selection);
+    expect(mocks.computeInputsHash).toHaveBeenCalledWith('/repo', syncedState.selection, expect.any(String));
     expect(mocks.recordResolvedEntries).toHaveBeenCalledWith(majorModesConfig, layerResolvers);
     expect(mocks.buildSyncedRuntime).toHaveBeenCalledWith('/repo', { DOOMPI_ROOT: '/repo' }, expect.any(String));
     expect(text()).toContain('bootstrap.hash.mjs');
@@ -259,7 +261,7 @@ describe('BuildCommand', () => {
       'compile failed',
     );
 
-    expect(mocks.findRepositoryRoot).toHaveBeenCalledWith('/work');
+    expect(mocks.findRepositoryRoot).toHaveBeenCalledWith('/work', expect.any(String));
     expect(cleanup).toHaveBeenCalledOnce();
   });
 });

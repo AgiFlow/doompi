@@ -5,7 +5,7 @@ import { writeFileAtomic } from './serialization/json.ts';
 import { SYNC_REGISTRATION_VERSION } from './syncRegistration.ts';
 
 /** Protocol marker proving that the user package path is managed by DoomPi init. */
-export const PI_DISPATCHER_VERSION = 1;
+export const PI_DISPATCHER_VERSION = 2;
 
 const DISPATCHER_ENTRY = 'dispatcher.mjs';
 const PACKAGE_MANIFEST = 'package.json';
@@ -110,20 +110,19 @@ function registration(root) {
   return value;
 }
 
-function report(pi, message) {
-  pi.on('session_start', (_event, context) => context.ui.notify(\`doompi could not load this repository: \${message}. Run doompi init, then doompi sync.\`, WARNING));
+function report(pi, target, message) {
+  pi.on('session_start', (_event, context) => context.ui.notify(\`doompi could not load \${target}: \${message}. Run doompi init, then doompi sync.\`, WARNING));
 }
-
 export default async function doompiDispatcher(pi) {
-  const root = repositoryRoot(process.cwd());
-  if (!root) return;
+  const repository = repositoryRoot(process.cwd());
   try {
+    const root = repository ?? canonical(path.join(os.homedir(), '.pi', '.doom'));
     const record = registration(root);
     const loaded = await import(pathToFileURL(record.package.entry).href);
     if (typeof loaded.default !== 'function') throw new Error('recorded package entry has no extension factory');
     await loaded.default(pi);
   } catch (error) {
-    report(pi, error instanceof Error ? error.message : String(error));
+    report(pi, repository ? 'this repository' : 'the global composition', error instanceof Error ? error.message : String(error));
   }
 }
 `;
@@ -134,16 +133,27 @@ export function piExtensionDispatcherPath(piDirectory: string): string {
   return path.join(piDirectory, ...DOOM_PACKAGE_NAME.split('/'));
 }
 
-function managedManifest(directory: string): boolean {
+function managedManifestVersion(directory: string): number | undefined {
   try {
     const parsed = JSON.parse(fs.readFileSync(path.join(directory, PACKAGE_MANIFEST), 'utf8')) as {
       name?: unknown;
       doompiDispatcher?: unknown;
     };
-    return parsed.name === DOOM_PACKAGE_NAME && parsed.doompiDispatcher === PI_DISPATCHER_VERSION;
+    return parsed.name === DOOM_PACKAGE_NAME && Number.isSafeInteger(parsed.doompiDispatcher)
+      ? (parsed.doompiDispatcher as number)
+      : undefined;
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+function managedManifest(directory: string): boolean {
+  return managedManifestVersion(directory) === PI_DISPATCHER_VERSION;
+}
+
+function upgradeableManagedManifest(directory: string): boolean {
+  const version = managedManifestVersion(directory);
+  return version !== undefined && version > 0 && version <= PI_DISPATCHER_VERSION;
 }
 
 /** Whether init's dispatcher package has a supported protocol and complete entry. */
@@ -171,7 +181,7 @@ export function writePiExtensionDispatcher(piDirectory: string): string {
       throw new Error(`Refusing to replace unmanaged Pi extension path: ${directory}`);
     }
     fs.rmSync(directory, { force: true });
-  } else if (current && (!current.isDirectory() || !managedManifest(directory))) {
+  } else if (current && (!current.isDirectory() || !upgradeableManagedManifest(directory))) {
     throw new Error(`Refusing to replace unmanaged Pi extension path: ${directory}`);
   }
 

@@ -3,12 +3,13 @@
 import os from 'node:os';
 import { createCockpitContainer } from '../adapters/cockpitContainer.ts';
 import { handOffRemoteAccess } from '../adapters/cockpitHandoff.ts';
+import { ensureDoomInitialized } from '../adapters/doomInitialization.ts';
 import { hubAnswers, probeHub } from '../adapters/hubProbe.ts';
 import { packagedVersion, serveWeb } from '../adapters/httpServer.ts';
 import { defaultRemoteStateDir } from '../adapters/remoteAccessStore.ts';
 import { relaunchSessions } from '../adapters/sessionRelaunch.ts';
 import { REGISTRY_DIR_ENV, resolveRegistryDir } from '../services/registryStore.ts';
-import { isLoopbackHost, parseServeOptions } from '../services/serveOptions.ts';
+import { isLoopbackHost, parseServeOptions, serveHelp } from '../services/serveOptions.ts';
 import type { WebServer } from '../types/bridge.ts';
 import type { MigratingSession, RemoteAccessSettings } from '../types/remoteAccess.ts';
 
@@ -42,6 +43,15 @@ async function stopRunningHub(pid: number, host: string, port: number): Promise<
 
 async function main(): Promise<void> {
   const options = parseServeOptions(process.argv.slice(2));
+  if (options.help) {
+    process.stdout.write(serveHelp());
+    return;
+  }
+  if (options.version) {
+    process.stdout.write(`${packagedVersion()}\n`);
+    return;
+  }
+  await ensureDoomInitialized({ homeDirectory: os.homedir(), onNotice: notice });
   const url = `http://${options.host}:${String(options.port)}`;
   const stateDir = options.stateDir ?? defaultRemoteStateDir();
   const container = createCockpitContainer({ stateDir, onNotice: notice });
@@ -102,6 +112,7 @@ async function main(): Promise<void> {
       port: options.port,
       host: options.host,
       assetsDir: options.assetsDir,
+      compositionDir: options.directory,
       registryDir: resolveRegistryDir({
         flagValue: options.registryDir,
         envValue: process.env[REGISTRY_DIR_ENV],

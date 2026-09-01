@@ -30,7 +30,10 @@ describe('parseServeOptions', () => {
       host: '127.0.0.1',
       assetsDir: undefined,
       stateDir: undefined,
+      directory: undefined,
       cloudflaredPath: undefined,
+      help: false,
+      version: false,
     });
   });
 

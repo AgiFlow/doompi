@@ -35,15 +35,15 @@ function homeFor(root: string): string {
   return path.join(root, 'home');
 }
 
-function generationDirectory(root: string): string {
-  return syncGenerationDirectory(resolveSyncLocation(root, homeFor(root)), 'test-generation');
+function generationDirectory(root: string, homeDirectory: string = homeFor(root)): string {
+  return syncGenerationDirectory(resolveSyncLocation(root, homeDirectory), 'test-generation');
 }
 
-function validState(root: string, bootstrap?: string): Record<string, unknown> {
+function validState(root: string, bootstrap?: string, homeDirectory: string = homeFor(root)): Record<string, unknown> {
   return {
     version: SYNC_STATE_VERSION,
     root,
-    identity: resolveSyncLocation(root, homeFor(root)).identity,
+    identity: resolveSyncLocation(root, homeDirectory).identity,
     inputsHash: 'hash',
     compositionFingerprint: TEST_COMPOSITION_FINGERPRINT,
     selection: { majorMode: 'copilot', domains: ['default'], preset: 'default' },
@@ -55,9 +55,9 @@ function validState(root: string, bootstrap?: string): Record<string, unknown> {
   };
 }
 
-function writeStateText(root: string, text: string): void {
-  const location = resolveSyncLocation(root, homeFor(root));
-  const generationRoot = generationDirectory(root);
+function writeStateText(root: string, text: string, homeDirectory: string = homeFor(root)): void {
+  const location = resolveSyncLocation(root, homeDirectory);
+  const generationRoot = generationDirectory(root, homeDirectory);
   const statePath = path.join(generationRoot, 'state.json');
   const apiDirectory = path.join(generationRoot, 'api');
   const packageRoot = path.join(root, 'doompi-package');
@@ -84,12 +84,12 @@ function writeStateText(root: string, text: string): void {
       apiDirectory,
       package: { root: packageRoot, version: 'test', manifestPath: path.join(packageRoot, 'package.json'), entry },
     },
-    homeFor(root),
+    homeDirectory,
   );
 }
 
-function writeState(root: string, state: unknown): void {
-  writeStateText(root, JSON.stringify(state));
+function writeState(root: string, state: unknown, homeDirectory: string = homeFor(root)): void {
+  writeStateText(root, JSON.stringify(state), homeDirectory);
 }
 
 function writeFreshBuild(root: string): { artifact: string; input: string; manifest: string } {
@@ -139,6 +139,18 @@ describe('package bootstrap locator', () => {
     writeState(root, validState(root));
 
     expect(findSyncedRoot(nested, homeFor(root))).toBe(root);
+  });
+
+  it('uses the global synchronized composition outside repositories', () => {
+    const fixture = temporaryRoot();
+    const homeDirectory = path.join(fixture, 'home-global');
+    const globalRoot = path.join(homeDirectory, '.pi', '.doom');
+    const currentDirectory = path.join(fixture, 'Documents');
+    fs.mkdirSync(globalRoot, { recursive: true });
+    fs.mkdirSync(currentDirectory, { recursive: true });
+    writeState(globalRoot, validState(globalRoot, undefined, homeDirectory), homeDirectory);
+
+    expect(findSyncedRoot(currentDirectory, homeDirectory)).toBe(globalRoot);
   });
 
   it('keeps the nearest unsynced repository from inheriting parent state', () => {

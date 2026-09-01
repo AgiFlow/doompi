@@ -137,6 +137,16 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
       }
       return false;
     }
+    const remaining = readDrift(repoRoot);
+    if (!remaining.fresh) {
+      consecutiveFailures += 1;
+      const message = `sync completed but did not resolve drift (${describeSyncDrift({ fresh: false, reasons: remaining.reasons as never })})`;
+      if (message !== lastFailureNotice) {
+        notice(message);
+        lastFailureNotice = message;
+      }
+      return false;
+    }
     consecutiveFailures = 0;
     lastFailureNotice = undefined;
     notice('sync complete');

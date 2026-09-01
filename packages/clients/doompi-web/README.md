@@ -26,27 +26,31 @@ npm install -g @agimon-ai/doompi-web
 doompi-web
 ```
 
-Open `http://127.0.0.1:7433`. With no flags, the hub watches `~/.doompi/run`, attaches to registered sessions, and can start new sessions from the page. Sessions started by the cockpit use the server and agent from the same installation.
+Open `http://127.0.0.1:7433`. With no flags, the hub watches `~/.doompi/run`, attaches to registered sessions, and resolves the union of their synchronized cockpit compositions from `~/.pi/.doom/sync/registrations`. The directory that launches `doompi-web` does not select the bundle. Sessions started by the cockpit use the server and agent from the same installation.
 
-If a hub already answers on the port, a second `doompi-web` process prints its URL and exits.
+If `~/.pi/.doom` does not exist, the command runs its bundled `doompi init` before starting. If a hub already answers on the port, a second `doompi-web` process prints its URL and exits.
 
-To run this repository's build:
+To run this repository's build with its composition pinned and watched:
 
 ```bash
-pnpm cockpit
+pnpm cockpit:build
+pnpm doompi-web --dir=<PWD>
 ```
 
-The command builds the required packages and starts the hub on port 7433. Sessions created from the page use this checkout's builds.
+`--dir` accepts `--dir <path>` too. It synchronizes that repository before launch and watches it for development rebuilds.
 
-| Flag              | Default         | Meaning                                          |
-| ----------------- | --------------- | ------------------------------------------------ |
-| `--registry-dir`  | `~/.doompi/run` | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |
-| `--spawn-command` | this install    | Command launching sessions created from the page |
-| `--port`          | `7433`          | HTTP port                                        |
-| `--host`          | `127.0.0.1`     | Bind address                                     |
-| `--assets`        | bundled         | Override the built SPA directory                 |
-| `--state-dir`     | `~/.doompi/web` | Remote-access settings and the tunnel pid file   |
-| `--cloudflared`   | from `PATH`     | Tunnel binary (also `DOOMPI_CLOUDFLARED`)        |
+| Flag              | Default                  | Meaning                                          |
+| ----------------- | ------------------------ | ------------------------------------------------ |
+| `--dir`           | live-session union       | Pin, sync, and watch one repository composition  |
+| `--registry-dir`  | `~/.doompi/run`          | Registry to watch (also `DOOMPI_RUNTIME_DIR`)    |
+| `--spawn-command` | this install             | Command launching sessions created from the page |
+| `--port`          | `7433`                   | HTTP port                                        |
+| `--host`          | `127.0.0.1`              | Bind address                                     |
+| `--assets`        | synchronized or packaged | Override the built SPA directory                 |
+| `--state-dir`     | `~/.doompi/web`          | Remote-access settings and cockpit cache         |
+| `--cloudflared`   | from `PATH`              | Tunnel binary (also `DOOMPI_CLOUDFLARED`)        |
+| `-h`, `--help`    |                          | Print command help                               |
+| `-v`, `--version` |                          | Print the installed package version              |
 
 Install [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server) when you also want to run a session server directly. The hub does not require `doompi-server` on `PATH` to create sessions.
 

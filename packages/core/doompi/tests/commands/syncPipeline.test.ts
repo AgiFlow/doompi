@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildExecute: vi.fn(),
@@ -31,7 +34,11 @@ import { SyncPipeline } from '../../src/commands/syncPipeline.ts';
 
 const environment = { DOOMPI_ROOT: '/repo' };
 const output = { write: vi.fn((_chunk: string) => true) };
+const temporaryRoots: string[] = [];
 
+afterEach(() => {
+  for (const root of temporaryRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
 describe('SyncPipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,6 +85,36 @@ describe('SyncPipeline', () => {
       expect.objectContaining({ settingsMode: 'embedded', lockHeld: true }),
     );
     expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--major-mode', 'minimal'], environment, '/repo', output);
+  });
+
+  it('uses the global Doom configuration when the current directory has no repository', async () => {
+    const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-sync-pipeline-global-')));
+    temporaryRoots.push(fixture);
+    const homeDirectory = path.join(fixture, 'home');
+    const globalRoot = path.join(homeDirectory, '.pi', '.doom');
+    const currentDirectory = path.join(fixture, 'Documents');
+    fs.mkdirSync(globalRoot, { recursive: true });
+    fs.mkdirSync(currentDirectory, { recursive: true });
+    fs.writeFileSync(
+      path.join(globalRoot, 'modes.yaml'),
+      'layers: {}\ndefaultMajorMode: minimal\nmajorMode:\n  minimal: []\n',
+    );
+    const globalEnvironment = { HOME: homeDirectory };
+
+    await expect(
+      new SyncPipeline().execute(['sync', '--force'], globalEnvironment, currentDirectory, output),
+    ).resolves.toBe(0);
+
+    expect(mocks.ensureLayerPackages).toHaveBeenCalledWith(
+      expect.objectContaining({ repoRoot: globalRoot, environment: globalEnvironment }),
+    );
+    expect(mocks.buildExecute).toHaveBeenCalledWith(
+      ['build', '--force'],
+      globalEnvironment,
+      currentDirectory,
+      expect.any(Object),
+    );
+    expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--force'], globalEnvironment, currentDirectory, output);
   });
 
   it('keeps check mode read-only by skipping the package refresh and the build', async () => {

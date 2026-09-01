@@ -61,6 +61,7 @@ describe('configuration adapters', () => {
       expect(piConfigSource).toContain('trusted');
       expect(schemaSource).toContain('projectTrust');
       expect(piConfigSource).not.toMatch(/\.doom|loadDoomConfig/u);
+      expect(piConfigSource).not.toContain("from '@earendil-works/pi-coding-agent'");
     },
     ADAPTER_IMPORT_TIMEOUT_MS,
   );

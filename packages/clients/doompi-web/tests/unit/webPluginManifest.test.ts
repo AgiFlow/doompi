@@ -115,14 +115,30 @@ describe('the manifest scanner', () => {
     expect(plugins[0]?.isHost).toBe(false);
   });
 
+  it('accepts an external package that ships its built hub entry without its hub source', () => {
+    const host = pluginPackage({ name: 'host' });
+    const plugin = pluginPackage(
+      {
+        name: 'published',
+        doompiWeb: block({ hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
+      },
+      ['web/index.ts', 'dist/hub.mjs'],
+    );
+
+    expect(scanWebPlugins(host, [plugin]).map(({ pluginId }) => pluginId)).toEqual(['demo']);
+  });
+
   it('skips a plugin root with a missing entry, a malformed block, or an unreadable manifest, with a notice', () => {
     const host = pluginPackage({ name: 'host' });
     const fine = pluginPackage({ name: 'fine', doompiWeb: block({ pluginId: 'fine' }) });
     const missingClient = pluginPackage({ name: 'p', doompiWeb: block() }, []);
-    const missingHub = pluginPackage({
-      name: 'p',
-      doompiWeb: block({ pluginId: 'hubless', hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
-    });
+    const missingHub = pluginPackage(
+      {
+        name: 'p',
+        doompiWeb: block({ pluginId: 'hubless', hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
+      },
+      ['web/index.ts', 'src/hub.ts'],
+    );
     const malformed = pluginPackage({ name: 'p', doompiWeb: block({ pluginId: 'Bad Case' }) });
     const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-broken-'));
     cleanups.push(() => fs.rmSync(broken, { recursive: true, force: true }));
@@ -135,7 +151,7 @@ describe('the manifest scanner', () => {
     expect(plugins.map((p) => p.pluginId)).toEqual(['fine']);
     expect(notices).toHaveLength(4);
     expect(notices[0]).toMatch(/skipped: .*client\.entry '\.\/web\/index\.ts' does not exist/);
-    expect(notices[1]).toMatch(/skipped: .*hub\.entry '\.\/src\/hub\.ts' does not exist/);
+    expect(notices[1]).toMatch(/skipped: .*hub\.dist '\.\/dist\/hub\.mjs' does not exist/);
     expect(notices[2]).toMatch(/skipped: .*kebab-case/);
     expect(notices[3]).toMatch(/skipped: .*package\.json is unreadable/);
   });

@@ -1,12 +1,23 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { CONFIG_DIR_NAME, getAgentDir } from '@earendil-works/pi-coding-agent';
 import type { PiConfig, PiConfigLoadOptions, PiConfigPaths } from '../schemas/config/schema.ts';
 
 const SETTINGS_FILE_NAME = 'settings.json';
+const CONFIG_DIR_NAME = '.pi';
+const AGENT_DIR_NAME = 'agent';
+const PI_CODING_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
 const LEGACY_CONFIG_DIR_NAME = 'pi';
 
+function defaultAgentDirectory(homeDirectory: string): string {
+  const fallback = path.join(homeDirectory, CONFIG_DIR_NAME, AGENT_DIR_NAME);
+  if (homeDirectory !== os.homedir()) return fallback;
+  const configured = process.env[PI_CODING_AGENT_DIR_ENV]?.trim();
+  if (!configured) return fallback;
+  if (configured === '~') return homeDirectory;
+  if (configured.startsWith('~/')) return path.join(homeDirectory, configured.slice(2));
+  return path.resolve(configured);
+}
 function isObject(value: unknown): value is PiConfig {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -60,7 +71,7 @@ function projectIsTrusted(value: PiConfigLoadOptions['isProjectTrusted']): boole
 export function piConfigPaths(
   repoRoot: string,
   homeDirectory = os.homedir(),
-  agentDirectory = homeDirectory === os.homedir() ? getAgentDir() : path.join(homeDirectory, CONFIG_DIR_NAME, 'agent'),
+  agentDirectory = defaultAgentDirectory(homeDirectory),
 ): PiConfigPaths {
   return {
     canonicalUser: path.join(agentDirectory, SETTINGS_FILE_NAME),

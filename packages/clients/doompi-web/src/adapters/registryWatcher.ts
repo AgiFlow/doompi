@@ -24,6 +24,38 @@ function pidAlive(pid: number): boolean {
   }
 }
 
+/** Reads the currently live session records without starting a watcher. */
+export function readRegistryRecords(registryDir: string, onNotice?: (message: string) => void): SessionRecord[] {
+  const recordsDir = sessionRecordsDir(registryDir);
+  let names: string[];
+  try {
+    names = fs.readdirSync(recordsDir);
+  } catch {
+    // The directory appears with the first server; an empty registry is not an error.
+    return [];
+  }
+  const records: SessionRecord[] = [];
+  for (const name of names.filter(isRecordFileName)) {
+    let raw: string;
+    try {
+      raw = fs.readFileSync(path.join(recordsDir, name), 'utf8');
+    } catch {
+      continue; // Withdrawn between readdir and read; the next scan settles it.
+    }
+    const record = parseSessionRecord(raw);
+    if (!record) continue;
+    if (!pidAlive(record.pid)) {
+      fs.rmSync(path.join(recordsDir, name), { force: true });
+      onNotice?.(`removed stale record for session ${record.id}`);
+      continue;
+    }
+    records.push(record);
+  }
+  return records.sort(
+    (left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+  );
+}
+
 /**
  * Watches the registry directory for session records.
  *
@@ -40,36 +72,7 @@ export function watchRegistry(registryDir: string, onNotice?: (message: string) 
   let poll: NodeJS.Timeout | undefined;
   let closed = false;
 
-  const scan = (): SessionRecord[] => {
-    let names: string[];
-    try {
-      names = fs.readdirSync(recordsDir);
-    } catch {
-      // The directory appears with the first server; an empty registry is not
-      // an error.
-      return [];
-    }
-    const records: SessionRecord[] = [];
-    for (const name of names.filter(isRecordFileName)) {
-      let raw: string;
-      try {
-        raw = fs.readFileSync(path.join(recordsDir, name), 'utf8');
-      } catch {
-        continue; // Withdrawn between readdir and read; the next scan settles it.
-      }
-      const record = parseSessionRecord(raw);
-      if (!record) continue;
-      if (!pidAlive(record.pid)) {
-        fs.rmSync(path.join(recordsDir, name), { force: true });
-        onNotice?.(`removed stale record for session ${record.id}`);
-        continue;
-      }
-      records.push(record);
-    }
-    return records.sort(
-      (left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
-    );
-  };
+  const scan = (): SessionRecord[] => readRegistryRecords(registryDir, onNotice);
 
   const emit = (): void => {
     if (!closed) listener?.(scan());
