@@ -86,6 +86,15 @@ export class NodeTreeManifestAdapter implements TreeManifestPort {
     }
   }
 
+  async modifiedAt(filePath: string): Promise<number | undefined> {
+    try {
+      const stat = await fs.stat(filePath);
+      return stat.isFile() ? stat.mtimeMs : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   changed(before: TreeManifest, after: TreeManifest): string[] {
     const moved = new Set<string>();
     for (const [filePath, fingerprint] of after.entries) {

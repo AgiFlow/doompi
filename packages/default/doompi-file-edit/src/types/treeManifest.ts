@@ -40,6 +40,15 @@ export interface TreeManifestPort {
    * its manifest so the next walk does not report the same change twice.
    */
   fingerprint(filePath: string): Promise<string | undefined>;
+  /**
+   * When the file was last written, in epoch milliseconds, or undefined when it
+   * is not there.
+   *
+   * A comparison of two manifests only says a file differs between them, not
+   * when it moved, so a path left dirty by earlier work looks the same as one a
+   * command just wrote. Reading the modification time back tells the two apart.
+   */
+  modifiedAt(filePath: string): Promise<number | undefined>;
   /** Every path added, removed, or modified between two manifests, sorted. */
   changed(before: TreeManifest, after: TreeManifest): string[];
 }
