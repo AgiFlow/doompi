@@ -76,13 +76,9 @@ export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }
         )}
       </Button>
       {manualError && !autonomous ? (
-        <span
-          role="status"
-          data-testid="composer-voice-error"
-          className="max-w-32 truncate text-[9px] text-doom-yellow"
-        >
+        <output data-testid="composer-voice-error" className="max-w-32 truncate text-[9px] text-doom-yellow">
           {manualError}
-        </span>
+        </output>
       ) : null}
     </>
   );
