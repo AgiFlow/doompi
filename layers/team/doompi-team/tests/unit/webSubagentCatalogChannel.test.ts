@@ -1,5 +1,9 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { HubChannelHost } from '@agimon-ai/doompi-web-contracts';
 import { afterEach, describe, expect, it } from 'vitest';
+import { sessionCatalogPathFor, writeSessionCatalogSnapshot } from '../../src/adapters/sessionCatalogSnapshot.ts';
 import { createSubagentCatalogChannel } from '../../src/adapters/webSubagentCatalogChannel.ts';
 import type { CatalogAgentInput } from '../../src/services/webSubagentCatalog.ts';
 import type { SubagentCatalogPayload } from '../../src/types/webSubagents.ts';
@@ -113,5 +117,54 @@ describe('the subagent catalog hub channel', () => {
       agents: [{ name: 'plugins.reviewer', source: 'plugin' }],
       models: ['team/model'],
     });
+  });
+
+  it('prefers what the session published over the session API', async () => {
+    const sessionId = `catalog-chan-${String(process.pid)}-${String(Date.now())}`;
+    const snapshotPath = sessionCatalogPathFor({ sessionId, tmpdir: os.tmpdir(), uid: process.getuid?.() });
+    if (snapshotPath === undefined) return; // No uid on this platform: the bridge is disabled by design.
+    cleanups.push(() => fs.rmSync(path.dirname(snapshotPath), { recursive: true, force: true }));
+    writeSessionCatalogSnapshot(sessionId, {
+      cwd: '/w',
+      agents: [agent('domains.developer', 'plugin')],
+      models: ['team/model'],
+    });
+
+    const host = fakeHost();
+    let apiCalls = 0;
+    host.requestSessionApi = () => {
+      apiCalls += 1;
+      return Promise.resolve(Response.json({ agents: [], models: [] }));
+    };
+    const source = createSubagentCatalogChannel(undefined, 1_000_000).start(host);
+    cleanups.push(() => source.close());
+
+    source.sessionAdded?.({ sessionId, cwd: '/w' });
+    await waitFor(() => host.published.length === 1, 'the published catalog');
+
+    expect(apiCalls).toBe(0);
+    expect(host.published[0]?.payload).toMatchObject({
+      cwd: '/w',
+      agents: [{ name: 'domains.developer', source: 'plugin' }],
+      models: ['team/model'],
+    });
+  });
+
+  it('falls back to the session API when the published snapshot is for another cwd', async () => {
+    const sessionId = `catalog-chan-moved-${String(process.pid)}-${String(Date.now())}`;
+    const snapshotPath = sessionCatalogPathFor({ sessionId, tmpdir: os.tmpdir(), uid: process.getuid?.() });
+    if (snapshotPath === undefined) return;
+    cleanups.push(() => fs.rmSync(path.dirname(snapshotPath), { recursive: true, force: true }));
+    writeSessionCatalogSnapshot(sessionId, { cwd: '/elsewhere', agents: [agent('stale', 'plugin')], models: [] });
+
+    const host = fakeHost();
+    host.requestSessionApi = () => Promise.resolve(Response.json({ agents: [agent('fresh', 'project')], models: [] }));
+    const source = createSubagentCatalogChannel(undefined, 1_000_000).start(host);
+    cleanups.push(() => source.close());
+
+    source.sessionAdded?.({ sessionId, cwd: '/w' });
+    await waitFor(() => host.published.length === 1, 'the session API catalog');
+
+    expect(host.published[0]?.payload.agents.map((row) => row.name)).toEqual(['fresh']);
   });
 });

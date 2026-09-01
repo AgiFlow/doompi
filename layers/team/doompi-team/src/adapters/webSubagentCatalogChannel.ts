@@ -1,7 +1,9 @@
+import os from 'node:os';
 import type { HubChannelHost, HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import { type CatalogAgentInput, catalogModels, presentCatalog } from '../services/webSubagentCatalog.ts';
 import { SUBAGENT_CATALOG_TYPE, type SubagentCatalogPayload } from '../types/webSubagents.ts';
 import { AgentDiscoveryService, resolveActiveTeamModelSpecs } from './agents/discovery.ts';
+import { readSessionCatalogSnapshot } from './sessionCatalogSnapshot.ts';
 import { TEAM_API_BASE_PATH, TEAM_CATALOG_ROUTE, type TeamCatalogSnapshot } from './teamCatalogApi.ts';
 
 /** Agent files change rarely; discovery's own cache makes each look cheap. */
@@ -29,12 +31,31 @@ function parseCatalogSnapshot(value: unknown): TeamCatalogSnapshot {
   };
 }
 
+/**
+ * What the session itself published, when it is current for this scope.
+ *
+ * The session process is the only one that sees the active domain projection,
+ * so its snapshot wins over anything this process could discover. A cwd that no
+ * longer matches means the scope moved and the file is about to be rewritten.
+ */
+function readPublishedCatalog(scope: HubSessionScope): TeamCatalogSnapshot | undefined {
+  const snapshot = readSessionCatalogSnapshot({
+    sessionId: scope.sessionId,
+    tmpdir: os.tmpdir(),
+    uid: process.getuid?.(),
+  });
+  if (snapshot === undefined || snapshot.cwd !== scope.cwd) return undefined;
+  return { agents: snapshot.agents, models: snapshot.models };
+}
+
 async function readSessionCatalog(
   host: HubChannelHost,
   scope: HubSessionScope,
   signal: AbortSignal,
   fallback: CatalogReader,
 ): Promise<TeamCatalogSnapshot> {
+  const published = readPublishedCatalog(scope);
+  if (published !== undefined) return published;
   const response = await host.requestSessionApi(scope, {
     basePath: TEAM_API_BASE_PATH,
     path: TEAM_CATALOG_ROUTE,
@@ -54,10 +75,11 @@ async function readSessionCatalog(
 /**
  * The subagent catalog data channel: what each managed session can launch.
  *
- * Discovery runs inside the session API because that process owns the active
- * domain projection and its plugin agent directories. The hub refreshes and
- * publishes that result, with local discovery only for older sessions lacking
- * the API route.
+ * The session publishes its own discovery into its scope directory, because it
+ * is the only process holding the active domain projection and the harness
+ * state behind the Team model policy. This channel prefers that snapshot, then
+ * the session API, then local discovery, which sees project and user agents but
+ * no domain-provided ones.
  */
 export function createSubagentCatalogChannel(read?: CatalogReader, refreshMs = CATALOG_REFRESH_MS): WebHubChannel {
   return {
