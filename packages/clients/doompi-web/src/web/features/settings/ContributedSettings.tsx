@@ -208,11 +208,15 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
   const dirtyFields = useMemo(() => section.fields.filter((field) => keyOf(field) in drafts), [drafts, section.fields]);
 
   // Drafts belong to the file they were typed against, so switching repository
-  // discards them rather than replaying them onto another config.
-  useEffect(() => {
+  // discards them rather than replaying them onto another config. Clearing
+  // while rendering the change keeps the stale drafts from painting once more.
+  const fileKey = `${scope}\u0000${repoRoot}`;
+  const [lastFileKey, setLastFileKey] = useState(fileKey);
+  if (lastFileKey !== fileKey) {
+    setLastFileKey(fileKey);
     setDrafts({});
     setNote('');
-  }, [repoRoot, scope]);
+  }
   useEffect(() => {
     if (!wantsModels) return;
     void listSettingsModels().then(setModels);
@@ -232,6 +236,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
   }, [keys, repoRoot]);
 
   useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- reads the hub's settings config file over HTTP; the state is the response.
     void reload();
   }, [reload]);
 

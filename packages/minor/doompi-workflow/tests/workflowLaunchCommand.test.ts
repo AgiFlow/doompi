@@ -6,7 +6,7 @@ import {
   validateWorkflowLaunch,
   workflowLaunchCommand,
 } from '../src/services/workflowLaunchCommand.ts';
-import { WORKFLOW_LAUNCH_VERB, workflowLaunchLine } from '../web/launchLine.ts';
+import { WORKFLOW_LAUNCH_VERB, workflowLaunchLine } from '../src/web/launchLine.ts';
 
 describe('parseWorkflowLaunchCommand', () => {
   it('reads the workflow, the runner, the inputs and the prompt', () => {

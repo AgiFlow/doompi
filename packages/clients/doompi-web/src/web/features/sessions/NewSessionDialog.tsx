@@ -56,14 +56,17 @@ export function NewSessionDialog({
     4,
   );
 
+  /** Emptying the field drops the stale matches now; the effect below only fetches. */
+  const changeCwd = (next: string): void => {
+    setCwd(next);
+    if (next.trim() === '') setSuggestions([]);
+  };
+
   useEffect(() => {
     const typed = cwd.trim();
     // Any typing is worth a lookup now: the hub completes a path being drilled
     // into and searches for anything else, so a bare folder name finds itself.
-    if (typed === '') {
-      setSuggestions([]);
-      return;
-    }
+    if (typed === '') return;
     let stale = false;
     const timer = setTimeout(async () => {
       const found = await searchDirectories(typed);
@@ -79,7 +82,7 @@ export function NewSessionDialog({
   }, [cwd]);
 
   const pick = (directory: string): void => {
-    setCwd(`${directory}${PATH_SEPARATOR}`);
+    changeCwd(`${directory}${PATH_SEPARATOR}`);
     cwdInput.current?.focus();
   };
 
@@ -136,16 +139,17 @@ export function NewSessionDialog({
           <DialogTitle>new session</DialogTitle>
         </DialogHeader>
         <DialogBody>
-          <label className="flex flex-col gap-1">
+          <label htmlFor="new-session-cwd" className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">
               working directory <span className="text-doom-faint/70">(type a folder name or paste a path)</span>
             </span>
             <Input
+              id="new-session-cwd"
               ref={cwdInput}
               data-testid="new-session-cwd"
               value={cwd}
               autoFocus
-              onChange={(event) => setCwd(event.target.value)}
+              onChange={(event) => changeCwd(event.target.value)}
               onKeyDown={onCwdKeyDown}
               placeholder="agirepo, or /absolute/path/to/project"
             />
@@ -183,7 +187,7 @@ export function NewSessionDialog({
                   variant="outline"
                   size="xs"
                   data-testid="new-session-recent"
-                  onClick={() => setCwd(recent)}
+                  onClick={() => changeCwd(recent)}
                   className="font-normal"
                 >
                   {recent}
@@ -191,9 +195,10 @@ export function NewSessionDialog({
               ))}
             </div>
           ) : null}
-          <label className="flex flex-col gap-1">
+          <label htmlFor="new-session-name" className="flex flex-col gap-1">
             <span className="text-[10px] text-doom-faint">name (optional)</span>
             <Input
+              id="new-session-name"
               data-testid="new-session-name"
               value={name}
               onChange={(event) => setName(event.target.value)}

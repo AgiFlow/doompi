@@ -171,9 +171,9 @@ describe('doom voice package boundary', () => {
 
   it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {
     const manualFiles = [
-      'web/manualBrowserRecorder.ts',
-      'web/manualComposerRecorder.ts',
-      'web/manualTranscriptionClient.ts',
+      'src/web/manualBrowserRecorder.ts',
+      'src/web/manualComposerRecorder.ts',
+      'src/web/manualTranscriptionClient.ts',
     ];
     const forbidden =
       /CaptureSession|VoiceMediaClient|VoiceWorkerPipeline|voiceMediaWakeStore|voiceOwnership|sessionVoiceOwnership|playback/u;
@@ -181,7 +181,7 @@ describe('doom voice package boundary', () => {
       expect(await readFile(path.join(packageDirectory, file), 'utf8'), file).not.toMatch(forbidden);
     }
 
-    const webEntry = await readFile(path.join(packageDirectory, 'web/index.ts'), 'utf8');
+    const webEntry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
     expect(webEntry).not.toContain("id: 'voice.capture'");
     expect(webEntry).not.toContain("command: 'voice'");
   });

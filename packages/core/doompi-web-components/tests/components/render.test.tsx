@@ -292,7 +292,8 @@ describe('primitives', () => {
     expect(busy).toContain('saving');
     // A labelled spinner is a live status; an unlabelled one stays decorative.
     expect(html(<Spinner />)).toContain('aria-hidden');
-    expect(html(<Spinner label="loading" />)).toContain('role="status"');
+    // <output> carries an implicit status role, so no explicit role attribute is needed.
+    expect(html(<Spinner label="loading" />)).toContain('<output');
   });
 
   it('offers the form controls a settings page needs', () => {

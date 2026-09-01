@@ -1,4 +1,5 @@
 import {
+  AlertIcon,
   BranchIcon,
   Button,
   buttonVariants,
@@ -122,8 +123,14 @@ function SessionCard({
   const [restarting, setRestarting] = useState(false);
   // Read when the menu closes: a choice that moved the card into another
   // mode keeps the focus it took, rather than handing it back to the kebab.
+  // The menu's close-focus handler runs before React has re-rendered the card,
+  // so the ref is written from the event that changes the mode, never during
+  // render.
   const modeRef = useRef(mode);
-  modeRef.current = mode;
+  const enterMode = (next: CardMode): void => {
+    modeRef.current = next;
+    setMode(next);
+  };
   const status = sessionStatusLine(
     {
       attach: meta.attach,
@@ -135,24 +142,26 @@ function SessionCard({
     },
     now,
   );
-
+  // The same priority the status copy uses: a refusal outranks the question,
+  // and a restarting card is describing the restart, not the run it ended.
+  const awaitingInput = summary.awaitingInput && meta.attach !== 'refused' && !restarting;
   const beginRename = (): void => {
     setDraft(summary.name);
     setError('');
-    setMode('rename');
+    enterMode('rename');
   };
   const commitRename = (): void => {
     const name = draft.trim();
     if (name && name !== summary.name) renameSession(name, summary.id);
-    setMode('view');
+    enterMode('view');
   };
   const stop = async (): Promise<void> => {
-    setMode('view');
+    enterMode('view');
     const result = await stopSession(summary.id);
     if ('error' in result) setError(result.error);
   };
   const restart = async (): Promise<void> => {
-    setMode('view');
+    enterMode('view');
     setError('');
     setRestarting(true);
     const result = await restartSession(summary.id);
@@ -171,11 +180,23 @@ function SessionCard({
   const menuOpen = mode === 'menu';
   const details = (
     <>
-      <span
-        data-testid="session-status"
-        className={`text-[11px] leading-snug ${active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
-      >
-        {restarting ? 'restarting…' : status}
+      {/* The status line already says it, but it says it in the same dim voice
+          as the branch and the cwd. A blocked session is the one thing in this
+          list a reader must act on, so it gets a colour of its own. */}
+      <span className="flex items-start gap-1">
+        {awaitingInput ? (
+          <AlertIcon
+            data-testid="session-awaiting-input"
+            aria-label="waiting for your input"
+            className="mt-[2px] h-[11px] w-[11px] shrink-0 text-doom-red"
+          />
+        ) : null}
+        <span
+          data-testid="session-status"
+          className={`text-[11px] leading-snug ${awaitingInput ? 'text-doom-red' : active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
+        >
+          {restarting ? 'restarting…' : status}
+        </span>
       </span>
       {summary.git ? (
         <span
@@ -213,9 +234,9 @@ function SessionCard({
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') commitRename();
-              if (event.key === 'Escape') setMode('view');
+              if (event.key === 'Escape') enterMode('view');
             }}
-            onBlur={() => setMode('view')}
+            onBlur={() => enterMode('view')}
             className="border-doom-blue/60 px-1.5 py-0.5 text-[13px] font-bold"
           />
           {details}
@@ -260,7 +281,10 @@ function SessionCard({
         >
           <DropdownMenu
             open={menuOpen}
-            onOpenChange={(next) => setMode((current) => (next ? 'menu' : current === 'menu' ? 'view' : current))}
+            onOpenChange={(next) => {
+              const current = modeRef.current;
+              enterMode(next ? 'menu' : current === 'menu' ? 'view' : current);
+            }}
           >
             <DropdownMenuTrigger asChild>
               <Button
@@ -286,7 +310,7 @@ function SessionCard({
               <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
                 edit
               </DropdownMenuItem>
-              <DropdownMenuItem data-testid={`session-resume-${summary.id}`} onSelect={() => setMode('resume')}>
+              <DropdownMenuItem data-testid={`session-resume-${summary.id}`} onSelect={() => enterMode('resume')}>
                 resume
               </DropdownMenuItem>
               {/* Syncs, replaces the session's server under the same id, and
@@ -302,7 +326,7 @@ function SessionCard({
               <DropdownMenuItem
                 variant="destructive"
                 data-testid={`session-stop-${summary.id}`}
-                onSelect={() => setMode('confirm')}
+                onSelect={() => enterMode('confirm')}
               >
                 remove
               </DropdownMenuItem>
@@ -310,13 +334,13 @@ function SessionCard({
           </DropdownMenu>
         </div>
       ) : null}
-      {mode === 'resume' ? <ResumeSessionDialog sessionId={summary.id} onClose={() => setMode('view')} /> : null}
+      {mode === 'resume' ? <ResumeSessionDialog sessionId={summary.id} onClose={() => enterMode('view')} /> : null}
       <RemoveSessionDialog
         sessionId={summary.id}
         name={summary.name}
         open={mode === 'confirm'}
         onConfirm={() => void stop()}
-        onCancel={() => setMode('view')}
+        onCancel={() => enterMode('view')}
       />
     </div>
   );

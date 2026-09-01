@@ -102,6 +102,7 @@ export function ProviderSettings() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- reads the hub's provider auth list over HTTP; the state is the response.
     void reload();
   }, [reload]);
 

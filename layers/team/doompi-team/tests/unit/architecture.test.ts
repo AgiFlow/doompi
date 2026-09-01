@@ -24,7 +24,7 @@ describe('import boundaries', () => {
 
   it('uses the repository-owned canonical boundary preset and declares no boundaries of its own', () => {
     expect(config.extends).toContain('doom-extension/recommended');
-    // web/ hosts the cockpit plugin, a root outside the src vocabulary; the
+    // src/web hosts the cockpit plugin, a root outside the src vocabulary; the
     // doom-extension preset carries its boundary (web-plugin) and the tests
     // boundary that reaches it, so a package-local block would only drift.
     expect(config.boundaries).toBeUndefined();

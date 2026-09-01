@@ -145,6 +145,30 @@ describe('a session’s file changes, end to end', () => {
     ]);
   });
 
+  it('leaves out a file something else wrote between two commands, and keeps the one written during', async () => {
+    // The working tree is shared. Another session, a background agent, or the
+    // user's own editor writes into it while this session is not running a
+    // command, and the next walk sees a fingerprint that moved without anything
+    // here having moved it.
+    const { tracker } = startExtension();
+    const outside = path.join(cwd, 'someone-else.ts');
+    const mine = path.join(cwd, 'mine.ts');
+    fs.writeFileSync(outside, 'before');
+    fs.writeFileSync(mine, 'before');
+
+    await tracker.start('call-1', 'bash', { command: 'ls' }, cwd);
+    await tracker.end('call-1', false, cwd);
+
+    fs.writeFileSync(outside, 'written by someone else entirely');
+    const aWhileAgo = new Date(Date.now() - 60_000);
+    fs.utimesSync(outside, aWhileAgo, aWhileAgo);
+
+    await tracker.start('call-2', 'bash', { command: 'node scripts/codemod.mjs' }, cwd);
+    fs.writeFileSync(mine, 'written by the command');
+    await tracker.end('call-2', false, cwd);
+
+    expect(readHubRows().map((row) => row.relPath)).toEqual(['mine.ts']);
+  });
   it('leaves out a first-seen file git reports as unmodified', async () => {
     const clean = path.join(cwd, 'committed.txt');
     const ignored = path.join(cwd, 'temp.log');

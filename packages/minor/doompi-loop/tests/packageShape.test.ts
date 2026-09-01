@@ -95,7 +95,7 @@ describe('doom-loop package boundary', () => {
     expect(project.sourceRoot).toBe('packages/minor/doompi-loop/src');
     expect(project.sourceTemplate).toBe('doom-extension');
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
-    expect(manifest.doompiWeb).toEqual({ pluginId: 'loop', channels: [], client: './web/index.ts' });
+    expect(manifest.doompiWeb).toEqual({ pluginId: 'loop', channels: [], client: './src/exports/webClient.ts' });
   });
 
   it('declares only closed ESM, CJS, and declaration targets for public entries', async () => {
@@ -124,7 +124,8 @@ describe('doom-loop package boundary', () => {
     expect(files).not.toContain('tests');
     expect(files).toContain('src/prompts');
     expect(files).toContain('src/types/loopView.ts');
-    expect(files).toContain('web');
+    expect(files).toContain('src/web');
+    expect(files).toContain('src/exports/webClient.ts');
     expect(files).toContain('README.md');
     expect(files).toContain('package.json');
     for (const resource of files) {

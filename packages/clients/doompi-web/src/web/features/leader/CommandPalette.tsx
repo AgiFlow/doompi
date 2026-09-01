@@ -70,13 +70,17 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Every opening starts at the root with an empty search.
-  useEffect(() => {
+  // Every opening starts at the root with an empty search. Adjusted during
+  // render rather than in an effect so the palette never paints the previous
+  // search for a frame.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) {
       setSearch('');
       setSelected(0);
     }
-  }, [open]);
+  }
 
   const keys = useMemo(() => path.split(''), [path]);
   const bindings = pluginLeaderBindings();

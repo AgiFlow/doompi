@@ -17,7 +17,7 @@ export const LEADER_DETAIL = 'servers and tools';
  *
  * MCP tools are registered under `<server>_<tool>`, a name only known at
  * runtime, so the cockpit's web plugin reads this status to recognise which
- * tool calls are MCP calls. The web half duplicates the literal (web/ may
+ * tool calls are MCP calls. The web half duplicates the literal (src/web may
  * only import src/types), and a test keeps the two in step.
  */
 export const MCP_STATUS_KEY = 'doom-mcp';

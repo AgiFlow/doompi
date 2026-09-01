@@ -11,6 +11,10 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
 import type { Context } from '@deepseek-ai/cordis';
+import {
+  DOOM_RESOURCE_CATALOG_ENTRY_TYPE,
+  type ResourceCatalogProjection,
+} from '@agimon-ai/doompi-extension-contracts/skills';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { registerDomainsCommand } from '../../commands/domainsCommand.ts';
 import { DOMAIN_STATUS_KEY, domainStatus } from '../../services/domainText.ts';
@@ -40,6 +44,47 @@ function lazyModules() {
 
 export function activeDomainSkillPaths(state: Pick<HarnessState, 'skillDirectories'> = getHarnessState()): string[] {
   return [...state.skillDirectories];
+}
+
+/**
+ * How long the catalog signal waits for Pi to finish applying a reload.
+ *
+ * Pi applies the paths every `resources_discover` handler returned only after
+ * all of them have resolved, so the signal cannot be sent from the handler
+ * itself: a microtask scheduled there still observes the previous catalog, and
+ * a client that re-read on it would just cache the stale answer again. A timer
+ * lands after the apply, and this one matches the settle the minor-mode catalog
+ * publisher uses.
+ */
+const CATALOG_SETTLE_MS = 50;
+
+/**
+ * Answers `resources_discover` with the selected skills, and tells RPC clients
+ * once a reload has rebuilt the catalog.
+ *
+ * Pi publishes nothing for a reload, so a client that caches `get_commands`,
+ * which is what the web cockpit completes `$` from, otherwise keeps offering
+ * the skills of the selection it replaced. This entry is that missing notice.
+ * Every reload fires this event once whatever caused it, so the signal also
+ * covers a switch that changed skills without touching domains.
+ */
+export function registerResourceCatalogSignal(pi: ExtensionAPI, settleMs = CATALOG_SETTLE_MS): () => void {
+  let settle: ReturnType<typeof setTimeout> | undefined;
+  pi.on('resources_discover', (event) => {
+    if (event.reason === 'reload') {
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        settle = undefined;
+        const projection: ResourceCatalogProjection = { version: 1, revision: Date.now() };
+        pi.appendEntry(DOOM_RESOURCE_CATALOG_ENTRY_TYPE, projection);
+      }, settleMs);
+    }
+    // The harness store is the process authority updated before reload begins.
+    // Reading it directly avoids serving the previous Cordis session snapshot
+    // while Pi is rebuilding resources for the replacement session.
+    return { skillPaths: activeDomainSkillPaths() };
+  });
+  return () => clearTimeout(settle);
 }
 
 interface DomainPluginConfig {
@@ -102,10 +147,7 @@ function domainPlugin(cordis: Context, { pi, telemetry }: DomainPluginConfig): v
       loadPicker: load.picker,
     });
 
-    // The harness store is the process authority updated before reload begins.
-    // Reading it directly avoids serving the previous Cordis session snapshot while
-    // Pi is rebuilding resources for the replacement session.
-    pi.on('resources_discover', () => ({ skillPaths: activeDomainSkillPaths() }));
+    const releaseCatalogSignal = registerResourceCatalogSignal(pi);
 
     pi.on('session_shutdown', (_event, ctx) => {
       handoffs.clearSession(ctx.sessionManager.getSessionId());
@@ -134,6 +176,7 @@ function domainPlugin(cordis: Context, { pi, telemetry }: DomainPluginConfig): v
     });
 
     yield () => {
+      releaseCatalogSignal();
       handoffs.dispose();
     };
   }, DOMAIN_SOURCE);

@@ -8,7 +8,7 @@ import { pluginBlocks, readManifest, readSource, walkSources, WEB_ROOT } from '.
  * Every Pi tool a package registers gets a cockpit item. The rule reads the
  * tool definitions out of `src/**` (an object literal with `name`,
  * `parameters`, and `execute`), resolves each `name` as far as a literal or
- * a package-local const goes, and checks that `web/**` claims it in a
+ * a package-local const goes, and checks that `src/web/**` claims it in a
  * `toolRenderers` entry, or carries a `matches` renderer for a name only
  * known at runtime.
  */
@@ -341,6 +341,6 @@ export const webPluginToolRenderers: RuleDefinition = {
     if (missing.length === 0) return null;
     const notChecked =
       unresolvable.length > 0 ? ` Not checked (name imported from a package): ${unresolvable.join(', ')}.` : '';
-    return `web/ renders no item for: ${missing.join(', ')}. List each name in a toolRenderers entry of the doompiWeb client entry (tools: [...], or a const array in web/**), give a runtime-named tool a renderer with matches(...), or mark it '// web-plugin-tool-renderers: ignore <name>' beside its definition.${notChecked}`;
+    return `src/web renders no item for: ${missing.join(', ')}. List each name in a toolRenderers entry of the doompiWeb client entry (tools: [...], or a const array in src/web/**), give a runtime-named tool a renderer with matches(...), or mark it '// web-plugin-tool-renderers: ignore <name>' beside its definition.${notChecked}`;
   },
 };

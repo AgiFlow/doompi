@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editCallView, editResultView, parseDiffRows, resultTextLines } from '../web/editToolView.ts';
+import { editCallView, editResultView, parseDiffRows, resultTextLines } from '../src/web/editToolView.ts';
 
 describe('the edit call view', () => {
   it('counts ranges the way the TUI heading does', () => {

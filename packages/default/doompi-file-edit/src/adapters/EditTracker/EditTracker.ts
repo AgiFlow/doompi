@@ -26,11 +26,14 @@ const BASH_TOOL = 'bash';
  * identified after it had already changed. That is a real limit and the wire
  * carries it as `origin: 'scan'` rather than pretending a diff exists.
  *
- * A manifest compares size and modification time, which a checkout, an install,
- * or a formatter rewriting identical bytes moves without changing a single
- * byte of content. So a candidate is confirmed before it is recorded: its
- * content hash is compared against the last one this session saw, and a path
- * this session has never captured is put to git. Neither answer is available
+ * A manifest compares size and modification time, and it compares the tree as
+ * this tracker last walked it against the tree now, so it answers whether a
+ * file differs, never when it moved. A path a previous session left dirty, or
+ * one a checkout or an install rewrote, differs exactly like a path the command
+ * just wrote. So a candidate is confirmed three ways before it is recorded: its
+ * modification time has to fall inside the call that is being closed, its
+ * content hash has to differ from the last one this session saw, and a path
+ * this session has never captured is put to git. Not every answer is available
  * for every file, an ignored temporary file is unknown to git and a first
  * sighting has no earlier hash, so an unconfirmable candidate is still
  * recorded; only a proven non-change is dropped.
@@ -57,10 +60,19 @@ export interface EditTrackerOptions {
   git?: GitStatusPort;
 }
 
+/**
+ * How far before a call started a write may claim to have happened and still be
+ * attributed to it. A working tree can sit on a filesystem that stores whole
+ * seconds, which floors a write made just after the call began to a stamp just
+ * before it, and the cost of being generous here is one second of the staleness
+ * this check exists to remove.
+ */
+const MODIFIED_TOLERANCE_MS = 1000;
+
 export class EditTracker implements IEditTracker {
   private readonly pending = new Map<string, PendingEdit>();
-  /** Set while a bash call is in flight, so its end knows a manifest is owed. */
-  private readonly bracketed = new Set<string>();
+  /** Start time per in-flight bash call, so its end knows what it may claim. */
+  private readonly bracketed = new Map<string, number>();
   /**
    * The tree as this tracker last saw it. A bash call compares against it and
    * then replaces it, so each call costs one walk rather than two, and a change
@@ -112,7 +124,9 @@ export class EditTracker implements IEditTracker {
       return;
     }
     if (tool !== BASH_TOOL) return;
-    this.bracketed.add(id);
+    // Read before the baseline walk, which is the one thing here that can take
+    // long enough to matter: a write that races it belongs to this call.
+    this.bracketed.set(id, this.now());
     // The first bash call of a session has nothing to compare against, so it
     // pays for the baseline walk; every later call reuses the previous end.
     this.manifest ??= await this.manifests.take(cwd, this.excluded);
@@ -121,13 +135,14 @@ export class EditTracker implements IEditTracker {
   async end(id: string, isError: boolean, cwd: string): Promise<void> {
     const pending = this.pending.get(id);
     this.pending.delete(id);
-    const bracketed = this.bracketed.delete(id);
+    const startedAt = this.bracketed.get(id);
+    this.bracketed.delete(id);
     if (isError) return;
     if (pending) {
       await this.recordTool(pending);
       return;
     }
-    if (bracketed) await this.recordScan(cwd);
+    if (startedAt !== undefined) await this.recordScan(cwd, startedAt);
   }
 
   /** An `edit` or `write` whose file was read on both sides of the call. */
@@ -151,12 +166,12 @@ export class EditTracker implements IEditTracker {
   }
 
   /** Whatever a bash call actually edited, however the command wrote it. */
-  private async recordScan(cwd: string): Promise<void> {
+  private async recordScan(cwd: string, startedAt: number): Promise<void> {
     const before = this.manifest;
     if (before === undefined) return;
     const after = await this.manifests.take(cwd, this.excluded);
     this.manifest = after;
-    const candidates = this.manifests.changed(before, after);
+    const candidates = await this.writtenDuring(this.manifests.changed(before, after), startedAt);
     if (candidates.length === 0) return;
     const unchanged = await this.unchangedInGit(cwd, candidates);
     for (const filePath of candidates) {
@@ -178,6 +193,26 @@ export class EditTracker implements IEditTracker {
         ...(captured === undefined ? {} : { after: captured }),
       });
     }
+  }
+
+  /**
+   * Narrows candidates to the ones that could have been written by the call
+   * being closed.
+   *
+   * This is what keeps a working tree that was already dirty out of the list. A
+   * file whose bytes were last written before the call began was differed by
+   * something else, whatever moved its fingerprint. A file that is no longer
+   * there has no time to read and a delete is a change the call may well have
+   * made, so it stays a candidate.
+   */
+  private async writtenDuring(candidates: readonly string[], startedAt: number): Promise<string[]> {
+    const floor = startedAt - MODIFIED_TOLERANCE_MS;
+    const written: string[] = [];
+    for (const filePath of candidates) {
+      const modifiedAt = await this.manifests.modifiedAt(filePath);
+      if (modifiedAt === undefined || modifiedAt >= floor) written.push(filePath);
+    }
+    return written;
   }
 
   /** Which candidates git tracks and reports as untouched; empty when it cannot say. */

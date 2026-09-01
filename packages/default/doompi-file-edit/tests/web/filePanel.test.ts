@@ -1,8 +1,8 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FileEditsDetailView } from '../../src/types/fileEditsApi.ts';
-import { FilePanel } from '../../web/FilePanel.tsx';
-import { files, storeDetail } from '../../web/filesStore.ts';
+import { FilePanel } from '../../src/web/FilePanel.tsx';
+import { files, storeDetail } from '../../src/web/filesStore.ts';
 
 /**
  * The file tab, rendered.

@@ -10,9 +10,9 @@ import {
   startManualBrowserRecording,
   type ManualBrowserRecording,
   type ManualBrowserRecordingResult,
-} from '../web/manualBrowserRecorder.ts';
-import { ManualComposerRecorder } from '../web/manualComposerRecorder.ts';
-import { transcribeManualRecording } from '../web/manualTranscriptionClient.ts';
+} from '../src/web/manualBrowserRecorder.ts';
+import { ManualComposerRecorder } from '../src/web/manualComposerRecorder.ts';
+import { transcribeManualRecording } from '../src/web/manualTranscriptionClient.ts';
 
 function recorderFixture() {
   const stopTrack = vi.fn();

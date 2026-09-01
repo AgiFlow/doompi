@@ -1,5 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import type {
+  AutocompactModeConfig,
+  AutocompactThresholdConfig,
   DoomConfig,
   DoomSelectionConfig,
   EditorConfig,
@@ -23,9 +25,14 @@ const DEFAULT_VOICE_LANGUAGE = 'auto';
 const DEFAULT_RECORDER_DEVICE = 'none:default';
 const ROOT_KEYS = ['modes', 'projectTrust', 'editor', 'voice', 'selection'] as const;
 const SELECTION_KEYS = ['majorMode', 'domains', 'profile'] as const;
-const MODE_KEYS = ['planning'] as const;
+const MODE_KEYS = ['planning', 'autocompact'] as const;
 const PLANNING_KEYS = ['main', 'subagents', 'plansDirectory'] as const;
 const AGENT_KEYS = ['model', 'thinking'] as const;
+const AUTOCOMPACT_KEYS = ['enabled', 'model', 'thinking', 'thresholds'] as const;
+const AUTOCOMPACT_THRESHOLD_KEYS = ['pass1', 'pass2', 'pass3'] as const;
+/** A pass that fires below this is noise; one above it never fires before Pi compacts natively. */
+const MIN_AUTOCOMPACT_RATIO = 0.05;
+const MAX_AUTOCOMPACT_RATIO = 0.99;
 const EDITOR_KEYS = ['command'] as const;
 const VOICE_KEYS = ['engine', 'language', 'recorder', 'adapters', 'autoCapture'] as const;
 const RECORDER_KEYS = ['binary', 'device'] as const;
@@ -326,21 +333,88 @@ function parseAutoCapture(value: unknown, filePath: string): VoiceAutoCaptureCon
     tts: parseTtsConfig(value.tts, filePath),
   };
 }
-function parseAgent(value: unknown, location: string, filePath: string): PlanningAgentConfig | undefined {
+function parseThinking(value: unknown, location: string, filePath: string): PlanningThinkingLevel | undefined {
   if (value === undefined) return undefined;
-  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires ${location} to be an object`);
-  assertKeys(value, AGENT_KEYS, location, filePath);
-  const thinking = value.thinking;
-  if (
-    thinking !== undefined &&
-    (typeof thinking !== 'string' || !THINKING_VALUES.has(thinking as PlanningThinkingLevel))
-  ) {
+  if (typeof value !== 'string' || !THINKING_VALUES.has(value as PlanningThinkingLevel)) {
     throw new Error(
       `Doom config at ${filePath} requires ${location}.thinking to be one of: ${[...THINKING_VALUES].join(', ')}`,
     );
   }
+  return value as PlanningThinkingLevel;
+}
+function parseAgent(value: unknown, location: string, filePath: string): PlanningAgentConfig | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires ${location} to be an object`);
+  assertKeys(value, AGENT_KEYS, location, filePath);
+  const thinking = parseThinking(value.thinking, location, filePath);
   const model = optionalString(value.model, `${location}.model`, filePath);
-  return { ...(model ? { model } : {}), ...(thinking ? { thinking: thinking as PlanningThinkingLevel } : {}) };
+  return { ...(model ? { model } : {}), ...(thinking ? { thinking } : {}) };
+}
+/**
+ * A flag the cockpit can write.
+ *
+ * The settings page writes strings and nothing else, so `'true'` has to mean
+ * what a hand-edited `true` means. Anything else is rejected rather than
+ * treated as false, because a typo that silently disables a feature is the
+ * worst reading of it.
+ */
+function parseFlexibleBoolean(value: unknown, location: string, filePath: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error(`Doom config at ${filePath} requires ${location} to be true or false`);
+}
+/** Same story as the flag: a number, or the string form the settings page writes. */
+function parseFlexibleRatio(value: unknown, location: string, filePath: string): number | undefined {
+  if (value === undefined) return undefined;
+  const ratio = typeof value === 'string' ? Number(value.trim()) : value;
+  if (
+    typeof ratio !== 'number' ||
+    !Number.isFinite(ratio) ||
+    ratio < MIN_AUTOCOMPACT_RATIO ||
+    ratio > MAX_AUTOCOMPACT_RATIO
+  ) {
+    throw new Error(
+      `Doom config at ${filePath} requires ${location} to be a number from ${MIN_AUTOCOMPACT_RATIO} to ${MAX_AUTOCOMPACT_RATIO}`,
+    );
+  }
+  return ratio;
+}
+function parseAutocompactThresholds(
+  value: unknown,
+  location: string,
+  filePath: string,
+): AutocompactThresholdConfig | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires ${location} to be an object`);
+  assertKeys(value, AUTOCOMPACT_THRESHOLD_KEYS, location, filePath);
+  const pass1 = parseFlexibleRatio(value.pass1, `${location}.pass1`, filePath);
+  const pass2 = parseFlexibleRatio(value.pass2, `${location}.pass2`, filePath);
+  const pass3 = parseFlexibleRatio(value.pass3, `${location}.pass3`, filePath);
+  return {
+    ...(pass1 === undefined ? {} : { pass1 }),
+    ...(pass2 === undefined ? {} : { pass2 }),
+    ...(pass3 === undefined ? {} : { pass3 }),
+  };
+}
+export function parseAutocompactModeConfig(
+  value: unknown,
+  filePath: string,
+  location = 'modes.autocompact',
+): AutocompactModeConfig {
+  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires ${location} to be an object`);
+  assertKeys(value, AUTOCOMPACT_KEYS, location, filePath);
+  const enabled = parseFlexibleBoolean(value.enabled, `${location}.enabled`, filePath);
+  const model = optionalString(value.model, `${location}.model`, filePath);
+  const thinking = parseThinking(value.thinking, location, filePath);
+  const thresholds = parseAutocompactThresholds(value.thresholds, `${location}.thresholds`, filePath);
+  return {
+    ...(enabled === undefined ? {} : { enabled }),
+    ...(model ? { model } : {}),
+    ...(thinking ? { thinking } : {}),
+    ...(thresholds ? { thresholds } : {}),
+  };
 }
 export function parsePlanningModeConfig(
   value: unknown,
@@ -464,8 +538,14 @@ export function parseDoomConfig(content: string, filePath: string): DoomConfig {
   if (parsed.modes !== undefined) {
     if (!isObject(parsed.modes)) throw new Error(`Doom config at ${filePath} requires modes to be an object`);
     assertKeys(parsed.modes, MODE_KEYS, 'modes', filePath);
-    modes =
-      parsed.modes.planning === undefined ? {} : { planning: parsePlanningModeConfig(parsed.modes.planning, filePath) };
+    modes = {
+      ...(parsed.modes.planning === undefined
+        ? {}
+        : { planning: parsePlanningModeConfig(parsed.modes.planning, filePath) }),
+      ...(parsed.modes.autocompact === undefined
+        ? {}
+        : { autocompact: parseAutocompactModeConfig(parsed.modes.autocompact, filePath) }),
+    };
   }
   const trust = parsed.projectTrust === undefined ? DEFAULT_PROJECT_TRUST : parsed.projectTrust;
   if (typeof trust !== 'string' || !TRUST_VALUES.has(trust as ProjectTrust))
@@ -497,9 +577,26 @@ export function mergeDoomConfigs(globalConfig: DoomConfig, repositoryConfig: Doo
           plansDirectory: repositoryPlanning?.plansDirectory ?? globalPlanning?.plansDirectory,
         }
       : undefined;
+  const globalAutocompact = globalConfig.modes?.autocompact;
+  const repositoryAutocompact = repositoryConfig.modes?.autocompact;
+  // Per key, so a repository can pin the model and inherit the ladder, or the
+  // other way round.
+  const autocompact =
+    globalAutocompact || repositoryAutocompact
+      ? {
+          ...globalAutocompact,
+          ...repositoryAutocompact,
+          ...(globalAutocompact?.thresholds || repositoryAutocompact?.thresholds
+            ? { thresholds: { ...globalAutocompact?.thresholds, ...repositoryAutocompact?.thresholds } }
+            : {}),
+        }
+      : undefined;
   const voice = mergeVoice(globalConfig.voice, repositoryConfig.voice);
   return {
-    modes: planning ? { planning } : undefined,
+    modes:
+      planning || autocompact
+        ? { ...(planning ? { planning } : {}), ...(autocompact ? { autocompact } : {}) }
+        : undefined,
     projectTrust: repositoryConfig.projectTrust,
     editor: globalConfig.editor,
     voice,

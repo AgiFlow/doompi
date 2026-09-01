@@ -22,10 +22,9 @@ function declaresColors(relativePath: string): boolean {
   );
 }
 
-/** Browser source: the cockpit's client tree, a plugin's web/ tree, or a component library's src. */
+/** Browser source: the cockpit's client tree, a plugin's src/web tree, or a component library's src. */
 function isBrowserSource(relativePath: string): boolean {
   if (relativePath.startsWith('src/web/')) return true;
-  if (relativePath.startsWith('web/')) return true;
   return relativePath.startsWith('src/components/') || relativePath.startsWith('src/lib/');
 }
 

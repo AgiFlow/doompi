@@ -8,6 +8,7 @@ export const TASK_EVENT = {
   storeCommitListenerFailed: 'doom_task.store_commit_listener_failed',
   storeSweepFailed: 'doom_task.store_sweep_failed',
   sessionStartFailed: 'doom_task.session_start_failed',
+  sessionStartDegraded: 'doom_task.session_start_degraded',
   toolFailed: 'doom_task.tool_failed',
   delegationRequestFailed: 'doom_task.delegation_request_failed',
   delegationStartFailed: 'doom_task.delegation_start_failed',

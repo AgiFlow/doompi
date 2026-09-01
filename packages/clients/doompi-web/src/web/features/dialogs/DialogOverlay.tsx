@@ -15,7 +15,7 @@ import {
   Textarea,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { focusPrompt } from '../../lib/promptFocus.ts';
 import { menuStore } from '../../stores/menuStore.ts';
 import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore.ts';
@@ -39,10 +39,16 @@ export function DialogOverlay() {
   const [value, setValue] = useState('');
   const [cursor, setCursor] = useState(0);
 
-  useEffect(() => {
+  // A new request (or a re-sent prefill for the same one) starts the field over.
+  // Adjusted during render rather than in an effect so the stale answer is never
+  // painted for a frame.
+  const request = `${dialog?.id ?? ''}\u0000${dialog?.prefill ?? ''}`;
+  const [shown, setShown] = useState<string | null>(null);
+  if (shown !== request) {
+    setShown(request);
     setValue(dialog?.prefill ?? '');
     setCursor(0);
-  }, [dialog?.id, dialog?.prefill]);
+  }
 
   if (!dialog) return null;
   if (dialog.method === 'select' && claimed !== null && claimed.dialogId === dialog.id) return null;

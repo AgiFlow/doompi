@@ -31,8 +31,17 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
       type: 'module',
     });
     expect(packageJson.private).toBeUndefined();
-    expect(packageJson.files).toEqual(expect.arrayContaining(['dist']));
-    expect(packageJson.files?.some((entry) => /^(src|tests|coverage|\.env)/u.test(entry))).toBe(false);
+    expect(packageJson.files).toEqual(expect.arrayContaining(['dist', 'src/web']));
+    // The cockpit client is TypeScript the host bundles, so src/web, the
+    // src/exports re-export that publishes it, and the descriptor table it
+    // imports ship as source. Nothing else under src/ does.
+    expect(packageJson.files?.filter((entry) => entry.startsWith('src/'))).toEqual([
+      'src/web',
+      'src/exports/webClient.ts',
+      'src/types/autocompactSettings.ts',
+      'src/types/constants.ts',
+    ]);
+    expect(packageJson.files?.some((entry) => /^(tests|coverage|\.env)/u.test(entry))).toBe(false);
   });
 
   it('uses local package tooling instead of rig-backed configuration', () => {
@@ -43,28 +52,24 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     }
   });
 
-  it('declares ESM, CJS, declarations, and the private worker build entry', () => {
+  it('declares ESM, CJS, and declaration build entries for the public exports only', () => {
     const config = readConfig('tsdown.config.ts');
     expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
-    expect(config).toContain("'*': 'src/exports/**/*.ts'");
-    expect(config).toContain('src/adapters/process/checkpointWorker.ts');
+    // The browser client re-export is negated out: the cockpit bundles it from
+    // source, and node-building it would pull React into dist for nothing.
+    expect(config).toContain("'*': ['src/exports/**/*.ts', '!src/exports/webClient.ts']");
+    expect(config).not.toContain('src/adapters/');
   });
 
-  it('keeps the standalone worker independent from package-local Pi resolution', () => {
-    const worker = readConfig('src/adapters/process/checkpointWorker.ts');
-
-    expect(worker).toContain('await import(input.piModuleUrl)');
-    expect(worker).not.toMatch(/import\s+\{[^}]*generateSummary[^}]*\}\s+from/u);
-  });
-  it('resolves the private worker by walking from the emitted adapter', () => {
+  it('summarizes through the session provider instead of a separate thread', () => {
     const adapter = readConfig('src/adapters/pi/extension.ts');
 
-    expect(adapter).toContain('findCheckpointWorkerUrl(import.meta.url)');
-    expect(adapter).not.toMatch(/new URL\(['"]\.\.\//u);
+    expect(adapter).toContain('provider.streamSimple(model, context, options)');
+    expect(adapter).not.toContain('node:worker_threads');
   });
 
-  it('keeps public exports closed while retaining the worker as a private artifact', () => {
+  it('keeps public exports closed to the built entry points', () => {
     const exportsMap = packageJson.exports ?? {};
     expect(Object.keys(exportsMap)).not.toContain('./*');
     for (const [subpath, target] of Object.entries(exportsMap)) {
@@ -78,6 +83,6 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     }
     expect(exportsMap['.']).toMatchObject({ import: './dist/index.mjs', require: './dist/index.cjs' });
     expect(exportsMap['./extensions/pi']).toMatchObject({ import: './dist/extensions/pi.mjs' });
-    expect(Object.keys(exportsMap).some((subpath) => subpath.includes('checkpointWorker'))).toBe(false);
+    expect(Object.keys(exportsMap).some((subpath) => subpath.includes('adapters'))).toBe(false);
   });
 });

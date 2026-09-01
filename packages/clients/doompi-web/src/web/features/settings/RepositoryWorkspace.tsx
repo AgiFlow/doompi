@@ -52,6 +52,7 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
 
   useEffect(() => {
     let currentRequest = true;
+    // eslint-disable-next-line react/set-state-in-effect -- marks the in-flight request that lists the hub's repositories over HTTP.
     setLoading(true);
     void listSettingsRepositories().then((found) => {
       if (!currentRequest) return;

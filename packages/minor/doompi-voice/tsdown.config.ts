@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: { '*': 'src/exports/**/*.ts', voiceWorker: 'src/adapters/process/voiceWorker.ts' },
+  entry: {
+    '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'],
+    voiceWorker: 'src/adapters/process/voiceWorker.ts',
+  },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,

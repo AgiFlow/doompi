@@ -27,7 +27,8 @@
   },
   "files": [
     "dist",
-    "web",
+    "src/web",
+    "src/exports/webClient.ts",
     "src/types/domain.ts",
     "src/types/webFiles.ts",
     "src/types/fileEditsApi.ts",
@@ -67,7 +68,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -127,7 +128,7 @@
     "channels": [
       "file_edits"
     ],
-    "client": "./web/index.ts",
+    "client": "./src/exports/webClient.ts",
     "hub": {
       "entry": "./src/exports/webHub.ts",
       "dist": "./dist/webHub.mjs"

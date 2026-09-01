@@ -38,7 +38,15 @@ describe('doompi-profile package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.files).toEqual(
-      expect.arrayContaining(['dist', 'web', 'llms.txt', 'README.md', 'src/prompts', 'package.json']),
+      expect.arrayContaining([
+        'dist',
+        'src/web',
+        'src/exports/webClient.ts',
+        'llms.txt',
+        'README.md',
+        'src/prompts',
+        'package.json',
+      ]),
     );
     expect(manifest.keywords).toEqual([
       'agent-persona',
@@ -76,9 +84,11 @@ describe('doompi-profile package contract', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'profile',
       channels: [],
-      client: './web/index.ts',
+      client: './src/exports/webClient.ts',
     });
-    const entry = await readFile(path.join(packageDirectory, 'web/index.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'src/exports/webClient.ts'), 'utf8');
+    expect(client).toContain("export { webPlugin } from '../web/index.ts';");
+    const entry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
     expect(entry).toContain('defineWebPlugin');
     expect(entry).toContain("statusKey: 'doom-profile'");
   });

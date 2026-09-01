@@ -80,11 +80,26 @@ function renderBuiltinHubModule(plugins: readonly DeclaredWebPlugin[]): string {
   return lines.join('\n');
 }
 
+/**
+ * The directory Tailwind scans for a plugin's class names.
+ *
+ * A plugin's components live in its `src/web` root. The client entry is not a
+ * reliable stand-in: it is published through `src/exports/webClient.ts`, a
+ * one-line re-export, and pointing Tailwind at that directory silently drops
+ * every class the panels use. The entry's own directory is the fallback for a
+ * plugin that keeps no src/web root at all.
+ */
+function pluginSourceRoot(plugin: DeclaredWebPlugin): string {
+  const webRoot = path.join(plugin.packageDir, 'src', 'web');
+  if (fs.existsSync(webRoot)) return webRoot;
+  return path.dirname(path.join(plugin.packageDir, plugin.client.entry));
+}
+
 function renderCssModule(plugins: readonly DeclaredWebPlugin[]): string {
   const lines = [`/* ${HEADER.slice(3)} */`];
   for (const plugin of plugins) {
     if (plugin.isHost) continue; // The host tree is already inside Tailwind's scan root.
-    lines.push(`@source "${path.dirname(path.join(plugin.packageDir, plugin.client.entry))}";`);
+    lines.push(`@source "${pluginSourceRoot(plugin)}";`);
   }
   lines.push('');
   return lines.join('\n');

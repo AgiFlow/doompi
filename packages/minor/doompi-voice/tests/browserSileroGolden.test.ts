@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as ort from 'onnxruntime-web/wasm';
-import { SILERO_STATE_SAMPLES, SileroVadFrames } from '../web/sileroVadFrames.ts';
+import { SILERO_STATE_SAMPLES, SileroVadFrames } from '../src/web/sileroVadFrames.ts';
 
 function readScaledFixture(): Uint8Array {
   const wav = fs.readFileSync(new URL('./fixtures/silero-speech.wav', import.meta.url));

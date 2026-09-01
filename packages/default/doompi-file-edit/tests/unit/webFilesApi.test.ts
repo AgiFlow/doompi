@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../../web/filesApi.ts';
+import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../../src/web/filesApi.ts';
 
 const SESSION = 's1';
 const FILE = 'src/app.ts';

@@ -10,14 +10,14 @@ import { installLogTestRuntime, installTelemetryTestRuntime } from './helpers/ex
 
 type Handler = (event: Record<string, unknown>, context: ExtensionContext) => Promise<void>;
 
-function createContext(): ExtensionContext {
+function createContext(sessionId = 'pi-session'): ExtensionContext {
   return {
     cwd: '/workspace',
     mode: 'json',
     thinkingLevel: 'medium',
     model: { provider: 'openai-codex', id: 'gpt-5.6' },
     sessionManager: {
-      getSessionId: () => 'pi-session',
+      getSessionId: () => sessionId,
       getSessionFile: () => '/workspace/session.jsonl',
     },
   } as unknown as ExtensionContext;
@@ -116,6 +116,64 @@ describe('log-sink Pi telemetry entry', () => {
     await handlers.get('session_start')?.({ type: 'session_start', reason: 'startup' }, createContext());
 
     expect(telemetryFactory).toHaveBeenCalledWith(expect.objectContaining({ serviceName: 'custom-service' }));
+  });
+
+  // The sink groups records by the x-agent-session-id header, which is derived from the
+  // environment. A top-level Pi session has no AGENT_SESSION_ID/PI_SESSION_ID set, so without
+  // the overlay every record collapses into one unattributed group and per-agent cost is
+  // unqueryable. This asserts the session id reaches the factory with no ambient env var.
+  it('derives the session header from the session manager when the environment is bare', async () => {
+    const handlers = new Map<string, Handler>();
+    const pi = {
+      on: vi.fn((event: string, handler: Handler) => handlers.set(event, handler)),
+    } as unknown as ExtensionAPI;
+    const { telemetryFactory } = createTelemetryDouble();
+
+    installTelemetryTestRuntime(pi, { env: {}, telemetryFactory });
+    await handlers.get('session_start')?.({ type: 'session_start', reason: 'startup' }, createContext());
+
+    expect(telemetryFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-agent-session-id': expect.stringMatching(/^id_[0-9a-f]+$/) }),
+      }),
+    );
+  });
+
+  // The handle caches its headers, so reusing it across sessions would keep attributing a
+  // long-lived process to whichever session happened to start first.
+  it('rebuilds the telemetry handle when the session id changes', async () => {
+    const handlers = new Map<string, Handler>();
+    const pi = {
+      on: vi.fn((event: string, handler: Handler) => handlers.set(event, handler)),
+    } as unknown as ExtensionAPI;
+    const { telemetryFactory } = createTelemetryDouble();
+
+    installTelemetryTestRuntime(pi, { env: {}, telemetryFactory });
+    await handlers.get('session_start')?.({ type: 'session_start', reason: 'startup' }, createContext('first-session'));
+    await handlers.get('session_start')?.(
+      { type: 'session_start', reason: 'startup' },
+      createContext('second-session'),
+    );
+
+    expect(telemetryFactory).toHaveBeenCalledTimes(2);
+    const [first] = telemetryFactory.mock.calls[0] as [{ headers?: Record<string, string> }];
+    const [second] = telemetryFactory.mock.calls[1] as [{ headers?: Record<string, string> }];
+    expect(first.headers?.['x-agent-session-id']).not.toBe(second.headers?.['x-agent-session-id']);
+  });
+
+  // A single session must not pay for a new handle on every turn.
+  it('reuses the telemetry handle while the session id is unchanged', async () => {
+    const handlers = new Map<string, Handler>();
+    const pi = {
+      on: vi.fn((event: string, handler: Handler) => handlers.set(event, handler)),
+    } as unknown as ExtensionAPI;
+    const { telemetryFactory } = createTelemetryDouble();
+
+    installTelemetryTestRuntime(pi, { env: {}, telemetryFactory });
+    await handlers.get('session_start')?.({ type: 'session_start', reason: 'startup' }, createContext());
+    await handlers.get('session_start')?.({ type: 'session_start', reason: 'startup' }, createContext());
+
+    expect(telemetryFactory).toHaveBeenCalledTimes(1);
   });
 
   it('degrades safely when telemetry initialization fails', async () => {

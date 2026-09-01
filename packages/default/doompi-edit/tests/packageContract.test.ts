@@ -86,7 +86,7 @@ describe('doompi-edit package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
     expect(exportsMap['./package.json']).toBeDefined();
-    expect(manifest.files).toEqual(['dist', 'web']);
+    expect(manifest.files).toEqual(['dist', 'src/web', 'src/exports/webClient.ts']);
     expect(manifest.files).not.toContain('src');
     expect(manifest.files).not.toContain('tests');
     await expect(access(path.join(packageDirectory, 'dist'))).resolves.toBeUndefined();

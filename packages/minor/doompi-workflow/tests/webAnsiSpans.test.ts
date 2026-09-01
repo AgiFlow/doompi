@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ansiSpans } from '../web/ansiSpans.ts';
+import { ansiSpans } from '../src/web/ansiSpans.ts';
 
 const ESC = '\x1b';
 

@@ -74,6 +74,12 @@ import {
   resolveRuntimeTable,
 } from '../../runs/shared/runtimeRegistry';
 import { type ConcurrencyEventReporter, runWithConcurrency } from '../../runs/shared/runWithConcurrency';
+import {
+  type AdmissionGateContract,
+  type AdmissionTicket,
+  DEFAULT_ADMISSION_TIMEOUT_MS,
+  sharedAdmissionGate,
+} from '../../runs/shared/admissionGate';
 import { DoomTeamExpectedError } from '../../../services/support/errors';
 import type { ExtensionConfig } from './config';
 
@@ -213,6 +219,8 @@ interface SpawnOneChildInput {
   parentSessionId: string | undefined;
   parentSessionFile: string | undefined;
   preparedSessionFile: string | undefined;
+  maxLiveRuns: number;
+  admissionTimeoutMs: number;
   handshakeTimeoutMs: number | undefined;
   artifacts: boolean | undefined;
   artifactDir: ExtensionConfig['artifactDir'];
@@ -240,17 +248,32 @@ export interface SpawnPlanResult {
 
 const DEFAULT_PARALLEL_CONCURRENCY = 4;
 /**
- * Hard ceiling on how many children one PARALLEL call may launch.
+ * Hard ceiling on how many children one PARALLEL call may DECLARE.
  *
  * `concurrency` does NOT bound this, and cannot: `spawnOneChild` resolves as
  * soon as its child confirms it started, and the child then runs detached. So
  * `runWithConcurrency` throttles how fast children are STARTED, not how many
  * are running - `{tasks: [8], concurrency: 4}` ends up with eight live model
- * processes, not four. Until a launch queue exists that drains as runs go
- * terminal, a width cap is the only thing standing between a fan-out and the
- * machine. 8 matches the sibling implementation's `PI_TEAM_MATE_MAX_PARALLEL`.
+ * processes, not four. 8 matches the sibling implementation's
+ * `PI_TEAM_MATE_MAX_PARALLEL`.
+ *
+ * This is a per-call declaration limit and nothing more. What actually bounds
+ * live children across concurrent calls is `AdmissionGate`
+ * (`runs/shared/admissionGate.ts`), which every spawn passes through.
  */
 const DEFAULT_PARALLEL_MAX_TASKS = 8;
+/**
+ * Process-wide ceiling on children ALIVE at once.
+ *
+ * Defaulted to `DEFAULT_PARALLEL_MAX_TASKS` so a single call's width is
+ * exactly what it was before the gate existed; the only behaviour that
+ * changes is that a second overlapping call now queues instead of stacking
+ * another full batch on the machine. Raise or lower it with
+ * `parallel.maxLiveRuns` in the subagent config, and bound the queue wait with
+ * `parallel.admissionTimeoutMs`. It is deliberately NOT derived from the host's
+ * cores or memory: a number measured on one machine is not a default.
+ */
+const DEFAULT_MAX_LIVE_RUNS = DEFAULT_PARALLEL_MAX_TASKS;
 const INLINE_AGENT_TOOLS = ['read', 'grep', 'find', 'ls'] as const;
 
 function appendPromptSection(prompt: string, section: string): string {
@@ -353,6 +376,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
     private readonly skills?: SkillDiscoveryContract,
     private readonly reportConcurrencyEvent?: ConcurrencyEventReporter,
     private readonly mcpToolResolver?: McpDirectToolResolver,
+    private readonly admission: AdmissionGateContract = sharedAdmissionGate(),
   ) {}
 
   protected generateRunId(): string {
@@ -607,6 +631,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
       parentSessionId,
       parentSessionFile,
       preparedSessionFile,
+      maxLiveRuns,
+      admissionTimeoutMs,
       handshakeTimeoutMs,
       artifacts,
       artifactDir,
@@ -709,6 +735,23 @@ export class SpawnPlanner implements SpawnPlannerContract {
       runtimes,
     };
 
+    let ticket: AdmissionTicket;
+    try {
+      ticket = await this.admission.admit({
+        maxLiveRuns,
+        timeoutMs: admissionTimeoutMs,
+        ...(this.reportConcurrencyEvent ? { report: this.reportConcurrencyEvent } : {}),
+      });
+    } catch (error) {
+      return {
+        agent: agentConfig.name,
+        task,
+        childIndex,
+        error: error instanceof Error ? error.message : String(error),
+        ...(warning ? { warning } : {}),
+      };
+    }
+
     try {
       const result: AsyncSubagentSpawnResult = await this.spawner.spawn(spawnInput);
       return {
@@ -727,6 +770,10 @@ export class SpawnPlanner implements SpawnPlannerContract {
         error: error instanceof Error ? error.message : String(error),
         ...(warning ? { warning } : {}),
       };
+    } finally {
+      // The child is in `runRegistry` by the time `spawn` resolves, so the
+      // registry count takes over from this reservation.
+      ticket.release();
     }
   }
 
@@ -754,9 +801,9 @@ export class SpawnPlanner implements SpawnPlannerContract {
     if (tasks.length > maxTasks) {
       throw new DoomTeamExpectedError(
         ERROR_CODE_INVALID_REQUEST,
-        `Run requested ${tasks.length} tasks, but at most ${maxTasks} may run at once. Concurrency throttles how fast they start, not how many run.`,
+        `Run requested ${tasks.length} tasks, but at most ${maxTasks} may be declared in one call. Concurrency throttles how fast they start, not how many run.`,
         false,
-        'Split the requests into smaller explicit run calls.',
+        'Send at most that many requests in this call and wait for them, or raise parallel.maxTasks in the subagent config. Splitting the same width across extra calls does not raise the live-child ceiling.',
       );
     }
 
@@ -919,6 +966,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
     const concurrency = fanout
       ? (request.concurrency ?? config.parallel?.concurrency ?? DEFAULT_PARALLEL_CONCURRENCY)
       : 1;
+    const maxLiveRuns = Math.max(1, config.parallel?.maxLiveRuns ?? DEFAULT_MAX_LIVE_RUNS);
+    const admissionTimeoutMs = config.parallel?.admissionTimeoutMs ?? DEFAULT_ADMISSION_TIMEOUT_MS;
 
     const skillProjectionCache = new Map<string, ChildSkillProjection>();
     const factories = tasks.map(
@@ -937,6 +986,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
           parentSessionId: request.parentSessionId,
           parentSessionFile: request.parentSessionFile,
           preparedSessionFile: preparedSessionFiles[childIndex],
+          maxLiveRuns,
+          admissionTimeoutMs,
           handshakeTimeoutMs: config.handshakeTimeoutMs,
           artifacts: request.artifacts,
           artifactDir: config.artifactDir,

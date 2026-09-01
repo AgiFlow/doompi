@@ -59,6 +59,9 @@ import { authenticatedModelInfos } from '../../services/models/modelResolution';
 import { createSessionScope, setCurrentSessionScope, tryCurrentSessionScope } from '../filesystem/paths';
 import type { PollSchedulerContract } from '../pollScheduler';
 import { writeScopeOwnerAsync } from '../scopeOwner';
+import { resolveActiveTeamModelSpecs } from '../agents/discovery';
+import { writeSessionCatalogSnapshot } from '../sessionCatalogSnapshot';
+import { presentCatalog } from '../../services/webSubagentCatalog';
 import { registerCompletionRenderer } from './tui/completionNotice';
 import { registerSlashRunRenderer } from './tui/slashRunNotice';
 import {
@@ -401,6 +404,37 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
   });
 
   const state: SlashCommandState = { baseCwd: undefined };
+
+  /**
+   * Publish what this session can launch, for the cockpit hub to read.
+   *
+   * The hub and the session API run in `doompi-server`, which never receives
+   * the domain projection's agent directories or the harness state behind the
+   * Team model policy, so discovery run there misses every domain-provided
+   * agent. This process has both. Republished on each turn so an agent file
+   * added mid-session shows up without a restart.
+   */
+  const publishCatalogSnapshot = (cwd: string, sessionId: string): void => {
+    // A spawned child shares its parent's scope directory; only the root
+    // session may write the catalog the user is looking at.
+    if (resolveRootSessionId(sessionId) !== sessionId) return;
+    try {
+      writeSessionCatalogSnapshot(sessionId, {
+        cwd,
+        agents: presentCatalog(discovery.discover(cwd, 'both').agents),
+        models: resolveActiveTeamModelSpecs() ?? [],
+      });
+    } catch {
+      // Best effort: the hub falls back to its own discovery, and every launch
+      // path reports discovery failures on its own.
+    }
+  };
+
+  pi.on('before_agent_start', (_event: { systemPrompt?: string }, ctx: ExtensionContext) => {
+    if (!active) return undefined;
+    publishCatalogSnapshot(ctx.cwd, ctx.sessionManager.getSessionId());
+    return undefined;
+  });
   const slashCommandDeps = buildSlashCommandDeps(
     discovery,
     skills,
@@ -487,6 +521,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
     const scope = createSessionScope(resolveRootSessionId(sessionId));
     setCurrentSessionScope(scope);
     state.baseCwd = ctx.cwd;
+    publishCatalogSnapshot(ctx.cwd, sessionId);
     if (watchedScopeKey !== undefined && watchedScopeKey !== scope.scopeKey) {
       resultWatcher.stop();
       watchedScopeKey = undefined;
@@ -555,7 +590,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
             cwd: ctx.cwd,
             availableModels: authenticatedModelInfos(ctx.modelRegistry),
             ...(parentModel ? { parentModel } : {}),
-            forkSource: captureSessionForkSource(ctx.sessionManager, 'tool'),
+            captureForkSource: () => captureSessionForkSource(ctx.sessionManager, 'tool'),
           },
           delegation: delegationBridge,
           fablePlan: fablePlanBridge,

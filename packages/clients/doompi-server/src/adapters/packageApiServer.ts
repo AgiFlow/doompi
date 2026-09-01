@@ -15,6 +15,13 @@ import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 /** The socket name beside the session's own, so one directory holds the pair. */
 export const API_SOCKET_NAME = 'api.sock';
 
+/**
+ * A body that keeps streaming well after its headers went out is worth its own span. A fast
+ * one is not: the request span already carries the duration and outcome, so emitting a second
+ * span per call made package API traffic 99.65% of all spans recorded in a two hour sample.
+ */
+export const COMPLETION_SPAN_MIN_DURATION_MS = 1000;
+
 export interface PackageApiServerOptions {
   /** Directory the session's sockets live in; the API socket joins them there. */
   socketDir: string;
@@ -141,6 +148,10 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     }
     return responseWithCompletion(response, () => {
       if (!options.telemetry) return;
+      const durationMs = Math.round(performance.now() - startedAt);
+      // Keep this span only where it says something the request span cannot: a failing status,
+      // or a body that took real time to flush after the headers were sent.
+      if (response.status < 400 && durationMs < COMPLETION_SPAN_MIN_DURATION_MS) return;
       observe(
         options.telemetry.runInSpan(
           'doompi_server.package_api.complete',
@@ -148,7 +159,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
             api: basePath,
             method: request.method,
             status_code: response.status,
-            duration_ms: Math.round(performance.now() - startedAt),
+            duration_ms: durationMs,
           },
           async () => undefined,
           childContext ?? parent,

@@ -126,6 +126,7 @@ export {
   DOOM_VOICE_ENGINES,
   DOOM_VOICE_TTS_ENGINES,
   mergeDoomConfigs,
+  parseAutocompactModeConfig,
   parseDoomConfig,
   parsePlanningModeConfig,
   resolveVoiceConfig,
@@ -142,6 +143,8 @@ export type {
   DoomConfigTransitionStrategy,
 } from '../types/config.ts';
 export {
+  type AutocompactModeConfig,
+  type AutocompactThresholdConfig,
   type DeepReadonly,
   DOOM_CONFIG_SERVICE,
   type DoomConfig,

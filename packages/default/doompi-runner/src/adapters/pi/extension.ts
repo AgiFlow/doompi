@@ -40,6 +40,11 @@ const STOPPED_REASON = 'stopped';
 const RUNNER_STATUS_KEY = 'doom-runner-runners';
 const RUNNER_FOOTER_ORDER = 10;
 const RUNNER_STATUS_POLL_MS = 500;
+/**
+ * How often a live session revisits its own runner history. Retention only
+ * bounds a session that ends; a session open all day has to sweep itself.
+ */
+const HISTORY_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 
 /**
  * Project-local extension config, read the way Pi documents it: one JSON file
@@ -98,6 +103,7 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
   let historySweepInFlight: Promise<void> | undefined;
   let historySweepTimer: ReturnType<typeof setImmediate> | undefined;
   let statusPoll: ReturnType<typeof setInterval> | undefined;
+  let historySweepPoll: ReturnType<typeof setInterval> | undefined;
   let unsubscribeRegistry: (() => void) | undefined;
   let sessionInitialization: Promise<void> = Promise.resolve();
   let fallbackReadiness: DoomReadinessCoordinator | undefined;
@@ -290,6 +296,8 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
     sessionReady = false;
     if (statusPoll) clearInterval(statusPoll);
     statusPoll = undefined;
+    if (historySweepPoll) clearInterval(historySweepPoll);
+    historySweepPoll = undefined;
     if (historySweepTimer) clearImmediate(historySweepTimer);
     historySweepTimer = undefined;
     const unsubscribe = unsubscribeRegistry;
@@ -381,6 +389,8 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
   unsubscribeRegistry = registry.subscribe(() => scheduleRefresh(false));
   statusPoll = setInterval(() => scheduleRefresh(true), RUNNER_STATUS_POLL_MS);
   statusPoll.unref?.();
+  historySweepPoll = setInterval(() => scheduleHistorySweep(), HISTORY_SWEEP_INTERVAL_MS);
+  historySweepPoll.unref?.();
 
   registerBashTool(pi, {
     bashRunService: trackedBashRunService,

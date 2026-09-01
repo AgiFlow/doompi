@@ -107,13 +107,15 @@ describe('Doom extension plugin contract', () => {
   it('publishes the web plugin boundary and lets tests reach it', () => {
     expect(recommended.boundaries).toContainEqual({
       name: 'web-plugin',
-      pattern: 'web/**',
-      allowedImports: ['web/**', 'src/types', 'src/types/**'],
+      pattern: 'src/web/**',
+      allowedImports: ['src/web/**', 'src/types', 'src/types/**'],
     });
+    // tests reach the browser half through the src/** entry, so no separate
+    // web entry is needed here any more.
     expect(recommended.boundaries).toContainEqual({
       name: 'tests',
       pattern: 'tests/**',
-      allowedImports: ['src/**', 'tests/**', 'web/**'],
+      allowedImports: ['src/**', 'tests/**'],
     });
     for (const id of [
       'doom-web-plugin-entry',

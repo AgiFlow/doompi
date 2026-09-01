@@ -16,9 +16,9 @@ const OPTION_HINT = 'OptionRow';
 
 const IGNORE_MARKER = /prefer-shared-primitive:\s*ignore/;
 
-/** Browser source: the cockpit's client tree or a plugin's web/ tree. */
+/** Browser source: the cockpit's client tree or a plugin's src/web tree. */
 function isBrowserSource(relativePath: string): boolean {
-  return relativePath.startsWith('src/web/') || relativePath.startsWith('web/');
+  return relativePath.startsWith('src/web/');
 }
 
 function isTest(relativePath: string): boolean {

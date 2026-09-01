@@ -45,14 +45,28 @@ const ARTIFACT_DIR_PREFERENCES = new Set<ArtifactDirPreference>(['project', 'ses
 
 export interface TopLevelParallelConfig {
   /**
-   * Hard cap on how many children one top-level PARALLEL call may launch.
-   * Defaults to 8. This is the only real bound on fan-out width - see
+   * Hard cap on how many children one top-level PARALLEL call may DECLARE.
+   * Defaults to 8. This bounds one call's width only - see
    * `DEFAULT_PARALLEL_MAX_TASKS` in `spawnPlan.ts` for why `concurrency`
-   * cannot serve that purpose.
+   * cannot serve that purpose, and `maxLiveRuns` for the bound that survives
+   * concurrent calls.
    */
   maxTasks?: number;
   /** How many children may be started at once. Throttles launch rate, not the number running. Defaults to 4. */
   concurrency?: number;
+  /**
+   * Process-wide ceiling on children ALIVE at once, across every concurrent
+   * call. Defaults to 8, the same as `maxTasks`, so a single call behaves
+   * exactly as it did before admission control existed. Lower it on a small
+   * machine (each Pi child was measured at 82-218 MB RSS); raise it when the
+   * host can carry more.
+   */
+  maxLiveRuns?: number;
+  /**
+   * How long a queued child waits for a free slot before it is refused as a
+   * per-child error. Defaults to 300000 (5 minutes).
+   */
+  admissionTimeoutMs?: number;
 }
 
 export type ToolDescriptionMode = 'full' | 'compact' | 'custom';

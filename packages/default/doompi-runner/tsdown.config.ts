@@ -2,7 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
-    '*': 'src/exports/**/*.ts',
+    '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'],
     // Executables keep their own entries: a facade would re-export the module
     // instead of running it, and the shebang has to survive to dist.
     'bin/cli': 'src/bin/cli.ts',

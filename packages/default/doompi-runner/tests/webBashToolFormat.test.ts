@@ -9,7 +9,7 @@ import {
   formatResultSummary,
   formatSize,
   truncateMiddle,
-} from '../web/bashToolFormat.ts';
+} from '../src/web/bashToolFormat.ts';
 
 describe('the bash web call summary', () => {
   it('collapses scripts, abbreviates home paths, and keeps both ends of a long pipeline', () => {

@@ -20,6 +20,10 @@ const CANONICAL_ROOTS = new Set([
   'services',
   'tui',
   'types',
+  // The cockpit plugin's browser half. It is canonical so src/exports may
+  // publish its entry, and so the folder rules recognize it instead of
+  // reporting src/web as a noncanonical root.
+  'web',
 ]);
 const RESOURCE_ROOTS = new Set(['prompts']);
 const TRANSITIONAL_ROOTS = new Set(['bin', 'extensions']);
@@ -73,6 +77,11 @@ const ALLOWED_ROOT_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> =
   services: new Set(['schemas', 'services', 'types']),
   tui: new Set(['schemas', 'services', 'tui', 'types']),
   types: new Set(['types']),
+  // A panel composes its sibling components and view modules, so web reaches
+  // itself like every other root. Beyond that the browser half shares only the
+  // wire-JSON view types with the server half, which is what the web-plugin
+  // boundary glob already asserts.
+  web: new Set(['types', 'web']),
   bin: new Set(['adapters', 'bin', 'commands', 'container', 'providers', 'schemas', 'services', 'tui', 'types']),
 };
 

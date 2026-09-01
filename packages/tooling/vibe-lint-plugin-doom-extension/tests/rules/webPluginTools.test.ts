@@ -29,7 +29,7 @@ describe('web-plugin-tool-renderers', () => {
       'package.json',
       JSON.stringify({
         name: 'p',
-        ...(withPlugin ? { doompiWeb: { pluginId: 'demo', client: './web/index.ts' } } : {}),
+        ...(withPlugin ? { doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' } } : {}),
       }),
     );
   }
@@ -40,7 +40,7 @@ describe('web-plugin-tool-renderers', () => {
 
   it('is silent off the manifest and for a package that registers no tool', () => {
     write('src/adapters/pi/tool.ts', tool("'read'"));
-    expect(webPluginToolRenderers.check?.(write('web/index.ts', entry("['read']")), root)).toBeNull();
+    expect(webPluginToolRenderers.check?.(write('src/web/index.ts', entry("['read']")), root)).toBeNull();
     const clean = manifest();
     write('src/adapters/pi/tool.ts', "voiceTools.register({ name: 'x', inputSchema: {}, execute() {} });");
     write(
@@ -53,7 +53,7 @@ describe('web-plugin-tool-renderers', () => {
   it('accepts a literal name claimed by a literal tools entry', () => {
     const file = manifest();
     write('src/adapters/pi/tool.ts', tool("'read'"));
-    write('web/index.ts', entry("['read']"));
+    write('src/web/index.ts', entry("['read']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
   });
 
@@ -64,9 +64,9 @@ describe('web-plugin-tool-renderers', () => {
       'src/commands/bashTool.ts',
       `import { BASH_TOOL_NAME } from '../schemas/bash.js';\nconst TASK = 'task' as const;\n${tool('BASH_TOOL_NAME')}\n${tool('TASK')}`,
     );
-    write('web/names.ts', "const BASH = 'bash';\nexport const TOOL_NAMES = [BASH, 'task'] as const;");
+    write('src/web/names.ts', "const BASH = 'bash';\nexport const TOOL_NAMES = [BASH, 'task'] as const;");
     write(
-      'web/index.ts',
+      'src/web/index.ts',
       `import { defineWebPlugin } from '${CONTRACTS}';\nimport { TOOL_NAMES } from './names.ts';\nexport const webPlugin = defineWebPlugin({ id: 'demo', toolRenderers: [{ tools: [...TOOL_NAMES], message: X }] });`,
     );
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
@@ -82,9 +82,9 @@ describe('web-plugin-tool-renderers', () => {
       'src/adapters/pi/tools.ts',
       `import { WORKFLOW_PI_TOOL_NAMES } from '../../schemas/names.ts';\nconst [LIST, LAUNCH] = WORKFLOW_PI_TOOL_NAMES;\nconst [RUN] = ['workflow_run'] as const;\n${tool('LIST')}\n${tool('LAUNCH')}\n${tool('RUN')}`,
     );
-    write('web/index.ts', entry("['list_workflows', 'launch_workflow', 'workflow_run']"));
+    write('src/web/index.ts', entry("['list_workflows', 'launch_workflow', 'workflow_run']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
-    write('web/index.ts', entry("['list_workflows']"));
+    write('src/web/index.ts', entry("['list_workflows']"));
     const result = webPluginToolRenderers.check?.(file, root);
     expect(result).toContain('launch_workflow (src/adapters/pi/tools.ts)');
     expect(result).toContain('workflow_run (src/adapters/pi/tools.ts)');
@@ -93,7 +93,7 @@ describe('web-plugin-tool-renderers', () => {
   it('reports an unclaimed tool with the file that registers it', () => {
     const file = manifest();
     write('src/adapters/pi/tool.ts', `${tool("'read'")}\n${tool("'write'")}`);
-    write('web/index.ts', entry("['read']"));
+    write('src/web/index.ts', entry("['read']"));
     const result = webPluginToolRenderers.check?.(file, root);
     expect(result).toContain('write (src/adapters/pi/tool.ts)');
     expect(result).not.toContain('read (');
@@ -103,9 +103,9 @@ describe('web-plugin-tool-renderers', () => {
   it('requires a matches renderer for a name computed at runtime', () => {
     const file = manifest();
     write('src/adapters/pi/tool.ts', tool('tool.piName'));
-    write('web/index.ts', entry('[]'));
+    write('src/web/index.ts', entry('[]'));
     expect(webPluginToolRenderers.check?.(file, root)).toContain('computed at runtime');
-    write('web/index.ts', entry('[]', 'matches: () => true, '));
+    write('src/web/index.ts', entry('[]', 'matches: () => true, '));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
   });
 
@@ -115,7 +115,7 @@ describe('web-plugin-tool-renderers', () => {
       'src/adapters/pi/tool.ts',
       `import { NARRATE_TOOL_NAME } from '@agimon-ai/doompi-extension-contracts/voice-tools';\n${tool('NARRATE_TOOL_NAME')}`,
     );
-    write('web/index.ts', entry("['narrate']"));
+    write('src/web/index.ts', entry("['narrate']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
     write('src/adapters/pi/other.ts', tool("'other'"));
     const result = webPluginToolRenderers.check?.(file, root);
@@ -129,7 +129,7 @@ describe('web-plugin-tool-renderers', () => {
       'src/adapters/pi/child.ts',
       `// web-plugin-tool-renderers: ignore structured_output (child process only)\n${tool("'structured_output'")}`,
     );
-    write('web/index.ts', entry('[]'));
+    write('src/web/index.ts', entry('[]'));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
   });
 
@@ -137,7 +137,7 @@ describe('web-plugin-tool-renderers', () => {
     const file = manifest();
     write('src/adapters/pi/tool.test.ts', tool("'ghost'"));
     write('src/fixtures/tool.ts', tool("'ghost'"));
-    write('web/index.ts', entry('[]'));
+    write('src/web/index.ts', entry('[]'));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
   });
 
@@ -151,13 +151,29 @@ describe('web-plugin-tool-renderers', () => {
     const file = manifest();
     write('src/adapters/pi/tool.ts', `${tool("'subagent'")}\n${tool("'intercom'")}`);
     write(
-      'web/toolRenderers.ts',
+      'src/web/toolRenderers.ts',
       "export const teamToolRenderers = [{ tools: ['subagent'], message: A }, { tools: ['intercom'], message: B }];",
     );
     write(
-      'web/index.ts',
+      'src/web/index.ts',
       `import { defineWebPlugin } from '${CONTRACTS}';\nimport { teamToolRenderers } from './toolRenderers.ts';\nexport const webPlugin = defineWebPlugin({ id: 'demo', toolRenderers: teamToolRenderers });`,
     );
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
+  });
+
+  // The renderer scan walks the package's web root. If it resolved only the
+  // pre-migration web/, a migrated package would report every tool as missing
+  // a renderer, so the src/web layout is pinned here too.
+  it('finds renderers in src/web and still reports a tool none of them claims', () => {
+    const file = write(
+      'package.json',
+      JSON.stringify({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/exports/webClient.ts' } }),
+    );
+    write('src/adapters/pi/tool.ts', tool("'read'"));
+    write('src/web/index.ts', entry("['read']"));
+    expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
+
+    write('src/adapters/pi/tool.ts', `${tool("'read'")}\n${tool("'write'")}`);
+    expect(webPluginToolRenderers.check?.(file, root)).toContain('write');
   });
 });

@@ -2,17 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership.ts';
-import { browserVoiceMediaClientId } from '../web/browserMediaIdentity.ts';
-import { VoiceActivitySection } from '../web/VoiceActivitySection.tsx';
-import { VoiceComposerAction } from '../web/VoiceComposerAction.tsx';
-import { VoiceToolMessage } from '../web/VoiceToolMessage.tsx';
+import { browserVoiceMediaClientId } from '../src/web/browserMediaIdentity.ts';
+import { VoiceActivitySection } from '../src/web/VoiceActivitySection.tsx';
+import { VoiceComposerAction } from '../src/web/VoiceComposerAction.tsx';
+import { VoiceToolMessage } from '../src/web/VoiceToolMessage.tsx';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
   voiceMediaWakes,
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
-} from '../web/voiceMediaWakeStore.ts';
+} from '../src/web/voiceMediaWakeStore.ts';
 
 afterEach(() => {
   activeVoiceSession.reset();
@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe('browser voice media', () => {
   it('publishes both controls and page-lifetime media channels', async () => {
-    const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
 
     expect(source).toContain('channels: [voiceMediaWakeChannel, voiceOwnershipChannel]');
     expect(source).toContain('start: startVoiceMediaRuntime');
@@ -32,18 +32,18 @@ describe('browser voice media', () => {
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
-    const runtimeSource = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    const runtimeSource = await readFile(new URL('../src/web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
     expect(runtimeSource).toContain('this.device.armUserGesture()');
   });
 
   it('does not classify autonomous voice capture as background work', async () => {
-    const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
 
     expect(source).toContain('marksBackgroundWork: false');
   });
 
   it('presents narration as readable conversational output', async () => {
-    const source = await readFile(new URL('../web/index.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
     const rendered = renderPlugin(
       VoiceToolMessage,
       toolMessagePropsFixture({
@@ -156,13 +156,13 @@ describe('browser voice media', () => {
   });
 
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
-    const source = await readFile(new URL('../web/clientMediaTransport.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/clientMediaTransport.ts', import.meta.url), 'utf8');
 
     expect(source).toContain("controlLocation: sealedTransport.active() ? 'remote' : 'local'");
   });
 
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
-    const source = await readFile(new URL('../web/browserMediaDevice.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/browserMediaDevice.ts', import.meta.url), 'utf8');
 
     expect(source).toContain("new URL('./browserCaptureWorklet.js?no-inline', import.meta.url).href");
     expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
@@ -170,7 +170,7 @@ describe('browser voice media', () => {
   });
 
   it('fills the composer action with manual recording and blocks it during autonomous voice', async () => {
-    const source = await readFile(new URL('../web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).toContain('data-testid="composer-voice-error"');
@@ -206,7 +206,7 @@ describe('browser voice media', () => {
   });
 
   it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
-    const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
 
     expect(source).not.toContain("sendCommand('/voice')");
     expect(source).not.toContain('voice-recording-stop');
@@ -234,7 +234,7 @@ describe('browser voice media', () => {
     );
     expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
 
-    const source = await readFile(new URL('../web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
     expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
@@ -255,7 +255,7 @@ describe('browser voice media', () => {
     expect(composer.html).toContain('manual voice is unavailable while autonomous voice is active');
   });
   it('switches browser media from the server-selected global value without acknowledgements', async () => {
-    const source = await readFile(new URL('../web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
     expect(source).toContain('this.boundSessionId = sessionId');

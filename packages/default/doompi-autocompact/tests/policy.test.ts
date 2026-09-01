@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   baselineUsageIsSettled,
   checkpointSummaryFromEntry,
+  compactionRatios,
   contextDetailsFromUnknown,
   createInitialState,
   fileDetailsFromUnknown,
@@ -90,6 +91,16 @@ describe('autocompact policy', () => {
     expect(thresholdTokens(3, 200_000)).toBe(183_616);
     expect(thresholdTokens(3, 32_000)).toBe(15_616);
     expect(thresholdTokens(1, 32_000)).toBe(15_616);
+  });
+
+  it('takes configured pass ratios and keeps the ladder climbing', () => {
+    expect(compactionRatios()).toEqual({ 1: 0.5, 2: 0.75, 3: 0.95 });
+    expect(compactionRatios({ 1: 0.4 })).toEqual({ 1: 0.4, 2: 0.75, 3: 0.95 });
+    // A pass configured below the one before it would never contribute, so it is
+    // raised rather than left as a rung that can never fire.
+    expect(compactionRatios({ 1: 0.8, 2: 0.6 })).toEqual({ 1: 0.8, 2: 0.8, 3: 0.95 });
+
+    expect(thresholdTokens(1, 1_000_000, 0, { 1: 0.1 })).toBe(100_000);
   });
 
   it('extracts the agent-owned pass 2 decision from the checkpoint', () => {

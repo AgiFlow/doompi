@@ -4,6 +4,9 @@ export type AutocompactPass = 1 | 2 | 3;
 export type AutocompactMessage = ContextEvent['messages'][number];
 export type AutocompactPhase = 'waiting' | 'checkpoint_pending' | 'checkpoint_ready' | 'compacting';
 
+/** Configured pass ratios, keyed by pass; an absent pass keeps its default. */
+export type AutocompactRatioOverrides = Partial<Record<AutocompactPass, number>>;
+
 export interface AutocompactFileDetails {
   readFiles: string[];
   modifiedFiles: string[];

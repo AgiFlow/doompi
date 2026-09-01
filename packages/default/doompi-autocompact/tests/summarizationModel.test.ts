@@ -5,7 +5,7 @@ const loadDoomConfig = vi.hoisted(() => vi.fn());
 const harnessState = vi.hoisted(() => vi.fn(() => ({})));
 vi.mock('@agimon-ai/doompi-config', () => ({ loadDoomConfig, getHarnessState: harnessState }));
 
-const { parseModelReference, resolveDoomSummarizationModel, resolveSummarizationModel } =
+const { autocompactRuntimeConfig, parseModelReference, resolveDoomSummarizationModel, resolveSummarizationModel } =
   await import('../src/adapters/pi/extension.ts');
 
 type Model = NonNullable<ExtensionContext['model']>;
@@ -110,5 +110,29 @@ describe('summarization model resolution', () => {
   it('loads the active Pi model without consulting Doom config on the standard path', () => {
     expect(resolveSummarizationModel(createContext())).toEqual({ model: SESSION_MODEL, thinkingLevel: 'low' });
     expect(loadDoomConfig).not.toHaveBeenCalled();
+  });
+
+  it('prefers the autocompact keys over the planning subagent they used to borrow', () => {
+    loadDoomConfig.mockReturnValue({
+      modes: {
+        planning: { subagents: { model: 'openai-codex/gpt-5.6-sol', thinking: 'low' } },
+        autocompact: { model: 'openai-codex/gpt-5.6-luna', thinking: 'max' },
+      },
+    });
+
+    expect(resolveDoomSummarizationModel(createContext())).toEqual({
+      model: SUBAGENT_MODEL,
+      thinkingLevel: 'max',
+    });
+  });
+
+  it('reads the enable flag and the pass ratios, defaulting to on with no overrides', () => {
+    loadDoomConfig.mockReturnValue({
+      modes: { autocompact: { enabled: false, thresholds: { pass1: 0.4, pass3: 0.9 } } },
+    });
+    expect(autocompactRuntimeConfig('/repo')).toEqual({ enabled: false, ratios: { 1: 0.4, 3: 0.9 } });
+
+    loadDoomConfig.mockReturnValue({ modes: {} });
+    expect(autocompactRuntimeConfig('/repo')).toEqual({ enabled: true, ratios: {} });
   });
 });

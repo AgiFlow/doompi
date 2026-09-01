@@ -59,7 +59,33 @@ const SESSION_START_EVENT = 'session_start';
 const SESSION_COMPACT_EVENT = 'session_compact';
 const SESSION_TREE_EVENT = 'session_tree';
 const TOOL_EXECUTION_END_EVENT = 'tool_execution_end';
+const ERROR_TYPE_ATTRIBUTE = 'error.type';
+/**
+ * Which part of session start ran. The telemetry sanitizer drops free text, so
+ * the failing branch has to travel as a stable low-cardinality token.
+ */
+const SESSION_START_STAGE_ATTRIBUTE = 'task.stage';
+const SESSION_START_STAGE = {
+  sessionId: 'session_id',
+  storeCleanup: 'store_cleanup',
+  storeSweep: 'store_sweep',
+  storeRead: 'store_read',
+  reconcile: 'reconcile',
+  refresh: 'refresh',
+} as const;
+type SessionStartStage = (typeof SESSION_START_STAGE)[keyof typeof SESSION_START_STAGE];
 
+/**
+ * Mirror of the telemetry sink's own `error.type` token. The sink overwrites it
+ * for any defined error, so this only guarantees the attribute exists when the
+ * thrown value is `undefined`.
+ */
+function errorTypeToken(error: unknown): string {
+  if (error instanceof Error) return error.name || 'Error';
+  if (typeof error === 'string') return 'StringError';
+  if (error && typeof error === 'object') return 'ObjectError';
+  return 'UnknownError';
+}
 /** Install Task state and external resources into its host-owned Cordis plugin fiber. */
 export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
   const errorReporter = createTaskErrorReporter();
@@ -269,6 +295,22 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
     const context = ctx as unknown as SessionContextLike;
     const initialize = async (signal?: AbortSignal): Promise<void> => {
       const isCurrent = (): boolean => !signal?.aborted && active && ownGeneration === sessionGeneration;
+      let stage: SessionStartStage = SESSION_START_STAGE.sessionId;
+      /**
+       * Run a stage whose failure only degrades task visibility. The session
+       * still starts, and the warning keeps the degraded state from being silent.
+       */
+      const degrade = async (next: SessionStartStage, operation: () => Promise<void>): Promise<void> => {
+        stage = next;
+        try {
+          await operation();
+        } catch (error) {
+          report.warn(TASK_EVENT.sessionStartDegraded, error, {
+            [SESSION_START_STAGE_ATTRIBUTE]: next,
+            [ERROR_TYPE_ATTRIBUTE]: errorTypeToken(error),
+          });
+        }
+      };
       try {
         const currentSessionId = context.sessionManager?.getSessionId();
         if (!currentSessionId) throw new Error('doom-task requires a session id');
@@ -276,8 +318,10 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
         backgroundWorkEnabled = !context.hasUI;
         backgroundWork?.update();
         taskStore.configureSession(resolveSessionKey(currentSessionId));
+        stage = SESSION_START_STAGE.storeCleanup;
         const cleanup = await removeLegacyStoreDirectoryAsync(taskStore.storePath);
         if (!isCurrent()) return;
+        stage = SESSION_START_STAGE.storeSweep;
         const sweep = hasStorePathOverride()
           ? { removed: [], errors: [] }
           : await sweepStoreFilesAsync(taskStore.storePath, getStoreTtlMs());
@@ -286,16 +330,24 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
         for (const failure of storeErrors) report.warn(TASK_EVENT.storeSweepFailed, new Error(failure));
         if (storeErrors.length > 0 && context.hasUI) context.ui.notify(storeErrors.join('\n'), 'warning');
         if (context.hasUI) taskOverlay.setUICtx(context.ui);
-        await taskStore.readAsync(isCurrent);
+        await degrade(SESSION_START_STAGE.storeRead, async () => {
+          await taskStore.readAsync(isCurrent);
+        });
         if (!isCurrent()) return;
         unwatch = taskStore.onExternalChange(refresh);
-        await delegationManager.reconcile(isCurrent);
+        await degrade(SESSION_START_STAGE.reconcile, async () => {
+          await delegationManager.reconcile(isCurrent);
+        });
         if (!isCurrent()) return;
+        stage = SESSION_START_STAGE.refresh;
         refresh();
       } catch (error) {
         if (!isCurrent()) return;
         clearSessionResources();
-        report.error(TASK_EVENT.sessionStartFailed, error);
+        report.error(TASK_EVENT.sessionStartFailed, error, {
+          [SESSION_START_STAGE_ATTRIBUTE]: stage,
+          [ERROR_TYPE_ATTRIBUTE]: errorTypeToken(error),
+        });
         throw error;
       }
     };

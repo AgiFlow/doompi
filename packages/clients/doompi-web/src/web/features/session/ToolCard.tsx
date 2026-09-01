@@ -110,11 +110,17 @@ function HostAttachmentView({ attachment, index }: { attachment: HostAttachment;
         preload="metadata"
         data-testid="tool-output-video"
         className="max-h-96 max-w-full self-start rounded-md border border-doom-border-soft"
-      />
+      >
+        <track kind="captions" />
+      </video>
     );
   }
   if (url !== undefined && attachment.kind === 'audio') {
-    return <audio src={url} controls preload="metadata" data-testid="tool-output-audio" className="w-full" />;
+    return (
+      <audio src={url} controls preload="metadata" data-testid="tool-output-audio" className="w-full">
+        <track kind="captions" />
+      </audio>
+    );
   }
   if (url !== undefined && attachment.kind === 'pdf') {
     return (

@@ -287,7 +287,11 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
   }
 
   private applyStatus(sessionId: string, runId: string, read: ReadStatusResult | undefined): boolean {
-    const session = this.session(sessionId);
+    // Teardown (`stop()`, `reset()`) can land between two of the tick's awaits.
+    // A late refresh must observe that and drop its result, never recreate the
+    // session it belonged to: resurrecting it here is what made `stop()` not stop.
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
     const existing = session.jobs.get(runId);
     if (read === undefined) {
       // A run may not have created its file yet, and a torn read must not blank
@@ -335,7 +339,9 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
         session.terminalAt.delete(runId);
         changed = true;
       }
-      if (session.jobs.size === 0) this.sessions.delete(sessionId);
+      // Only drop the entry this pass actually walked: a `track()` that landed
+      // during an await above may have installed a fresh one under the same id.
+      if (session.jobs.size === 0 && this.sessions.get(sessionId) === session) this.sessions.delete(sessionId);
     }
 
     return changed;
@@ -362,6 +368,9 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
   }
 
   private trackInSession(sessionId: string, runId: string): void {
+    // `applyStatus` no longer creates sessions (see its comment), so tracking is
+    // the one path that does.
+    this.session(sessionId);
     this.refresh(sessionId, runId);
   }
 

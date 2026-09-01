@@ -22,16 +22,16 @@ const EXPECTED_RULE_IDS = [
 ] as const;
 
 /**
- * prefer-shared-primitive lands as a warning: the surfaces it names are being
- * migrated, and an error would block the change that clears them. Promote it
- * once the sweep is quiet.
+ * Every rule in the preset is an error. prefer-shared-primitive was promoted
+ * from warn once its sweep came back clean: no raw button, input, textarea, or
+ * select remains in either preset consumer.
  */
 const RULE_SEVERITY: Readonly<Record<(typeof EXPECTED_RULE_IDS)[number], 'error' | 'warn'>> = {
   'doom-components-layer-boundary': 'error',
   'doom-web-layer-boundary': 'error',
   'no-cross-feature-import': 'error',
   'no-raw-theme-color': 'error',
-  'prefer-shared-primitive': 'warn',
+  'prefer-shared-primitive': 'error',
   'web-file-naming': 'error',
 };
 

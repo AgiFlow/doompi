@@ -16,6 +16,11 @@ import {
   type SessionEntry,
 } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const loadDoomConfig = vi.hoisted(() => vi.fn(() => ({ modes: {} }) as unknown));
+const getHarnessState = vi.hoisted(() => vi.fn(() => ({}) as unknown));
+vi.mock('@agimon-ai/doompi-config', () => ({ loadDoomConfig, getHarnessState }));
+
 import { installAutocompactRuntime } from '../src/adapters/pi/extension.ts';
 import {
   AUTOCOMPACT_EVENT,
@@ -351,6 +356,8 @@ function compactionEntry(id: string): SessionEntry & { type: 'compaction' } {
 describe('doom autocompact extension', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    loadDoomConfig.mockReturnValue({ modes: {} });
+    getHarnessState.mockReturnValue({});
   });
 
   it('stages pass 1 with an asynchronous LLM summary without entering the agent context', async () => {
@@ -807,7 +814,9 @@ describe('doom autocompact extension', () => {
     harness.setUsage(115_000);
     await harness.emit('agent_settled');
     expect(harness.generationRequests).toHaveLength(1);
-    expect(harness.notify).toHaveBeenCalledWith('Doom autocompact baseline captured at 30000 tokens.', 'info');
+    expect(
+      harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
+    ).toMatchObject({ data: { baselineTokens: 30_000, baselinePending: false } });
   });
 
   it('records delegation failures and retries only after the parent branch advances', async () => {
@@ -949,6 +958,62 @@ describe('doom autocompact extension', () => {
     await harness.emit('agent_settled');
     expect(harness.generationRequests).toHaveLength(4);
     expect(harness.generationRequests[3]?.instructions).toContain('checkpoint pass 2');
+  });
+
+  it('abandons a pass whose summarizer keeps throwing and caps the failure telemetry', async () => {
+    const harness = createHarness();
+    harness.appendAssistant('Large parent transcript.');
+    await harness.emit('session_start', { reason: 'startup' });
+    harness.setUsage(190_000);
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await harness.emit('agent_settled');
+      expect(harness.generationRequests).toHaveLength(attempt);
+      expect(harness.generationRequests[attempt - 1]?.instructions).toContain('checkpoint pass 1');
+      await harness.finishLatest(undefined, true);
+      harness.appendAssistant(`The parent branch advanced ${attempt}.`);
+    }
+
+    expect(harness.notify).toHaveBeenCalledWith(
+      'Doom autocompact summarization pass 1 failed 3 times and was abandoned: summarizer unavailable',
+      'error',
+    );
+    expect(
+      harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
+    ).toMatchObject({ data: { exhaustedPasses: [1], invalidAttempts: 0, checkpointQueue: [2, 3] } });
+
+    // The abandoned rung is skipped while the rest of the ladder still runs.
+    await harness.emit('agent_settled');
+    expect(harness.generationRequests).toHaveLength(4);
+    expect(harness.generationRequests[3]?.instructions).toContain('checkpoint pass 2');
+
+    const pass1Failures = vi
+      .mocked(harness.telemetry.recordError)
+      .mock.calls.filter(
+        ([event, , attributes]) =>
+          event === AUTOCOMPACT_EVENT.checkpointFailed && attributes?.['autocompact.pass'] === 1,
+      );
+    expect(pass1Failures).toHaveLength(3);
+  });
+
+  it('reports a configuration load failure to telemetry exactly once', async () => {
+    const harness = createHarness();
+    harness.appendAssistant('Large parent transcript.');
+    await harness.emit('session_start', { reason: 'startup' });
+    loadDoomConfig.mockImplementation(() => {
+      throw new Error('malformed autocompact configuration');
+    });
+    harness.setUsage(190_000);
+
+    await harness.emit('agent_settled');
+    harness.appendAssistant('The parent branch advanced.');
+    await harness.emit('agent_settled');
+
+    const configWarnings = vi
+      .mocked(harness.telemetry.recordWarning)
+      .mock.calls.filter(([event]) => event === AUTOCOMPACT_EVENT.configurationLoadFailed);
+    expect(configWarnings).toHaveLength(1);
+    expect(configWarnings[0]?.[1]).toBeInstanceOf(Error);
   });
 
   it('clears abandoned passes once the context is compacted', async () => {
@@ -1149,10 +1214,6 @@ describe('doom autocompact extension', () => {
 
     harness.setUsage(319_395);
     await harness.emit('agent_settled');
-    expect(harness.notify).not.toHaveBeenCalledWith(
-      expect.stringContaining('baseline captured at 319395'),
-      expect.anything(),
-    );
     expect(
       harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
     ).toMatchObject({ data: { checkpointQueue: [], baselinePending: true } });
@@ -1161,7 +1222,6 @@ describe('doom autocompact extension', () => {
     harness.setUsage(30_000);
     await harness.emit('agent_settled');
 
-    expect(harness.notify).toHaveBeenCalledWith('Doom autocompact baseline captured at 30000 tokens.', 'info');
     expect(
       harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
     ).toMatchObject({ data: { baselineTokens: 30_000, baselinePending: false, checkpointQueue: [] } });
@@ -1176,7 +1236,9 @@ describe('doom autocompact extension', () => {
     harness.setUsage(150_000);
     await harness.emit('session_start', { reason: 'startup' });
 
-    expect(harness.notify).toHaveBeenCalledWith('Doom autocompact baseline captured at 150000 tokens.', 'info');
+    expect(
+      harness.entries.findLast((entry) => entry.type === 'custom' && entry.customType === STATE_CUSTOM_TYPE),
+    ).toMatchObject({ data: { baselineTokens: 150_000, baselinePending: false } });
   });
 
   it('aborts in-flight summarization whenever the session generation is replaced', async () => {

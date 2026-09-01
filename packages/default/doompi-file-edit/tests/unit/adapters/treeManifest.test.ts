@@ -100,6 +100,14 @@ describe('NodeTreeManifestAdapter', () => {
     expect(await manifests.fingerprint(path.join(root, 'absent.txt'))).toBeUndefined();
   });
 
+  it('reads back when one file was last written, and nothing for what is not a file', async () => {
+    const manifests = new NodeTreeManifestAdapter();
+    const filePath = write('a.txt', 'content');
+    fs.utimesSync(filePath, new Date(1_700_000_000_000), new Date(1_700_000_000_000));
+    expect(await manifests.modifiedAt(filePath)).toBe(1_700_000_000_000);
+    expect(await manifests.modifiedAt(path.join(root, 'absent.txt'))).toBeUndefined();
+    expect(await manifests.modifiedAt(root)).toBeUndefined();
+  });
   it('answers an empty manifest for a directory that is not there', async () => {
     const manifests = new NodeTreeManifestAdapter();
     const manifest = await manifests.take(path.join(root, 'absent'));

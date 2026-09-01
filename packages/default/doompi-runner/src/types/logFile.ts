@@ -2,7 +2,7 @@
 export interface LogWriter {
   readonly path: string;
   append(text: string): void;
-  /** Complete bytes written to the authoritative raw log. */
+  /** Bytes currently in the file at `path`; rotation restarts the count. */
   size(): number;
   close(): void;
 }

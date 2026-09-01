@@ -79,7 +79,12 @@ export interface DelegationSessionContext {
   sessionId: string;
   availableModels: AvailableModelInfo[];
   parentModel?: ParentModel;
-  forkSource?: SessionForkSource;
+  /**
+   * Read fresh per delegation request. Never cached: Pi does not persist a
+   * transcript until the session's first assistant message, so a value captured
+   * when the session binds is empty for a new session and stale after a resume.
+   */
+  captureForkSource?: () => SessionForkSource | undefined;
 }
 
 export interface DelegationBridgeDeps {
@@ -248,6 +253,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     ctx.emit(DOOM_DELEGATION_ACCEPTED_EVENT, { requestId: request.requestId });
 
     try {
+      const forkSource = session.captureForkSource?.();
       const result = await deps.planner.spawn(
         {
           single: {
@@ -260,9 +266,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
           cwd: request.cwd,
           agentScope: 'both',
           parentSessionId: session.sessionId,
-          ...(session.forkSource
-            ? { parentSessionFile: session.forkSource.sessionFile, parentLeafId: session.forkSource.leafId }
-            : {}),
+          ...(forkSource ? { parentSessionFile: forkSource.sessionFile, parentLeafId: forkSource.leafId } : {}),
           availableModels: session.availableModels,
           ...(session.parentModel ? { parentModel: session.parentModel } : {}),
         },

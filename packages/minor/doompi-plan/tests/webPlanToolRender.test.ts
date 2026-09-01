@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_TOOL_NAMES, planCallSummary, planResultLines } from '../web/planToolRender.ts';
+import { PLAN_TOOL_NAMES, planCallSummary, planResultLines } from '../src/web/planToolRender.ts';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });
 const done = { expanded: false, isError: false, isPartial: false };

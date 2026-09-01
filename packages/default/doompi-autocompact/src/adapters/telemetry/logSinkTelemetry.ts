@@ -8,6 +8,7 @@ export const AUTOCOMPACT_EVENT = {
   checkpointCompleted: 'doom_autocompact.checkpoint_completed',
   checkpointFailed: 'doom_autocompact.checkpoint_failed',
   checkpointInvalid: 'doom_autocompact.checkpoint_invalid',
+  configurationLoadFailed: 'doom_autocompact.configuration_load_failed',
   contextContributionDegraded: 'doom_autocompact.context_contribution_degraded',
   contextCommitted: 'doom_autocompact.context_committed',
   contextApplied: 'doom_autocompact.context_applied',

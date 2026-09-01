@@ -5,6 +5,34 @@ import { Check, Errors } from 'typebox/value';
 /** Provider-owned Cordis service for live skill-directory contributions. */
 export const DOOM_SKILL_SOURCES_SERVICE = 'doom/skill-sources';
 
+/**
+ * The custom session entry journaled once Pi has rebuilt its resource catalog
+ * for a reload.
+ *
+ * A reload is the only thing that changes which skills exist, and Pi publishes
+ * nothing for it: the whole wire record of a `/domains` switch is the single
+ * `response:prompt` for the command that triggered it. An RPC client therefore
+ * has no way to learn that the `get_commands` answer it cached, which is what
+ * the web cockpit completes `$` from, now describes the previous domains.
+ *
+ * This entry is that missing signal. It rides Pi's `entry_appended` frames the
+ * way the minor-mode catalog projection does, so it needs no new protocol, and
+ * a custom entry with no registered renderer is invisible in the TUI.
+ */
+export const DOOM_RESOURCE_CATALOG_ENTRY_TYPE = 'doom-resource-catalog';
+
+/**
+ * The payload of a resource-catalog entry.
+ *
+ * Arrival is the signal; a client re-reads the catalog rather than diffing
+ * this. The revision only distinguishes one rebuild from the next in a journal
+ * a human is reading.
+ */
+export interface ResourceCatalogProjection {
+  readonly version: 1;
+  readonly revision: number;
+}
+
 const MAX_GENERATION_LENGTH = 256;
 
 export const SkillSourceNameSchema = Type.String({

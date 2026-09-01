@@ -26,7 +26,7 @@ export default defineConfig({
         // Playwright suite's, the same split doompi-web-components makes for
         // its portal-rendered primitives. The plain modules beside them,
         // stores and render helpers, stay counted.
-        'web/**/*.tsx',
+        'src/web/**/*.tsx',
       ],
       reportOnFailure: false,
       enabled: true,

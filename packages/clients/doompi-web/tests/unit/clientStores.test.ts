@@ -305,6 +305,61 @@ describe('transcript ownership', () => {
       expect.objectContaining({ kind: 'settled' }),
     ]);
   });
+
+  it('folds every re-published copy of a prompt into the entry that stands', () => {
+    // The hub re-reads the journal at each run boundary and re-publishes user
+    // messages, because no live frame carries one. A claim consumed by the first
+    // of those copies left the next one reading as a new prompt, which is the
+    // reader's own message appearing again below the settled divider.
+    applyProtocolTranscript('s1', [], true);
+    setActiveSession('s1');
+    submitMessage('say it once');
+    const optimisticId = sessionStoreFor('s1').state.entries[0]?.id;
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'say it once' }], true);
+    applySessionFrame('s1', { type: 'agent_settled' });
+    releaseProtocolTranscript('s1');
+
+    for (const id of ['journal-1', 'journal-2']) {
+      applySessionFrame('s1', {
+        type: 'entry_appended',
+        entry: { id, type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'say it once' }] } },
+      });
+    }
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: optimisticId, text: 'say it once' },
+      expect.objectContaining({ kind: 'settled' }),
+    ]);
+  });
+
+  it('remembers a journalled prompt it dropped, so the same entry cannot arrive again', () => {
+    // While the protocol owns the transcript the journal's copy is dropped. The
+    // id is kept all the same: the hub republishes that entry at the next run
+    // boundary, and by then ownership may have returned to the journal.
+    applyProtocolTranscript('s1', [], true);
+    setActiveSession('s1');
+    submitMessage('say it once');
+    const optimisticId = sessionStoreFor('s1').state.entries[0]?.id;
+    applyProtocolTranscript('s1', [{ kind: 'user', id: 'protocol-user', text: 'say it once' }], true);
+    const journalled = {
+      type: 'entry_appended',
+      entry: {
+        id: 'journal-1',
+        type: 'message',
+        message: { role: 'user', content: [{ type: 'text', text: 'say it once' }] },
+      },
+    };
+    applySessionFrame('s1', journalled);
+    applySessionFrame('s1', { type: 'agent_settled' });
+
+    releaseProtocolTranscript('s1');
+    applySessionFrame('s1', journalled);
+
+    expect(sessionStoreFor('s1').state.entries).toEqual([
+      { kind: 'user', id: optimisticId, text: 'say it once' },
+      expect.objectContaining({ kind: 'settled' }),
+    ]);
+  });
 });
 describe('transport', () => {
   it('envelopes session commands with the session id', () => {

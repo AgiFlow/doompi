@@ -12,6 +12,7 @@ export const RESULT_MAX_TOKENS_ENV = 'DOOM_RUNNER_RESULT_MAX_TOKENS';
 export const SUCCESS_RESULT_MAX_TOKENS_ENV = 'DOOM_RUNNER_SUCCESS_RESULT_MAX_TOKENS';
 export const LOG_MAX_BYTES_ENV = 'DOOM_RUNNER_LOG_MAX_BYTES';
 export const LOG_TTL_MS_ENV = 'DOOM_RUNNER_LOG_TTL_MS';
+export const MAX_COMPLETED_RUNNERS_ENV = 'DOOM_RUNNER_MAX_COMPLETED_RUNNERS';
 /** Unscoped override for the runner log directory. */
 export const LOG_DIR_ENV = 'DOOM_RUNNER_LOG_DIR';
 
@@ -47,6 +48,14 @@ export const DEFAULT_ERROR_MAX_VARIANTS_JOINED = 6;
 export const DEFAULT_LOG_MAX_BYTES = 5 * 1024 * 1024;
 /** Retention window for logs with no live registry record. */
 export const DEFAULT_LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Completed runners a single session keeps on disk.
+ *
+ * A count bound, not just an age one, because a session that stays open for a
+ * working day never ages its own records past the TTL: they would accumulate
+ * for as long as the session lives.
+ */
+export const DEFAULT_MAX_COMPLETED_RUNNERS = 100;
 
 function positiveNumber(raw: string | undefined, fallback: number): number {
   const value = Number(raw);
@@ -71,6 +80,11 @@ export function getLogMaxBytes(env: NodeJS.ProcessEnv = process.env): number {
 /** Retention window for orphaned runner logs. */
 export function getLogTtlMs(env: NodeJS.ProcessEnv = process.env): number {
   return positiveNumber(env[LOG_TTL_MS_ENV], DEFAULT_LOG_TTL_MS);
+}
+
+/** Completed runners one session retains before the oldest are swept. */
+export function getMaxCompletedRunners(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveNumber(env[MAX_COMPLETED_RUNNERS_ENV], DEFAULT_MAX_COMPLETED_RUNNERS);
 }
 
 /**

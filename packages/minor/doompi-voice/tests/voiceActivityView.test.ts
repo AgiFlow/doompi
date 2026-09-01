@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { voiceActivityView } from '../web/voiceActivityView.ts';
+import { voiceActivityView } from '../src/web/voiceActivityView.ts';
 
 describe('reading the voice status line', () => {
   it('says nothing is listening when the session reports nothing', () => {

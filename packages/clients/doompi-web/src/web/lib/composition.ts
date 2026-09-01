@@ -330,6 +330,7 @@ export function useFileLinks(sessionId: string | null): FileLinkResolver {
     (path: string) => fileLinkFor(sessionId, path),
     // The fingerprint is the dependency: the same path resolves differently
     // once the session's set of tracked files changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint is a deliberate identity buster, not a value the callback reads.
     [sessionId, fingerprint],
   );
 }

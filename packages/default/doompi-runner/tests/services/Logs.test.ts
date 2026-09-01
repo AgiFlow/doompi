@@ -54,16 +54,37 @@ describe('LogFile', () => {
     expect(fs.readFileSync(writer.path, 'utf8')).toBe('fresh\n');
   });
 
-  it('preserves complete output beyond the legacy rotation ceiling', () => {
+  it('rotates at the configured ceiling instead of growing one file forever', () => {
     process.env[LOG_MAX_BYTES_ENV] = '8';
     const writer = logFile().open('api');
     writer.append('12345678');
     writer.append('complete\n');
     writer.close();
 
-    expect(fs.readFileSync(path.join(directory, 'api.log'), 'utf8')).toBe('12345678complete\n');
-    expect(fs.existsSync(path.join(directory, 'api.log.1'))).toBe(false);
-    expect(writer.size()).toBe(17);
+    // The advertised path holds the newest window and the one before it sits beside it.
+    expect(fs.readFileSync(path.join(directory, 'api.log'), 'utf8')).toBe('complete\n');
+    expect(fs.readFileSync(path.join(directory, 'api.log.1'), 'utf8')).toBe('12345678');
+    expect(writer.size()).toBe(9);
+  });
+
+  it('bounds a long run to roughly twice the ceiling while the advertised counts stay honest', () => {
+    const ceiling = 512;
+    process.env[LOG_MAX_BYTES_ENV] = String(ceiling);
+    const writer = logFile().open('api');
+    const line = `${'x'.repeat(63)}\n`;
+    for (let index = 0; index < 500; index += 1) writer.append(line);
+    writer.close();
+
+    const logPath = path.join(directory, 'api.log');
+    const rotatedPath = path.join(directory, 'api.log.1');
+    // 500 * 64 bytes of output, held to two windows on disk.
+    expect(fs.statSync(logPath).size).toBeLessThanOrEqual(ceiling + line.length);
+    expect(fs.statSync(logPath).size + fs.statSync(rotatedPath).size).toBeLessThanOrEqual(2 * (ceiling + line.length));
+
+    // What a reader would advertise still describes the file it read.
+    const text = fs.readFileSync(logPath, 'utf8');
+    expect(Buffer.byteLength(text, 'utf8')).toBe(writer.size());
+    expect(text.split('\n').length - 1).toBe(writer.size() / line.length);
   });
 
   it('tolerates being closed twice', () => {

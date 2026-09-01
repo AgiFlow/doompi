@@ -1,7 +1,7 @@
 import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it } from 'vitest';
-import { PlanToolMessage } from '../../web/PlanToolMessage.tsx';
-import { webPlugin } from '../../web/index.ts';
+import { PlanToolMessage } from '../../src/web/PlanToolMessage.tsx';
+import { webPlugin } from '../../src/web/index.ts';
 
 /**
  * The cockpit half of this package, rendered.

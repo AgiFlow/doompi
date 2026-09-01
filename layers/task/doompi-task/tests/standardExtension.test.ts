@@ -35,6 +35,8 @@ const runtimeMocks = vi.hoisted(() => ({
   overlayDispose: vi.fn(),
   overlayUpdate: vi.fn(),
   readStore: vi.fn(async () => undefined),
+  reportError: vi.fn(),
+  reportWarn: vi.fn(),
   registerBackgroundWork: vi.fn(),
   registerLeader: vi.fn(),
   removeLegacyStore: vi.fn(async (): Promise<{ removed: string[]; errors: string[] }> => ({ removed: [], errors: [] })),
@@ -109,13 +111,21 @@ vi.mock('../src/types/config.ts', () => ({
   resolveCollapseKey: () => 'off',
 }));
 vi.mock('../src/adapters/telemetry/logSinkTelemetry.ts', () => ({
-  TASK_EVENT: { sessionStartFailed: 'session-start-failed', storeSweepFailed: 'store-sweep-failed' },
+  TASK_EVENT: {
+    sessionStartFailed: 'session-start-failed',
+    sessionStartDegraded: 'session-start-degraded',
+    storeSweepFailed: 'store-sweep-failed',
+  },
   createTaskErrorReporter: () => ({
     recordNotificationError: vi.fn(async () => undefined),
     recordWarning: runtimeMocks.narrationWarning,
     shutdown: runtimeMocks.reporterShutdown,
   }),
-  toFailureReporter: () => ({ error: vi.fn(), warn: vi.fn() }),
+  toFailureReporter: () => ({
+    error: runtimeMocks.reportError,
+    warn: runtimeMocks.reportWarn,
+    event: vi.fn(),
+  }),
 }));
 
 const { taskExtension } = await import('../src/adapters/pi/extension.ts');
@@ -362,5 +372,65 @@ describe('standard Task extension lifecycle', () => {
     expect(runtimeMocks.createDelegation).toHaveBeenCalledTimes(2);
     expect(runtimeMocks.createOverlay).toHaveBeenCalledTimes(2);
     expect(runtimeMocks.reporterShutdown).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Task session start failure reporting', () => {
+  it('reports a fatal session start with a stage and a non-empty error type', async () => {
+    const fixture = createPi();
+    await taskExtension(fixture.pi);
+
+    await expect(fixture.handler('session_start')({}, { hasUI: false })).rejects.toThrow(
+      'doom-task requires a session id',
+    );
+
+    expect(runtimeMocks.reportError).toHaveBeenCalledWith(
+      'session-start-failed',
+      expect.any(Error),
+      expect.objectContaining({ 'task.stage': 'session_id', 'error.type': 'Error' }),
+    );
+    const attributes = runtimeMocks.reportError.mock.calls.at(-1)?.[2] as Record<string, string>;
+    expect(attributes['error.type']).not.toBe('');
+    await fixture.handler('session_shutdown')();
+  });
+
+  it('starts the session with an empty task list when the store read fails', async () => {
+    runtimeMocks.readStore.mockRejectedValueOnce(new TypeError('corrupt store'));
+    const fixture = createPi();
+    await taskExtension(fixture.pi);
+
+    await expect(
+      fixture.handler('session_start')({}, { hasUI: false, sessionManager: { getSessionId: () => 'session-read' } }),
+    ).resolves.toBeUndefined();
+
+    expect(runtimeMocks.reportWarn).toHaveBeenCalledWith(
+      'session-start-degraded',
+      expect.any(TypeError),
+      expect.objectContaining({ 'task.stage': 'store_read', 'error.type': 'TypeError' }),
+    );
+    expect(runtimeMocks.reportError).not.toHaveBeenCalled();
+    expect(runtimeMocks.delegationReconcile).toHaveBeenCalledOnce();
+    await fixture.handler('session_shutdown')();
+  });
+
+  it('starts the session when delegation reconciliation fails', async () => {
+    runtimeMocks.delegationReconcile.mockRejectedValueOnce(new Error('reconcile unavailable'));
+    const fixture = createPi();
+    await taskExtension(fixture.pi);
+
+    await expect(
+      fixture.handler('session_start')(
+        {},
+        { hasUI: false, sessionManager: { getSessionId: () => 'session-reconcile' } },
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(runtimeMocks.reportWarn).toHaveBeenCalledWith(
+      'session-start-degraded',
+      expect.any(Error),
+      expect.objectContaining({ 'task.stage': 'reconcile', 'error.type': 'Error' }),
+    );
+    expect(runtimeMocks.reportError).not.toHaveBeenCalled();
+    await fixture.handler('session_shutdown')();
   });
 });

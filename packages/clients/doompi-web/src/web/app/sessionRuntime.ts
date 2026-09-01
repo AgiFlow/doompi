@@ -1,6 +1,7 @@
 import {
   HISTORY_PAGE_TYPE,
   HUB_RESYNCED_TYPE,
+  RESOURCE_CATALOG_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
   SESSION_FRAME_TYPE,
   SESSION_REMOVED_TYPE,
@@ -11,6 +12,7 @@ import {
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
 } from '../../types/hub.ts';
+import { parseBundleUpdatedMessage } from '../../types/bundle.ts';
 import { parseDoomNotificationEntry } from '../../types/notification.ts';
 import {
   REMOTE_PAIRING_REQUEST_TYPE,
@@ -23,7 +25,7 @@ import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } fro
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { dropComposerState } from '../stores/composerStore.ts';
+import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore.ts';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
 import { applyRemoteState } from '../stores/remoteAccessStore.ts';
 import {
@@ -50,6 +52,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Every reload this runtime triggers is unasked for, so unsent text is kept first. */
+function reloadForBundle(): void {
+  saveComposerDrafts();
+  window.location.reload();
+}
+
 async function refreshVerifiedBundle(): Promise<void> {
   try {
     const registration = await navigator.serviceWorker.ready;
@@ -70,10 +78,27 @@ async function refreshVerifiedBundle(): Promise<void> {
       serviceWorker.postMessage({ type: 'doompi:refresh-bundle' }, [channel.port2]);
     });
     if (!isRecord(result) || result.ok !== true) throw new Error('The refreshed bundle was refused.');
-    window.location.reload();
+    reloadForBundle();
   } catch {
     window.location.replace('/pair');
   }
+}
+
+/**
+ * Reloads once the verifier reports a newer bundle it already committed.
+ *
+ * The worker revalidates on navigation, which is the only moment a returning
+ * device reliably asks the host anything. By the time this message arrives the
+ * replacement is verified and on disk, so the reload just picks it up.
+ */
+function watchVerifiedBundleUpdates(): () => void {
+  if (!('serviceWorker' in navigator)) return () => {};
+  const onMessage = (event: MessageEvent<unknown>): void => {
+    if (parseBundleUpdatedMessage(event.data) === undefined) return;
+    reloadForBundle();
+  };
+  navigator.serviceWorker.addEventListener('message', onMessage);
+  return () => navigator.serviceWorker.removeEventListener('message', onMessage);
 }
 
 /**
@@ -96,6 +121,10 @@ function oldestEntryId(frames: readonly Record<string, unknown>[]): string | nul
 }
 
 export function startSessionRuntime(): () => void {
+  // A bundle update reloads this page mid-sentence; the text it saved is put
+  // back before anything can render an empty composer over it.
+  restoreComposerDrafts();
+  const stopBundleWatch = watchVerifiedBundleUpdates();
   // The hub-side subscription this page currently holds; it dies with the
   // socket, which is why the snapshot handler re-subscribes.
   let subscribed: string | null = null;
@@ -195,6 +224,15 @@ export function startSessionRuntime(): () => void {
           if (frame.frame.type === 'extension_ui_request' && frame.frame.method === 'select') {
             claimDialogMenu(typeof frame.frame.id === 'string' ? frame.frame.id : '');
           }
+          // A reload rebuilt the resource catalog, so the commands and skills
+          // this page cached describe the selection it replaced. Pi reports a
+          // reload no other way, which is why the runtime journals this entry.
+          if (frame.frame.type === 'entry_appended') {
+            const entry = isRecord(frame.frame.entry) ? frame.frame.entry : undefined;
+            if (entry?.type === 'custom' && entry.customType === RESOURCE_CATALOG_ENTRY_TYPE) {
+              refreshSessionFacts(frame.sessionId);
+            }
+          }
           if (frame.frame.type === 'agent_settled') {
             clearPendingMenu();
             refreshSessionFacts(frame.sessionId);
@@ -239,6 +277,7 @@ export function startSessionRuntime(): () => void {
   const subscription = sessionsStore.subscribe(() => syncSubscription());
 
   return () => {
+    stopBundleWatch();
     subscription.unsubscribe();
     protocol.stop();
     releaseTransport();

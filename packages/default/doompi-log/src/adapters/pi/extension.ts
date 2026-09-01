@@ -133,6 +133,7 @@ export function installPiTelemetryRuntime(
   let sessionGeneration = 0;
   let agentStartedAt: number | undefined;
   let telemetry: DoomTelemetry | undefined;
+  let telemetrySessionId: string | undefined;
   let sessionReadiness:
     | {
         readonly sessionManager: object;
@@ -157,6 +158,7 @@ export function installPiTelemetryRuntime(
       agentStartedAt = undefined;
       const ownedTelemetry = telemetry;
       telemetry = undefined;
+      telemetrySessionId = undefined;
       await ownedTelemetry?.shutdown();
     },
     `${PACKAGE_NAME}/telemetry`,
@@ -172,23 +174,39 @@ export function installPiTelemetryRuntime(
 
   const getTelemetry = (ctx: ExtensionContext): DoomTelemetry => {
     if (!active) throw new Error('Log telemetry runtime is disposed.');
-    telemetry ??= createDoomTelemetry({
-      serviceName: options.serviceName ?? SERVICE_NAME,
-      packageName: PACKAGE_NAME,
-      cwd: ctx.cwd,
-      env,
-      allowFileFallback: options.allowFileFallback,
-      telemetryFactory: options.telemetryFactory,
-      warn: options.onDiagnostic,
-      enableLogs: true,
-      enableTraces: env.AGENT_OTEL_TRACES === undefined || isEnabled(env.AGENT_OTEL_TRACES),
-      onRecord: (record) => {
-        if (active) metrics?.record(record.event, record.attributes);
-      },
-      onStatus: (status) => {
-        if (active) options.onSinkStatus?.(statusFromTelemetry(status));
-      },
-    });
+    // The sink groups records by the x-agent-session-id header, which the SDK derives from
+    // the environment once per handle. Nothing stamps PI_SESSION_ID for a top-level session
+    // (only doompi-workflow does, for spawned children), so without this overlay every record
+    // lands in a single unattributed group and per-agent cost cannot be queried.
+    const sessionId = ctx.sessionManager.getSessionId();
+    // The handle caches those headers, so a second session in the same process would keep
+    // reporting under the first session's id. Rebuild when the session changes.
+    if (telemetry && telemetrySessionId !== sessionId) {
+      const staleTelemetry = telemetry;
+      telemetry = undefined;
+      telemetrySessionId = undefined;
+      enqueue(() => staleTelemetry.shutdown());
+    }
+    if (!telemetry) {
+      telemetrySessionId = sessionId;
+      telemetry = createDoomTelemetry({
+        serviceName: options.serviceName ?? SERVICE_NAME,
+        packageName: PACKAGE_NAME,
+        cwd: ctx.cwd,
+        env: { ...env, PI_SESSION_ID: sessionId },
+        allowFileFallback: options.allowFileFallback,
+        telemetryFactory: options.telemetryFactory,
+        warn: options.onDiagnostic,
+        enableLogs: true,
+        enableTraces: env.AGENT_OTEL_TRACES === undefined || isEnabled(env.AGENT_OTEL_TRACES),
+        onRecord: (record) => {
+          if (active) metrics?.record(record.event, record.attributes);
+        },
+        onStatus: (status) => {
+          if (active) options.onSinkStatus?.(statusFromTelemetry(status));
+        },
+      });
+    }
     if (active) options.onSinkStatus?.(statusFromTelemetry(telemetry.status()));
     return telemetry;
   };

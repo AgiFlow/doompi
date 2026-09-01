@@ -54,7 +54,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     const config = readConfig('tsdown.config.ts');
     expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
-    expect(config).toContain("'*': 'src/exports/**/*.ts'");
+    expect(config).toContain("'*': ['src/exports/**/*.ts', '!src/exports/webClient.ts']");
   });
 
   it('keeps the package export map closed and explicit', () => {

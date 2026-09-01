@@ -505,7 +505,11 @@ function reconcilePendingUser(state: SessionState, text: string, images: UserIma
   const source = index === -1 ? state.reconciledUserEntries : state.pendingUserEntries;
   const at = index === -1 ? reconciledIndex : index;
   const pending = source[at] as { id: string; images?: UserImage[] };
-  const remaining = source.filter((_, position) => position !== at);
+  // A pending prompt is claimed once, because a second copy of the same text is
+  // a second message. A claim already published is kept: the hub re-reads the
+  // journal at every run boundary, and each of those copies has to fold into the
+  // entry that stands rather than becoming a new one.
+  const remaining = index === -1 ? state.reconciledUserEntries : source.filter((_, position) => position !== at);
   const entries = state.entries.map((entry) => {
     if (entry.id !== pending.id) return entry;
     const reconciledImages = images.length > 0 ? images : pending.images;
@@ -597,6 +601,22 @@ function applyJournalEntry(state: SessionState, entry: Frame): SessionState {
   if (id === '' || state.restoredIds.includes(id)) return state;
   const next = applyJournalMessage(state, entry.message);
   return { ...next, restoredIds: [...next.restoredIds, id] };
+}
+
+/**
+ * Records a journal entry the protocol already publishes, without folding it.
+ *
+ * The hub re-reads the journal at every run boundary and re-publishes user
+ * messages, because no live frame carries one. Dropping those copies without a
+ * trace left the page with no memory of them, so a copy arriving after protocol
+ * ownership lapsed read as a new prompt and landed below the settled divider.
+ * Keeping the id is what makes the drop idempotent.
+ */
+function rememberJournalEntry(state: SessionState, entry: Frame): SessionState {
+  if (entry.type !== 'message' || !isRecord(entry.message)) return state;
+  const id = asString(entry.id);
+  if (id === '' || state.restoredIds.includes(id)) return state;
+  return { ...state, restoredIds: [...state.restoredIds, id] };
 }
 
 /**
@@ -754,7 +774,7 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
       }
       // A journalled user message is a transcript entry the protocol already
       // publishes; the catalog above is DoomPi's own and always applies.
-      return options.transcriptFromProtocol ? state : applyJournalEntry(state, entry);
+      return options.transcriptFromProtocol ? rememberJournalEntry(state, entry) : applyJournalEntry(state, entry);
     }
 
     case 'response':

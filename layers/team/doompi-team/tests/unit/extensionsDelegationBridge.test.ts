@@ -140,3 +140,92 @@ describe('createDelegationBridge live metrics', () => {
     expect(result).not.toHaveProperty('tokens');
   });
 });
+
+describe('createDelegationBridge fork source', () => {
+  const forkDeps = (spawnRequests: Array<Record<string, unknown>>): DelegationBridgeDeps =>
+    ({
+      planner: {
+        spawn: async (request: Record<string, unknown>) => {
+          spawnRequests.push(request);
+          return {
+            outcomes: [{ runId: `run-${spawnRequests.length}`, agent: 'worker', task: 'work', childIndex: 0, pid: 1 }],
+          };
+        },
+      },
+      management: {
+        stop: () => {},
+        status: () => ({ status: { state: 'completed', startedAt: 10, endedAt: 30, summary: 'done' } }),
+      },
+      waiter: { wait: async () => ({ reason: 'completed', elapsedMs: 20, runs: [] }) },
+      scheduler: { register: () => () => {}, wake: () => {} },
+      tracker: {
+        forSession: () =>
+          ({
+            track: () => {},
+            get: () => undefined,
+            list: () => [],
+            untrack: () => {},
+            reset: () => {},
+          }) as unknown as TrackedAsyncJobsContract,
+      },
+      loadConfig: () => ({}),
+    }) as never;
+
+  const forkRequest = (requestId: string): DelegationRequest => ({
+    requestId,
+    taskId: 'task-1',
+    agent: 'worker',
+    prompt: 'work',
+    cwd: '/repo',
+    context: 'fork',
+  });
+
+  it('captures the fork source per request instead of reusing a bind-time value', async () => {
+    const spawnRequests: Array<Record<string, unknown>> = [];
+    const bridge = createDelegationBridge(forkDeps(spawnRequests));
+    const ctx = new Context();
+    roots.push(ctx);
+    let current = { sessionFile: '/tmp/parent.jsonl', leafId: 'leaf-1' };
+    const service = bridge.createService(ctx, {
+      sessionId: 'session-1',
+      availableModels: [],
+      captureForkSource: () => current,
+    });
+
+    await service.request(forkRequest('request-1'));
+    current = { sessionFile: '/tmp/parent.jsonl', leafId: 'leaf-2' };
+    await service.request(forkRequest('request-2'));
+
+    expect(spawnRequests.map((request) => request.parentLeafId)).toEqual(['leaf-1', 'leaf-2']);
+  });
+
+  it('omits the parent lineage when the session cannot produce a fork source', async () => {
+    const spawnRequests: Array<Record<string, unknown>> = [];
+    const bridge = createDelegationBridge(forkDeps(spawnRequests));
+    const ctx = new Context();
+    roots.push(ctx);
+    const service = bridge.createService(ctx, {
+      sessionId: 'session-1',
+      availableModels: [],
+      captureForkSource: () => undefined,
+    });
+
+    await service.request(forkRequest('request-1'));
+
+    expect(spawnRequests[0]).not.toHaveProperty('parentSessionFile');
+    expect(spawnRequests[0]).not.toHaveProperty('parentLeafId');
+  });
+
+  it('omits the parent lineage when the session declares no fork capture at all', async () => {
+    const spawnRequests: Array<Record<string, unknown>> = [];
+    const bridge = createDelegationBridge(forkDeps(spawnRequests));
+    const ctx = new Context();
+    roots.push(ctx);
+    const service = bridge.createService(ctx, { sessionId: 'session-1', availableModels: [] });
+
+    await service.request(forkRequest('request-1'));
+
+    expect(spawnRequests[0]).not.toHaveProperty('parentSessionFile');
+    expect(spawnRequests[0]).not.toHaveProperty('parentLeafId');
+  });
+});

@@ -11,6 +11,7 @@ import {
   type SpawnPlanRequest,
 } from '../../src/adapters/pi/extensions/spawnPlan';
 import { SubagentCapabilityPolicyStore } from '../../src/schemas/team/capabilityCeiling';
+import { AdmissionGate } from '../../src/adapters/runs/shared/admissionGate';
 import type {
   DiscoveredSkill,
   SkillDiscoveryContract,
@@ -1206,7 +1207,7 @@ describe('fan-out width is bounded, because concurrency cannot bound it', () => 
 
   it('refuses a PARALLEL call wider than maxTasks before spawning anything', async () => {
     await expect(planner.spawn(baseRequest({ tasks: tasks(9) }), {})).rejects.toThrow(
-      /requested 9 tasks, but at most 8 may run at once/,
+      /requested 9 tasks, but at most 8 may be declared in one call/,
     );
     // Preflight means NOTHING started - not a partial fan-out that then throws.
     expect(spawner.calls).toHaveLength(0);
@@ -1219,7 +1220,7 @@ describe('fan-out width is bounded, because concurrency cannot bound it', () => 
 
   it('honours a configured maxTasks over the default', async () => {
     await expect(planner.spawn(baseRequest({ tasks: tasks(3) }), { parallel: { maxTasks: 2 } })).rejects.toThrow(
-      /requested 3 tasks, but at most 2 may run at once/,
+      /requested 3 tasks, but at most 2 may be declared in one call/,
     );
   });
 
@@ -1227,6 +1228,104 @@ describe('fan-out width is bounded, because concurrency cannot bound it', () => 
     await expect(planner.spawn(baseRequest({ tasks: tasks(9) }), {})).rejects.toThrow(
       /throttles how fast they start, not how many run/,
     );
+  });
+
+  it('no longer tells the caller to split the batch across calls, which used to defeat the cap', async () => {
+    const refusal = await planner.spawn(baseRequest({ tasks: tasks(9) }), {}).catch((error: unknown) => String(error));
+    expect(refusal).not.toMatch(/smaller explicit run calls/);
+    expect(refusal).toMatch(/does not raise the live-child ceiling/);
+  });
+});
+
+describe('global admission control', () => {
+  /** Children stay alive until the gate's wait frees one, standing in for detached processes. */
+  class LiveChildren {
+    private live = new Set<string>();
+    maxObserved = 0;
+
+    start(runId: string): void {
+      this.live.add(runId);
+      this.maxObserved = Math.max(this.maxObserved, this.live.size);
+    }
+
+    exitOldest(): void {
+      const oldest = this.live.values().next();
+      if (!oldest.done) this.live.delete(oldest.value);
+    }
+
+    count(): number {
+      return this.live.size;
+    }
+  }
+
+  class LiveTrackingSpawner extends FakeSpawner {
+    constructor(private readonly children: LiveChildren) {
+      super();
+    }
+
+    override async spawn(input: AsyncSubagentSpawnInput): Promise<AsyncSubagentSpawnResult> {
+      const result = await super.spawn(input);
+      // A real child registers in `runRegistry` before `spawn` resolves and
+      // then keeps running detached.
+      this.children.start(result.runId);
+      return result;
+    }
+  }
+
+  function tasks(count: number, label: string) {
+    return Array.from({ length: count }, (_, index) => ({ agent: 'worker', task: `${label} ${index}` }));
+  }
+
+  it('holds concurrent PARALLEL calls to one process-wide ceiling, not one ceiling per call', async () => {
+    const children = new LiveChildren();
+    const discovery = new FakeAgentDiscovery();
+    discovery.agents.set('worker', agentConfig('worker'));
+    const spawner = new LiveTrackingSpawner(children);
+    const gate = new AdmissionGate({
+      countLiveRuns: () => children.count(),
+      // Each wait retires one child, so a saturated queue drains deterministically.
+      wait: async () => children.exitOldest(),
+    });
+    const planner = new TestableSpawnPlanner(discovery, spawner, undefined, undefined, undefined, undefined, gate);
+    const config: ExtensionConfig = { parallel: { maxTasks: 4, concurrency: 4, maxLiveRuns: 3 } };
+
+    const results = await Promise.all([
+      planner.spawn(baseRequest({ tasks: tasks(4, 'a') }), config),
+      planner.spawn(baseRequest({ tasks: tasks(4, 'b') }), config),
+      planner.spawn(baseRequest({ tasks: tasks(4, 'c') }), config),
+    ]);
+
+    // Twelve children were requested across three calls that each pass the
+    // per-call `maxTasks` check; only three may be alive at once.
+    expect(children.maxObserved).toBeLessThanOrEqual(3);
+    const outcomes = results.flatMap((result) => result.outcomes);
+    expect(outcomes).toHaveLength(12);
+    expect(outcomes.filter((outcome) => outcome.error)).toEqual([]);
+  });
+
+  it('refuses a child as a per-child error when no slot frees before the timeout', async () => {
+    const discovery = new FakeAgentDiscovery();
+    discovery.agents.set('worker', agentConfig('worker'));
+    const spawner = new FakeSpawner();
+    const events: string[] = [];
+    const gate = new AdmissionGate({ countLiveRuns: () => 2, wait: async () => {}, now: () => 0 });
+    const planner = new TestableSpawnPlanner(
+      discovery,
+      spawner,
+      undefined,
+      undefined,
+      (event) => events.push(event),
+      undefined,
+      gate,
+    );
+
+    const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'work' } }), {
+      parallel: { maxLiveRuns: 2, admissionTimeoutMs: 0 },
+    });
+
+    expect(result.outcomes[0]?.error).toMatch(/No child slot became available/);
+    expect(spawner.calls).toHaveLength(0);
+    expect(events).toContain('doom_team.admission_wait');
   });
 });
 

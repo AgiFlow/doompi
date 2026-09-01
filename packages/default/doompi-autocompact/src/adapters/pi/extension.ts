@@ -1,8 +1,3 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Worker } from 'node:worker_threads';
-
 import { getHarnessState, loadDoomConfig, type PlanningAgentConfig } from '@agimon-ai/doompi-config';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
@@ -20,6 +15,7 @@ import type { ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-wor
 import {
   buildSessionContext,
   DEFAULT_COMPACTION_SETTINGS,
+  generateSummary,
   sessionEntryToContextMessages,
 } from '@earendil-works/pi-coding-agent';
 import {
@@ -56,12 +52,15 @@ import { AUTOCOMPACT_EVENT, createAutocompactTelemetry } from '../telemetry/logS
 export type { ModelReference, SummarizationModel } from '../../services/summarizationModel.ts';
 export { parseModelReference, resolveSummarizationModel } from '../../services/summarizationModel.ts';
 
-import type { AutocompactContextDetails, AutocompactPass, AutocompactState } from '../../types/index.ts';
+import type {
+  AutocompactContextDetails,
+  AutocompactPass,
+  AutocompactRatioOverrides,
+  AutocompactState,
+} from '../../types/index.ts';
 
 const ROOT_WORKING_LEAF = '@root';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-autocompact';
-const PI_PACKAGE = '@earendil-works/pi-coding-agent';
-const PACKAGE_MANIFEST = 'package.json';
 const PLAN_DOCUMENT_ENTRY = 'agent-harness-plan-document';
 const FOOTER_SOURCE = 'doom-autocompact';
 const FOOTER_ORDER = 20;
@@ -99,11 +98,6 @@ interface CheckpointGenerationInput {
   previousCheckpoint?: string;
   context: ExtensionContext;
   signal: AbortSignal;
-}
-
-interface CheckpointWorkerResult {
-  checkpoint?: string;
-  error?: string;
 }
 
 export interface AutocompactDependencies {
@@ -292,103 +286,59 @@ function messagesForCheckpoint(
     .flatMap((entry) => sessionEntryToContextMessages(entry));
 }
 
-export function findCheckpointWorkerUrl(importFileUrl: string | URL): URL {
-  const importFilePath = fileURLToPath(importFileUrl);
-  let directory = dirname(importFilePath);
-
-  while (true) {
-    const workerPath = join(directory, 'checkpointWorker.mjs');
-    if (existsSync(workerPath)) return pathToFileURL(workerPath);
-
-    const parent = dirname(directory);
-    if (parent === directory) break;
-    directory = parent;
-  }
-
-  throw new Error(`Cannot find checkpointWorker.mjs by walking from ${importFilePath}.`);
+interface AutocompactRuntimeConfig {
+  /** Off leaves compaction to Pi; unset is on. */
+  enabled: boolean;
+  /** The agent that writes the summaries, from autocompact's own keys or planning's. */
+  agent?: PlanningAgentConfig;
+  ratios: AutocompactRatioOverrides;
 }
 
-export function findInstalledPiModuleUrl(
-  anchors: readonly string[] = [
-    ...(process.argv[1] ? [process.argv[1]] : []),
-    fileURLToPath(import.meta.url),
-    join(process.cwd(), PACKAGE_MANIFEST),
-  ],
-): string {
-  for (const anchor of anchors) {
-    const canonicalAnchor = existsSync(anchor) ? realpathSync(anchor) : resolve(anchor);
-    let directory = dirname(canonicalAnchor);
+const DEFAULT_RUNTIME_CONFIG: AutocompactRuntimeConfig = { enabled: true, ratios: {} };
 
-    while (true) {
-      const packageRoot = join(directory, 'node_modules', PI_PACKAGE);
-      const manifestPath = join(packageRoot, PACKAGE_MANIFEST);
-      if (existsSync(manifestPath)) {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { main?: unknown };
-        if (typeof manifest.main === 'string') {
-          const entry = resolve(packageRoot, manifest.main);
-          if (existsSync(entry)) return pathToFileURL(entry).href;
-        }
-      }
-
-      const parent = dirname(directory);
-      if (parent === directory) break;
-      directory = parent;
-    }
-  }
-
-  throw new Error(`Cannot resolve ${PI_PACKAGE} from the DoomPi or host module trees.`);
-}
-
-function runCheckpointWorker(workerInput: Record<string, unknown>, signal: AbortSignal): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(findCheckpointWorkerUrl(import.meta.url), {
-      workerData: { ...workerInput, piModuleUrl: findInstalledPiModuleUrl() },
-    });
-    let settled = false;
-
-    const settle = (complete: () => void): void => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener('abort', abort);
-      complete();
-    };
-    const abort = (): void => {
-      settle(() => {
-        void worker.terminate();
-        reject(signal.reason instanceof Error ? signal.reason : new Error('Autocompact summarization aborted.'));
-      });
-    };
-
-    worker.once('message', (result: CheckpointWorkerResult) => {
-      settle(() => {
-        if (typeof result.checkpoint === 'string') resolve(result.checkpoint);
-        else reject(new Error(result.error ?? 'Autocompact summarization worker returned no checkpoint.'));
-      });
-    });
-    worker.once('error', (error) => settle(() => reject(error)));
-    worker.once('exit', (code) => {
-      if (code !== 0) settle(() => reject(new Error(`Autocompact summarization worker exited with code ${code}.`)));
-    });
-    signal.addEventListener('abort', abort, { once: true });
-    worker.unref();
-    if (signal.aborted) abort();
-  });
-}
-
-function subagentModelConfig(cwd: string): PlanningAgentConfig | undefined {
+/**
+ * What the Doom config says about this package.
+ *
+ * `modes.autocompact` is read first and `modes.planning.subagents` is the
+ * fallback, because summarization borrowed the planning subagent model before
+ * it had keys of its own and existing files still spell it that way.
+ */
+export function autocompactRuntimeConfig(
+  cwd: string,
+  onLoadFailure?: (error: unknown) => void,
+): AutocompactRuntimeConfig {
+  let modes: ReturnType<typeof loadDoomConfig>['modes'];
   try {
-    return loadDoomConfig(getHarnessState().root ?? cwd).modes?.planning?.subagents;
-  } catch {
-    process.emitWarning(
-      'Doom autocompact planning configuration could not be loaded; using the active session model instead.',
-    );
-    return undefined;
+    modes = loadDoomConfig(getHarnessState().root ?? cwd).modes;
+  } catch (error) {
+    process.emitWarning('Doom autocompact configuration could not be loaded; using the active session model instead.');
+    onLoadFailure?.(error);
+    return DEFAULT_RUNTIME_CONFIG;
   }
+  const configured = modes?.autocompact;
+  const ownAgent: PlanningAgentConfig | undefined =
+    configured && (configured.model !== undefined || configured.thinking !== undefined)
+      ? {
+          ...(configured.model ? { model: configured.model } : {}),
+          ...(configured.thinking ? { thinking: configured.thinking } : {}),
+        }
+      : undefined;
+  const agent = ownAgent ?? modes?.planning?.subagents;
+  const thresholds = configured?.thresholds;
+  return {
+    enabled: configured?.enabled ?? true,
+    ...(agent ? { agent } : {}),
+    ratios: {
+      ...(thresholds?.pass1 === undefined ? {} : { 1: thresholds.pass1 }),
+      ...(thresholds?.pass2 === undefined ? {} : { 2: thresholds.pass2 }),
+      ...(thresholds?.pass3 === undefined ? {} : { 3: thresholds.pass3 }),
+    },
+  };
 }
 
-/** Explicit Doom model selection honors the configured planning subagent model. */
+/** Explicit Doom model selection honors the configured summarization model. */
 export function resolveDoomSummarizationModel(ctx: ExtensionContext): SummarizationModel | undefined {
-  const configured = subagentModelConfig(ctx.cwd);
+  const configured = autocompactRuntimeConfig(ctx.cwd).agent;
   const reference = configured?.model ? parseModelReference(configured.model) : undefined;
   const configuredModel = reference ? ctx.modelRegistry.find(reference.provider, reference.modelId) : undefined;
   const model = configuredModel ?? ctx.model;
@@ -398,7 +348,16 @@ export function resolveDoomSummarizationModel(ctx: ExtensionContext): Summarizat
   return { model, ...(thinkingLevel ? { thinkingLevel } : {}) };
 }
 
-async function generateCheckpointWithPi(
+/**
+ * Summarization borrows the session's own provider instead of re-resolving one.
+ *
+ * The selected model can come from a Pi provider extension, and that extension's
+ * `streamSimple` closure lives only in this process: it is never in Pi's global api
+ * registry, so any other thread or process sees `No API provider registered for api`.
+ * Passing the composed provider in as `generateSummary`'s stream function keeps
+ * summarization on exactly the path the agent's own requests take.
+ */
+export async function generateCheckpointWithPi(
   input: CheckpointGenerationInput,
   resolveModel: (context: ExtensionContext) => SummarizationModel | undefined,
 ): Promise<string> {
@@ -406,19 +365,24 @@ async function generateCheckpointWithPi(
   if (!selection) throw new Error('No active model is available for autocompact summarization.');
   const auth = await input.context.modelRegistry.getApiKeyAndHeaders(selection.model);
   if (!auth.ok) throw new Error(auth.error);
-  return runCheckpointWorker(
-    {
-      messages: input.messages,
-      model: selection.model,
-      reserveTokens: DEFAULT_COMPACTION_SETTINGS.reserveTokens,
-      apiKey: auth.apiKey,
-      headers: auth.headers,
-      instructions: input.instructions,
-      previousCheckpoint: input.previousCheckpoint,
-      thinkingLevel: selection.thinkingLevel,
-      env: auth.env,
-    },
+  const provider = input.context.modelRegistry.getProvider(selection.model.provider);
+  if (!provider) {
+    throw new Error(`No provider is registered for "${selection.model.provider}" in this session.`);
+  }
+  return generateSummary(
+    input.messages,
+    selection.model,
+    DEFAULT_COMPACTION_SETTINGS.reserveTokens,
+    auth.apiKey,
+    // A null header value suppresses a provider default, which the narrower
+    // `generateSummary` signature does not model but every provider honors.
+    auth.headers as Record<string, string> | undefined,
     input.signal,
+    input.instructions,
+    input.previousCheckpoint,
+    selection.thinkingLevel,
+    (model, context, options) => provider.streamSimple(model, context, options),
+    auth.env,
   );
 }
 
@@ -447,6 +411,7 @@ export function installAutocompactRuntime(
   let checkpointController: AbortController | undefined;
   let footerContribution: DoomFooterContributionHandle | undefined;
   let contextContributionsService: DoomContextContributionsService | undefined;
+  let configLoadFailureReported = false;
 
   cordis.effect(
     () => async () => {
@@ -461,6 +426,7 @@ export function installAutocompactRuntime(
       appliedContextRequests.clear();
       invalidContextLeaves.clear();
       state = createInitialState();
+      configLoadFailureReported = false;
       await telemetry.shutdown();
     },
     `${FOOTER_SOURCE}/runtime`,
@@ -551,17 +517,54 @@ export function installAutocompactRuntime(
     );
   };
 
-  const failCheckpoint = (requestId: string, error: unknown): void => {
-    if (!active || requestId !== state.requestId || state.phase !== STATE_PHASE.checkpointPending) return;
-    const failedLeafId = state.snapshotLeafId;
+  /**
+   * Both failure paths share one attempt budget: a summarizer that keeps failing would
+   * otherwise cost a full summarization call every turn for the rest of the session, so the
+   * pass is abandoned once the budget is spent and becomes eligible again on the next cycle.
+   */
+  const registerFailedAttempt = (
+    pass: AutocompactPass,
+    failedLeafId: string | undefined,
+  ): { attempts: number; exhausted: boolean } => {
+    const attempts = state.invalidAttempts + 1;
+    const exhausted = attempts >= MAX_INVALID_CHECKPOINT_ATTEMPTS;
     state.phase = STATE_PHASE.waiting;
     if (failedLeafId) state.lastAttemptLeafId = failedLeafId;
+    if (exhausted) {
+      completeQueuedPass(pass);
+      state.exhaustedPasses = [...state.exhaustedPasses, pass];
+      state.invalidAttempts = 0;
+    } else {
+      state.invalidAttempts = attempts;
+    }
     clearPendingCheckpoint();
     persist();
+    return { attempts, exhausted };
+  };
+
+  const failCheckpoint = (requestId: string, error: unknown): void => {
+    if (!active || requestId !== state.requestId || state.phase !== STATE_PHASE.checkpointPending) return;
+    const pass = state.pass;
+    const { attempts, exhausted } = registerFailedAttempt(pass, state.snapshotLeafId);
+    const reason = error instanceof Error ? error.message : String(error);
     notify(
       currentContext,
-      `Doom autocompact summarization pass ${state.pass} failed: ${error instanceof Error ? error.message : String(error)}`,
+      exhausted
+        ? `Doom autocompact summarization pass ${pass} failed ${attempts} times and was abandoned: ${reason}`
+        : `Doom autocompact summarization pass ${pass} failed: ${reason}`,
       'error',
+    );
+  };
+
+  // A configuration that cannot be read degrades every later pass silently, and the process
+  // warning never reaches the log sink. Report it once per session instead of once per turn.
+  const reportConfigLoadFailure = (ctx: ExtensionContext, error: unknown): void => {
+    if (!active || configLoadFailureReported) return;
+    configLoadFailureReported = true;
+    void telemetry.recordWarning(
+      AUTOCOMPACT_EVENT.configurationLoadFailed,
+      error,
+      telemetryAttributes(ctx, { 'autocompact.cycle': state.cycle, 'autocompact.pass': state.pass }),
     );
   };
 
@@ -627,7 +630,6 @@ export function installAutocompactRuntime(
       retainedMessages: retainedMessagesAfterSnapshot(branch, state.snapshotLeafId),
     };
 
-    notify(ctx, `Doom autocompact pass ${pass} context commit started.`);
     const committedWhileIdle = ctx.isIdle();
     pi.sendMessage({ customType: CONTEXT_MESSAGE_TYPE, content: summary, display: false, details });
     const contextMessageLeafId = workingLeafId(ctx);
@@ -668,7 +670,6 @@ export function installAutocompactRuntime(
         ...runtimeTelemetryAttributes(runtimeSnapshot),
       }),
     );
-    notify(ctx, `Doom autocompact context committed. Baseline will be captured from the next settled context.`);
     // A mid-run commit needs no resume steer: the agent is already continuing.
     if (committedWhileIdle) resumeAgent('Asynchronous compaction completed.');
     return true;
@@ -706,7 +707,6 @@ export function installAutocompactRuntime(
     checkpointController?.abort();
     checkpointController = new AbortController();
     const checkpointSignal = checkpointController.signal;
-    notify(ctx, `Doom autocompact summarization pass ${pass} started.`);
     const operation = telemetry
       .runInSpan('doom_autocompact.checkpoint', attributes, async () => {
         await telemetry.recordEvent(AUTOCOMPACT_EVENT.checkpointStarted, attributes);
@@ -751,7 +751,6 @@ export function installAutocompactRuntime(
         state.phase = STATE_PHASE.checkpointReady;
         state.pendingCheckpoint = checkpoint.trim();
         persist();
-        notify(currentContext, `Doom autocompact summarization pass ${pass} completed.`);
         if (currentContext) processProgress(currentContext);
       })
       .catch((error: unknown) => {
@@ -763,6 +762,11 @@ export function installAutocompactRuntime(
 
   const evaluateUsage = (ctx: ExtensionContext): boolean => {
     if (!active || state.phase !== STATE_PHASE.waiting || ctx.hasPendingMessages()) return false;
+    // Read per evaluation rather than once at install, so turning the ladder off
+    // or moving a threshold in settings takes effect on the next turn instead of
+    // the next session.
+    const configured = autocompactRuntimeConfig(ctx.cwd, (error) => reportConfigLoadFailure(ctx, error));
+    if (!configured.enabled) return false;
     const usage = ctx.getContextUsage();
     if (!usage || usage.tokens === null) return false;
     if (state.baselinePending) {
@@ -772,7 +776,6 @@ export function installAutocompactRuntime(
       state.baselineTokens = usage.tokens;
       state.baselinePending = false;
       persist();
-      notify(ctx, `Doom autocompact baseline captured at ${state.baselineTokens} tokens.`);
       return false;
     }
     const leafId = workingLeafId(ctx);
@@ -780,7 +783,7 @@ export function installAutocompactRuntime(
 
     for (const pass of [1, 2, 3] as const) {
       if (pass < state.pass || state.checkpointQueue.includes(pass) || state.exhaustedPasses.includes(pass)) continue;
-      if (usage.tokens >= thresholdTokens(pass, usage.contextWindow, state.baselineTokens)) {
+      if (usage.tokens >= thresholdTokens(pass, usage.contextWindow, state.baselineTokens, configured.ratios)) {
         state.checkpointQueue.push(pass);
       }
     }
@@ -814,19 +817,7 @@ export function installAutocompactRuntime(
       const invalidRequestId = state.requestId;
       // A queued pass is retried once per new leaf, so an output the summarizer never formats
       // correctly would otherwise burn a full summarization call every turn for the session.
-      const attempts = state.invalidAttempts + 1;
-      const exhausted = attempts >= MAX_INVALID_CHECKPOINT_ATTEMPTS;
-      state.phase = STATE_PHASE.waiting;
-      if (failedLeafId) state.lastAttemptLeafId = failedLeafId;
-      if (exhausted) {
-        completeQueuedPass(pass);
-        state.exhaustedPasses = [...state.exhaustedPasses, pass];
-        state.invalidAttempts = 0;
-      } else {
-        state.invalidAttempts = attempts;
-      }
-      clearPendingCheckpoint();
-      persist();
+      const { attempts, exhausted } = registerFailedAttempt(pass, failedLeafId);
       const error = new Error(`Summarization pass ${pass} returned an incomplete checkpoint.`);
       notify(
         ctx,
@@ -1005,10 +996,6 @@ export function installAutocompactRuntime(
         'autocompact.tokens_before': event.compactionEntry.tokensBefore,
         ...runtimeTelemetryAttributes(runtimeSnapshot),
       }),
-    );
-    notify(
-      ctx,
-      `Doom autocompact completed. Baseline will be captured from the next settled context. Next pass: ${state.pass}.`,
     );
   });
 }

@@ -1,12 +1,12 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FileEditsDetailView, FileEditsDiffHunk } from '../../src/types/fileEditsApi.ts';
-import { CommentDraft } from '../../web/CommentDraft.tsx';
-import { DeleteFileDialog } from '../../web/DeleteFileDialog.tsx';
-import { DiffView } from '../../web/DiffView.tsx';
-import { FilePanel } from '../../web/FilePanel.tsx';
-import { FilesActivitySection } from '../../web/FilesActivitySection.tsx';
-import { addComment, files, filesChannel, storeDetail, storeError } from '../../web/filesStore.ts';
+import { CommentDraft } from '../../src/web/CommentDraft.tsx';
+import { DeleteFileDialog } from '../../src/web/DeleteFileDialog.tsx';
+import { DiffView } from '../../src/web/DiffView.tsx';
+import { FilePanel } from '../../src/web/FilePanel.tsx';
+import { FilesActivitySection } from '../../src/web/FilesActivitySection.tsx';
+import { addComment, files, filesChannel, storeDetail, storeError } from '../../src/web/filesStore.ts';
 
 /**
  * Every surface this plugin puts on the page, rendered once.
