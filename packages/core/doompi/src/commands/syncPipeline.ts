@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { ensureLayerPackages, type LayerPackageResult } from '../adapters/layerPackageInstaller.ts';
-import { findRepositoryRoot } from '../adapters/repository/repository';
+import { resolveDoomConfigurationRoot } from '../adapters/repository/repository';
 import type { HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts';
 import { acquireSyncLocationLock, resolveSyncLocation } from '../adapters/syncLocation.ts';
 import { readSyncDrift } from '../adapters/syncDrift.ts';
@@ -56,9 +56,11 @@ export class SyncPipeline {
       return new SyncCommand({ settingsMode: this.settingsMode }).execute(args, environment, currentDirectory, output);
     }
 
-    const inheritedRoot = environment[HARNESS_ROOT_ENV];
-    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
     const homeDirectory = environment.HOME ?? os.homedir();
+    const inheritedRoot = environment[HARNESS_ROOT_ENV];
+    const repoRoot = inheritedRoot
+      ? path.resolve(inheritedRoot)
+      : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
 
     // Nothing drifted means the packages are current, the mode extension is
     // compiled from these exact bytes, and the published generation already
@@ -112,9 +114,12 @@ export class SyncPipeline {
     currentDirectory: string,
     progress: SyncProgress,
   ): Promise<void> {
+    const homeDirectory = environment.HOME ?? os.homedir();
     const inheritedRoot = environment[HARNESS_ROOT_ENV];
-    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
-    const config = loadMajorModesConfig(repoRoot);
+    const repoRoot = inheritedRoot
+      ? path.resolve(inheritedRoot)
+      : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+    const config = loadMajorModesConfig(repoRoot, homeDirectory);
     const done = progress.start(PACKAGES_LABEL, 'checking configured packages for updates');
     const result = await ensureLayerPackages({
       repoRoot,

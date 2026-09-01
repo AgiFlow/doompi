@@ -76,24 +76,26 @@ dependency closure.
 ### Sync storage and worktrees
 
 DoomPi stores generated sync data under `~/.pi/.doom/sync`, outside the repository. Repository and
-worktree identities select separate namespaces. Each successful sync writes a new immutable generation,
-then atomically publishes that generation's registration as the final commit step. A failed sync removes
-its unpublished generation and leaves the previous registration active. Syncing one repository never
-rewrites another repository's registration or generation.
+worktree identities select separate namespaces. Outside a repository, the canonical `~/.pi/.doom`
+configuration gets its own global composition and registration. Each successful sync writes a new immutable
+generation, then atomically publishes that generation's registration as the final commit step. A failed sync
+removes its unpublished generation and leaves the previous registration active. One sync target never rewrites
+another target's registration or generation.
 
 `dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension and theme
 settings in memory. It never writes those values to `.pi/settings.json`.
 
 Run `doompi sync --check` to detect missing, invalid, or stale registered state. Unregistered legacy state
-is not loaded. Run `doompi sync` in that repository to publish a current generation.
+is not loaded. Inside a repository, `doompi sync` publishes that repository and worktree. Outside every
+repository, it publishes the global composition from `~/.pi/.doom`.
 
 When you are comfortable with DoomPi and no longer need the side-by-side experiment, initialize the
-normal Pi integration and synchronize each repository you use:
+normal Pi integration and synchronize the scopes you use:
 
 ```bash
 doompi init                                  # seed ~/.pi/.doom and register the managed Pi integration
-doompi sync                                  # publish this repository and worktree's generated runtime
-pi                                           # resolve the nearest synchronized repository at startup
+doompi sync                                  # publish the current repository, or the global composition
+pi                                           # use the nearest repository, otherwise the global composition
 ```
 
 `doompi` remains available as an explicit harness when you want per-run matrix flags:
@@ -691,8 +693,8 @@ its owning package's controls; values supplied by callers are not automatically 
 | -------------------------------------------- | --------------------------------------------------------------------------------- |
 | `dpi init`, `dpi sync`, `dpi`                | Creates, synchronizes, and runs the repository-scoped comparison setup            |
 | `doompi init`                                | Seeds personal config and installs the managed Pi dispatcher, settings, and theme |
-| `doompi sync`                                | Atomically publishes state, web, and API artifacts for one repository/worktree    |
-| `doompi sync --check`                        | Exits non-zero when the repository's registered generation is missing or stale    |
+| `doompi sync`                                | Publishes the current repository, or the global composition outside repositories  |
+| `doompi sync --check`                        | Exits non-zero when the applicable registered generation is missing or stale      |
 | `doompi compat <codex\|claude\|antigravity>` | Resolves the selected matrix and launches the compatibility adapter               |
 | `doom-runner`                                | Inspects and controls supervised Runner processes and logs                        |
 | `--explain`                                  | Prints the resolved matrix and estimated prompt cost without launching Pi         |

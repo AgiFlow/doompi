@@ -28,6 +28,8 @@ export interface WebServerOptions {
   host?: string;
   /** Directory holding the built SPA. Defaults to the bundled dist/web. */
   assetsDir?: string;
+  /** Repository whose synchronized composition is pinned instead of resolving live-session compositions. */
+  compositionDir?: string;
   onNotice?: (message: string) => void;
   /** Watch this registry directory for running sessions. */
   registryDir: string;

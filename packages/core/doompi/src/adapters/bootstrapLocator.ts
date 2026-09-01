@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findRepositoryRoot } from './repository/repository.ts';
+import { resolveDoomConfigurationRoot } from './repository/repository.ts';
 import { readSyncRegistration } from './syncRegistration.ts';
 import { readSyncState } from './syncState.ts';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from './syncStateContract.ts';
@@ -178,13 +178,9 @@ function locationHasState(repoRoot: string, homeDirectory: string): boolean {
 
 /** Finds the nearest configured repository with generated Doom sync state. */
 export function findSyncedRoot(cwd: string, homeDirectory: string = os.homedir()): string | undefined {
-  try {
-    if (locationHasState(cwd, homeDirectory)) return canonicalPath(cwd);
-    const root = findRepositoryRoot(cwd);
-    return locationHasState(root, homeDirectory) ? root : undefined;
-  } catch {
-    return undefined;
-  }
+  if (locationHasState(cwd, homeDirectory)) return canonicalPath(cwd);
+  const root = resolveDoomConfigurationRoot(cwd, homeDirectory);
+  return locationHasState(root, homeDirectory) ? canonicalPath(root) : undefined;
 }
 
 function readBootstrapState(repoRoot: string, homeDirectory: string = os.homedir()): BootstrapState | undefined {

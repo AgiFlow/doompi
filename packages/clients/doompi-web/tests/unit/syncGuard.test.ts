@@ -181,6 +181,28 @@ describe('sync guard', () => {
     expect(synced).not.toHaveBeenCalled();
   });
 
+  it('does not announce or hot-loop a sync that leaves the repository drifted', async () => {
+    const notices: string[] = [];
+    const runSync = vi.fn(async () => ({ ok: true }));
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync,
+      onNotice: (message) => notices.push(message),
+      intervalMs: 5,
+    });
+    const synced = vi.fn();
+
+    subject.watch(synced);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    subject.close();
+
+    expect(synced).not.toHaveBeenCalled();
+    expect(runSync.mock.calls.length).toBeLessThan(8);
+    expect(notices).toContainEqual(expect.stringContaining('did not resolve drift'));
+    expect(notices).not.toContain('sync complete');
+  });
+
   it('backs off instead of retrying a failing sync every interval', async () => {
     const attempts: number[] = [];
     const subject = createSyncGuard({

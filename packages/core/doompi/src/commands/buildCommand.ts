@@ -18,7 +18,7 @@ import type { HarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry.ts
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { createLayerResolvers } from '../services/extensionAssembler.ts';
-import { findRepositoryRoot } from '../adapters/repository/repository';
+import { resolveDoomConfigurationRoot } from '../adapters/repository/repository';
 import { parseHarnessArgs } from './cli/options.ts';
 import { selectionEnvironment } from './syncCommand.ts';
 
@@ -44,10 +44,11 @@ function syncStateIsCurrent(
   state: SyncState,
   majorModesConfig: MajorModesConfig,
   compositionFingerprint: string,
+  homeDirectory: string,
 ): boolean {
   if (!syncStateRootMatches(repoRoot, state.root)) return false;
   if (state.compositionFingerprint !== compositionFingerprint) return false;
-  if (computeInputsHash(repoRoot, state.selection) !== state.inputsHash) return false;
+  if (computeInputsHash(repoRoot, state.selection, homeDirectory) !== state.inputsHash) return false;
   const resolved = recordResolvedEntries(majorModesConfig, createLayerResolvers(repoRoot));
   return JSON.stringify(resolved) === JSON.stringify(state.resolved);
 }
@@ -89,16 +90,18 @@ export class BuildCommand {
     currentDirectory = process.cwd(),
     output: BuildOutput = process.stdout,
   ): Promise<number> {
-    const inheritedRoot = environment[HARNESS_ROOT_ENV];
-    const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);
     const homeDirectory = environment.HOME ?? os.homedir();
+    const inheritedRoot = environment[HARNESS_ROOT_ENV];
+    const repoRoot = inheritedRoot
+      ? path.resolve(inheritedRoot)
+      : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
     const location = resolveSyncLocation(repoRoot, homeDirectory);
     const parsed = parseHarnessArgs(
       args.slice(1),
       selectionEnvironment(repoRoot, environment),
       currentDirectory,
-      loadMajorModesConfig(repoRoot).defaultMajorMode,
-      loadDomains(repoRoot).defaultDomains,
+      loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode,
+      loadDomains(repoRoot, homeDirectory).defaultDomains,
     );
     const context = await buildHarnessContext({ ...parsed.options, repoRoot, homeDirectory }, this.telemetry);
     try {
@@ -118,7 +121,10 @@ export class BuildCommand {
         // An obsolete state must not prevent that repair path from completing.
         syncState = undefined;
       }
-      if (syncState && syncStateIsCurrent(repoRoot, syncState, context.majorModesConfig, built.fingerprint)) {
+      if (
+        syncState &&
+        syncStateIsCurrent(repoRoot, syncState, context.majorModesConfig, built.fingerprint, homeDirectory)
+      ) {
         const { buildSyncedRuntime } = await import('../adapters/syncedRuntimeBuilder.ts');
         synced = await buildSyncedRuntime(repoRoot, environment, homeDirectory);
       }

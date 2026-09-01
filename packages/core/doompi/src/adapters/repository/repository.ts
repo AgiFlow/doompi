@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 
 /** Doom's own repository configuration directory. */
 const DOOM_DIRECTORY = '.doom';
@@ -56,5 +57,14 @@ export function findRepositoryRoot(start: string): string {
     const parent = path.dirname(directory);
     if (parent === directory) throw new Error(`Could not find repository root from ${start}`);
     directory = parent;
+  }
+}
+
+/** Uses the nearest repository when one exists, otherwise the user's global Doom composition. */
+export function resolveDoomConfigurationRoot(start: string, homeDirectory: string): string {
+  try {
+    return findRepositoryRoot(start);
+  } catch {
+    return globalDoomConfigDirectory(homeDirectory);
   }
 }

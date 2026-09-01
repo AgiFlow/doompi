@@ -6,12 +6,13 @@ import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { PiServer, PiServerError } from '@earendil-works/pi-server';
-import { readSyncDrift, readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi/services';
+import { readSyncDrift, readSyncRegistration } from '@agimon-ai/doompi/services';
+import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
 import { readSyncState, type SyncState } from '@agimon-ai/doompi/services/syncState';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
 import { createPiHubService } from './piHubService.ts';
-import { createSyncGuard } from './syncGuard.ts';
+import { createSyncGuard, type SyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
 import { type Context, Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
@@ -55,7 +56,7 @@ import {
 import { parseDoomNotificationEntry } from '../types/notification.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
-import { watchRegistry } from './registryWatcher.ts';
+import { readRegistryRecords, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub } from './sessionHub.ts';
 import { allowedOriginsFromEnv } from '../services/remoteGuardPolicy.ts';
@@ -96,6 +97,7 @@ import {
   shutdownWebTelemetry,
   WEB_TELEMETRY_ROUTE,
 } from './webTelemetry.ts';
+import { resolveWebComposition } from './webComposition.ts';
 
 // Pi's protocol rides its own socket so the DoomPi channel keeps the
 // vocabulary the protocol has no shape for: dialogs, minor modes, selection.
@@ -248,13 +250,13 @@ export function packagedVersion(): string {
 /** The assets to serve, with explicit overrides ahead of this hub's registration. */
 function resolveAssetsDir(
   explicit: string | undefined,
-  registration: SyncRegistration | undefined,
+  composition: { webDirectory: string | null } | undefined,
   notice: (message: string) => void,
 ): string {
   if (explicit !== undefined) return explicit;
   const fromEnv = process.env[WEB_DIST_ENV];
   if (fromEnv !== undefined && fromEnv !== '') return fromEnv;
-  const synced = registration?.webDirectory;
+  const synced = composition?.webDirectory;
   if (synced !== undefined && synced !== null && fs.existsSync(path.join(synced, INDEX_FILE))) {
     notice(`serving the synced cockpit bundle from ${synced}`);
     return synced;
@@ -460,37 +462,66 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const host = options.host ?? '127.0.0.1';
   const notice = options.onNotice ?? ((): void => {});
   const telemetry = createWebTelemetry();
-  let startupRoot: string | undefined;
-  try {
-    startupRoot = findRepositoryRoot(process.cwd());
-  } catch {
-    startupRoot = undefined;
-  }
-  const syncGuard = createSyncGuard({
-    ...(startupRoot === undefined ? { cwd: process.cwd() } : { repoRoot: startupRoot }),
-    onNotice: notice,
-  });
-  await syncGuard.ensureSynced();
-  let startupRegistration: SyncRegistration | undefined;
-  if (startupRoot !== undefined) {
+  const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
+  const repositoryRoot = (directory: string): string | undefined => {
     try {
-      startupRegistration = readSyncRegistration(startupRoot);
-    } catch (error) {
-      notice(`synced registration is unavailable (${describeError(error)})`);
+      return fs.realpathSync(findRepositoryRoot(directory));
+    } catch {
+      return undefined;
     }
+  };
+  const compositionRoot = (directory: string): string | undefined => {
+    const repository = repositoryRoot(directory);
+    if (repository !== undefined) return repository;
+    const globalRoot = globalDoomConfigDirectory();
+    try {
+      return readSyncRegistration(globalRoot)?.root;
+    } catch (error) {
+      notice(`global cockpit composition is unreadable (${describeError(error)})`);
+      return undefined;
+    }
+  };
+  const pinnedRoot = options.compositionDir === undefined ? undefined : repositoryRoot(options.compositionDir);
+  if (options.compositionDir !== undefined && pinnedRoot === undefined) {
+    throw new Error(`Cockpit composition directory is not inside a repository: ${options.compositionDir}`);
   }
-  /**
-   * The generation the hub is currently serving.
-   *
-   * Resolved once at startup and then re-read whenever the guard reports a
-   * rebuild. Capturing it for the process lifetime meant a hub that started
-   * before the first successful sync served the packaged, plugin-free bundle
-   * until it was restarted, and a hub that outlived a sync kept serving a
-   * generation that had already been superseded.
-   */
+  const initialRecords = readRegistryRecords(options.registryDir, notice);
+  const liveRoots = initialRecords
+    .map((record) => compositionRoot(record.cwd))
+    .filter((root): root is string => root !== undefined);
+  const compositionRoots = [...new Set(pinnedRoot === undefined ? liveRoots : [pinnedRoot])].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  const syncGuards = new Map<string, SyncGuard>();
+  for (const root of compositionRoots) {
+    syncGuards.set(root, createSyncGuard({ repoRoot: root, onNotice: notice }));
+  }
+  await Promise.all([...syncGuards.values()].map(async (guard) => await guard.ensureSynced()));
+  const resolveComposition = async () =>
+    await resolveWebComposition({
+      repositoryRoots: compositionRoots,
+      stateDirectory: store.directory,
+      onNotice: notice,
+    });
+  const startupComposition = await resolveComposition();
   let served = {
-    assetsDir: resolveAssetsDir(options.assetsDir, startupRegistration, notice),
-    apiDirectory: startupRegistration?.apiDirectory,
+    assetsDir: resolveAssetsDir(options.assetsDir, startupComposition, notice),
+    apiDirectory: startupComposition?.apiDirectory,
+  };
+  const ensureSessionSynced = async (directory: string): Promise<void> => {
+    const root = compositionRoot(directory);
+    if (root === undefined) return;
+    const existing = syncGuards.get(root);
+    if (existing !== undefined) {
+      await existing.ensureSynced();
+      return;
+    }
+    const guard = createSyncGuard({ repoRoot: root, onNotice: notice });
+    try {
+      await guard.ensureSynced();
+    } finally {
+      guard.close();
+    }
   };
   const hub = buildHub(options, notice, await loadHubChannels(served.assetsDir, notice), telemetry);
   // Threads are journals the data channels can name (a subagent run's own
@@ -518,7 +549,6 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const nodeWs = createNodeWebSocket({ app });
   /** Known once the listener binds; until then the guard treats every request as remote. */
   let loopbackPort: number | undefined;
-  const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
   const pwaDir = packagedPwaDir();
   const publication = createBundlePublication({
     assetsDir: () => served.assetsDir,
@@ -880,7 +910,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       return context.json({ error: 'A cwd string is required.' }, 400);
     }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
-    await syncGuard.ensureSynced();
+    await ensureSessionSynced(body.cwd);
     const outcome = await hub.create({ cwd: body.cwd, name, trace: readTraceContext(context.req.raw.headers) });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
@@ -892,7 +922,8 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // finish before the replacement starts or it reads the same stale artifacts.
   app.post(`${SESSIONS_API_ROUTE}/:sessionId/restart`, async (context) => {
     const sessionId = context.req.param('sessionId');
-    await syncGuard.ensureSynced();
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (summary !== undefined) await ensureSessionSynced(summary.cwd);
     const outcome = await hub.restart(sessionId, readTraceContext(context.req.raw.headers));
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 202);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 404 : 502);
@@ -931,7 +962,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     const sessions = await SessionManager.list(summary.cwd);
     const target = sessions.find((session) => session.id === body.targetSessionId);
     if (!target) return context.json({ error: 'That Pi thread does not belong to this workspace.' }, 404);
-    await syncGuard.ensureSynced();
+    await ensureSessionSynced(summary.cwd);
     const outcome = await hub.resume(
       sessionId,
       { sessionId: target.id, name: resumedSessionName(target, summary.cwd) },
@@ -1327,28 +1358,24 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.text('Not found.', 404);
   });
 
-  // A rebuilt bundle only changes on disk, so the page it replaced has to be
-  // told; nothing about a loaded bundle notices that its source moved. Sync
-  // publishes each rebuild as a new generation, so the paths resolved at
-  // startup have to be re-read before anything is served from them.
-  syncGuard.watch(() => {
-    let rebuilt: SyncRegistration | undefined;
-    if (startupRoot !== undefined) {
-      try {
-        rebuilt = readSyncRegistration(startupRoot);
-      } catch (error) {
-        // An unreadable registration leaves the hub on the generation it is
-        // already serving, which still works, rather than on nothing at all.
-        notice(`the rebuilt registration is unavailable (${describeError(error)}); keeping the served bundle`);
+  // A rebuilt bundle only changes on disk, so re-resolve the synchronized
+  // registrations and tell every page to stage the replacement.
+  const refreshServedComposition = async (): Promise<void> => {
+    try {
+      const rebuilt = await resolveComposition();
+      if (rebuilt !== undefined && rebuilt.webDirectory !== served.assetsDir) {
+        served = { assetsDir: rebuilt.webDirectory, apiDirectory: rebuilt.apiDirectory };
+        notice(`serving the rebuilt cockpit bundle from ${served.assetsDir}`);
       }
+      publication.refresh();
+      broadcast({ type: HUB_RESYNCED_TYPE }, false);
+    } catch (error) {
+      notice(`the rebuilt cockpit composition is unavailable (${describeError(error)}); keeping the served bundle`);
     }
-    if (rebuilt?.webDirectory != null && rebuilt.webDirectory !== served.assetsDir) {
-      served = { assetsDir: rebuilt.webDirectory, apiDirectory: rebuilt.apiDirectory };
-      notice(`serving the rebuilt cockpit bundle from ${served.assetsDir}`);
-    }
-    publication.refresh();
-    broadcast({ type: HUB_RESYNCED_TYPE }, false);
-  });
+  };
+  for (const guard of syncGuards.values()) {
+    guard.watch(() => void refreshServedComposition());
+  }
 
   return new Promise<WebServer>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port: options.port, hostname: host }, (info) => {
@@ -1365,7 +1392,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         await remote.close();
         await new Promise<void>((done) => {
           threads.close();
-          syncGuard.close();
+          for (const guard of syncGuards.values()) guard.close();
           void localProtocolServer.close();
           void remoteProtocolServer.close();
           disconnectLivePush();

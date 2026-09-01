@@ -107,6 +107,33 @@ function makeGitRepositoryWithPersonalConfig(): string {
   return root;
 }
 
+function makeGlobalConfiguration(): {
+  root: string;
+  homeDirectory: string;
+  currentDirectory: string;
+  environment: NodeJS.ProcessEnv;
+} {
+  const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-sync-global-')));
+  temporaryRoots.push(fixture);
+  const homeDirectory = path.join(fixture, 'home');
+  const root = path.join(homeDirectory, '.pi', '.doom');
+  const currentDirectory = path.join(fixture, 'Documents');
+  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(currentDirectory, { recursive: true });
+  fs.writeFileSync(path.join(root, 'modes.yaml'), LAYERS);
+  fs.writeFileSync(
+    path.join(root, 'domains.yaml'),
+    'defaultDomains: [default]\ndomains:\n  default:\n    plugins: []\n',
+  );
+  fs.writeFileSync(path.join(root, 'config.yaml'), 'projectTrust: ask\n');
+  initializePiFixture(root);
+  return {
+    root,
+    homeDirectory,
+    currentDirectory,
+    environment: { HOME: homeDirectory, PI_CODING_AGENT_DIR: agentDirectory(root) },
+  };
+}
 function agentDirectory(root: string): string {
   return path.join(root, '.pi-user');
 }
@@ -418,6 +445,19 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(fs.existsSync(path.join(root, '.doom'))).toBe(false);
     expect(text()).toContain('mode:     copilot');
     expect(readSyncState(root, homeDirectory)?.selection).toEqual(SELECTION);
+  });
+
+  it('publishes the global composition when invoked outside a repository', async () => {
+    const fixture = makeGlobalConfiguration();
+    vi.stubEnv('HOME', fixture.homeDirectory);
+    const { output, text } = capture();
+
+    const code = await new SyncCommand().execute(['sync'], fixture.environment, fixture.currentDirectory, output);
+
+    expect(code).toBe(0);
+    expect(readSyncState(fixture.root, fixture.homeDirectory)?.root).toBe(fixture.root);
+    expect(readSyncRegistration(fixture.root, fixture.homeDirectory)?.root).toBe(fixture.root);
+    expect(text()).toContain('mode:     copilot');
   });
 
   it('stages and precompiles the matrix before registering DoomPi in Pi user settings', async () => {

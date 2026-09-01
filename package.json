@@ -7,7 +7,7 @@
     "audit:workspace": "node scripts/audit-workspace.mjs",
     "build": "nx run-many -t build",
     "cockpit": "pnpm cockpit:build && pnpm doompi-web",
-    "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web @agimon-ai/doompi-file-edit @agimon-ai/doompi-mcp @agimon-ai/doompi-task @agimon-ai/doompi-team @agimon-ai/doompi-workflow @agimon-ai/doompi-user-feedback",
+    "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web @agimon-ai/doompi-file-edit @agimon-ai/doompi-mcp @agimon-ai/doompi-task @agimon-ai/doompi-team @agimon-ai/doompi-voice @agimon-ai/doompi-workflow @agimon-ai/doompi-user-feedback",
     "examples:check": "node scripts/check-examples.mjs",
     "hooks:check": "node scripts/emit-hooks.mjs --check",
     "hooks:write": "node scripts/emit-hooks.mjs --write",
