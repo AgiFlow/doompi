@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-autocompact",
-  "version": "0.0.1-alpha.46",
+  "version": "0.0.1-alpha.47",
   "description": "Iterative context compaction and checkpoint summaries for Pi and DoomPi agent sessions.",
   "keywords": [
     "ai",
