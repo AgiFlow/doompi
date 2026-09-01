@@ -1,8 +1,9 @@
-# The browser half of this package lives in web/, which the doom-extension
-# preset does not colour-check. doom-web owns that rule and its scope already
-# covers web/, so the plugin is declared for the one rule rather than for its
-# preset: the rest of that preset is scoped to a cockpit host's src/web tree
-# and would not apply here.
+# The browser half of this package lives in src/web, which the doom-extension
+# preset does not colour-check. doom-web owns that rule and its scope covers
+# src/web, so the plugin is declared for the one rule rather than for its
+# preset: the rest of that preset describes a cockpit host's client layers
+# (stores, features, routes, app), which a plugin's flat src/web does not use,
+# so it stays unenabled here.
 plugins:
   - core
   - doom-extension
@@ -31,7 +32,7 @@ overrides:
   # This module runs only inside a dedicated Web Worker. ONNX Runtime is the
   # selected processor, and worker-local recurrent state cannot leak into the UI.
   - files:
-      - web/sileroVadWorker.ts
+      - src/web/sileroVadWorker.ts
     rules:
       web-plugin-import-allowlist: off
       web-plugin-no-module-state: off

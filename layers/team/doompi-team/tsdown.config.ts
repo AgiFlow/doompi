@@ -2,7 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
-    '*': 'src/exports/**/*.ts',
+    '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'],
     // Child-process entries: private artifacts the runtime spawns, not exports.
     'extensions/subagentPromptRuntimeEntry': 'src/adapters/pi/extensions/subagentPromptRuntimeEntry.cts',
     'runs/piModuleAlias': 'src/adapters/process/piModuleAlias.ts',

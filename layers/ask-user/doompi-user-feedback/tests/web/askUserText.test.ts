@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askCallSummary, askResultView } from '../../web/askUserText.ts';
+import { askCallSummary, askResultView } from '../../src/web/askUserText.ts';
 
 describe('the ask_user_question card text', () => {
   it('counts the questions and lists their headers', () => {

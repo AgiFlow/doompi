@@ -5,8 +5,8 @@ import {
   AUTOCOMPACT_SETTING_SHAPES,
   AUTOCOMPACT_THINKING_LEVELS,
 } from '../src/types/autocompactSettings.ts';
-import { autocompactSettingsSection } from '../web/autocompactSettings.ts';
-import { webPlugin } from '../web/index.ts';
+import { autocompactSettingsSection } from '../src/web/autocompactSettings.ts';
+import { webPlugin } from '../src/web/index.ts';
 
 /** The value a settings field of this shape would send, in the string form the page writes. */
 function sampleValue(id: string): string {

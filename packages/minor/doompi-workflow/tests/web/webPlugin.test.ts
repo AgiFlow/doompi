@@ -5,8 +5,8 @@ import {
   toolMessagePropsFixture,
 } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { workflows } from '../../web/workflowsStore.ts';
-import { webPlugin } from '../../web/index.ts';
+import { workflows } from '../../src/web/workflowsStore.ts';
+import { webPlugin } from '../../src/web/index.ts';
 
 /**
  * Every surface this plugin declares, rendered at least once.

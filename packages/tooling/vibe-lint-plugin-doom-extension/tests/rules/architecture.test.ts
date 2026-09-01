@@ -122,6 +122,28 @@ describe('Doom deterministic architecture rules', () => {
     expect(doomLayerBoundary.check?.(adapter, root, boundaryContext())).toBeNull();
   });
 
+  // src/web is the cockpit plugin's browser half. It is a canonical root so the
+  // folder rules accept it and src/exports may publish its entry, and its only
+  // inward dependency is the wire-JSON view types both halves share.
+  it('accepts src/web as a canonical root and holds it to types and its own siblings', () => {
+    write('package.json', JSON.stringify({ name: '@scope/package' }));
+    const panel = write('src/web/DemoPanel.tsx', "import type { D } from '../types/webDemo.ts';");
+    // A panel composes its siblings. Every other root may import itself, and web
+    // is no different: without this a multi-file plugin fails the moment it moves
+    // under src, which a single-file fixture never shows.
+    const entry = write(
+      'src/web/index.ts',
+      ["import { DemoPanel } from './DemoPanel.tsx';", "import { fold } from './demoRender.ts';"].join('\n'),
+    );
+    const reaching = write('src/web/bad.ts', "import { run } from '../services/run.ts';");
+    const client = write('src/exports/webClient.ts', "export { webPlugin } from '../web/index.ts';");
+
+    expect(doomFolderLayout.check?.(panel, root, boundaryContext())).toBeNull();
+    expect(doomLayerBoundary.check?.(panel, root, boundaryContext())).toBeNull();
+    expect(doomLayerBoundary.check?.(entry, root, boundaryContext())).toBeNull();
+    expect(doomLayerBoundary.check?.(reaching, root, boundaryContext())).toContain('forbidden dependencies');
+    expect(doomLayerBoundary.check?.(client, root, boundaryContext())).toBeNull();
+  });
   it('blocks service imports from Node, Pi, adapters, containers, commands, extensions, and TUI', () => {
     const service = write(
       'src/services/runService.ts',

@@ -47,7 +47,7 @@ describe('No raw theme colour rule', () => {
 
   it('rejects a bare colour string in a style value', () => {
     const result = check(
-      'web/RunCard.tsx',
+      'src/web/RunCard.tsx',
       "export const RunCard = () => <div style={{ backgroundColor: '#282c34' }} />;\n",
     );
 

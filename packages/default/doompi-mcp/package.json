@@ -27,7 +27,8 @@
   },
   "files": [
     "dist",
-    "web",
+    "src/web",
+    "src/exports/webClient.ts",
     "src/types/webMcp.ts",
     "llms.txt",
     "src/prompts",
@@ -63,7 +64,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -119,7 +120,7 @@
   "doompiWeb": {
     "pluginId": "mcp",
     "channels": [],
-    "client": "./web/index.ts"
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

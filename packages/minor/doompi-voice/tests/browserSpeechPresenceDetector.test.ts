@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserSpeechPresenceDetector } from '../web/browserSpeechPresenceDetector.ts';
+import { BrowserSpeechPresenceDetector } from '../src/web/browserSpeechPresenceDetector.ts';
 
 class FakeWorker {
   public onmessage: ((event: { data: unknown }) => void) | null = null;

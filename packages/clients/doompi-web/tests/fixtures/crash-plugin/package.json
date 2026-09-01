@@ -5,6 +5,6 @@
   "type": "module",
   "doompiWeb": {
     "pluginId": "crash",
-    "client": "./web/index.tsx"
+    "client": "./src/exports/webClient.ts"
   }
 }

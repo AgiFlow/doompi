@@ -4,7 +4,7 @@ const run = (runId: string, state: string) => ({ runId, agent: 'reviewer', state
 
 describe('subagents plugin channel', () => {
   it('keeps each session fleet separately and drops one with its session', async () => {
-    const { subagentRunsChannel, subagents } = await import('../../web/subagentsStore.ts');
+    const { subagentRunsChannel, subagents } = await import('../../src/web/subagentsStore.ts');
     const session = (sessionId: string) => subagents.select(subagents.store.state, sessionId);
     subagents.reset();
     subagentRunsChannel.apply('s1', subagentRunsChannel.parse({ runs: [run('r1', 'running')] })!);
@@ -24,7 +24,8 @@ describe('subagents plugin channel', () => {
   });
 
   it('keeps terminal outcomes in history but removes them from activity immediately', async () => {
-    const { activityRuns, subagentRunsChannel, subagents, visibleRuns } = await import('../../web/subagentsStore.ts');
+    const { activityRuns, subagentRunsChannel, subagents, visibleRuns } =
+      await import('../../src/web/subagentsStore.ts');
     const session = () => subagents.select(subagents.store.state, 'activity');
     subagents.reset();
     const feed = (runs: unknown[]) => subagentRunsChannel.apply('activity', subagentRunsChannel.parse({ runs })!);
@@ -52,7 +53,7 @@ describe('subagents plugin channel', () => {
 
   it('hides a cleared run until the feed forgets it, and closes its drawer', async () => {
     const { subagentRunsChannel, subagents, visibleRuns, dismissRun, openRun } =
-      await import('../../web/subagentsStore.ts');
+      await import('../../src/web/subagentsStore.ts');
     const session = (sessionId: string | null) => subagents.select(subagents.store.state, sessionId);
     subagents.reset();
     const feed = (runs: unknown[]) => subagentRunsChannel.apply('s1', subagentRunsChannel.parse({ runs })!);
@@ -76,7 +77,7 @@ describe('subagents plugin channel', () => {
   });
 
   it('asks the runtime to stop through the slash verb and remembers it until the run settles', async () => {
-    const { subagentRunsChannel, subagents, requestRunStop } = await import('../../web/subagentsStore.ts');
+    const { subagentRunsChannel, subagents, requestRunStop } = await import('../../src/web/subagentsStore.ts');
     const session = (sessionId: string) => subagents.select(subagents.store.state, sessionId);
     subagents.reset();
     const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
@@ -97,7 +98,7 @@ describe('subagents plugin channel', () => {
   });
 
   it('sends steering guidance through the dedicated session slash command', async () => {
-    const { requestRunSteer } = await import('../../web/subagentsStore.ts');
+    const { requestRunSteer } = await import('../../src/web/subagentsStore.ts');
     const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
 
     requestRunSteer((sessionId, frame) => sent.push({ sessionId, frame }), 's1', 'r1', 'check the edge case');
@@ -109,7 +110,7 @@ describe('subagents plugin channel', () => {
 
   it('remembers a launch until a new run of that agent arrives, then flags it to open once', async () => {
     const { clearAutoOpen, requestLaunch, subagentRunsChannel, subagents } =
-      await import('../../web/subagentsStore.ts');
+      await import('../../src/web/subagentsStore.ts');
     const session = (sessionId: string) => subagents.select(subagents.store.state, sessionId);
     const fleet = (...runs: Array<[string, string]>) =>
       subagentRunsChannel.parse({ runs: runs.map(([runId, agent]) => ({ runId, agent, state: 'running' })) })!;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workflowRunsChannel, workflows } from '../web/workflowsStore.ts';
+import { workflowRunsChannel, workflows } from '../src/web/workflowsStore.ts';
 
 describe('the workflows web store channel', () => {
   it('keeps each session workflow set separately and drops one with its session', () => {

@@ -31,10 +31,13 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
       type: 'module',
     });
     expect(packageJson.private).toBeUndefined();
-    expect(packageJson.files).toEqual(expect.arrayContaining(['dist', 'web']));
-    // The cockpit client is TypeScript the host bundles, so `web/` and the
-    // descriptor table it imports ship as source. Nothing else under src/ does.
+    expect(packageJson.files).toEqual(expect.arrayContaining(['dist', 'src/web']));
+    // The cockpit client is TypeScript the host bundles, so src/web, the
+    // src/exports re-export that publishes it, and the descriptor table it
+    // imports ship as source. Nothing else under src/ does.
     expect(packageJson.files?.filter((entry) => entry.startsWith('src/'))).toEqual([
+      'src/web',
+      'src/exports/webClient.ts',
       'src/types/autocompactSettings.ts',
       'src/types/constants.ts',
     ]);
@@ -53,7 +56,9 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     const config = readConfig('tsdown.config.ts');
     expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
-    expect(config).toContain("'*': 'src/exports/**/*.ts'");
+    // The browser client re-export is negated out: the cockpit bundles it from
+    // source, and node-building it would pull React into dist for nothing.
+    expect(config).toContain("'*': ['src/exports/**/*.ts', '!src/exports/webClient.ts']");
     expect(config).not.toContain('src/adapters/');
   });
 

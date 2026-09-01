@@ -1,7 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView.ts';
-import { webPlugin } from '../../web/index.ts';
+import { webPlugin } from '../../src/web/index.ts';
 
 const payload = JSON.stringify([
   { instanceId: 'starting-loop', label: 'Starting loop', detail: 'every 30s', state: 'starting' },

@@ -42,8 +42,23 @@ class TestAsyncJobTracker extends AsyncJobTracker {
     return this.statusFiles.get(runId);
   }
 
+  private pendingRead: Promise<void> | undefined;
+
   protected override async readFileAsync(filePath: string): Promise<string | undefined> {
+    await this.pendingRead;
     return this.readFile(filePath);
+  }
+
+  /** Park every async read until the returned function is called. */
+  blockReads(): () => void {
+    let release: () => void = () => {};
+    this.pendingRead = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return () => {
+      this.pendingRead = undefined;
+      release();
+    };
   }
 
   runOnce(): Promise<boolean> {
@@ -366,5 +381,57 @@ describe('AsyncJobTracker <-> PollScheduler registration', () => {
     tracker.start();
 
     expect(tracker.list()).toEqual([]);
+  });
+});
+
+/** The tick awaits per run, so teardown can land between two of those awaits. */
+function sessionCount(subject: AsyncJobTracker): number {
+  return (subject as unknown as { sessions: Map<string, unknown> }).sessions.size;
+}
+
+describe('AsyncJobTracker teardown during an in-flight tick', () => {
+  it('stop() called mid-await leaves no sessions behind', async () => {
+    tracker.statusFiles.set('run-1', statusJson('running'));
+    tracker.forSession('session-a').track('run-1');
+    tracker.start();
+
+    const releaseReads = tracker.blockReads();
+    const tick = tracker.runOnce();
+    tracker.stop();
+    releaseReads();
+    await tick;
+
+    // Resurrection here is what made stop() not stop: the in-flight refresh
+    // would recreate the deleted session and write the job back into it.
+    expect(sessionCount(tracker)).toBe(0);
+    expect(tracker.forSession('session-a').list()).toEqual([]);
+  });
+
+  it('reset() called mid-await does not bring the reset session back', async () => {
+    tracker.statusFiles.set('run-1', statusJson('running'));
+    tracker.statusFiles.set('run-2', statusJson('running'));
+    const session = tracker.forSession('session-a');
+    session.track('run-1');
+    tracker.forSession('session-b').track('run-2');
+
+    const releaseReads = tracker.blockReads();
+    const tick = tracker.runOnce();
+    session.reset();
+    releaseReads();
+    await tick;
+
+    expect(session.list()).toEqual([]);
+    expect(sessionCount(tracker)).toBe(1);
+    expect(tracker.forSession('session-b').list()).toHaveLength(1);
+  });
+
+  it('a tick with no teardown still refreshes every session', async () => {
+    tracker.statusFiles.set('run-1', statusJson('running'));
+    tracker.forSession('session-a').track('run-1');
+
+    tracker.statusFiles.set('run-1', statusJson('complete'));
+    await expect(tracker.runOnce()).resolves.toBe(true);
+
+    expect(tracker.forSession('session-a').get('run-1')?.status).toBe('completed');
   });
 });

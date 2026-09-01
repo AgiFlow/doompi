@@ -309,6 +309,14 @@ describe('Doom package convention rules', () => {
     const nodeGlobal = write('src/services/nodeGlobal.ts', `const root = global; root[Symbol.for('doom/live')] = {};`);
     expect(noLiveGlobalRegistry.check?.(nodeGlobal, root, boundaryContext())).toContain('process-global registry');
 
+    // The cockpit plugin's browser half is not process-global state: globalThis
+    // in a page is the window, and in a worker the worker scope. It sat outside
+    // src/ before the move to src/web and stays out of scope after it.
+    const browserGlobal = write(
+      'src/web/recorder.ts',
+      `const key = Symbol.for('doom/live');\nconst root = globalThis as Record<PropertyKey, unknown>;\nroot[key] = new globalThis.AudioContext();`,
+    );
+    expect(noLiveGlobalRegistry.check?.(browserGlobal, root, boundaryContext())).toBeNull();
     writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
     const voiceReloadHandoff = write(
       'src/schemas/voiceReloadHandoff.ts',

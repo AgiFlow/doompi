@@ -2,8 +2,8 @@ import { driveChannel } from '@agimon-ai/doompi-web-contracts/testing';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { VoiceMediaClientEvent } from '../src/types/clientMedia.ts';
-import { BrowserVoiceMediaTransport } from '../web/clientMediaTransport.ts';
-import { parseVoiceMediaWakePayload, voiceMediaWakeChannel, voiceMediaWakes } from '../web/voiceMediaWakeStore.ts';
+import { BrowserVoiceMediaTransport } from '../src/web/clientMediaTransport.ts';
+import { parseVoiceMediaWakePayload, voiceMediaWakeChannel, voiceMediaWakes } from '../src/web/voiceMediaWakeStore.ts';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   sealedTransport: {

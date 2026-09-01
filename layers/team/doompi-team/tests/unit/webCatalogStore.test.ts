@@ -12,7 +12,7 @@ describe('the catalog store', () => {
       setCatalogFilter,
       subagentCatalogChannel,
       toggleInspect,
-    } = await import('../../web/catalogStore.ts');
+    } = await import('../../src/web/catalogStore.ts');
     const session = (sessionId: string) => catalog.select(catalog.store.state, sessionId);
     catalog.reset();
 

@@ -4,7 +4,7 @@ import {
   SILERO_FRAME_SAMPLES,
   SILERO_STATE_SAMPLES,
   SileroVadFrames,
-} from '../web/sileroVadFrames.ts';
+} from '../src/web/sileroVadFrames.ts';
 
 function pcm(samples: readonly number[]): Uint8Array {
   const bytes = new Uint8Array(samples.length * 2);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkflowRunView } from '../src/types/webWorkflows.ts';
-import { workflowActivityRows, workflowRunIdentity } from '../web/workflowActivity.ts';
-import { focusRun, workflowRunsChannel, workflows } from '../web/workflowsStore.ts';
+import { workflowActivityRows, workflowRunIdentity } from '../src/web/workflowActivity.ts';
+import { focusRun, workflowRunsChannel, workflows } from '../src/web/workflowsStore.ts';
 
 const NOW = Date.parse('2026-08-24T12:00:00.000Z');
 

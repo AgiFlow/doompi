@@ -33,14 +33,14 @@ describe('Prefer shared primitive rule', () => {
   });
 
   it('covers a plugin web/ tree as well as the cockpit client', () => {
-    expect(check('web/RunsPanel.tsx', 'export const P = () => <input className="px-2" />;')).toContain(
+    expect(check('src/web/RunsPanel.tsx', 'export const P = () => <input className="px-2" />;')).toContain(
       '<input> (use Input)',
     );
   });
 
   it('lists each offending element once, however many times it appears', () => {
     const result = check(
-      'web/Panel.tsx',
+      'src/web/Panel.tsx',
       [
         'export const P = () => (',
         '  <div>',
@@ -59,7 +59,7 @@ describe('Prefer shared primitive rule', () => {
 
   it('stands down under asChild, which is how a primitive lends its styling', () => {
     const result = check(
-      'web/RunsPanel.tsx',
+      'src/web/RunsPanel.tsx',
       [
         'export const P = () => (',
         '  <Badge asChild>',
@@ -74,7 +74,7 @@ describe('Prefer shared primitive rule', () => {
 
   it('still reports an element that only has an asChild grandparent', () => {
     const result = check(
-      'web/RunsPanel.tsx',
+      'src/web/RunsPanel.tsx',
       [
         'export const P = () => (',
         '  <Badge asChild>',
@@ -90,7 +90,7 @@ describe('Prefer shared primitive rule', () => {
   });
 
   it('names OptionRow for a hand-rolled listbox row', () => {
-    expect(check('web/List.tsx', 'export const P = () => <div role="option">a</div>;')).toContain(
+    expect(check('src/web/List.tsx', 'export const P = () => <div role="option">a</div>;')).toContain(
       '<div role="option"> (use OptionRow)',
     );
   });
@@ -107,7 +107,7 @@ describe('Prefer shared primitive rule', () => {
 
   it('honours an opt-out that says why', () => {
     const result = check(
-      'web/Chart.tsx',
+      'src/web/Chart.tsx',
       [
         '// prefer-shared-primitive: ignore — the legend toggle is an SVG hit area, not a button.',
         'export const P = () => <button />;',

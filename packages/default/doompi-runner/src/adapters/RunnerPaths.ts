@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { IRunnerPaths, LogSweepResult } from '../services/RunnerPaths/types.ts';
 import { inheritedSessionId } from '../services/runs/session.ts';
-import { LOG_DIR_ENV } from '../types/config.ts';
+import { getMaxCompletedRunners, LOG_DIR_ENV } from '../types/config.ts';
 
 const STORE_DIR_NAME = 'doom-runner';
 const DEFAULT_CONFIG_DIR_NAME = '.pi';
@@ -19,6 +19,13 @@ const HOME_ALIAS = '~';
 const HOME_ALIAS_PREFIX = '~/';
 const FILE_ENCODING = 'utf8';
 const NOT_FOUND_ERROR_CODE = 'ENOENT';
+/**
+ * How long an entirely empty session directory is left alone before it counts
+ * as an orphan. A session that has started but not yet run anything owns such a
+ * directory for a moment, and reclaiming it out from under that session would
+ * be churn for no gain.
+ */
+const EMPTY_SESSION_GRACE_MS = 5 * 60 * 1000;
 
 function git(args: string[], cwd: string): string | undefined {
   try {
@@ -139,6 +146,55 @@ function completedAt(value: unknown): number | undefined {
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
+interface CompletedRecord {
+  readonly id: string;
+  readonly statePath: string;
+  readonly finishedAt: number;
+}
+
+/**
+ * Completed records a sweep may delete: everything past the TTL, and everything
+ * beyond the newest `keep`.
+ *
+ * The count bound is what keeps a live session from growing without limit. Its
+ * records only reach a multi-day TTL long after the session that is still
+ * writing them would have filled its directory, so age alone bounds nothing
+ * while the session lasts.
+ */
+function expiredCompletedRecords(
+  records: readonly CompletedRecord[],
+  ttlMs: number,
+  now: number,
+  keep: number,
+): CompletedRecord[] {
+  return [...records]
+    .sort((left, right) => right.finishedAt - left.finishedAt)
+    .filter((record, index) => index >= keep || now - record.finishedAt > ttlMs);
+}
+
+/**
+ * Whether the directory holds no files at all, only empty subdirectories.
+ *
+ * A session that ran something leaves metadata behind, and a live session keeps
+ * its lifeline socket in the state directory, so an entirely empty tree names
+ * no owner and no history.
+ */
+function isEmptySession(directory: string): boolean {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) return false;
+    if (fs.readdirSync(path.join(directory, entry.name)).length > 0) return false;
+  }
+  return true;
+}
+
+async function isEmptySessionAsync(directory: string): Promise<boolean> {
+  for (const entry of await fs.promises.readdir(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) return false;
+    if ((await fs.promises.readdir(path.join(directory, entry.name))).length > 0) return false;
+  }
+  return true;
+}
+
 /**
  * The root every session's runner state lives under, before any log-directory
  * override: `<agent dir>/doom-runner/<session id>/{runs,logs}`. A reader in
@@ -217,7 +273,10 @@ export class RunnerPaths implements IRunnerPaths {
     // terminal state, and the emptied directories themselves from accumulating.
     const active = this.currentSessionId();
     for (const sessionId of sessions) {
-      if (sessionId === active) continue;
+      if (sessionId === active) {
+        this.sweepActiveSession(sessionId, ttlMs, now, result);
+        continue;
+      }
       this.sweepSessionDirectory(path.join(root, sessionId), ttlMs, now, result);
     }
     return result;
@@ -242,7 +301,10 @@ export class RunnerPaths implements IRunnerPaths {
 
     const active = this.currentSessionId();
     for (const sessionId of sessions) {
-      if (sessionId === active) continue;
+      if (sessionId === active) {
+        await this.sweepActiveSessionAsync(sessionId, ttlMs, now, result);
+        continue;
+      }
       await this.sweepSessionDirectoryAsync(path.join(root, sessionId), ttlMs, now, result);
     }
     return result;
@@ -270,10 +332,41 @@ export class RunnerPaths implements IRunnerPaths {
     }
   }
 
+  /**
+   * Retention inside the session that is still running.
+   *
+   * The whole-directory sweep cannot be pointed at the live session: it would
+   * take the lifeline socket, the supervisor sidecars and the running runners'
+   * own metadata with it. Per-record retention is safe there because it only
+   * ever removes a record whose state is `completed` together with the two log
+   * files that record names, and never the directory itself. A running record
+   * has no `exit.finishedAt`, so it is not a candidate at any age.
+   */
+  private sweepActiveSession(sessionId: string, ttlMs: number, now: number, result: LogSweepResult): void {
+    this.sweepStateDirectory(this.stateDirectory(sessionId), sessionId, ttlMs, now, result);
+  }
+
+  private async sweepActiveSessionAsync(
+    sessionId: string,
+    ttlMs: number,
+    now: number,
+    result: LogSweepResult,
+  ): Promise<void> {
+    await this.sweepStateDirectoryAsync(this.stateDirectory(sessionId), sessionId, ttlMs, now, result);
+  }
+
   /** Removes a session's whole directory once its newest entry is past the TTL. */
   private sweepSessionDirectory(directory: string, ttlMs: number, now: number, result: LogSweepResult): void {
     try {
-      if (now - newestEntryTime(directory) <= ttlMs) return;
+      const newest = newestEntryTime(directory);
+      // An orphan left by a session that never ran anything holds nothing worth
+      // a retention window, so it goes as soon as it is clearly not in use.
+      if (now - newest > EMPTY_SESSION_GRACE_MS && isEmptySession(directory)) {
+        fs.rmSync(directory, { recursive: true, force: true });
+        result.removed.push(directory);
+        return;
+      }
+      if (now - newest <= ttlMs) return;
       // An idle session can go quiet for longer than the TTL, and deleting one
       // takes its lifeline socket with it, which would read to its own runners
       // as an owner that had died. Its records name the owner, so ask.
@@ -294,7 +387,13 @@ export class RunnerPaths implements IRunnerPaths {
     result: LogSweepResult,
   ): Promise<void> {
     try {
-      if (now - (await newestEntryTimeAsync(directory)) <= ttlMs) return;
+      const newest = await newestEntryTimeAsync(directory);
+      if (now - newest > EMPTY_SESSION_GRACE_MS && (await isEmptySessionAsync(directory))) {
+        await fs.promises.rm(directory, { recursive: true, force: true });
+        result.removed.push(directory);
+        return;
+      }
+      if (now - newest <= ttlMs) return;
       if (await ownerAliveAsync(path.join(directory, STATE_DIR_NAME))) return;
       await fs.promises.rm(directory, { recursive: true, force: true });
       result.removed.push(directory);
@@ -338,18 +437,22 @@ export class RunnerPaths implements IRunnerPaths {
       return;
     }
 
+    const completed: CompletedRecord[] = [];
     for (const entry of entries) {
       if (!entry.endsWith(STATE_EXTENSION)) continue;
       const statePath = path.join(directory, entry);
       try {
         const value: unknown = JSON.parse(fs.readFileSync(statePath, FILE_ENCODING));
         const finishedAt = completedAt(value);
-        if (finishedAt === undefined || now - finishedAt <= ttlMs) continue;
-        const id = entry.slice(0, -STATE_EXTENSION.length);
-        this.removeHistoryFiles(sessionId, id, statePath, result);
+        if (finishedAt === undefined) continue;
+        completed.push({ id: entry.slice(0, -STATE_EXTENSION.length), statePath, finishedAt });
       } catch (error) {
         result.errors.push(`Could not sweep runner metadata ${statePath}: ${String(error)}`);
       }
+    }
+
+    for (const record of expiredCompletedRecords(completed, ttlMs, now, getMaxCompletedRunners())) {
+      this.removeHistoryFiles(sessionId, record.id, record.statePath, result);
     }
   }
 
@@ -370,18 +473,22 @@ export class RunnerPaths implements IRunnerPaths {
       return;
     }
 
+    const completed: CompletedRecord[] = [];
     for (const entry of entries) {
       if (!entry.endsWith(STATE_EXTENSION)) continue;
       const statePath = path.join(directory, entry);
       try {
         const value: unknown = JSON.parse(await fs.promises.readFile(statePath, FILE_ENCODING));
         const finishedAt = completedAt(value);
-        if (finishedAt === undefined || now - finishedAt <= ttlMs) continue;
-        const id = entry.slice(0, -STATE_EXTENSION.length);
-        await this.removeHistoryFilesAsync(sessionId, id, statePath, result);
+        if (finishedAt === undefined) continue;
+        completed.push({ id: entry.slice(0, -STATE_EXTENSION.length), statePath, finishedAt });
       } catch (error) {
         result.errors.push(`Could not sweep runner metadata ${statePath}: ${String(error)}`);
       }
+    }
+
+    for (const record of expiredCompletedRecords(completed, ttlMs, now, getMaxCompletedRunners())) {
+      await this.removeHistoryFilesAsync(sessionId, record.id, record.statePath, result);
     }
   }
 

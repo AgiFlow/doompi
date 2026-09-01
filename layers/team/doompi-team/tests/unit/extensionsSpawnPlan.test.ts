@@ -1206,7 +1206,7 @@ describe('fan-out width is bounded, because concurrency cannot bound it', () => 
 
   it('refuses a PARALLEL call wider than maxTasks before spawning anything', async () => {
     await expect(planner.spawn(baseRequest({ tasks: tasks(9) }), {})).rejects.toThrow(
-      /requested 9 tasks, but at most 8 may run at once/,
+      /requested 9 tasks, but at most 8 may be declared in one call/,
     );
     // Preflight means NOTHING started - not a partial fan-out that then throws.
     expect(spawner.calls).toHaveLength(0);
@@ -1219,7 +1219,7 @@ describe('fan-out width is bounded, because concurrency cannot bound it', () => 
 
   it('honours a configured maxTasks over the default', async () => {
     await expect(planner.spawn(baseRequest({ tasks: tasks(3) }), { parallel: { maxTasks: 2 } })).rejects.toThrow(
-      /requested 3 tasks, but at most 2 may run at once/,
+      /requested 3 tasks, but at most 2 may be declared in one call/,
     );
   });
 
@@ -1227,6 +1227,12 @@ describe('fan-out width is bounded, because concurrency cannot bound it', () => 
     await expect(planner.spawn(baseRequest({ tasks: tasks(9) }), {})).rejects.toThrow(
       /throttles how fast they start, not how many run/,
     );
+  });
+
+  it('no longer tells the caller to split the batch across calls, which used to defeat the cap', async () => {
+    const refusal = await planner.spawn(baseRequest({ tasks: tasks(9) }), {}).catch((error: unknown) => String(error));
+    expect(refusal).not.toMatch(/smaller explicit run calls/);
+    expect(refusal).toMatch(/does not raise the live-child ceiling/);
   });
 });
 

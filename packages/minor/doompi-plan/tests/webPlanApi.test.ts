@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { contentUrl, currentUrl } from '../src/types/planApi.ts';
-import { fetchPlan, savePlan } from '../web/planApi.ts';
+import { fetchPlan, savePlan } from '../src/web/planApi.ts';
 
 /**
  * The page's half of the session API.

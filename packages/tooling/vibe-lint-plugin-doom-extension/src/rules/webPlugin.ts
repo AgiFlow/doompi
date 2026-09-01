@@ -5,17 +5,19 @@ import ts from 'typescript';
 import { projectPath } from './manifestEntries.js';
 
 /**
- * The web (cockpit) plugin an extension package ships from its `web/` folder.
+ * The web (cockpit) plugin an extension package ships from its `src/web/`
+ * folder.
  *
- * `web/` sits outside the src vocabulary on purpose: it is browser code the
- * cockpit's bundler compiles into the host bundle, so it may reach only the
- * shared browser runtimes, the web contract, the shared components, its own
- * files, and the package's `src/types`. Its manifest block is what `doompi
- * sync` discovers, so a malformed one is caught here rather than at sync.
+ * `src/web` is browser code the cockpit's bundler compiles into the host
+ * bundle, so it may reach only the shared browser runtimes, the web contract,
+ * the shared components, its own files, and the package's `src/types`. Its
+ * manifest block is what `doompi sync` discovers, so a malformed one is caught
+ * here rather than at sync.
  */
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-export const WEB_ROOT = 'web';
+/** The root a package keeps its cockpit plugin in. */
+export const WEB_ROOT = 'src/web';
 const WEB_TSCONFIG = 'tsconfig.json';
 const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
@@ -71,10 +73,21 @@ export function readSource(filePath: string): ts.SourceFile | null {
     : null;
 }
 
-/** The repo-relative path of a `web/` source file, or null for anything else. */
+/** Whether a repo-relative path sits in the web root. */
+function isWebPath(relativePath: string): boolean {
+  return relativePath === WEB_ROOT || relativePath.startsWith(`${WEB_ROOT}/`);
+}
+
+/** The web root a package has on disk, or undefined when it ships no cockpit plugin. */
+function existingWebRoot(configRoot: string): string | undefined {
+  return fs.existsSync(path.join(configRoot, WEB_ROOT)) ? WEB_ROOT : undefined;
+}
+
+/** The repo-relative path of a web plugin source file, or null for anything else. */
 function webSourcePath(filePath: string, configRoot: string): string | null {
   const relativePath = projectPath(filePath, configRoot);
-  if (!relativePath?.startsWith(`${WEB_ROOT}/`) || !SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
+  if (relativePath === null || !isWebPath(relativePath)) return null;
+  if (!SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
   return relativePath;
 }
 
@@ -142,7 +155,7 @@ export function walkSources(directory: string): string[] {
   return found;
 }
 
-/** The `src/types` files and the bare packages every `web/` source in a package reaches. */
+/** The `src/types` files and the bare packages every web plugin source in a package reaches. */
 function webImports(configRoot: string): { typeFiles: Set<string>; packages: Set<string> } {
   const typeFiles = new Set<string>();
   const packages = new Set<string>();
@@ -174,7 +187,7 @@ export const webPluginImportAllowlist: RuleDefinition = {
     for (const specifier of moduleSpecifiers(sourceFile)) {
       if (specifier.startsWith('.')) {
         const target = relativeTarget(filePath, specifier, configRoot);
-        if (target === null || !(target.startsWith(`${WEB_ROOT}/`) || target === WEB_ROOT || isTypesPath(target))) {
+        if (target === null || !(isWebPath(target) || isTypesPath(target))) {
           offenders.add(specifier);
         }
       } else if (!ALLOWED_BARE_SPECIFIERS.has(specifier)) {
@@ -182,7 +195,7 @@ export const webPluginImportAllowlist: RuleDefinition = {
       }
     }
     if (offenders.size === 0) return null;
-    return `web/ plugin code may import only react, @tanstack/store, @tanstack/react-store, ${CONTRACTS_PACKAGE}, ${COMPONENTS_PACKAGE}, its own web/** and src/types/**; found: ${[...offenders].join(', ')}.`;
+    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${CONTRACTS_PACKAGE}, ${COMPONENTS_PACKAGE}, its own ${WEB_ROOT}/** and src/types/**; found: ${[...offenders].join(', ')}.`;
   },
 };
 
@@ -202,7 +215,7 @@ export const webPluginNoModuleState: RuleDefinition = {
       for (const declaration of statement.declarationList.declarations) names.push(declaration.name.getText());
     }
     if (names.length === 0) return null;
-    return `web/ modules keep no mutable module state (${names.join(', ')}). Put it in ${STORE_HELPERS} or a const Store; components send through props.sendSessionFrame and read statuses from their props.`;
+    return `src/web modules keep no mutable module state (${names.join(', ')}). Put it in ${STORE_HELPERS} or a const Store; components send through props.sendSessionFrame and read statuses from their props.`;
   },
 };
 
@@ -236,12 +249,12 @@ export const webPluginManifest: RuleDefinition = {
         if (!fs.existsSync(path.join(configRoot, client))) problems.push(`'${id}' client '${client}' does not exist`);
         if (!isPublished(files, stripDot(client)))
           problems.push(`'${id}' client '${client}' is not in the files allowlist`);
-        if (
-          stripDot(client).startsWith(`${WEB_ROOT}/`) &&
-          !fs.existsSync(path.join(configRoot, WEB_ROOT, WEB_TSCONFIG))
-        ) {
-          problems.push(`'${id}' has no ${WEB_ROOT}/${WEB_TSCONFIG}, so its web entry is never typechecked`);
-        }
+      }
+      // Keyed off the root the package actually has, not the client path: the
+      // client may be a re-export from src/exports, which sits in neither root.
+      const webRoot = existingWebRoot(configRoot);
+      if (webRoot !== undefined && !fs.existsSync(path.join(configRoot, webRoot, WEB_TSCONFIG))) {
+        problems.push(`'${id}' has no ${webRoot}/${WEB_TSCONFIG}, so its web entry is never typechecked`);
       }
       if (block.hub !== undefined) {
         const hub = block.hub as { entry?: unknown; dist?: unknown } | string;
@@ -258,17 +271,55 @@ export const webPluginManifest: RuleDefinition = {
     const imports = webImports(configRoot);
     for (const typeFile of [...imports.typeFiles].sort()) {
       if (!isPublished(files, typeFile))
-        problems.push(`web/ imports '${typeFile}', which is not in the files allowlist`);
+        problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
     }
     if (manifest.dependencies?.[CONTRACTS_PACKAGE] === undefined) {
       problems.push(`${CONTRACTS_PACKAGE} must be a dependency: the synced bundle imports it at runtime`);
     }
     if (imports.packages.has(COMPONENTS_PACKAGE) && manifest.dependencies?.[COMPONENTS_PACKAGE] === undefined) {
-      problems.push(`${COMPONENTS_PACKAGE} must be a dependency: web/ imports it`);
+      problems.push(`${COMPONENTS_PACKAGE} must be a dependency: ${WEB_ROOT}/ imports it`);
     }
     return problems.length > 0 ? `doompiWeb manifest: ${problems.join('; ')}.` : null;
   },
 };
+
+/**
+ * The file a pure re-export of `webPlugin` forwards to, or null when this file
+ * is not one. A client entry published through src/exports names the plugin in
+ * one `export { webPlugin } from '...'`, so the definition itself lives one hop
+ * away and has to be validated there.
+ */
+function reExportedWebPluginTarget(sourceFile: ts.SourceFile, filePath: string): string | null {
+  if (sourceFile.statements.length === 0) return null;
+  let target: string | null = null;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExportDeclaration(statement) || statement.moduleSpecifier === undefined) return null;
+    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) return null;
+    const clause = statement.exportClause;
+    if (clause === undefined || !ts.isNamedExports(clause)) continue;
+    if (clause.elements.some((element) => element.name.text === WEB_PLUGIN_EXPORT)) {
+      target = path.resolve(path.dirname(filePath), statement.moduleSpecifier.text);
+    }
+  }
+  return target;
+}
+
+/** The source of a re-export target, resolving the extensionless and directory forms. */
+function readResolvedSource(target: string): ts.SourceFile | null {
+  const candidates = [
+    target,
+    `${target}.ts`,
+    `${target}.tsx`,
+    path.join(target, 'index.ts'),
+    path.join(target, 'index.tsx'),
+  ];
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+    const sourceFile = readSource(candidate);
+    if (sourceFile) return sourceFile;
+  }
+  return null;
+}
 
 /** Whether the file exports `webPlugin` as a `defineWebPlugin(...)` call with the helper imported from the contract. */
 function exportsWebPlugin(sourceFile: ts.SourceFile): boolean {
@@ -310,8 +361,10 @@ export const webPluginEntry: RuleDefinition = {
   rationale:
     "The host's generated registry imports { webPlugin } from every client entry by name, and defineWebPlugin is what type-checks the literal against the contract. An entry that exports something else, or builds the definition by hand, fails at the host build after publishing instead of in the editor.",
   check(filePath, configRoot) {
-    const relativePath = webSourcePath(filePath, configRoot);
-    if (relativePath === null) return null;
+    // Gated on being a declared client entry rather than on living in the web
+    // root, so an entry re-exported from src/exports is still checked.
+    const relativePath = projectPath(filePath, configRoot);
+    if (relativePath === null || !SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
     const manifest = readManifest(configRoot);
     if (!manifest) return null;
     const entries = pluginBlocks(manifest)
@@ -321,6 +374,11 @@ export const webPluginEntry: RuleDefinition = {
     if (!entries.includes(relativePath)) return null;
     const sourceFile = readSource(filePath);
     if (!sourceFile || exportsWebPlugin(sourceFile)) return null;
-    return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${CONTRACTS_PACKAGE}; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
+    const target = reExportedWebPluginTarget(sourceFile, filePath);
+    if (target !== null) {
+      const forwarded = readResolvedSource(target);
+      if (forwarded && exportsWebPlugin(forwarded)) return null;
+    }
+    return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${CONTRACTS_PACKAGE}, directly or through one re-export; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
   },
 };

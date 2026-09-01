@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BrowserVoiceMediaDevice, Pcm16Resampler } from '../web/browserMediaDevice.ts';
+import { BrowserVoiceMediaDevice, Pcm16Resampler } from '../src/web/browserMediaDevice.ts';
 class FakeNode {
   public connect(): void {}
   public disconnect(): void {}

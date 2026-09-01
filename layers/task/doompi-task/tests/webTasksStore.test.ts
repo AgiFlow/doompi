@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { requestTaskInstruction, requestTaskRemoval, taskInstruction, tasks, tasksChannel } from '../web/tasksStore.ts';
+import {
+  requestTaskInstruction,
+  requestTaskRemoval,
+  taskInstruction,
+  tasks,
+  tasksChannel,
+} from '../src/web/tasksStore.ts';
 
 describe('task cockpit store', () => {
   it('parses task payloads and rejects invalid envelopes', () => {

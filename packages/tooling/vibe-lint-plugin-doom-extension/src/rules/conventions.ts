@@ -122,6 +122,13 @@ function isDoomPackage(packageName: string | undefined): boolean {
 function isDoomProductionSource(filePath: string, configRoot: string): boolean {
   const relativePath = projectPath(filePath, configRoot);
   if (!relativePath?.startsWith('src/')) return false;
+  // The cockpit plugin's browser half is server-side production source in path
+  // only. These rules police Pi events, the same-runner protocol runtime, and
+  // process-global registries, none of which exist in a page: globalThis there
+  // is the window or a worker scope. web-plugin-import-allowlist already blocks
+  // every specifier they guard. Before the move to src/web this code sat
+  // outside src/ and was out of scope for the same reason.
+  if (relativePath.startsWith('src/web/')) return false;
   const manifest = readManifest(path.join(configRoot, PACKAGE_MANIFEST_NAME));
   // Unit-rule fixtures historically omit a package manifest. Installed rules
   // are scoped by the Doom preset, while an explicit non-Doom manifest opts out.

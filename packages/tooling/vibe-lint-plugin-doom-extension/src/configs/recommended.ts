@@ -81,6 +81,9 @@ const boundaries: BoundaryConfig[] = [
       'services',
       'tui',
       'types',
+      // The cockpit client entry is published from src/exports as a source
+      // re-export, so exports reaches the browser half too.
+      'web',
     ),
   },
   { name: 'types', pattern: 'src/types/**', allowedImports: layer('types') },
@@ -145,12 +148,12 @@ const boundaries: BoundaryConfig[] = [
       'types',
     ),
   },
-  // The web cockpit plugin lives in web/, outside the src vocabulary the
-  // folder rules own. Its browser code may reach its own files and the shared
-  // src/types shapes (web-plugin-import-allowlist checks the bare specifiers);
-  // tests may reach it like any package source.
-  { name: 'web-plugin', pattern: 'web/**', allowedImports: ['web/**', 'src/types', 'src/types/**'] },
-  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**', 'web/**'] },
+  // The web cockpit plugin's browser half lives in src/web. It may reach its
+  // own files and the shared src/types shapes (web-plugin-import-allowlist
+  // checks the bare specifiers); tests reach it through the src/** entry above
+  // like any other package source.
+  { name: 'web-plugin', pattern: 'src/web/**', allowedImports: ['src/web/**', 'src/types', 'src/types/**'] },
+  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**'] },
   {
     name: 'metadata',
     pattern:

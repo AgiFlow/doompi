@@ -24,5 +24,12 @@
     "types": ["node", "vitest/globals"]
   },
   "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage", "tests/browserMediaDeviceRecovery.test.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "tests/browserMediaDeviceRecovery.test.ts",
+    "src/web",
+    "src/exports/webClient.ts"
+  ]
 }

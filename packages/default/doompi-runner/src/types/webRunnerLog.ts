@@ -3,7 +3,7 @@ import type { LogSlice } from './logReader.ts';
 /**
  * The runner log API, shared by this package's session-scoped routes and its
  * cockpit plugin. The two halves run in different processes, so the wire
- * vocabulary is declared here: `web/` may reach `src/types` and nothing else on
+ * vocabulary is declared here: `src/web` may reach `src/types` and nothing else on
  * the server side.
  *
  * The routes are mounted inside one session's own server, so they name a runner

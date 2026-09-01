@@ -29,5 +29,5 @@
     "types": ["vitest/globals", "node"]
   },
   "include": ["src", "tests", "vitest.config.ts", "vitest.system.config.ts", "tsdown.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  "exclude": ["node_modules", "dist", "coverage", "src/web", "src/exports/webClient.ts"]
 }

@@ -303,12 +303,16 @@ const DEFAULT_RUNTIME_CONFIG: AutocompactRuntimeConfig = { enabled: true, ratios
  * fallback, because summarization borrowed the planning subagent model before
  * it had keys of its own and existing files still spell it that way.
  */
-export function autocompactRuntimeConfig(cwd: string): AutocompactRuntimeConfig {
+export function autocompactRuntimeConfig(
+  cwd: string,
+  onLoadFailure?: (error: unknown) => void,
+): AutocompactRuntimeConfig {
   let modes: ReturnType<typeof loadDoomConfig>['modes'];
   try {
     modes = loadDoomConfig(getHarnessState().root ?? cwd).modes;
-  } catch {
+  } catch (error) {
     process.emitWarning('Doom autocompact configuration could not be loaded; using the active session model instead.');
+    onLoadFailure?.(error);
     return DEFAULT_RUNTIME_CONFIG;
   }
   const configured = modes?.autocompact;
@@ -407,6 +411,7 @@ export function installAutocompactRuntime(
   let checkpointController: AbortController | undefined;
   let footerContribution: DoomFooterContributionHandle | undefined;
   let contextContributionsService: DoomContextContributionsService | undefined;
+  let configLoadFailureReported = false;
 
   cordis.effect(
     () => async () => {
@@ -421,6 +426,7 @@ export function installAutocompactRuntime(
       appliedContextRequests.clear();
       invalidContextLeaves.clear();
       state = createInitialState();
+      configLoadFailureReported = false;
       await telemetry.shutdown();
     },
     `${FOOTER_SOURCE}/runtime`,
@@ -511,17 +517,54 @@ export function installAutocompactRuntime(
     );
   };
 
-  const failCheckpoint = (requestId: string, error: unknown): void => {
-    if (!active || requestId !== state.requestId || state.phase !== STATE_PHASE.checkpointPending) return;
-    const failedLeafId = state.snapshotLeafId;
+  /**
+   * Both failure paths share one attempt budget: a summarizer that keeps failing would
+   * otherwise cost a full summarization call every turn for the rest of the session, so the
+   * pass is abandoned once the budget is spent and becomes eligible again on the next cycle.
+   */
+  const registerFailedAttempt = (
+    pass: AutocompactPass,
+    failedLeafId: string | undefined,
+  ): { attempts: number; exhausted: boolean } => {
+    const attempts = state.invalidAttempts + 1;
+    const exhausted = attempts >= MAX_INVALID_CHECKPOINT_ATTEMPTS;
     state.phase = STATE_PHASE.waiting;
     if (failedLeafId) state.lastAttemptLeafId = failedLeafId;
+    if (exhausted) {
+      completeQueuedPass(pass);
+      state.exhaustedPasses = [...state.exhaustedPasses, pass];
+      state.invalidAttempts = 0;
+    } else {
+      state.invalidAttempts = attempts;
+    }
     clearPendingCheckpoint();
     persist();
+    return { attempts, exhausted };
+  };
+
+  const failCheckpoint = (requestId: string, error: unknown): void => {
+    if (!active || requestId !== state.requestId || state.phase !== STATE_PHASE.checkpointPending) return;
+    const pass = state.pass;
+    const { attempts, exhausted } = registerFailedAttempt(pass, state.snapshotLeafId);
+    const reason = error instanceof Error ? error.message : String(error);
     notify(
       currentContext,
-      `Doom autocompact summarization pass ${state.pass} failed: ${error instanceof Error ? error.message : String(error)}`,
+      exhausted
+        ? `Doom autocompact summarization pass ${pass} failed ${attempts} times and was abandoned: ${reason}`
+        : `Doom autocompact summarization pass ${pass} failed: ${reason}`,
       'error',
+    );
+  };
+
+  // A configuration that cannot be read degrades every later pass silently, and the process
+  // warning never reaches the log sink. Report it once per session instead of once per turn.
+  const reportConfigLoadFailure = (ctx: ExtensionContext, error: unknown): void => {
+    if (!active || configLoadFailureReported) return;
+    configLoadFailureReported = true;
+    void telemetry.recordWarning(
+      AUTOCOMPACT_EVENT.configurationLoadFailed,
+      error,
+      telemetryAttributes(ctx, { 'autocompact.cycle': state.cycle, 'autocompact.pass': state.pass }),
     );
   };
 
@@ -726,7 +769,7 @@ export function installAutocompactRuntime(
     // Read per evaluation rather than once at install, so turning the ladder off
     // or moving a threshold in settings takes effect on the next turn instead of
     // the next session.
-    const configured = autocompactRuntimeConfig(ctx.cwd);
+    const configured = autocompactRuntimeConfig(ctx.cwd, (error) => reportConfigLoadFailure(ctx, error));
     if (!configured.enabled) return false;
     const usage = ctx.getContextUsage();
     if (!usage || usage.tokens === null) return false;
@@ -779,19 +822,7 @@ export function installAutocompactRuntime(
       const invalidRequestId = state.requestId;
       // A queued pass is retried once per new leaf, so an output the summarizer never formats
       // correctly would otherwise burn a full summarization call every turn for the session.
-      const attempts = state.invalidAttempts + 1;
-      const exhausted = attempts >= MAX_INVALID_CHECKPOINT_ATTEMPTS;
-      state.phase = STATE_PHASE.waiting;
-      if (failedLeafId) state.lastAttemptLeafId = failedLeafId;
-      if (exhausted) {
-        completeQueuedPass(pass);
-        state.exhaustedPasses = [...state.exhaustedPasses, pass];
-        state.invalidAttempts = 0;
-      } else {
-        state.invalidAttempts = attempts;
-      }
-      clearPendingCheckpoint();
-      persist();
+      const { attempts, exhausted } = registerFailedAttempt(pass, failedLeafId);
       const error = new Error(`Summarization pass ${pass} returned an incomplete checkpoint.`);
       notify(
         ctx,

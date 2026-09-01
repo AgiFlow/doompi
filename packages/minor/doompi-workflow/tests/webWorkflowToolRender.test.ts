@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workflowCallSummary, workflowResultLines } from '../web/workflowToolRender.ts';
+import { workflowCallSummary, workflowResultLines } from '../src/web/workflowToolRender.ts';
 
 const text = (value: string) => ({ content: [{ type: 'text', text: value }], details: undefined });
 const json = (value: unknown) => text(JSON.stringify(value));
