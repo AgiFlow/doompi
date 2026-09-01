@@ -26,7 +26,13 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "src/types/autocompactSettings.ts",
+      "src/types/constants.ts"
+    ],
     "os": [],
     "cpu": []
   },
@@ -286,7 +292,16 @@
       "./src/prompts/doompi-author-domain/SKILL.md",
       "./src/prompts/doompi-author-domain/references/domains-contract.md"
     ],
-    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "llms.txt",
+      "src/prompts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -317,7 +332,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts"],
     "os": [],
     "cpu": []
   },
@@ -593,7 +608,15 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web", "src/types/domain.ts", "src/types/webFiles.ts", "src/types/fileEditsApi.ts", "LICENSE"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "src/types/domain.ts",
+      "src/types/webFiles.ts",
+      "src/types/fileEditsApi.ts",
+      "LICENSE"
+    ],
     "os": [],
     "cpu": []
   },
@@ -626,7 +649,8 @@
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-goal/SKILL.md"],
     "files": [
       "dist",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "llms.txt",
       "src/prompts",
       "src/types/goalView.ts",
@@ -665,7 +689,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts"],
     "os": [],
     "cpu": []
   },
@@ -725,7 +749,16 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-help/SKILL.md"],
-    "files": ["dist", "web", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "llms.txt",
+      "src/prompts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -838,7 +871,8 @@
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-loop/SKILL.md"],
     "files": [
       "dist",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "llms.txt",
       "src/prompts",
       "src/types/loopView.ts",
@@ -918,7 +952,17 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-mcp/SKILL.md"],
-    "files": ["dist", "web", "src/types/webMcp.ts", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "src/types/webMcp.ts",
+      "llms.txt",
+      "src/prompts",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -1024,7 +1068,8 @@
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-plan/SKILL.md"],
     "files": [
       "dist",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "llms.txt",
       "src/prompts",
       "src/types/planApi.ts",
@@ -1210,7 +1255,16 @@
       "./src/prompts/doompi-author-profile/SKILL.md",
       "./src/prompts/doompi-author-profile/references/profiles-contract.md"
     ],
-    "files": ["dist", "web", "llms.txt", "README.md", "src/prompts", "LICENSE", "package.json"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "llms.txt",
+      "README.md",
+      "src/prompts",
+      "LICENSE",
+      "package.json"
+    ],
     "os": [],
     "cpu": []
   },
@@ -1241,7 +1295,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts"],
     "os": [],
     "cpu": []
   },
@@ -1587,7 +1641,8 @@
     ],
     "files": [
       "dist",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "skills",
       "llms.txt",
       "src/prompts",
@@ -1801,7 +1856,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web", "src/types/webTasks.ts", "package.json"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webTasks.ts", "package.json"],
     "os": [],
     "cpu": []
   },
@@ -1838,7 +1893,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "web", "src/types/webSubagents.ts"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webSubagents.ts"],
     "os": [],
     "cpu": []
   },
@@ -1900,7 +1955,8 @@
     "assets": [],
     "files": [
       "dist",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "src/types/askUserWire.ts",
       "src/types/questionnaire.ts",
       "README.md",
@@ -2077,7 +2133,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./themes/doom-pi-dark.json"],
-    "files": ["dist", "web", "themes"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "themes"],
     "os": [],
     "cpu": []
   },
@@ -2122,7 +2178,8 @@
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-voice/SKILL.md"],
     "files": [
       "dist",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "models",
       "llms.txt",
       "src/prompts",
@@ -2219,7 +2276,8 @@
       "README.md",
       "src/prompts",
       "skills/workflow-recovery/SKILL.md",
-      "web",
+      "src/web",
+      "src/exports/webClient.ts",
       "src/types/webWorkflows.ts",
       "src/types/webWorkflowTerminal.ts"
     ],
