@@ -96,11 +96,38 @@ describe('AdmissionGate', () => {
       now: () => 0,
     });
 
-    await expect(
-      gate.admit({ maxLiveRuns: 2, timeoutMs: 0, report: (event) => events.push(event) }),
-    ).rejects.toThrow(/raise parallel.maxLiveRuns/);
+    await expect(gate.admit({ maxLiveRuns: 2, timeoutMs: 0, report: (event) => events.push(event) })).rejects.toThrow(
+      /raise parallel.maxLiveRuns/,
+    );
 
     expect(events).toEqual(['doom_team.admission_wait', 'doom_team.admission_timeout']);
+  });
+
+  it('waits on its own timer when no sleep is injected', async () => {
+    // Saturated on the first check only, so the gate has to sleep once.
+    let counts = 0;
+    const gate = new AdmissionGate({
+      countLiveRuns: () => (counts++ === 0 ? 1 : 0),
+      pollIntervalMs: 1,
+    });
+
+    await expect(gate.admit({ maxLiveRuns: 1, timeoutMs: 5_000 })).resolves.toBeDefined();
+  });
+
+  it('keeps serving the queue after a refused admission ahead of it', async () => {
+    // Saturated for the first admission only, so the second one queues behind a refusal.
+    let counts = 0;
+    const gate = new AdmissionGate({
+      countLiveRuns: () => (counts++ === 0 ? 1 : 0),
+      wait: async () => {},
+      now: () => 0,
+    });
+
+    const refused = gate.admit({ maxLiveRuns: 1, timeoutMs: 0 });
+    const queued = gate.admit({ maxLiveRuns: 1, timeoutMs: 0 });
+
+    await expect(refused).rejects.toThrow(/No child slot became available/);
+    await expect(queued).resolves.toBeDefined();
   });
 
   it('does not report a wait when a slot is free immediately', async () => {
