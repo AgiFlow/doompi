@@ -590,7 +590,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
             cwd: ctx.cwd,
             availableModels: authenticatedModelInfos(ctx.modelRegistry),
             ...(parentModel ? { parentModel } : {}),
-            forkSource: captureSessionForkSource(ctx.sessionManager, 'tool'),
+            captureForkSource: () => captureSessionForkSource(ctx.sessionManager, 'tool'),
           },
           delegation: delegationBridge,
           fablePlan: fablePlanBridge,

@@ -604,6 +604,119 @@ describe('Team standard runtime', () => {
     disposeFinished();
   });
 
+  it('resolves the fork source when the transcript is persisted after the session binds', async () => {
+    resetRuntimeState();
+    const host = fakePi();
+    activateTeamForTest(host.pi);
+    const runtime = runtimeFor(host.pi);
+
+    const planner = runtime.spawnPlanner;
+    vi.spyOn(planner, 'spawn').mockResolvedValue({
+      outcomes: [{ agent: 'explorer', task: 'Inspect the package', childIndex: 0, runId: 'run-1', pid: 42 }],
+    });
+    vi.spyOn(runtime.subagentWaiter, 'wait').mockResolvedValue({ reason: 'completed', elapsedMs: 12, runs: [] });
+
+    // Pi does not write a transcript until the session's first assistant message,
+    // so this path is absent while the session binds and appears before the tool
+    // call that issues the delegation.
+    const parentSessionFile = `/tmp/doom-team-late-parent-${Math.random().toString(36).slice(2)}.jsonl`;
+    const delegationContext = {
+      ...(host.context as object),
+      sessionManager: {
+        getSessionId: () => 'session-under-test',
+        getSessionFile: () => parentSessionFile,
+        getLeafId: () => 'active-assistant',
+        getLeafEntry: () => ({
+          type: 'message',
+          id: 'active-assistant',
+          parentId: 'safe-user-leaf',
+          message: { role: 'assistant', content: [] },
+        }),
+      },
+    };
+    await host.fireAsync('session_start', delegationContext);
+    await waitForTeamReadiness(host, delegationContext);
+
+    fs.writeFileSync(parentSessionFile, '{}\n');
+
+    const service = readDoomDelegationService(cordisFor(host.pi));
+    if (!service) throw new Error('Expected Team to provide doom/delegation.');
+    await service.request({
+      requestId: 'request-1',
+      taskId: 'task-1',
+      agent: 'explorer',
+      inlineAgent: { systemPrompt: 'Inspect without writing.' },
+      prompt: 'Inspect the package',
+      cwd: '/tmp',
+      context: 'fork',
+    });
+
+    expect(planner.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ parentSessionFile, parentLeafId: 'safe-user-leaf' }),
+      expect.any(Object),
+    );
+
+    fs.rmSync(parentSessionFile, { force: true });
+  });
+
+  it('follows the session leaf as it moves between delegation requests', async () => {
+    resetRuntimeState();
+    const host = fakePi();
+    activateTeamForTest(host.pi);
+    const runtime = runtimeFor(host.pi);
+
+    const planner = runtime.spawnPlanner;
+    const spawn = vi.spyOn(planner, 'spawn').mockResolvedValue({
+      outcomes: [{ agent: 'explorer', task: 'Inspect the package', childIndex: 0, runId: 'run-1', pid: 42 }],
+    });
+    vi.spyOn(runtime.subagentWaiter, 'wait').mockResolvedValue({ reason: 'completed', elapsedMs: 12, runs: [] });
+
+    const parentSessionFile = `/tmp/doom-team-moving-parent-${Math.random().toString(36).slice(2)}.jsonl`;
+    fs.writeFileSync(parentSessionFile, '{}\n');
+    let settledLeaf = 'first-user-leaf';
+    const delegationContext = {
+      ...(host.context as object),
+      sessionManager: {
+        getSessionId: () => 'session-under-test',
+        getSessionFile: () => parentSessionFile,
+        getLeafId: () => 'active-assistant',
+        getLeafEntry: () => ({
+          type: 'message',
+          id: 'active-assistant',
+          parentId: settledLeaf,
+          message: { role: 'assistant', content: [] },
+        }),
+      },
+    };
+    await host.fireAsync('session_start', delegationContext);
+    await waitForTeamReadiness(host, delegationContext);
+
+    const service = readDoomDelegationService(cordisFor(host.pi));
+    if (!service) throw new Error('Expected Team to provide doom/delegation.');
+    const requestFork = async (requestId: string): Promise<void> => {
+      await service.request({
+        requestId,
+        taskId: 'task-1',
+        agent: 'explorer',
+        inlineAgent: { systemPrompt: 'Inspect without writing.' },
+        prompt: 'Inspect the package',
+        cwd: '/tmp',
+        context: 'fork',
+      });
+    };
+
+    await requestFork('request-1');
+    settledLeaf = 'later-user-leaf';
+    await requestFork('request-2');
+
+    expect(spawn.mock.calls.map(([request]) => (request as { parentLeafId?: string }).parentLeafId)).toEqual([
+      'first-user-leaf',
+      'later-user-leaf',
+    ]);
+
+    fs.rmSync(parentSessionFile, { force: true });
+  });
+
   it('collects typed subagent policies for every central spawn path', async () => {
     resetRuntimeState();
     const host = fakePi();
