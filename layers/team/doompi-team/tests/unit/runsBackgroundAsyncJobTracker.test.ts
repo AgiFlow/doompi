@@ -392,8 +392,9 @@ function sessionCount(subject: AsyncJobTracker): number {
 describe('AsyncJobTracker teardown during an in-flight tick', () => {
   it('stop() called mid-await leaves no sessions behind', async () => {
     tracker.statusFiles.set('run-1', statusJson('running'));
-    tracker.forSession('session-a').track('run-1');
+    // start() resets first, so tracking has to follow it to survive into the tick.
     tracker.start();
+    tracker.forSession('session-a').track('run-1');
 
     const releaseReads = tracker.blockReads();
     const tick = tracker.runOnce();
