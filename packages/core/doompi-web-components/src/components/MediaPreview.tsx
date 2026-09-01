@@ -47,7 +47,9 @@ export function MediaPreview({ src, path, kind, className, 'data-testid': testId
         data-testid={testId}
         data-kind={resolved}
         className={cn(FRAME, 'max-h-[36rem]', className)}
-      />
+      >
+        <track kind="captions" />
+      </video>
     );
   }
   if (resolved === 'pdf') {

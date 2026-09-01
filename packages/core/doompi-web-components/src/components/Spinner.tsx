@@ -18,9 +18,9 @@ export function Spinner({ className, label, ...props }: SpinnerProps) {
   );
   if (label === undefined) return icon;
   return (
-    <span data-slot="spinner-status" role="status" className="inline-flex items-center">
+    <output data-slot="spinner-status" className="inline-flex items-center">
       {icon}
       <span className="sr-only">{label}</span>
-    </span>
+    </output>
   );
 }
