@@ -956,7 +956,10 @@ describe('TeamChannelRuntime ask/reply', () => {
       askPromise.catch((error: unknown) => {
         askError = error;
       });
-      await vi.advanceTimersByTimeAsync(1000);
+      // Just past the 40ms ask timeout. Advancing further only replays the
+      // 5ms channel and heartbeat polls, whose synchronous directory scans cost
+      // real wall time and push this test past its timeout on a loaded machine.
+      await vi.advanceTimersByTimeAsync(60);
 
       await expect(askPromise).rejects.toThrow(/Timed out waiting/);
       expect(askError).toBeInstanceOf(Error);

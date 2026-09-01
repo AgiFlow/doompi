@@ -109,7 +109,9 @@ describe('locked history store', () => {
     expect(await store.list()).toEqual([]);
   });
 
-  it('prunes capacity while retaining newest records', async () => {
+  // 105 sequential locked archives take about 3.5s on an idle machine, so the
+  // default 5s timeout reports load rather than a regression.
+  it('prunes capacity while retaining newest records', { timeout: 30_000 }, async () => {
     const cwd = temporaryDirectory();
     const store = new GoalHistoryStore(cwd, { agentDir: path.join(cwd, 'agent') });
     for (let index = 0; index < GOAL_HISTORY_MAX_ENTRIES + 5; index += 1) {

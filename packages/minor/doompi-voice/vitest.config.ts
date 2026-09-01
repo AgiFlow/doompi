@@ -9,8 +9,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     // Native inference and audio pipeline fixtures contend heavily when Vitest
-    // multiplies workers inside the already parallel Nx test matrix.
+    // multiplies workers inside the already parallel Nx test matrix. Serial
+    // files keep the contention bounded, and the raised timeout keeps that
+    // contention from being reported as a failure: the heaviest pipeline cases
+    // run for about a second on an idle machine and several times that beside
+    // the rest of the matrix.
     fileParallelism: false,
+    testTimeout: 30_000,
     bail: 10,
     include: ['tests/setup.ts', 'tests/**/*.test.ts'],
     exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*'],
