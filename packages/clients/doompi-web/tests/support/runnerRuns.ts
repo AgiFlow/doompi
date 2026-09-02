@@ -62,6 +62,32 @@ export function appendRunnerLog(storeDir: string, sessionId: string, runId: stri
 export function startRunnerApiSocket(storeDir: string, sessionId: string, socketPath: string): () => Promise<void> {
   const server = http.createServer((incoming, outgoing) => {
     const url = new URL(incoming.url ?? '/', 'http://session.local');
+    const streaming = /^\/api\/plugin\/runner\/runners\/([^/]+)\/log\/stream$/u.exec(url.pathname);
+    if (streaming) {
+      // The follow half of the same contract: server-sent events carrying the
+      // lines written after `from`, polled off the file the way the real route
+      // tails it. Only what the cockpit reads is implemented.
+      const runId = decodeURIComponent(streaming[1] ?? '');
+      const logPath = path.join(storeDir, sessionId, 'logs', `${runId}.log`);
+      let offset = Number.parseInt(url.searchParams.get('from') ?? '0', 10) || 0;
+      outgoing.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+      const timer = setInterval(() => {
+        const size = fs.existsSync(logPath) ? fs.statSync(logPath).size : 0;
+        if (size <= offset) return;
+        const handle = fs.openSync(logPath, 'r');
+        const buffer = Buffer.alloc(size - offset);
+        fs.readSync(handle, buffer, 0, buffer.length, offset);
+        fs.closeSync(handle);
+        offset = size;
+        const lines = buffer
+          .toString('utf8')
+          .split('\n')
+          .filter((line) => line !== '');
+        if (lines.length > 0) outgoing.write(`event: append\ndata: ${JSON.stringify({ lines })}\n\n`);
+      }, 50);
+      incoming.on('close', () => clearInterval(timer));
+      return;
+    }
     const match = /^\/api\/plugin\/runner\/runners\/([^/]+)\/log$/u.exec(url.pathname);
     if (!match) {
       outgoing.writeHead(404, { 'content-type': 'application/json' });
