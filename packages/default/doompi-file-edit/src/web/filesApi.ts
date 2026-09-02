@@ -3,7 +3,9 @@ import {
   deleteUrl,
   detailUrl,
   type FileEditsDetailView,
+  type FileEditsPreviewView,
   type FileEditsSaveView,
+  previewUrl,
 } from '../types/fileEditsApi.ts';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
@@ -69,6 +71,22 @@ export async function fetchFileDetail(sessionId: string, filePath: string): Prom
   if (!response.ok) return { ok: false, error: errorOf(body, `The session answered ${response.status}.`) };
   if (!isRecord(body)) return { ok: false, error: 'The session answered with no detail.' };
   return { ok: true, detail: body as unknown as FileEditsDetailView };
+}
+
+export type FetchPreviewResult = { ok: true; preview: FileEditsPreviewView } | { ok: false; error: string };
+
+/** One file the session never changed, read only; the route bounds it to the working directory. */
+export async function fetchFilePreview(sessionId: string, filePath: string): Promise<FetchPreviewResult> {
+  let response: Response;
+  try {
+    response = await sealedTransport.fetch(previewUrl(sessionId, filePath));
+  } catch {
+    return { ok: false, error: UNREACHABLE };
+  }
+  const body = await readBody(response);
+  if (!response.ok) return { ok: false, error: errorOf(body, `The session answered ${response.status}.`) };
+  if (!isRecord(body)) return { ok: false, error: 'The session answered with no file.' };
+  return { ok: true, preview: body as unknown as FileEditsPreviewView };
 }
 
 export type SaveResult =

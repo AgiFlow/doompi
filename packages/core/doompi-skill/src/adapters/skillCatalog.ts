@@ -19,6 +19,14 @@ export interface SkillEntry {
   /** Package name for an extension, plugin directory name, or `.claude/skills`. */
   owner: string;
   modelInvocable: boolean;
+  /**
+   * What removing this skill would save from the `<available_skills>` block.
+   *
+   * Marginal rather than proportional: the block has fixed framing that no
+   * single skill pays for, so the useful figure is what actually goes away.
+   * Bodies are excluded because they load on demand and are not a resting cost.
+   */
+  promptTokens?: number;
 }
 
 export interface SkillOwnerNode {
@@ -216,6 +224,19 @@ export async function buildSkillCatalog(options: SkillCatalogOptions): Promise<S
 
   const countTokens = await counter();
   const prompt = formatSkillsForPrompt(loaded);
+  const framingTokens = countTokens(formatSkillsForPrompt([]));
+  const marginal = new Map<string, number>();
+  for (const skill of loaded) {
+    marginal.set(skill.name, Math.max(0, countTokens(formatSkillsForPrompt([skill])) - framingTokens));
+  }
+  for (const group of groups) {
+    for (const owner of group.owners) {
+      for (const skill of owner.skills) {
+        const tokens = marginal.get(skill.name);
+        if (tokens !== undefined) skill.promptTokens = tokens;
+      }
+    }
+  }
   let bodyTokens = 0;
   for (const skill of loaded) {
     try {

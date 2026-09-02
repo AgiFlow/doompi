@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NodeSnapshotStoreAdapter } from '../../src/adapters/node/snapshotStore.ts';
 import { TimelineStore } from '../../src/adapters/TimelineStore/TimelineStore.ts';
 import { createFileEditsApi } from '../../src/adapters/fileEditsApi.ts';
-import type { FileEditsDetailView, FileEditsErrorView } from '../../src/types/fileEditsApi.ts';
-import { contentUrl, deleteUrl, detailUrl } from '../../src/types/fileEditsApi.ts';
+import type { FileEditsDetailView, FileEditsErrorView, FileEditsPreviewView } from '../../src/types/fileEditsApi.ts';
+import { contentUrl, deleteUrl, detailUrl, previewUrl } from '../../src/types/fileEditsApi.ts';
 
 let cwd: string;
 let timeline: TimelineStore;
@@ -109,6 +109,49 @@ describe('the file-edits session API', () => {
   it('refuses a path that climbs out of the session, because the timeline never held it', async () => {
     const response = await app.fetch(new Request(mounted(detailUrl('s1', '../../etc/passwd'))));
     expect(response.status).toBe(404);
+  });
+
+  it('previews a file the session never changed, read only', async () => {
+    const filePath = path.join(cwd, 'untouched.ts');
+    fs.writeFileSync(filePath, 'export const x = 1;\n');
+    const response = await app.fetch(new Request(mounted(previewUrl('s1', filePath))));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as FileEditsPreviewView;
+    expect(body.relPath).toBe('untouched.ts');
+    expect(body.working.content).toBe('export const x = 1;\n');
+    expect(body.working.unavailable).toBe(false);
+  });
+
+  it('refuses a preview that climbs out of the working directory', async () => {
+    const escaping = await app.fetch(new Request(mounted(previewUrl('s1', path.join(cwd, '..', 'passwd')))));
+    expect(escaping.status).toBe(403);
+    const relative = await app.fetch(new Request(mounted(previewUrl('s1', '../../etc/passwd'))));
+    expect(relative.status).toBe(403);
+  });
+
+  it('refuses a preview through a symlink that points outside', async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-file-edit-outside-'));
+    try {
+      fs.writeFileSync(path.join(outside, 'secret.env'), 'TOKEN=1');
+      fs.symlinkSync(path.join(outside, 'secret.env'), path.join(cwd, 'linked.env'));
+      const response = await app.fetch(new Request(mounted(previewUrl('s1', path.join(cwd, 'linked.env')))));
+      expect(response.status).toBe(403);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a preview of a file that is not there rather than refusing', async () => {
+    const response = await app.fetch(new Request(mounted(previewUrl('s1', path.join(cwd, 'absent.ts')))));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as FileEditsPreviewView;
+    expect(body.working.unavailable).toBe(true);
+  });
+
+  it('serves no preview at all when the host gave it no working directory', async () => {
+    const unbounded = createFileEditsApi({ sessionId: 's1', timeline, snapshots });
+    const response = await unbounded.fetch(new Request(mounted(previewUrl('s1', '/etc/passwd'))));
+    expect(response.status).toBe(403);
   });
 
   it('writes a manual save and answers the new hash', async () => {

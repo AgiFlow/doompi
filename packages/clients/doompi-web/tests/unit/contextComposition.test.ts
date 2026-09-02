@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { type ContextItem, contextGroups, totalTokens } from '../../src/web/lib/contextComposition.ts';
+import {
+  type ContextItem,
+  contextGroups,
+  ownerLabel,
+  ownersOf,
+  totalTokens,
+} from '../../src/web/lib/contextComposition.ts';
 
 // The same live capture the status-line parser is tested against, so the
 // grouping is driven by what DoomPi really publishes rather than a guess.
@@ -69,5 +75,63 @@ describe('contextGroups', () => {
     });
     expect(groups[0]?.tokens).toBeNull();
     expect(totalTokens(groups)).toBeNull();
+  });
+});
+
+function owned(name: string, owner: string, source: ContextItem['source'], tokens: number, active = true): ContextItem {
+  return { name, itemKind: 'tool', source, owner, tokens, active };
+}
+
+describe('ownersOf', () => {
+  it("gathers a mode's rows under the package that registered them", () => {
+    const items = [
+      owned('task', '@agimon-ai/doompi-task', 'extension', 2482),
+      owned('subagent', '@agimon-ai/doompi-team', 'extension', 758),
+      owned('intercom', '@agimon-ai/doompi-team', 'extension', 257),
+    ];
+    const attribution = Object.fromEntries(items.map((entry) => [entry.name, 'copilot']));
+    const [group] = contextGroups(statuses(LIVE_STATUS), [], null, items, attribution);
+    const owners = ownersOf(group!);
+
+    expect(owners.map((entry) => entry.owner)).toEqual(['@agimon-ai/doompi-task', '@agimon-ai/doompi-team']);
+    expect(owners[1]?.items.map((entry) => entry.name)).toEqual(['intercom', 'subagent']);
+    expect(owners[1]?.tokens).toBe(1015);
+  });
+
+  it('orders packages by source kind before name', () => {
+    const items = [
+      owned('scaffold', 'scaffold-mcp', 'mcp', 10),
+      owned('review', 'testing', 'plugin', 10),
+      owned('bash', '@agimon-ai/doompi-runner', 'extension', 10),
+    ];
+    const attribution = Object.fromEntries(items.map((entry) => [entry.name, 'copilot']));
+    const [group] = contextGroups(statuses(LIVE_STATUS), [], null, items, attribution);
+
+    expect(ownersOf(group!).map((entry) => entry.source)).toEqual(['extension', 'mcp', 'plugin']);
+  });
+
+  // A gated tool belongs to its package but is not being paid for, so the
+  // package subtotal has to keep the two apart exactly as the group total does.
+  it('splits a package subtotal into paid and gated', () => {
+    const items = [
+      owned('narrate', '@agimon-ai/doompi-voice', 'extension', 336, false),
+      owned('use_voice_tools', '@agimon-ai/doompi-voice', 'extension', 391, false),
+    ];
+    const attribution = Object.fromEntries(items.map((entry) => [entry.name, 'copilot']));
+    const [group] = contextGroups(statuses(LIVE_STATUS), [], null, items, attribution);
+    const [voice] = ownersOf(group!);
+
+    expect(voice?.tokens).toBe(0);
+    expect(voice?.inactiveTokens).toBe(727);
+  });
+});
+
+describe('ownerLabel', () => {
+  it('drops the scope, which the rows beneath already imply', () => {
+    expect(ownerLabel('@agimon-ai/doompi-team')).toBe('doompi-team');
+  });
+
+  it('leaves an unscoped server or plugin name alone', () => {
+    expect(ownerLabel('scaffold-mcp')).toBe('scaffold-mcp');
   });
 });

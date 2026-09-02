@@ -14,6 +14,8 @@ import {
 
 const CONFIG_PATH = '/repo/.doom/modes.yaml';
 const REPOSITORY_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
+/** The real checkout, whose modes.yaml names layer packages by local path. */
+const WORKSPACE_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
 const CONFIGURED_COPILOT_FEATURE_PACKAGES = [
   '@agimon-ai/doompi-team',
   '@agimon-ai/doompi-user-feedback',
@@ -683,5 +685,34 @@ describe('packageAttribution', () => {
     );
 
     expect(packageAttribution(composition)).toEqual({});
+  });
+});
+
+describe('packageAttribution across config styles', () => {
+  // The checked-in .doom/modes.yaml names layer packages by local path, e.g.
+  // './layers/team/doompi-team', while a published install names the same
+  // package '@agimon-ai/doompi-team'. Tools only ever resolve to the manifest
+  // name, so attribution keyed on the selector alone silently matches nothing
+  // in a source checkout and every tool falls into the core group.
+  it('keys a local-path package by its manifest name', () => {
+    const entry = path.join(WORKSPACE_ROOT, 'layers', 'team', 'doompi-team', 'package.json');
+    expect(fs.existsSync(entry), entry).toBe(true);
+    const selector = './layers/team/doompi-team';
+    const config = modes({ team: layer({ packages: [{ name: selector }] }) }, ['team']);
+    const composition = resolveExtensionComposition(
+      context(config, {
+        majorMode: 'test',
+        layers: ['team'],
+        resolvers: resolver({
+          localPackageEntries: () => [path.join(path.dirname(entry), 'src', 'index.ts')],
+          localPackageName: () => selector,
+        }),
+      }),
+    );
+    const attribution = packageAttribution(composition);
+
+    expect(attribution['@agimon-ai/doompi-team']).toEqual({ kind: 'major', mode: 'test', layer: 'team' });
+    // The selector stays as an alias so a published config still resolves.
+    expect(attribution[selector]).toEqual({ kind: 'major', mode: 'test', layer: 'team' });
   });
 });

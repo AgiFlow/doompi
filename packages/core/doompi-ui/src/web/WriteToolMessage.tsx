@@ -4,6 +4,7 @@ import {
   MessageItemHeader,
   MessageItemStatus,
   SyntaxLine,
+  ToolPathLink,
   toolTone,
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
@@ -43,8 +44,19 @@ function WritePreview({ view, path }: { view: WriteCallView; path: string }) {
  * TUI folds into its call: ten lines, or all of them once the item expands.
  * A failure shows the tool's message in red instead.
  */
-export function WriteToolMessage({ args, result, output, running, isError }: ToolMessageRenderProps) {
+export function WriteToolMessage({
+  args,
+  result,
+  output,
+  running,
+  isError,
+  fileTabFor,
+  openTransientTab,
+}: ToolMessageRenderProps) {
   const collapsed = writeCallView(args, false);
+  // The header names a file the tool is writing, so the reader can open it
+  // rather than hunt for it; nothing installed to show files leaves it as text.
+  const tab = fileTabFor(collapsed.path);
   return (
     <MessageItem tone={toolTone({ running, isError })} expandable={collapsed.hidden > 0}>
       {({ expanded }) => {
@@ -53,7 +65,10 @@ export function WriteToolMessage({ args, result, output, running, isError }: Too
           <>
             <MessageItemHeader title="write">
               <span data-testid="tool-call-write" className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate text-doom-text">{view.path}</span>
+                <ToolPathLink
+                  path={view.path}
+                  {...(tab === undefined ? {} : { onOpen: () => openTransientTab(tab) })}
+                />
                 <span className="shrink-0 text-doom-faint">· {view.size}</span>
               </span>
             </MessageItemHeader>

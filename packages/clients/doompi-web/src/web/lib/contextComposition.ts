@@ -1,4 +1,4 @@
-import type { MinorModeProjection } from '../../types/hub.ts';
+import type { ContextProjection, MinorModeProjection } from '../../types/hub.ts';
 import { minorModes } from './composition.ts';
 import { parseSelection } from './statusLine.ts';
 
@@ -38,8 +38,10 @@ export interface ContextGroup {
   /** A short qualifier shown beside the label, e.g. a pending switch. */
   detail: string;
   items: ContextItem[];
-  /** Subtotal across `items`, or null when no item carries a figure. */
+  /** Subtotal across active items, or null when no item carries a figure. */
   tokens: number | null;
+  /** What the group's gated items would add if switched on. */
+  inactiveTokens: number;
 }
 
 function bySource(left: ContextItem, right: ContextItem): number {
@@ -54,7 +56,7 @@ function subtotal(items: readonly ContextItem[]): number | null {
 
 function group(id: string, label: string, kind: ContextGroupKind, detail: string, items: ContextItem[]): ContextGroup {
   const sorted = [...items].sort(bySource);
-  return { id, label, kind, detail, items: sorted, tokens: subtotal(sorted) };
+  return { id, label, kind, detail, items: sorted, tokens: subtotal(sorted), inactiveTokens: 0 };
 }
 
 /**
@@ -113,8 +115,86 @@ export function contextGroups(
   return groups.sort((left, right) => KIND_ORDER[left.kind] - KIND_ORDER[right.kind]);
 }
 
+/**
+ * The runtime's own grouping, used as published.
+ *
+ * Once the session reports a composition it already knows which mode admitted
+ * each tool, which is a join the page cannot make for itself. Re-deriving it
+ * here from status strings would only be able to disagree.
+ */
+export function projectedGroups(projection: ContextProjection): ContextGroup[] {
+  return projection.groups.map((group) => ({
+    id: group.id,
+    label: group.label,
+    kind: group.kind,
+    detail: '',
+    inactiveTokens: group.inactiveTokens,
+    items: group.items.map((item) => ({
+      name: item.name,
+      itemKind: item.itemKind,
+      source: item.source,
+      owner: item.owner,
+      tokens: item.tokens,
+      active: item.active,
+    })),
+    tokens: group.tokens,
+  }));
+}
+
 /** The whole composition's estimate, or null while nothing is priced. */
 export function totalTokens(groups: readonly ContextGroup[]): number | null {
   const priced = groups.filter((entry) => entry.tokens !== null);
   return priced.length === 0 ? null : priced.reduce((total, entry) => total + (entry.tokens ?? 0), 0);
+}
+
+/**
+ * One package, server, or plugin inside a mode, with what it costs.
+ *
+ * A mode can admit two dozen tools from a dozen packages, and a flat list of
+ * those names says nothing about which dependency to reconsider. The package is
+ * the unit that gets added or removed, so it is the unit worth totalling.
+ */
+export interface ContextOwner {
+  owner: string;
+  /** Every tool a single owner registers shares one source kind. */
+  source: ContextItemSource;
+  items: ContextItem[];
+  tokens: number;
+  inactiveTokens: number;
+}
+
+/** The scope is noise once the rows beneath already name the package. */
+export function ownerLabel(owner: string): string {
+  return owner.startsWith('@') ? (owner.split('/').pop() ?? owner) : owner;
+}
+
+export function ownersOf(group: ContextGroup): ContextOwner[] {
+  const byOwner = new Map<string, ContextOwner>();
+  for (const item of group.items) {
+    const existing = byOwner.get(item.owner);
+    if (existing) {
+      existing.items.push(item);
+      existing.tokens += item.active ? (item.tokens ?? 0) : 0;
+      existing.inactiveTokens += item.active ? 0 : (item.tokens ?? 0);
+      continue;
+    }
+    byOwner.set(item.owner, {
+      owner: item.owner,
+      source: item.source,
+      items: [item],
+      tokens: item.active ? (item.tokens ?? 0) : 0,
+      inactiveTokens: item.active ? 0 : (item.tokens ?? 0),
+    });
+  }
+  for (const entry of byOwner.values()) entry.items.sort((left, right) => left.name.localeCompare(right.name));
+  return [...byOwner.values()].sort(
+    (left, right) =>
+      SOURCE_ORDER[left.source] - SOURCE_ORDER[right.source] ||
+      ownerLabel(left.owner).localeCompare(ownerLabel(right.owner)),
+  );
+}
+
+/** What every gated item across the composition would add if switched on. */
+export function inactiveTotal(groups: readonly ContextGroup[]): number {
+  return groups.reduce((total, entry) => total + entry.inactiveTokens, 0);
 }

@@ -4,6 +4,7 @@ import {
   type MajorModesConfig,
 } from '@agimon-ai/doompi-config/majorModes';
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
+import { extensionPackageName } from '@agimon-ai/doompi-ui/extensionName';
 import {
   consumerPackageEntries,
   consumerPackageEntry,
@@ -102,6 +103,11 @@ export interface ExtensionComposition {
  *
  * Only `package` entries appear. A bare `extension` selector is a path rather
  * than a package name, so it has nothing a registered tool could be joined on.
+ *
+ * Keyed by manifest name first, because that is what a registered tool resolves
+ * to. The selector is kept as an alias: a layer may name a package as
+ * `@agimon-ai/doompi-team` when published or `./layers/team/doompi-team` in a
+ * checkout, and both have to find the same layer.
  */
 export function packageAttribution(composition: ExtensionComposition): Record<string, PackageAttribution> {
   const attribution: Record<string, PackageAttribution> = {};
@@ -112,8 +118,10 @@ export function packageAttribution(composition: ExtensionComposition): Record<st
     if (selection.outcome !== 'resolved') continue;
     // First layer wins, matching activation order: the earlier layer is the one
     // whose copy of a duplicated package actually loaded.
-    if (attribution[selection.selector] !== undefined) continue;
-    attribution[selection.selector] = { kind: 'major', mode, layer: selection.layer };
+    const value: PackageAttribution = { kind: 'major', mode, layer: selection.layer };
+    const manifest = selection.path === undefined ? undefined : extensionPackageName(selection.path);
+    if (manifest !== undefined && attribution[manifest] === undefined) attribution[manifest] = value;
+    if (attribution[selection.selector] === undefined) attribution[selection.selector] = value;
   }
   return attribution;
 }

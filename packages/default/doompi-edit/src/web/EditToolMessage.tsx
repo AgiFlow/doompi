@@ -5,6 +5,7 @@ import {
   MessageItemHeader,
   MessageItemStatus,
   SyntaxLine,
+  ToolPathLink,
   toolTone,
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
@@ -55,9 +56,20 @@ function DiffRows({ rows, gutter, path }: { rows: readonly DiffRow[]; gutter: nu
  * edit whose details never arrived shows nothing, and a failed one shows the
  * tool's message in red.
  */
-export function EditToolMessage({ args, result, output, running, isError }: ToolMessageRenderProps) {
+export function EditToolMessage({
+  args,
+  result,
+  output,
+  running,
+  isError,
+  fileTabFor,
+  openTransientTab,
+}: ToolMessageRenderProps) {
   const call = editCallView(args);
   const view = result === null || isError ? undefined : editResultView(result);
+  // The file this edit lands in, opened from the header rather than found
+  // again in a file list; plain text when nothing installed can show it.
+  const tab = fileTabFor(call.path);
   return (
     <MessageItem
       tone={toolTone({ running, isError })}
@@ -67,7 +79,7 @@ export function EditToolMessage({ args, result, output, running, isError }: Tool
         <>
           <MessageItemHeader title="edit">
             <span data-testid="tool-call-edit" className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="truncate text-doom-text">{call.path}</span>
+              <ToolPathLink path={call.path} {...(tab === undefined ? {} : { onOpen: () => openTransientTab(tab) })} />
               <span className="shrink-0 text-doom-faint">· {call.ranges}</span>
             </span>
           </MessageItemHeader>

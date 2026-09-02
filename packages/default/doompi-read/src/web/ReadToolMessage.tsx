@@ -6,6 +6,7 @@ import {
   MessageItemHeader,
   MessageItemStatus,
   resultTextLines,
+  ToolPathLink,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
@@ -31,9 +32,20 @@ function resultImages(content: readonly unknown[]): Array<{ data: string; mimeTy
  * a line-number gutter in the body, collapsed to the TUI's budget until the
  * item expands. A failure shows the tool's message in red instead.
  */
-export function ReadToolMessage({ args, result, output, running, isError }: ToolMessageRenderProps) {
+export function ReadToolMessage({
+  args,
+  result,
+  output,
+  running,
+  isError,
+  fileTabFor,
+  openTransientTab,
+}: ToolMessageRenderProps) {
   const view = readCallView(args);
   const images = resultImages(result?.content ?? []);
+  // A read is the one call whose file the session usually has not changed, so
+  // this is the link that opens it read-only rather than in its history.
+  const tab = fileTabFor(view.path);
   const collapsed = result === null || isError ? null : hashlineBody(result, output, 'read', false);
   return (
     <MessageItem tone={toolTone({ running, isError })} expandable={collapsed !== null && collapsed.hidden > 0}>
@@ -44,7 +56,10 @@ export function ReadToolMessage({ args, result, output, running, isError }: Tool
           <>
             <MessageItemHeader title="read">
               <span data-testid="tool-call-read" className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate text-doom-text">{view.path}</span>
+                <ToolPathLink
+                  path={view.path}
+                  {...(tab === undefined ? {} : { onOpen: () => openTransientTab(tab) })}
+                />
                 {view.details.length > 0 ? (
                   <span className="shrink-0 text-doom-faint">· {view.details.join(' · ')}</span>
                 ) : null}

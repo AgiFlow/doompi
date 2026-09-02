@@ -314,6 +314,21 @@ export function fileLinkFor(sessionId: string | null, path: string): TransientTa
 }
 
 /**
+ * The tab a path the caller is sure about opens: a tool call's path argument,
+ * not a token spotted in prose.
+ *
+ * A source that offers `openPath` answers here, and it may claim a file the
+ * session never changed, which `resolve` deliberately will not. Sources
+ * without it fall back to the same guess prose gets.
+ */
+export function fileTabForPath(sessionId: string | null, path: string): TransientTab | undefined {
+  for (const source of pluginFileLinks()) {
+    const tab = source.openPath?.(sessionId, path) ?? source.resolve(sessionId, path);
+    if (tab !== undefined) return tab;
+  }
+  return undefined;
+}
+/**
  * Resolves the paths a message names against the plugins that track them.
  *
  * The resolver's identity is stable while the linkable set is, so a component

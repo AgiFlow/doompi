@@ -47,6 +47,8 @@ export interface SlotPropsOptions {
   slotData?: Readonly<Record<string, readonly SlotDataFill[]>>;
   /** What `renderThread` returns for a plugin that renders one. */
   thread?: (threadId: string, options?: ThreadViewOptions) => ReactNode;
+  /** The tab a path opens; by default no path opens one, as with no file plugin installed. */
+  fileTab?: (path: string) => TransientTab | undefined;
 }
 
 const DEFAULT_SESSION_ID = 's1';
@@ -65,6 +67,7 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
     closeTransientTab: (tabId: string) => {
       actions.push({ action: 'closeTransientTab', target: tabId });
     },
+    fileTabFor: (path: string) => options.fileTab?.(path),
     appendComposerDraft: (text) => {
       actions.push({ action: 'appendComposerDraft', target: props.sessionId, text });
     },

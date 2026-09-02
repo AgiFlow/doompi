@@ -1495,6 +1495,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
+      hono:
+        specifier: 4.13.5
+        version: 4.13.5
     devDependencies:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*

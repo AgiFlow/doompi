@@ -75,6 +75,16 @@ export interface FileLinkSource {
   fingerprint(sessionId: string | null): string;
   /** The tab this path opens, or undefined when the source does not recognise it. */
   resolve(sessionId: string | null, path: string): TransientTab | undefined;
+  /**
+   * The tab a path opens when the caller already knows it names a file, such
+   * as the path argument of a read, write or edit call.
+   *
+   * `resolve` guesses, so it claims only what it is sure of; a tool argument
+   * needs no guess, and a file the session has not changed is still a file the
+   * reader asked to see. A source that has nothing extra to offer omits this
+   * and the host falls back to `resolve`.
+   */
+  openPath?(sessionId: string | null, path: string): TransientTab | undefined;
 }
 /**
  * How a thread is drawn where it is not the whole surface: a card body wants
@@ -95,6 +105,13 @@ export interface WebPluginSlotProps {
   /** Opens the tab for the focused session, or focuses it when one with the same id is already open. */
   openTransientTab: (tab: TransientTab) => void;
   closeTransientTab: (tabId: string) => void;
+  /**
+   * The tab a file path opens, or undefined when no installed plugin can show
+   * it. A component that names a file it is certain about, such as a tool
+   * call's path argument, renders a link when this answers and plain text when
+   * it does not.
+   */
+  fileTabFor: (path: string) => TransientTab | undefined;
   /**
    * The host's live conversation view of one thread of the focused session,
    * rendered like the session's own timeline and subscribed while mounted. A

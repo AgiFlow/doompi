@@ -30,7 +30,8 @@
     "dist",
     "src/web",
     "src/exports/webClient.ts",
-    "src/types/webMetrics.ts"
+    "src/types/webMetrics.ts",
+    "src/types/issueGrouping.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -62,6 +63,11 @@
       "import": "./dist/tui/metricsOverlay.mjs",
       "require": "./dist/tui/metricsOverlay.cjs"
     },
+    "./hub-api": {
+      "types": "./dist/hubApi.d.mts",
+      "import": "./dist/hubApi.mjs",
+      "require": "./dist/hubApi.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -82,7 +88,8 @@
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/log-sink-mcp": "0.29.19",
-    "@deepseek-ai/cordis": "4.0.1"
+    "@deepseek-ai/cordis": "4.0.1",
+    "hono": "4.13.5"
   },
   "devDependencies": {
     "@agimon-ai/doompi-ui": "workspace:*",
@@ -112,6 +119,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "log",
+    "hub": {
+      "entry": "./src/exports/hubApi.ts",
+      "dist": "./dist/hubApi.mjs"
+    }
   },
   "doompiWeb": {
     "pluginId": "log",

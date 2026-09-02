@@ -191,6 +191,7 @@ export {
   toastVariants,
   ToastViewport,
 } from '../components/Toast.tsx';
+export { ToolPathLink, type ToolPathLinkProps } from '../components/ToolPathLink.tsx';
 export * from '../icons/icons.ts';
 export { type AnsiSpan, ansiSpans } from '../lib/ansiSpans.ts';
 export { cn } from '../lib/cn.ts';

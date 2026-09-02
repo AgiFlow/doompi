@@ -30,7 +30,7 @@ import { LeaderHints } from '../../tui/leaderHints.ts';
 import { DEFAULT_THEME_NAME } from '../../tui/theme.ts';
 import { openToolsOverlay } from '../../tui/toolsOverlay.ts';
 import { createUiTelemetry, UI_EVENT, type UiTelemetry } from '../telemetry/logSinkTelemetry.ts';
-import { extensionName, extensionToolSource } from './extensionName.ts';
+import { extensionName, extensionPackageName, extensionToolSource } from './extensionName.ts';
 import { registerBuiltinToolUi } from './toolOverrides.ts';
 
 const LEADER_WIDGET_KEY = 'doom-pi-leader';
@@ -124,6 +124,7 @@ function doomPiUiPlugin(cordis: Context, { pi, telemetry, hostMode }: UiPluginOp
         activeTools: pi.getActiveTools(),
         ...(mcpServers ? { mcpServers } : {}),
         resolveExtensionName: extensionName,
+        resolveExtensionPackageName: extensionPackageName,
         resolveExtensionToolSource: (toolName) => extensionToolSource(pi, toolName),
       });
       await openToolsOverlay(ctx, sources);

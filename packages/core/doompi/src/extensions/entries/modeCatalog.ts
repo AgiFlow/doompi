@@ -24,6 +24,7 @@ import {
   type TransitionSource,
 } from '@agimon-ai/doompi-extension-contracts/transition';
 import type { Context } from '@deepseek-ai/cordis';
+import { type ContextPublisher, createContextPublisher } from '../../services/contextCatalog.ts';
 import { projectMinorModes } from '../../services/minorModeProjection.ts';
 import { createMinorModeCatalogHost } from '../../services/modeCatalog.ts';
 import { registerMinorModeCommand } from './minorModeCommand.ts';
@@ -70,12 +71,31 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
   // catalog binding the session-scoped inject below sets and clears.
   const activeCatalog: CatalogBinding = { current: undefined };
   registerMinorModeCommand(pi, () => activeCatalog.current);
+  // The composition is only complete once every extension has registered, so
+  // the inventory is read on the same deferred tick the catalog republishes on.
+  const contextBinding: { publisher?: ContextPublisher } = {};
   pi.on('session_start', () => {
-    setTimeout(() => activeCatalog.republish?.(), BOOT_PUBLISH_DELAY_MS);
+    setTimeout(() => {
+      activeCatalog.republish?.();
+      void contextBinding.publisher?.publish();
+    }, BOOT_PUBLISH_DELAY_MS);
+  });
+  // MCP status is pull-only and servers connect long after startup, so the
+  // boot read above cannot see them. A turn is the moment the composition is
+  // actually sent, which makes it both the freshest and the most meaningful
+  // time to price. Identical compositions are skipped, so a quiet session
+  // journals nothing extra.
+  pi.on('turn_start', () => {
+    void contextBinding.publisher?.publish();
   });
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fiber = connection.root.plugin((cordis: Context) => {
-    modeCatalogPlugin(cordis, pi, activeCatalog);
+    contextBinding.publisher = createContextPublisher(pi, cordis);
+    modeCatalogPlugin(cordis, pi, activeCatalog, () => void contextBinding.publisher?.publish());
+    return () => {
+      contextBinding.publisher?.dispose();
+      contextBinding.publisher = undefined;
+    };
   });
   try {
     await fiber;
@@ -102,6 +122,7 @@ function modeCatalogPlugin(
   cordis: Context,
   pi: Pick<ExtensionAPI, 'appendEntry'>,
   activeCatalog: CatalogBinding,
+  onCatalogChanged: () => void,
 ): void {
   cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
     const contribution = requireDoomHelpService(helpContext).register({
@@ -174,6 +195,8 @@ function modeCatalogPlugin(
       if (serialized === published) return;
       published = serialized;
       pi.appendEntry(DOOM_MINOR_MODE_ENTRY_TYPE, projection);
+      // A mode changing is the usual reason the toolbox changed too.
+      onCatalogChanged();
     };
     const unsubscribe = catalog.subscribe(() => {
       settle ??= setTimeout(publish, PROJECTION_SETTLE_MS);

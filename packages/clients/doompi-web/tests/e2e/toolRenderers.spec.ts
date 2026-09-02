@@ -440,3 +440,32 @@ test('a run of calls to one tool shares a frame, and a lone call keeps its card'
   await expect(page.getByTestId('entry-tool-group')).toHaveCount(1);
   await expect(page.getByTestId('entry-tool')).toHaveCount(4);
 });
+
+/**
+ * The path in a call header is the shortest way to the file itself.
+ *
+ * A read is the case that has to work without the file-edit timeline: the
+ * session never changed this file, so the only thing that can open it is the
+ * preview route, bounded by the working directory. What this suite proves is
+ * the click and the tab it raises. It cannot prove what the tab then shows,
+ * because the fixture's session API socket serves the runner route and nothing
+ * else, so the preview request has no route to reach; the route itself is
+ * covered against a real filesystem in doompi-file-edit's own tests.
+ */
+test('a read call opens its file from the path in the header', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'call-link',
+    toolName: 'read',
+    args: { path: 'src/Unchanged.ts' },
+  });
+
+  await page.getByTestId('tool-call-read').getByTestId('tool-path').click();
+  await expect(page.getByTestId('files-preview-panel')).toBeVisible();
+  await expect(page.getByTestId('files-preview-breadcrumb')).toContainText('src/Unchanged.ts');
+  // The tab is the file's own, not the changed-file tab, which this file has no
+  // history for.
+  await expect(page).toHaveURL(/\/files-file-[^/]+-preview$/u);
+});
