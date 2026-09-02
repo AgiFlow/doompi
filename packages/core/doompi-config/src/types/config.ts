@@ -146,6 +146,16 @@ export interface PluginHookSource {
   configPath: string;
 }
 
+/** What admitted a package into the composition. */
+export interface PackageAttribution {
+  /** `major` for a layer package, `domain` for a plugin a domain carries. */
+  kind: 'major' | 'domain';
+  /** The major mode name, or the domain name. */
+  mode: string;
+  /** The layer the package was listed under; absent for a domain plugin. */
+  layer?: string;
+}
+
 export interface HarnessState {
   root?: string;
   /** The one named major mode this session runs under. */
@@ -154,6 +164,17 @@ export interface HarnessState {
   domains: string[];
   /** The layer components the major mode resolved to. */
   layers: string[];
+  /**
+   * Which mode, layer, or domain admitted each package, keyed by the package
+   * name exactly as its manifest spells it.
+   *
+   * The composition resolves this on its way to a flat list of entry paths and
+   * has no further use for it, so without somewhere to put it the causal link
+   * between a mode and the tools it brought is lost the moment the session
+   * starts. A surface that reports what the session is carrying has to be able
+   * to say what asked for it.
+   */
+  packageAttribution?: Record<string, PackageAttribution>;
   /** Canonical identity shared by launch, sync, children, and reload. */
   compositionFingerprint?: string;
   profile?: string;

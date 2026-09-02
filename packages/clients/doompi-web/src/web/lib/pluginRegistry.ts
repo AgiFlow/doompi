@@ -5,6 +5,7 @@ import type {
   MinorModeContribution,
   PaletteCommandContribution,
   RepositorySettingsPanelContribution,
+  SettingsPanelContribution,
   SettingsSectionContribution,
   SelectionAxisContribution,
   SessionChannelContribution,
@@ -98,6 +99,7 @@ interface RegistryState {
   minorModes: MinorModeContribution[];
   activityGroups: ActivityGroupContribution[];
   settingsSections: SettingsSectionContribution[];
+  settingsPanels: InstalledSettingsPanel[];
   toolRenderers: Map<string, ToolRendererContribution>;
   toolMatchers: ToolRendererContribution[];
   slots: Map<string, SlotDeclaration>;
@@ -117,6 +119,7 @@ function emptyState(): RegistryState {
     minorModes: [],
     activityGroups: [],
     settingsSections: [],
+    settingsPanels: [],
     toolRenderers: new Map(),
     toolMatchers: [],
     slots: new Map(),
@@ -335,9 +338,16 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
     for (const tab of plugin.tabs ?? []) {
       if (claim(owners.tab, 'tab', tab.id, plugin.id)) state.tabs.push(tab);
     }
+    // A panel and a section both become a /settings/:id route, so the two
+    // share one id namespace rather than racing to own the same URL.
     for (const section of plugin.settingsSections ?? []) {
       if (claim(owners['settings-section'], 'settings-section', section.id, plugin.id)) {
         state.settingsSections.push(section);
+      }
+    }
+    for (const panel of plugin.settingsPanels ?? []) {
+      if (claim(owners['settings-section'], 'settings-section', panel.id, plugin.id)) {
+        state.settingsPanels.push({ pluginId: plugin.id, ...panel });
       }
     }
     for (const channel of plugin.channels ?? []) {
@@ -455,6 +465,15 @@ export function webTabs(): readonly TabContribution[] {
  */
 export function pluginSettingsSections(): readonly SettingsSectionContribution[] {
   return state.settingsSections;
+}
+
+export interface InstalledSettingsPanel extends SettingsPanelContribution {
+  pluginId: string;
+}
+
+/** The settings pages plugins draw themselves, in install order; the reader sorts them with the sections. */
+export function pluginSettingsPanels(): readonly InstalledSettingsPanel[] {
+  return state.settingsPanels;
 }
 
 /** The fills placed into one slot, in slot order; empty for a slot nobody declared. */

@@ -27,7 +27,11 @@
     "directory": "packages/default/doompi-log"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/web",
+    "src/exports/webClient.ts",
+    "src/types/webMetrics.ts",
+    "src/types/issueGrouping.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -59,6 +63,11 @@
       "import": "./dist/tui/metricsOverlay.mjs",
       "require": "./dist/tui/metricsOverlay.cjs"
     },
+    "./hub-api": {
+      "types": "./dist/hubApi.d.mts",
+      "import": "./dist/hubApi.mjs",
+      "require": "./dist/hubApi.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -68,22 +77,30 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/log-sink-mcp": "0.29.19",
-    "@deepseek-ai/cordis": "4.0.1"
+    "@deepseek-ai/cordis": "4.0.1",
+    "hono": "4.13.5"
   },
   "devDependencies": {
     "@agimon-ai/doompi-ui": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@earendil-works/pi-tui": "0.84.4",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
     "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
     "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
@@ -102,6 +119,17 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "log",
+    "hub": {
+      "entry": "./src/exports/hubApi.ts",
+      "dist": "./dist/hubApi.mjs"
+    }
+  },
+  "doompiWeb": {
+    "pluginId": "log",
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

@@ -1,4 +1,5 @@
 export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/Accordion.tsx';
+export { AnsiLine, type AnsiLineProps, AnsiText, type AnsiTextProps } from '../components/AnsiText.tsx';
 export { Avatar, AvatarFallback, AvatarImage } from '../components/Avatar.tsx';
 export { Badge, type BadgeProps, type BadgeTone, badgeVariants } from '../components/Badge.tsx';
 export {
@@ -76,6 +77,8 @@ export { MediaPreview, type MediaPreviewProps } from '../components/MediaPreview
 export {
   MessageItem,
   MessageItemBody,
+  MessageItemGroup,
+  type MessageItemGroupProps,
   MessageItemHeader,
   type MessageItemHeaderProps,
   type MessageItemProps,
@@ -83,6 +86,7 @@ export {
   MessageItemStatus,
   type MessageItemStatusProps,
   messageItemStatusVariants,
+  messageItemRowVariants,
   messageItemVariants,
   STATUS_GLYPH,
   STATUS_LABEL,
@@ -157,6 +161,14 @@ export {
 export { StreamCursor } from '../components/StreamCursor.tsx';
 export { Switch } from '../components/Switch.tsx';
 export {
+  SyntaxLine,
+  type SyntaxLineProps,
+  type SyntaxQuery,
+  SyntaxText,
+  type SyntaxTextProps,
+  useSyntaxLines,
+} from '../components/SyntaxText.tsx';
+export {
   NavTab,
   NavTabBadge,
   type NavTabProps,
@@ -179,10 +191,13 @@ export {
   toastVariants,
   ToastViewport,
 } from '../components/Toast.tsx';
+export { ToolPathLink, type ToolPathLinkProps } from '../components/ToolPathLink.tsx';
 export * from '../icons/icons.ts';
+export { type AnsiSpan, ansiSpans } from '../lib/ansiSpans.ts';
 export { cn } from '../lib/cn.ts';
 export { type CollapsedLines, collapseLines } from '../lib/collapse.ts';
 export { type GrammarKey, grammarKeyOf } from '../lib/editorLanguage.ts';
+export { type HashlineGroup, hashlineGroups, hashlineGroupsKey } from '../lib/hashlineHighlight.ts';
 export {
   compactDetails,
   GREP_COLLAPSED_LINES,
@@ -201,6 +216,15 @@ export {
   takeTrailingNotice,
 } from '../lib/hashlineView.ts';
 export { mediaKindOf } from '../lib/media.ts';
+export {
+  detectGrammar,
+  type GrammarQuery,
+  highlightToLines,
+  type SyntaxLines,
+  type SyntaxSpan,
+  syntaxStyleOf,
+  type SyntaxToken,
+} from '../lib/syntaxHighlight.ts';
 export { handleOptionListKey, MAX_DIGIT_SHORTCUT, optionListHint, optionMarker } from '../lib/optionList.ts';
 export { CHIP_TO_STATUS, LINE_TONE_TO_STATUS, STATUS_TO_CHIP, STATUS_TO_DOT } from '../lib/tone.ts';
 export { type CodeEditorProps, type EditorSelectionRange, MEDIA_KINDS, type MediaKind } from '../types/editor.ts';

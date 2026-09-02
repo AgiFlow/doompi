@@ -1,4 +1,5 @@
 import {
+  AnsiLine,
   Button,
   ChevronDownIcon,
   cn,
@@ -35,7 +36,6 @@ import type {
 } from '../types/webWorkflows.ts';
 import type { WorkflowTerminalCapabilitiesView } from '../types/webWorkflowTerminal.ts';
 import { ArtifactsPane, artifactTab } from './ArtifactsPane.tsx';
-import { ansiSpans } from './ansiSpans.ts';
 import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from './catalogStore.ts';
 import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
 import { formatRunDuration } from './runDuration.ts';
@@ -331,23 +331,10 @@ function StepRow({
 }
 
 function ScreenLine({ line }: { line: string }) {
-  const spans = ansiSpans(line);
-  if (spans.length === 0) return <span className="block h-[15px]" />;
-  return (
-    <span className="block whitespace-pre">
-      {spans.map((span, index) => (
-        <span
-          key={index}
-          className={`${span.className ?? ''} ${span.bold ? 'font-bold' : ''} ${span.faint ? 'opacity-60' : ''} ${
-            span.italic ? 'italic' : ''
-          } ${span.underline ? 'underline' : ''} ${span.inverse ? 'bg-doom-text text-doom-deep' : ''}`}
-          style={span.color === undefined ? undefined : { color: span.color }}
-        >
-          {span.text}
-        </span>
-      ))}
-    </span>
-  );
+  // A blank row still has to hold the grid open, so an empty line keeps its
+  // height rather than collapsing the screen by one row.
+  if (line.length === 0) return <span className="block h-[15px]" />;
+  return <AnsiLine line={line} className="block whitespace-pre" />;
 }
 
 function InlineStepOutput({

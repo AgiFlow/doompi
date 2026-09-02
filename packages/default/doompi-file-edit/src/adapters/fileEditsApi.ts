@@ -10,6 +10,7 @@ import {
   API_BASE_PATH,
   type FileEditsCumulativeView,
   type FileEditsDetailView,
+  type FileEditsPreviewView,
   type FileEditsSaveRequest,
   type FileEditsSaveView,
   type FileEditsVersionView,
@@ -31,10 +32,12 @@ import { TimelineStore } from './TimelineStore/TimelineStore.ts';
  * makes the session id and working directory available without the page
  * supplying either: a page names a file, never a session's private paths.
  *
- * The detail route answers everything a reader needs to open a file, because
- * splitting it would make the page stitch three responses together for one
- * click. The save route is the only mutation, and it refuses unless the reader
- * proves they were looking at the content that is still on disk.
+ * The detail route answers everything a reader needs to open a changed file,
+ * because splitting it would make the page stitch three responses together for
+ * one click. The save route is the only mutation, and it refuses unless the
+ * reader proves they were looking at the content that is still on disk. The
+ * preview route is the read-only way in to a file the session never changed,
+ * bounded by the working directory instead of by the timeline.
  */
 
 /** Past this, the working view reports the file rather than carrying it. */
@@ -89,6 +92,27 @@ async function readWorking(filePath: string): Promise<FileEditsWorkingView> {
   }
   const content = raw.toString('utf8');
   return { content, hash: hashOf(content), unavailable: false };
+}
+
+function isInside(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}${path.sep}`);
+}
+
+/**
+ * The same containment check after symlinks are followed. A path that does not
+ * exist yet resolves to nothing, and there is nothing to hand out, so it
+ * passes and the read below reports it missing.
+ */
+async function isRealPathInside(root: string, candidate: string): Promise<boolean> {
+  let realRoot: string;
+  let real: string;
+  try {
+    realRoot = await fs.realpath(root);
+    real = await fs.realpath(candidate);
+  } catch {
+    return true;
+  }
+  return isInside(realRoot, real);
 }
 
 /**
@@ -198,6 +222,36 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
       versions: await Promise.all(versions.map((version) => toVersionView(version, snapshots))),
       cumulative: await toCumulativeView(versions, working, snapshots),
       working,
+    };
+    return context.json(body);
+  });
+
+  /**
+   * The file a request names, read only, for a file the timeline knows nothing
+   * about: a path the agent read but never changed is still a path the reader
+   * clicked, and refusing it would leave the link dead.
+   *
+   * The working directory is the boundary here, since the timeline is not.
+   * Containment is checked lexically and again on the real path, so a symlink
+   * inside the tree cannot hand out something beyond it, and a host that gave
+   * these routes no working directory has no boundary to enforce and so serves
+   * nothing.
+   */
+  app.get('/preview', async (context) => {
+    const requested = context.req.query(PATH_QUERY_PARAM);
+    if (requested === undefined || requested === '' || requested.includes('\0')) {
+      return context.json({ error: 'A preview names a path.' }, 400);
+    }
+    if (cwd === '') return context.json({ error: 'This session has no working directory to read from.' }, 403);
+    const root = path.resolve(cwd);
+    const filePath = path.resolve(root, requested);
+    if (!isInside(root, filePath) || !(await isRealPathInside(root, filePath))) {
+      return context.json({ error: 'The path leaves the session directory.' }, 403);
+    }
+    const body: FileEditsPreviewView = {
+      path: filePath,
+      relPath: path.relative(root, filePath),
+      working: await readWorking(filePath),
     };
     return context.json(body);
   });

@@ -128,7 +128,9 @@ describe('Doom configuration', () => {
     // Everything except the documents only the file carries, which every
     // spawned process and every hook would otherwise copy in its environment.
     expect(readHarnessState(environment)).toEqual({ ...state, profileEnvironment: {}, pluginHooks: [] });
-    expect(FILE_ONLY_STATE_FIELDS).toEqual(new Set(['profileEnvironment', 'pluginHooks', 'mcpProjection']));
+    expect(FILE_ONLY_STATE_FIELDS).toEqual(
+      new Set(['profileEnvironment', 'pluginHooks', 'mcpProjection', 'packageAttribution']),
+    );
 
     projectHarnessEnvironment({ personaFile: undefined, profile: undefined }, environment);
     expect(environment).not.toHaveProperty(HARNESS_STATE_KEYS.personaFile);
@@ -143,6 +145,7 @@ describe('Doom configuration', () => {
       root: '/repo',
       profileEnvironment: { MODE: 'strict' },
       pluginHooks: [{ pluginRoot: '/plugin', configPath: '/plugin/hooks.json' }],
+      packageAttribution: { '@agimon-ai/doompi-team': { kind: 'major' as const, mode: 'copilot', layer: 'team' } },
       mcpProjection: {
         version: 1 as const,
         enabled: false,

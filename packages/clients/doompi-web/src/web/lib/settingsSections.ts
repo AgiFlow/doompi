@@ -1,8 +1,10 @@
 import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
 import {
   pluginRepositorySettingsPanels,
+  pluginSettingsPanels,
   pluginSettingsSections,
   type InstalledRepositorySettingsPanel,
+  type InstalledSettingsPanel,
 } from './pluginRegistry.ts';
 
 /**
@@ -25,6 +27,8 @@ export interface SettingsSection {
   contribution?: SettingsSectionContribution;
   /** Package panel hosted inside the repository workspace. */
   repositoryPanel?: InstalledRepositorySettingsPanel;
+  /** A page the contributing package draws itself, rather than fields the host renders. */
+  panel?: InstalledSettingsPanel;
 }
 
 const GENERAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -75,7 +79,12 @@ const REPOSITORY_SECTION_PREFIX = 'repository-';
 export const DEFAULT_SETTINGS_SECTION = GENERAL_SETTINGS_SECTIONS[0]!.id;
 export const DEFAULT_REPOSITORY_SETTINGS_SECTION = REPOSITORY_DEFAULTS_SECTION.id;
 
-function byMenuOrder(left: SettingsSectionContribution, right: SettingsSectionContribution): number {
+interface MenuOrdered {
+  id: string;
+  order?: number;
+}
+
+function byMenuOrder(left: MenuOrdered, right: MenuOrdered): number {
   return (
     (left.order ?? DEFAULT_CONTRIBUTED_ORDER) - (right.order ?? DEFAULT_CONTRIBUTED_ORDER) ||
     left.id.localeCompare(right.id)
@@ -106,6 +115,15 @@ export function settingsSections(workspace?: SettingsWorkspace): readonly Settin
     workspace: 'repository' as const,
     contribution,
   }));
+  // A self-drawn page has no scope to switch: it reports rather than writes,
+  // so it appears once, in the general workspace, and not as a repository copy.
+  const panels = [...pluginSettingsPanels()].sort(byMenuOrder).map((panel) => ({
+    id: panel.id,
+    label: panel.label,
+    detail: panel.detail,
+    workspace: 'general' as const,
+    panel,
+  }));
   const repositoryPanels = pluginRepositorySettingsPanels().map((repositoryPanel) => ({
     id: `${REPOSITORY_SECTION_PREFIX}${repositoryPanel.pluginId}`,
     label: repositoryPanel.label,
@@ -116,6 +134,7 @@ export function settingsSections(workspace?: SettingsWorkspace): readonly Settin
   const all = [
     ...GENERAL_SETTINGS_SECTIONS,
     ...contributed,
+    ...panels,
     REPOSITORY_DEFAULTS_SECTION,
     ...repositoryPanels,
     ...contributedForRepository,

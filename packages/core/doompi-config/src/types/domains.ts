@@ -83,6 +83,8 @@ export interface PluginEntry {
   /** Catalog identifier when the entry came from domains.yaml. */
   name?: string;
   directory: string;
+  /** The domain that admitted this plugin; absent for an explicit directory. */
+  domain?: string;
   /** Omitted for legacy programmatic callers that already supply a directory. */
   source?: PluginSource;
   /** Manifest metadata retained so resource adapters can apply schema-gated plugin contracts. */

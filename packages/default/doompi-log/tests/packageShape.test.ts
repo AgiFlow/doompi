@@ -14,6 +14,8 @@ const CONFIG_FILES = ['tsdown.config.ts', 'tsconfig.json', 'vitest.config.ts', '
 const EXPORT_SUBPATHS = [
   '.',
   './extensions/pi',
+  // The hub-scoped metrics API the cockpit host imports; declared in doompiApi.
+  './hub-api',
   './metrics',
   './metricsSource',
   './tui/metricsOverlay',

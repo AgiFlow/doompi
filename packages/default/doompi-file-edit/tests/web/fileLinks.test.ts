@@ -53,6 +53,23 @@ describe('fileLinks', () => {
     expect(fileLinks.resolve(null, 'src/app.ts')).toBeUndefined();
   });
 
+  it('opens a changed file on its history when the caller is sure it is a path', () => {
+    const tab = fileLinks.openPath?.(SESSION, 'src/app.ts');
+    expect(tab?.id).toBe(fileLinks.resolve(SESSION, 'src/app.ts')?.id);
+  });
+
+  it('opens a file the session never changed read-only, which resolve refuses', () => {
+    expect(fileLinks.resolve(SESSION, 'src/other.ts')).toBeUndefined();
+    const tab = fileLinks.openPath?.(SESSION, '/repo/src/other.ts');
+    expect(tab?.label).toBe('other.ts');
+    expect(tab?.id.endsWith('-preview')).toBe(true);
+  });
+
+  it('has nothing to open for a call with no path', () => {
+    expect(fileLinks.openPath?.(SESSION, '')).toBeUndefined();
+    expect(fileLinks.openPath?.(SESSION, '   ')).toBeUndefined();
+  });
+
   it('fingerprints the paths, so a swap at equal length still re-resolves', () => {
     const before = fileLinks.fingerprint(SESSION);
     filesChannel.apply(SESSION, filesChannel.parse({ items: [item('src/app.ts'), item('docs/CHANGES.md')] })!);

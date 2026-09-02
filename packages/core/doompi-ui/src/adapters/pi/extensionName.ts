@@ -13,6 +13,9 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 /** Results are stable for the life of a session, and every source hits the same few dirs. */
 const cache = new Map<string, string>();
+// Wrapped, because "no package above this path" is a real answer worth caching
+// and a bare undefined cannot be told apart from a miss.
+const packageCache = new Map<string, { readonly name: string | undefined }>();
 const TOOL_SOURCE_REGISTRY_KEY = '__doompiExtensionToolSources__' as const;
 
 type RegisteredTool = Parameters<ExtensionAPI['registerTool']>[0];
@@ -88,4 +91,21 @@ export function extensionName(entryPath: string): string {
   const resolved = name ? (name.split('/').pop() ?? name) : path.basename(entryPath, path.extname(entryPath));
   cache.set(entryPath, resolved);
   return resolved;
+}
+
+/**
+ * The package name exactly as a manifest spells it, scope and all.
+ *
+ * `extensionName` drops the scope because a tree reads better without it, but
+ * that makes it useless as a key: `.doom/modes.yaml` names packages as
+ * `@agimon-ai/doompi-team`, so joining a registered tool back to the layer that
+ * admitted it needs the unshortened name. Attribution and display are different
+ * jobs, so they get different functions rather than one lossy one.
+ */
+export function extensionPackageName(entryPath: string): string | undefined {
+  const cached = packageCache.get(entryPath);
+  if (cached !== undefined) return cached.name;
+  const name = packageName(path.dirname(entryPath));
+  packageCache.set(entryPath, { name });
+  return name;
 }

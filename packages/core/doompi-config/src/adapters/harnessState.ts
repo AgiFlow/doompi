@@ -26,6 +26,10 @@ export const FILE_ONLY_STATE_FIELDS: ReadonlySet<keyof HarnessState> = new Set([
   'profileEnvironment',
   'pluginHooks',
   'mcpProjection',
+  // One entry per composed package. Nothing that spawns a process needs it,
+  // and putting a map that size in front of every exec would cost far more
+  // than the one surface that reads it is worth.
+  'packageAttribution',
 ]);
 
 export type HarnessStateParseReporter = (key: string, error: unknown) => void;

@@ -1,5 +1,5 @@
 import { expect, test } from '../support/cockpit.ts';
-import { writeRunnerRecord } from '../support/runnerRuns.ts';
+import { appendRunnerLog, writeRunnerRecord } from '../support/runnerRuns.ts';
 import { writeWorkflowRun } from '../support/workflowRuns.ts';
 
 // The dock's groups are declared by doompi-team, doompi-runner, and
@@ -168,6 +168,8 @@ test('the runners group lists only what is up now, and a row opens its log', asy
       exit: { reason: 'completed', code: 1, signal: null, finishedAt: new Date().toISOString() },
     },
   });
+  // A runner that has not written anything yet still has to say what it is.
+  writeRunnerRecord(cockpit.runnerStore, 's1', { id: 'runner-quiet', name: 'quiet', command: 'pnpm build' });
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
@@ -177,7 +179,20 @@ test('the runners group lists only what is up now, and a row opens its log', asy
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute('data-runner-tone', 'running');
   await expect(row).toContainText('api');
-  await expect(row).toContainText('pnpm dev --filter api');
+  // A running row shows what the runner is doing, not what it was asked to do:
+  // the command never changes, and the last log line is the progress.
+  const detail = page.getByTestId('activity-runner-detail-runner-api');
+  await expect(detail).toHaveAttribute('data-detail', 'tail');
+  await expect(detail).toHaveText('GET /missing 404');
+
+  // The line follows the log, so a row left open keeps up with the run.
+  appendRunnerLog(cockpit.runnerStore, 's1', 'runner-api', 'GET /health 200\nPOST /orders 201\n');
+  await expect(detail).toHaveText('POST /orders 201');
+
+  // Until the first line lands, the command is what the row has to say.
+  const quiet = page.getByTestId('activity-runner-detail-runner-quiet');
+  await expect(quiet).toHaveAttribute('data-detail', 'command');
+  await expect(quiet).toHaveText('pnpm build');
   await expect(page.getByTestId('activity-runner-runner-old')).toHaveCount(0);
   await expect(page.getByTestId('activity-summary-runners')).toBeHidden();
 

@@ -125,6 +125,7 @@ aliases:
       {
         name: 'one',
         directory: path.join(root, 'plugins', 'one'),
+        domain: 'development',
         source: { type: 'local', path: path.join(root, 'plugins', 'one') },
         skills: ['typescript'],
         agents: ['reviewer'],
@@ -134,6 +135,7 @@ aliases:
       {
         name: 'two',
         directory: path.join(root, 'plugins', 'two'),
+        domain: 'qa',
         source: { type: 'local', path: path.join(root, 'plugins', 'two') },
       },
     ]);

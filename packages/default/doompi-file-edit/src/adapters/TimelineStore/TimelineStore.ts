@@ -1,4 +1,4 @@
-import fs from 'node:fs/promises';
+import fs, { type FileHandle } from 'node:fs/promises';
 import {
   type AnyTimelineEvent,
   confirmedChanges,
@@ -9,8 +9,16 @@ import {
 import type { FileEditEntry, FileEditVersion, TimelineEvent } from '../../types/domain';
 import type { ITimelineStore } from '../../types/timelineStore';
 
-const LOCK_RETRY_MS = 10;
-const LOCK_RETRIES = 100;
+const LOCK_RETRY_MS = 25;
+const LOCK_RETRIES = 400;
+/**
+ * How long a lock file may sit untouched before a waiter treats it as abandoned.
+ *
+ * An append writes one line, so a holder that has been there for half a minute
+ * is a process that died without unlinking. Without this, that one file would
+ * block every later append to the same timeline permanently.
+ */
+const LOCK_STALE_MS = 30_000;
 
 function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code;
@@ -65,24 +73,48 @@ export class TimelineStore implements ITimelineStore {
 
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {
     const lockPath = `${this.requirePath()}.lock`;
+    const lock = await this.acquire(lockPath);
+    try {
+      return await operation();
+    } finally {
+      await lock.close();
+      await this.release(lockPath);
+    }
+  }
+
+  /** Waits for the lock file, breaking one an earlier process left behind. */
+  private async acquire(lockPath: string): Promise<FileHandle> {
     for (let attempt = 0; attempt < LOCK_RETRIES; attempt += 1) {
       try {
-        const lock = await fs.open(lockPath, 'wx');
-        try {
-          return await operation();
-        } finally {
-          await lock.close();
-          try {
-            await fs.unlink(lockPath);
-          } catch (error) {
-            if (!hasCode(error, 'ENOENT')) console.warn(`Could not remove timeline lock: ${String(error)}`);
-          }
-        }
+        return await fs.open(lockPath, 'wx');
       } catch (error) {
         if (!hasCode(error, 'EEXIST')) throw error;
+        if (await this.breakStale(lockPath)) continue;
         await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
       }
     }
     throw new Error(`Timed out acquiring timeline lock ${lockPath}`);
+  }
+
+  /** Whether the lock is now free to take, having removed it when its holder is gone. */
+  private async breakStale(lockPath: string): Promise<boolean> {
+    try {
+      const stats = await fs.stat(lockPath);
+      if (Date.now() - stats.mtimeMs < LOCK_STALE_MS) return false;
+      await fs.unlink(lockPath);
+      return true;
+    } catch (error) {
+      // Already gone, or another waiter broke it first: either way, try again.
+      if (hasCode(error, 'ENOENT')) return true;
+      throw error;
+    }
+  }
+
+  private async release(lockPath: string): Promise<void> {
+    try {
+      await fs.unlink(lockPath);
+    } catch (error) {
+      if (!hasCode(error, 'ENOENT')) console.warn(`Could not remove timeline lock: ${String(error)}`);
+    }
   }
 }

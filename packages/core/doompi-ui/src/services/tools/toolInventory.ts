@@ -6,6 +6,8 @@ export interface ToolEntry {
   name: string;
   description?: string;
   parameters?: unknown;
+  /** One-line snippet Pi keys by tool name in the system prompt. */
+  promptSnippet?: string;
   promptGuidelines?: readonly string[];
   active: boolean;
 }
@@ -18,6 +20,14 @@ export interface ToolSource {
   status?: string;
   /** The registering file for extension sources. */
   detail?: string;
+  /**
+   * Package name as its manifest spells it, scope included.
+   *
+   * `label` is shortened for reading. Attribution joins against `.doom`
+   * configuration, which names packages in full, so the unshortened name is
+   * carried separately rather than recovered from the label.
+   */
+  packageName?: string;
   tools: readonly ToolEntry[];
 }
 
@@ -28,6 +38,7 @@ export interface ToolInfo {
   name: string;
   description?: string;
   parameters?: unknown;
+  promptSnippet?: string;
   promptGuidelines?: readonly string[];
   sourceInfo: { path: string; source?: string };
 }
@@ -38,6 +49,8 @@ export interface ToolInventoryInput {
   /** Absent when the MCP adapter is not loaded or has not published yet. */
   mcpServers?: readonly McpServerStatus[];
   resolveExtensionName?: (entryPath: string) => string;
+  /** Unshortened package name for the same entry path, for attribution. */
+  resolveExtensionPackageName?: (entryPath: string) => string | undefined;
   resolveExtensionToolSource?: (toolName: string) => string | undefined;
 }
 
@@ -69,6 +82,7 @@ function toEntry(tool: ToolInfo, activeTools: ReadonlySet<string>): ToolEntry {
     name: tool.name,
     ...(tool.description ? { description: tool.description } : {}),
     ...(tool.parameters === undefined ? {} : { parameters: tool.parameters }),
+    ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
     ...(tool.promptGuidelines?.length ? { promptGuidelines: tool.promptGuidelines } : {}),
     active: activeTools.has(tool.name),
   };
@@ -110,7 +124,7 @@ export function buildToolSources(input: ToolInventoryInput): readonly ToolSource
   const owningServer = serverByTool(servers);
   const core: ToolEntry[] = [];
   const mcpTools = new Map<string, ToolEntry[]>();
-  const extensions = new Map<string, { label: string; detail: string; tools: ToolEntry[] }>();
+  const extensions = new Map<string, { label: string; detail: string; packageName?: string; tools: ToolEntry[] }>();
 
   for (const tool of input.tools) {
     const entry = toEntry(tool, activeTools);
@@ -141,7 +155,13 @@ export function buildToolSources(input: ToolInventoryInput): readonly ToolSource
       const name = structuralSource
         ? (input.resolveExtensionName?.(key) ?? tool.sourceInfo.source ?? key)
         : (tool.sourceInfo.source ?? key);
-      extensions.set(key, { label: sourceLabel(name, 'extension'), detail: key, tools: [entry] });
+      const scoped = input.resolveExtensionPackageName?.(key);
+      extensions.set(key, {
+        label: sourceLabel(name, 'extension'),
+        detail: key,
+        ...(scoped ? { packageName: scoped } : {}),
+        tools: [entry],
+      });
     }
   }
 
@@ -169,6 +189,7 @@ export function buildToolSources(input: ToolInventoryInput): readonly ToolSource
       label: group.label,
       kind: 'extension',
       detail: group.detail,
+      ...(group.packageName ? { packageName: group.packageName } : {}),
       tools: group.tools.sort(byName),
     });
   }

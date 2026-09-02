@@ -113,6 +113,15 @@ export const HUB_RESYNCED_TYPE = 'hub_resynced';
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
 /**
+ * The custom session entry DoomPi journals describing what the session is
+ * composed of: which mode admitted each tool and skill, and what each costs.
+ *
+ * Schemas are deliberately absent. Only names, kinds, owners and integer token
+ * counts travel, so republishing the whole composition stays cheap.
+ */
+export const CONTEXT_ENTRY_TYPE = 'doom-context';
+
+/**
  * The custom session entry doompi-domain journals once Pi has rebuilt its
  * resource catalog for a reload; it mirrors DOOM_RESOURCE_CATALOG_ENTRY_TYPE in
  * doompi-extension-contracts.
@@ -146,6 +155,39 @@ export interface MinorModeProjection {
   version: 1;
   revision: number;
   modes: MinorModeRecordProjection[];
+}
+
+export type ContextGroupKind = 'major' | 'minor' | 'domain' | 'core';
+export type ContextItemSource = 'extension' | 'mcp' | 'plugin' | 'core';
+
+export interface ContextItemProjection {
+  name: string;
+  itemKind: 'tool' | 'skill';
+  source: ContextItemSource;
+  owner: string;
+  tokens: number;
+  active: boolean;
+}
+
+export interface ContextGroupProjection {
+  id: string;
+  label: string;
+  kind: ContextGroupKind;
+  items: ContextItemProjection[];
+  /** What the group costs now: active items only. */
+  tokens: number;
+  /** What its gated items would add if switched on. */
+  inactiveTokens: number;
+}
+
+export interface ContextProjection {
+  version: 1;
+  revision: number;
+  groups: ContextGroupProjection[];
+  totalTokens: number;
+  inactiveTokens: number;
+  /** Names the tokenizer, because the figures are indicative, not billed. */
+  estimator: string;
 }
 export const SUBSCRIBE_TYPE = 'subscribe';
 export const UNSUBSCRIBE_TYPE = 'unsubscribe';

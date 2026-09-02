@@ -1,6 +1,7 @@
 import type { FileLinkSource, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import type { FilesItemView } from '../types/webFiles.ts';
 import { fileTab } from './FilePanel.tsx';
+import { filePreviewTab } from './FilePreviewPanel.tsx';
 import { files } from './filesStore.ts';
 
 /**
@@ -41,5 +42,17 @@ export const fileLinks: FileLinkSource = {
   resolve: (sessionId, path): TransientTab | undefined => {
     const item = match(sessionId, path);
     return item === undefined ? undefined : fileTab(item.path, item.relPath);
+  },
+  // A tool argument is a path on purpose, so nothing here has to be guessed.
+  // A file the session changed opens on its history; one it only read opens
+  // read-only, and the route behind that tab is what decides whether a path
+  // outside the working directory may be shown at all.
+  openPath: (sessionId, path): TransientTab | undefined => {
+    const item = match(sessionId, path);
+    if (item !== undefined) return fileTab(item.path, item.relPath);
+    // A call with no path argument at all hands this an empty string, and
+    // there is no file to open behind it.
+    const candidate = path.trim();
+    return candidate === '' ? undefined : filePreviewTab(candidate);
   },
 };

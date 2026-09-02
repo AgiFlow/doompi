@@ -11,6 +11,7 @@ import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace.ts
 import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
 import { RemoteControlSettings } from '../features/settings/RemoteControlSettings.tsx';
 import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
+import { SettingsPanelHost } from '../features/settings/SettingsPanelHost.tsx';
 import {
   DEFAULT_REPOSITORY_SETTINGS_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -136,6 +137,7 @@ export function SettingsPage() {
               {current?.contribution === undefined ? null : (
                 <ContributedSettings section={current.contribution} scope="global" />
               )}
+              {current?.panel === undefined ? null : <SettingsPanelHost panel={current.panel} />}
             </section>
           </div>
         )}

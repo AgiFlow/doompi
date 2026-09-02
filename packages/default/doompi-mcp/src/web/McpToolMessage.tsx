@@ -4,6 +4,7 @@ import {
   MessageItemHeader,
   MessageItemStatus,
   type StatusTone,
+  SyntaxText,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
@@ -50,9 +51,9 @@ function McpBlock({ block }: { block: McpResultBlock }) {
       );
     case 'resource':
       return block.text !== undefined ? (
-        <pre data-testid="tool-result-mcp-resource" className="whitespace-pre-wrap break-words text-doom-dim">
-          {block.text}
-        </pre>
+        // A resource arrives without a name, so its grammar is whatever the
+        // text itself gives away; anything unrecognised stays plain.
+        <SyntaxText data-testid="tool-result-mcp-resource" className="text-doom-dim" text={block.text} />
       ) : (
         <span data-testid="tool-result-mcp-resource" className="truncate text-doom-faint">
           binary {block.mimeType ?? 'resource'} · {block.uri}
@@ -60,9 +61,12 @@ function McpBlock({ block }: { block: McpResultBlock }) {
       );
     case 'structured':
       return (
-        <pre data-testid="tool-result-mcp-structured" className="whitespace-pre-wrap break-words text-doom-dim">
-          {JSON.stringify(block.value, null, 2)}
-        </pre>
+        <SyntaxText
+          data-testid="tool-result-mcp-structured"
+          className="text-doom-dim"
+          grammar="json"
+          text={JSON.stringify(block.value, null, 2)}
+        />
       );
     case 'audio':
       return (

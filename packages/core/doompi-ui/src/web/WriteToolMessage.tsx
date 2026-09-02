@@ -3,10 +3,40 @@ import {
   MessageItemBody,
   MessageItemHeader,
   MessageItemStatus,
+  SyntaxLine,
+  ToolPathLink,
   toolTone,
+  useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { resultText, writeCallView } from './builtinToolView.ts';
+import { resultText, type WriteCallView, writeCallView } from './builtinToolView.ts';
+
+/**
+ * The numbered preview, coloured as the file it is about to become.
+ *
+ * Its own component so the highlighting hook has somewhere to live: the body
+ * around it is picked inside a render prop. The preview is a prefix of the
+ * content, so it parses as the file it came from up to wherever it was cut.
+ */
+function WritePreview({ view, path }: { view: WriteCallView; path: string }) {
+  const spans = useSyntaxLines(view.preview.map((line) => line.text).join('\n'), { path });
+  return (
+    <>
+      {view.preview.map((line, index) => (
+        <span key={line.number} className="flex gap-2">
+          <span className="shrink-0 text-right text-doom-faint" style={{ width: `${String(view.gutter)}ch` }}>
+            {line.number}
+          </span>
+          <SyntaxLine
+            spans={spans?.[index]}
+            text={line.text}
+            className="min-w-0 whitespace-pre-wrap break-words text-doom-text"
+          />
+        </span>
+      ))}
+    </>
+  );
+}
 
 /**
  * The write tool's timeline item: `path · N chars` in the header. Pi's write
@@ -14,8 +44,19 @@ import { resultText, writeCallView } from './builtinToolView.ts';
  * TUI folds into its call: ten lines, or all of them once the item expands.
  * A failure shows the tool's message in red instead.
  */
-export function WriteToolMessage({ args, result, output, running, isError }: ToolMessageRenderProps) {
+export function WriteToolMessage({
+  args,
+  result,
+  output,
+  running,
+  isError,
+  fileTabFor,
+  openTransientTab,
+}: ToolMessageRenderProps) {
   const collapsed = writeCallView(args, false);
+  // The header names a file the tool is writing, so the reader can open it
+  // rather than hunt for it; nothing installed to show files leaves it as text.
+  const tab = fileTabFor(collapsed.path);
   return (
     <MessageItem tone={toolTone({ running, isError })} expandable={collapsed.hidden > 0}>
       {({ expanded }) => {
@@ -24,7 +65,10 @@ export function WriteToolMessage({ args, result, output, running, isError }: Too
           <>
             <MessageItemHeader title="write">
               <span data-testid="tool-call-write" className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate text-doom-text">{view.path}</span>
+                <ToolPathLink
+                  path={view.path}
+                  {...(tab === undefined ? {} : { onOpen: () => openTransientTab(tab) })}
+                />
                 <span className="shrink-0 text-doom-faint">· {view.size}</span>
               </span>
             </MessageItemHeader>
@@ -41,14 +85,7 @@ export function WriteToolMessage({ args, result, output, running, isError }: Too
               ) : null
             ) : (
               <MessageItemBody data-testid="tool-result-write" className="flex flex-col font-mono">
-                {view.preview.map((line) => (
-                  <span key={line.number} className="flex gap-2">
-                    <span className="shrink-0 text-right text-doom-faint" style={{ width: `${String(view.gutter)}ch` }}>
-                      {line.number}
-                    </span>
-                    <span className="min-w-0 whitespace-pre-wrap break-words text-doom-text">{line.text}</span>
-                  </span>
-                ))}
+                <WritePreview view={view} path={view.path} />
                 {view.hidden > 0 ? <MessageItemStatus expands>{view.hidden} more lines</MessageItemStatus> : null}
                 {running ? <MessageItemStatus tone="running">running</MessageItemStatus> : null}
               </MessageItemBody>

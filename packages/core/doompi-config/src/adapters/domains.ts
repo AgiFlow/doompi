@@ -210,6 +210,10 @@ export function resolvePluginEntries(
       entries.push({
         name: pluginName,
         directory,
+        // The domain is only in scope here. `resolvePluginDirectories` keeps
+        // just the path, so anything downstream that wants to say which domain
+        // brought a plugin has to be told now or not at all.
+        domain: domainName,
         source: plugin.source,
         ...(plugin.manifest ? { manifest: plugin.manifest } : {}),
         ...(plugin.manifest?.agentPluginSchema === SUPPORTED_AGENT_PLUGIN_SCHEMA

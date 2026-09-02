@@ -31,7 +31,11 @@ const HTTP_TIMEOUT_MS = 5000;
 const CLI_TIMEOUT_MS = 30000;
 /** A day of dev telemetry is already ~140k records; keep the payload bounded. */
 const MAX_CLI_BUFFER = 32 * 1024 * 1024;
-const TOOL_LIMIT = '1';
+/**
+ * The overlay ranks one tool, but a page pairing tool calls against failure
+ * counts needs a denominator for every tool that failed, so callers ask.
+ */
+const DEFAULT_TOOL_LIMIT = 1;
 /** The panel ranks consumers, so ask for the biggest rather than the most recent. */
 const TOKEN_SORT = 'total-tokens';
 
@@ -61,14 +65,43 @@ function cliEntryPoint(): string {
   return path.join(path.dirname(packageJson), 'dist', 'cli.mjs');
 }
 
+/**
+ * The sink names these the same way on the wire and on the command line, apart
+ * from the case convention, so the two transports stay in step.
+ */
+const FILTER_QUERY_KEYS = {
+  sessionId: 'sessionId',
+  agentName: 'agentName',
+  model: 'model',
+  provider: 'provider',
+} as const;
+
+const FILTER_CLI_FLAGS = {
+  sessionId: '--session-id',
+  agentName: '--agent-name',
+  model: '--model',
+  provider: '--provider',
+} as const;
+
+function filterEntries(params: MetricsQueryParams): [keyof typeof FILTER_QUERY_KEYS, string][] {
+  const filter = params.filter;
+  if (filter === undefined) return [];
+  return (Object.keys(FILTER_QUERY_KEYS) as (keyof typeof FILTER_QUERY_KEYS)[]).flatMap((key) => {
+    const value = filter[key];
+    return value === undefined || value === '' ? [] : [[key, value] as [keyof typeof FILTER_QUERY_KEYS, string]];
+  });
+}
+
 function searchParams(params: MetricsQueryParams): string {
-  return new URLSearchParams({
+  const search = new URLSearchParams({
     groupBy: params.groupBy,
     period: params.period,
     sort: TOKEN_SORT,
     limit: String(params.limit),
-    toolLimit: TOOL_LIMIT,
-  }).toString();
+    toolLimit: String(params.toolLimit ?? DEFAULT_TOOL_LIMIT),
+  });
+  for (const [key, value] of filterEntries(params)) search.set(FILTER_QUERY_KEYS[key], value);
+  return search.toString();
 }
 
 async function queryHttp(
@@ -109,7 +142,8 @@ function runCli(params: MetricsQueryParams, dbPath: string | undefined): Promise
         '--limit',
         String(params.limit),
         '--tool-limit',
-        TOOL_LIMIT,
+        String(params.toolLimit ?? DEFAULT_TOOL_LIMIT),
+        ...filterEntries(params).flatMap(([key, value]) => [FILTER_CLI_FLAGS[key], value]),
         ...(dbPath === undefined ? [] : ['--db-path', dbPath]),
       ],
       { timeout: CLI_TIMEOUT_MS, maxBuffer: MAX_CLI_BUFFER },

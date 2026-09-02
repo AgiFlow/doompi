@@ -2,10 +2,12 @@
  * The escapes a captured terminal screen carries, turned into spans.
  *
  * WHY THIS EXISTS:
- * tmux captures a pane with `-e`, and cmux's render grid is rebuilt into the
- * same escapes, so what arrives at the cockpit is a terminal's own colour. The
- * browser has no terminal, and the cockpit carries no terminal emulator, so
- * the sequences are read here and rendered as ordinary spans.
+ * Two kinds of output reach the cockpit with a terminal's colour still in it.
+ * A workflow captures a tmux pane with `-e`, and a runner's log file keeps the
+ * palette on purpose, stripping only cursor moves and redraws. The browser has
+ * no terminal, and the cockpit carries no terminal emulator, so the sequences
+ * are read here and rendered as ordinary spans. It lives in the component
+ * library because both readers need it and neither may import the other.
  *
  * WHAT IT UNDERSTANDS:
  * SGR (`ESC [ … m`) only: the eight base colours and their bright forms, 256

@@ -17,6 +17,8 @@ release-artifacts
 .pi
 .codex-local
 logs
+**/logs
 tmp
+**/tmp
 *.log
 .claude/settings.local.json

@@ -7,9 +7,10 @@ import type { FileEditOrigin, FileEditTool } from './domain.ts';
  * bundle may read: the cockpit plugin builds its URLs from these and the
  * routes answer them, so neither half can drift from the other.
  *
- * Two routes only. Opening a file wants its whole history at once, so `detail`
- * answers in one round trip rather than making the page stitch three reads
- * together; `content` takes the manual save back.
+ * Three routes. Opening a changed file wants its whole history at once, so
+ * `detail` answers in one round trip rather than making the page stitch three
+ * reads together; `content` takes the manual save back; `preview` reads a file
+ * the session never changed, which has no history to answer with.
  */
 
 /** Where a host mounts this package's API; the segment after /api/plugin/. */
@@ -31,6 +32,11 @@ export function contentPath(): string {
   return '/content';
 }
 
+/** One unchanged file, read only, relative to the API's own mount. */
+export function previewPath(): string {
+  return '/preview';
+}
+
 /**
  * The absolute URL a page fetches, through the hub. The whole query is built
  * here, session parameter included, so a caller never appends a second '?'.
@@ -44,6 +50,12 @@ export function detailUrl(sessionId: string, filePath: string): string {
 export function contentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
   return `/api/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+}
+
+/** The absolute URL a page reads an unchanged file through. */
+export function previewUrl(sessionId: string, filePath: string): string {
+  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
+  return `/api/plugin/${API_BASE_PATH}${previewPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page deletes a file through; the path rides the query, not a body. */
@@ -115,6 +127,17 @@ export interface FileEditsDetailView {
   relPath: string;
   versions: FileEditsVersionView[];
   cumulative: FileEditsCumulativeView;
+  working: FileEditsWorkingView;
+}
+
+/**
+ * What the preview route answers with: the file as it stands, and nothing
+ * about how it got there. A file this session never touched has no history and
+ * no baseline, so there is no diff to send and no save to take back.
+ */
+export interface FileEditsPreviewView {
+  path: string;
+  relPath: string;
   working: FileEditsWorkingView;
 }
 

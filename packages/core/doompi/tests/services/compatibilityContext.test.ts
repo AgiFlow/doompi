@@ -88,6 +88,7 @@ describe('buildCompatibilityContext', () => {
       {
         name: 'shared',
         directory: path.join(root, 'plugins', 'shared'),
+        domain: 'default',
         source: { type: 'local', path: path.join(root, 'plugins', 'shared') },
       },
     ]);

@@ -140,3 +140,65 @@ describe('historical log metrics source', () => {
     expect(source.lastTransport()).toBeUndefined();
   });
 });
+
+describe('narrowing one query to a single group', () => {
+  it('sends each filter the sink names on the query string', async () => {
+    resolveLogSinkPort.mockResolvedValue({ endpoint: 'http://127.0.0.1:4318' });
+    const fetchMock = vi.fn(async (_input: unknown) => new Response(JSON.stringify(REPORT), { status: 200 }));
+    const source = createMetricsSource({
+      ...IDENTITY,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await source.query({
+      ...QUERY,
+      filter: { model: 'claude-opus-5', provider: 'anthropic', sessionId: 'id_abc', agentName: 'reviewer' },
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.searchParams.get('model')).toBe('claude-opus-5');
+    expect(url.searchParams.get('provider')).toBe('anthropic');
+    expect(url.searchParams.get('sessionId')).toBe('id_abc');
+    expect(url.searchParams.get('agentName')).toBe('reviewer');
+  });
+
+  it('omits an empty filter value rather than narrowing to nothing', async () => {
+    resolveLogSinkPort.mockResolvedValue({ endpoint: 'http://127.0.0.1:4318' });
+    const fetchMock = vi.fn(async (_input: unknown) => new Response(JSON.stringify(REPORT), { status: 200 }));
+    const source = createMetricsSource({ ...IDENTITY, fetchImpl: fetchMock as unknown as typeof fetch });
+
+    await source.query({ ...QUERY, filter: { model: '' } });
+
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.has('model')).toBe(false);
+  });
+
+  it('sends the same filters as flags when it falls back to the CLI', async () => {
+    // The two transports must narrow identically, or a daemon that is merely
+    // unreachable would silently widen the reader's query.
+    resolveLogSinkPort.mockResolvedValue(undefined);
+    execFile.mockImplementation((_bin: string, _args: string[], _options: unknown, done: Function) => {
+      done(null, JSON.stringify(REPORT), '');
+    });
+    const source = createMetricsSource({ ...IDENTITY });
+
+    await source.query({ ...QUERY, filter: { model: 'claude-opus-5', sessionId: 'id_abc' } });
+
+    const args = execFile.mock.calls[0]?.[1] as string[];
+    expect(args).toContain('--model');
+    expect(args[args.indexOf('--model') + 1]).toBe('claude-opus-5');
+    expect(args).toContain('--session-id');
+    expect(args[args.indexOf('--session-id') + 1]).toBe('id_abc');
+  });
+
+  it('passes no filter flags when the caller narrowed nothing', async () => {
+    resolveLogSinkPort.mockResolvedValue(undefined);
+    execFile.mockImplementation((_bin: string, _args: string[], _options: unknown, done: Function) => {
+      done(null, JSON.stringify(REPORT), '');
+    });
+
+    await createMetricsSource({ ...IDENTITY }).query(QUERY);
+
+    const args = execFile.mock.calls[0]?.[1] as string[];
+    expect(args.some((arg) => arg.startsWith('--model') || arg.startsWith('--session-id'))).toBe(false);
+  });
+});

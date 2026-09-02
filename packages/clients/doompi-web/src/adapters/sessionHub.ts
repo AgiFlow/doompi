@@ -22,6 +22,7 @@ import {
   HISTORY_PAGE_SIZE,
   HISTORY_PAGE_TYPE,
   type HistoryPageFrame,
+  CONTEXT_ENTRY_TYPE,
   MINOR_MODE_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
   type SessionBacklogFrame,
@@ -212,19 +213,26 @@ function renderableJournalEntries(frame: SessionFrame, limit: number): Record<st
   if (!Array.isArray(entries)) return [];
 
   const messages: Record<string, unknown>[] = [];
-  let minorModes: Record<string, unknown> | undefined;
+  // Both are projections rather than events, so only the last one matters and
+  // replaying every copy would grow the backlog for no added meaning.
+  const projections = new Map<string, Record<string, unknown>>();
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
     const candidate = entry as Record<string, unknown>;
     if (candidate.type === 'message') messages.push(candidate);
-    else if (candidate.type === 'custom' && candidate.customType === MINOR_MODE_ENTRY_TYPE) minorModes = candidate;
+    else if (
+      candidate.type === 'custom' &&
+      (candidate.customType === MINOR_MODE_ENTRY_TYPE || candidate.customType === CONTEXT_ENTRY_TYPE)
+    ) {
+      projections.set(String(candidate.customType), candidate);
+    }
   }
 
   // The ring is bounded and live frames must still fit, so only the tail of a
   // long transcript is published on attach; the rest is retained for the page
   // to page back through rather than dropped on the floor.
   const kept = messages.length > limit ? messages.slice(-limit) : messages;
-  return minorModes === undefined ? kept : [...kept, minorModes];
+  return projections.size === 0 ? kept : [...kept, ...projections.values()];
 }
 
 /**
@@ -259,7 +267,9 @@ function journalMessages(frame: SessionFrame): Record<string, unknown>[] {
  * re-reading it only replaces a projection, so a refresh cannot double it.
  */
 function isUnreportedEntry(entry: Record<string, unknown>): boolean {
-  if (entry.type === 'custom') return entry.customType === MINOR_MODE_ENTRY_TYPE;
+  if (entry.type === 'custom') {
+    return entry.customType === MINOR_MODE_ENTRY_TYPE || entry.customType === CONTEXT_ENTRY_TYPE;
+  }
   const message = entry.message;
   if (typeof message !== 'object' || message === null) return false;
   return (message as { role?: unknown }).role === 'user';

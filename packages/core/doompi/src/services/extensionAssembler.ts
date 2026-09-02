@@ -3,6 +3,8 @@ import {
   type LayerResolvers,
   type MajorModesConfig,
 } from '@agimon-ai/doompi-config/majorModes';
+import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
+import { extensionPackageName } from '@agimon-ai/doompi-ui/extensionName';
 import {
   consumerPackageEntries,
   consumerPackageEntry,
@@ -91,6 +93,38 @@ export interface ExtensionComposition {
   readonly fingerprint: string;
 }
 
+/**
+ * Which layer of which major mode admitted each package.
+ *
+ * The composition already holds this join while it resolves package names to
+ * entry paths, then drops it, so a session cannot afterwards say why a tool is
+ * present. Reducing it here keeps the selection type private and costs one pass
+ * over an array the caller already has.
+ *
+ * Only `package` entries appear. A bare `extension` selector is a path rather
+ * than a package name, so it has nothing a registered tool could be joined on.
+ *
+ * Keyed by manifest name first, because that is what a registered tool resolves
+ * to. The selector is kept as an alias: a layer may name a package as
+ * `@agimon-ai/doompi-team` when published or `./layers/team/doompi-team` in a
+ * checkout, and both have to find the same layer.
+ */
+export function packageAttribution(composition: ExtensionComposition): Record<string, PackageAttribution> {
+  const attribution: Record<string, PackageAttribution> = {};
+  const mode = composition.majorMode?.name;
+  if (mode === undefined) return attribution;
+  for (const selection of composition.selections) {
+    if (selection.entryKind !== 'package') continue;
+    if (selection.outcome !== 'resolved') continue;
+    // First layer wins, matching activation order: the earlier layer is the one
+    // whose copy of a duplicated package actually loaded.
+    const value: PackageAttribution = { kind: 'major', mode, layer: selection.layer };
+    const manifest = selection.path === undefined ? undefined : extensionPackageName(selection.path);
+    if (manifest !== undefined && attribution[manifest] === undefined) attribution[manifest] = value;
+    if (attribution[selection.selector] === undefined) attribution[selection.selector] = value;
+  }
+  return attribution;
+}
 export const COMPOSITION_FINGERPRINT_VERSION = 4;
 export const STANDARD_PI_EXTENSION_CONTRACT_VERSION = 2;
 

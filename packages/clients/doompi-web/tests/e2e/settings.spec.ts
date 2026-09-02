@@ -178,3 +178,33 @@ test.describe('with the synced bundle', () => {
     await expect(page.getByTestId('settings-plugin-diagnostics-empty')).toBeVisible();
   });
 });
+
+// The metrics page is contributed by doompi-log, so it exists only in the
+// synced-style bundle the Playwright global setup composes from every
+// workspace plugin. The package's own dist ships the shell with an empty
+// plugin registry.
+test.describe('with the synced bundle, which carries the doompi-log metrics page', () => {
+  test.use({ assets: 'synced' });
+
+  test('opens the metrics page and settles on a state it can name', async ({ page, cockpit }) => {
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+
+    await page.getByTestId('settings-open').click();
+    await page.getByTestId('settings-section-metrics').click();
+    await expect(page).toHaveURL(/\/settings\/metrics$/);
+
+    // The page is drawn by the package rather than rendered from declared
+    // fields, so reaching it exercises the whole settings-panel contribution.
+    await expect(page.getByTestId('settings-panel-metrics')).toBeVisible();
+    await expect(page.getByTestId('metrics-panel')).toBeVisible();
+
+    // Whether a log sink runs is a property of the machine, not of the
+    // cockpit, so this asserts the page reaches a state it can explain rather
+    // than pinning one of them. An unexplained error is the actual failure.
+    await expect(page.getByTestId('metrics-empty').or(page.getByTestId('metrics-group-bars'))).toBeVisible({
+      timeout: FIRST_READ_MS,
+    });
+    await expect(page.getByTestId('metrics-error')).toHaveCount(0);
+  });
+});

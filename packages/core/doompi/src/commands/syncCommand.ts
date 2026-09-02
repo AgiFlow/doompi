@@ -9,7 +9,12 @@ import { buildHarnessContext } from '../adapters/harnessContext.ts';
 import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../adapters/layerPackageInstaller.ts';
 import { readBootstrapStatus } from '../adapters/bootstrapLocator.ts';
 import { DOOM_PACKAGE_NAME } from '../adapters/doomPackage.ts';
-import { doomPiPackageRoot, piExtensionAliasIsCurrent } from '../adapters/piExtensionAlias.ts';
+import { doomPiPackageRoot, piExtensionAliasIsCurrent, writePiExtensionAlias } from '../adapters/piExtensionAlias.ts';
+import {
+  PI_DISPATCHER_VERSION,
+  piExtensionDispatcherIsUpgradeable,
+  piExtensionDispatcherVersion,
+} from '../adapters/piExtensionDispatcher.ts';
 import {
   mergePiSettings,
   piAgentDirectory,
@@ -202,6 +207,23 @@ export function selectionCompositionFingerprint(
   }).fingerprint;
 }
 
+/** Settings, dispatcher and theme differences an init would fix, independent of sync state. */
+function piIntegrationDrift(agentDirectory: string): string[] {
+  const drift: string[] = [];
+  const themePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
+  const settings = readPiSettings(agentDirectory);
+  const merged = mergePiSettings(settings, agentDirectory, { themePath, themeName: DEFAULT_THEME_NAME });
+  if (serializePiSettings(merged) !== serializePiSettings(settings)) {
+    drift.push('Pi user settings are out of date; run doompi init');
+  }
+  if (!piExtensionAliasIsCurrent(agentDirectory)) drift.push('Pi user dispatcher is out of date; run doompi init');
+  const expectedTheme = `${JSON.stringify(DEFAULT_THEME, null, 2)}\n`;
+  if (!fs.existsSync(themePath) || fs.readFileSync(themePath, 'utf8') !== expectedTheme) {
+    drift.push('Pi user theme is out of date; run doompi init');
+  }
+  return drift;
+}
+
 /** Differences between what a sync would produce and what is on disk. */
 export function collectDrift(
   repoRoot: string,
@@ -254,17 +276,8 @@ export function collectDrift(
   if (settingsMode === 'persisted') {
     const agentDirectory = piAgentDirectory(environment);
     const themePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
-    const settings = readPiSettings(agentDirectory);
-    const merged = mergePiSettings(settings, agentDirectory, { themePath, themeName: DEFAULT_THEME_NAME });
-    if (serializePiSettings(merged) !== serializePiSettings(settings)) {
-      drift.push('Pi user settings are out of date; run doompi init');
-    }
+    drift.push(...piIntegrationDrift(agentDirectory));
     if (projectRegistersDoom(repoRoot)) drift.push(DUPLICATE_REGISTRATION_DRIFT);
-    if (!piExtensionAliasIsCurrent(agentDirectory)) drift.push('Pi user dispatcher is out of date; run doompi init');
-    const expectedTheme = `${JSON.stringify(DEFAULT_THEME, null, 2)}\n`;
-    if (!fs.existsSync(themePath) || fs.readFileSync(themePath, 'utf8') !== expectedTheme) {
-      drift.push('Pi user theme is out of date; run doompi init');
-    }
     if (state.baseline.themePath !== themePath || state.baseline.themeName !== DEFAULT_THEME_NAME) {
       drift.push('synced theme location is out of date');
     }
@@ -431,20 +444,16 @@ export class SyncCommand {
     const selection = toSelection(parsed.options);
     const agentDirectory = piAgentDirectory(environment, homeDirectory);
     if (this.settingsMode === 'persisted' && !check) {
-      const themePath = path.join(piThemeDirectory(agentDirectory), `${DEFAULT_THEME_NAME}.json`);
-      const settings = readPiSettings(agentDirectory);
-      const expectedSettings = mergePiSettings(settings, agentDirectory, {
-        themePath,
-        themeName: DEFAULT_THEME_NAME,
-      });
-      const expectedTheme = `${JSON.stringify(DEFAULT_THEME, null, 2)}\n`;
-      const ready =
-        piExtensionAliasIsCurrent(agentDirectory) &&
-        serializePiSettings(expectedSettings) === serializePiSettings(settings) &&
-        fs.existsSync(themePath) &&
-        fs.readFileSync(themePath, 'utf8') === expectedTheme;
-      if (!ready) {
-        throw new Error('DoomPi Pi integration is not initialized. Run doompi init before doompi sync.');
+      if (piExtensionDispatcherIsUpgradeable(agentDirectory)) {
+        const previousVersion = piExtensionDispatcherVersion(agentDirectory);
+        writePiExtensionAlias(agentDirectory);
+        output.write(
+          `repair:   upgraded Pi user dispatcher from protocol ${String(previousVersion)} to ${String(PI_DISPATCHER_VERSION)}\n`,
+        );
+      }
+      const drift = piIntegrationDrift(agentDirectory);
+      if (drift.length > 0) {
+        throw new Error(`DoomPi Pi integration is not ready:\n${drift.map((entry) => `  ${entry}`).join('\n')}`);
       }
     }
     if (check) {

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/adapters/piExtensionAlias';
+import { PI_DISPATCHER_VERSION } from '../../src/adapters/piExtensionDispatcher';
 import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/adapters/projectPiSettings';
 import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
 import {
@@ -566,6 +567,45 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(fs.existsSync(piExtensionAliasPath(path.join(root, '.pi')))).toBe(false);
   });
 
+  it('self-heals a stale but upgradeable Pi dispatcher and reports the repair', async () => {
+    const root = makeRepository();
+    const dispatcherPath = piExtensionAliasPath(agentDirectory(root));
+    fs.writeFileSync(
+      path.join(dispatcherPath, 'package.json'),
+      `${JSON.stringify({ name: '@agimon-ai/doompi', doompiDispatcher: 1 })}\n`,
+    );
+
+    const { output, text } = capture();
+    const code = await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
+
+    expect(code).toBe(0);
+    expect(text()).toContain('repair:   upgraded Pi user dispatcher from protocol 1 to 2');
+    const manifest = JSON.parse(fs.readFileSync(path.join(dispatcherPath, 'package.json'), 'utf8')) as {
+      doompiDispatcher?: unknown;
+    };
+    expect(manifest.doompiDispatcher).toBe(PI_DISPATCHER_VERSION);
+  });
+
+  it('refuses to repair an unmanaged dispatcher path and names the real condition', async () => {
+    const root = makeRepository();
+    const dispatcherPath = piExtensionAliasPath(agentDirectory(root));
+    fs.rmSync(dispatcherPath, { recursive: true, force: true });
+    fs.mkdirSync(dispatcherPath, { recursive: true });
+
+    await expect(new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output)).rejects.toThrow(
+      'Pi user dispatcher is out of date; run doompi init',
+    );
+    expect(fs.existsSync(path.join(dispatcherPath, 'package.json'))).toBe(false);
+  });
+
+  it('names stale user settings instead of claiming the integration is uninitialized', async () => {
+    const root = makeRepository();
+    fs.writeFileSync(path.join(agentDirectory(root), 'settings.json'), '{"extensions":[]}\n');
+
+    await expect(new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output)).rejects.toThrow(
+      'Pi user settings are out of date; run doompi init',
+    );
+  });
   it('drops a project registration key that empties out and leaves the root marker in place', async () => {
     const root = makeRepository();
     const projectSettingsPath = path.join(root, '.pi', 'settings.json');

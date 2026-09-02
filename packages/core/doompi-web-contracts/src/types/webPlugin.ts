@@ -8,10 +8,10 @@ import type { ComponentType, ReactNode } from 'react';
  * declared client entry. The cockpit's bundler compiles that entry into the
  * host bundle, so a plugin's client code may import only react,
  * @tanstack/store, @tanstack/react-store, this contract,
- * @agimon-ai/doompi-web-components, and the package's own web/ and src/types
- * modules; never another plugin, a node builtin, or a server framework, which
- * modules; never another plugin, a node builtin, or a server framework, which
- * the host bundle would swallow. Page-wide state takes the shape
+ * @agimon-ai/doompi-web-components, @agimon-ai/doompi-web-security/browser,
+ * and the package's own web/ and src/types modules; never another plugin, a
+ * node builtin, or a server framework, which the host bundle would swallow.
+ * Page-wide state takes the shape
  * defineGlobalStore gives it; per-session state takes the shape defineSessionStore
  * gives it. Tailwind utility classes must appear as complete literal strings so
  * the host's class scanner can see them.
@@ -75,6 +75,16 @@ export interface FileLinkSource {
   fingerprint(sessionId: string | null): string;
   /** The tab this path opens, or undefined when the source does not recognise it. */
   resolve(sessionId: string | null, path: string): TransientTab | undefined;
+  /**
+   * The tab a path opens when the caller already knows it names a file, such
+   * as the path argument of a read, write or edit call.
+   *
+   * `resolve` guesses, so it claims only what it is sure of; a tool argument
+   * needs no guess, and a file the session has not changed is still a file the
+   * reader asked to see. A source that has nothing extra to offer omits this
+   * and the host falls back to `resolve`.
+   */
+  openPath?(sessionId: string | null, path: string): TransientTab | undefined;
 }
 /**
  * How a thread is drawn where it is not the whole surface: a card body wants
@@ -95,6 +105,13 @@ export interface WebPluginSlotProps {
   /** Opens the tab for the focused session, or focuses it when one with the same id is already open. */
   openTransientTab: (tab: TransientTab) => void;
   closeTransientTab: (tabId: string) => void;
+  /**
+   * The tab a file path opens, or undefined when no installed plugin can show
+   * it. A component that names a file it is certain about, such as a tool
+   * call's path argument, renders a link when this answers and plain text when
+   * it does not.
+   */
+  fileTabFor: (path: string) => TransientTab | undefined;
   /**
    * The host's live conversation view of one thread of the focused session,
    * rendered like the session's own timeline and subscribed while mounted. A
@@ -215,6 +232,42 @@ export interface SettingsSectionContribution {
   /** Sort position in the settings menu; lower first, id breaks ties. */
   order?: number;
   fields: readonly SettingsFieldContribution[];
+}
+
+/**
+ * Props for a settings page a package draws itself. The transport is the
+ * host's, because only the host knows whether the page is being read over a
+ * tunnel and what to seal.
+ */
+export interface SettingsPanelProps {
+  /** Same-origin request routed through the host's sealed transport when remote. */
+  request: (input: string, init?: RequestInit) => Promise<Response>;
+  /** The same transport, retrying once after the host's fresh passkey gesture. */
+  requestWithStepUp: (input: string, init?: RequestInit) => Promise<Response>;
+}
+
+/**
+ * A settings page a package draws itself, for a page that reports rather
+ * than writes.
+ *
+ * A contributed section is data because the host owns what a plugin cannot:
+ * which file an edit lands in. That reasoning runs out when a page has
+ * nothing to write. A page whose content is a chart, a table, or anything
+ * else the host cannot know the shape of has no keyPath to declare and no
+ * scope to switch, so declaring it as fields would mean inventing a field
+ * kind per picture. Such a page takes a component and the host's transport,
+ * exactly as a repository panel does, and gives up the scope switch and the
+ * write plumbing it would not use. A package that needs both contributes
+ * both, and the two appear in the menu as two pages.
+ */
+export interface SettingsPanelContribution {
+  /** The URL segment (/settings/:id) and testid suffix; unique across plugins. */
+  id: string;
+  label: string;
+  detail: string;
+  /** Sort position in the settings menu; lower first, id breaks ties. */
+  order?: number;
+  component: ComponentType<SettingsPanelProps>;
 }
 export interface SurfaceContribution {
   id: string;
@@ -539,6 +592,12 @@ export interface WebPluginDefinition {
    * owns the scope switch, the repository picker, and every write.
    */
   settingsSections?: SettingsSectionContribution[];
+  /**
+   * Pages this plugin draws itself in cockpit settings, for a page that
+   * reports rather than writes. The host owns the menu entry, the route, and
+   * the transport; the plugin owns everything inside the page.
+   */
+  settingsPanels?: SettingsPanelContribution[];
   /**
    * A package-owned management panel inside the host's repository page. The
    * host owns repository identity and passes only repositories it admitted.

@@ -1,5 +1,6 @@
 import type { SlotDataFill, SlotDeclaration, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { createElement, type ReactNode } from 'react';
+import { fileTabForPath } from './composition.ts';
 import { slotFills } from './pluginRegistry.ts';
 import { renderThread } from './threadRenderer.ts';
 import { sendFrame } from './transport.ts';
@@ -27,6 +28,9 @@ export function pluginSlotProps(
     openTab,
     openTransientTab: tabs.open,
     closeTransientTab: tabs.close,
+    // Asked per render rather than bound to a snapshot: which plugin claims a
+    // path is a property of what is installed, and the answer is cheap.
+    fileTabFor: (path) => fileTabForPath(sessionId, path),
     appendComposerDraft,
     sendSessionFrame: sendFrame,
     statuses,

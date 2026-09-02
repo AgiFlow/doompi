@@ -1,5 +1,11 @@
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
-import { DIALOG_ANSWERED_TYPE, MINOR_MODE_ENTRY_TYPE, type MinorModeProjection } from '../../types/hub.ts';
+import {
+  CONTEXT_ENTRY_TYPE,
+  type ContextProjection,
+  DIALOG_ANSWERED_TYPE,
+  MINOR_MODE_ENTRY_TYPE,
+  type MinorModeProjection,
+} from '../../types/hub.ts';
 import { BUILTIN_COMMANDS } from './commands.ts';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
@@ -138,6 +144,8 @@ export interface SessionState {
   editorTextRequest: EditorTextRequest | null;
   /** The runtime's minor-mode catalog as last journaled, or null before it reports. */
   minorModes: MinorModeProjection | null;
+  /** What the session is composed of, as last journaled, or null before it reports. */
+  context: ContextProjection | null;
   /** Tool calls seen since the current run began, reported when it settles. */
   toolsThisRun: number;
   /**
@@ -185,6 +193,7 @@ export const initialSessionState: SessionState = {
   dialog: null,
   editorTextRequest: null,
   minorModes: null,
+  context: null,
   toolsThisRun: 0,
   restoredIds: [],
   pendingUserEntries: [],
@@ -771,6 +780,11 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
         const data = isRecord(entry.data) ? entry.data : undefined;
         if (!data || !Array.isArray(data.modes)) return state;
         return { ...state, minorModes: data as unknown as MinorModeProjection };
+      }
+      if (entry.type === 'custom' && entry.customType === CONTEXT_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        if (!data || !Array.isArray(data.groups)) return state;
+        return { ...state, context: data as unknown as ContextProjection };
       }
       // A journalled user message is a transcript entry the protocol already
       // publishes; the catalog above is DoomPi's own and always applies.

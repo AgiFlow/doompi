@@ -185,6 +185,34 @@ describe('TimelineStore', () => {
     expect(await store.list()).toHaveLength(12);
   });
 
+  it('breaks a lock an earlier process died holding, instead of failing forever', async () => {
+    // A killed writer never unlinks its lock. Before this, the orphan file made
+    // every later append to that timeline throw for the life of the machine.
+    const lockPath = path.join(directory, 'timeline.jsonl.lock');
+    fs.writeFileSync(lockPath, '');
+    const stale = new Date(Date.now() - 60_000);
+    fs.utimesSync(lockPath, stale, stale);
+    await store.append(event({ path: '/a.ts', tool: 'edit', at: 10 }));
+    expect((await store.list()).map((entry) => entry.path)).toEqual(['/a.ts']);
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it('waits on a lock a live writer still holds, and appends once it is released', async () => {
+    const lockPath = path.join(directory, 'timeline.jsonl.lock');
+    fs.writeFileSync(lockPath, '');
+    let done = false;
+    const append = store.append(event({ path: '/a.ts', tool: 'edit', at: 10 })).then(() => {
+      done = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    // The lock was written just now, so it is a holder that may still be working.
+    expect(done).toBe(false);
+    expect(fs.existsSync(lockPath)).toBe(true);
+    fs.unlinkSync(lockPath);
+    await append;
+    expect((await store.list()).map((entry) => entry.path)).toEqual(['/a.ts']);
+  });
+
   it('refuses to work before it has been told which file it owns', async () => {
     const uninitialized = new TimelineStore();
     await expect(uninitialized.list()).rejects.toThrow('not initialized');

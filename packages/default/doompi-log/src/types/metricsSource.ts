@@ -1,9 +1,28 @@
 import type { LogMetricsGroupBy, LogMetricsPeriod, LogMetricsReport } from '@agimon-ai/log-sink-mcp';
 
+/**
+ * Narrowing one query to a single group, for a reader who clicked a row.
+ *
+ * Every field is optional and callers that pass none behave exactly as before,
+ * which is what keeps the TUI overlay unaffected. The sink echoes the filters
+ * it actually applied back on the report, so a caller can tell an honoured
+ * filter from one an older daemon ignored rather than presenting unfiltered
+ * numbers as filtered ones.
+ */
+export interface MetricsFilter {
+  sessionId?: string;
+  agentName?: string;
+  model?: string;
+  provider?: string;
+}
+
 export interface MetricsQueryParams {
   groupBy: LogMetricsGroupBy;
   period: LogMetricsPeriod;
   limit: number;
+  /** How many tool rows to rank; defaults to the overlay's one. */
+  toolLimit?: number;
+  filter?: MetricsFilter;
 }
 
 export type MetricsQuery = (params: MetricsQueryParams) => Promise<LogMetricsReport>;
