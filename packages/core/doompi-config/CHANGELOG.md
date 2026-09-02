@@ -1,3 +1,18 @@
+## 0.0.1-alpha.48 (2026-09-02)
+
+### 🚀 Features
+
+- **root:** share ansi/syntax text components and add context dock ([552f30d](https://github.com/AgiFlow/doompi/commit/552f30d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.48
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.47 (2026-09-01)
 
 ### 🩹 Fixes

@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-domain",
-  "version": "0.0.1-alpha.26",
+  "version": "0.0.1-alpha.27",
   "description": "Domain selection, resource staging, and MCP scoping for DoomPi sessions.",
   "keywords": [
     "ai",

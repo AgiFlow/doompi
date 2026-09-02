@@ -1,3 +1,34 @@
+## 0.0.1-alpha.49 (2026-09-02)
+
+### 🚀 Features
+
+- **root:** add the log issues panel, tool cost, and context projection ([ffdf232](https://github.com/AgiFlow/doompi/commit/ffdf232))
+- **root:** share ansi/syntax text components and add context dock ([552f30d](https://github.com/AgiFlow/doompi/commit/552f30d))
+
+### 🩹 Fixes
+
+- **root:** build log hub API and refresh baseline ([f3966a3](https://github.com/AgiFlow/doompi/commit/f3966a3))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.49
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.48 (2026-09-01)
 
 ### 🩹 Fixes

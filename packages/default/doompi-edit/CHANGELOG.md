@@ -1,3 +1,22 @@
+## 0.0.1-alpha.21 (2026-09-02)
+
+### 🚀 Features
+
+- **root:** add the log issues panel, tool cost, and context projection ([ffdf232](https://github.com/AgiFlow/doompi/commit/ffdf232))
+- **root:** share ansi/syntax text components and add context dock ([552f30d](https://github.com/AgiFlow/doompi/commit/552f30d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.20
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.9
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.12
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.20 (2026-09-01)
 
 ### 🧱 Updated Dependencies
