@@ -25,22 +25,23 @@
   "main": "./dist/bin/main.cjs",
   "scripts": {
     "build": "tsdown",
-    "build:hub": "node scripts/stageHub.mjs",
-    "package": "pnpm run build && pnpm run build:hub && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
-    "start": "pnpm run build && pnpm run build:hub && electron dist/bin/main.cjs",
+    "build:runtime": "vite build --config vite.runtime.config.ts",
+    "package": "pnpm run build && pnpm run build:runtime && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
+    "start": "pnpm run build && pnpm run build:runtime && electron dist/bin/main.cjs",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
-  "dependencies": {
-    "@agimon-ai/doompi-web": "workspace:*"
-  },
   "devDependencies": {
+    "@agimon-ai/doompi": "workspace:*",
+    "@agimon-ai/doompi-server": "workspace:*",
+    "@agimon-ai/doompi-web": "workspace:*",
     "@types/node": "26.4.0",
     "electron": "44.0.0",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
+    "vite": "8.2.2",
     "vitest": "4.1.11"
   },
   "engines": {

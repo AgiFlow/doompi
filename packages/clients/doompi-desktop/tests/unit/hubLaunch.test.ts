@@ -12,26 +12,42 @@ import {
 describe('locating the staged cockpit', () => {
   it('reads from the resources directory once packaged', () => {
     const entry = hubEntry({ resourcesPath: '/Apps/DoomPi.app/Contents/Resources', packaged: true, projectRoot: '/x' });
-    // pnpm deploy writes the package at the root of its target, so the entry is
-    // hub/dist, not hub/node_modules/@agimon-ai/doompi-web/dist.
     expect(entry).toBe(
-      path.join('/Apps/DoomPi.app/Contents/Resources', 'app.asar.unpacked', 'build', 'hub', 'dist', 'bin', 'serve.mjs'),
+      path.join('/Apps/DoomPi.app/Contents/Resources', 'runtime', 'doompi-web', 'dist', 'bin', 'serve.mjs'),
     );
   });
 
   it('reads from the local build directory when running unpackaged', () => {
     const entry = hubEntry({ resourcesPath: '/ignored', packaged: false, projectRoot: '/repo/pkg' });
-    expect(entry.startsWith(path.join('/repo/pkg', 'build', 'hub'))).toBe(true);
+    expect(entry.startsWith(path.join('/repo/pkg', 'build', 'runtime'))).toBe(true);
   });
 });
 
 describe('the runtime handed to the cockpit', () => {
   it('turns this binary into Node for every descendant', () => {
-    expect(hubEnvironment({ PATH: '/usr/bin' }).ELECTRON_RUN_AS_NODE).toBe('1');
+    expect(hubEnvironment({ PATH: '/usr/bin' }, '/runtime/doompi-web/dist/bin/serve.mjs').ELECTRON_RUN_AS_NODE).toBe(
+      '1',
+    );
   });
 
   it('keeps the inherited environment, which is how the agent is configured', () => {
-    expect(hubEnvironment({ ANTHROPIC_API_KEY: 'secret' }).ANTHROPIC_API_KEY).toBe('secret');
+    expect(
+      hubEnvironment({ ANTHROPIC_API_KEY: 'secret' }, '/runtime/doompi-web/dist/bin/serve.mjs').ANTHROPIC_API_KEY,
+    ).toBe('secret');
+  });
+
+  it('points dynamic commands and native tools at the runtime artifact', () => {
+    const environment = hubEnvironment({}, '/runtime/doompi-web/dist/bin/serve.mjs');
+    expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi-server', 'dist', 'bin', 'serve.mjs'));
+    expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'cli.mjs'));
+    expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi', 'dist', 'src'));
+    expect(environment.DOOMPI_WEB_MODULE).toBe('file:///runtime/doompi-web/dist/index.mjs');
+    expect(environment.DOOMPI_WEB_DIST).toBeUndefined();
+    expect(environment.DOOMPI_WEB_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi-web'));
+    expect(environment.DOOMPI_VITE_PACKAGE_ROOT).toBe(path.join('/runtime', 'vendor', 'vite'));
+    expect(environment.NODE_PATH).toBe(path.join('/runtime', 'native', 'node_modules'));
+    expect(environment.DOOMPI_RMUX_BINARY).toBe(path.join('/runtime', 'native', 'rmux', 'bin', 'rmux'));
+    expect(environment.DOOMPI_RTK_BINARY).toBe(path.join('/runtime', 'native', 'rtk', 'bin', 'rtk'));
   });
 });
 

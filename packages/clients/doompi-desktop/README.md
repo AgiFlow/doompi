@@ -31,28 +31,31 @@ its transport, and the service worker would not register. `http://127.0.0.1` is
 a trustworthy origin to Chromium, so everything keeps working unchanged, and the
 same bundle is still served to a remote paired browser.
 
-**The cockpit payload is not inside the asar.** A plugin composition runs a real
-Vite build, which execs the `esbuild` binary, and an executable cannot be run
-from inside an archive. The payload is staged by `pnpm deploy` and shipped as
-`extraResources`, which also gives the notary signable Mach-O files.
+**The runtime is a build artifact, not a deployed package tree.** Vite bundles
+the cockpit, server, agent, and workspace JavaScript into `build/runtime`. Its
+runtime plugin copies the built web assets, RMUX and RTK payloads, platform-native
+addons, and the scoped browser package graph needed to compose user plugins. It
+never walks or ships the general workspace `node_modules` tree.
 
 ## Layout
 
-| Path                          | Purpose                                              |
-| ----------------------------- | ---------------------------------------------------- |
-| `src/bin/main.ts`             | Electron entry: lifecycle, single-instance lock, IPC |
-| `src/bin/preload.ts`          | The whole renderer bridge, deliberately two members  |
-| `src/adapters/hubProcess.ts`  | Starts, health-checks and stops the cockpit          |
-| `src/adapters/mainWindow.ts`  | Window creation and navigation confinement           |
-| `src/services/hubLaunch.ts`   | Pure path, environment and socket-budget logic       |
-| `scripts/stageHub.mjs`        | `pnpm deploy` of the cockpit into `build/hub`        |
-| `scripts/signHubBinaries.cjs` | Signs payload binaries before the bundle is signed   |
+| Path                              | Purpose                                              |
+| --------------------------------- | ---------------------------------------------------- |
+| `src/bin/main.ts`                 | Electron entry: lifecycle, single-instance lock, IPC |
+| `src/bin/preload.ts`              | The whole renderer bridge, deliberately two members  |
+| `src/adapters/hubProcess.ts`      | Starts, health-checks and stops the cockpit          |
+| `src/adapters/mainWindow.ts`      | Window creation and navigation confinement           |
+| `src/services/hubLaunch.ts`       | Pure path, environment and socket-budget logic       |
+| `vite.runtime.config.ts`          | Bundles the child-process runtime artifact           |
+| `scripts/desktopRuntimePlugin.ts` | Copies composition assets and native payloads        |
+| `scripts/signHubBinaries.cjs`     | Signs native binaries before the app is signed       |
 
 ## Commands
 
 ```bash
 pnpm nx run @agimon-ai/doompi-desktop:build     # compile main and preload
-pnpm --filter @agimon-ai/doompi-desktop start   # build, stage, run locally
+pnpm --filter @agimon-ai/doompi-desktop build:runtime # bundle the child runtime
+pnpm --filter @agimon-ai/doompi-desktop start   # build the artifact and run locally
 pnpm nx run @agimon-ai/doompi-desktop:package   # produce installers
 pnpm --filter @agimon-ai/doompi-desktop test
 ```

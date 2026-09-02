@@ -4,6 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const AGENT_COMMAND_ENV = 'DOOMPI_AGENT_COMMAND';
+const SERVER_COMMAND_ENV = 'DOOMPI_SERVER_COMMAND';
 const WEB_MODULE_ENV = 'DOOMPI_WEB_MODULE';
 const REPOSITORY_CLI = ['node_modules', '@agimon-ai', 'doompi', 'dist', 'bin', 'cli.mjs'];
 
@@ -45,20 +46,26 @@ export function defaultServerLaunch(
   parentUrl: string = import.meta.url,
   exists: FileExists = fs.existsSync,
 ): BundledServerLaunch {
-  const server = packageFile('@agimon-ai/doompi-server', ['dist', 'bin', 'serve.mjs'], parentUrl);
-  const bundledAgent = packageFile('@agimon-ai/doompi', ['dist', 'bin', 'cli.mjs'], parentUrl);
-  const bundledWeb = packageFile('@agimon-ai/doompi-web', ['dist', 'index.mjs'], parentUrl);
+  const configuredServer = environment[SERVER_COMMAND_ENV];
+  const server = configuredServer || packageFile('@agimon-ai/doompi-server', ['dist', 'bin', 'serve.mjs'], parentUrl);
   const configuredAgent = environment[AGENT_COMMAND_ENV];
   const localAgent = repositoryDoomPiCli(cwd, exists);
   const agentEnvironment =
-    configuredAgent || localAgent ? { ...environment } : { ...environment, [AGENT_COMMAND_ENV]: bundledAgent };
-
+    configuredAgent || localAgent
+      ? { ...environment }
+      : {
+          ...environment,
+          [AGENT_COMMAND_ENV]: packageFile('@agimon-ai/doompi', ['dist', 'bin', 'cli.mjs'], parentUrl),
+        };
+  const webModule =
+    environment[WEB_MODULE_ENV] ||
+    pathToFileURL(packageFile('@agimon-ai/doompi-web', ['dist', 'index.mjs'], parentUrl)).href;
   return {
     command: process.execPath,
     args: [server],
     environment: {
       ...agentEnvironment,
-      [WEB_MODULE_ENV]: environment[WEB_MODULE_ENV] || pathToFileURL(bundledWeb).href,
+      [WEB_MODULE_ENV]: webModule,
     },
   };
 }

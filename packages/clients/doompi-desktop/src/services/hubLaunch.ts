@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /** The hub refuses a socket path longer than this; see doompi-web serverSpawner. */
 const SOCKET_BUDGET = 103;
@@ -12,33 +13,34 @@ const RESERVED_FOR_SESSION = 40;
 export const DEFAULT_PORT = 7433;
 export const LOOPBACK_HOST = '127.0.0.1';
 
-/**
- * Locates the cockpit payload staged next to the packaged app.
- *
- * The payload ships as `extraResources` rather than inside the asar because a
- * packaged Vite composition has to exec real binaries, and an executable cannot
- * be run from inside an archive.
- *
- * `pnpm deploy` writes the deployed package at the root of its target, with its
- * dependencies under `node_modules` beside it, so the entry sits directly at
- * `hub/dist`, not under `hub/node_modules/@agimon-ai/doompi-web`.
- */
+/** Locates the bundled cockpit entry in the desktop runtime artifact. */
 export function hubEntry(input: { resourcesPath: string; packaged: boolean; projectRoot: string }): string {
-  const root = input.packaged
-    ? path.join(input.resourcesPath, 'app.asar.unpacked', 'build')
-    : path.join(input.projectRoot, 'build');
-  return path.join(root, 'hub', 'dist', 'bin', 'serve.mjs');
+  const runtimeRoot = input.packaged
+    ? path.join(input.resourcesPath, 'runtime')
+    : path.join(input.projectRoot, 'build', 'runtime');
+  return path.join(runtimeRoot, 'doompi-web', 'dist', 'bin', 'serve.mjs');
 }
 
 /**
- * Runs the staged hub on this app's own binary.
- *
- * Electron is Node when asked to be, so the cockpit, the session server it
- * spawns, and the agent below that all inherit one runtime from this single
- * variable. Nothing downstream has to know it is running inside a desktop app.
+ * Runs every desktop child on Electron's Node runtime and points dynamic launch
+ * seams at files in the bundled artifact rather than an installed node_modules.
  */
-export function hubEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...base, ELECTRON_RUN_AS_NODE: '1' };
+export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.ProcessEnv {
+  const runtimeRoot = path.resolve(path.dirname(entry), '..', '..', '..');
+  const artifact = (...segments: string[]): string => path.join(runtimeRoot, ...segments);
+  return {
+    ...base,
+    ELECTRON_RUN_AS_NODE: '1',
+    NODE_PATH: artifact('native', 'node_modules'),
+    DOOMPI_SERVER_COMMAND: artifact('doompi-server', 'dist', 'bin', 'serve.mjs'),
+    DOOMPI_AGENT_COMMAND: artifact('doompi', 'dist', 'bin', 'cli.mjs'),
+    DOOMPI_PACKAGE_ROOT: artifact('doompi', 'dist', 'src'),
+    DOOMPI_WEB_MODULE: pathToFileURL(artifact('doompi-web', 'dist', 'index.mjs')).href,
+    DOOMPI_WEB_PACKAGE_ROOT: artifact('doompi-web'),
+    DOOMPI_VITE_PACKAGE_ROOT: artifact('vendor', 'vite'),
+    DOOMPI_RMUX_BINARY: artifact('native', 'rmux', 'bin', 'rmux'),
+    DOOMPI_RTK_BINARY: artifact('native', 'rtk', 'bin', 'rtk'),
+  };
 }
 
 /**

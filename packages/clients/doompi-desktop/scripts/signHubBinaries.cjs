@@ -1,12 +1,10 @@
 /**
- * Signs the Mach-O binaries inside the staged cockpit payload.
+ * Signs the Mach-O binaries inside the desktop runtime artifact.
  *
- * electron-builder signs the app bundle and anything it unpacks from the asar,
- * but `extraResources` is copied verbatim, so the native addons and the esbuild
- * executable in the payload would reach the notary unsigned and fail the whole
- * submission. Signing happens deepest-first and before the enclosing bundle is
- * signed, because signing an inner file afterwards invalidates the outer
- * signature.
+ * electron-builder signs the app bundle and unpacked files, but the staged
+ * native addons and executables still need explicit hardened-runtime signing
+ * before the enclosing bundle is signed. Signing happens deepest-first because
+ * signing an inner file afterwards would invalidate the outer signature.
  */
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -52,20 +50,20 @@ exports.default = async function signHubBinaries(context) {
     return;
   }
 
-  const hubDirectory = path.join(
+  const runtimeDirectory = path.join(
     context.appOutDir,
     `${context.packager.appInfo.productFilename}.app`,
     'Contents',
     'Resources',
-    'hub',
+    'runtime',
   );
-  if (!fs.existsSync(hubDirectory)) {
-    console.log(`[sign-hub] nothing staged at ${hubDirectory}`);
-    return;
+  if (!fs.existsSync(runtimeDirectory)) {
+    throw new Error(`The desktop runtime is missing at ${runtimeDirectory}`);
   }
 
   const entitlements = path.join(__dirname, '..', 'resources', 'entitlements.mac.plist');
-  const binaries = collect(hubDirectory).sort((left, right) => depth(right) - depth(left));
+  const binaries = collect(runtimeDirectory).sort((left, right) => depth(right) - depth(left));
+  if (binaries.length === 0) throw new Error(`The desktop runtime has no Mach-O binaries at ${runtimeDirectory}`);
 
   for (const binary of binaries) {
     const result = spawnSync(
@@ -76,5 +74,5 @@ exports.default = async function signHubBinaries(context) {
     if (result.status !== 0) throw new Error(`codesign failed for ${binary}`);
   }
 
-  console.log(`[sign-hub] signed ${String(binaries.length)} binaries in the staged cockpit`);
+  console.log(`[sign-hub] signed ${String(binaries.length)} binaries in the desktop runtime`);
 };

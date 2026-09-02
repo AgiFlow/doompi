@@ -1,5 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 import { hubArguments, hubEnvironment } from '../services/hubLaunch.ts';
 import type { HubLaunchPlan, RunningHub } from '../types/hub.ts';
 
@@ -59,6 +61,25 @@ async function waitForHealth(host: string, port: number, child: ChildProcess): P
   throw new Error(`The cockpit did not answer on ${healthUrl(host, port)} within ${String(HEALTH_TIMEOUT_MS)}ms.`);
 }
 
+/** Uses Electron's background helper as Node so child sessions never become Dock apps. */
+export function nodeRuntimeExecutable(
+  mainExecutable: string,
+  platform: NodeJS.Platform = process.platform,
+  exists: (candidate: string) => boolean = fs.existsSync,
+): string {
+  if (platform !== 'darwin') return mainExecutable;
+  const name = path.basename(mainExecutable);
+  const helper = path.resolve(
+    path.dirname(mainExecutable),
+    '..',
+    'Frameworks',
+    `${name} Helper.app`,
+    'Contents',
+    'MacOS',
+    `${name} Helper`,
+  );
+  return exists(helper) ? helper : mainExecutable;
+}
 /**
  * Starts the staged cockpit, or attaches to one that is already serving.
  *
@@ -77,9 +98,9 @@ export async function startHub(
     return { url, owned: false, stop: async () => {} };
   }
 
-  const child = spawn(process.execPath, hubArguments(plan), {
+  const child = spawn(nodeRuntimeExecutable(process.execPath), hubArguments(plan), {
     cwd: plan.cwd,
-    env: hubEnvironment(process.env),
+    env: hubEnvironment(process.env, plan.entry),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));

@@ -6,6 +6,7 @@ const MIN_HEIGHT = 600;
 const DEFAULT_WIDTH = 1440;
 const DEFAULT_HEIGHT = 900;
 const EXTERNAL_PROTOCOLS = new Set(['https:']);
+const MACOS_TITLEBAR_CSS = '[data-doompi-session-rail-header] { padding-top: 3.5rem !important; }';
 
 /**
  * Confines the window to the cockpit it was opened for.
@@ -46,6 +47,10 @@ export function createMainWindow(input: { hubUrl: string; preloadPath: string })
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.resolve(input.preloadPath),
+      // The cockpit bootstraps through a service worker. An in-memory partition
+      // gives each desktop launch the bundle shipped by that app version instead
+      // of reviving a worker cached by an older installation.
+      partition: 'doompi-desktop',
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -54,6 +59,9 @@ export function createMainWindow(input: { hubUrl: string; preloadPath: string })
   });
 
   confineNavigation(window, input.hubUrl);
+  if (process.platform === 'darwin') {
+    window.webContents.on('did-finish-load', () => void window.webContents.insertCSS(MACOS_TITLEBAR_CSS));
+  }
   window.once('ready-to-show', () => window.show());
   void window.loadURL(input.hubUrl);
   return window;

@@ -109,6 +109,8 @@ const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
 /** Env override for the assets directory, set by launchers that know a synced bundle. */
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
+/** Package-root override for bundled launchers whose chunks do not retain the npm layout. */
+const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
 /** Comma-separated origins the operator allows past the guard, for dev setups this package cannot guess. */
 const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 const RAW_BUNDLE_PREFIX = '/bundle-assets/';
@@ -211,6 +213,8 @@ function decodeSealedHttpBody(value: string | undefined): Buffer | undefined {
  * tree, whose depth is a build detail.
  */
 function packagedDirectory(name: 'web' | 'pwa'): string {
+  const configuredRoot = process.env[WEB_PACKAGE_ROOT_ENV];
+  if (configuredRoot !== undefined && configuredRoot !== '') return path.join(configuredRoot, 'dist', name);
   let dir = path.dirname(fileURLToPath(import.meta.url));
   for (;;) {
     if (fs.existsSync(path.join(dir, 'package.json'))) return path.join(dir, 'dist', name);
@@ -237,7 +241,11 @@ function packagedPwaDir(): string {
  * long-lived process signs its asset directory once and never revisits it.
  */
 export function packagedVersion(): string {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
+  const configuredRoot = process.env[WEB_PACKAGE_ROOT_ENV];
+  let dir =
+    configuredRoot !== undefined && configuredRoot !== ''
+      ? configuredRoot
+      : path.dirname(fileURLToPath(import.meta.url));
   for (;;) {
     const manifest = path.join(dir, 'package.json');
     if (fs.existsSync(manifest)) {
