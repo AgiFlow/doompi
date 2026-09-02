@@ -29,3 +29,7 @@ packages/default/doompi-runner-rmux-*/vendor/
 packages/default/doompi-runner-rtk-*/vendor/
 # The cockpit dev loop's generated plugin registry (packages/clients/doompi-web/vite.config.ts).
 packages/clients/doompi-web/.dev/
+# The desktop app's staged cockpit payload and packaged artifacts, produced by
+# `pnpm deploy` and electron-builder rather than stored here.
+packages/clients/doompi-desktop/build/
+packages/clients/doompi-desktop/release/

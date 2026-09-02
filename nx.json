@@ -74,6 +74,7 @@
           "@agimon-ai/doompi-notification",
           "@agimon-ai/doompi-plan",
           "@agimon-ai/doompi-profile",
+          "@agimon-ai/doompi-prompt",
           "@agimon-ai/doompi-read",
           "@agimon-ai/doompi-runner",
           "@agimon-ai/doompi-runner-rmux-darwin-arm64",

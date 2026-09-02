@@ -2,6 +2,7 @@ import { CheckIcon, RadioGroup, RadioGroupCard } from '@agimon-ai/doompi-web-com
 import type { ThemeConfig } from '@agimon-ai/doompi-web-components/theme';
 import { useStore } from '@tanstack/react-store';
 import { availableThemes, selectTheme, themeStore } from '../../stores/themeStore.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 /** The accents a swatch previews, in the order the bar shows them. */
 const SWATCH_ACCENTS = ['blue', 'green', 'yellow', 'red', 'magenta', 'cyan'] as const;
@@ -43,14 +44,11 @@ function ThemeSwatch({ theme }: { theme: ThemeConfig }) {
 export function AppearanceSettings() {
   const current = useStore(themeStore, (state) => state.name);
   return (
-    <div data-testid="appearance-settings" className="flex max-w-[780px] flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[13px] font-bold text-doom-hi">appearance</h2>
-        <p className="text-[11px] leading-relaxed text-doom-dim">
-          pick the theme the cockpit renders with. the choice is remembered in this browser; every colour on the page,
-          including the plugins&apos; tabs, follows it.
-        </p>
-      </div>
+    <div data-testid="appearance-settings" className="flex flex-col gap-4">
+      <SettingsSectionHeader
+        title="appearance"
+        detail="pick the theme the cockpit renders with. the choice is remembered in this browser; every colour on the page, including the plugins' tabs, follows it."
+      />
       <RadioGroup
         aria-label="theme"
         data-testid="theme-list"

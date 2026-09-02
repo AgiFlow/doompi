@@ -54,7 +54,7 @@ export const AUTOCOMPACT_SETTING_SHAPES: readonly AutocompactSettingShape[] = [
     label: 'enabled',
     keyPath: [...AUTOCOMPACT_PATH, 'enabled'],
     placeholder: 'on',
-    detail: 'Off leaves compaction to Pi. Unset is on.',
+    detail: 'off leaves compaction to Pi. unset is on.',
     options: AUTOCOMPACT_ENABLED_VALUES,
   },
   {
@@ -62,7 +62,7 @@ export const AUTOCOMPACT_SETTING_SHAPES: readonly AutocompactSettingShape[] = [
     label: 'summarization model',
     keyPath: [...AUTOCOMPACT_PATH, 'model'],
     placeholder: INHERIT_MODEL,
-    detail: 'Model that writes the checkpoint summaries.',
+    detail: 'model that writes the checkpoint summaries.',
     models: true,
   },
   {
@@ -70,7 +70,7 @@ export const AUTOCOMPACT_SETTING_SHAPES: readonly AutocompactSettingShape[] = [
     label: 'summarization thinking',
     keyPath: [...AUTOCOMPACT_PATH, 'thinking'],
     placeholder: INHERIT_THINKING,
-    detail: 'Thinking level appended to the summarization model.',
+    detail: 'thinking level appended to the summarization model.',
     options: AUTOCOMPACT_THINKING_LEVELS,
   },
   {
@@ -78,20 +78,20 @@ export const AUTOCOMPACT_SETTING_SHAPES: readonly AutocompactSettingShape[] = [
     label: 'pass 1 threshold',
     keyPath: [...AUTOCOMPACT_PATH, THRESHOLDS_KEY, 'pass1'],
     placeholder: String(COMPACTION_THRESHOLDS[1].ratio),
-    detail: 'Fraction of the remaining context window at which the first pass fires.',
+    detail: 'fraction of the remaining context window at which the first pass fires.',
   },
   {
     id: 'thresholds.pass2',
     label: 'pass 2 threshold',
     keyPath: [...AUTOCOMPACT_PATH, THRESHOLDS_KEY, 'pass2'],
     placeholder: String(COMPACTION_THRESHOLDS[2].ratio),
-    detail: 'Second pass. A value below pass 1 is raised back to it.',
+    detail: 'second pass. a value below pass 1 is raised back to it.',
   },
   {
     id: 'thresholds.pass3',
     label: 'pass 3 threshold',
     keyPath: [...AUTOCOMPACT_PATH, THRESHOLDS_KEY, 'pass3'],
     placeholder: String(COMPACTION_THRESHOLDS[3].ratio),
-    detail: 'Last pass before Pi compacts natively. A value below pass 2 is raised back to it.',
+    detail: 'last pass before Pi compacts natively. a value below pass 2 is raised back to it.',
   },
 ];

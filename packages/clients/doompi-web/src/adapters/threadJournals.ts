@@ -3,7 +3,14 @@ import path from 'node:path';
 import { journalFrames, retainNewest } from '../services/journalTail.ts';
 import type { SessionFrame } from '../types/session.ts';
 
-const DEFAULT_POLL_MS = 1000;
+/**
+ * The floor under how late a thread can be. fs.watch is the accelerator, so
+ * this only has to catch what the watch misses: a file not created yet, a
+ * rotated file, and platforms where the watch is unreliable.
+ */
+const DEFAULT_POLL_MS = 250;
+/** How long a watch event waits for its neighbours, so a burst of appends is one read. */
+const WATCH_DEBOUNCE_MS = 25;
 /** Journalled messages kept per thread, the same allowance an attach restores. */
 const DEFAULT_RETAIN_LIMIT = 300;
 /** How far back a first read goes into a long journal; older lines stay on disk. */
@@ -45,6 +52,10 @@ interface Tail {
   offset: number;
   retained: SessionFrame[];
   warned: boolean;
+  /** Set once the journal exists and fs.watch accepted it; the poll runs regardless. */
+  watcher: fs.FSWatcher | undefined;
+  /** Coalesces a burst of watch events into one read. */
+  debounce: NodeJS.Timeout | undefined;
 }
 
 function keyOf(sessionId: string, threadId: string): string {
@@ -130,13 +141,47 @@ export function createThreadJournals(options: ThreadJournalsOptions): ThreadJour
     return frames;
   };
 
-  const tick = (): void => {
-    for (const tail of tails.values()) {
-      const frames = advance(tail);
-      for (const frame of frames) {
-        for (const listener of listeners) listener({ sessionId: tail.sessionId, threadId: tail.threadId, frame });
-      }
+  /**
+   * Follows the journal file itself once it exists, so an appended message
+   * reaches the page in milliseconds instead of waiting out the poll. The
+   * poll stays the source of truth: a watch that never fires, or one lost to
+   * a rotated file, only costs the old latency.
+   */
+  const watchTail = (tail: Tail): void => {
+    if (tail.watcher !== undefined || tail.path === undefined) return;
+    try {
+      tail.watcher = fs.watch(tail.path, () => {
+        if (tail.debounce !== undefined) return;
+        tail.debounce = setTimeout(() => {
+          tail.debounce = undefined;
+          if (tails.has(keyOf(tail.sessionId, tail.threadId))) pump(tail);
+        }, WATCH_DEBOUNCE_MS);
+      });
+    } catch {
+      // Not written yet, or a filesystem without watches; the poll covers it.
     }
+  };
+
+  /** Reads one tail and hands whatever it gained to the listeners. */
+  const pump = (tail: Tail): void => {
+    const frames = advance(tail);
+    // A run names its journal only once the child's session starts, so the
+    // watch is attached on the first tick that finds the file, not only at
+    // subscribe time.
+    watchTail(tail);
+    for (const frame of frames) {
+      for (const listener of listeners) listener({ sessionId: tail.sessionId, threadId: tail.threadId, frame });
+    }
+  };
+
+  const tick = (): void => {
+    for (const tail of tails.values()) pump(tail);
+  };
+  const releaseTail = (tail: Tail): void => {
+    tail.watcher?.close();
+    tail.watcher = undefined;
+    if (tail.debounce !== undefined) clearTimeout(tail.debounce);
+    tail.debounce = undefined;
   };
 
   const syncTimer = (): void => {
@@ -152,9 +197,20 @@ export function createThreadJournals(options: ThreadJournalsOptions): ThreadJour
       const key = keyOf(sessionId, threadId);
       let tail = tails.get(key);
       if (tail === undefined) {
-        tail = { sessionId, threadId, refs: 0, path: undefined, offset: 0, retained: [], warned: false };
+        tail = {
+          sessionId,
+          threadId,
+          refs: 0,
+          path: undefined,
+          offset: 0,
+          retained: [],
+          warned: false,
+          watcher: undefined,
+          debounce: undefined,
+        };
         tails.set(key, tail);
         advance(tail);
+        watchTail(tail);
         syncTimer();
       }
       tail.refs += 1;
@@ -165,7 +221,10 @@ export function createThreadJournals(options: ThreadJournalsOptions): ThreadJour
       const tail = tails.get(key);
       if (tail === undefined) return;
       tail.refs -= 1;
-      if (tail.refs <= 0) tails.delete(key);
+      if (tail.refs <= 0) {
+        releaseTail(tail);
+        tails.delete(key);
+      }
       syncTimer();
     },
     onFrame(listener) {
@@ -177,6 +236,7 @@ export function createThreadJournals(options: ThreadJournalsOptions): ThreadJour
     close() {
       if (timer !== undefined) clearInterval(timer);
       timer = undefined;
+      for (const tail of tails.values()) releaseTail(tail);
       tails.clear();
       listeners.clear();
     },

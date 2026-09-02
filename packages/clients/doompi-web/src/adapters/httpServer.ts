@@ -88,10 +88,13 @@ import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 import {
+  BROWSER_ERROR_EVENT,
+  createBrowserError,
   createBrowserTelemetryRateLimit,
   createWebTelemetry,
   forwardedTraceContext,
-  parseBrowserPerformanceBatch,
+  isBrowserErrorEvent,
+  parseBrowserTelemetryBatch,
   readTraceContext,
   requestOperation,
   shutdownWebTelemetry,
@@ -114,6 +117,11 @@ const SEALED_HTTP_VERSION = 1;
 /** Upper bound for any body accepted from the tunnel before route-specific limits. */
 const TUNNEL_BODY_BYTES = 8 * 1024 * 1024;
 const TUNNEL_HEADER_BYTES = 16 * 1024;
+/**
+ * A full telemetry batch of ten failures, each with a bounded stack, still fits
+ * with room to spare. Anything larger is not a cockpit reporting itself.
+ */
+const BROWSER_TELEMETRY_BODY_BYTES = 32 * 1024;
 const TUNNEL_HEADERS_TIMEOUT_MS = 5000;
 const TUNNEL_REQUEST_TIMEOUT_MS = 10_000;
 const TUNNEL_CONNECTION_LIMIT = 64;
@@ -503,7 +511,17 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       stateDirectory: store.directory,
       onNotice: notice,
     });
-  const startupComposition = await resolveComposition();
+  // A repository whose web plugins cannot be bundled must not stop the hub
+  // from binding. Serving the packaged cockpit loses the plugins, which the
+  // notice says out loud, but a reachable hub can still be used to fix them;
+  // a hub that refused to start could not.
+  let startupComposition: Awaited<ReturnType<typeof resolveComposition>>;
+  try {
+    startupComposition = await resolveComposition();
+  } catch (error) {
+    notice(`the cockpit composition is unavailable (${describeError(error)}); serving the packaged bundle`);
+    startupComposition = undefined;
+  }
   let served = {
     assetsDir: resolveAssetsDir(options.assetsDir, startupComposition, notice),
     apiDirectory: startupComposition?.apiDirectory,
@@ -714,7 +732,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return await tunnelBodyLimit(context, next);
   });
   const browserTelemetryBodyLimit = bodyLimit({
-    maxSize: 8 * 1024,
+    maxSize: BROWSER_TELEMETRY_BODY_BYTES,
     onError: (context) => context.json({ error: 'The telemetry batch is too large.' }, 413),
   });
   const acceptBrowserTelemetryRequest = createBrowserTelemetryRateLimit();
@@ -726,9 +744,25 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     } catch {
       return context.json({ error: 'The telemetry batch must be JSON.' }, 400);
     }
-    const events = parseBrowserPerformanceBatch(body);
+    const events = parseBrowserTelemetryBatch(body);
     if (events === undefined) return context.json({ error: 'The telemetry batch is invalid.' }, 400);
     for (const event of events) {
+      if (isBrowserErrorEvent(event)) {
+        // The message and stack ride the exception, not the attributes:
+        // sanitisation drops those keys, and rightly so for everything that is
+        // not an error the reader asked to see.
+        await telemetry.recordError(
+          BROWSER_ERROR_EVENT,
+          createBrowserError(event),
+          {
+            'browser.source': event.source,
+            ...(event.session_id === undefined ? {} : { 'session.id': event.session_id }),
+            'failure.kind': 'browser',
+          },
+          { includeException: true },
+        );
+        continue;
+      }
       await telemetry.recordEvent(event.name, {
         ...(event.duration_ms === undefined ? {} : { duration_ms: event.duration_ms }),
         ...(event.count === undefined ? {} : { count: event.count }),

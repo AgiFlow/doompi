@@ -103,6 +103,31 @@ describe('threadJournals', () => {
     expect(ids(journals.subscribe('s1', 'late'))).toEqual(['n']);
   });
 
+  // The fs.watch accelerator has no test here on purpose: watch events do not
+  // fire inside this runner's sandbox, so a test of it would assert the
+  // sandbox rather than the tail. The poll below is what the tail guarantees.
+  it('keeps following after a subscriber leaves and returns', async () => {
+    const file = path.join(tempDir(), 'watched.jsonl');
+    fs.writeFileSync(file, lines(entry('m1', 'one')));
+    const journals = createThreadJournals({ resolve: () => file, pollMs: 20 });
+    cleanups.push(() => journals.close());
+    const seen: ThreadFrameEvent[] = [];
+    journals.onFrame((event) => seen.push(event));
+
+    expect(ids(journals.subscribe('s1', 'watched'))).toEqual(['m1']);
+    fs.appendFileSync(file, lines(entry('m2', 'two')));
+    await waitFor(() => seen.length === 1, 'the appended entry');
+
+    journals.unsubscribe('s1', 'watched');
+    fs.appendFileSync(file, lines(entry('m3', 'three')));
+    await sleep(80);
+    expect(seen).toHaveLength(1);
+
+    expect(ids(journals.subscribe('s1', 'watched'))).toEqual(['m1', 'm2', 'm3']);
+    fs.appendFileSync(file, lines(entry('m4', 'four')));
+    await waitFor(() => seen.length === 2, 'the entry after the return');
+    expect(ids([seen[1]!.frame])).toEqual(['m4']);
+  });
   it('cuts a first read of a long journal to its newest whole lines', () => {
     const file = path.join(tempDir(), 'long.jsonl');
     const tail = lines(entry('m4', 'four'), entry('m5', 'five'));

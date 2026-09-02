@@ -35,6 +35,7 @@ import { applyTaskMutation } from '../src/exports/store/reducer';
 import { TaskStore } from '../src/exports/store/taskStore';
 import type { Task } from '../src/exports/store/types';
 import { DEFAULT_PROMPT_GUIDELINES } from '../src/exports/tool/promptGuidelines';
+import { TaskParamsSchema } from '../src/schemas/task.ts';
 
 /** Minimal Team service mounted on a real Cordis root. */
 class FakeBus {
@@ -179,37 +180,39 @@ describe('prompt-led allocation guidance', () => {
   it('requires discovery, tracked fan-out, dependency follow-up, and explicit recovery', () => {
     const guidelines = DEFAULT_PROMPT_GUIDELINES.join('\n');
 
-    expect(guidelines).toContain('Before assigning work, call subagent with {"action":"agents"}');
-    expect(guidelines).toContain('match each task to an exact discovered agent name');
-    expect(guidelines).toContain('Prefer a discovered general-purpose write-capable agent such as delegate or worker');
-    expect(guidelines).toContain('Use a focused inlineAgent only for read-only work');
-    expect(guidelines).toContain("Apply the session's general delegation criteria before selecting tracked work");
-    expect(guidelines).toContain('Use assignments[] for every assign call, including one task');
-    expect(guidelines).toContain('assign has no top-level single-task form');
-    expect(guidelines).toContain('For two or more independent ready tasks selected for delegation');
+    expect(guidelines).toContain('call subagent {"action":"agents"}');
+    expect(guidelines).toContain('use an exact discovered name');
+    expect(guidelines).toContain('Prefer a general-purpose write-capable agent such as delegate or worker');
+    expect(guidelines).toContain('focused inlineAgent only for read-only work');
+    expect(guidelines).toContain('Apply the session delegation criteria before choosing what to delegate');
+    expect(guidelines).toContain('Assign through assignments[] even for a single task');
+    expect(guidelines).toContain('Put independent ready tasks in one batch');
     expect(guidelines).toContain('"assignments":[{"id":1,"agent":"researcher"}');
-    expect(guidelines).toContain('Do not wrap repeated task assign calls in multi_tool');
-    expect(guidelines).toContain(
-      'Do not use a direct subagent run for work already represented in the shared task list',
-    );
-    expect(guidelines).toContain('Successful entries are already running if another entry fails');
-    expect(guidelines).toContain('retry only failed entries');
-    expect(guidelines).toContain('reconsider that newly eligible task promptly');
-    expect(guidelines).toContain('repeat agent discovery before assigning it if needed');
-    expect(guidelines).toContain('If a child asks for a decision through intercom');
-    expect(guidelines).toContain('assignment fails to start for another concrete issue');
+    expect(guidelines).toContain('rather than repeated calls or multi_tool');
+    expect(guidelines).toContain('do not start a direct subagent run for work already on the task list');
+    expect(guidelines).toContain('Successful entries keep running when another entry fails');
+    expect(guidelines).toContain('retry only the failures');
+    expect(guidelines).toContain('reconsider it promptly');
+    expect(guidelines).toContain('If a child asks for a decision');
+    expect(guidelines).toContain('an assignment fails to start');
+  });
+
+  /** The single-entry form is a schema rule, so it is pinned where it is stated. */
+  it('states the assignments[] entry rule on the parameters, not in the guidelines', () => {
+    const parameters = JSON.stringify(TaskParamsSchema);
+
+    expect(parameters).toContain('Required for assign, one entry per task, including when there is only one');
+    expect(parameters).toContain('Not accepted by upsert or assign');
   });
 
   it('documents Task-specific context fields without repeating Team handoff policy', () => {
     const guidelines = DEFAULT_PROMPT_GUIDELINES.join('\n');
 
-    expect(guidelines).toContain('Populate relevantFiles only with files you actually read or located');
+    expect(guidelines).toContain('Fill relevantFiles only with files you actually read or located');
     expect(guidelines).toContain('priorFindings only with verified facts');
-    expect(guidelines).toContain('a guessed path costs more than an omitted one');
-    expect(guidelines).toContain('Keep priorFindings to a few lines of facts, not directives');
-    expect(guidelines).toContain(
-      'the delegated brief is that description plus the assign-time instructions, relevantFiles and priorFindings',
-    );
+    expect(guidelines).toContain('guessed path costs more than an omitted one');
+    expect(guidelines).toContain('in a few lines, not directives');
+    expect(guidelines).toContain('extended at assign time by instructions, relevantFiles and priorFindings');
     expect(guidelines).toContain('do not repeat one in the other');
     expect(guidelines).not.toContain('A fresh-context child starts with none of your context');
     expect(guidelines).not.toContain('reads known paths directly');
@@ -224,18 +227,18 @@ describe('prompt-led allocation guidance', () => {
     expect(guidelines).not.toContain('Do not poll in a loop');
     expect(guidelines).not.toContain('Completion notifications wake the parent session');
     expect(guidelines).not.toContain('Read the completion or failure result before deciding what to do next');
-    expect(guidelines).toContain('Doom Task records delegated lifecycle and results on the shared task');
+    expect(guidelines).toContain('Doom Task records delegated lifecycle and results on the task itself');
   });
 
   it('permits batching a plan while still forbidding batched progress', () => {
     const guidelines = DEFAULT_PROMPT_GUIDELINES.join('\n');
 
-    expect(guidelines).toContain('Capture a whole plan in one call');
-    expect(guidelines).toContain('Do not batch parent progress');
-    expect(guidelines).toContain('upsert batching is for writing a plan down, single calls are for reporting progress');
-    expect(guidelines).toContain('Native assignments[] fan-out is separate from progress reporting');
-    expect(guidelines).toContain('resend only the corrected failures');
-    expect(guidelines).toContain('an already-applied entry with no id would create a duplicate task');
+    expect(guidelines).toContain('Batch the whole plan in one upsert');
+    expect(guidelines).toContain('Report progress one call at a time');
+    expect(guidelines).toContain('never batched at the end of a turn');
+    expect(guidelines).toContain('delegated tasks run in parallel and do not count');
+    expect(guidelines).toContain('Resend only the corrected failures');
+    expect(guidelines).toContain('resending an applied entry with no id creates a duplicate task');
   });
 });
 

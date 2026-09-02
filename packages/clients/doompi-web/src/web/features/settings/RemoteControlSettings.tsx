@@ -2,6 +2,7 @@ import { Spinner } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect } from 'react';
 import { refreshRemoteState, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 import { TunnelSettings } from './TunnelSettings.tsx';
 
 /** Persistent tunnel configuration, separate from the dialog that starts and pairs a remote session. */
@@ -13,14 +14,11 @@ export function RemoteControlSettings() {
   }, []);
 
   return (
-    <div data-testid="remote-control-settings" className="flex max-w-[780px] flex-col gap-5">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[13px] font-bold text-doom-hi">remote control</h2>
-        <p className="text-[11px] leading-relaxed text-doom-dim">
-          configure how remote devices reach this cockpit. a named tunnel is saved on this machine and reused whenever
-          remote access starts.
-        </p>
-      </div>
+    <div data-testid="remote-control-settings" className="flex flex-col gap-5">
+      <SettingsSectionHeader
+        title="remote control"
+        detail="configure how remote devices reach this cockpit. a named tunnel is saved on this machine and reused whenever remote access starts."
+      />
 
       {state.view === undefined ? (
         <p className="flex items-center gap-2 text-[11px] text-doom-faint">

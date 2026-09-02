@@ -14,7 +14,7 @@ export const webPlugin = defineWebPlugin({
   id: 'mcp',
   repositorySettingsPanel: {
     label: 'MCP servers',
-    detail: 'Inspect cached capabilities, discover live servers, and complete OAuth authorization.',
+    detail: 'inspect cached capabilities, discover live servers, and complete OAuth authorization.',
     order: 100,
     component: McpRepositorySettingsPanel,
   },

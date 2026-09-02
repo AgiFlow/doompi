@@ -30,10 +30,8 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   });
 
   await page.goto(cockpit.url);
-  await expect(page.getByTestId('tab-workflows-count')).toHaveText('1');
-
-  await page.getByTestId('tab-workflows').click();
-  await expect(page).toHaveURL(/\/session\/s1\/workflows$/);
+  await page.getByTestId('activity-open-workflows').click();
+  await expect(page).toHaveURL(/\/session\/s1\/workflows-runs$/);
   await expect(page.getByTestId('workflow-picker')).toContainText('Release Hardening');
   await page.getByTestId('workflow-picker').click();
   await expect(page.getByTestId('workflow-option-release-hardening')).toHaveAttribute('data-run-stage', 'running');
@@ -95,7 +93,7 @@ test('renders Markdown artifacts and explains when an artifact is empty', async 
   );
   writeWorkflowArtifact(cockpit.workflowHome, fixture, 'copy-review.md', '');
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toContainText('Publication');
   await page.getByTestId('pane-tab-artifacts').click();
   await page.getByTestId('artifact-row-publication-checklist.md').click();
@@ -106,7 +104,7 @@ test('renders Markdown artifacts and explains when an artifact is empty', async 
   await page.getByTestId('artifact-rendered-toggle').click();
   await expect(page.getByTestId('artifact-markdown')).toBeVisible();
 
-  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('activity-open-workflows').click();
   await page.getByTestId('pane-tab-artifacts').click();
   await page.getByTestId('artifact-row-copy-review.md').click();
   await expect(page.getByTestId('artifact-empty')).toContainText('this artifact is empty');
@@ -123,7 +121,7 @@ test('confirms before permanently deleting a settled workflow', async ({ page, c
   const runDir = workflowRunDir(cockpit.workflowHome, fixture);
 
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toContainText('Finished Run');
   await page.getByTestId('delete-workflow').click();
   await expect(page.getByTestId('delete-workflow-dialog')).toContainText('Delete Finished Run?');
@@ -141,7 +139,7 @@ test('confirms before permanently deleting a settled workflow', async ({ page, c
 test('a failure moves into the needs-you strip live', async ({ page, cockpit }) => {
   const at = new Date().toISOString();
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflows-empty')).toBeVisible();
 
   writeWorkflowRun(cockpit.workflowHome, {
@@ -185,7 +183,7 @@ test('a workflow owned by another session stays off this tab', async ({ page, co
   });
 
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toBeVisible({ timeout: 5000 });
   await page.getByTestId('workflow-picker').click();
   await expect(page.getByTestId('workflow-option-mine')).toBeVisible();
@@ -209,7 +207,7 @@ test('searches thirty runs without turning them into a chip strip', async ({ pag
   }
 
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-workflows').click();
+  await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toContainText('30 workflows', { timeout: 5000 });
 
   await page.getByTestId('workflow-picker').click();

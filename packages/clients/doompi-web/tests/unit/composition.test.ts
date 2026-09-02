@@ -230,13 +230,17 @@ describe('selectionAxes', () => {
 });
 
 describe('activityGroups', () => {
+  const subagentsTab = () => ({ id: 'subagents-fleet', label: 'subagents', panel: () => null });
+  const workflowsTab = () => ({ id: 'workflows-runs', label: 'workflows', panel: () => null });
   let activeWorkflowSession: string | null = null;
   const installOwners = (): void => {
     activeWorkflowSession = null;
     installWebPlugins([
       defineWebPlugin({
         id: 'subagents',
-        activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
+        activityGroups: [
+          { name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', transientTab: subagentsTab, order: 10 },
+        ],
       }),
       defineWebPlugin({
         id: 'runner',
@@ -253,7 +257,7 @@ describe('activityGroups', () => {
               subscribe: () => () => undefined,
               isActive: (sessionId) => sessionId !== null && sessionId === activeWorkflowSession,
             },
-            tab: 'workflows',
+            transientTab: workflowsTab,
             order: 30,
           },
         ],
@@ -272,11 +276,23 @@ describe('activityGroups', () => {
     try {
       const idle = activityGroups({}, []);
       expect(idle.map((group) => group.name)).toEqual(['workflows']);
-      expect(idle[0]).toEqual({ name: 'workflows', keys: 'w r', summary: '', active: false, tab: 'workflows' });
+      expect(idle[0]).toEqual({
+        name: 'workflows',
+        keys: 'w r',
+        summary: '',
+        active: false,
+        transientTab: workflowsTab,
+      });
 
       const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
       expect(groups.map((group) => group.name)).toEqual(['agents', 'runners', 'workflows']);
-      expect(groups[0]).toEqual({ name: 'agents', keys: 'a r', summary: '2 running', active: true, tab: 'subagents' });
+      expect(groups[0]).toEqual({
+        name: 'agents',
+        keys: 'a r',
+        summary: '2 running',
+        active: true,
+        transientTab: subagentsTab,
+      });
       expect(groups[1]).toEqual({ name: 'runners', keys: 'r l', summary: '', active: false });
     } finally {
       resetWebPlugins();
@@ -288,11 +304,11 @@ describe('activityGroups', () => {
     try {
       const progress = activityGroups({}, ['workflow-mcp-progress'], 's1');
       expect(progress.map((group) => group.name)).toEqual(['workflows']);
-      expect(progress[0]).toMatchObject({ tab: 'workflows', active: false });
+      expect(progress[0]).toMatchObject({ transientTab: workflowsTab, active: false });
 
       activeWorkflowSession = 's1';
-      expect(activityGroups({}, [], 's1')[0]).toMatchObject({ tab: 'workflows', active: true });
-      expect(activityGroups({}, [], 's2')[0]).toMatchObject({ tab: 'workflows', active: false });
+      expect(activityGroups({}, [], 's1')[0]).toMatchObject({ transientTab: workflowsTab, active: true });
+      expect(activityGroups({}, [], 's2')[0]).toMatchObject({ transientTab: workflowsTab, active: false });
     } finally {
       resetWebPlugins();
     }

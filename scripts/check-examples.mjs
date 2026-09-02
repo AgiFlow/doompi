@@ -26,6 +26,7 @@ const defaultPackagePaths = [
   './packages/minor/doompi-workflow',
   './packages/default/doompi-log',
   './packages/default/doompi-mcp',
+  './packages/default/doompi-prompt',
 ];
 
 function fail(message) {

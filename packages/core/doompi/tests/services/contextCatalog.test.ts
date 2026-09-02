@@ -43,6 +43,33 @@ describe('createContextPublisher', () => {
     expect(core?.items.find((item) => item.name === 'read')?.tokens).toBeGreaterThan(0);
   });
 
+  // The panel groups by the thing a reader can switch off, so a mode that is on
+  // has to be a group whether or not it brought a tool with it.
+  it('declares the minor modes that are on as groups of their own', async () => {
+    const { pi, appended } = harness([{ name: 'read' }]);
+
+    await createContextPublisher(pi, cordis, { readMinorModes: () => [{ id: 'plan', label: 'plan' }] }).publish();
+
+    const projection = appended[0]?.data as { groups: { kind: string; id: string }[] };
+    expect(projection.groups.filter((group) => group.kind === 'minor').map((group) => group.id)).toEqual(['plan']);
+  });
+
+  // A mode switching on is one of the reasons a publish happens, so the list is
+  // read at publish time; a remembered one would describe the mode before it.
+  it('republishes when a minor mode comes on', async () => {
+    const { pi, appended } = harness([{ name: 'read' }]);
+    let modes: { id: string; label: string }[] = [];
+    const publisher = createContextPublisher(pi, cordis, { readMinorModes: () => modes });
+
+    await publisher.publish();
+    modes = [{ id: 'plan', label: 'plan' }];
+    await publisher.publish();
+
+    expect(appended).toHaveLength(2);
+    const projection = appended[1]?.data as { groups: { kind: string; id: string }[] };
+    expect(projection.groups.some((group) => group.kind === 'minor' && group.id === 'plan')).toBe(true);
+  });
+
   // Republishing happens whenever a mode flips, which is far more often than
   // the toolbox actually changes. An identical payload must stay off the journal.
   it('says nothing when the composition has not changed', async () => {

@@ -114,7 +114,7 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     await page.keyboard.press('r');
 
     await expect(page.getByTestId('palette')).toBeHidden();
-    await expect(page).toHaveURL(/\/workflows$/);
+    await expect(page).toHaveURL(/\/workflows-runs$/);
   });
 
   test('a command leaf runs as a slash prompt: SPC w e toggles workflow mode', async ({ page, cockpit }) => {
@@ -144,7 +144,7 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     await expect(page.getByTestId('palette-filter')).toHaveValue('');
   });
 
-  test('SPC a r opens the subagents tab', async ({ page, cockpit }) => {
+  test('SPC a r opens the temporary subagents tab', async ({ page, cockpit }) => {
     await page.goto(cockpit.url);
     await cockpit.session.waitForCommand('get_commands');
     cockpit.session.emit(COMMANDS);
@@ -152,7 +152,7 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     await page.keyboard.press('Control+k');
     await page.keyboard.press('a');
     await page.keyboard.press('r');
-    await expect(page).toHaveURL(/\/subagents$/);
+    await expect(page).toHaveURL(/\/subagents-fleet$/);
   });
 
   test('closing the palette hands the keyboard back to the composer', async ({ page, cockpit }) => {

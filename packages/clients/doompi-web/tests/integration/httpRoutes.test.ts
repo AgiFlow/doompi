@@ -163,8 +163,39 @@ describe('browser telemetry ingestion', () => {
     const oversized = await fetch(url('/api/telemetry/browser'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ v: 1, events: [], padding: 'x'.repeat(9 * 1024) }),
+      body: JSON.stringify({ v: 1, events: [], padding: 'x'.repeat(33 * 1024) }),
     });
     expect(oversized.status).toBe(413);
+  });
+
+  it('accepts a browser error and rejects one whose source is not a known site', async () => {
+    const accepted = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        v: 1,
+        events: [
+          {
+            name: 'web.browser.error',
+            source: 'window_error',
+            error_name: 'TypeError',
+            message: 'theme.fg is not a function',
+            stack: 'TypeError: theme.fg is not a function\n  at render',
+            session_id: 'session-7',
+          },
+        ],
+      }),
+    });
+    expect(accepted.status).toBe(204);
+
+    const rejected = await fetch(url('/api/telemetry/browser'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        v: 1,
+        events: [{ name: 'web.browser.error', source: 'anywhere', error_name: 'TypeError', message: 'boom' }],
+      }),
+    });
+    expect(rejected.status).toBe(400);
   });
 });

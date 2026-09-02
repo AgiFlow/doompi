@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  BROWSER_ERROR_EVENT,
+  createBrowserError,
   createBrowserTelemetryRateLimit,
   forwardedTraceContext,
-  parseBrowserPerformanceBatch,
+  isBrowserErrorEvent,
+  parseBrowserTelemetryBatch,
   readTraceContext,
   requestOperation,
   shutdownWebTelemetry,
@@ -14,7 +17,7 @@ afterEach(() => vi.useRealTimers());
 describe('web telemetry boundaries', () => {
   it('accepts only fixed bounded browser performance events', () => {
     expect(
-      parseBrowserPerformanceBatch({
+      parseBrowserTelemetryBatch({
         v: 1,
         events: [
           { name: 'web.browser.ready', duration_ms: 12.4 },
@@ -26,12 +29,77 @@ describe('web telemetry boundaries', () => {
       { name: 'web.browser.backlog', count: 3 },
     ]);
     expect(
-      parseBrowserPerformanceBatch({ v: 1, events: [{ name: 'web.browser.ready', path: '/private' }] }),
+      parseBrowserTelemetryBatch({ v: 1, events: [{ name: 'web.browser.ready', path: '/private' }] }),
     ).toBeUndefined();
+    expect(parseBrowserTelemetryBatch({ v: 1, events: Array(11).fill({ name: 'web.browser.ready' }) })).toBeUndefined();
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [{ name: 'other.event' }] })).toBeUndefined();
+  });
+
+  it('accepts a browser error with a bounded name, message, stack, and session id', () => {
+    const parsed = parseBrowserTelemetryBatch({
+      v: 1,
+      events: [
+        {
+          name: BROWSER_ERROR_EVENT,
+          source: 'window_error',
+          error_name: 'TypeError',
+          message: 'theme.fg is not a function',
+          stack: 'TypeError: theme.fg is not a function\n  at render',
+          session_id: 'id-42',
+        },
+      ],
+    });
+
+    expect(parsed).toEqual([
+      {
+        name: BROWSER_ERROR_EVENT,
+        source: 'window_error',
+        error_name: 'TypeError',
+        message: 'theme.fg is not a function',
+        stack: 'TypeError: theme.fg is not a function\n  at render',
+        session_id: 'id-42',
+      },
+    ]);
+    expect(parsed !== undefined && isBrowserErrorEvent(parsed[0]!)).toBe(true);
+  });
+
+  it('rejects a browser error that is unbounded, mislabelled, or carrying extra fields', () => {
+    const valid = {
+      name: BROWSER_ERROR_EVENT,
+      source: 'window_error',
+      error_name: 'TypeError',
+      message: 'boom',
+    };
+
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [{ ...valid, source: 'anywhere' }] })).toBeUndefined();
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [{ ...valid, message: 'x'.repeat(301) }] })).toBeUndefined();
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [{ ...valid, stack: 'x'.repeat(801) }] })).toBeUndefined();
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [{ ...valid, session_id: 'a/../b' }] })).toBeUndefined();
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [{ ...valid, cwd: '/private' }] })).toBeUndefined();
+    // One bad event rejects the batch rather than being silently skipped.
+    expect(parseBrowserTelemetryBatch({ v: 1, events: [valid, { ...valid, error_name: '' }] })).toBeUndefined();
+  });
+
+  it('rebuilds a browser error so the message and stack ride the exception', () => {
+    const error = createBrowserError({
+      name: BROWSER_ERROR_EVENT,
+      source: 'unhandled_rejection',
+      error_name: 'TypeError',
+      message: 'boom',
+      stack: 'TypeError: boom\n  at frame',
+    });
+
+    expect(error.name).toBe('TypeError');
+    expect(error.message).toBe('boom');
+    expect(error.stack).toBe('TypeError: boom\n  at frame');
     expect(
-      parseBrowserPerformanceBatch({ v: 1, events: Array(11).fill({ name: 'web.browser.ready' }) }),
-    ).toBeUndefined();
-    expect(parseBrowserPerformanceBatch({ v: 1, events: [{ name: 'other.event' }] })).toBeUndefined();
+      createBrowserError({
+        name: BROWSER_ERROR_EVENT,
+        source: 'window_error',
+        error_name: 'Error',
+        message: 'no stack',
+      }).stack,
+    ).toBe('Error: no stack');
   });
 
   it('validates trace context and never uses request paths as operation names', () => {

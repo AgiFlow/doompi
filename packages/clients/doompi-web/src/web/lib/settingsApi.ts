@@ -1,5 +1,6 @@
 import {
   SETTINGS_CONFIG_API_ROUTE,
+  SETTINGS_IMAGES_API_ROUTE,
   SETTINGS_MODELS_API_ROUTE,
   SETTINGS_REPOSITORIES_API_ROUTE,
   SETTINGS_REPOSITORY_API_ROUTE,
@@ -8,6 +9,8 @@ import {
   type RepositorySelectionWriteRequest,
   type RepositorySettingsView,
   type SettingsConfigView,
+  type SettingsImagesView,
+  type SettingsImagesWriteRequest,
   type SettingsModel,
   type SettingsRepository,
   type SettingsWriteRequest,
@@ -154,5 +157,39 @@ export async function listSettingsModels(): Promise<readonly SettingsModel[]> {
     return body.models as SettingsModel[];
   } catch {
     return [];
+  }
+}
+
+export type ImageSettingsResult = { ok: true; images: SettingsImagesView } | { ok: false; error: string };
+
+function imageSettingsOf(response: Response, body: unknown): ImageSettingsResult {
+  if (!response.ok) return { ok: false, error: errorOf(body, `The hub answered ${String(response.status)}.`) };
+  if (!isRecord(body)) return { ok: false, error: 'The hub answered with no image settings.' };
+  return { ok: true, images: body as unknown as SettingsImagesView };
+}
+
+export async function readImageSettings(): Promise<ImageSettingsResult> {
+  try {
+    const response = await sealedHttpSession.fetch(SETTINGS_IMAGES_API_ROUTE);
+    return imageSettingsOf(response, await readBody(response));
+  } catch {
+    return { ok: false, error: UNREACHABLE };
+  }
+}
+
+/**
+ * Writes through the step-up gate, as every other settings write does: this
+ * one decides how much of a screenshot a remote caller can push into a model.
+ */
+export async function writeImageSettings(request: SettingsImagesWriteRequest): Promise<ImageSettingsResult> {
+  try {
+    const response = await fetchWithStepUp(SETTINGS_IMAGES_API_ROUTE, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(request),
+    });
+    return imageSettingsOf(response, await readBody(response));
+  } catch {
+    return { ok: false, error: UNREACHABLE };
   }
 }

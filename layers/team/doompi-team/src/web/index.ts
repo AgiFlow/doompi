@@ -1,38 +1,55 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { useStore } from '@tanstack/react-store';
 import { AgentsActivitySection } from './AgentsActivitySection.tsx';
-import { SubagentsPanel } from './SubagentsPanel.tsx';
+import { subagentsTab } from './SubagentsPanel.tsx';
 import { openCatalog, subagentCatalogChannel } from './catalogStore.ts';
 import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
-import { subagentRunsChannel, subagents, visibleRuns } from './subagentsStore.ts';
+import { activityRuns, isTerminalRun, subagentRunsChannel, subagents } from './subagentsStore.ts';
 import { teamToolRenderers } from './toolRenderers.ts';
 
-/** The tab badge: every run the session's fleet currently shows. */
-export function useSubagentsBadge(sessionId: string | null): number {
-  return useStore(subagents.store, (state) => visibleRuns(subagents.select(state, sessionId)).length);
-}
-
 const AGENTS_GROUP = { key: 'a', label: 'agents', detail: 'subagent resources and runs' };
+
+// The group is the only way into the fleet now, so it stays visible while the
+// session is idle: a launcher that appears only once something runs cannot be
+// used to start anything.
+const agentsActivitySource = {
+  subscribe(listener: () => void) {
+    const subscription = subagents.store.subscribe(listener);
+    return () => subscription.unsubscribe();
+  },
+  isActive(sessionId: string | null) {
+    return activityRuns(subagents.select(subagents.store.state, sessionId)).some((run) => !isTerminalRun(run));
+  },
+};
 
 /** The named export the generated plugin registry imports. */
 export const webPlugin = defineWebPlugin({
   id: 'subagents',
-  tabs: [{ id: 'subagents', label: 'subagents', panel: SubagentsPanel, useBadge: useSubagentsBadge }],
   channels: [subagentRunsChannel, subagentCatalogChannel],
-  activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
+  // No declared tab: the fleet is a panel the reader opens from the dock's
+  // agents group, and closes when they are done with it.
+  activityGroups: [
+    {
+      name: 'agents',
+      keys: 'a r',
+      statusKey: 'doom-team-agents',
+      activeSource: agentsActivitySource,
+      transientTab: subagentsTab,
+      order: 10,
+    },
+  ],
   // The TUI's SPC a r and SPC a l: the runs, and the catalog to launch from.
   leaderBindings: [
     {
       id: 'subagents.fleet',
       path: [AGENTS_GROUP, { key: 'r', label: 'runs', detail: 'runs in this session' }],
-      run: (context) => context.openTab('subagents'),
+      run: (context) => context.openTransientTab(subagentsTab()),
     },
     {
       id: 'subagents.catalog',
       path: [AGENTS_GROUP, { key: 'l', label: 'launch', detail: 'pick an agent and launch it' }],
       run: (context) => {
         if (context.sessionId !== null) openCatalog(context.sessionId);
-        context.openTab('subagents');
+        context.openTransientTab(subagentsTab());
       },
     },
   ],

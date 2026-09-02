@@ -45,6 +45,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-notification': 'packages/core/doompi-notification',
   '@agimon-ai/doompi-plan': 'packages/minor/doompi-plan',
   '@agimon-ai/doompi-profile': 'packages/core/doompi-profile',
+  '@agimon-ai/doompi-prompt': 'packages/default/doompi-prompt',
   '@agimon-ai/doompi-read': 'packages/default/doompi-read',
   '@agimon-ai/doompi-runner': 'packages/default/doompi-runner',
   '@agimon-ai/doompi-runner-rmux-darwin-arm64': 'packages/default/doompi-runner-rmux-darwin-arm64',
@@ -88,6 +89,7 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-ui',
   '@agimon-ai/doompi-plan',
   '@agimon-ai/doompi-profile',
+  '@agimon-ai/doompi-prompt',
   '@agimon-ai/doompi-read',
   '@agimon-ai/doompi-runner',
   '@agimon-ai/doompi-skill',
@@ -137,6 +139,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
     './src/prompts/doompi-author-profile/SKILL.md',
     './src/prompts/doompi-author-profile/references/profiles-contract.md',
   ],
+  '@agimon-ai/doompi-prompt': ['./llms.txt', './README.md', './src/prompts/doompi-use-prompt/SKILL.md'],
   '@agimon-ai/doompi-runner': [
     './llms.txt',
     './README.md',

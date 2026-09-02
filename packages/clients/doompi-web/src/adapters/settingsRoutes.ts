@@ -1,14 +1,19 @@
 import {
   configScopeOf,
+  DEFAULT_IMAGE_MAX_DIMENSION,
   globalDoomConfigPath,
   loadDomains,
   loadDoomConfigLayers,
   loadMajorModesConfig,
+  loadPiImageSettings,
   loadProfiles,
+  MIN_IMAGE_MAX_DIMENSION,
   repositoryDoomConfigPath,
+  savePiImageSettings,
   setDoomConfigValue,
   unsetDoomConfigValue,
   writeDoomConfigValues,
+  type PiImageSettings,
 } from '@agimon-ai/doompi-config';
 import { defaultDomainsForMajorMode } from '@agimon-ai/doompi-config/domains';
 import type { Hono } from 'hono';
@@ -17,6 +22,7 @@ import {
   SETTINGS_MODELS_API_ROUTE,
   SETTINGS_REPOSITORIES_API_ROUTE,
   SETTINGS_REPOSITORY_API_ROUTE,
+  SETTINGS_IMAGES_API_ROUTE,
   SETTINGS_REPOSITORY_SELECTION_API_ROUTE,
   SETTINGS_VALUE_API_ROUTE,
   type RepositoryCatalogOption,
@@ -24,6 +30,7 @@ import {
   type RepositorySelectionWriteRequest,
   type RepositorySettingsView,
   type SettingsConfigView,
+  type SettingsImagesView,
   type SettingsModel,
   type SettingsRepository,
   type SettingsScope,
@@ -289,6 +296,50 @@ export function registerSettingsRoutes(app: Hono, options: SettingsRoutesOptions
     }
   });
 
+  // The image limits are Pi's own settings.json rather than the Doom config, so
+  // they get a route of their own: one file, no repository scope, and Pi's TUI
+  // toggle writing the same key.
+  const imagesView = (settings: PiImageSettings): SettingsImagesView => ({
+    ...settings,
+    minDimension: MIN_IMAGE_MAX_DIMENSION,
+    maxAllowedDimension: DEFAULT_IMAGE_MAX_DIMENSION,
+  });
+
+  app.get(SETTINGS_IMAGES_API_ROUTE, (context) => {
+    try {
+      return context.json(imagesView(loadPiImageSettings(homeDirectory)));
+    } catch (error) {
+      // An unparseable settings.json is what a reader opens this page to fix.
+      return context.json({ error: describe(error) }, 422);
+    }
+  });
+
+  app.put(SETTINGS_IMAGES_API_ROUTE, async (context) => {
+    const request: unknown = await context.req.json().catch(() => undefined);
+    if (!isRecord(request)) return context.json({ error: 'An image settings write needs a JSON body.' }, 400);
+    const { autoResize, maxDimension } = request;
+    if (autoResize !== undefined && typeof autoResize !== 'boolean') {
+      return context.json({ error: 'autoResize is true or false.' }, 400);
+    }
+    if (maxDimension !== undefined && (typeof maxDimension !== 'number' || !Number.isFinite(maxDimension))) {
+      return context.json({ error: 'maxDimension is a number of pixels.' }, 400);
+    }
+    try {
+      return context.json(
+        imagesView(
+          savePiImageSettings(
+            {
+              ...(autoResize === undefined ? {} : { autoResize }),
+              ...(maxDimension === undefined ? {} : { maxDimension }),
+            },
+            homeDirectory,
+          ),
+        ),
+      );
+    } catch (error) {
+      return context.json({ error: describe(error) }, 422);
+    }
+  });
   app.get(SETTINGS_CONFIG_API_ROUTE, (context) => {
     // A page with no repository in view still has global settings to show, so
     // the repository is optional rather than required.

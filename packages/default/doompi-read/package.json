@@ -57,6 +57,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
+    "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-hashline": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",

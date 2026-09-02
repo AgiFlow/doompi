@@ -1120,12 +1120,27 @@ export function planModeExtension(
     };
   }
 
+  /**
+   * Pi exposes `ui.theme` as a proxy over a global the TUI installs, so every
+   * property access throws `Theme not initialized` in a headless runtime (an
+   * SDK child, a web-hosted session). Colour on a status label is not worth
+   * failing the hook that calls this, so styling is best effort and the plain
+   * label is the fallback.
+   */
+  function styleStatus(ctx: ExtensionContext, status: string): string {
+    try {
+      return ctx.ui.theme.fg(WARNING_STYLE, status);
+    } catch {
+      return status;
+    }
+  }
+
   function updateStatus(ctx: ExtensionContext): void {
     if (!active) return;
     updateLeader();
     const flavor = activeFlavor;
     const status = enabled && flavor ? `plan:${flavor}` : undefined;
-    ctx.ui.setStatus(PLAN_MODE_STATUS_KEY, status ? ctx.ui.theme.fg(WARNING_STYLE, status) : undefined);
+    ctx.ui.setStatus(PLAN_MODE_STATUS_KEY, status ? styleStatus(ctx, status) : undefined);
     modeOwner?.publish(currentPlanModeState());
   }
 

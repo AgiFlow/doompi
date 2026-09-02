@@ -35,6 +35,7 @@ import type { RecordSource } from './registryWatcher.ts';
 import type { SessionSpawner, SpawnOutcome, SpawnSessionInput } from './serverSpawner.ts';
 import { attachToSession } from './sessionSocketClient.ts';
 import { proxyToSocket } from './packageApiProxy.ts';
+import { carriesUserImages, shrinkUserImages, userImageLimits } from './promptImages.ts';
 
 const GIT_REFRESH_MS = 10_000;
 const GET_ENTRIES_COMMAND = 'get_entries';
@@ -60,13 +61,25 @@ const ENTRY_APPENDED_TYPE = 'entry_appended';
 const DEFAULT_RESTART_WAIT_MS = 15_000;
 const DEFAULT_RESTART_POLL_MS = 100;
 
-/** One session-local extension projection, including a replay wrapper from its server. */
+/**
+ * One session-local projection, including a replay wrapper from its server.
+ *
+ * A projection is the current answer to a standing question, not an event, so
+ * only the newest copy matters and it has to survive for as long as the session
+ * does. Status lines and widgets are the obvious ones. The composition entries
+ * belong here for the same reason and a sharper one: the runtime journals them
+ * only when the composition actually changes, which on a long session is once,
+ * hours before the reader opens the page. Left in the bounded ring they are
+ * evicted by ordinary traffic, and the context panel then shows the modes the
+ * status line still carries with none of the tools underneath them.
+ */
 function uiProjectionKey(frame: SessionFrame): string | undefined {
   const replayed = frame.frame;
   const projected =
     frame.type === REPLAY_TYPE && typeof replayed === 'object' && replayed !== null && !Array.isArray(replayed)
       ? (replayed as SessionFrame)
       : frame;
+  if (projected.type === ENTRY_APPENDED_TYPE) return compositionEntryKey(projected.entry);
   if (projected.type !== 'extension_ui_request') return undefined;
   if (projected.method === 'setStatus' && typeof projected.statusKey === 'string') {
     return `status:${projected.statusKey}`;
@@ -75,6 +88,15 @@ function uiProjectionKey(frame: SessionFrame): string | undefined {
     return `widget:${projected.widgetKey}`;
   }
   return undefined;
+}
+
+/** The projection key for a custom composition entry, or undefined for any other entry. */
+function compositionEntryKey(entry: unknown): string | undefined {
+  if (typeof entry !== 'object' || entry === null) return undefined;
+  const candidate = entry as Record<string, unknown>;
+  if (candidate.type !== 'custom') return undefined;
+  if (candidate.customType !== MINOR_MODE_ENTRY_TYPE && candidate.customType !== CONTEXT_ENTRY_TYPE) return undefined;
+  return `entry:${String(candidate.customType)}`;
 }
 
 export type HubEvent =
@@ -184,6 +206,11 @@ interface ManagedSession {
    */
   journal: Record<string, unknown>[];
   frameCount: number;
+  /**
+   * The tail of this session's outbound command chain, so a resize in flight
+   * cannot let a later command overtake an earlier one.
+   */
+  commands: Promise<void>;
 }
 
 interface StartedChannel {
@@ -478,7 +505,9 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
                   managed.emittedEntryIds.add(entryId);
                 }
                 const restored = { type: ENTRY_APPENDED_TYPE, entry };
-                managed.ring.record(restored);
+                const restoredKey = compositionEntryKey(entry);
+                if (restoredKey === undefined) managed.ring.record(restored);
+                else managed.uiProjections.set(restoredKey, restored);
                 managed.frameCount += 1;
                 emit({ kind: 'frame', sessionId: managed.record.id, frame: restored });
                 const next = presenceAfterRestoredEntry(managed.presence, entry, restoredAt);
@@ -549,6 +578,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       emittedEntryIds: new Set<string>(),
       restoredJournal: false,
       frameCount: 0,
+      commands: Promise.resolve(),
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
@@ -693,7 +723,20 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     command(sessionId, frame) {
       const managed = sessions.get(sessionId);
       if (!managed) return;
-      managed.attachment?.send(frame);
+      // A frame carrying images has to be resized before it is forwarded, which
+      // is asynchronous, so every frame for this session queues behind the one
+      // in flight. Two messages sent a keystroke apart must reach the agent in
+      // the order they were sent, and only a single queue guarantees that.
+      managed.commands = managed.commands
+        .then(async () => {
+          const outgoing = carriesUserImages(frame) ? await shrinkUserImages(frame, userImageLimits()) : frame;
+          managed.attachment?.send(outgoing);
+        })
+        // A failed send must not poison the chain, or one bad frame would
+        // silence every command this session is sent afterwards.
+        .catch((error: unknown) => {
+          options.onNotice?.(`command not delivered: ${error instanceof Error ? error.message : String(error)}`);
+        });
       // The agent never announces that a dialog was answered, so an
       // extension_ui_request in the ring would reopen on every replay. This
       // synthetic close travels the same path as agent frames: it closes the

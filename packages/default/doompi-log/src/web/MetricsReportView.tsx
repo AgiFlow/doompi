@@ -101,6 +101,15 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
           consumption
         </span>
         <table className="w-full text-[10px]" data-testid="metrics-tools">
+          {/* Without heads the two right columns are just numbers; "1006" and
+              "325.9k" do not say which is a call count and which is tokens. */}
+          <thead>
+            <tr className="text-[9px] text-doom-faint/70">
+              <th className="py-1 text-left font-normal">tool</th>
+              <th className="w-20 py-1 text-right font-normal">calls</th>
+              <th className="w-20 py-1 text-right font-normal">tokens</th>
+            </tr>
+          </thead>
           <tbody>
             {report.tools.map((tool) => (
               <tr key={tool.name} className="border-b border-doom-border/40">

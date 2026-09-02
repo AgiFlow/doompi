@@ -1,0 +1,20 @@
+# This package is a standalone desktop shell, not a Doom extension and not a
+# cockpit web plugin, so it takes the core preset only. The doom-extension
+# preset is deliberately not used: it requires a `pi.extensions` array, which an
+# Electron app does not have and should not fake.
+plugins:
+  - core
+
+extends:
+  - core/recommended
+
+ignore:
+  - "dist/**"
+  # The staged cockpit payload, produced by `pnpm deploy`, and the packaged
+  # artifacts. Both are build output that happens to contain source.
+  - "build/**"
+  - "release/**"
+  - "coverage/**"
+  # Packaging hooks run inside electron-builder, not inside the app, so they are
+  # CommonJS by requirement and sit outside the source layer graph.
+  - "scripts/**"

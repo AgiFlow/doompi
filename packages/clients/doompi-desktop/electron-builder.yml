@@ -1,0 +1,52 @@
+appId: ai.agimon.doompi
+productName: DoomPi
+copyright: Copyright © AgiFlow
+
+directories:
+  output: release
+  buildResources: resources
+
+# Only the shell is archived. The cockpit payload stays a real directory tree
+# because it execs binaries (esbuild during a plugin composition) and loads
+# native addons, and neither works from inside an archive.
+asar: true
+files:
+  - dist/**/*
+  - package.json
+
+extraResources:
+  - from: build/hub
+    to: hub
+
+# Every Mach-O binary under extraResources must carry a signature or
+# notarization rejects the bundle. This runs at afterPack, before the app
+# bundle itself is signed: signing inner binaries afterwards would invalidate
+# the enclosing signature.
+afterPack: scripts/signHubBinaries.cjs
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Driven by APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID in CI.
+  # electron-builder skips this automatically when no identity is available,
+  # so an unsigned local build still produces artifacts.
+  notarize: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  extendInfo:
+    NSAppleEventsUsageDescription: DoomPi uses Apple Events to open links and files you choose.
+
+linux:
+  category: Development
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  maintainer: AgiFlow <support@agimon.ai>

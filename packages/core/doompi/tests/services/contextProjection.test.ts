@@ -33,6 +33,7 @@ function project(input: Partial<Parameters<typeof projectContext>[0]> = {}) {
     revision: 1,
     majorMode: 'copilot',
     minorModes: [],
+    domains: [],
     sources: [],
     skills: [],
     attribution: {},

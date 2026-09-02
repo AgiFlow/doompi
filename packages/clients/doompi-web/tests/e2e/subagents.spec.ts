@@ -61,10 +61,8 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
     tokens: 85_380,
   });
   await page.goto(cockpit.url);
-  await expect(page.getByTestId('tab-subagents-count')).toHaveText('2');
-
-  await page.getByTestId('tab-subagents').click();
-  await expect(page).toHaveURL(/\/session\/s1\/subagents$/);
+  await page.getByTestId('activity-open-agents').click();
+  await expect(page).toHaveURL(/\/session\/s1\/subagents-fleet$/);
   await expect(page.getByTestId('run-card-run-a')).toHaveAttribute('data-run-state', 'running');
   await expect(page.getByTestId('run-card-run-b')).toHaveAttribute('data-run-state', 'done');
   await expect(page.getByTestId('subagents-tally')).toHaveText('1 running · 1 done · 0 failed');
@@ -103,7 +101,7 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
 
 test('a run started while watching appears live', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-subagents').click();
+  await page.getByTestId('activity-open-agents').click();
   await expect(page.getByTestId('subagents-empty')).toBeVisible();
 
   writeRunStatus('s1', {
@@ -139,7 +137,7 @@ test('a long prompt truncates inside the card instead of widening the grid', asy
   });
 
   await page.goto(cockpit.url);
-  await page.getByTestId('tab-subagents').click();
+  await page.getByTestId('activity-open-agents').click();
   const card = page.getByTestId('run-card-run-wide');
   await expect(card).toBeVisible();
 
@@ -173,7 +171,7 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  await page.getByTestId('tab-subagents').click();
+  await page.getByTestId('activity-open-agents').click();
 
   await page.getByTestId('run-menu-run-stop').click();
   await page.getByTestId('run-stop-run-stop').click();
@@ -204,7 +202,6 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
   await page.getByTestId('run-clear-run-stop').click();
   await expect(page.getByTestId('run-card-run-stop')).toBeHidden();
   await expect(page.getByTestId('subagents-empty')).toBeVisible();
-  await expect(page.getByTestId('tab-subagents-count')).toBeHidden();
 });
 
 test('the activity dock lists the runs and opens one in a temporary agent tab', async ({ page, cockpit }) => {
@@ -298,7 +295,7 @@ test('the catalog lists the agents the session can launch and launches one throu
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  await page.getByTestId('tab-subagents').click();
+  await page.getByTestId('activity-open-agents').click();
   await page.getByTestId('subagents-launch').click();
   const drawer = page.getByTestId('catalog-drawer');
   await expect(drawer).toBeVisible();

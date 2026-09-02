@@ -301,6 +301,32 @@ describe('the session hub over a registry', () => {
     expect(harness.hub.backlog('unknown')).toBeUndefined();
   });
 
+  // The runtime journals the composition only when it actually changes, which on
+  // a long session is once and hours before anyone opens the page. Held in the
+  // transient ring it is evicted by ordinary traffic, and the context panel then
+  // shows the modes the status line still carries with no tools underneath them.
+  it('keeps the composition entry out of the bounded transient ring', async () => {
+    const registryDir = freshRegistryDir();
+    const cwd = path.dirname(registryDir);
+    const session = await startRegisteredSession(registryDir, { id: 'one', cwd });
+    const composition = {
+      type: 'entry_appended',
+      entry: { type: 'custom', id: 'c1', customType: 'doom-context', data: { version: 1, groups: [] } },
+    };
+    session.emit(composition);
+    session.emit({ type: 'agent_start' });
+
+    const harness = startHub(registryDir, undefined, [], undefined, { ringLimit: 1 });
+    await session.waitForAttach();
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'replay').length >= 2,
+      'both frames replaying',
+    );
+
+    const frames = harness.hub.backlog('one')?.frames ?? [];
+    expect(frames).toContainEqual({ type: 'replay', frame: composition });
+    expect(frames).toContainEqual({ type: 'replay', frame: { type: 'agent_start' } });
+  });
   it("keeps each session's latest UI projections outside its bounded transient ring", async () => {
     const registryDir = freshRegistryDir();
     const cwd = path.dirname(registryDir);
@@ -472,12 +498,14 @@ describe('the session hub over a registry', () => {
       { type: 'entry_appended', entry: current },
     ]);
     // The answer itself is the whole journal and no page reads it, so it
-    // reaches neither live subscribers nor the replay ring.
+    // reaches neither live subscribers nor the replay ring. The catalog entry is
+    // a projection rather than a transcript event, so it leads the backlog from
+    // the projection map instead of ageing out of the ring behind the messages.
     expect(harness.framesFor('one').some((frame) => frame.type === 'response')).toBe(false);
     expect(harness.hub.backlog('one')?.frames).toEqual([
+      { type: 'entry_appended', entry: current },
       { type: 'entry_appended', entry: asked },
       { type: 'entry_appended', entry: answered },
-      { type: 'entry_appended', entry: current },
     ]);
   });
 

@@ -31,12 +31,15 @@ function SectionLinks({
         data-testid={`settings-section-${section.id}`}
         data-active={current}
         onClick={onNavigate}
-        className={`flex min-w-0 flex-col gap-0.5 rounded-md px-[11px] py-2.5 transition-colors ${
+        className={`flex min-w-0 items-center rounded-md px-[11px] py-1.5 transition-colors ${
           current ? 'bg-doom-tint-blue' : 'hover:bg-doom-panel'
         }`}
       >
-        <span className={`text-[12px] font-bold ${current ? 'text-doom-blue' : 'text-doom-hi'}`}>{section.label}</span>
-        <span className="text-[10px] leading-snug text-doom-faint">{section.detail}</span>
+        {/* Title only: each page repeats its own detail in the panel header, and
+            eight stacked descriptions made the menu taller than the page. */}
+        <span className={`truncate text-[12px] font-bold ${current ? 'text-doom-blue' : 'text-doom-hi'}`}>
+          {section.label}
+        </span>
       </Link>
     );
   });

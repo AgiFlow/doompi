@@ -88,9 +88,9 @@ const packageByName = new Map(packageRecords.map((record) => [record.manifest.na
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
 const workspacePackageNames = new Set([...ownedNames, toolingPackageName, ...additionalToolingPackageNames]);
 
-if (packageDirectories.length !== 45 || ownedNames.size !== 45) {
+if (packageDirectories.length !== 46 || ownedNames.size !== 46) {
   fail(
-    `Expected exactly 45 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 46 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {

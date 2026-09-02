@@ -68,6 +68,8 @@ export interface ContextProjectionInput {
   readonly majorMode: string;
   /** Active minor modes, in the order the catalog reports them. */
   readonly minorModes: readonly { readonly id: string; readonly label: string }[];
+  /** Domains the composition resolved under, whether or not they carried a plugin. */
+  readonly domains: readonly string[];
   readonly sources: readonly ToolSource[];
   readonly skills: readonly SkillEntry[];
   /**
@@ -108,6 +110,10 @@ export function projectContext(input: ContextProjectionInput): ContextProjection
   };
   if (input.majorMode) declare(input.majorMode, input.majorMode, 'major');
   for (const mode of input.minorModes) declare(mode.id, mode.label, 'minor');
+  // A domain that contributed no plugin is still part of what the session is
+  // running under, and a reader comparing the panel against the footer would
+  // otherwise read its absence as the panel being out of date.
+  for (const domain of input.domains) declare(domain, domain, 'domain');
 
   const place = (owner: string, item: ContextItemProjection): void => {
     const attributed = input.attribution[owner];

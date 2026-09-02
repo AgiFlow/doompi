@@ -137,7 +137,7 @@ test('highlights background work and renders its resume notice once the agent se
   await expect.poll(() => notice.evaluate((element) => element.parentElement?.lastElementChild === element)).toBe(true);
 });
 
-test('the key chip opens the owning plugin tab, and is a label where there is none', async ({ page, cockpit }) => {
+test('the group name opens the owning plugin panel, and is a label where there is none', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
@@ -147,7 +147,7 @@ test('the key chip opens the owning plugin tab, and is a label where there is no
   await expect(page.getByTestId('activity-open-runners')).toHaveCount(0);
 
   await page.getByTestId('activity-open-agents').click();
-  await expect(page).toHaveURL(/\/session\/s1\/subagents$/);
+  await expect(page).toHaveURL(/\/session\/s1\/subagents-fleet$/);
 });
 
 test('the runners group lists only what is up now, and a row opens its log', async ({ page, cockpit }) => {
@@ -289,7 +289,7 @@ test('the workflows group lists the session runs and opens one in the workflows 
   await expect(page.getByTestId('background-work-notice')).toBeVisible();
 
   await row.click();
-  await expect(page).toHaveURL(/\/session\/s1\/workflows$/);
+  await expect(page).toHaveURL(/\/session\/s1\/workflows-runs$/);
   await expect(page.getByTestId('workflow-picker')).toContainText('Release Hardening');
 });
 

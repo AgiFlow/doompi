@@ -200,8 +200,8 @@ export interface ActivityGroup {
   /** What the publishing extension is reporting, empty when it reports nothing. */
   summary: string;
   active: boolean;
-  /** The plugin tab the group's key chip opens, when its package declares one. */
-  tab?: string;
+  /** The temporary tab the group's name opens, when its package declares one. */
+  transientTab?: () => TransientTab;
   /** Keeps the group visible below the dock's scrolling ordinary groups. */
   placement?: 'bottom';
 }
@@ -238,7 +238,7 @@ export function activityGroups(
 ): ActivityGroup[] {
   const groups: ActivityGroup[] = [];
   for (const source of pluginActivityGroups()) {
-    const tab = source.tab === undefined ? {} : { tab: source.tab };
+    const tab = source.transientTab === undefined ? {} : { transientTab: source.transientTab };
     const placement = source.placement === undefined ? {} : { placement: source.placement };
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();

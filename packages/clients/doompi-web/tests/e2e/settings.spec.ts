@@ -166,12 +166,37 @@ test('lists no plugins for the packaged bundle and nothing to resolve', async ({
   await expect(page.getByTestId('settings-plugin-diagnostics-empty')).toBeVisible();
 });
 
+test('reads and writes the image limits on the images page', async ({ page, cockpit }) => {
+  let images = { autoResize: true, maxDimension: 2000, minDimension: 256, maxAllowedDimension: 2000 };
+  await page.route('**/api/settings/images', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const patch = route.request().postDataJSON() as { autoResize?: boolean; maxDimension?: number };
+      images = { ...images, ...patch };
+    }
+    await route.fulfill({ json: images });
+  });
+
+  await page.goto(`${cockpit.url}/settings/images`);
+  await expect(page.getByTestId('settings-section-images')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('image-max-dimension')).toHaveValue('2000');
+
+  // A typed cap saves on its own button, so the field is dirty until then.
+  await page.getByTestId('image-max-dimension').fill('1024');
+  await page.getByTestId('image-max-dimension-save').click();
+  await expect(page.getByTestId('image-max-dimension-save')).toBeDisabled();
+  expect(images.maxDimension).toBe(1024);
+
+  // The toggle applies at once, and turning it off locks the cap with it.
+  await page.getByTestId('image-auto-resize').click();
+  await expect(page.getByTestId('image-max-dimension')).toBeDisabled();
+  expect(images.autoResize).toBe(false);
+});
 test.describe('with the synced bundle', () => {
   test.use({ assets: 'synced' });
 
   test('lists every bundled plugin with its contributions and no diagnostics', async ({ page, cockpit }) => {
     await page.goto(`${cockpit.url}/settings/plugins`);
-    await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 tabs');
+    await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 activity groups');
     await expect(page.getByTestId('settings-plugin-subagents')).toContainText('1 slots');
     await expect(page.getByTestId('settings-plugin-runner')).toContainText('1 activity groups');
     await expect(page.getByTestId('settings-plugin-workflows')).toBeVisible();

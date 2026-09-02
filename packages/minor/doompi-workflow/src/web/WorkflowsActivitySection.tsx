@@ -10,10 +10,10 @@ import {
   workflowActivityRows,
 } from './workflowActivity.ts';
 import { openCatalog } from './catalogStore.ts';
+import { workflowsTab } from './WorkflowsPanel.tsx';
 import { focusRun, workflows } from './workflowsStore.ts';
 
 const TICK_MS = 10_000;
-const WORKFLOWS_TAB = 'workflows';
 
 const TONE_DOT: Readonly<Record<WorkflowActivityTone, DotTone>> = {
   running: 'yellow',
@@ -45,7 +45,7 @@ const GROUP_LABEL: Readonly<Record<WorkflowActivityGroupName, string>> = {
  * they are the only ones that need an answer, and the rest stay out of the way
  * until somebody asks. Idle offers the catalog instead of saying nothing.
  */
-export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotProps) {
+export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const runs = useStore(workflows.store, (state) => workflows.select(state, sessionId).runs);
   const [now, setNow] = useState(() => Date.now());
   const [folded, setFolded] = useState<Partial<Record<WorkflowActivityGroupName, boolean>>>({});
@@ -70,7 +70,7 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
           onClick={() => {
             if (sessionId === null) return;
             openCatalog(sessionId);
-            openTab(WORKFLOWS_TAB);
+            openTransientTab(workflowsTab());
           }}
         >
           launch a workflow
@@ -89,7 +89,7 @@ export function WorkflowsActivitySection({ sessionId, openTab }: WebPluginSlotPr
       onClick={() => {
         if (sessionId === null) return;
         focusRun(sessionId, row.identity);
-        openTab(WORKFLOWS_TAB);
+        openTransientTab(workflowsTab());
       }}
       className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
     >
