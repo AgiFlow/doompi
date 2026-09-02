@@ -30,24 +30,51 @@ describe('the runtime handed to the cockpit', () => {
     );
   });
 
-  it('keeps the inherited environment, which is how the agent is configured', () => {
-    expect(
-      hubEnvironment({ ANTHROPIC_API_KEY: 'secret' }, '/runtime/doompi-web/dist/bin/serve.mjs').ANTHROPIC_API_KEY,
-    ).toBe('secret');
+  it('keeps provider configuration but drops a parent session composition', () => {
+    const environment = hubEnvironment(
+      { ANTHROPIC_API_KEY: 'secret', DOOMPI_ROOT: '/parent/repository', DOOMPI_STATE: '/parent/state.json' },
+      '/runtime/doompi-web/dist/bin/serve.mjs',
+    );
+    expect(environment.ANTHROPIC_API_KEY).toBe('secret');
+    expect(environment.DOOMPI_ROOT).toBeUndefined();
+    expect(environment.DOOMPI_STATE).toBeUndefined();
   });
 
   it('points dynamic commands and native tools at the runtime artifact', () => {
     const environment = hubEnvironment({}, '/runtime/doompi-web/dist/bin/serve.mjs');
     expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi-server', 'dist', 'bin', 'serve.mjs'));
-    expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'cli.mjs'));
+    expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
+    expect(environment.DOOMPI_SYNC_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi', 'dist', 'src'));
+    expect(environment.DOOMPI_PACKAGE_CATALOG).toBe(path.join('/runtime', 'catalog', 'index.json'));
+    expect(environment.DOOMPI_NPM_CLI).toBe(path.join('/runtime', 'vendor', 'npm', 'bin', 'npm-cli.js'));
     expect(environment.DOOMPI_WEB_MODULE).toBe('file:///runtime/doompi-web/dist/index.mjs');
     expect(environment.DOOMPI_WEB_DIST).toBeUndefined();
     expect(environment.DOOMPI_WEB_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi-web'));
     expect(environment.DOOMPI_VITE_PACKAGE_ROOT).toBe(path.join('/runtime', 'vendor', 'vite'));
     expect(environment.NODE_PATH).toBe(path.join('/runtime', 'native', 'node_modules'));
-    expect(environment.DOOMPI_RMUX_BINARY).toBe(path.join('/runtime', 'native', 'rmux', 'bin', 'rmux'));
-    expect(environment.DOOMPI_RTK_BINARY).toBe(path.join('/runtime', 'native', 'rtk', 'bin', 'rtk'));
+    expect(environment.DOOMPI_RMUX_BINARY).toBe(
+      path.join(
+        '/runtime',
+        'node_modules',
+        '@agimon-ai',
+        `doompi-runner-rmux-${process.platform}-${process.arch}`,
+        'vendor',
+        'bin',
+        'rmux',
+      ),
+    );
+    expect(environment.DOOMPI_RTK_BINARY).toBe(
+      path.join(
+        '/runtime',
+        'node_modules',
+        '@agimon-ai',
+        `doompi-runner-rtk-${process.platform}-${process.arch}`,
+        'vendor',
+        'bin',
+        'rtk',
+      ),
+    );
   });
 });
 

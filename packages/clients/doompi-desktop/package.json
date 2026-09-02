@@ -39,6 +39,7 @@
     "@agimon-ai/doompi-web": "workspace:*",
     "@types/node": "26.4.0",
     "electron": "44.0.0",
+    "npm": "11.16.0",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
     "vite": "8.2.2",

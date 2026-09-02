@@ -28,18 +28,38 @@ export function hubEntry(input: { resourcesPath: string; packaged: boolean; proj
 export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.ProcessEnv {
   const runtimeRoot = path.resolve(path.dirname(entry), '..', '..', '..');
   const artifact = (...segments: string[]): string => path.join(runtimeRoot, ...segments);
+  const inherited = Object.fromEntries(Object.entries(base).filter(([name]) => !name.startsWith('DOOMPI_')));
   return {
-    ...base,
+    ...inherited,
     ELECTRON_RUN_AS_NODE: '1',
     NODE_PATH: artifact('native', 'node_modules'),
     DOOMPI_SERVER_COMMAND: artifact('doompi-server', 'dist', 'bin', 'serve.mjs'),
-    DOOMPI_AGENT_COMMAND: artifact('doompi', 'dist', 'bin', 'cli.mjs'),
+    // Desktop owns an isolated DPI composition rather than changing the user's
+    // persisted Pi integration. Sync and sessions must use that same entry point.
+    DOOMPI_AGENT_COMMAND: artifact('doompi', 'dist', 'bin', 'dpi.mjs'),
+    DOOMPI_SYNC_COMMAND: artifact('doompi', 'dist', 'bin', 'dpi.mjs'),
     DOOMPI_PACKAGE_ROOT: artifact('doompi', 'dist', 'src'),
+    DOOMPI_PACKAGE_CATALOG: artifact('catalog', 'index.json'),
+    DOOMPI_NPM_CLI: artifact('vendor', 'npm', 'bin', 'npm-cli.js'),
     DOOMPI_WEB_MODULE: pathToFileURL(artifact('doompi-web', 'dist', 'index.mjs')).href,
     DOOMPI_WEB_PACKAGE_ROOT: artifact('doompi-web'),
     DOOMPI_VITE_PACKAGE_ROOT: artifact('vendor', 'vite'),
-    DOOMPI_RMUX_BINARY: artifact('native', 'rmux', 'bin', 'rmux'),
-    DOOMPI_RTK_BINARY: artifact('native', 'rtk', 'bin', 'rtk'),
+    DOOMPI_RMUX_BINARY: artifact(
+      'node_modules',
+      '@agimon-ai',
+      `doompi-runner-rmux-${process.platform}-${process.arch}`,
+      'vendor',
+      'bin',
+      'rmux',
+    ),
+    DOOMPI_RTK_BINARY: artifact(
+      'node_modules',
+      '@agimon-ai',
+      `doompi-runner-rtk-${process.platform}-${process.arch}`,
+      'vendor',
+      'bin',
+      'rtk',
+    ),
   };
 }
 
