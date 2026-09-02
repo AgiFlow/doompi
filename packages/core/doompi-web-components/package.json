@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-web-components",
-  "version": "0.0.1-alpha.8",
+  "version": "0.0.1-alpha.9",
   "description": "Shared web components and theme tokens for the DoomPi cockpit and its web plugins: shadcn-style primitives on Radix, tuned to the Doom palette, with runtime theme configs.",
   "keywords": [
     "ai",

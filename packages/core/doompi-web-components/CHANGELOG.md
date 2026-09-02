@@ -1,3 +1,18 @@
+## 0.0.1-alpha.9 (2026-09-02)
+
+### 🚀 Features
+
+- **root:** add the log issues panel, tool cost, and context projection ([ffdf232](https://github.com/AgiFlow/doompi/commit/ffdf232))
+- **root:** share ansi/syntax text components and add context dock ([552f30d](https://github.com/AgiFlow/doompi/commit/552f30d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.45
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.8 (2026-09-01)
 
 ### 🧱 Updated Dependencies

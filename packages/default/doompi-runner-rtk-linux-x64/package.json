@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-runner-rtk-linux-x64",
-  "version": "0.0.1-alpha.45",
+  "version": "0.0.1-alpha.46",
   "description": "Prebuilt RTK v0.45.0 log processor for DoomPi Runner on Linux x64.",
   "keywords": [
     "ai",

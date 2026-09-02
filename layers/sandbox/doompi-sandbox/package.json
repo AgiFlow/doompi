@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-sandbox",
-  "version": "0.0.1-alpha.47",
+  "version": "0.0.1-alpha.48",
   "description": "Container sandbox for DoomPi launches: the agent, extensions, and tools run inside Docker or Podman while the terminal stays on the host",
   "keywords": [
     "coding-agent",
