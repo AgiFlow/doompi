@@ -4,12 +4,12 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import type { SubagentRun } from '../types/webSubagents.ts';
 import { agentThreadTab } from './AgentThreadPanel.tsx';
+import { subagentsTab } from './SubagentsPanel.tsx';
 import { openCatalog } from './catalogStore.ts';
 import { formatRunDuration } from './format.ts';
 import { activityRuns, isTerminalRun, subagents } from './subagentsStore.ts';
 
 const TICK_MS = 10_000;
-const SUBAGENTS_TAB = 'subagents';
 
 const STATE_TONE: Readonly<Record<SubagentRun['state'], DotTone>> = {
   queued: 'muted',
@@ -36,7 +36,7 @@ function detail(run: SubagentRun): string {
  * row that opens the run's own conversation in a temporary tab. This replaces
  * the runtime's footer one-liner, which only says whether anything is running.
  */
-export function AgentsActivitySection({ sessionId, openTab, openTransientTab }: WebPluginSlotProps) {
+export function AgentsActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const runs = useStore(subagents.store, (state) => activityRuns(subagents.select(state, sessionId)));
   const [now, setNow] = useState(() => Date.now());
 
@@ -59,7 +59,7 @@ export function AgentsActivitySection({ sessionId, openTab, openTransientTab }: 
           onClick={() => {
             if (sessionId === null) return;
             openCatalog(sessionId);
-            openTab(SUBAGENTS_TAB);
+            openTransientTab(subagentsTab());
           }}
         >
           launch an agent

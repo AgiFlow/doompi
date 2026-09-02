@@ -1,4 +1,6 @@
-import { EmptyState } from '@agimon-ai/doompi-web-components';
+import type { ContextItemKind } from '@agimon-ai/doompi/contextApi';
+import { Button, EmptyState } from '@agimon-ai/doompi-web-components';
+import { useState } from 'react';
 import {
   type ContextGroup,
   type ContextItemSource,
@@ -9,7 +11,16 @@ import {
   projectedGroups,
   totalTokens,
 } from '../../lib/contextComposition.ts';
+import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
+import { ContextItemDialog } from './ContextItemDialog.tsx';
+
+/** The row a reader clicked, which is all the detail request is made of. */
+interface ItemTarget {
+  itemKind: ContextItemKind;
+  name: string;
+  owner: string;
+}
 
 /** Short enough to sit in a fixed column without wrapping the tool's own name. */
 const SOURCE_LABEL: Record<ContextItemSource, string> = {
@@ -39,6 +50,8 @@ export function ContextPanel() {
   const widgets = useActiveSession((state) => state.widgets);
   const projection = useActiveSession((state) => state.minorModes);
   const context = useActiveSession((state) => state.context);
+  const sessionId = useActiveSessionMeta()?.summary.id ?? null;
+  const [target, setTarget] = useState<ItemTarget | null>(null);
   // The runtime's grouping wins once it arrives; the status line only has to
   // carry the surface until the session has reported its inventory.
   const groups = context ? projectedGroups(context) : contextGroups(statuses, widgets, projection);
@@ -58,7 +71,7 @@ export function ContextPanel() {
         ) : (
           <div className="flex flex-col">
             {groups.map((group) => (
-              <ContextGroupView key={`${group.kind}:${group.id}`} group={group} />
+              <ContextGroupView key={`${group.kind}:${group.id}`} group={group} onSelect={setTarget} />
             ))}
           </div>
         )}
@@ -83,11 +96,13 @@ export function ContextPanel() {
           {`estimated · ${context?.estimator ?? 'gpt-tokenizer'} BPE · not a billed total`}
         </span>
       </div>
+
+      <ContextItemDialog sessionId={sessionId} target={target} onClose={() => setTarget(null)} />
     </div>
   );
 }
 
-function ContextGroupView({ group }: { group: ContextGroup }) {
+function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: (target: ItemTarget) => void }) {
   return (
     <div
       data-testid={`context-group-${group.id}`}
@@ -127,11 +142,17 @@ function ContextGroupView({ group }: { group: ContextGroup }) {
               <span className="w-14 text-right text-[10px] text-doom-dim">{tokens(owner.tokens)}</span>
             </div>
             {owner.items.map((item) => (
-              <div
+              // A row is a question as much as a figure: what am I paying for.
+              // The answer is too large to have travelled with the panel, so
+              // the row asks for it rather than carrying it.
+              <Button
+                variant="ghost"
+                size="card"
                 key={`${item.itemKind}:${item.name}`}
                 data-testid={`context-row-${item.name}`}
                 data-active={item.active}
-                className="flex items-center gap-2 py-px pr-1 pl-4"
+                onClick={() => onSelect({ itemKind: item.itemKind, name: item.name, owner: item.owner })}
+                className="flex-row items-center gap-2 rounded-none py-px pr-1 pl-4"
               >
                 <span className={`flex-1 truncate text-[10px] ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}>
                   {item.name}
@@ -142,7 +163,7 @@ function ContextGroupView({ group }: { group: ContextGroup }) {
                 >
                   {item.active ? tokens(item.tokens) : `(${tokens(item.tokens)})`}
                 </span>
-              </div>
+              </Button>
             ))}
           </div>
         ))

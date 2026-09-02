@@ -70,3 +70,53 @@ test('reports the estimate as an estimate', async ({ page, cockpit }) => {
   await expect(page.getByTestId('context-total')).toHaveText('—');
   await expect(page.getByTestId('context-panel')).toContainText('not a billed total');
 });
+
+// A row is a question as much as a figure, so it has to be answerable. The
+// fake session behind these tests serves no package API, which is exactly the
+// case a reader must not be left staring at a spinner for.
+test('opens a row and says so when the session cannot describe it', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      id: 'ctx-1',
+      customType: 'doom-context',
+      data: {
+        version: 1,
+        revision: 1,
+        estimator: 'gpt-tokenizer',
+        totalTokens: 153,
+        inactiveTokens: 0,
+        groups: [
+          {
+            id: 'core',
+            label: 'core',
+            kind: 'core',
+            tokens: 153,
+            inactiveTokens: 0,
+            items: [
+              {
+                name: 'read',
+                itemKind: 'tool',
+                source: 'extension',
+                owner: '@agimon-ai/doompi-read',
+                tokens: 153,
+                active: true,
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  await page.getByTestId('dock-tab-context').click();
+
+  await page.getByTestId('context-row-read').click();
+
+  await expect(page.getByTestId('context-item-dialog')).toBeVisible();
+  await expect(page.getByTestId('context-item-title')).toHaveText('read');
+  await expect(page.getByTestId('context-item-error')).toBeVisible();
+});

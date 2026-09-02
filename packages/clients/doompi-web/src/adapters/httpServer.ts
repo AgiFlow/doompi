@@ -88,10 +88,13 @@ import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
 import {
+  BROWSER_ERROR_EVENT,
+  createBrowserError,
   createBrowserTelemetryRateLimit,
   createWebTelemetry,
   forwardedTraceContext,
-  parseBrowserPerformanceBatch,
+  isBrowserErrorEvent,
+  parseBrowserTelemetryBatch,
   readTraceContext,
   requestOperation,
   shutdownWebTelemetry,
@@ -106,6 +109,8 @@ const DIRECTORY_SUGGESTION_LIMIT = 12;
 const INDEX_FILE = 'index.html';
 /** Env override for the assets directory, set by launchers that know a synced bundle. */
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
+/** Package-root override for bundled launchers whose chunks do not retain the npm layout. */
+const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
 /** Comma-separated origins the operator allows past the guard, for dev setups this package cannot guess. */
 const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 const RAW_BUNDLE_PREFIX = '/bundle-assets/';
@@ -114,6 +119,11 @@ const SEALED_HTTP_VERSION = 1;
 /** Upper bound for any body accepted from the tunnel before route-specific limits. */
 const TUNNEL_BODY_BYTES = 8 * 1024 * 1024;
 const TUNNEL_HEADER_BYTES = 16 * 1024;
+/**
+ * A full telemetry batch of ten failures, each with a bounded stack, still fits
+ * with room to spare. Anything larger is not a cockpit reporting itself.
+ */
+const BROWSER_TELEMETRY_BODY_BYTES = 32 * 1024;
 const TUNNEL_HEADERS_TIMEOUT_MS = 5000;
 const TUNNEL_REQUEST_TIMEOUT_MS = 10_000;
 const TUNNEL_CONNECTION_LIMIT = 64;
@@ -203,6 +213,8 @@ function decodeSealedHttpBody(value: string | undefined): Buffer | undefined {
  * tree, whose depth is a build detail.
  */
 function packagedDirectory(name: 'web' | 'pwa'): string {
+  const configuredRoot = process.env[WEB_PACKAGE_ROOT_ENV];
+  if (configuredRoot !== undefined && configuredRoot !== '') return path.join(configuredRoot, 'dist', name);
   let dir = path.dirname(fileURLToPath(import.meta.url));
   for (;;) {
     if (fs.existsSync(path.join(dir, 'package.json'))) return path.join(dir, 'dist', name);
@@ -229,7 +241,11 @@ function packagedPwaDir(): string {
  * long-lived process signs its asset directory once and never revisits it.
  */
 export function packagedVersion(): string {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
+  const configuredRoot = process.env[WEB_PACKAGE_ROOT_ENV];
+  let dir =
+    configuredRoot !== undefined && configuredRoot !== ''
+      ? configuredRoot
+      : path.dirname(fileURLToPath(import.meta.url));
   for (;;) {
     const manifest = path.join(dir, 'package.json');
     if (fs.existsSync(manifest)) {
@@ -503,7 +519,17 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       stateDirectory: store.directory,
       onNotice: notice,
     });
-  const startupComposition = await resolveComposition();
+  // A repository whose web plugins cannot be bundled must not stop the hub
+  // from binding. Serving the packaged cockpit loses the plugins, which the
+  // notice says out loud, but a reachable hub can still be used to fix them;
+  // a hub that refused to start could not.
+  let startupComposition: Awaited<ReturnType<typeof resolveComposition>>;
+  try {
+    startupComposition = await resolveComposition();
+  } catch (error) {
+    notice(`the cockpit composition is unavailable (${describeError(error)}); serving the packaged bundle`);
+    startupComposition = undefined;
+  }
   let served = {
     assetsDir: resolveAssetsDir(options.assetsDir, startupComposition, notice),
     apiDirectory: startupComposition?.apiDirectory,
@@ -714,7 +740,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return await tunnelBodyLimit(context, next);
   });
   const browserTelemetryBodyLimit = bodyLimit({
-    maxSize: 8 * 1024,
+    maxSize: BROWSER_TELEMETRY_BODY_BYTES,
     onError: (context) => context.json({ error: 'The telemetry batch is too large.' }, 413),
   });
   const acceptBrowserTelemetryRequest = createBrowserTelemetryRateLimit();
@@ -726,9 +752,25 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     } catch {
       return context.json({ error: 'The telemetry batch must be JSON.' }, 400);
     }
-    const events = parseBrowserPerformanceBatch(body);
+    const events = parseBrowserTelemetryBatch(body);
     if (events === undefined) return context.json({ error: 'The telemetry batch is invalid.' }, 400);
     for (const event of events) {
+      if (isBrowserErrorEvent(event)) {
+        // The message and stack ride the exception, not the attributes:
+        // sanitisation drops those keys, and rightly so for everything that is
+        // not an error the reader asked to see.
+        await telemetry.recordError(
+          BROWSER_ERROR_EVENT,
+          createBrowserError(event),
+          {
+            'browser.source': event.source,
+            ...(event.session_id === undefined ? {} : { 'session.id': event.session_id }),
+            'failure.kind': 'browser',
+          },
+          { includeException: true },
+        );
+        continue;
+      }
       await telemetry.recordEvent(event.name, {
         ...(event.duration_ms === undefined ? {} : { duration_ms: event.duration_ms }),
         ...(event.count === undefined ? {} : { count: event.count }),

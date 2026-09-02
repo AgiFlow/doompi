@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx';
 import { ContributedSettings } from '../features/settings/ContributedSettings.tsx';
+import { ImageSettings } from '../features/settings/ImageSettings.tsx';
 import { NotificationSettings } from '../features/settings/NotificationSettings.tsx';
 import { PluginSettings } from '../features/settings/PluginSettings.tsx';
 import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace.tsx';
@@ -129,15 +130,20 @@ export function SettingsPage() {
               data-testid="settings-content"
               className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"
             >
-              {current?.id === 'providers' ? <ProviderSettings /> : null}
-              {current?.id === 'appearance' ? <AppearanceSettings /> : null}
-              {current?.id === 'notifications' ? <NotificationSettings /> : null}
-              {current?.id === 'remote' ? <RemoteControlSettings /> : null}
-              {current?.id === 'plugins' ? <PluginSettings /> : null}
-              {current?.contribution === undefined ? null : (
-                <ContributedSettings section={current.contribution} scope="global" />
-              )}
-              {current?.panel === undefined ? null : <SettingsPanelHost panel={current.panel} />}
+              {/* One column width for every page, so moving between sections does
+                  not re-flow the reading line. */}
+              <div className="flex w-full max-w-[780px] flex-col gap-4">
+                {current?.id === 'providers' ? <ProviderSettings /> : null}
+                {current?.id === 'appearance' ? <AppearanceSettings /> : null}
+                {current?.id === 'notifications' ? <NotificationSettings /> : null}
+                {current?.id === 'images' ? <ImageSettings /> : null}
+                {current?.id === 'remote' ? <RemoteControlSettings /> : null}
+                {current?.id === 'plugins' ? <PluginSettings /> : null}
+                {current?.contribution === undefined ? null : (
+                  <ContributedSettings section={current.contribution} scope="global" />
+                )}
+                {current?.panel === undefined ? null : <SettingsPanelHost panel={current.panel} />}
+              </div>
             </section>
           </div>
         )}

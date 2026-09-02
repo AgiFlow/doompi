@@ -145,7 +145,7 @@ describe('task Pi tool boundary', () => {
     expect(tool.description).toContain('Do not use it for simple requests');
     expect(tool.promptSnippet).toBeUndefined();
     expect(tool.promptGuidelines).toEqual(DEFAULT_PROMPT_GUIDELINES);
-    expect(guidelines).toContain('Capture a whole plan in one call');
+    expect(guidelines).toContain('Batch the whole plan in one upsert');
     expect(guidelines).not.toContain('Use `task` only for complex jobs');
     expect(guidelines).not.toContain('3+ steps');
   });

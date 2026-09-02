@@ -18,6 +18,7 @@ default:
     - "./packages/minor/doompi-workflow"
     - "./packages/default/doompi-log"
     - "./packages/default/doompi-mcp"
+    - "./packages/default/doompi-prompt"
 
 layers:
   team:

@@ -1,0 +1,85 @@
+name: Desktop release
+
+# Kept separate from `Release publish` on purpose: that workflow publishes npm
+# packages and asserts every project it names appears on the alpha dist-tag.
+# The desktop app is private and ships as a GitHub Release artifact instead, so
+# it has its own trigger and its own matrix.
+on:
+  push:
+    tags: ["desktop-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: doompi-desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            platform: mac
+          - runner: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      # The secrets context is not available to a step-level `if`, so signing
+      # availability is decided once here and read as an ordinary variable.
+      SIGNING_AVAILABLE: ${{ secrets.APPLE_ID != '' }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the workspace packages the app bundles
+        run: pnpm nx run-many -t build -p @agimon-ai/doompi-web @agimon-ai/doompi-desktop
+
+      - name: Package the desktop app
+        run: pnpm nx run @agimon-ai/doompi-desktop:package
+        env:
+          # Absent on forks and on Linux, where electron-builder skips signing
+          # and still produces artifacts.
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Confirm macOS artifacts are notarized
+        if: matrix.platform == 'mac' && env.SIGNING_AVAILABLE == 'true'
+        run: |
+          app="packages/clients/doompi-desktop/release/mac-arm64/DoomPi.app"
+          codesign -dv --verbose=4 "$app"
+          spctl -a -vvv -t install "$app"
+
+      - name: Upload the artifacts to the release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          files: |
+            packages/clients/doompi-desktop/release/*.dmg
+            packages/clients/doompi-desktop/release/*.zip
+            packages/clients/doompi-desktop/release/*.AppImage
+            packages/clients/doompi-desktop/release/*.deb
+          draft: true
+          fail_on_unmatched_files: false

@@ -1,18 +1,9 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { useStore } from '@tanstack/react-store';
 import { openCatalog, workflowCatalogChannel } from './catalogStore.ts';
 import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
-import { WorkflowsPanel } from './WorkflowsPanel.tsx';
+import { workflowsTab } from './WorkflowsPanel.tsx';
 import { WorkflowToolMessage } from './WorkflowToolMessage.tsx';
 import { workflowRunsChannel, workflows } from './workflowsStore.ts';
-
-/** The tab badge: only runs still in the running stage. */
-export function useWorkflowsBadge(sessionId: string | null): number {
-  return useStore(
-    workflows.store,
-    (state) => workflows.select(state, sessionId).runs.filter((run) => run.stage === 'running').length,
-  );
-}
 
 const WORKFLOWS_GROUP = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };
 
@@ -29,7 +20,8 @@ const workflowActivitySource = {
 /** The named export the generated plugin registry imports. */
 export const webPlugin = defineWebPlugin({
   id: 'workflows',
-  tabs: [{ id: 'workflows', label: 'workflows', panel: WorkflowsPanel, useBadge: useWorkflowsBadge }],
+  // No declared tab: the runs surface is a panel the reader opens from the
+  // dock's workflows group, and closes when they are done with it.
   channels: [workflowRunsChannel, workflowCatalogChannel],
   minorModes: [{ name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress', order: 50 }],
   activityGroups: [
@@ -38,7 +30,7 @@ export const webPlugin = defineWebPlugin({
       keys: 'w r',
       widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
       activeSource: workflowActivitySource,
-      tab: 'workflows',
+      transientTab: workflowsTab,
       order: 30,
     },
   ],
@@ -53,14 +45,14 @@ export const webPlugin = defineWebPlugin({
     {
       id: 'doom-workflow.manage',
       path: [WORKFLOWS_GROUP, { key: 'r', label: 'runs', detail: 'runs in this session' }],
-      run: (context) => context.openTab('workflows'),
+      run: (context) => context.openTransientTab(workflowsTab()),
     },
     {
       id: 'doom-workflow.catalog',
       path: [WORKFLOWS_GROUP, { key: 'l', label: 'launch', detail: 'pick a workflow and launch it' }],
       run: (context) => {
         if (context.sessionId !== null) openCatalog(context.sessionId);
-        context.openTab('workflows');
+        context.openTransientTab(workflowsTab());
       },
     },
     {

@@ -15,7 +15,28 @@ export const SETTINGS_REPOSITORIES_API_ROUTE = '/api/settings/repositories';
 export const SETTINGS_MODELS_API_ROUTE = '/api/settings/models';
 export const SETTINGS_REPOSITORY_API_ROUTE = '/api/settings/repository';
 export const SETTINGS_REPOSITORY_SELECTION_API_ROUTE = '/api/settings/repository/selection';
+export const SETTINGS_IMAGES_API_ROUTE = '/api/settings/images';
 
+/**
+ * The image limits, which live in Pi's settings.json rather than the Doom
+ * config, so they have their own route instead of a key path: Pi's own toggle
+ * writes that file, and a machine should not end up with two answers to how
+ * large an image reaches a model.
+ */
+export interface SettingsImagesView {
+  /** Off leaves every image at the size it arrived. */
+  autoResize: boolean;
+  /** Longest edge an image keeps once resizing is on. */
+  maxDimension: number;
+  /** The range the hub accepts; a value outside it is clamped rather than refused. */
+  minDimension: number;
+  maxAllowedDimension: number;
+}
+
+export interface SettingsImagesWriteRequest {
+  autoResize?: boolean;
+  maxDimension?: number;
+}
 /** Which of the two config files a read or write is about. */
 export type SettingsScope = 'global' | 'repository';
 

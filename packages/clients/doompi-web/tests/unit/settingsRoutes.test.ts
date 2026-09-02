@@ -400,3 +400,64 @@ describe('what the page needs besides values', () => {
     });
   });
 });
+
+describe('image limits', () => {
+  const IMAGES = '/api/settings/images';
+
+  function piSettings(home: string): string {
+    return path.join(home, '.pi', 'agent', 'settings.json');
+  }
+
+  async function writeImages(hono: Hono, body: unknown): Promise<Response> {
+    return await hono.request(IMAGES, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('answers Pi is defaults on a machine that never set them', async () => {
+    const { home } = workspace();
+
+    const response = await app(home).request(IMAGES);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      autoResize: true,
+      maxDimension: 2000,
+      minDimension: 256,
+      maxAllowedDimension: 2000,
+    });
+  });
+
+  it('writes the toggle and the cap into Pi is own settings file', async () => {
+    const { home } = workspace();
+    const hono = app(home);
+
+    const written = await writeImages(hono, { autoResize: false, maxDimension: 1024 });
+
+    expect(written.status).toBe(200);
+    expect(await written.json()).toMatchObject({ autoResize: false, maxDimension: 1024 });
+    expect(JSON.parse(fs.readFileSync(piSettings(home), 'utf8'))).toEqual({
+      images: { autoResize: false, maxDimension: 1024 },
+    });
+    expect(await (await hono.request(IMAGES)).json()).toMatchObject({ autoResize: false, maxDimension: 1024 });
+  });
+
+  it('clamps a cap Pi would undo rather than refusing the write', async () => {
+    const { home } = workspace();
+
+    const written = await writeImages(app(home), { maxDimension: 9000 });
+
+    expect(await written.json()).toMatchObject({ maxDimension: 2000 });
+  });
+
+  it('refuses a body that is not the shape of a limit', async () => {
+    const { home } = workspace();
+    const hono = app(home);
+
+    expect((await writeImages(hono, { autoResize: 'yes' })).status).toBe(400);
+    expect((await writeImages(hono, { maxDimension: 'big' })).status).toBe(400);
+    expect((await writeImages(hono, 'not a record')).status).toBe(400);
+  });
+});

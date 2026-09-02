@@ -1274,6 +1274,53 @@
     "os": [],
     "cpu": []
   },
+  "@agimon-ai/doompi-prompt": {
+    "exports": {
+      ".": "tir",
+      "./extensions/pi": "tir",
+      "./hub-api": "tir",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./hub-api": {
+        "types": "./dist/hubApi.d.mts",
+        "import": "./dist/hubApi.mjs",
+        "require": "./dist/hubApi.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
+    "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-prompt/SKILL.md"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "src/types/webPrompts.ts",
+      "src/prompts",
+      "llms.txt",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
+    "os": [],
+    "cpu": []
+  },
   "@agimon-ai/doompi-read": {
     "exports": {
       ".": "tir",
@@ -2313,6 +2360,7 @@
       "./config": "tir",
       "./config/harnessState": "tir",
       "./config/projectTrust": "tir",
+      "./contextApi": "tir",
       "./extensions/pi": "tir",
       "./entries/domains": "tir",
       "./entries/cordisFinalizer": "tir",
@@ -2338,6 +2386,7 @@
       "./services/piSettings": "tir",
       "./services/resourceCollector": "tir",
       "./services/syncState": "tir",
+      "./sessionApi": "tir",
       "./utils": "tir",
       "./utils/json": "tir",
       "./utils/moduleResolution": "tir",
@@ -2450,6 +2499,11 @@
         "types": "./dist/config/projectTrust.d.mts",
         "import": "./dist/config/projectTrust.mjs",
         "require": "./dist/config/projectTrust.cjs"
+      },
+      "./contextApi": {
+        "types": "./dist/contextApi.d.mts",
+        "import": "./dist/contextApi.mjs",
+        "require": "./dist/contextApi.cjs"
       },
       "./extensions/pi": {
         "types": "./dist/extensions/pi.d.mts",
@@ -2575,6 +2629,11 @@
         "types": "./dist/services/syncState.d.mts",
         "import": "./dist/services/syncState.mjs",
         "require": "./dist/services/syncState.cjs"
+      },
+      "./sessionApi": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
       },
       "./utils": {
         "types": "./dist/utils/index.d.mts",

@@ -65,6 +65,7 @@ const STRUCTURED_SEARCH_INCOMPATIBLE_OPTIONS = [
   '--no-line-number',
   '--heading',
 ] as const;
+const RTK_BINARY_ENV = 'DOOMPI_RTK_BINARY';
 const PACKAGE_BY_PLATFORM: Readonly<Record<string, string>> = {
   'darwin-arm64': '@agimon-ai/doompi-runner-rtk-darwin-arm64',
   'darwin-x64': '@agimon-ai/doompi-runner-rtk-darwin-x64',
@@ -285,6 +286,8 @@ export function rtkPackageForTarget(platform: string, architecture: string): str
 }
 
 function bundledBinary(): string | undefined {
+  const configured = process.env[RTK_BINARY_ENV];
+  if (configured !== undefined && configured !== '') return configured;
   const packageName = rtkPackageForTarget(process.platform, process.arch);
   if (!packageName) return undefined;
   try {

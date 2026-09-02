@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "tests/web", "src/web", "src/exports/webClient.ts"]
+}

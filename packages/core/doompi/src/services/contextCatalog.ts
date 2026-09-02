@@ -8,6 +8,8 @@ import { extensionName, extensionPackageName, extensionToolSource } from '@agimo
 import { buildToolSources } from '@agimon-ai/doompi-ui/toolInventory';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { ContextItemDetail } from '../types/contextApi.ts';
+import { buildContextDetail } from './contextDetail.ts';
 import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from './contextProjection.ts';
 
 /**
@@ -22,6 +24,30 @@ export interface ContextPublisher {
   /** Never rejects: callers fire this and forget it. */
   publish: () => Promise<void>;
   dispose: () => void;
+}
+
+/** The active minor modes at publish time, read rather than remembered. */
+export type ReadMinorModes = () => readonly { readonly id: string; readonly label: string }[];
+
+export interface ContextPublisherOptions {
+  readMinorModes?: ReadMinorModes;
+  /**
+   * The session the detail file is keyed by, read at publish time.
+   *
+   * Undefined until a session is bound, and undefined in a host that has no
+   * session at all; the projection is still journaled either way, and only the
+   * click-through detail goes unwritten.
+   */
+  readSessionId?: () => string | undefined;
+  /**
+   * Where the click-through detail is left for the session API to find.
+   *
+   * Injected because writing it is filesystem work and this is not the layer
+   * that does filesystem work. A host that supplies neither still gets the
+   * projection; only the detail behind a row goes unpublished.
+   */
+  writeDetail?: (sessionId: string, revision: number, items: readonly ContextItemDetail[]) => void;
+  removeDetail?: (sessionId: string) => void;
 }
 
 /** Skills sit under owners, which is one level deeper than a flat list. */
@@ -50,10 +76,16 @@ function attributionFor(repoRoot: string, domains: readonly string[], pluginDire
   return attribution;
 }
 
-export function createContextPublisher(pi: ExtensionAPI, cordis: Context): ContextPublisher {
+export function createContextPublisher(
+  pi: ExtensionAPI,
+  cordis: Context,
+  options: ContextPublisherOptions = {},
+): ContextPublisher {
   let published: string | undefined;
   let revision = 0;
   let disposed = false;
+  /** Removed on disposal, so a session leaves nothing behind in the store. */
+  let detailSessionId: string | undefined;
 
   const build = async (): Promise<void> => {
     if (disposed) return;
@@ -82,14 +114,16 @@ export function createContextPublisher(pi: ExtensionAPI, cordis: Context): Conte
       // fails should not take the whole figure down with it.
     }
 
+    const countTokens = await counter();
     const projection = projectContext({
       revision: revision + 1,
       majorMode: harness.majorMode,
-      minorModes: [],
+      minorModes: options.readMinorModes?.() ?? [],
+      domains: harness.domains,
       sources,
       skills,
       attribution: attributionFor(repoRoot, harness.domains, harness.pluginDirectories),
-      countTokens: await counter(),
+      countTokens,
     });
 
     // Revision is compared out, so a republish that changed nothing is silent
@@ -98,6 +132,13 @@ export function createContextPublisher(pi: ExtensionAPI, cordis: Context): Conte
     if (serialized === published || disposed) return;
     published = serialized;
     revision += 1;
+    // The detail lands before the entry that invites a reader to ask for it, so
+    // a click that follows the panel's update cannot outrun the file behind it.
+    const sessionId = options.readSessionId?.();
+    if (sessionId !== undefined && sessionId !== '' && options.writeDetail !== undefined) {
+      detailSessionId = sessionId;
+      options.writeDetail(sessionId, revision, buildContextDetail({ sources, skills, countTokens }));
+    }
     pi.appendEntry(DOOM_CONTEXT_ENTRY_TYPE, { ...projection, revision });
   };
 
@@ -120,6 +161,8 @@ export function createContextPublisher(pi: ExtensionAPI, cordis: Context): Conte
     publish,
     dispose: () => {
       disposed = true;
+      if (detailSessionId !== undefined) options.removeDetail?.(detailSessionId);
+      detailSessionId = undefined;
     },
   };
 }

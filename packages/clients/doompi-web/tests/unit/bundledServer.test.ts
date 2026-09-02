@@ -35,6 +35,22 @@ describe('default Server command', () => {
     expect(launch.environment.DOOMPI_WEB_MODULE).toBe('file:///custom/web.mjs');
   });
 
+  it('launches a desktop artifact without resolving an installed package tree', () => {
+    const launch = defaultServerLaunch(
+      '/workspace/project',
+      {
+        DOOMPI_SERVER_COMMAND: '/artifact/doompi-server/dist/bin/serve.mjs',
+        DOOMPI_AGENT_COMMAND: '/artifact/doompi/dist/bin/cli.mjs',
+        DOOMPI_WEB_MODULE: 'file:///artifact/doompi-web/dist/index.mjs',
+      },
+      'file:///missing/desktop-entry.mjs',
+      () => false,
+    );
+
+    expect(launch.args).toEqual(['/artifact/doompi-server/dist/bin/serve.mjs']);
+    expect(launch.environment.DOOMPI_AGENT_COMMAND).toBe('/artifact/doompi/dist/bin/cli.mjs');
+    expect(launch.environment.DOOMPI_WEB_MODULE).toBe('file:///artifact/doompi-web/dist/index.mjs');
+  });
   it('lets Server use the repository-local agent when one exists', () => {
     const localCli = path.join('/workspace/project', ...repositoryCliSegments);
     const launch = defaultServerLaunch(

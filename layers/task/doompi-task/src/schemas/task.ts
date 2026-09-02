@@ -56,61 +56,53 @@ export const TaskItemSchema = Type.Object(
     id: Type.Optional(
       Type.Integer({
         description:
-          'Existing task id to change. Omit to create a new task. An entry with an id never creates: if the id is unknown, only that entry fails.',
+          'Existing task id to change. Omit to create. An unknown id fails only that entry; it never creates.',
       }),
     ),
     ref: Type.Optional(
       Type.String({
         description:
-          'Temporary name for a task created by this entry, so a LATER entry in the same tasks[] can list it in blockedBy before its real id exists. Must start with a letter. Scoped to this one call and never stored; the response reports which real id it became.',
+          'Temporary name for a task created by this entry, so a LATER entry in this array can list it in blockedBy. Must start with a letter; never stored.',
       }),
     ),
     subject: Type.Optional(
       Type.String({
-        description:
-          "Short imperative subject line (e.g. 'Research existing tool'). Required when the entry has no id; on an entry with an id it renames the task.",
+        description: 'Short imperative subject. Required when the entry has no id; on an entry with an id it renames.',
       }),
     ),
     description: Type.Optional(
-      Type.String({
-        description: 'Long-form task detail. This becomes the brief handed to the subagent when the task is assigned.',
-      }),
+      Type.String({ description: 'Long-form detail; becomes the brief handed to the subagent on assign.' }),
     ),
     activeForm: Type.Optional(
-      Type.String({
-        description: "Present-continuous spinner label shown while status is in_progress (e.g. 'writing tests')",
-      }),
+      Type.String({ description: "Present-continuous label shown while in_progress (e.g. 'writing tests')" }),
     ),
     status: Type.Optional(
       Type.String({
         enum: [...TASK_STATUSES],
         description:
-          'Starting status for a new entry (default pending; deleted is rejected), or the target status for an entry with an id, where the transition must be legal.',
+          'New entries default to pending and cannot start deleted; on an entry with an id the transition must be legal.',
       }),
     ),
     blockedBy: Type.Optional(
       Type.Array(DepTokenSchema, {
         description:
-          'Dependencies for a NEW entry (one with no id): this task is blocked by each target. A number is an existing task id; a string is the ref of a task created by an EARLIER entry in this same array. Use addBlockedBy / removeBlockedBy on an entry that has an id.',
+          'Dependencies for a NEW entry: task ids, or refs of tasks created EARLIER in this array. On an entry with an id use addBlockedBy / removeBlockedBy instead.',
       }),
     ),
     addBlockedBy: Type.Optional(
       Type.Array(DepTokenSchema, {
-        description:
-          'Dependencies to add, for an entry with an id. Task ids, or refs declared by an earlier entry. Additive merge — do not resend the full array.',
+        description: 'Dependencies to add (ids or earlier refs). Additive; do not resend the full array.',
       }),
     ),
     removeBlockedBy: Type.Optional(
       Type.Array(DepTokenSchema, {
-        description: 'Dependencies to remove, for an entry with an id. Additive merge — do not resend the full array.',
+        description: 'Dependencies to remove. Additive; do not resend the full array.',
       }),
     ),
-    owner: Type.Optional(
-      Type.String({ description: 'Owner label for this task. assign sets this to the subagent name automatically.' }),
-    ),
+    owner: Type.Optional(Type.String({ description: 'Owner label; assign sets it to the subagent name.' })),
     metadata: Type.Optional(
       Type.Record(Type.String(), Type.Unknown(), {
-        description: 'Arbitrary metadata merged into the task; pass null as a value to delete that key',
+        description: 'Merged into the task; a null value deletes that key.',
       }),
     ),
   },
@@ -126,7 +118,7 @@ export const TaskAssignmentSchema = Type.Object(
     instructions: Type.Optional(Type.String({ description: 'Extra instructions appended to this delegated brief' })),
     relevantFiles: Type.Optional(
       Type.Array(Type.String(), {
-        description: `Files already read or located for this task. Paths are relative to the working directory; at most ${MAX_BRIEF_FILES} are used.`,
+        description: `Files already read or located, relative to the working directory; at most ${MAX_BRIEF_FILES} are used.`,
       }),
     ),
     priorFindings: Type.Optional(
@@ -148,42 +140,34 @@ export const TaskAssignmentSchema = Type.Object(
  * wording changes here change model behaviour.
  */
 export const TaskParamsSchema = Type.Object({
-  action: Type.String({
-    enum: [...TASK_ACTIONS],
-    description:
-      'upsert (create new tasks and change existing ones, one or many per call), list, get, delete (tombstone), clear (close/reset the list), assign (delegate one or more tasks through assignments[]), cancel (stop a delegated run)',
-  }),
+  action: Type.String({ enum: [...TASK_ACTIONS] }),
   tasks: Type.Optional(
     Type.Array(TaskItemSchema, {
       minItems: 1,
       description:
-        'upsert only. One entry per task: an entry with an id changes that task, an entry without an id creates one. Entries apply in array order, so a later entry can depend on an earlier one by ref. Each entry succeeds or fails on its own: the ones that succeed are committed and the ones that fail are reported by their array index.',
+        'upsert only. An entry with an id changes that task, an entry without an id creates one. Entries apply in array order, so a later entry can depend on an earlier one by ref.',
     }),
   ),
   assignments: Type.Optional(
     Type.Array(TaskAssignmentSchema, {
       minItems: 1,
-      description:
-        'Required for assign, including one task. Each entry selects its own pending, unblocked task, agent, model, and context pack; successful entries remain delegated if another entry fails. assign has no top-level single-task form.',
+      description: 'Required for assign, one entry per task, including when there is only one.',
     }),
   ),
   id: Type.Optional(
     Type.Integer({
       description:
-        'Task id, for get, delete, and cancel. For assign, put every id inside assignments[]. upsert does not accept this field — put the id inside the tasks[] entry you want to change.',
+        'Task id, for get, delete and cancel. Not accepted by upsert or assign: those carry ids inside tasks[] and assignments[] entries.',
     }),
   ),
   status: Type.Optional(
     Type.String({
       enum: [...TASK_STATUSES],
-      description:
-        'list only: return just the tasks in this status. To SET a status, use upsert with the task id inside tasks[].',
+      description: 'list only: return just the tasks in this status. To SET a status, upsert the task by id.',
     }),
   ),
   includeDeleted: Type.Optional(
-    Type.Boolean({
-      description: 'If true, list returns deleted (tombstoned) tasks as well. Default: false.',
-    }),
+    Type.Boolean({ description: 'list only: also return deleted tombstones. Default false.' }),
   ),
 });
 

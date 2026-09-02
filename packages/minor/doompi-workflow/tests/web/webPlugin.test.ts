@@ -27,8 +27,8 @@ const run = {
 afterEach(() => workflows.reset());
 
 describe('the workflows plugin surfaces', () => {
-  it('renders the tab panel for a focused session with no runs', () => {
-    const tab = webPlugin.tabs?.[0];
+  it('renders the transient runs panel for a focused session with no runs', () => {
+    const tab = webPlugin.activityGroups?.[0]?.transientTab?.();
     const { props } = slotPropsFixture({ sessionId: 's1' });
 
     const rendered = renderPlugin(tab!.panel, props);
@@ -36,14 +36,15 @@ describe('the workflows plugin surfaces', () => {
     // The empty session is the first thing anyone sees, and the state a panel
     // is most likely to index into something absent.
     expect(rendered.error).toBeUndefined();
-    expect(tab?.id).toBe('workflows');
+    expect(tab?.id).toBe('workflows-runs');
   });
 
-  it('renders the tab panel with runs the hub reported', () => {
+  it('renders the transient runs panel with runs the hub reported', () => {
     const channel = webPlugin.channels?.find((candidate) => candidate.channel === 'workflow_runs');
     expect(driveChannel(channel!, 's1', { runs: [run] })).toEqual({ accepted: true });
 
-    const rendered = renderPlugin(webPlugin.tabs![0]!.panel, slotPropsFixture({ sessionId: 's1' }).props);
+    const tab = webPlugin.activityGroups?.[0]?.transientTab?.();
+    const rendered = renderPlugin(tab!.panel, slotPropsFixture({ sessionId: 's1' }).props);
 
     expect(rendered.error).toBeUndefined();
     expect(rendered.includes('blog-writing')).toBe(true);
@@ -77,7 +78,8 @@ describe('the workflows plugin surfaces', () => {
     // last session closes, and every component is mounted in both states.
     const { props } = slotPropsFixture({ sessionId: null });
 
-    for (const surface of [...(webPlugin.tabs ?? []), ...(webPlugin.activitySections ?? [])]) {
+    const transientTabs = webPlugin.activityGroups?.flatMap((group) => group.transientTab?.() ?? []) ?? [];
+    for (const surface of [...(webPlugin.tabs ?? []), ...transientTabs, ...(webPlugin.activitySections ?? [])]) {
       const component = 'panel' in surface ? surface.panel : surface.component;
       const id = 'id' in surface ? surface.id : 'unknown';
       expect(renderPlugin(component, props).error, id).toBeUndefined();
@@ -116,6 +118,7 @@ describe('the workflows plugin surfaces', () => {
     const context = {
       sessionId: 's1',
       openTab: fixture.props.openTab,
+      openTransientTab: fixture.props.openTransientTab,
       sendSessionFrame: fixture.props.sendSessionFrame,
     };
     const runnable = webPlugin.leaderBindings?.filter((binding) => 'run' in binding) ?? [];
@@ -126,7 +129,7 @@ describe('the workflows plugin surfaces', () => {
 
     expect(runnable.length).toBeGreaterThan(0);
     expect(fixture.actions.map(({ action, target }) => `${action}:${String(target)}`)).toEqual(
-      runnable.map(() => 'openTab:workflows'),
+      runnable.map(() => 'openTransientTab:workflows-runs'),
     );
   });
 });

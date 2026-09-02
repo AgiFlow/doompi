@@ -19,7 +19,7 @@ import {
   STATUS_EDGE,
   StatusBadge,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { SessionFrameSender, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
 import type { SubagentRun } from '../types/webSubagents.ts';
@@ -39,6 +39,9 @@ import {
   subagents,
   visibleRuns,
 } from './subagentsStore.ts';
+
+/** One fleet tab per session; the fleet is singular, so the id needs nothing else. */
+export const SUBAGENTS_TAB_ID = 'subagents-fleet';
 
 const TICK_MS = 10_000;
 
@@ -476,4 +479,9 @@ export function SubagentsPanel({
       ) : null}
     </div>
   );
+}
+
+/** The temporary tab the fleet opens in; opening it again only focuses it. */
+export function subagentsTab(): TransientTab {
+  return { id: SUBAGENTS_TAB_ID, label: 'subagents', panel: SubagentsPanel };
 }

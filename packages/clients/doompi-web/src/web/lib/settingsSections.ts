@@ -51,6 +51,12 @@ const GENERAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     workspace: 'general',
   },
   {
+    id: 'images',
+    label: 'images',
+    detail: 'how large an image may be when it reaches a model',
+    workspace: 'general',
+  },
+  {
     id: 'remote',
     label: 'remote control',
     detail: 'save a named tunnel for remote access',

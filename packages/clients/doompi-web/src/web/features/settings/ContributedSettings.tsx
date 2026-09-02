@@ -28,6 +28,7 @@ import {
 } from '../../lib/settingsDraft.ts';
 import { refreshSessionFacts } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 /**
  * A settings page a package contributed, rendered by the host.
@@ -48,11 +49,16 @@ import { sessionsStore } from '../../stores/sessionsStore.ts';
 /** The select entry that clears a key, since unset is how the file spells "inherit". */
 const INHERIT_VALUE = '__inherit__';
 
-const ORIGIN_LABEL: Readonly<Record<SettingsOrigin, string>> = {
-  global: 'from global',
-  repository: 'overridden here',
-  default: 'default',
-};
+/**
+ * What the badge says about where a value came from, read from the seat the
+ * reader is in. "from global" was shown even at global scope, where it made a
+ * key the reader had set themselves look inherited from somewhere else.
+ */
+function originLabel(origin: SettingsOrigin, scope: SettingsScope): string {
+  if (origin === 'default') return 'default';
+  if (origin === scope) return 'set here';
+  return origin === 'global' ? 'from global' : 'overridden here';
+}
 
 function OriginBadge({ origin, scope }: { origin: SettingsOrigin; scope: SettingsScope }) {
   // An override the reader is not currently editing is the one thing worth
@@ -60,7 +66,7 @@ function OriginBadge({ origin, scope }: { origin: SettingsOrigin; scope: Setting
   const shadowed = origin === 'repository' && scope === 'global';
   return (
     <Badge tone={shadowed ? 'yellow' : 'neutral'} className="shrink-0 text-[8px]">
-      {ORIGIN_LABEL[origin]}
+      {originLabel(origin, scope)}
     </Badge>
   );
 }
@@ -93,6 +99,11 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
   // A select with nothing to offer is a dead control, so it degrades to text
   // rather than showing an empty menu the reader cannot get past.
   const kind = field.kind === 'select' && options.length === 0 ? 'text' : field.kind;
+  // A value the catalog no longer lists is still what the config file says.
+  // With no entry to match it the trigger renders empty, which reads as "unset"
+  // and hides a setting the reader is actively relying on.
+  const orphan =
+    kind === 'select' && value !== '' && !options.some((option) => option.value === value) ? value : undefined;
 
   return (
     <div data-testid={`settings-field-${field.id}`} data-dirty={dirty} className="flex flex-col gap-1 py-2.5">
@@ -124,6 +135,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={INHERIT_VALUE}>{field.placeholder ?? 'inherit'}</SelectItem>
+            {orphan === undefined ? null : <SelectItem value={orphan}>{orphan} · not in catalog</SelectItem>}
             {groups.map((group) => (
               <SelectGroup key={group}>
                 {group === '' ? null : <SelectLabel>{group}</SelectLabel>}
@@ -152,13 +164,18 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
         />
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {field.detail === undefined ? null : (
           <span className="min-w-0 basis-full text-[9px] leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
             {field.detail}
           </span>
         )}
-        <span className="min-w-0 break-all text-[9px] text-doom-faint/70 min-[480px]:shrink-0">{keyOf(field)}</span>
+        {/* The config key earns its place on a page that writes a config file,
+            but it is reference, not prose: it wraps instead of running off the
+            edge, and never squeezes the sentence beside it. */}
+        <code className="min-w-0 max-w-full break-all text-[9px] text-doom-faint/70 min-[480px]:shrink-0">
+          {keyOf(field)}
+        </code>
         {dirty ? (
           <Button
             variant="ghost"
@@ -295,19 +312,13 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
 
   return (
     <div data-testid={`settings-contributed-${section.id}`} className="flex flex-col gap-3">
-      <header className="flex flex-col gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-[12px] font-bold text-doom-hi">{section.label}</span>
-          <span className="min-w-0 basis-full text-[10px] leading-relaxed text-doom-faint min-[560px]:basis-auto min-[560px]:flex-1">
-            {section.detail}
+      <SettingsSectionHeader title={section.label} detail={section.detail}>
+        {scope === 'repository' && repoRoot === '' ? (
+          <span data-testid="settings-no-repositories" className="shrink-0 text-[9px] text-doom-faint">
+            pick a repository above to edit its config
           </span>
-          {scope === 'repository' && repoRoot === '' ? (
-            <span data-testid="settings-no-repositories" className="shrink-0 text-[9px] text-doom-faint">
-              pick a repository above to edit its config
-            </span>
-          ) : null}
-        </div>
-      </header>
+        ) : null}
+      </SettingsSectionHeader>
 
       {error === '' ? null : (
         <p data-testid="settings-error" className="text-[11px] leading-relaxed text-doom-red">
@@ -331,9 +342,11 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
       </div>
 
       <footer className="flex flex-wrap items-center gap-2 border-t border-doom-border pt-3">
+        {/* Primary only when there is something to save, so the button reads as
+            the next step instead of sitting lit with nothing to commit. */}
         <Button
-          variant="outline"
-          size="xs"
+          variant={dirtyFields.length > 0 ? 'primary' : 'outline'}
+          size="sm"
           data-testid="settings-save"
           loading={busy}
           disabled={busy || !canSaveSettings({ dirty: dirtyFields.length, scope, repoRoot })}

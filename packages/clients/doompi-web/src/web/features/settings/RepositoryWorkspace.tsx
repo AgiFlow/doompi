@@ -18,6 +18,7 @@ import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { ContributedSettings } from './ContributedSettings.tsx';
 import { RepositorySettings } from './RepositorySettings.tsx';
 import { SettingsMenu } from './SettingsMenu.tsx';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 const LAST_REPOSITORY_KEY = 'doompi.settings.repository';
 
@@ -129,25 +130,27 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
           data-testid="settings-content"
           className="min-w-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:px-8"
         >
-          {current.id === 'repositories' ? <RepositorySettings repository={repository} /> : null}
-          {current.contribution === undefined ? null : (
-            <ContributedSettings section={current.contribution} scope="repository" repoRoot={repository?.path ?? ''} />
-          )}
-          {panel === undefined || Panel === undefined ? null : (
-            <div className="flex flex-col gap-3" data-testid={`repository-settings-panel-${panel.pluginId}`}>
-              <header className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="text-[12px] font-bold text-doom-hi">{panel.label}</span>
-                <span className="min-w-0 basis-full text-[10px] text-doom-faint sm:basis-auto sm:flex-1">
-                  {panel.detail}
-                </span>
-              </header>
-              <Panel
-                repository={repository}
-                request={requestThroughSealedSession}
-                requestWithStepUp={fetchWithStepUp}
+          {/* Same column width the general workspace uses. */}
+          <div className="flex w-full max-w-[780px] flex-col gap-4">
+            {current.id === 'repositories' ? <RepositorySettings repository={repository} /> : null}
+            {current.contribution === undefined ? null : (
+              <ContributedSettings
+                section={current.contribution}
+                scope="repository"
+                repoRoot={repository?.path ?? ''}
               />
-            </div>
-          )}
+            )}
+            {panel === undefined || Panel === undefined ? null : (
+              <div className="flex flex-col gap-3" data-testid={`repository-settings-panel-${panel.pluginId}`}>
+                <SettingsSectionHeader title={panel.label} detail={panel.detail} />
+                <Panel
+                  repository={repository}
+                  request={requestThroughSealedSession}
+                  requestWithStepUp={fetchWithStepUp}
+                />
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </div>

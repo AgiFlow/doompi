@@ -1,0 +1,62 @@
+appId: ai.agimon.doompi
+productName: DoomPi
+copyright: Copyright © AgiFlow
+
+directories:
+  output: release
+  buildResources: resources
+
+# The JavaScript runtime is bundled, while the complete child-process artifact
+# stays in Resources as real files so Electron's Node mode and native helpers can
+# execute it without asar extraction.
+asar: true
+files:
+  - dist/**/*
+  - package.json
+
+extraResources:
+  - from: build/runtime
+    to: runtime
+    filter:
+      - "**/*"
+      - "!node_modules{,/**/*}"
+  # electron-builder excludes node_modules while walking a broader file set.
+  # Copy from inside it so runtime package resolution survives packaging.
+  - from: build/runtime/node_modules
+    to: runtime/node_modules
+    filter:
+      - "**/*"
+
+# Every Mach-O binary unpacked beside the asar must carry a signature or
+# notarization rejects the bundle. This runs at afterPack, before the app
+# bundle itself is signed: signing inner binaries afterwards would invalidate
+# the enclosing signature.
+afterPack: scripts/signHubBinaries.cjs
+
+mac:
+  icon: ../doompi-web/src/web/public/icon-512.png
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Driven by APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID in CI.
+  # electron-builder skips this automatically when no identity is available,
+  # so an unsigned local build still produces artifacts.
+  notarize: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  extendInfo:
+    NSAppleEventsUsageDescription: DoomPi uses Apple Events to open links and files you choose.
+
+linux:
+  category: Development
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  maintainer: AgiFlow <support@agimon.ai>

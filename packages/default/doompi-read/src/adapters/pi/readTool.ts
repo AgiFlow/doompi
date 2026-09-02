@@ -18,6 +18,7 @@ import {
   type ReadToolDetails,
 } from '@earendil-works/pi-coding-agent';
 import { ReadParamsSchema, type ReadParams } from '../../schemas/readTool.ts';
+import { applyImageLimits, imageLimits } from './readImage.ts';
 
 type WritableCheck = (path: string) => Promise<boolean>;
 
@@ -42,7 +43,10 @@ export function registerHashlineReadTool(
       const input = params as ReadParams;
       assertNotAborted(signal);
       const absolutePath = await resolveReadInputPath(input.path, ctx.cwd);
-      const nativeRead = createReadToolDefinition(ctx.cwd);
+      // Pi resizes at a cap it hardcodes, so it is told not to: the block comes
+      // back converted but full size, and the machine's configured cap is
+      // applied below. Everything else about the native read is kept.
+      const nativeRead = createReadToolDefinition(ctx.cwd, { autoResizeImages: false });
       const nativeResult = await nativeRead.execute(
         toolCallId,
         { ...input, path: absolutePath },
@@ -50,7 +54,10 @@ export function registerHashlineReadTool(
         onUpdate,
         ctx,
       );
-      if (isImageRead(nativeResult.content)) return nativeResult;
+      if (isImageRead(nativeResult.content)) {
+        assertNotAborted(signal);
+        return { ...nativeResult, content: await applyImageLimits(nativeResult.content, imageLimits()) };
+      }
 
       assertNotAborted(signal);
       const canEdit = await writable(absolutePath);

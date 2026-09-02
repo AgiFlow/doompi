@@ -5,6 +5,7 @@ import {
   type BrowserNotificationPermissionStatus,
 } from '../../lib/browserNotifications.ts';
 import { disableLivePush, enableLivePush, livePushStatus, type LivePushStatus } from '../../lib/livePush.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 const STATUS_COPY: Record<BrowserNotificationPermissionStatus, string> = {
   granted: 'browser notifications are allowed',
@@ -41,14 +42,11 @@ export function NotificationSettings() {
   };
 
   return (
-    <div data-testid="notification-settings" className="flex max-w-[640px] flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[13px] font-bold text-doom-hi">notifications</h2>
-        <p className="text-[11px] leading-relaxed text-doom-dim">
-          Open pages receive full live notification text. A closed installed app receives only a generic live alert,
-          with no session content and no replay after downtime.
-        </p>
-      </div>
+    <div data-testid="notification-settings" className="flex flex-col gap-4">
+      <SettingsSectionHeader
+        title="notifications"
+        detail="open pages receive full live notification text. a closed installed app receives only a generic live alert, with no session content and no replay after downtime."
+      />
       <div className="flex flex-col items-start gap-2 rounded border border-doom-border bg-doom-panel p-3">
         <p data-testid="notification-permission-status" className="text-[11px] text-doom-dim">
           {STATUS_COPY[status]}

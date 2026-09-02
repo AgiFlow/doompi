@@ -7,9 +7,8 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import { subagentsTab } from './SubagentsPanel.tsx';
 import { shapeResult, subagentCallDetail } from './toolText.ts';
-
-const SUBAGENTS_TAB = 'subagents';
 
 const CLOSING = {
   running: { tone: 'running', text: 'running' },
@@ -23,7 +22,7 @@ const CLOSING = {
  * the framed text lines with the closing status line in the body, and the
  * subagents tab one click away while a run is on the go.
  */
-export function SubagentToolMessage({ args, output, running, isError, openTab }: ToolMessageRenderProps) {
+export function SubagentToolMessage({ args, output, running, isError, openTransientTab }: ToolMessageRenderProps) {
   const action = typeof args.action === 'string' ? args.action : '';
   const detail = subagentCallDetail(args);
   const collapsed = shapeResult(output, { expanded: false, isPartial: running, isError });
@@ -54,7 +53,7 @@ export function SubagentToolMessage({ args, output, running, isError, openTab }:
                 variant="link"
                 size="xs"
                 data-testid="tool-result-subagent-open"
-                onClick={() => openTab(SUBAGENTS_TAB)}
+                onClick={() => openTransientTab(subagentsTab())}
                 className="self-start px-0"
               >
                 open subagents

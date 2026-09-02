@@ -399,7 +399,10 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-doom-border px-4 pt-4 pb-3.5">
+      <div
+        data-doompi-session-rail-header
+        className="flex items-center justify-between border-b border-doom-border px-4 pt-4 pb-3.5"
+      >
         <span className="flex items-center gap-[3px]" aria-label="DoomPi">
           <span aria-hidden="true" className="text-[15px] font-bold tracking-[0.16em] text-doom-hi">
             DOOM

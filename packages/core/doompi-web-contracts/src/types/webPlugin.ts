@@ -277,6 +277,8 @@ export interface PaletteCommandContext {
   sessionId: string | null;
   /** Host navigation; null returns to the conversation tab. */
   openTab(tabId: string | null): void;
+  /** Opens a runtime tab for the focused session, or focuses it when its id is already open. */
+  openTransientTab(tab: TransientTab): void;
   sendSessionFrame: SessionFrameSender;
 }
 export interface PaletteCommandContribution {
@@ -393,8 +395,12 @@ export interface ActivityGroupContribution {
   activeSource?: ActivityGroupActiveSource;
   /** Whether a non-empty signal represents background work. Defaults to true. */
   marksBackgroundWork?: boolean;
-  /** The plugin tab the group's key chip opens; without one the chip is a plain label. */
-  tab?: string;
+  /**
+   * The temporary tab the group's name opens; without one the name is a plain
+   * label. The factory runs on each click, so the panel it names is the one
+   * the plugin currently wants for that group.
+   */
+  transientTab?: () => TransientTab;
   /**
    * Drop the group entirely while its status key is present but empty, rather
    * than showing a header over "idle".

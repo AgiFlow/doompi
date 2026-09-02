@@ -16,13 +16,14 @@ import {
   OptionRow,
   StatusBadge,
 } from '@agimon-ai/doompi-web-components';
-import type { LeaderBindingContribution } from '@agimon-ai/doompi-web-contracts';
+import type { LeaderBindingContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { type LeaderOption, leaderGroup } from '../../lib/leaderTree.ts';
 import { paletteCommands, pluginLeaderBindings } from '../../lib/pluginRegistry.ts';
 import { focusPrompt } from '../../lib/promptFocus.ts';
 import { sendFrame } from '../../lib/transport.ts';
+import { openTransientTab } from '../../stores/transientTabsStore.ts';
 import { useOpenTab } from '../../stores/useOpenTab.ts';
 import { closePalette, paletteStore, setPalettePath, togglePalette } from '../../stores/paletteStore.ts';
 import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
@@ -51,6 +52,13 @@ export function CommandPalette() {
   const { open, path } = useStore(paletteStore);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const openTab = useOpenTab();
+  // Leader keys reach the same temporary tabs the activity dock opens, so a
+  // group without a declared tab is still one key path away.
+  const openTransient = (tab: TransientTab): void => {
+    if (activeId === null) return;
+    openTransientTab(activeId, tab);
+    openTab(tab.id);
+  };
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(0);
   const surface = useRef<HTMLDivElement>(null);
@@ -106,7 +114,7 @@ export function CommandPalette() {
       runCommand(binding.command);
       return;
     }
-    binding.run({ sessionId: activeId, openTab, sendSessionFrame: sendFrame });
+    binding.run({ sessionId: activeId, openTab, openTransientTab: openTransient, sendSessionFrame: sendFrame });
   };
 
   const descend = (option: LeaderOption, from: readonly string[] = keys): void => {
@@ -136,7 +144,7 @@ export function CommandPalette() {
     const command = paletteCommands().find((candidate) => candidate.id === id);
     if (!command) return;
     closePalette();
-    command.run({ sessionId: activeId, openTab, sendSessionFrame: sendFrame });
+    command.run({ sessionId: activeId, openTab, openTransientTab: openTransient, sendSessionFrame: sendFrame });
   };
 
   const onSurfaceKey = (event: ReactKeyboardEvent<HTMLDivElement>): void => {

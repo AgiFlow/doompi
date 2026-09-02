@@ -53,6 +53,20 @@ The packages cover macOS and Linux on arm64 and x64 for both [RMUX][pkg-rmux-dar
 the way when a draft is not empty, and other packages contribute bindings through one
 leader API instead of hardcoding their own menus.
 
+### Prompt reuse
+
+[`@agimon-ai/doompi-prompt`][pkg-doompi-prompt] keeps the last three prompts of the session staged in
+memory and never writes them anywhere. `SPC e p` or `/prompts` opens a filterable picker over those
+three plus every saved prompt, and staging one drops it into the editor instead of sending it.
+`/prompt-save <name>` stores the current draft as an ordinary Pi prompt template in
+`~/.pi/agent/prompts`, so it is also `/<name>` from the next start. Arrow up and down keep Pi's own
+behaviour, untouched.
+
+In the cockpit the same library is a `prompts` group in the activity dock, served by a hub-scoped
+API over the same directory. The group opens a dialog over the conversation: picking a prompt sends
+it to the focused session, and the dialog also creates, edits, renames and deletes entries. Staged
+prompts stay in the terminal, since they live in the memory of the session that received them.
+
 ## Coordinated work
 
 ### Agent team
@@ -212,6 +226,7 @@ available, and the same model continues to provide bounded command correction.
 [pkg-doompi-ui]: https://www.npmjs.com/package/@agimon-ai/doompi-ui
 [pkg-doompi-hashline]: https://www.npmjs.com/package/@agimon-ai/doompi-hashline
 [pkg-doompi-hook]: https://www.npmjs.com/package/@agimon-ai/doompi-hook
+[pkg-doompi-prompt]: https://www.npmjs.com/package/@agimon-ai/doompi-prompt
 [pkg-doompi-read]: https://www.npmjs.com/package/@agimon-ai/doompi-read
 [pkg-doompi-grep]: https://www.npmjs.com/package/@agimon-ai/doompi-grep
 [pkg-doompi-edit]: https://www.npmjs.com/package/@agimon-ai/doompi-edit

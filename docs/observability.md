@@ -54,10 +54,26 @@ OTEL_SDK_DISABLED=1 doompi
 
 `AGENT_TELEMETRY_DISABLED` disables DoomPi's Pi telemetry extension for that process. `OTEL_SDK_DISABLED` disables OpenTelemetry SDK export globally for that process. When metrics collection is disabled, `/log-metrics` and `SPC h l` show the disabled state rather than zero activity. `AGENT_OTEL_TRACES` controls span export separately, so disabling traces alone does not disable logs.
 
+## Cockpit browser telemetry
+
+The web cockpit posts its own events to `POST /api/telemetry/browser` on the DoomPi Web server, which records them under the `doom-web` service. The route is rate limited to 60 batches per minute, accepts at most 10 events per batch, and rejects a whole batch when any event fails validation.
+
+Two event shapes are accepted and nothing else:
+
+- Performance events, a closed set of six names (`web.browser.ready`, `web.browser.protocol_ready`, `web.browser.session_socket_ready`, `web.browser.reconnect`, `web.browser.backlog`, `web.browser.telemetry_drop`) carrying only a bounded `duration_ms` or `count`.
+- Failure events, all under the single name `web.browser.error`, carrying a `source` from a closed set (`window_error`, `unhandled_rejection`, `session_socket`), an `error_name`, a `message`, an optional `stack`, and an optional `session_id`. These are recorded at error level, so `logs agent-issues` and any error-severity query surface them.
+
+Query them with the service filter:
+
+```bash
+pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs query --service doom-web --limit 20
+```
+
 ## Privacy and data boundaries
 
 - Prompts, tool inputs, and tool results are omitted by default. `AGENT_OTEL_REDACT=0` includes them and can expose source, commands, credentials, or model content.
 - Operational metadata can still be sensitive. Records can include session and parent-session IDs, working directory, model, tool names, token and cost totals, errors, workflow identity, and caller-supplied attributes.
+- Cockpit failure events are the one browser payload that carries free text. The `message` is capped at 300 characters and the optional `stack` at 800, and a stack contains bundle paths and function names from the page. Both are recorded as the log record's exception, not as attributes, so they are exempt from attribute sanitisation by design. The `session_id` is hashed into the same `id_` form the agent uses, which is what lets a browser failure be correlated with the session that produced it.
 - A default local sink writes to `./logs/session.db` and retains data after Pi exits. Protect, rotate, or remove that file according to the repository's data policy. `--in-memory` avoids this persistence.
 - Local scope is an instance-selection rule, not a security sandbox. Processes with access to the repository or local sink can read its records.
 - Without a configured or discovered endpoint, export is dropped by default. `LOG_SINK_PI_FILE_FALLBACK=1` opts into file fallback and therefore creates another local retention surface.

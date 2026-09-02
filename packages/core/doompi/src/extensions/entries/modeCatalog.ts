@@ -24,6 +24,7 @@ import {
   type TransitionSource,
 } from '@agimon-ai/doompi-extension-contracts/transition';
 import type { Context } from '@deepseek-ai/cordis';
+import { removeContextDetail, writeContextDetail } from '../../adapters/contextDetailStore.ts';
 import { type ContextPublisher, createContextPublisher } from '../../services/contextCatalog.ts';
 import { projectMinorModes } from '../../services/minorModeProjection.ts';
 import { createMinorModeCatalogHost } from '../../services/modeCatalog.ts';
@@ -44,6 +45,14 @@ interface CatalogBinding {
   current: MinorModeCatalogService | undefined;
   /** Journals the projection even if unchanged; set while a session is bound. */
   republish?: () => void;
+  /**
+   * The bound session, which the detail store is keyed by.
+   *
+   * The server launches the agent with `--session-id`, so this is the same id
+   * the cockpit and the session API know the session by, and a browser asking
+   * for a row's detail looks under the file this session wrote.
+   */
+  sessionId?: string;
 }
 
 function notify(cordis: Context, context: ExtensionContext, body: string, level: DoomNotificationLevel): void {
@@ -64,6 +73,21 @@ function transitionSource(requesterSource: string): TransitionSource {
   if (requesterSource.includes('leader')) return 'leader';
   if (requesterSource.includes('ui')) return 'ui';
   return 'system';
+}
+
+/**
+ * The minor modes that are actually on, for the composition panel.
+ *
+ * Read from the bound catalog at publish time rather than passed in, because a
+ * mode switching on is one of the reasons a publish happens at all, and a
+ * remembered list would describe the composition before the switch.
+ */
+function activeMinorModes(binding: CatalogBinding): { id: string; label: string }[] {
+  const snapshot = binding.current?.getSnapshot();
+  if (!snapshot) return [];
+  return snapshot.modes
+    .filter((record) => record.state.activation === 'active')
+    .map((record) => ({ id: record.descriptor.id, label: record.descriptor.label }));
 }
 
 export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
@@ -90,7 +114,12 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
   });
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fiber = connection.root.plugin((cordis: Context) => {
-    contextBinding.publisher = createContextPublisher(pi, cordis);
+    contextBinding.publisher = createContextPublisher(pi, cordis, {
+      readMinorModes: () => activeMinorModes(activeCatalog),
+      readSessionId: () => activeCatalog.sessionId,
+      writeDetail: (sessionId, revision, items) => void writeContextDetail(sessionId, revision, items),
+      removeDetail: removeContextDetail,
+    });
     modeCatalogPlugin(cordis, pi, activeCatalog, () => void contextBinding.publisher?.publish());
     return () => {
       contextBinding.publisher?.dispose();
@@ -183,6 +212,7 @@ function modeCatalogPlugin(
     });
     sessionContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
     activeCatalog.current = catalog;
+    activeCatalog.sessionId = sessionId;
 
     // Journal the projection so RPC clients see catalog state live and on
     // replay; identical projections are skipped so detail churn stays cheap.
@@ -211,6 +241,7 @@ function modeCatalogPlugin(
       unsubscribe();
       activeCatalog.republish = undefined;
       activeCatalog.current = undefined;
+      activeCatalog.sessionId = undefined;
       catalog.dispose();
     };
   });

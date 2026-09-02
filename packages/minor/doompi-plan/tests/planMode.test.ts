@@ -2452,6 +2452,27 @@ describe('the plan in the cockpit', () => {
     });
   });
 
+  it('publishes an unstyled plan status when the host has no initialised theme', async () => {
+    // Pi's ui.theme is a proxy over a global the TUI installs, so every access
+    // throws in a headless runtime. A status colour is not worth failing the
+    // hook that publishes it.
+    await withPiSession(async () => {
+      const fixture = createExtensionFixture([], undefined, true, 'headless-session', {}, {});
+      (fixture.ctx as unknown as { ui: { theme: unknown } }).ui.theme = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error('Theme not initialized. Call initTheme() first.');
+          },
+        },
+      );
+
+      await fixture.handler('session_start')({}, fixture.ctx);
+      await fixture.invokeLeaderAction('plan.normal');
+
+      expect(fixture.statuses).toHaveBeenCalledWith('plan-mode', 'plan:normal');
+    });
+  });
   it('does not fail a write when the pointer cannot be recorded', async () => {
     // The plan is on disk either way; losing a cockpit view is not worth
     // failing the write that produced it.

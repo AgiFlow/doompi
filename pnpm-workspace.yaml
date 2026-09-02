@@ -26,12 +26,16 @@ publicHoistPattern:
 allowBuilds:
   "@google/genai": false
   better-sqlite3: true
+  # The desktop shell's runtime is downloaded by its own postinstall; without
+  # this there is no Electron binary to package or run.
+  electron: true
   esbuild: true
   nx: true
   protobufjs: true
 
 onlyBuiltDependencies:
   - better-sqlite3
+  - electron
   - esbuild
   - nx
   - protobufjs
@@ -60,6 +64,7 @@ minimumReleaseAgeExclude:
   - "@tanstack/react-router@1.170.32"
   - "@tanstack/router-core@1.171.27"
   - "protobufjs@7.6.6"
+  - electron@44.1.1
 
 # Avoid repeated full-schema scans when Pi validates recursive JSON snapshot fields.
 patchedDependencies:

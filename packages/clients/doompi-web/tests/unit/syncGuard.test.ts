@@ -142,6 +142,24 @@ describe('sync guard', () => {
     subject.close();
   });
 
+  it('uses the configured bundled agent when the repository has no pinned CLI', async () => {
+    vi.stubEnv('DOOMPI_AGENT_COMMAND', '/runtime/doompi/dist/bin/cli.mjs');
+    const child = fakeChild();
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift: () => drifted });
+
+    const pending = subject.ensureSynced();
+    child.emit('exit', 0);
+    await pending;
+
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      ['/runtime/doompi/dist/bin/cli.mjs', 'sync'],
+      expect.objectContaining({ cwd: REPO }),
+    );
+    subject.close();
+    vi.unstubAllEnvs();
+  });
+
   it('reports output from a failed packaged sync without rejecting the launch', async () => {
     const notices: string[] = [];
     const child = fakeChild();

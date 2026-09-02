@@ -127,23 +127,29 @@ function ActivityGroupView({
         >
           #
         </span>
-        <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
-        {group.tab === undefined ? (
-          <Kbd data-testid={`activity-keys-${group.name}`} className="bg-doom-panel">
-            {group.keys}
-          </Kbd>
+        {/* A group that owns a panel opens it from its own name: the tab is
+            temporary, so the tab strip carries it only while the reader is
+            using it. Groups without a panel keep the name as a plain label. */}
+        {group.transientTab === undefined ? (
+          <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
         ) : (
           <Button
-            variant="subtle"
+            variant="ghost"
             size="xs"
             data-testid={`activity-open-${group.name}`}
-            title={`open the ${group.tab} tab`}
-            onClick={() => slotProps.openTab(group.tab ?? null)}
-            className="h-auto px-1.5 py-0.5 text-[8px] font-bold text-doom-violet hover:text-doom-magenta"
+            title={`open ${group.name}`}
+            onClick={() => {
+              const tab = group.transientTab?.();
+              if (tab !== undefined) slotProps.openTransientTab(tab);
+            }}
+            className="h-auto flex-1 justify-start px-0 py-0 text-[11px] font-bold text-doom-text hover:underline"
           >
-            {group.keys}
+            {group.name}
           </Button>
         )}
+        <Kbd data-testid={`activity-keys-${group.name}`} className="bg-doom-panel">
+          {group.keys}
+        </Kbd>
       </div>
       {slotFills(activityGroupSlot(group.name)).length > 0 ? (
         slotProps.renderSlot(activityGroupSlot(group.name))

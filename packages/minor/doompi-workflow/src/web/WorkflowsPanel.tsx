@@ -25,7 +25,7 @@ import {
   StatusBadge,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -44,6 +44,9 @@ import { deleteWorkflowRun, followScreen } from './terminalApi.ts';
 import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer.tsx';
 import { workflowRunIdentity } from './workflowActivity.ts';
 import { focusRun, removeRun, workflows } from './workflowsStore.ts';
+
+/** One workflows tab per session; the surface is singular, so the id needs nothing else. */
+export const WORKFLOWS_TAB_ID = 'workflows-runs';
 
 const TICK_MS = 10_000;
 
@@ -726,4 +729,9 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
       ) : null}
     </div>
   );
+}
+
+/** The temporary tab the workflow surface opens in; opening it again only focuses it. */
+export function workflowsTab(): TransientTab {
+  return { id: WORKFLOWS_TAB_ID, label: 'workflows', panel: WorkflowsPanel };
 }

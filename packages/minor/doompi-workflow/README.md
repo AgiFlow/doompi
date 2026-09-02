@@ -117,8 +117,9 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 ## Web cockpit plugin
 
-The `src/web` directory is this package's DoomPi web cockpit plugin: the workflows tab, its store,
-and its `workflow_runs` session channel, compiled into the cockpit bundle by `doompi-web`'s build.
+The `src/web` directory is this package's DoomPi web cockpit plugin: the workflows panel the dock's
+workflows group opens in a temporary tab, its store, and its `workflow_runs` session channel,
+compiled into the cockpit bundle by `doompi-web`'s build.
 The hub-side data source ships behind the `./web-hub` subpath and reads the workflow registry
 (run.json plus progress.ndjson) exactly as the engine writes it. Both halves are declared by the
 `doompiWeb` block in package.json.

@@ -1,8 +1,9 @@
-import { Badge, Button, Dot, EmptyState, Input, Panel, Spinner } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, EmptyState, Input, Panel, Spinner } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useState } from 'react';
 import type { AuthMethodType, LoginFlowSnapshot, ProviderAuthSummary } from '../../../types/auth.ts';
 import { answerLogin, cancelLogin, listProviders, logoutProvider, readLogin, startLogin } from '../../lib/authApi.ts';
 import { LoginFlowDialog, METHOD_LABEL } from './LoginFlowDialog.tsx';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 const FLOW_POLL_MS = 500;
 /** The auth source Pi reports for a credential its own /login stored; the only kind /logout removes. */
@@ -37,14 +38,18 @@ function ProviderRow({
           <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
           <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
         </div>
-        <Badge
-          tone={authenticated ? 'green' : 'neutral'}
+        {/* State is read, not pressed. It used to wear the same outlined chip as
+            the sign-in button beside it, so forty rows offered what looked like
+            two buttons each. Only the actions keep a border. */}
+        <span
           data-testid={`provider-status-${provider.id}`}
-          className="self-start min-[560px]:self-auto"
+          className={`flex shrink-0 items-center gap-1.5 self-start text-[10px] min-[560px]:self-auto ${
+            authenticated ? 'text-doom-green' : 'text-doom-faint'
+          }`}
         >
           <Dot tone={authenticated ? 'green' : 'neutral'} />
           {statusText(provider)}
-        </Badge>
+        </span>
         {provider.methods.map((method) => (
           <Button
             key={method.type}
@@ -176,14 +181,11 @@ export function ProviderSettings() {
   const authenticatedCount = (providers ?? []).filter((provider) => provider.authenticated !== undefined).length;
 
   return (
-    <div data-testid="provider-settings" className="flex max-w-[780px] flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[13px] font-bold text-doom-hi">providers</h2>
-        <p className="text-[11px] leading-relaxed text-doom-dim">
-          sign in to the model providers Pi can use. credentials land in Pi&apos;s auth.json on this machine, so every
-          session shares them.
-        </p>
-      </div>
+    <div data-testid="provider-settings" className="flex flex-col gap-4">
+      <SettingsSectionHeader
+        title="providers"
+        detail="sign in to the model providers Pi can use. credentials land in Pi's auth.json on this machine, so every session shares them."
+      />
       {error ? (
         <p data-testid="provider-settings-error" className="text-[11px] leading-relaxed text-doom-red">
           {error}

@@ -1,6 +1,7 @@
 import { sealedHttpSession } from '../../lib/sealedSession.ts';
 import { fetchWithStepUp } from '../../lib/stepUp.ts';
 import type { InstalledSettingsPanel } from '../../lib/pluginRegistry.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 /**
  * The frame around a settings page a package draws itself.
@@ -26,10 +27,7 @@ export function SettingsPanelHost({ panel }: SettingsPanelHostProps) {
   const Panel = panel.component;
   return (
     <div className="flex flex-col gap-3" data-testid={`settings-panel-${panel.id}`}>
-      <header className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="text-[12px] font-bold text-doom-hi">{panel.label}</span>
-        <span className="min-w-0 basis-full text-[10px] text-doom-faint sm:basis-auto sm:flex-1">{panel.detail}</span>
-      </header>
+      <SettingsSectionHeader title={panel.label} detail={panel.detail} />
       <Panel request={requestThroughSealedSession} requestWithStepUp={fetchWithStepUp} />
     </div>
   );

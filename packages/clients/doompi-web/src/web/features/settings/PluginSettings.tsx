@@ -1,6 +1,7 @@
 import { Panel, SectionLabel } from '@agimon-ai/doompi-web-components';
 import type { WebPluginDefinition } from '@agimon-ai/doompi-web-contracts';
 import { installedWebPlugins, webPluginDiagnostics } from '../../lib/pluginRegistry.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 /** What one plugin contributes, as counts: enough to see it landed without opening its code. */
 function contributions(plugin: WebPluginDefinition): string[] {
@@ -31,7 +32,11 @@ export function PluginSettings() {
   const plugins = installedWebPlugins();
   const diagnostics = webPluginDiagnostics();
   return (
-    <div data-testid="settings-plugins" className="flex max-w-[640px] flex-col gap-5">
+    <div data-testid="settings-plugins" className="flex flex-col gap-5">
+      <SettingsSectionHeader
+        title="plugins"
+        detail="the web plugins this bundle carries and what their install resolved."
+      />
       <div className="flex flex-col gap-2">
         <SectionLabel>installed</SectionLabel>
         <p className="text-[11px] leading-relaxed text-doom-faint">
@@ -52,7 +57,9 @@ export function PluginSettings() {
               >
                 <li data-testid={`settings-plugin-${plugin.id}`}>
                   <span className="text-[12px] font-bold text-doom-hi">{plugin.id}</span>
-                  <span className="min-w-0 w-full truncate text-[10px] text-doom-faint min-[480px]:w-auto min-[480px]:flex-1">
+                  {/* Wraps rather than truncates: a clipped "2 lea…" tells the
+                      reader less than nothing about what the plugin contributed. */}
+                  <span className="min-w-0 w-full text-[10px] leading-relaxed text-doom-faint min-[480px]:w-auto min-[480px]:flex-1">
                     {contributions(plugin).join(' · ') || 'no contributions'}
                   </span>
                 </li>

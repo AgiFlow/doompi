@@ -82,6 +82,7 @@ default:
     - '@agimon-ai/doompi-workflow'
     - '@agimon-ai/doompi-log'
     - '@agimon-ai/doompi-mcp'
+    - '@agimon-ai/doompi-prompt'
 
 layers:
   team:

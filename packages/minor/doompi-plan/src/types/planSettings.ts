@@ -41,7 +41,7 @@ export const PLAN_SETTING_SHAPES: readonly PlanSettingShape[] = [
     label: 'main model',
     keyPath: [...PLANNING_PATH, MAIN_KEY, 'model'],
     placeholder: INHERIT_MODEL,
-    detail: 'Model the main agent switches to while plan mode is on.',
+    detail: 'model the main agent switches to while plan mode is on.',
     models: true,
   },
   {
@@ -49,7 +49,7 @@ export const PLAN_SETTING_SHAPES: readonly PlanSettingShape[] = [
     label: 'main thinking',
     keyPath: [...PLANNING_PATH, MAIN_KEY, 'thinking'],
     placeholder: INHERIT_THINKING,
-    detail: 'Thinking level appended to the main model while planning.',
+    detail: 'thinking level appended to the main model while planning.',
     options: PLAN_THINKING_LEVELS,
   },
   {
@@ -57,7 +57,7 @@ export const PLAN_SETTING_SHAPES: readonly PlanSettingShape[] = [
     label: 'subagent model',
     keyPath: [...PLANNING_PATH, SUBAGENTS_KEY, 'model'],
     placeholder: INHERIT_MODEL,
-    detail: 'Model forced onto delegated planning subagents.',
+    detail: 'model forced onto delegated planning subagents.',
     models: true,
   },
   {
@@ -65,7 +65,7 @@ export const PLAN_SETTING_SHAPES: readonly PlanSettingShape[] = [
     label: 'subagent thinking',
     keyPath: [...PLANNING_PATH, SUBAGENTS_KEY, 'thinking'],
     placeholder: INHERIT_THINKING,
-    detail: 'Thinking level appended to the subagent model.',
+    detail: 'thinking level appended to the subagent model.',
     options: PLAN_THINKING_LEVELS,
   },
   {
@@ -73,6 +73,6 @@ export const PLAN_SETTING_SHAPES: readonly PlanSettingShape[] = [
     label: 'plans directory',
     keyPath: [...PLANNING_PATH, 'plansDirectory'],
     placeholder: '~/.pi/plans',
-    detail: 'Absolute, repo-relative, or under ~. Written plans land here.',
+    detail: 'absolute, repo-relative, or under ~. written plans land here.',
   },
 ];

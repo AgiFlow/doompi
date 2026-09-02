@@ -2,6 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PiConfig, PiConfigLoadOptions, PiConfigPaths } from '../schemas/config/schema.ts';
+import {
+  applyPiImageSettings,
+  parsePiImageSettings,
+  type PiImageSettings,
+  type PiImageSettingsUpdate,
+} from '../services/imageSettings.ts';
+import { writePrivateAtomicJson } from './atomicJson.ts';
 
 const SETTINGS_FILE_NAME = 'settings.json';
 const CONFIG_DIR_NAME = '.pi';
@@ -116,4 +123,44 @@ export async function loadPiConfigAsync(options: PiConfigLoadOptions): Promise<P
     options.cli ?? {},
     options.programmatic ?? {},
   ].reduce(mergeConfig, {});
+}
+
+/**
+ * Where the image limits are read from and written to.
+ *
+ * The user layer only. Pi merges a trusted project settings.json over it, but
+ * these limits describe one machine's tolerance for image payloads rather than
+ * one repository's, and the cockpit page that writes them has no repository
+ * scope to offer. The legacy user path is still read, because a machine that
+ * has not been migrated still answers from it.
+ */
+function userSettingsPaths(homeDirectory: string): { legacy: string; canonical: string } {
+  return {
+    legacy: path.join(homeDirectory, CONFIG_DIR_NAME, SETTINGS_FILE_NAME),
+    canonical: path.join(defaultAgentDirectory(homeDirectory), SETTINGS_FILE_NAME),
+  };
+}
+
+/** The file a change lands in; Pi's own settings toggle writes the same one. */
+export function piImageSettingsPath(homeDirectory = os.homedir()): string {
+  return userSettingsPaths(homeDirectory).canonical;
+}
+
+export function loadPiImageSettings(homeDirectory = os.homedir()): PiImageSettings {
+  const paths = userSettingsPaths(homeDirectory);
+  return parsePiImageSettings(readConfigPaths([paths.legacy, paths.canonical]));
+}
+
+/**
+ * Writes the changed keys back and reports the limits that now apply.
+ *
+ * Read-modify-write on Pi's own file, so a save races a concurrent Pi settings
+ * save rather than merging with it. Pi writes only the fields its UI touched,
+ * as this does, which keeps the window to the one setting being changed on
+ * both sides at once.
+ */
+export function savePiImageSettings(update: PiImageSettingsUpdate, homeDirectory = os.homedir()): PiImageSettings {
+  const paths = userSettingsPaths(homeDirectory);
+  writePrivateAtomicJson(paths.canonical, applyPiImageSettings(readConfig(paths.canonical), update));
+  return loadPiImageSettings(homeDirectory);
 }

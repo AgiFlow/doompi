@@ -1,0 +1,50 @@
+{
+  "name": "@agimon-ai/doompi-desktop",
+  "version": "0.0.1-alpha.0",
+  "private": true,
+  "description": "Standalone DoomPi desktop app: bundles the cockpit and the session server so a download runs an agent with no Node toolchain installed",
+  "keywords": [
+    "coding-agent",
+    "desktop",
+    "doompi",
+    "electron",
+    "pi-coding-agent"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/clients/doompi-desktop"
+  },
+  "type": "module",
+  "main": "./dist/bin/main.cjs",
+  "scripts": {
+    "build": "tsdown",
+    "build:runtime": "vite build --config vite.runtime.config.ts",
+    "package": "pnpm run build && pnpm run build:runtime && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
+    "start": "pnpm run build && pnpm run build:runtime && electron dist/bin/main.cjs",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "devDependencies": {
+    "@agimon-ai/doompi": "workspace:*",
+    "@agimon-ai/doompi-server": "workspace:*",
+    "@agimon-ai/doompi-web": "workspace:*",
+    "@types/node": "26.4.0",
+    "electron": "44.0.0",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

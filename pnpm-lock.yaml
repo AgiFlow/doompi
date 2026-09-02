@@ -40,6 +40,9 @@ importers:
       '@agimon-ai/doompi-hook':
         specifier: workspace:*
         version: link:packages/default/doompi-hook
+      '@agimon-ai/doompi-prompt':
+        specifier: workspace:*
+        version: link:packages/default/doompi-prompt
       '@agimon-ai/doompi-read':
         specifier: workspace:*
         version: link:packages/default/doompi-read
@@ -323,6 +326,36 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/clients/doompi-desktop:
+    devDependencies:
+      '@agimon-ai/doompi':
+        specifier: workspace:*
+        version: link:../../core/doompi
+      '@agimon-ai/doompi-server':
+        specifier: workspace:*
+        version: link:../doompi-server
+      '@agimon-ai/doompi-web':
+        specifier: workspace:*
+        version: link:../doompi-web
+      '@types/node':
+        specifier: 26.4.0
+        version: 26.4.0
+      electron:
+        specifier: 44.0.0
+        version: 44.0.0
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
@@ -1609,8 +1642,72 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/default/doompi-prompt:
+    dependencies:
+      '@agimon-ai/doompi-extension-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-extension-contracts
+      '@agimon-ai/doompi-ui':
+        specifier: workspace:*
+        version: link:../../core/doompi-ui
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
+      '@deepseek-ai/cordis':
+        specifier: 4.0.1
+        version: 4.0.1
+      hono:
+        specifier: 4.13.5
+        version: 4.13.5
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.84.4
+        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-tui':
+        specifier: 0.84.4
+        version: 0.84.4
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.18)
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/default/doompi-read:
     dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../core/doompi-config
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-extension-contracts
@@ -3080,6 +3177,14 @@ packages:
   '@earendil-works/pi-tui@0.84.4':
     resolution: {integrity: sha512-nPUnwDkLtupPXnZQYrCwPFcuTydCDqTY6ZbFqhsL4S4kVq0AT418kPa/6uXwtaCD+MjBNBltb7ScTYX65yeE1w==}
     engines: {node: '>=22.19.0'}
+
+  '@electron-internal/extract-zip@1.0.5':
+    resolution: {integrity: sha512-+bqFCP98pLI0Tt0XQo1TmlXtwjWchISndDOxCkEcIuUgXWpBnLyRI+2DU+mesvnMMX6L1XDqYNA0lXNDHd/yiA==}
+    engines: {node: '>=22.12.0'}
+
+  '@electron/get@5.1.0':
+    resolution: {integrity: sha512-3kSBtG8ObcTVfXanm5vVJ6UnBLEVmVsRk1M+vGqCuMBV+XLCbJYuWQful+yIy0GQDsSlK0kHEriEHn7SPk4EnA==}
+    engines: {node: '>=22.12.0'}
 
   '@emnapi/core@1.4.5':
     resolution: {integrity: sha512-XsLw1dEOpkSX/WucdqUhPWP7hDxSvZiY+fsUC14h+FtQ2Ifni4znbBt8punRX+Uj2JG/uDb8nEHVKvrVlvdZ5Q==}
@@ -5223,6 +5328,9 @@ packages:
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
 
+  '@types/node@26.2.0':
+    resolution: {integrity: sha512-5IviulTZeRNp2vAJ514cc/HUlY5nZ9fCbq9DMyC52BrhFZACo3nI0R7qBxhQmo/d27NFe96ur/b7Wwxklda+kg==}
+
   '@types/node@26.4.0':
     resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
 
@@ -5234,6 +5342,11 @@ packages:
 
   '@types/range-parser@1.2.7':
     resolution: {integrity: sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==}
+
+  '@types/react-dom@19.2.3':
+    resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
+    peerDependencies:
+      '@types/react': ^19.2.0
 
   '@types/react-dom@19.2.5':
     resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
@@ -6243,6 +6356,11 @@ packages:
   electron-to-chromium@1.5.416:
     resolution: {integrity: sha512-K6bvB2BjnNrugtIih6ewlbBI9DXa976jIdiIlRLHhBoEI9a4JaQjjHyF+A1IQI543aQYR4LnmOrT/K5fZj0aPA==}
 
+  electron@44.0.0:
+    resolution: {integrity: sha512-FkTqPrFPZYljdPI5b7KORGsJTd6FgUQDefl5MrU3Xz9R87pAj9JLreIjDqcRN8hJIkFHIou0o8kKzvcpT9qiRQ==}
+    engines: {node: '>= 22.12.0'}
+    hasBin: true
+
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
 
@@ -6271,6 +6389,10 @@ packages:
   env-paths@2.2.1:
     resolution: {integrity: sha512-+h1lkLKhZMTYjog1VEpJNG7NZJWcuc2DDk/qsqSTRRCOXiLjeQ1d1/udrUGhqMxUgAlwKNZ0cf2uqan5GLuS2A==}
     engines: {node: '>=6'}
+
+  env-paths@3.0.0:
+    resolution: {integrity: sha512-dtJUTepzMW3Lm/NPxRf3wP4642UWhjL2sQxc+ym2YMj1m/H2zDNQOlezafzkHwn6sMstjHTwG6iQQsctDW/b1A==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   error-ex@1.3.4:
     resolution: {integrity: sha512-sqQamAnR14VgCr1A618A3sGrygcpK+HEbenA/HiEAkkUwcZIIB/tgWqHFxWgOyDh4nB4JCRimh79dR5Ywc9MDQ==}
@@ -7495,6 +7617,10 @@ packages:
   process-warning@5.1.0:
     resolution: {integrity: sha512-jQSaVHsPgtyw60e1rQ/A+/ArPEj/S8pS/vFnyGa/gYFXrKk/6RuDkoqVDQ5NI5MmS01698ltlAk0NoDBNLujRw==}
 
+  progress@2.0.3:
+    resolution: {integrity: sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==}
+    engines: {node: '>=0.4.0'}
+
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
 
@@ -7987,6 +8113,10 @@ packages:
   style-to-object@1.0.14:
     resolution: {integrity: sha512-LIN7rULI0jBscWQYaSswptyderlarFkjQ+t79nzty8tcIAceVomEVlLzH5VP4Cmsv6MtKhs7qaAiwlcp+Mgaxw==}
 
+  sumchecker@3.0.1:
+    resolution: {integrity: sha512-MvjXzkz/BOfyVDkG0oFOtBxHX2u3gKbMHIF/dXblZsgD3BWOFLmHovIpZY7BykJdAjcqRCBi1WYBNdEC9yI7vg==}
+    engines: {node: '>= 8.0'}
+
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
@@ -8137,6 +8267,10 @@ packages:
 
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+    engines: {node: '>=20.18.1'}
 
   undici@8.9.0:
     resolution: {integrity: sha512-aWZpUj7XoGonMClx4gdDRfgBjqeA+F473aDmROQQbM9n6PRfK/u1q/a0X4wMTgcHfT8H6fpbt98PFuDUwFg2YA==}
@@ -10025,6 +10159,21 @@ snapshots:
     dependencies:
       get-east-asian-width: 1.6.0
       marked: 18.0.5
+
+  '@electron-internal/extract-zip@1.0.5': {}
+
+  '@electron/get@5.1.0':
+    dependencies:
+      debug: 4.4.3(supports-color@7.2.0)
+      env-paths: 3.0.0
+      graceful-fs: 4.2.11
+      progress: 2.0.3
+      semver: 7.8.5
+      sumchecker: 3.0.1
+    optionalDependencies:
+      undici: 7.29.0
+    transitivePeerDependencies:
+      - supports-color
 
   '@emnapi/core@1.4.5':
     dependencies:
@@ -12062,6 +12211,10 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
+  '@types/node@26.2.0':
+    dependencies:
+      undici-types: 8.3.0
+
   '@types/node@26.4.0':
     dependencies:
       undici-types: 8.3.0
@@ -12071,6 +12224,10 @@ snapshots:
   '@types/qs@6.15.1': {}
 
   '@types/range-parser@1.2.7': {}
+
+  '@types/react-dom@19.2.3(@types/react@19.2.18)':
+    dependencies:
+      '@types/react': 19.2.18
 
   '@types/react-dom@19.2.5(@types/react@19.2.18)':
     dependencies:
@@ -12192,6 +12349,14 @@ snapshots:
       '@vitest/utils': 4.1.11
       chai: 6.2.2
       tinyrainbow: 3.1.1
+
+  '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.11
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0)
 
   '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
@@ -12823,6 +12988,14 @@ snapshots:
 
   electron-to-chromium@1.5.416: {}
 
+  electron@44.0.0:
+    dependencies:
+      '@electron-internal/extract-zip': 1.0.5
+      '@electron/get': 5.1.0
+      '@types/node': 24.13.3
+    transitivePeerDependencies:
+      - supports-color
+
   emoji-regex@10.6.0: {}
 
   emoji-regex@8.0.0: {}
@@ -12845,6 +13018,8 @@ snapshots:
       ansi-colors: 4.1.3
 
   env-paths@2.2.1: {}
+
+  env-paths@3.0.0: {}
 
   error-ex@1.3.4:
     dependencies:
@@ -14347,6 +14522,8 @@ snapshots:
 
   process-warning@5.1.0: {}
 
+  progress@2.0.3: {}
+
   proper-lockfile@4.1.2:
     dependencies:
       graceful-fs: 4.2.11
@@ -14939,6 +15116,12 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
+  sumchecker@3.0.1:
+    dependencies:
+      debug: 4.4.3(supports-color@7.2.0)
+    transitivePeerDependencies:
+      - supports-color
+
   supports-color@7.2.0:
     dependencies:
       has-flag: 4.0.0
@@ -15102,6 +15285,9 @@ snapshots:
 
   undici-types@8.3.0: {}
 
+  undici@7.29.0:
+    optional: true
+
   undici@8.9.0: {}
 
   unicode-canonical-property-names-ecmascript@2.0.1: {}
@@ -15195,18 +15381,60 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
+  vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0):
+    dependencies:
+      lightningcss: 1.33.0
+      picomatch: 4.0.7
+      postcss: 8.5.26
+      rolldown: 1.2.6
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 26.2.0
+      fsevents: 2.3.3
+      jiti: 2.7.0
+      yaml: 2.9.0
+
   vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       postcss: 8.5.26
-      rolldown: 1.2.5
+      rolldown: 1.2.6
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 26.4.0
       fsevents: 2.3.3
       jiti: 2.7.0
       yaml: 2.9.0
+
+  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.11
+      '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.11
+      '@vitest/runner': 4.1.11
+      '@vitest/snapshot': 4.1.11
+      '@vitest/spy': 4.1.11
+      '@vitest/utils': 4.1.11
+      es-module-lexer: 2.3.2
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.1.4
+      pathe: 2.0.3
+      picomatch: 4.0.5
+      std-env: 4.2.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.0
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.1
+      vite: 8.2.2(@types/node@26.2.0)(jiti@2.7.0)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+      '@types/node': 26.2.0
+      '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
+    transitivePeerDependencies:
+      - msw
 
   vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:

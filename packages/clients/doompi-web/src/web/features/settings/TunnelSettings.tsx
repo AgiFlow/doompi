@@ -57,23 +57,23 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
   return (
     <section className="flex flex-col gap-3" data-testid="remote-tunnel-settings">
       <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-doom-hi">Cloudflare tunnel</span>
-        <span className="text-[11px] text-doom-faint">Use a named tunnel for a stable custom domain and passkeys.</span>
+        <span className="text-xs text-doom-hi">cloudflare tunnel</span>
+        <span className="text-[11px] text-doom-faint">use a named tunnel for a stable custom domain and passkeys.</span>
       </div>
 
       <RadioGroup
         value={draft.kind}
         onValueChange={(kind) => setDraft(kind === 'named' ? namedTunnel(draft) : { kind: 'quick' })}
         className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2"
-        aria-label="Cloudflare tunnel type"
+        aria-label="cloudflare tunnel type"
       >
         <RadioGroupCard value="quick" data-testid="remote-tunnel-quick">
           <span className="block text-xs text-doom-hi">quick tunnel</span>
-          <span className="block text-[10px] text-doom-faint">No account, rotating address</span>
+          <span className="block text-[10px] text-doom-faint">no account, rotating address</span>
         </RadioGroupCard>
         <RadioGroupCard value="named" data-testid="remote-tunnel-named">
           <span className="block text-xs text-doom-hi">named tunnel</span>
-          <span className="block text-[10px] text-doom-faint">Your domain, durable access</span>
+          <span className="block text-[10px] text-doom-faint">your domain, durable access</span>
         </RadioGroupCard>
       </RadioGroup>
 
@@ -91,7 +91,7 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
             />
           </label>
           {invalidHostname ? (
-            <p className="text-[10px] text-doom-red">Enter a hostname only, without https://, a port, or a path.</p>
+            <p className="text-[10px] text-doom-red">enter a hostname only, without https://, a port, or a path.</p>
           ) : null}
           <label htmlFor="remote-tunnel-token-file" className="flex flex-col gap-1 text-[11px] text-doom-faint">
             token file
@@ -104,7 +104,7 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
             />
           </label>
           <p className="text-[10px] text-doom-faint">
-            Store the Cloudflare connector token in this local file. The token itself is never saved in browser
+            store the cloudflare connector token in this local file. the token itself is never saved in browser
             settings.
           </p>
           <details className="text-[11px] text-doom-faint">
@@ -137,7 +137,7 @@ export function TunnelSettings({ tunnel }: { tunnel: TunnelConfig }) {
 
       <div className="flex flex-col items-stretch gap-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-between min-[480px]:gap-3">
         <span className="text-[10px] leading-relaxed text-doom-faint">
-          Changes apply the next time remote access starts.
+          changes apply the next time remote access starts.
         </span>
         <Button
           variant="outline"

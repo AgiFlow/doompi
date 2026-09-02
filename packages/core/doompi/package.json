@@ -43,6 +43,16 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./contextApi": {
+      "types": "./dist/contextApi.d.mts",
+      "import": "./dist/contextApi.mjs",
+      "require": "./dist/contextApi.cjs"
+    },
+    "./sessionApi": {
+      "types": "./dist/sessionApi.d.mts",
+      "import": "./dist/sessionApi.mjs",
+      "require": "./dist/sessionApi.cjs"
+    },
     "./bin/cli": {
       "types": "./dist/bin/cli.d.mts",
       "import": "./dist/bin/cli.mjs",
@@ -349,6 +359,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "context",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
   },
   "pi": {
     "extensions": [

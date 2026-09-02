@@ -35,7 +35,7 @@ const additionalToolingPackageNames = ['@agimon-ai/vibe-lint-plugin-doom-web'];
 // never be a runtime dependency of a released package: the release publishes
 // the resolved `workspace:*` version, so a released package that points at an
 // unreleased one ships a dependency npm cannot install.
-const unreleasedOwnedPackageNames = new Set([]);
+const unreleasedOwnedPackageNames = new Set(['@agimon-ai/doompi-desktop']);
 const vibeLintVersion = '0.0.1-alpha.29';
 
 function readJson(file) {
@@ -88,9 +88,9 @@ const packageByName = new Map(packageRecords.map((record) => [record.manifest.na
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
 const workspacePackageNames = new Set([...ownedNames, toolingPackageName, ...additionalToolingPackageNames]);
 
-if (packageDirectories.length !== 45 || ownedNames.size !== 45) {
+if (packageDirectories.length !== 47 || ownedNames.size !== 47) {
   fail(
-    `Expected exactly 45 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 47 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {
@@ -105,7 +105,11 @@ if (
 
 for (const [index, manifest] of manifests.entries()) {
   const owner = manifest.name ?? packageDirectories[index];
-  if (manifest.private === true) fail(`${owner} must remain publishable`);
+  if (unreleasedOwnedPackageNames.has(owner)) {
+    if (manifest.private !== true) fail(`${owner} must remain private`);
+  } else if (manifest.private === true) {
+    fail(`${owner} must remain publishable`);
+  }
   for (const section of dependencySections) {
     for (const [name, range] of Object.entries(manifest[section] ?? {})) {
       if (typeof range !== 'string') fail(`${owner} has a non-string ${section} range for ${name}`);
@@ -296,5 +300,5 @@ if (rmuxPayloadCount !== 12) fail(`Expected 12 RMUX vendor files, found ${rmuxPa
 if (rtkPayloadCount !== 4) fail(`Expected 4 RTK vendor files, found ${rtkPayloadCount}`);
 
 console.log(
-  'Workspace audit passed: 45 runtime packages, 2 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
+  'Workspace audit passed: 46 publishable runtime packages, 1 private standalone client, 2 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
 );

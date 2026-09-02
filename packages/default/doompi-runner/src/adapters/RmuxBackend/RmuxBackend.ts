@@ -21,6 +21,7 @@ import type { IRunnerPaths } from '../../services/RunnerPaths/types';
 import type { ExitResult } from '../../types/spawner';
 import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
 
+const RMUX_BINARY_ENV = 'DOOMPI_RMUX_BINARY';
 const POLL_MS = 100;
 const LOG_DRAIN_TIMEOUT_MS = 2_000;
 const LOG_DRAIN_POLL_MS = 25;
@@ -319,6 +320,8 @@ export function rmuxPackageForTarget(platform: string, architecture: string): st
 }
 
 function bundledBinary(): string | undefined {
+  const configured = process.env[RMUX_BINARY_ENV];
+  if (configured !== undefined && configured !== '') return configured;
   const packageName = rmuxPackageForTarget(process.platform, process.arch);
   if (!packageName) return undefined;
   try {

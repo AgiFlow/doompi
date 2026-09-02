@@ -18,6 +18,7 @@ import type {
 import { readRepositorySettings, writeRepositorySelection } from '../../lib/settingsApi.ts';
 import { refreshSessionFacts } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 /** Repository selection controls shared with package-owned management panels. */
 
@@ -183,7 +184,7 @@ function DomainsAxis({ view, draft, dirty, busy, onChange, onRevert }: DomainsAx
           );
         })}
         {view.catalogs.domains.length === 0 ? (
-          <span className="text-[10px] text-doom-faint">No domains are configured.</span>
+          <span className="text-[10px] text-doom-faint">no domains are configured.</span>
         ) : null}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -289,16 +290,14 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
 
   return (
     <div data-testid="repository-settings" className="flex flex-col gap-4">
-      <header className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="text-[12px] font-bold text-doom-hi">defaults</span>
-        <span className="min-w-0 flex-1 text-[10px] text-doom-faint">
-          Selection defaults apply to the next synced session. Open sessions keep their current composition.
-        </span>
-      </header>
+      <SettingsSectionHeader
+        title="defaults"
+        detail="selection defaults apply to the next synced session. open sessions keep their current composition."
+      />
 
       {repository === null ? (
         <p data-testid="repository-settings-empty" className="text-[11px] text-doom-faint">
-          Open a session inside a .doom or Git repository to configure it here.
+          open a session inside a .doom or Git repository to configure it here.
         </p>
       ) : null}
 
@@ -313,7 +312,7 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
           <SingleAxis
             id="major-mode"
             label="major mode"
-            detail="The extension and package layer composition used by default."
+            detail="the extension and package layer composition used by default."
             options={view.catalogs.majorModes}
             effective={view.selection.majorMode.effective}
             repositoryValue={view.selection.majorMode.repository}
@@ -335,7 +334,7 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
           <SingleAxis
             id="profile"
             label="profile"
-            detail="The persona applied when the repository starts a new session."
+            detail="the persona applied when the repository starts a new session."
             options={view.catalogs.profiles}
             effective={view.selection.profile.effective}
             repositoryValue={view.selection.profile.repository}
