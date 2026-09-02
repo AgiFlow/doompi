@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsdown",
     "build:hub": "node scripts/stageHub.mjs",
-    "package": "pnpm run build && pnpm run build:hub && npx --yes electron-builder@26.0.12 --config electron-builder.yml",
+    "package": "pnpm run build && pnpm run build:hub && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
     "start": "pnpm run build && pnpm run build:hub && electron dist/bin/main.cjs",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",

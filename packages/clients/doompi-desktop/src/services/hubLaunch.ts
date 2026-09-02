@@ -24,7 +24,9 @@ export const LOOPBACK_HOST = '127.0.0.1';
  * `hub/dist`, not under `hub/node_modules/@agimon-ai/doompi-web`.
  */
 export function hubEntry(input: { resourcesPath: string; packaged: boolean; projectRoot: string }): string {
-  const root = input.packaged ? input.resourcesPath : path.join(input.projectRoot, 'build');
+  const root = input.packaged
+    ? path.join(input.resourcesPath, 'app.asar.unpacked', 'build')
+    : path.join(input.projectRoot, 'build');
   return path.join(root, 'hub', 'dist', 'bin', 'serve.mjs');
 }
 

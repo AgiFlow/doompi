@@ -41,4 +41,42 @@ if (!fs.existsSync(entry)) {
   process.exit(1);
 }
 
+/**
+ * Replaces symlinks that point outside the payload with real copies.
+ *
+ * `pnpm deploy` leaves a few links in its hoist directory pointing back at the
+ * workspace checkout. They resolve on this machine and nowhere else, and
+ * electron-builder refuses them outright because a link escaping the archive
+ * violates asar integrity. Dereferencing is the honest fix: the payload is
+ * supposed to be self-contained, and a link to a directory that will not exist
+ * on the user's machine is a bug whether or not the packager catches it.
+ */
+function dereferenceEscapingLinks(directory, root, replaced = { count: 0 }) {
+  for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
+    const itemPath = path.join(directory, item.name);
+    if (item.isSymbolicLink()) {
+      let resolved;
+      try {
+        resolved = fs.realpathSync(itemPath);
+      } catch {
+        // A link that resolves nowhere cannot be copied either.
+        fs.rmSync(itemPath, { force: true });
+        replaced.count += 1;
+        continue;
+      }
+      if (resolved === root || resolved.startsWith(`${root}${path.sep}`)) continue;
+      fs.rmSync(itemPath, { recursive: true, force: true });
+      fs.cpSync(resolved, itemPath, { recursive: true, dereference: true });
+      replaced.count += 1;
+      continue;
+    }
+    if (item.isDirectory()) dereferenceEscapingLinks(itemPath, root, replaced);
+  }
+  return replaced.count;
+}
+
+const payloadRoot = fs.realpathSync(target);
+const replaced = dereferenceEscapingLinks(payloadRoot, payloadRoot);
+if (replaced > 0) process.stdout.write(`[stage-hub] inlined ${String(replaced)} link(s) that escaped the payload\n`);
+
 process.stdout.write(`[stage-hub] staged the cockpit at ${target}\n`);

@@ -14,7 +14,9 @@ describe('locating the staged cockpit', () => {
     const entry = hubEntry({ resourcesPath: '/Apps/DoomPi.app/Contents/Resources', packaged: true, projectRoot: '/x' });
     // pnpm deploy writes the package at the root of its target, so the entry is
     // hub/dist, not hub/node_modules/@agimon-ai/doompi-web/dist.
-    expect(entry).toBe(path.join('/Apps/DoomPi.app/Contents/Resources', 'hub', 'dist', 'bin', 'serve.mjs'));
+    expect(entry).toBe(
+      path.join('/Apps/DoomPi.app/Contents/Resources', 'app.asar.unpacked', 'build', 'hub', 'dist', 'bin', 'serve.mjs'),
+    );
   });
 
   it('reads from the local build directory when running unpackaged', () => {

@@ -13,10 +13,17 @@ asar: true
 files:
   - dist/**/*
   - package.json
+  # The cockpit payload rides in `files`, not `extraResources`: electron-builder
+  # unconditionally strips `node_modules` from extraResources, which for this
+  # payload is the agent and every runtime dependency.
+  - build/hub/**/*
 
-extraResources:
-  - from: build/hub
-    to: hub
+# ...and is then unpacked, so it lands as real files on disk. That is required,
+# not cosmetic: a plugin composition execs the esbuild binary, and exec against
+# a path inside an asar fails with ENOTDIR.
+asarUnpack:
+  - build/hub/**/*
+
 
 # Every Mach-O binary under extraResources must carry a signature or
 # notarization rejects the bundle. This runs at afterPack, before the app
