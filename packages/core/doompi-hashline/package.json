@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-hashline",
-  "version": "0.0.1-alpha.18",
+  "version": "0.0.1-alpha.19",
   "description": "Shared snapshot-bound file tags and line anchors for DoomPi tools.",
   "keywords": [
     "ai",
