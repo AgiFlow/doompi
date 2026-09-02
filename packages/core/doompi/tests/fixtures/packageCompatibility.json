@@ -797,6 +797,7 @@
     "exports": {
       ".": "tir",
       "./extensions/pi": "tir",
+      "./hub-api": "tir",
       "./metrics": "tir",
       "./metricsSource": "tir",
       "./tui/metricsOverlay": "tir",
@@ -812,6 +813,11 @@
         "types": "./dist/extensions/pi.d.mts",
         "import": "./dist/extensions/pi.mjs",
         "require": "./dist/extensions/pi.cjs"
+      },
+      "./hub-api": {
+        "types": "./dist/hubApi.d.mts",
+        "import": "./dist/hubApi.mjs",
+        "require": "./dist/hubApi.cjs"
       },
       "./metrics": {
         "types": "./dist/metrics.d.mts",
@@ -838,7 +844,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webMetrics.ts", "src/types/issueGrouping.ts"],
     "os": [],
     "cpu": []
   },
