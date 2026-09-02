@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-log",
-  "version": "0.0.1-alpha.50",
+  "version": "0.0.1-alpha.51",
   "description": "Pi session metrics, findings, sink status, and a Log Metrics overlay for agent observability.",
   "keywords": [
     "agent-observability",

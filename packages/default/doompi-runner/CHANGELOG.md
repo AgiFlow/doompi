@@ -1,3 +1,30 @@
+## 0.0.1-alpha.51 (2026-09-02)
+
+### 🩹 Fixes
+
+- **doompi-desktop:** bundle a self-contained runtime ([dc6655b](https://github.com/AgiFlow/doompi/commit/dc6655b))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.11
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.14
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.12
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.50 (2026-09-02)
 
 ### 🩹 Fixes
