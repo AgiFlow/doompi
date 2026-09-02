@@ -1,3 +1,20 @@
+## 0.0.1-alpha.50 (2026-09-02)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.16
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.50
+
 ## 0.0.1-alpha.49 (2026-09-02)
 
 ### 🚀 Features

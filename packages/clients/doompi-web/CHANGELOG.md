@@ -1,3 +1,25 @@
+## 0.0.1-alpha.11 (2026-09-02)
+
+### 🩹 Fixes
+
+- **doompi-desktop:** bundle a self-contained runtime ([dc6655b](https://github.com/AgiFlow/doompi/commit/dc6655b))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.13
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.10
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.13
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.11
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.46
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.10 (2026-09-02)
 
 ### 🚀 Features

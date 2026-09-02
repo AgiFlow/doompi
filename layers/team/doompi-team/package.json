@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-team",
-  "version": "0.0.1-alpha.49",
+  "version": "0.0.1-alpha.50",
   "description": "Asynchronous named subagents, team runs, intercom, and model policy for Pi coding agents.",
   "keywords": [
     "agent-team",

@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-prompt",
-  "version": "0.0.0",
+  "version": "0.0.1-alpha.0",
   "description": "Staged recent prompts and saved prompt templates for DoomPi",
   "keywords": [
     "ai",
