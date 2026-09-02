@@ -1,10 +1,9 @@
-import { Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/doompi-web-components';
+import { AnsiLine, Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { WorkflowRunView } from '../types/webWorkflows.ts';
 import type { WorkflowTerminalCapabilitiesView } from '../types/webWorkflowTerminal.ts';
-import { ansiSpans } from './ansiSpans.ts';
 import { followScreen, releaseControl, sendKeys, takeControl } from './terminalApi.ts';
 import { workflows } from './workflowsStore.ts';
 
@@ -53,23 +52,10 @@ export function stepTerminalTab(run: WorkflowRunView, job: string, step?: string
 }
 
 function ScreenLine({ line }: { line: string }) {
-  const spans = ansiSpans(line);
-  if (spans.length === 0) return <span className="block h-[15px]" />;
-  return (
-    <span className="block whitespace-pre">
-      {spans.map((span, index) => (
-        <span
-          key={index}
-          className={`${span.className ?? ''} ${span.bold ? 'font-bold' : ''} ${span.faint ? 'opacity-60' : ''} ${
-            span.italic ? 'italic' : ''
-          } ${span.underline ? 'underline' : ''} ${span.inverse ? 'bg-doom-text text-doom-deep' : ''}`}
-          style={span.color === undefined ? undefined : { color: span.color }}
-        >
-          {span.text}
-        </span>
-      ))}
-    </span>
-  );
+  // A blank row still has to hold the grid open, so an empty line keeps its
+  // height rather than collapsing the screen by one row.
+  if (line.length === 0) return <span className="block h-[15px]" />;
+  return <AnsiLine line={line} className="block whitespace-pre" />;
 }
 
 /**

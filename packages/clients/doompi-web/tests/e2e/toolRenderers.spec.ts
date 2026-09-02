@@ -29,6 +29,10 @@ test('a plugin renders the call and result of the tool it owns', async ({ page, 
     toolCallId: 'call-1',
     partialResult: { content: [{ type: 'text', text: 'running 4 tests' }] },
   });
+  // The bash card is a header row until it is opened, so the streamed tail
+  // only exists once the item is expanded.
+  await expect(page.getByTestId('tool-result-bash')).toHaveCount(0);
+  await page.getByTestId('tool-expand').click();
   await expect(page.getByTestId('tool-result-bash')).toContainText('running 4 tests');
 
   cockpit.session.emit({
@@ -108,12 +112,14 @@ test('the expand toggle hands the plugin renderer its expanded state', async ({ 
     isError: false,
   });
 
-  // Collapsed, the bash card keeps the tail end of the log, as the TUI does.
-  const result = page.getByTestId('tool-result-bash');
-  await expect(result).toContainText('line 30');
-  await expect(result).not.toContainText(/\bline 1\b/);
+  // Collapsed, the bash card is header only; expanding it shows the command as
+  // it was run and the whole tail the frame carried.
+  await expect(page.getByTestId('tool-result-bash')).toHaveCount(0);
   await page.getByTestId('tool-expand').click();
-  await expect(result).toContainText(/\bline 1\b/);
+  const output = page.getByTestId('tool-result-bash-output');
+  await expect(page.getByTestId('tool-result-bash-command')).toContainText('seq 30');
+  await expect(output).toContainText(/\bline 1\b/);
+  await expect(output).toContainText('line 30');
 });
 
 test('the read plugin renders anchored text and attached images', async ({ page, cockpit }) => {
@@ -340,4 +346,97 @@ test('every migrated tool renders a plugin item, never the host fallback', async
     await expect(items.nth(index), entry.tool).toHaveAttribute('data-tool-renderer', 'plugin');
     await expect(items.nth(index), entry.tool).toHaveAttribute('data-tool-state', 'ok');
   }
+});
+
+test('code results wear the editor grammar and log output keeps its own colours', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const source = ['// a comment', 'const x = 1;'].join('\n');
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'hl-read',
+    toolName: 'read',
+    args: { path: 'src/a.ts' },
+  });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'hl-read',
+    result: { content: [{ type: 'text', text: '1#abc|// a comment\n2#abd|const x = 1;' }] },
+    isError: false,
+  });
+
+  // The grammar loads in its own chunk, so the plain text paints first and the
+  // colours arrive after; the palette is the editor's, named as theme tokens.
+  const comment = page.locator('[data-testid="tool-result-read"] span[style*="--doom-faint"]');
+  await expect(comment).toHaveText('// a comment');
+
+  // A runner's log keeps the colours the command wrote, so the card renders
+  // them instead of printing the escape sequences as text.
+  const ESC = '\u001B[';
+  const tail = `${ESC}31mError:${ESC}39m no such flag`;
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'hl-bash',
+    toolName: 'bash',
+    args: { command: `echo ${source.length}` },
+  });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'hl-bash',
+    result: { content: [{ type: 'text', text: tail }], details: { tail, tailLines: 1, exitCode: 0 } },
+    isError: false,
+  });
+  await page.getByTestId('tool-expand').last().click();
+  await expect(page.locator('[data-testid="tool-result-bash-output"] span.text-doom-red')).toHaveText('Error:');
+  await expect(page.getByTestId('tool-result-bash-output')).not.toContainText('[31m');
+});
+
+test('a run of calls to one tool shares a frame, and a lone call keeps its card', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const call = (id: string, command: string, isError = false): void => {
+    cockpit.session.emit({ type: 'tool_execution_start', toolCallId: id, toolName: 'bash', args: { command } });
+    cockpit.session.emit({
+      type: 'tool_execution_end',
+      toolCallId: id,
+      result: {
+        content: [{ type: 'text', text: 'done' }],
+        details: { tail: 'done', tailLines: 1, exitCode: isError ? 1 : 0 },
+      },
+      isError,
+    });
+  };
+  call('grp-1', 'pnpm lint');
+  call('grp-2', 'pnpm typecheck', true);
+  call('grp-3', 'pnpm test');
+
+  // One frame for the run, and the run reports the worst thing in it.
+  const group = page.getByTestId('entry-tool-group');
+  await expect(group).toHaveCount(1);
+  await expect(group).toHaveAttribute('data-tool-count', '3');
+  await expect(group).toContainText('3 calls');
+  await expect(group.getByTestId('entry-tool')).toHaveCount(3);
+
+  // A row inside the group drops the tool name the group already states, and
+  // stays quiet unless its own outcome differs from the run's.
+  await expect(group.getByTestId('tool-status')).toHaveCount(1);
+  await expect(group.getByTestId('tool-status')).toHaveText('ERROR');
+  await expect(group.getByTestId('entry-tool').first()).not.toContainText('bash');
+
+  // Each row still opens on its own.
+  await group.getByTestId('tool-expand').first().click();
+  await expect(group.getByTestId('tool-result-bash-command').first()).toContainText('pnpm lint');
+
+  // Anything between two calls ends the run, and a single call is still a card.
+  cockpit.session.emit({ type: 'tool_execution_start', toolCallId: 'solo', toolName: 'read', args: { path: 'a.ts' } });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'solo',
+    result: { content: [{ type: 'text', text: '1#abc|const x = 1;' }] },
+    isError: false,
+  });
+  await expect(page.getByTestId('entry-tool-group')).toHaveCount(1);
+  await expect(page.getByTestId('entry-tool')).toHaveCount(4);
 });

@@ -3,7 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { extensionName, extensionToolSource, withExtensionSource } from '../src/exports/extensionName.ts';
+import {
+  extensionName,
+  extensionPackageName,
+  extensionToolSource,
+  withExtensionSource,
+} from '../src/exports/extensionName.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-extension-name-'));
 
@@ -48,5 +53,29 @@ describe('extensionName', () => {
 
     expect(registerTool).toHaveBeenCalledWith(tool);
     expect(extensionToolSource(pi, tool.name)).toBe(entry);
+  });
+});
+
+describe('extensionPackageName', () => {
+  // `.doom/modes.yaml` names packages with their scope, so attribution has to
+  // read the manifest name whole. `extensionName` shortens it for display, and
+  // joining on that instead would miss every scoped package silently.
+  it('keeps the scope that extensionName drops', () => {
+    write('packages/scoped-attr/package.json', JSON.stringify({ name: '@agimon-ai/doompi-team' }));
+    const entry = write('packages/scoped-attr/extensions/pi.ts');
+
+    expect(extensionPackageName(entry)).toBe('@agimon-ai/doompi-team');
+    expect(extensionName(entry)).toBe('doompi-team');
+  });
+
+  it('reports nothing when no manifest sits above the entry', () => {
+    const orphan = path.join(os.tmpdir(), `doom-orphan-${process.pid}`, 'pi.ts');
+    fs.mkdirSync(path.dirname(orphan), { recursive: true });
+    fs.writeFileSync(orphan, '');
+
+    // An answer of "no package" is cached like any other, so a second call
+    // must not read the disk again and must not change its mind.
+    expect(extensionPackageName(orphan)).toBe(extensionPackageName(orphan));
+    fs.rmSync(path.dirname(orphan), { recursive: true, force: true });
   });
 });

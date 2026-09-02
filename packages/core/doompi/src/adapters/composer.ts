@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { loadMajorModesConfig, type MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { withExtensionSource } from '@agimon-ai/doompi-ui/extensionName';
 import { type ExtensionAPI, parseArgs } from '@earendil-works/pi-coding-agent';
-import { PERSONA_ENTRY, resolveExtensionComposition } from '../services/extensionAssembler.ts';
+import { PERSONA_ENTRY, packageAttribution, resolveExtensionComposition } from '../services/extensionAssembler.ts';
 import type { HarnessPreset } from '../types/interfaces/harness';
 import { findSyncedRoot, readBundleStatus } from './bootstrapLocator.ts';
 import { alreadyComposed } from '@agimon-ai/doompi-extension-contracts/child-process';
@@ -298,6 +298,7 @@ export async function composeRuntimeLoadPlan(
     {
       childExtensions: [...composition.childActivation],
       compositionFingerprint: composition.fingerprint,
+      packageAttribution: packageAttribution(composition),
     },
     environment,
   );

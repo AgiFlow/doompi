@@ -10,7 +10,11 @@ import {
   piExtensionAliasPath,
   writePiExtensionAlias,
 } from '../../src/adapters/piExtensionAlias';
-import { PI_DISPATCHER_VERSION } from '../../src/adapters/piExtensionDispatcher.ts';
+import {
+  PI_DISPATCHER_VERSION,
+  piExtensionDispatcherIsUpgradeable,
+  piExtensionDispatcherVersion,
+} from '../../src/adapters/piExtensionDispatcher.ts';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
@@ -184,6 +188,40 @@ describe('Pi extension dispatcher package', () => {
     };
     expect(manifest.doompiDispatcher).toBe(PI_DISPATCHER_VERSION);
     expect(piExtensionAliasIsCurrent(root)).toBe(true);
+  });
+
+  it('reports a stale managed dispatcher as not current but upgradeable', () => {
+    const root = temporaryRoot();
+    const dispatcherPath = piExtensionAliasPath(root);
+    fs.mkdirSync(dispatcherPath, { recursive: true });
+    fs.writeFileSync(
+      path.join(dispatcherPath, 'package.json'),
+      `${JSON.stringify({ name: '@agimon-ai/doompi', doompiDispatcher: 1 })}\n`,
+    );
+    fs.writeFileSync(path.join(dispatcherPath, 'dispatcher.mjs'), 'stale\n');
+
+    expect(piExtensionAliasIsCurrent(root)).toBe(false);
+    expect(piExtensionDispatcherIsUpgradeable(root)).toBe(true);
+    expect(piExtensionDispatcherVersion(root)).toBe(1);
+  });
+
+  it('reports a current dispatcher as not upgradeable', () => {
+    const root = temporaryRoot();
+    const packageRoot = fakePackage(path.join(root, 'install', 'doompi'));
+    writePiExtensionAlias(root, packageRoot);
+
+    expect(piExtensionAliasIsCurrent(root)).toBe(true);
+    expect(piExtensionDispatcherIsUpgradeable(root)).toBe(false);
+    expect(piExtensionDispatcherVersion(root)).toBe(PI_DISPATCHER_VERSION);
+  });
+
+  it('reports an unmanaged dispatcher path as not upgradeable', () => {
+    const root = temporaryRoot();
+    const dispatcherPath = piExtensionAliasPath(root);
+    fs.mkdirSync(dispatcherPath, { recursive: true });
+
+    expect(piExtensionDispatcherIsUpgradeable(root)).toBe(false);
+    expect(piExtensionDispatcherVersion(root)).toBeUndefined();
   });
   it('does not replace an unmanaged path', () => {
     const root = temporaryRoot();

@@ -1480,6 +1480,15 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-contracts
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.19
         version: 0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
@@ -1496,12 +1505,24 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
@@ -10047,17 +10068,13 @@ snapshots:
 
   '@hexagon/base64@1.1.28': {}
 
-  '@hono/node-server@1.19.17(hono@4.13.3)':
+  '@hono/node-server@1.19.17(hono@4.13.5)':
     dependencies:
-      hono: 4.13.3
+      hono: 4.13.5
 
   '@hono/node-server@2.0.10(hono@4.12.34)':
     dependencies:
       hono: 4.12.34
-
-  '@hono/node-server@2.1.1(hono@4.13.3)':
-    dependencies:
-      hono: 4.13.3
 
   '@hono/node-server@2.1.1(hono@4.13.5)':
     dependencies:
@@ -10364,7 +10381,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.3)
+      '@hono/node-server': 1.19.17(hono@4.13.5)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -10374,7 +10391,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1
       express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.3
+      hono: 4.13.5
       jose: 6.2.9
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -10386,7 +10403,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.3)
+      '@hono/node-server': 1.19.17(hono@4.13.5)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -10396,7 +10413,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1
       express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.3
+      hono: 4.13.5
       jose: 6.2.9
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -10408,7 +10425,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.30.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 2.1.1(hono@4.13.3)
+      '@hono/node-server': 2.1.1(hono@4.13.5)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -10418,7 +10435,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1
       express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.3
+      hono: 4.13.5
       jose: 6.2.9
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1

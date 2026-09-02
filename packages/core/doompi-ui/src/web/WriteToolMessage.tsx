@@ -3,10 +3,39 @@ import {
   MessageItemBody,
   MessageItemHeader,
   MessageItemStatus,
+  SyntaxLine,
   toolTone,
+  useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { resultText, writeCallView } from './builtinToolView.ts';
+import { resultText, type WriteCallView, writeCallView } from './builtinToolView.ts';
+
+/**
+ * The numbered preview, coloured as the file it is about to become.
+ *
+ * Its own component so the highlighting hook has somewhere to live: the body
+ * around it is picked inside a render prop. The preview is a prefix of the
+ * content, so it parses as the file it came from up to wherever it was cut.
+ */
+function WritePreview({ view, path }: { view: WriteCallView; path: string }) {
+  const spans = useSyntaxLines(view.preview.map((line) => line.text).join('\n'), { path });
+  return (
+    <>
+      {view.preview.map((line, index) => (
+        <span key={line.number} className="flex gap-2">
+          <span className="shrink-0 text-right text-doom-faint" style={{ width: `${String(view.gutter)}ch` }}>
+            {line.number}
+          </span>
+          <SyntaxLine
+            spans={spans?.[index]}
+            text={line.text}
+            className="min-w-0 whitespace-pre-wrap break-words text-doom-text"
+          />
+        </span>
+      ))}
+    </>
+  );
+}
 
 /**
  * The write tool's timeline item: `path · N chars` in the header. Pi's write
@@ -41,14 +70,7 @@ export function WriteToolMessage({ args, result, output, running, isError }: Too
               ) : null
             ) : (
               <MessageItemBody data-testid="tool-result-write" className="flex flex-col font-mono">
-                {view.preview.map((line) => (
-                  <span key={line.number} className="flex gap-2">
-                    <span className="shrink-0 text-right text-doom-faint" style={{ width: `${String(view.gutter)}ch` }}>
-                      {line.number}
-                    </span>
-                    <span className="min-w-0 whitespace-pre-wrap break-words text-doom-text">{line.text}</span>
-                  </span>
-                ))}
+                <WritePreview view={view} path={view.path} />
                 {view.hidden > 0 ? <MessageItemStatus expands>{view.hidden} more lines</MessageItemStatus> : null}
                 {running ? <MessageItemStatus tone="running">running</MessageItemStatus> : null}
               </MessageItemBody>

@@ -164,6 +164,19 @@ export function piExtensionDispatcherIsCurrent(piDirectory: string): boolean {
   return fs.lstatSync(path.join(directory, DISPATCHER_ENTRY), { throwIfNoEntry: false })?.isFile() === true;
 }
 
+/** Whether an existing managed dispatcher is stale but safe to upgrade in place. */
+export function piExtensionDispatcherIsUpgradeable(piDirectory: string): boolean {
+  const directory = piExtensionDispatcherPath(piDirectory);
+  const stat = fs.lstatSync(directory, { throwIfNoEntry: false });
+  if (!stat?.isDirectory() || stat.isSymbolicLink()) return false;
+  return upgradeableManagedManifest(directory) && !managedManifest(directory);
+}
+
+/** Installed protocol version of the dispatcher package, if it is DoomPi-owned. */
+export function piExtensionDispatcherVersion(piDirectory: string): number | undefined {
+  return managedManifestVersion(piExtensionDispatcherPath(piDirectory));
+}
+
 function legacyLinkIsManaged(linkPath: string): boolean {
   try {
     return manifestName(fs.realpathSync(linkPath)) === DOOM_PACKAGE_NAME;

@@ -8,6 +8,7 @@ import {
   assembleExtensions,
   type ExtensionContext,
   type ExtensionLayerResolvers,
+  packageAttribution,
   resolveExtensionComposition,
 } from '../../src/services/extensionAssembler.ts';
 
@@ -626,5 +627,61 @@ describe('standard extension composition', () => {
     expect(child).toEqual(composition.childActivation);
     expect(parent).not.toBe(composition.parentActivation);
     expect(child).not.toBe(composition.childActivation);
+  });
+});
+
+describe('packageAttribution', () => {
+  it('names the layer of the major mode that admitted each package', () => {
+    const config = loadMajorModesConfig(REPOSITORY_ROOT);
+    const composition = resolveExtensionComposition(
+      context(config, { majorMode: 'copilot', layers: resolveLayers(config, 'copilot'), resolvers: resolver() }),
+    );
+
+    expect(packageAttribution(composition)['@agimon-ai/doompi-team']).toEqual({
+      kind: 'major',
+      mode: 'copilot',
+      layer: 'team',
+    });
+    expect(packageAttribution(composition)['@agimon-ai/doompi-task']).toEqual({
+      kind: 'major',
+      mode: 'copilot',
+      layer: 'task',
+    });
+  });
+
+  // The join this feeds is against a package manifest name, and `extensionName`
+  // deliberately strips the scope for display. If attribution ever strips it
+  // too, every scoped package silently loses its mode and the surface that
+  // reads this quietly reports nothing.
+  it('keeps the npm scope, because the join key is the manifest name', () => {
+    const config = loadMajorModesConfig(REPOSITORY_ROOT);
+    const composition = resolveExtensionComposition(
+      context(config, { majorMode: 'copilot', layers: resolveLayers(config, 'copilot'), resolvers: resolver() }),
+    );
+    const attribution = packageAttribution(composition);
+
+    expect(Object.keys(attribution)).toContain('@agimon-ai/doompi-team');
+    expect(Object.keys(attribution)).not.toContain('doompi-team');
+    expect(Object.keys(attribution).every((name) => !name.startsWith('/'))).toBe(true);
+  });
+
+  it('attributes a layer that a mode does not select to nothing', () => {
+    const config = loadMajorModesConfig(REPOSITORY_ROOT);
+    const composition = resolveExtensionComposition(
+      context(config, { majorMode: 'minimal', layers: resolveLayers(config, 'minimal'), resolvers: resolver() }),
+    );
+    const attribution = packageAttribution(composition);
+
+    expect(attribution['@agimon-ai/doompi-team']?.mode).toBe('minimal');
+    expect(attribution['@agimon-ai/vibe-lint']).toBeUndefined();
+  });
+
+  it('reports nothing when the composition names no major mode', () => {
+    const config = loadMajorModesConfig(REPOSITORY_ROOT);
+    const composition = resolveExtensionComposition(
+      context(config, { majorMode: '', layers: [], resolvers: resolver() }),
+    );
+
+    expect(packageAttribution(composition)).toEqual({});
   });
 });

@@ -34,6 +34,8 @@ export type {
   RepositorySettingsRepository,
   SettingsFieldContribution,
   SettingsFieldOption,
+  SettingsPanelContribution,
+  SettingsPanelProps,
   SettingsSectionContribution,
   SurfaceContribution,
   TabContribution,

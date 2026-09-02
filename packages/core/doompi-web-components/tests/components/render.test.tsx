@@ -29,6 +29,7 @@ import {
   Markdown,
   MessageItem,
   MessageItemBody,
+  MessageItemGroup,
   MessageItemHeader,
   MessageItemStatus,
   MessageLines,
@@ -63,6 +64,8 @@ import {
   StatusBadge,
   StreamCursor,
   Switch,
+  SyntaxLine,
+  SyntaxText,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -256,6 +259,60 @@ describe('primitives', () => {
     expect(out).toContain('native row');
   });
 
+  it('shows code plain before a grammar has answered, and coloured once it has', () => {
+    // The first paint is the text itself: highlighting is asynchronous, so a
+    // card is readable whether or not a parser ever arrives.
+    const plain = html(<SyntaxText text={'const x = 1;\nexport { x };'} path="src/a.ts" />);
+    expect(plain).toContain('const x = 1;');
+    expect(plain).toContain('export { x };');
+    expect(plain).toContain('data-highlighted="false"');
+
+    const coloured = html(
+      <SyntaxLine
+        spans={[{ text: 'const', token: 'keyword' }, { text: ' x = ' }, { text: '1', token: 'literal' }]}
+        text=""
+      />,
+    );
+    expect(coloured).toContain('var(--doom-magenta)');
+    expect(coloured).toContain('var(--doom-orange)');
+    expect(coloured).toContain('const');
+
+    // Without spans the line is its own plain text, which is what every card
+    // renders until its file has parsed.
+    expect(html(<SyntaxLine text="const x = 1;" />)).toContain('const x = 1;');
+  });
+
+  it('turns items into rows inside a group, which says the shared part once', () => {
+    const out = html(
+      <MessageItemGroup tone="error" title="bash" summary="· 2 calls">
+        <MessageItem tone="ok">
+          <MessageItemHeader title="bash">pnpm lint</MessageItemHeader>
+        </MessageItem>
+        <MessageItem tone="error">
+          <MessageItemHeader title="bash">pnpm test</MessageItemHeader>
+        </MessageItem>
+      </MessageItemGroup>,
+    );
+    // The group states the tool and the run's outcome.
+    expect(out).toContain('2 calls');
+    expect(out).toContain('ERROR');
+    // A row keeps its tone as an edge, not as a card of its own.
+    expect(out).toContain('border-l-2');
+    expect(out).toContain('data-grouped="true"');
+    // The tool's name is stated once, by the group, and not again per row.
+    expect(out.match(/>bash<\/span>/g)).toHaveLength(1);
+    expect(out.match(/ERROR/g)).toHaveLength(2);
+    expect(out).not.toContain('>OK<');
+
+    // On its own the same item is a card, with its title and its badge back.
+    const alone = html(
+      <MessageItem tone="ok">
+        <MessageItemHeader title="bash">pnpm lint</MessageItemHeader>
+      </MessageItem>,
+    );
+    expect(alone).toContain('>bash</span>');
+    expect(alone).toContain('OK');
+  });
   it('lends its styling to another element wherever asChild is offered', () => {
     expect(
       html(

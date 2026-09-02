@@ -170,6 +170,55 @@ describe('the web plugin registry', () => {
     ]);
   });
 
+  it('places a self-drawn page in the general workspace only, in menu order', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'log',
+        settingsPanels: [{ id: 'metrics', label: 'metrics', detail: 'tokens and cost', component: Panel }],
+      }),
+      defineWebPlugin({
+        id: 'planning',
+        settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
+      }),
+    ]);
+
+    expect(settingsSections('general').map((section) => section.id)).toEqual([
+      'providers',
+      'appearance',
+      'notifications',
+      'remote',
+      'plugins',
+      'planning',
+      'metrics',
+    ]);
+    // A drawn page reports rather than writes, so unlike a contributed section
+    // it has no repository copy to offer.
+    expect(settingsSections('repository').map((section) => section.id)).toEqual([
+      'repositories',
+      'repository-planning',
+    ]);
+    expect(settingsSections('general').find((section) => section.id === 'metrics')?.panel?.pluginId).toBe('log');
+  });
+
+  it('refuses a panel whose id a section already claimed', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'planning',
+        settingsSections: [{ id: 'metrics', label: 'metrics', detail: 'fields', fields: [] }],
+      }),
+      defineWebPlugin({
+        id: 'log',
+        settingsPanels: [{ id: 'metrics', label: 'metrics', detail: 'drawn', component: Panel }],
+      }),
+    ]);
+
+    // Both would route at /settings/metrics, so the second is a diagnostic and
+    // the first keeps the id.
+    expect(settingsSections('general').filter((section) => section.id === 'metrics')).toHaveLength(1);
+    expect(settingsSections('general').find((section) => section.id === 'metrics')?.panel).toBeUndefined();
+    expect(webPluginDiagnostics().map((diagnostic) => diagnostic.kind)).toContain('duplicate-settings-section');
+  });
+
   it('collects leader bindings in install order and refuses keys the TUI would', () => {
     const group = { key: 'w', label: 'workflows' };
     installWebPlugins([

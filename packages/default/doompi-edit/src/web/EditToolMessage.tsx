@@ -4,7 +4,9 @@ import {
   MessageItemBody,
   MessageItemHeader,
   MessageItemStatus,
+  SyntaxLine,
   toolTone,
+  useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
 import { type DiffRow, editCallView, editResultView, resultTextLines } from './editToolView.ts';
@@ -19,6 +21,33 @@ const ROW_TONE: Readonly<Record<DiffRow['marker'], string>> = {
   '-': 'bg-doom-tint-red text-doom-red',
   ' ': 'text-doom-dim',
 };
+
+/**
+ * The banded rows, and the grammar over them.
+ *
+ * Its own component because the colours come from a hook, and the body that
+ * renders these rows is chosen inside a render prop. The rows are parsed as
+ * one document: a diff is not a file, so a replaced line is seen twice and a
+ * split string can colour oddly, which costs a token here and there and never
+ * costs the reader the text. The `+` and `-` wash stays underneath, so what
+ * changed is still legible when the grammar has coloured the foreground.
+ */
+function DiffRows({ rows, gutter, path }: { rows: readonly DiffRow[]; gutter: number; path: string }) {
+  const spans = useSyntaxLines(rows.map((row) => row.content).join('\n'), { path });
+  return (
+    <>
+      {rows.map((row, index) => (
+        <span key={`${String(index)}-${row.lineNumber}`} className={`flex gap-2 ${ROW_TONE[row.marker]}`}>
+          <span className="shrink-0 text-right text-doom-faint" style={{ width: `${String(gutter)}ch` }}>
+            {row.lineNumber}
+          </span>
+          <span className="w-2 shrink-0">{row.marker === ' ' ? '' : row.marker}</span>
+          <SyntaxLine spans={spans?.[index]} text={row.content} className="min-w-0 whitespace-pre-wrap break-words" />
+        </span>
+      ))}
+    </>
+  );
+}
 
 /**
  * The edit tool's timeline item: `path · N ranges` in the header; the display
@@ -62,18 +91,7 @@ export function EditToolMessage({ args, result, output, running, isError }: Tool
               const { shown, hidden } = collapseLines(view.rows, COLLAPSED_ROWS, expanded);
               return (
                 <MessageItemBody data-testid="tool-result-edit" className="flex flex-col font-mono">
-                  {shown.map((row, index) => (
-                    <span key={`${String(index)}-${row.lineNumber}`} className={`flex gap-2 ${ROW_TONE[row.marker]}`}>
-                      <span
-                        className="shrink-0 text-right text-doom-faint"
-                        style={{ width: `${String(view.gutter)}ch` }}
-                      >
-                        {row.lineNumber}
-                      </span>
-                      <span className="w-2 shrink-0">{row.marker === ' ' ? '' : row.marker}</span>
-                      <span className="min-w-0 whitespace-pre-wrap break-words">{row.content}</span>
-                    </span>
-                  ))}
+                  <DiffRows rows={shown} gutter={view.gutter} path={call.path} />
                   {hidden > 0 ? (
                     <MessageItemStatus expands className="pt-1">
                       {hidden} more rows

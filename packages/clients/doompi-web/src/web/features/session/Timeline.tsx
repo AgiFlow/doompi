@@ -3,6 +3,7 @@ import {
   ChevronDownIcon,
   EmptyState,
   ExternalLinkIcon,
+  MessageItemGroup,
   Separator,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
@@ -12,7 +13,13 @@ import type { Store } from '@tanstack/store';
 import { useActivityGroups } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
-import { isSupportedImageMimeType, type SessionState, type TimelineEntry } from '../../lib/sessionModel.ts';
+import {
+  isSupportedImageMimeType,
+  type SessionState,
+  type TimelineEntry,
+  type ToolEntry,
+} from '../../lib/sessionModel.ts';
+import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups.ts';
 import {
   requestOlderHistory,
   sessionStoreFor,
@@ -84,6 +91,44 @@ function ToolEntryRow({
       <div className="min-w-0 flex-1">
         <ToolCard entry={entry} sessionId={sessionId} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * A run of calls to one tool, under one frame and one gutter label. The rows
+ * inside are the same cards the tool renders on its own; the group only takes
+ * their border, so each call still opens and closes by itself.
+ */
+function ToolGroupRow({
+  name,
+  entries,
+  sessionId,
+}: {
+  name: string;
+  entries: readonly ToolEntry[];
+  sessionId: string | null;
+}) {
+  return (
+    <div
+      data-testid="entry-tool-row"
+      data-tool-presentation="tool"
+      className="flex flex-col gap-1 sm:flex-row sm:gap-3"
+    >
+      <Gutter label="tool" tone="text-doom-faint" />
+      <MessageItemGroup
+        data-testid="entry-tool-group"
+        data-tool-name={name}
+        data-tool-count={entries.length}
+        tone={groupTone(entries)}
+        title={name}
+        summary={`· ${groupSummary(entries)}`}
+        className="min-w-0 flex-1"
+      >
+        {entries.map((entry) => (
+          <ToolCard key={entry.id} entry={entry} sessionId={sessionId} />
+        ))}
+      </MessageItemGroup>
     </div>
   );
 }
@@ -228,6 +273,17 @@ export function Transcript({
     const shown = entries.filter((entry) => entry.kind !== 'queued');
     return limit === undefined ? shown : shown.slice(-limit);
   }, [entries, limit]);
+  const toolStatuses = useActiveSession((state) => state.statuses);
+  // A tool that presents itself as a message has no frame to share, so only
+  // the card-shaped ones are gathered into runs.
+  const units = useMemo(
+    () =>
+      timelineUnits(
+        visibleEntries,
+        (name) => (pluginToolRenderer(name, toolStatuses)?.timelinePresentation ?? 'tool') === 'tool',
+      ),
+    [visibleEntries, toolStatuses],
+  );
   const scroller = useRef<HTMLDivElement>(null);
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
@@ -359,7 +415,7 @@ export function Transcript({
             : 'flex flex-1 flex-col gap-[18px] overflow-y-auto px-2 py-4 sm:px-[26px] sm:py-[22px]'
         }
       >
-        {visibleEntries.map((entry, index) => (
+        {units.map((unit) => (
           // Entries above the live tail are skipped for layout and paint until
           // they are scrolled near. A long transcript is thousands of markdown
           // blocks, diffs and tool cards, and laying all of them out on every
@@ -368,14 +424,18 @@ export function Transcript({
           // order of magnitude and a list that guesses them wrong moves the
           // reader's place under them.
           <div
-            key={entry.id}
+            key={unit.kind === 'group' ? `group-${unit.entries[0]?.id ?? ''}` : unit.entry.id}
             className={
-              index < visibleEntries.length - LIVE_TAIL_ENTRIES
+              unit.index < visibleEntries.length - LIVE_TAIL_ENTRIES
                 ? '[contain-intrinsic-size:auto_64px] [content-visibility:auto]'
                 : undefined
             }
           >
-            <Entry entry={entry} sessionId={sessionId} />
+            {unit.kind === 'group' ? (
+              <ToolGroupRow name={unit.name} entries={unit.entries} sessionId={sessionId} />
+            ) : (
+              <Entry entry={unit.entry} sessionId={sessionId} />
+            )}
           </div>
         ))}
         {backgroundWorkActive ? <BackgroundWorkNotice /> : null}

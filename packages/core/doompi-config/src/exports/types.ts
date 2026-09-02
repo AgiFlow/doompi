@@ -19,6 +19,7 @@ export {
   type HarnessState,
   type IDoomConfigLoader,
   type IDoomConfigService,
+  type PackageAttribution,
   type PlanningAgentConfig,
   type PlanningModeConfig,
   type PlanningThinkingLevel,

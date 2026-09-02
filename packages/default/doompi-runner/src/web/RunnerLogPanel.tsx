@@ -1,4 +1,4 @@
-import { Button, Input, SearchIcon, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
+import { AnsiText, Button, Input, SearchIcon, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -249,9 +249,10 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
         ) : lines.length === 0 ? (
           <p className="text-[10px] text-doom-faint">{filtering ? 'nothing matched' : 'the log is empty'}</p>
         ) : (
-          <pre className="whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6] text-doom-dim">
-            {lines.join('\n')}
-          </pre>
+          <AnsiText
+            text={lines.join('\n')}
+            className="whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6] text-doom-dim"
+          />
         )}
         <div ref={bottom} />
       </div>

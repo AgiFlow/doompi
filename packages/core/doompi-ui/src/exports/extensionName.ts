@@ -1,1 +1,6 @@
-export { extensionName, extensionToolSource, withExtensionSource } from '../adapters/pi/extensionName.ts';
+export {
+  extensionName,
+  extensionPackageName,
+  extensionToolSource,
+  withExtensionSource,
+} from '../adapters/pi/extensionName.ts';

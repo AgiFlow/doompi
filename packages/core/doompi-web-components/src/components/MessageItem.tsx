@@ -34,8 +34,22 @@ export function useMessageItem(): MessageItemState {
   return useContext(MessageItemContext);
 }
 
+/**
+ * The group an item is a row of, or null for an item that is a card of its
+ * own. A row drops the frame the group already draws and keeps its tone as an
+ * edge down its left side, and it stops repeating what the group's header has
+ * said once: the tool's name, and an outcome the whole run shares.
+ */
+const MessageItemGroupContext = createContext<{ tone: StatusTone } | null>(null);
+
 /** The frame, wearing the edge STATUS_EDGE names for the tone, so the two never drift apart. */
 export const messageItemVariants = cva('overflow-hidden rounded-md border bg-doom-panel transition-colors', {
+  variants: { tone: STATUS_EDGE },
+  defaultVariants: { tone: 'neutral' },
+});
+
+/** The same tone as a row: no card, one coloured edge, and the group's separators between rows. */
+export const messageItemRowVariants = cva('overflow-hidden border-l-2 transition-colors', {
   variants: { tone: STATUS_EDGE },
   defaultVariants: { tone: 'neutral' },
 });
@@ -63,6 +77,8 @@ export function MessageItem({
   ...props
 }: MessageItemProps) {
   const [own, setOwn] = useState(defaultExpanded);
+  const group = useContext(MessageItemGroupContext);
+  const grouped = group !== null;
   const current = expanded ?? own;
   const state: MessageItemState = {
     tone: tone ?? 'neutral',
@@ -79,12 +95,58 @@ export function MessageItem({
       <div
         data-slot="message-item"
         data-expanded={current}
-        className={cn(messageItemVariants({ tone }), className)}
+        data-grouped={grouped}
+        className={cn(grouped ? messageItemRowVariants({ tone }) : messageItemVariants({ tone }), className)}
         {...props}
       >
         {typeof children === 'function' ? children(state) : children}
       </div>
     </MessageItemContext.Provider>
+  );
+}
+
+export interface MessageItemGroupProps
+  extends Omit<ComponentProps<'div'>, 'title'>, VariantProps<typeof messageItemVariants> {
+  /** The bold label at the left of the group header: the tool the run belongs to. */
+  title: ReactNode;
+  /** The line beside it, such as how many calls the group holds. */
+  summary?: ReactNode;
+  /** The badge text; defaults to the tone's label, null hides the badge. */
+  badge?: ReactNode | null;
+  children?: ReactNode;
+}
+
+/**
+ * One frame around a run of items that belong together.
+ *
+ * A transcript that calls the same tool five times in a row is five identical
+ * frames, five gutter labels and five gaps, and the repetition reads louder
+ * than the commands do. The group draws the frame once and each item inside it
+ * becomes a row: same header, same expand, no card of its own. The tone still
+ * belongs to the row, as an edge, so a failure in the middle of a run is not
+ * flattened into the group's own outcome.
+ */
+export function MessageItemGroup({
+  className,
+  tone,
+  title,
+  summary,
+  badge,
+  children,
+  ...props
+}: MessageItemGroupProps) {
+  const label = badge === undefined ? STATUS_LABEL[tone ?? 'neutral'] : badge;
+  return (
+    <MessageItemGroupContext.Provider value={{ tone: tone ?? 'neutral' }}>
+      <div data-slot="message-item-group" className={cn(messageItemVariants({ tone }), className)} {...props}>
+        <div className="flex min-h-8 items-center gap-2 border-doom-border-soft border-b px-[11px] text-[11px] text-doom-dim">
+          <span className="shrink-0 font-bold text-doom-hi">{title}</span>
+          <span className="min-w-0 flex-1 truncate text-doom-faint">{summary}</span>
+          {label !== null && label !== '' ? <StatusBadge tone={tone ?? 'neutral'}>{label}</StatusBadge> : null}
+        </div>
+        <div className="flex flex-col divide-y divide-doom-border-soft">{children}</div>
+      </div>
+    </MessageItemGroupContext.Provider>
   );
 }
 
@@ -112,17 +174,30 @@ export interface MessageItemHeaderProps extends Omit<ComponentProps<'div'>, 'tit
   children?: ReactNode;
 }
 
-/** The title row: label, summary, the tone's badge, and the expand toggle when the item is expandable. */
+/** Inside a group these two are the quiet outcome: the group's header has already said it. */
+const SILENT_IN_GROUP: ReadonlySet<StatusTone> = new Set<StatusTone>(['ok', 'neutral']);
+
+/**
+ * The title row: label, summary, the tone's badge, and the expand toggle when
+ * the item is expandable.
+ *
+ * A row inside a group says less. The group's header has already named the
+ * tool and stated the run's outcome, so the row drops its title and speaks up
+ * only when something went wrong or is still going: five OK badges down a run
+ * of five are noise, and the one ERROR among them is the point.
+ */
 export function MessageItemHeader({ className, title, badge, children, ...props }: MessageItemHeaderProps) {
   const { tone, expandable, expanded, toggle } = useMessageItem();
-  const label = badge === undefined ? STATUS_LABEL[tone] : badge;
+  const group = useContext(MessageItemGroupContext);
+  const defaultLabel = group !== null && SILENT_IN_GROUP.has(tone) ? null : STATUS_LABEL[tone];
+  const label = badge === undefined ? defaultLabel : badge;
   return (
     <div
       data-slot="message-item-header"
       className={cn('flex min-h-8 items-center gap-2 px-[11px] text-[11px] text-doom-dim', className)}
       {...props}
     >
-      <span className="shrink-0 font-bold text-doom-hi">{title}</span>
+      {group === null ? <span className="shrink-0 font-bold text-doom-hi">{title}</span> : null}
       <div data-slot="message-item-summary" className="flex min-w-0 flex-1 items-center gap-2">
         {children}
       </div>

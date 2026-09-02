@@ -67,7 +67,9 @@ export function ReadToolMessage({ args, result, output, running, isError }: Tool
               ) : null
             ) : body.shown.length === 0 && body.notice === undefined && images.length === 0 ? null : (
               <MessageItemBody data-testid="tool-result-read" className="flex flex-col gap-1">
-                <HashlineLines lines={body.shown} gutter={body.gutter} />
+                {/* A read body is one file with no heading of its own, so the
+                    call's path is what names the grammar for it. */}
+                <HashlineLines lines={body.shown} gutter={body.gutter} path={view.path} />
                 {images.map((image, index) => {
                   const url = `data:${image.mimeType};base64,${image.data}`;
                   return (
