@@ -21,10 +21,13 @@ function directoriesIn(directory) {
 
 for (const directory of packageDirectories.sort()) {
   const manifestPath = path.join(directory, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (manifest.private === true) {
+    continue;
+  }
   if (process.argv.includes('--paths')) {
     console.log(path.relative(root, manifestPath));
     continue;
   }
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   console.log(`${manifest.name}\t${manifest.version}`);
 }

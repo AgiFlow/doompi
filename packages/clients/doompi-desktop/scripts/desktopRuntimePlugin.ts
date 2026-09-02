@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -8,12 +9,8 @@ interface DesktopRuntimePluginOptions {
   workspaceRoot: string;
 }
 
-const PLATFORM_NAME: Readonly<Record<string, string>> = {
-  darwin: 'darwin',
-  linux: 'linux',
-};
-
 const DOOMPI_RUNTIME_PACKAGES = new Set([
+  '@agimon-ai/doompi',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-cache',
   '@agimon-ai/doompi-config',
@@ -27,6 +24,8 @@ const DOOMPI_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi-ui',
   '@earendil-works/pi-coding-agent',
 ]);
+const DOOMPI_PACKAGE_DIRECTORIES = ['core', 'default', 'minor'] as const;
+const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;
 
 const WEB_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi-extension-contracts',
@@ -81,17 +80,26 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
         'packages/core/doompi',
         'native/node_modules/@agimon-ai/doompi',
       );
-      copyNativeBinaries(options.workspaceRoot, options.outDir);
-      // Core extensions are resolved by package name after startup, so they must
-      // remain real packages beside the bundled runtime rather than only chunks.
-      copyRuntimePackages(options.workspaceRoot, path.join(options.outDir, 'node_modules'), DOOMPI_RUNTIME_PACKAGES);
+      copyRuntimePackages(
+        options.workspaceRoot,
+        path.join(options.outDir, 'node_modules'),
+        new Set([
+          ...DOOMPI_RUNTIME_PACKAGES,
+          `@agimon-ai/doompi-runner-rmux-${target}`,
+          `@agimon-ai/doompi-runner-rtk-${target}`,
+        ]),
+        path.join(options.workspaceRoot, 'packages', 'core', 'doompi'),
+      );
+      copyPackageCatalog(options.workspaceRoot, options.outDir, target);
       copyRuntimePackages(options.workspaceRoot, path.join(options.outDir, 'native', 'node_modules'), runtimePackages);
       copyRuntimePackages(
         options.workspaceRoot,
         path.join(options.outDir, 'doompi-web', 'node_modules'),
         WEB_RUNTIME_PACKAGES,
+        path.join(options.workspaceRoot, 'packages', 'clients', 'doompi-web'),
         new Set(['@earendil-works/pi-coding-agent']),
       );
+      copyNpmRuntime(options.workspaceRoot, options.outDir);
       copyViteRuntime(options.workspaceRoot, options.outDir);
     },
   };
@@ -125,17 +133,69 @@ function copyPackageManifest(workspaceRoot: string, outDir: string, packagePath:
   fs.writeFileSync(destination, `${JSON.stringify(output, null, 2)}\n`);
 }
 
-function copyNativeBinaries(workspaceRoot: string, outDir: string): void {
-  const platform = PLATFORM_NAME[process.platform];
-  if (platform === undefined || !['arm64', 'x64'].includes(process.arch)) {
-    throw new Error(`The desktop runtime does not support native binaries for ${process.platform}-${process.arch}.`);
+interface CatalogPackage {
+  name: string;
+  root: string;
+  dependencies: string[];
+}
+
+function bundledDoomPiPackages(workspaceRoot: string, target: string): CatalogPackage[] {
+  const packages: CatalogPackage[] = [];
+  for (const group of DOOMPI_PACKAGE_DIRECTORIES) {
+    const groupRoot = path.join(workspaceRoot, 'packages', group);
+    for (const directory of fs.readdirSync(groupRoot, { withFileTypes: true })) {
+      if (!directory.isDirectory()) continue;
+      const root = path.join(groupRoot, directory.name);
+      const manifestPath = path.join(root, 'package.json');
+      if (!fs.existsSync(manifestPath)) continue;
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+        name?: unknown;
+        files?: unknown;
+        dependencies?: Record<string, string>;
+        optionalDependencies?: Record<string, string>;
+      };
+      if (typeof manifest.name !== 'string' || !manifest.name.startsWith('@agimon-ai/doompi')) continue;
+      const platform = manifest.name.match(PLATFORM_PACKAGE_SUFFIX);
+      if (platform && `${platform[1]}-${platform[2]}` !== target) continue;
+      if (Array.isArray(manifest.files) && manifest.files.includes('dist') && !fs.existsSync(path.join(root, 'dist'))) {
+        throw new Error(`Build ${manifest.name} before packaging DoomPi Desktop.`);
+      }
+      packages.push({
+        name: manifest.name,
+        root,
+        dependencies: [
+          ...Object.keys(manifest.dependencies ?? {}),
+          ...Object.keys(manifest.optionalDependencies ?? {}),
+        ],
+      });
+    }
   }
-  for (const binary of ['rmux', 'rtk']) {
-    const packageName = `doompi-runner-${binary}-${platform}-${process.arch}`;
-    const source = path.join(workspaceRoot, 'packages', 'default', packageName, 'vendor');
-    if (!fs.existsSync(source)) throw new Error(`The native payload is missing at ${source}.`);
-    fs.cpSync(source, path.join(outDir, 'native', binary), { recursive: true });
+  return packages.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function copyPackageCatalog(workspaceRoot: string, outDir: string, target: string): void {
+  const catalogRoot = path.join(outDir, 'catalog');
+  fs.mkdirSync(catalogRoot, { recursive: true });
+  const entries = bundledDoomPiPackages(workspaceRoot, target);
+  const catalogNames = new Set(entries.map((entry) => entry.name));
+  const catalog: Record<string, { archive: string; dependencies: string[] }> = {};
+  for (const entry of entries) {
+    const output = execFileSync('pnpm', ['pack', '--pack-destination', catalogRoot, '--json'], {
+      cwd: entry.root,
+      encoding: 'utf8',
+      maxBuffer: 50 * 1024 * 1024,
+    });
+    const packed = JSON.parse(output) as { filename?: unknown };
+    if (typeof packed.filename !== 'string') throw new Error(`pnpm pack returned no archive for ${entry.name}.`);
+    catalog[entry.name] = {
+      archive: path.basename(packed.filename),
+      dependencies: entry.dependencies.filter((dependency) => catalogNames.has(dependency)).sort(),
+    };
   }
+  fs.writeFileSync(
+    path.join(catalogRoot, 'index.json'),
+    `${JSON.stringify({ version: 1, packages: catalog }, null, 2)}\n`,
+  );
 }
 
 function dependencyPackageName(source: string): string | undefined {
@@ -151,24 +211,25 @@ function copyRuntimePackages(
   workspaceRoot: string,
   destinationRoot: string,
   packages: ReadonlySet<string>,
+  resolutionRoot: string = workspaceRoot,
   shallowPackages: ReadonlySet<string> = new Set(),
 ): void {
-  const rootRequire = createRequire(path.join(workspaceRoot, 'package.json'));
+  const rootRequire = createRequire(path.join(resolutionRoot, 'package.json'));
   const copied = new Set<string>();
 
   const copy = (packageName: string, require: NodeJS.Require): void => {
     if (copied.has(packageName)) return;
+    // A declared runtime root wins over a transitive version encountered first.
+    // The flat artifact cannot represent pnpm's nested version graph.
+    if (require !== rootRequire && packages.has(packageName)) return;
     const manifestPath = resolveManifest(require, packageName);
     const source = path.dirname(manifestPath);
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
       dependencies?: Record<string, string>;
+      files?: unknown;
     };
     const destination = path.join(destinationRoot, ...packageName.split('/'));
-    fs.cpSync(source, destination, {
-      recursive: true,
-      dereference: true,
-      filter: (entry) => path.basename(entry) !== 'node_modules',
-    });
+    copyPackagePayload(workspaceRoot, source, destination, manifest.files);
     copied.add(packageName);
     if (shallowPackages.has(packageName)) return;
     const dependencyRequire = createRequire(manifestPath);
@@ -178,6 +239,30 @@ function copyRuntimePackages(
   for (const packageName of packages) copy(packageName, rootRequire);
 }
 
+function copyPackagePayload(workspaceRoot: string, source: string, destination: string, files: unknown): void {
+  const packagesRoot = path.join(workspaceRoot, 'packages');
+  const relative = path.relative(packagesRoot, source);
+  const workspacePackage = relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  const publishedFiles = Array.isArray(files)
+    ? files.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  if (!workspacePackage || publishedFiles.length === 0) {
+    fs.cpSync(source, destination, {
+      recursive: true,
+      dereference: true,
+      filter: (entry) => path.basename(entry) !== 'node_modules',
+    });
+    return;
+  }
+
+  fs.mkdirSync(destination, { recursive: true });
+  fs.cpSync(path.join(source, 'package.json'), path.join(destination, 'package.json'));
+  for (const entry of publishedFiles) {
+    const from = path.join(source, entry);
+    if (!fs.existsSync(from) || entry === 'package.json') continue;
+    fs.cpSync(from, path.join(destination, entry), { recursive: true, dereference: true });
+  }
+}
 function resolveManifest(require: NodeJS.Require, packageName: string): string {
   try {
     return require.resolve(`${packageName}/package.json`);
@@ -195,6 +280,11 @@ function nativePackageCandidates(target: string): string[] {
   return [`@rolldown/binding-${binaryTarget}`, `@tailwindcss/oxide-${binaryTarget}`, `lightningcss-${binaryTarget}`];
 }
 
+function copyNpmRuntime(workspaceRoot: string, outDir: string): void {
+  const require = createRequire(path.join(workspaceRoot, 'packages', 'clients', 'doompi-desktop', 'package.json'));
+  const root = path.dirname(resolveManifest(require, 'npm'));
+  fs.cpSync(root, path.join(outDir, 'vendor', 'npm'), { recursive: true, dereference: true });
+}
 function copyViteRuntime(workspaceRoot: string, outDir: string): void {
   const require = createRequire(path.join(workspaceRoot, 'package.json'));
   const root = path.dirname(require.resolve('vite/package.json'));

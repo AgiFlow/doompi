@@ -160,6 +160,23 @@ describe('sync guard', () => {
     vi.unstubAllEnvs();
   });
 
+  it('lets an embedded host pin DPI for sync independently from repository installs', async () => {
+    vi.stubEnv('DOOMPI_SYNC_COMMAND', '/runtime/doompi/dist/bin/dpi.mjs');
+    const child = fakeChild();
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift: () => drifted });
+
+    const pending = subject.ensureSynced();
+    child.emit('exit', 0);
+    await pending;
+
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      ['/runtime/doompi/dist/bin/dpi.mjs', 'sync'],
+      expect.objectContaining({ cwd: REPO }),
+    );
+    subject.close();
+    vi.unstubAllEnvs();
+  });
   it('reports output from a failed packaged sync without rejecting the launch', async () => {
     const notices: string[] = [];
     const child = fakeChild();

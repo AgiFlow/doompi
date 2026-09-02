@@ -15,6 +15,8 @@ const PI_MANAGED_PACKAGE_NAME = 'pi-extensions';
 const UNPINNED_PACKAGE_RANGE = '*';
 const PACKAGE_MANIFEST = 'package.json';
 const DEFAULT_NPM_COMMAND = 'npm';
+const NPM_CLI_ENV = 'DOOMPI_NPM_CLI';
+const PACKAGE_CATALOG_ENV = 'DOOMPI_PACKAGE_CATALOG';
 const REGISTRY_TIMEOUT_MS = 20_000;
 const PACKAGE_MANAGER_STDERR_SCRIPT = [
   "const { spawn } = require('node:child_process');",
@@ -203,11 +205,64 @@ export function missingLayerPackageSpecifiers(
 }
 
 function packageName(source: string): string {
-  return source.startsWith(NPM_SOURCE_PREFIX) ? source.slice(NPM_SOURCE_PREFIX.length) : source;
+  const specifier = source.startsWith(NPM_SOURCE_PREFIX) ? source.slice(NPM_SOURCE_PREFIX.length) : source;
+  if (specifier.startsWith('@')) {
+    const slash = specifier.indexOf('/');
+    const version = slash === -1 ? -1 : specifier.indexOf('@', slash);
+    return version === -1 ? specifier : specifier.slice(0, version);
+  }
+  const version = specifier.indexOf('@');
+  return version === -1 ? specifier : specifier.slice(0, version);
 }
 
-function npmSources(specifiers: readonly string[]): string[] {
-  return [...new Set(specifiers.map((specifier) => `${NPM_SOURCE_PREFIX}${splitPackageSpecifier(specifier).name}`))];
+interface PackageCatalogEntry {
+  target: string;
+  dependencies: readonly string[];
+}
+
+type PackageCatalog = ReadonlyMap<string, PackageCatalogEntry>;
+
+function readPackageCatalog(environment: NodeJS.ProcessEnv): PackageCatalog {
+  const manifestPath = environment[PACKAGE_CATALOG_ENV]?.trim();
+  if (!manifestPath) return new Map();
+  const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.packages)) {
+    throw new Error(`Unsupported DoomPi package catalog: ${manifestPath}`);
+  }
+  const catalog = new Map<string, PackageCatalogEntry>();
+  for (const [name, value] of Object.entries(parsed.packages)) {
+    if (!isRecord(value) || typeof value.archive !== 'string' || !Array.isArray(value.dependencies)) {
+      throw new Error(`Invalid package entry for ${name} in ${manifestPath}`);
+    }
+    const dependencies = value.dependencies.filter(
+      (dependency): dependency is string => typeof dependency === 'string',
+    );
+    if (dependencies.length !== value.dependencies.length)
+      throw new Error(`Invalid dependencies for ${name} in ${manifestPath}`);
+    const archive = path.resolve(path.dirname(manifestPath), value.archive);
+    if (!fs.existsSync(archive)) throw new Error(`DoomPi package catalog archive is missing: ${archive}`);
+    catalog.set(name, { target: `file:${archive}`, dependencies });
+  }
+  return catalog;
+}
+
+function npmSources(
+  specifiers: readonly string[],
+  catalog: PackageCatalog = new Map(),
+  includeCatalogDependencies = false,
+): string[] {
+  const names = [...new Set(specifiers.map((specifier) => splitPackageSpecifier(specifier).name))];
+  if (includeCatalogDependencies) {
+    for (let index = 0; index < names.length; index += 1) {
+      for (const dependency of catalog.get(names[index]!)?.dependencies ?? []) {
+        if (!names.includes(dependency)) names.push(dependency);
+      }
+    }
+  }
+  return names.map((name) => {
+    const target = catalog.get(name)?.target;
+    return `${NPM_SOURCE_PREFIX}${name}${target ? `@${target}` : ''}`;
+  });
 }
 
 function pluralize(count: number, noun: string): string {
@@ -233,12 +288,30 @@ export function packageManagerCommandWithStderr(configured: readonly string[] | 
   return [process.execPath, '--eval', PACKAGE_MANAGER_STDERR_SCRIPT, '--', ...command];
 }
 
+export function effectivePackageManagerCommand(
+  configured: readonly string[] | undefined,
+  environment: NodeJS.ProcessEnv,
+): readonly string[] | undefined {
+  if (configured?.length) return configured;
+  const bundledCli = environment[NPM_CLI_ENV]?.trim();
+  return bundledCli ? [process.execPath, bundledCli] : undefined;
+}
+
+function configuredPackageManagerCommand(
+  settingsManager: Pick<SettingsManager, 'getNpmCommand'>,
+  environment: NodeJS.ProcessEnv,
+): readonly string[] | undefined {
+  return effectivePackageManagerCommand(settingsManager.getNpmCommand(), environment);
+}
+
 function createPackageManager(repoRoot: string, environment: NodeJS.ProcessEnv): LayerPackageManager {
   const agentDirectory = piAgentDirectory(environment);
   const settingsManager = SettingsManager.create(repoRoot, agentDirectory, { projectTrusted: true });
   const redirectedSettingsManager = new Proxy(settingsManager, {
     get(target, property, receiver) {
-      if (property === 'getNpmCommand') return () => packageManagerCommandWithStderr(target.getNpmCommand());
+      if (property === 'getNpmCommand') {
+        return () => packageManagerCommandWithStderr(configuredPackageManagerCommand(target, environment));
+      }
       return Reflect.get(target, property, receiver) as unknown;
     },
   });
@@ -251,14 +324,11 @@ function createPackageManager(repoRoot: string, environment: NodeJS.ProcessEnv):
 
 /** Reads newest published versions with the same client Pi installs them with. */
 function createVersionReader(repoRoot: string, environment: NodeJS.ProcessEnv): (name: string) => Promise<string> {
-  const configured = SettingsManager.create(repoRoot, piAgentDirectory(environment), {
-    projectTrusted: true,
-  }).getNpmCommand();
-  const [command, ...args] = configured ?? [];
+  const settingsManager = SettingsManager.create(repoRoot, piAgentDirectory(environment), { projectTrusted: true });
+  const [command, ...args] = configuredPackageManagerCommand(settingsManager, environment) ?? [];
   const client = command ?? DEFAULT_NPM_COMMAND;
-  const clientArguments = command ? args : [];
   return async (name) => {
-    const { stdout } = await execFileAsync(client, [...clientArguments, 'view', name, 'version', '--json'], {
+    const { stdout } = await execFileAsync(client, [...args, 'view', name, 'version', '--json'], {
       cwd: repoRoot,
       timeout: REGISTRY_TIMEOUT_MS,
       encoding: 'utf8',
@@ -326,26 +396,31 @@ export async function ensureLayerPackages(
   const resolvers = dependencies.resolvers ?? createLayerResolvers(options.repoRoot);
   const configured = configuredPackageSpecifiers(options.config, options.layers);
   const missing = configured.filter((specifier) => resolvePackageEntries(resolvers, specifier) === undefined);
-  const missingSources = npmSources(missing);
-  const sources = npmSources(configured);
+  const catalog = readPackageCatalog(environment);
+  const missingSources = npmSources(missing, catalog);
+  const sources = npmSources(configured, catalog, true);
   if (sources.length === 0) return { installed: [], updated: [], unchecked: [] };
 
   const managedDirectory = path.dirname(managedPackageManifestPath(options.repoRoot));
   if (missing.length === 0 && !fs.existsSync(managedDirectory)) return { installed: [], updated: [], unchecked: [] };
 
+  const registrySources = sources.filter((source) => !catalog.has(packageName(source)));
   const { updated, unchecked } = options.refresh
     ? await resolveUpdates(
         options.repoRoot,
-        sources,
+        registrySources,
         dependencies.publishedVersion ?? createVersionReader(options.repoRoot, environment),
         options.onProgress,
       )
     : { updated: [], unchecked: [] };
-  const manifestChanged = ensureManagedPackageManifest(
-    options.repoRoot,
-    sources,
-    new Map(updated.map((update) => [update.name, update.to])),
-  );
+  const targets = new Map<string, string>();
+  for (const source of sources) {
+    const name = packageName(source);
+    const target = catalog.get(name)?.target;
+    if (target) targets.set(name, target);
+  }
+  for (const update of updated) targets.set(update.name, update.to);
+  const manifestChanged = ensureManagedPackageManifest(options.repoRoot, sources, targets);
   if (missing.length === 0 && !manifestChanged) return { installed: [], updated: [], unchecked };
 
   const packageManager = dependencies.packageManager ?? createPackageManager(options.repoRoot, environment);

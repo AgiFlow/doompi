@@ -6,6 +6,7 @@ import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import type { ResolvedPaths } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  effectivePackageManagerCommand,
   ensureLayerPackages,
   ensureManagedPackageManifest,
   missingLayerPackageSpecifiers,
@@ -143,6 +144,14 @@ describe('ensureLayerPackages', () => {
     expect(result.stderr).toBe('install outputinstall warning');
   });
 
+  it('uses the embedded npm CLI when the user has not configured a package manager', () => {
+    expect(effectivePackageManagerCommand(undefined, { DOOMPI_NPM_CLI: '/runtime/vendor/npm/bin/npm-cli.js' })).toEqual(
+      [process.execPath, '/runtime/vendor/npm/bin/npm-cli.js'],
+    );
+    expect(
+      effectivePackageManagerCommand(['pnpm', '--silent'], { DOOMPI_NPM_CLI: '/runtime/vendor/npm/bin/npm-cli.js' }),
+    ).toEqual(['pnpm', '--silent']);
+  });
   it('pins only vulnerable version ranges to non-major repair lines', () => {
     expect(SAFE_TRANSITIVE_OVERRIDES).toEqual({
       '@hono/node-server@2.0.0 - 2.0.9': '^2.0.10',
@@ -208,6 +217,68 @@ describe('ensureLayerPackages', () => {
     expect(manifest.pnpm.overrides).toEqual(SAFE_TRANSITIVE_OVERRIDES);
   });
 
+  it('installs bundled and external extensions without downloading the bundled package', async () => {
+    const root = repository();
+    const catalogRoot = path.join(root, 'catalog');
+    const archive = path.join(catalogRoot, 'doompi-help.tgz');
+    const dependencyArchive = path.join(catalogRoot, 'doompi-extension-contracts.tgz');
+    const catalog = path.join(catalogRoot, 'index.json');
+    fs.mkdirSync(catalogRoot, { recursive: true });
+    fs.writeFileSync(archive, 'fixture');
+    fs.writeFileSync(dependencyArchive, 'fixture');
+    fs.writeFileSync(
+      catalog,
+      JSON.stringify({
+        version: 1,
+        packages: {
+          '@agimon-ai/doompi-help': {
+            archive: path.basename(archive),
+            dependencies: ['@agimon-ai/doompi-extension-contracts'],
+          },
+          '@agimon-ai/doompi-extension-contracts': {
+            archive: path.basename(dependencyArchive),
+            dependencies: [],
+          },
+        },
+      }),
+    );
+    let installed = false;
+    const packageManager = {
+      install: vi.fn(async () => {
+        installed = true;
+      }),
+      resolveExtensionSources: vi.fn(),
+    };
+    const resolve = resolvers((specifier) => {
+      if (!installed) return undefined;
+      if (specifier === '@agimon-ai/doompi-help') return ['/managed/help.mjs'];
+      if (specifier === '@scope/external') return ['/managed/external.mjs'];
+      return undefined;
+    });
+
+    await expect(
+      ensureLayerPackages(
+        {
+          repoRoot: root,
+          config: config(['@agimon-ai/doompi-help', '@scope/external']),
+          layers: ['selected'],
+          environment: { DOOMPI_PACKAGE_CATALOG: catalog },
+        },
+        { packageManager, resolvers: resolve },
+      ),
+    ).resolves.toEqual({
+      installed: [`npm:@agimon-ai/doompi-help@file:${archive}`, 'npm:@scope/external'],
+      updated: [],
+      unchecked: [],
+    });
+
+    expect(packageManager.install).toHaveBeenCalledWith(`npm:@agimon-ai/doompi-help@file:${archive}`, { local: true });
+    expect(manifestDependencies(root)).toEqual({
+      '@agimon-ai/doompi-help': `file:${archive}`,
+      '@scope/external': '*',
+      '@agimon-ai/doompi-extension-contracts': `file:${dependencyArchive}`,
+    });
+  });
   it('does not create or call a package manager when every package resolves outside Pi storage', async () => {
     const root = repository();
     const packageManager = { install: vi.fn(), resolveExtensionSources: vi.fn() };

@@ -7,6 +7,7 @@ import { repositoryDoomPiCli } from './bundledServer.ts';
 
 const DOOMPI_PACKAGE = '@agimon-ai/doompi';
 const AGENT_COMMAND_ENV = 'DOOMPI_AGENT_COMMAND';
+const SYNC_COMMAND_ENV = 'DOOMPI_SYNC_COMMAND';
 const CLI_SEGMENTS = ['dist', 'bin', 'cli.mjs'];
 const SYNC_ARGS = ['sync'];
 /** How often the watcher re-reads the drift inputs. */
@@ -63,6 +64,7 @@ function inactiveSyncGuard(): SyncGuard {
  */
 function syncCliFor(repoRoot: string): string {
   return (
+    process.env[SYNC_COMMAND_ENV] ??
     repositoryDoomPiCli(repoRoot) ??
     process.env[AGENT_COMMAND_ENV] ??
     path.join(path.dirname(createRequire(import.meta.url).resolve(`${DOOMPI_PACKAGE}/package.json`)), ...CLI_SEGMENTS)
