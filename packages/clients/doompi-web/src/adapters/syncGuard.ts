@@ -124,7 +124,7 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
     options.readDrift ??
     ((root: string, entry?: string) => readSyncDrift({ repoRoot: root, expectedBootstrapEntry: entry }));
   const baseInterval = options.intervalMs ?? WATCH_INTERVAL_MS;
-  let inFlight: Promise<boolean> | undefined;
+  let inFlight: Promise<{ ready: boolean; rebuilt: boolean; error?: string }> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
   let consecutiveFailures = 0;
@@ -137,42 +137,48 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
    * telling every attached page to reload is two lies and a reload storm: the
    * repository is still drifted, so the next poll tries again immediately.
    */
-  const syncOnce = async (drift: { reasons: readonly string[] }): Promise<boolean> => {
-    notice(`syncing: ${describeSyncDrift({ fresh: false, reasons: drift.reasons as never })}`);
-    const outcome = (await runSync(repoRoot)) ?? { ok: true };
-    if (!outcome.ok) {
-      consecutiveFailures += 1;
-      const message = `sync failed (${outcome.detail ?? 'no detail'})`;
-      // The same failure every few seconds buries everything else in the log.
-      if (message !== lastFailureNotice) {
-        notice(message);
-        lastFailureNotice = message;
-      }
-      return false;
+  const failedResult = (failure: string): { ready: false; rebuilt: false; error: string } => {
+    consecutiveFailures += 1;
+    // The same failure every few seconds buries everything else in the log.
+    if (failure !== lastFailureNotice) {
+      notice(failure);
+      lastFailureNotice = failure;
     }
+    return { ready: false, rebuilt: false, error: failure };
+  };
+
+  const syncOnce = async (drift: {
+    reasons: readonly string[];
+  }): Promise<{ ready: boolean; rebuilt: boolean; error?: string }> => {
+    notice(`syncing: ${describeSyncDrift({ fresh: false, reasons: drift.reasons as never })}`);
+    let outcome: SyncRunOutcome;
+    try {
+      outcome = (await runSync(repoRoot)) ?? { ok: true };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return failedResult(`sync failed (${detail})`);
+    }
+    if (!outcome.ok) return failedResult(`sync failed (${outcome.detail ?? 'no detail'})`);
+
     const remaining = readDrift(repoRoot, expectedBootstrapEntry);
     if (!remaining.fresh) {
-      consecutiveFailures += 1;
-      const message = `sync completed but did not resolve drift (${describeSyncDrift({ fresh: false, reasons: remaining.reasons as never })})`;
-      if (message !== lastFailureNotice) {
-        notice(message);
-        lastFailureNotice = message;
-      }
-      return false;
+      return failedResult(
+        `sync completed but did not resolve drift (${describeSyncDrift({ fresh: false, reasons: remaining.reasons as never })})`,
+      );
     }
     consecutiveFailures = 0;
     lastFailureNotice = undefined;
     notice('sync complete');
-    return true;
+    return { ready: true, rebuilt: true };
   };
 
-  const ensureSynced = async (): Promise<boolean> => {
-    if (closed) return false;
+  const ensureSynced = async (): Promise<{ ready: boolean; rebuilt: boolean; error?: string }> => {
+    if (closed) return { ready: false, rebuilt: false, error: 'sync guard is closed' };
     // Joining the run already in flight is what makes concurrent launches
     // wait for one sync instead of starting several.
     if (inFlight) return inFlight;
     const drift = readDrift(repoRoot, expectedBootstrapEntry);
-    if (drift.fresh) return false;
+    if (drift.fresh) return { ready: true, rebuilt: false };
     inFlight = syncOnce(drift).finally(() => {
       inFlight = undefined;
     });
@@ -181,7 +187,8 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
 
   return {
     async ensureSynced() {
-      await ensureSynced();
+      const result = await ensureSynced();
+      if (!result.ready) throw new Error(`DoomPi cannot launch this session because ${result.error ?? 'sync failed'}.`);
     },
     watch(onSynced) {
       if (timer) return;
@@ -205,8 +212,8 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
           schedule();
           return;
         }
-        void ensureSynced().then((rebuilt) => {
-          if (!closed && rebuilt) onSynced();
+        void ensureSynced().then((result) => {
+          if (!closed && result.rebuilt) onSynced();
           schedule();
         });
       };

@@ -56,7 +56,7 @@ function loadSherpaOnnx(): SherpaOnnxModule {
 export function findSileroVadModelPath(importFileUrl: string | URL): string {
   let directory = path.dirname(fileURLToPath(importFileUrl));
   while (true) {
-    const candidate = path.join(directory, 'models', SILERO_MODEL_FILE);
+    const candidate = path.join(directory, 'src', 'web', 'models', SILERO_MODEL_FILE);
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(directory);
     if (parent === directory) break;

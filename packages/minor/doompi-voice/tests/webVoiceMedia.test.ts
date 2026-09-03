@@ -165,7 +165,8 @@ describe('browser voice media', () => {
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
     const source = await readFile(new URL('../src/web/browserMediaDevice.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain("new URL('./browserCaptureWorklet.js?no-inline', import.meta.url).href");
+    expect(source).toContain("import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url'");
+    expect(source).toContain('audioWorklet.addModule(browserCaptureWorkletUrl)');
     expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
@@ -174,7 +175,7 @@ describe('browser voice media', () => {
     const source = await readFile(new URL('../src/web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
-    expect(source).toContain('data-testid="composer-voice-error"');
+    expect(source).not.toContain('data-testid="composer-voice-error"');
     expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
     expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
     expect(source).toContain('sessionId === null || autonomous');

@@ -1,3 +1,4 @@
+import sileroVadModelUrl from './models/silero_vad_v6.2.1.onnx?url';
 import type { SpeechPresenceDetector } from '../types/clientCaptureActivity.ts';
 import type {
   VoiceMediaCapabilities,
@@ -8,7 +9,9 @@ import type {
   VoiceMediaPlaybackResult,
 } from '../types/clientMedia.ts';
 import { VOICE_MEDIA_SAMPLE_RATE } from '../types/clientMedia.ts';
+import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url';
 import { BrowserSpeechPresenceDetector, type SpeechWorker } from './browserSpeechPresenceDetector.ts';
+import sileroVadWorkerUrl from './sileroVadWorker.ts?worker&url';
 
 const AUDIO_BUFFER_SIZE = 4_096;
 const AUDIO_UPLOAD_DURATION_MS = 100;
@@ -339,9 +342,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     let stopProcessor: () => void;
     if (typeof AudioWorkletNode !== 'undefined' && this.context.audioWorklet !== undefined) {
       if (!this.workletInstalled) {
-        await this.context.audioWorklet.addModule(
-          new URL('./browserCaptureWorklet.js?no-inline', import.meta.url).href,
-        );
+        await this.context.audioWorklet.addModule(browserCaptureWorkletUrl);
         this.workletInstalled = true;
       }
       const worklet = new AudioWorkletNode(this.context, AUDIO_WORKLET_NAME);
@@ -497,7 +498,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     let detector: BrowserSpeechPresenceDetector | undefined;
     try {
       detector = new BrowserSpeechPresenceDetector(
-        new Worker(new URL('./sileroVadWorker.ts', import.meta.url), {
+        new Worker(sileroVadWorkerUrl, {
           type: 'module',
           name: 'doompi-silero-vad',
         }) as unknown as SpeechWorker,
@@ -510,7 +511,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
         },
       );
       this.preparingSpeechDetector = detector;
-      await detector.initialize(new URL('../../models/silero_vad_v6.2.1.onnx', import.meta.url).href);
+      await detector.initialize(sileroVadModelUrl);
       if (this.preparingSpeechDetector !== detector) {
         await detector.close().catch(() => undefined);
         return;

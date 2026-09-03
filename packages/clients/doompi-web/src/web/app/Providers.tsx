@@ -3,7 +3,6 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.tsx';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
-import { RemoteBanner } from '../features/remote/RemoteBanner.tsx';
 import { ThreadView } from '../features/session/ThreadView.tsx';
 import { installWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
@@ -62,10 +61,7 @@ export function Providers() {
 
   return (
     <TooltipProvider>
-      {/* Mounted once at the root rather than per route: a banner that warns
-          the tunnel is open must not be missable by navigating, and the
-          approval prompt has to reach the host wherever they are. */}
-      <RemoteBanner />
+      {/* Mounted once at the root so the approval prompt reaches the host wherever they are. */}
       <RemoteAccessDialog />
       <PairingApprovalDialog />
       <RouterProvider router={router} />

@@ -3,8 +3,10 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
+import type { DoomApi } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { serveWeb } from '../../src/adapters/httpServer.ts';
+import { mountHubApis, serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
@@ -94,6 +96,33 @@ async function hubWith(apiSocketPath?: string): Promise<{ server: WebServer; ses
   }
   return { server, session, id };
 }
+
+describe('hub-scoped package APIs', () => {
+  it('mounts an API discovered from a session composition after the shared route exists', async () => {
+    const app = new Hono();
+    const mounted = mountHubApis(
+      app,
+      [],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+    );
+    const api: DoomApi = {
+      basePath: 'metrics',
+      start: () => ({
+        fetch: (request) => Response.json({ path: new URL(request.url).pathname }),
+        close: () => undefined,
+      }),
+    };
+
+    expect((await app.request('/api/plugin/metrics/report')).status).toBe(404);
+    mounted.add([api]);
+
+    const response = await app.request('/api/plugin/metrics/report');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ path: '/report' });
+  });
+});
 
 describe('a package API reached through the hub', () => {
   it('proxies a session-scoped request to that session, keeping the path and dropping the routing parameter', async () => {

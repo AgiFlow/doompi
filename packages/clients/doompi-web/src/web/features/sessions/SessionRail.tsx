@@ -12,6 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Dot,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -39,7 +40,7 @@ import { closeNewSession, openNewSession, newSessionStore } from '../../stores/n
 import { paletteStore } from '../../stores/paletteStore.ts';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
 import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
-import { openRemoteDialog, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
+import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore.ts';
 import { NewSessionDialog } from './NewSessionDialog.tsx';
 import { ResumeSessionDialog } from './ResumeSessionDialog.tsx';
 const STATUS_REFRESH_MS = 30_000;
@@ -493,24 +494,58 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
 
       <PluginSurface slot={HOST_SLOTS.rail} sessionId={activeId} />
       <div className="flex-1" />
-      <div className="flex items-center gap-2.5 border-t border-doom-border px-4 py-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button asChild variant="ghost" size="icon" className="text-doom-faint">
-              <Link
-                to="/settings/$section"
-                params={{ section: DEFAULT_SETTINGS_SECTION }}
-                data-testid="settings-open"
-                aria-label="settings"
-                onClick={onDismiss}
+      <div className="sticky bottom-0 mt-auto shrink-0 bg-doom-rail">
+        {remote === undefined || remote.status === 'off' ? null : (
+          <div
+            data-testid="remote-banner"
+            className={`flex flex-col gap-1.5 border-t px-4 py-2 text-[11px] ${
+              remote.status === 'failed' ? 'bg-doom-tint-red text-doom-red' : 'bg-doom-tint-yellow text-doom-yellow'
+            }`}
+          >
+            <output className="flex min-w-0 items-center gap-2">
+              <Dot tone={remote.status === 'failed' ? 'red' : 'yellow'} />
+              <span className="truncate">
+                {remote.status === 'failed'
+                  ? `remote access failed: ${remote.error ?? 'the tunnel stopped'}`
+                  : `remote access is ${remote.status === 'starting' ? 'starting' : 'on'}${
+                      remote.publicUrl === undefined ? '' : ` · ${new URL(remote.publicUrl).host}`
+                    } · ${String(remote.devices.length)} device${remote.devices.length === 1 ? '' : 's'} paired`}
+              </span>
+            </output>
+            <span className="flex items-center justify-end gap-1">
+              <Button variant="ghost" size="sm" data-testid="remote-banner-open" onClick={openRemoteDialog}>
+                manage
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="remote-banner-off"
+                onClick={() => void turnRemoteAccessOff()}
               >
-                <GearIcon className="h-3 w-3" />
-              </Link>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">settings</TooltipContent>
-        </Tooltip>
-        <span className="text-[9px] text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
+                turn off
+              </Button>
+            </span>
+          </div>
+        )}
+        <div className="flex items-center gap-2.5 border-t border-doom-border px-4 py-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon" className="text-doom-faint">
+                <Link
+                  to="/settings/$section"
+                  params={{ section: DEFAULT_SETTINGS_SECTION }}
+                  data-testid="settings-open"
+                  aria-label="settings"
+                  onClick={onDismiss}
+                >
+                  <GearIcon className="h-3 w-3" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">settings</TooltipContent>
+          </Tooltip>
+          <span className="text-[9px] text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
+        </div>
       </div>
 
       {creating ? (

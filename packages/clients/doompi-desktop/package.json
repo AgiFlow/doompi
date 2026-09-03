@@ -25,7 +25,7 @@
   "main": "./dist/bin/main.cjs",
   "scripts": {
     "build": "tsdown",
-    "build:runtime": "vite build --config vite.runtime.config.ts",
+    "build:runtime": "vite build --config vite.runtime.config.ts && node scripts/downloadCloudflared.mjs",
     "package": "pnpm run build && pnpm run build:runtime && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
     "start": "pnpm run build && pnpm run build:runtime && electron dist/bin/main.cjs",
     "test": "vitest --run",

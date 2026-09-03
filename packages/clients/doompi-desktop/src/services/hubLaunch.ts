@@ -47,6 +47,11 @@ export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.P
     DOOMPI_WEB_MODULE: pathToFileURL(artifact('doompi-web', 'dist', 'index.mjs')).href,
     DOOMPI_WEB_PACKAGE_ROOT: artifact('doompi-web'),
     DOOMPI_VITE_PACKAGE_ROOT: artifact('vendor', 'vite'),
+    DOOMPI_CLOUDFLARED: artifact(
+      'vendor',
+      'cloudflared',
+      process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared',
+    ),
     DOOMPI_RMUX_BINARY: artifact(
       'node_modules',
       '@agimon-ai',

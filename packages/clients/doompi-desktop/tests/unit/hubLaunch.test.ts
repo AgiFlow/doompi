@@ -55,6 +55,9 @@ describe('the runtime handed to the cockpit', () => {
     expect(environment.DOOMPI_WEB_DIST).toBeUndefined();
     expect(environment.DOOMPI_WEB_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi-web'));
     expect(environment.DOOMPI_VITE_PACKAGE_ROOT).toBe(path.join('/runtime', 'vendor', 'vite'));
+    expect(environment.DOOMPI_CLOUDFLARED).toBe(
+      path.join('/runtime', 'vendor', 'cloudflared', process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'),
+    );
     expect(environment.NODE_PATH).toBe(
       [path.join('/runtime', 'node_modules'), path.join('/runtime', 'native', 'node_modules')].join(path.delimiter),
     );

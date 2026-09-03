@@ -60,9 +60,13 @@ test('the pairing step shows a scannable code, manual code, and address', async 
   await expect(page.getByTestId('remote-pair-code')).toHaveText('12345678');
   await expect(page.getByTestId('remote-pair-url')).toHaveText(PAIR_URL);
   await expect(page.locator('[data-testid="remote-access-dialog"] svg[role="img"]')).toBeVisible();
-  // Unmissable while the tunnel is up, and it names the host so a forgotten
-  // tunnel is obvious from across the room.
-  await expect(page.getByTestId('remote-banner')).toContainText(TUNNEL_HOST);
+  // Unmissable while the tunnel is up, and contained by the rail so it does not
+  // add height to the page around the cockpit.
+  const banner = page.getByTestId('session-rail-panel').getByTestId('remote-banner');
+  await expect(banner).toContainText(TUNNEL_HOST);
+  await expect
+    .poll(async () => await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight))
+    .toBe(true);
 });
 
 test('an approval prompt names the device and says what approving grants', async ({ page, cockpit }) => {

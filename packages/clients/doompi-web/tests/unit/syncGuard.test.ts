@@ -12,6 +12,15 @@ const REPO = '/workspace/repo';
 const drifted = { fresh: false, reasons: ['configuration-changed'] as const };
 const fresh = { fresh: true, reasons: [] as const };
 
+function driftOnce(): () => { fresh: boolean; reasons: readonly string[] } {
+  let first = true;
+  return () => {
+    if (!first) return fresh;
+    first = false;
+    return drifted;
+  };
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -90,7 +99,7 @@ describe('sync guard', () => {
   });
 
   it('syncs when anything a session reads has drifted', async () => {
-    const { guard: subject, runSync } = guard(() => drifted);
+    const { guard: subject, runSync } = guard(driftOnce());
 
     await subject.ensureSynced();
 
@@ -101,7 +110,7 @@ describe('sync guard', () => {
   it('runs one sync for sessions launched at the same moment', async () => {
     let release = (): void => {};
     const runSync = vi.fn(() => new Promise<void>((resolve) => (release = resolve)));
-    const { guard: subject } = guard(() => drifted, runSync);
+    const { guard: subject } = guard(driftOnce(), runSync);
 
     const both = Promise.all([subject.ensureSynced(), subject.ensureSynced()]);
     release();
@@ -112,7 +121,7 @@ describe('sync guard', () => {
     subject.close();
   });
 
-  it('reports a sync that failed instead of failing the launch', async () => {
+  it('refuses to launch when sync throws', async () => {
     const notices: string[] = [];
     const subject = createSyncGuard({
       repoRoot: REPO,
@@ -121,8 +130,6 @@ describe('sync guard', () => {
       onNotice: (message) => notices.push(message),
     });
 
-    // The caller wanted a session; a stale sync is worse than no session only
-    // if it also takes the session away.
     await expect(subject.ensureSynced()).rejects.toThrow('compiler unavailable');
     subject.close();
   });
@@ -144,7 +151,7 @@ describe('sync guard', () => {
 
   it('runs the packaged sync command when no runner is injected', async () => {
     const child = fakeChild();
-    const subject = createSyncGuard({ repoRoot: REPO, readDrift: () => drifted });
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift: driftOnce() });
 
     const pending = subject.ensureSynced();
     child.emit('exit', 0);
@@ -161,7 +168,7 @@ describe('sync guard', () => {
   it('uses the configured bundled agent when the repository has no pinned CLI', async () => {
     vi.stubEnv('DOOMPI_AGENT_COMMAND', '/runtime/doompi/dist/bin/cli.mjs');
     const child = fakeChild();
-    const subject = createSyncGuard({ repoRoot: REPO, readDrift: () => drifted });
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift: driftOnce() });
 
     const pending = subject.ensureSynced();
     child.emit('exit', 0);
@@ -179,7 +186,7 @@ describe('sync guard', () => {
   it('lets an embedded host pin DPI for sync independently from repository installs', async () => {
     vi.stubEnv('DOOMPI_SYNC_COMMAND', '/runtime/doompi/dist/bin/dpi.mjs');
     const child = fakeChild();
-    const subject = createSyncGuard({ repoRoot: REPO, readDrift: () => drifted });
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift: driftOnce() });
 
     const pending = subject.ensureSynced();
     child.emit('exit', 0);
@@ -193,7 +200,7 @@ describe('sync guard', () => {
     subject.close();
     vi.unstubAllEnvs();
   });
-  it('reports output from a failed packaged sync without rejecting the launch', async () => {
+  it('reports output from a failed packaged sync and rejects the launch', async () => {
     const notices: string[] = [];
     const child = fakeChild();
     const subject = createSyncGuard({
@@ -205,12 +212,34 @@ describe('sync guard', () => {
     const pending = subject.ensureSynced();
     child.stderr?.emit('data', Buffer.from('build failed'));
     child.emit('exit', 1);
-    await pending;
+    await expect(pending).rejects.toThrow('sync failed (exit 1: build failed)');
 
     expect(notices).toContainEqual(expect.stringMatching(/sync failed \(exit 1: build failed\)/));
     // Saying "complete" after a non-zero exit is what made a broken sync look
     // like a rebuild, and every page reloaded on the strength of it.
     expect(notices).not.toContainEqual('sync complete');
+    subject.close();
+  });
+
+  it('refuses a session when sync reports failure', async () => {
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync: async () => ({ ok: false, detail: 'exit 1: build failed' }),
+    });
+
+    await expect(subject.ensureSynced()).rejects.toThrow('exit 1: build failed');
+    subject.close();
+  });
+
+  it('refuses a session when sync leaves the repository drifted', async () => {
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync: async () => ({ ok: true }),
+    });
+
+    await expect(subject.ensureSynced()).rejects.toThrow('did not resolve drift');
     subject.close();
   });
 

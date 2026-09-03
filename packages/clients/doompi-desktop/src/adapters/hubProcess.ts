@@ -5,7 +5,7 @@ import path from 'node:path';
 import { hubArguments, hubEnvironment } from '../services/hubLaunch.ts';
 import type { HubLaunchPlan, RunningHub } from '../types/hub.ts';
 
-const HEALTH_TIMEOUT_MS = 120_000;
+const HEALTH_TIMEOUT_MS = 10 * 60_000;
 const HEALTH_POLL_MS = 150;
 const STOP_TIMEOUT_MS = 10_000;
 

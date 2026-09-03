@@ -32,7 +32,7 @@ describe('browser Silero pinned-model golden PCM', () => {
   it('detects the repository speech fixture and rejects equal-length silence', async () => {
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
-    const model = fs.readFileSync(new URL('../models/silero_vad_v6.2.1.onnx', import.meta.url));
+    const model = fs.readFileSync(new URL('../src/web/models/silero_vad_v6.2.1.onnx', import.meta.url));
     const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
     const detector = new SileroVadFrames(async (input, state) => {
       const result = await session.run({
