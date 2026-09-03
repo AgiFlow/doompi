@@ -127,6 +127,8 @@ export interface VoiceMediaTransport {
     connectionId: string,
     capabilities: VoiceMediaCapabilities,
   ): Promise<VoiceMediaConnectResult>;
+  /** Refreshes optional capabilities without changing active work or event position. */
+  refreshCapabilities?(clientId: string, connectionId: string, capabilities: VoiceMediaCapabilities): Promise<void>;
   disconnect(clientId: string, connectionId: string): Promise<void>;
   nextEvent(
     clientId: string,
@@ -164,7 +166,7 @@ export interface VoiceMediaPlayback {
 /** Client hardware boundary. Browser and future native clients implement the same contract. */
 export interface VoiceMediaDevice {
   readonly capabilities: VoiceMediaCapabilities;
-  /** Initializes optional authoritative media processors before capabilities are advertised. */
+  /** Initializes optional authoritative media processors after baseline capabilities are available. */
   prepare?(): Promise<void>;
   createSpeechPresenceDetector?(): SpeechPresenceDetector | undefined;
   startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture>;

@@ -58,7 +58,14 @@ import {
   resolvePlanningPlansDirectory,
 } from '../schemas/plan/config.ts';
 import { type PlanModelChoice, planConfigSections, planSettingByFieldId } from '../schemas/plan/planConfig.ts';
-import { formatPlanStatus, PLAN_STATUS_KEY } from '../types/planApi.ts';
+import {
+  CONTINUE_PLANNING_CHOICE,
+  EXIT_PLAN_MODE_CHOICE,
+  formatPlanStatus,
+  PLAN_REVIEW_OPTIONS,
+  PLAN_REVIEW_TITLE,
+  PLAN_STATUS_KEY,
+} from '../types/planApi.ts';
 import type { PlanPointerPort } from '../types/planPointer.ts';
 import {
   createFablePlanFlow,
@@ -114,17 +121,15 @@ const DEBUG_EVIDENCE_MAX_TEXT_BYTES = 4 * 1024;
 const DEBUG_EVIDENCE_MAX_ITEMS = 32;
 const DEBUG_DIAGNOSTIC_TOOLS = new Set<string>();
 export const WRITE_PLAN_TIMEOUT_MS = 5_000;
-const EXIT_PLAN_MODE_CHOICE = 'Exit plan mode and start implementation';
-const CONTINUE_PLANNING_CHOICE = 'Continue planning';
 const EXIT_PLAN_DECISION = 'exit';
 const CONTINUE_PLAN_DECISION = 'continue';
 const PLAN_REVIEW_PROMPT = [
-  'Plan complete. What would you like to do?',
+  PLAN_REVIEW_TITLE,
   `  1. ${EXIT_PLAN_MODE_CHOICE}`,
   `  2. ${CONTINUE_PLANNING_CHOICE}`,
   '  Type something.',
 ].join('\n');
-const PLAN_REVIEW_NARRATION = `Plan complete. What would you like to do? Options: 1, ${EXIT_PLAN_MODE_CHOICE}; 2, ${CONTINUE_PLANNING_CHOICE}. Please choose one option. You may also answer in your own words.`;
+const PLAN_REVIEW_NARRATION = `${PLAN_REVIEW_TITLE} Options: 1, ${EXIT_PLAN_MODE_CHOICE}; 2, ${CONTINUE_PLANNING_CHOICE}. Please choose one option. You may also answer in your own words.`;
 const PLAN_REVIEW_NARRATION_REQUEST = createNarrationRequest(PLAN_REVIEW_NARRATION)!;
 const PLAN_REVIEW_WAIT_MESSAGE =
   "The choices were spoken through autonomous voice. Stop now and wait for the user's next message; it will arrive as an ordinary user message.";
@@ -1971,10 +1976,7 @@ export function planModeExtension(
         return voicePlanReviewResult();
       }
 
-      const choice = await ctx.ui.select('Plan complete. What would you like to do?', [
-        EXIT_PLAN_MODE_CHOICE,
-        CONTINUE_PLANNING_CHOICE,
-      ]);
+      const choice = await ctx.ui.select(PLAN_REVIEW_TITLE, [...PLAN_REVIEW_OPTIONS]);
       assertRuntimeActive(generation);
       return applyPlanReviewDecision(
         choice === EXIT_PLAN_MODE_CHOICE ? EXIT_PLAN_DECISION : CONTINUE_PLAN_DECISION,

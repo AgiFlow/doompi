@@ -1,5 +1,6 @@
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { isExternalRuntimePackage } from '../../scripts/desktopRuntimePlugin.ts';
+import { bundledDoomPiPackages, isExternalRuntimePackage } from '../../scripts/desktopRuntimePlugin.ts';
 import runtimeConfig from '../../vite.runtime.config.ts';
 
 describe('desktop runtime externals', () => {
@@ -25,5 +26,23 @@ describe('desktop DoomPi entrypoints', () => {
         },
       },
     });
+  });
+});
+
+describe('desktop DoomPi package catalog', () => {
+  it('includes selectable layer packages', () => {
+    const workspaceRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
+    const names = bundledDoomPiPackages(workspaceRoot, `${process.platform}-${process.arch}`).map(
+      (entry) => entry.name,
+    );
+
+    expect(names).toEqual(
+      expect.arrayContaining([
+        '@agimon-ai/doompi-sandbox',
+        '@agimon-ai/doompi-task',
+        '@agimon-ai/doompi-team',
+        '@agimon-ai/doompi-user-feedback',
+      ]),
+    );
   });
 });

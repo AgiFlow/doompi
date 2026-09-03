@@ -260,6 +260,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   private activeCapture: VoiceMediaCapture | undefined;
   private activePlayback: VoiceMediaPlayback | undefined;
   private speechDetector: BrowserSpeechPresenceDetector | undefined;
+  private preparingSpeechDetector: BrowserSpeechPresenceDetector | undefined;
   private speechPreparation: Promise<void> | undefined;
   private listeningForMediaUnlock = false;
   private speechWarmup: SpeechSynthesisUtterance | undefined;
@@ -420,6 +421,18 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   }
 
   public async close(): Promise<void> {
+    const speechDetector = this.speechDetector;
+    const preparingSpeechDetector = this.preparingSpeechDetector;
+    const speechPreparation = this.speechPreparation;
+    this.speechDetector = undefined;
+    this.preparingSpeechDetector = undefined;
+    this.speechPreparation = undefined;
+    this.capabilities.captureActivity = false;
+    this.capabilities.autonomousOrchestration = false;
+
+    await speechDetector?.close().catch(() => undefined);
+    if (preparingSpeechDetector !== speechDetector) await preparingSpeechDetector?.close().catch(() => undefined);
+    await speechPreparation?.catch(() => undefined);
     this.stopListeningForMediaUnlock();
     this.finishSpeechWarmup(true);
     await this.activeCapture?.stop();
@@ -429,11 +442,6 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     if (this.context !== undefined && this.context.state !== 'closed') await this.context.close();
     this.context = undefined;
     this.workletInstalled = false;
-    await this.speechDetector?.close().catch(() => undefined);
-    this.speechDetector = undefined;
-    this.speechPreparation = undefined;
-    this.capabilities.captureActivity = false;
-    this.capabilities.autonomousOrchestration = false;
   }
 
   private listenForMediaUnlock(): void {
@@ -488,20 +496,32 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     if (typeof Worker === 'undefined' || typeof WebAssembly === 'undefined') return;
     let detector: BrowserSpeechPresenceDetector | undefined;
     try {
-      const worker = new Worker(new URL('./sileroVadWorker.ts', import.meta.url), {
-        type: 'module',
-        name: 'doompi-silero-vad',
-      });
-      detector = new BrowserSpeechPresenceDetector(worker as unknown as SpeechWorker, () => {
-        this.speechDetector = undefined;
-        this.capabilities.captureActivity = false;
-        this.capabilities.autonomousOrchestration = false;
-      });
+      detector = new BrowserSpeechPresenceDetector(
+        new Worker(new URL('./sileroVadWorker.ts', import.meta.url), {
+          type: 'module',
+          name: 'doompi-silero-vad',
+        }) as unknown as SpeechWorker,
+        () => {
+          if (this.preparingSpeechDetector !== detector && this.speechDetector !== detector) return;
+          if (this.preparingSpeechDetector === detector) this.preparingSpeechDetector = undefined;
+          if (this.speechDetector === detector) this.speechDetector = undefined;
+          this.capabilities.captureActivity = false;
+          this.capabilities.autonomousOrchestration = false;
+        },
+      );
+      this.preparingSpeechDetector = detector;
       await detector.initialize(new URL('../../models/silero_vad_v6.2.1.onnx', import.meta.url).href);
+      if (this.preparingSpeechDetector !== detector) {
+        await detector.close().catch(() => undefined);
+        return;
+      }
+      this.preparingSpeechDetector = undefined;
       this.speechDetector = detector;
       this.capabilities.captureActivity = true;
       this.capabilities.autonomousOrchestration = this.rebindProtocolSupported;
     } catch {
+      if (this.preparingSpeechDetector === detector) this.preparingSpeechDetector = undefined;
+      if (this.speechDetector === detector) this.speechDetector = undefined;
       await detector?.close().catch(() => undefined);
     }
   }

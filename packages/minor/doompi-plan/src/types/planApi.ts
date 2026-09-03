@@ -25,6 +25,12 @@ export const SESSION_QUERY_PARAM = 'session';
  */
 export const PLAN_STATUS_KEY = 'doom-plan-document';
 
+/** The selector contract shared by complete_plan and its cockpit composer prompt. */
+export const PLAN_REVIEW_TITLE = 'Plan complete. What would you like to do?';
+export const EXIT_PLAN_MODE_CHOICE = 'Exit plan mode and start implementation';
+export const CONTINUE_PLANNING_CHOICE = 'Continue planning';
+export const PLAN_REVIEW_OPTIONS = [EXIT_PLAN_MODE_CHOICE, CONTINUE_PLANNING_CHOICE] as const;
+
 /** Between the plan's title and the stamp that marks a rewrite. */
 const STATUS_SEPARATOR = ' · ';
 

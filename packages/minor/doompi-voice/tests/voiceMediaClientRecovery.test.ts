@@ -59,14 +59,15 @@ interface FakePlayback extends VoiceMediaPlayback {
 }
 
 class FakeDevice implements VoiceMediaDevice {
-  public readonly capabilities = capabilities;
+  public readonly capabilities: VoiceMediaCapabilities = { ...capabilities };
   public readonly callbacks: Array<(pcm: Uint8Array) => void> = [];
   public readonly captures: Array<VoiceMediaCapture & { stop: ReturnType<typeof vi.fn> }> = [];
   public readonly playbacks: FakePlayback[] = [];
   public close = vi.fn(async () => undefined);
   public detectors: SpeechPresenceDetector[] = [];
+  public preparation: Promise<void> = Promise.resolve();
+  public readonly prepare = vi.fn(async () => this.preparation);
   public speakError: Error | undefined;
-
   public createSpeechPresenceDetector(): SpeechPresenceDetector | undefined {
     return this.detectors.shift();
   }
@@ -98,6 +99,8 @@ class FakeDevice implements VoiceMediaDevice {
 
 class FakeTransport implements VoiceMediaTransport {
   public readonly connectionIds: string[] = [];
+  public readonly connections: Array<{ connectionId: string; capabilities: VoiceMediaCapabilities }> = [];
+  public readonly capabilityRefreshes: Array<{ connectionId: string; capabilities: VoiceMediaCapabilities }> = [];
   public readonly disconnect = vi.fn(async () => undefined);
   public readonly captureStopped = vi.fn(async () => undefined);
   public readonly playbackFinished = vi.fn(async () => undefined);
@@ -112,13 +115,26 @@ class FakeTransport implements VoiceMediaTransport {
     aborted: boolean;
   }> = [];
   public startsEveryConnection = true;
+  public captureActivityControl: 'client' | 'host' = 'client';
   public sendFailure: Error | undefined;
   public connectFailure: Error | undefined;
 
-  public async connect(_clientId: string, connectionId: string): Promise<{ version: 6; cursor: number }> {
+  public async connect(
+    _clientId: string,
+    connectionId: string,
+    declaredCapabilities: VoiceMediaCapabilities,
+  ): Promise<{ version: 6; cursor: number }> {
     this.connectionIds.push(connectionId);
+    this.connections.push({ connectionId, capabilities: { ...declaredCapabilities } });
     if (this.connectFailure !== undefined) throw this.connectFailure;
     return { version: 6, cursor: 0 };
+  }
+  public async refreshCapabilities(
+    _clientId: string,
+    connectionId: string,
+    declaredCapabilities: VoiceMediaCapabilities,
+  ): Promise<void> {
+    this.capabilityRefreshes.push({ connectionId, capabilities: { ...declaredCapabilities } });
   }
   public nextEvent(
     _clientId: string,
@@ -134,7 +150,7 @@ class FakeTransport implements VoiceMediaTransport {
         sampleRate: 16_000,
         channels: 1,
         bitsPerSample: 16,
-        configuration: { mode: 'autonomous', activityControl: 'client' },
+        configuration: { mode: 'autonomous', activityControl: this.captureActivityControl },
       });
     }
     const poll = deferred<VoiceMediaClientEvent | undefined>();
@@ -190,6 +206,61 @@ describe('voice media client browser recovery', () => {
     expect(states.slice(0, 2)).toEqual(['connecting', 'conflict']);
     await client.stop();
     expect(states.at(-1)).toBe('disconnected');
+  });
+
+  it('registers baseline media and consumes capture while optional preparation is pending', async () => {
+    const preparation = deferred<void>();
+    const transport = new FakeTransport();
+    transport.captureActivityControl = 'host';
+    const device = new FakeDevice();
+    device.capabilities.captureActivity = false;
+    device.capabilities.autonomousOrchestration = false;
+    device.preparation = preparation.promise;
+    const client = new VoiceMediaClient('client', 'connection', transport, device);
+
+    client.start();
+    await eventually(() => expect(device.callbacks).toHaveLength(1));
+
+    expect(transport.connections).toEqual([
+      {
+        connectionId: 'connection:1',
+        capabilities: { ...capabilities, captureActivity: false, autonomousOrchestration: false },
+      },
+    ]);
+    expect(transport.capabilityRefreshes).toHaveLength(0);
+
+    device.capabilities.captureActivity = true;
+    device.capabilities.autonomousOrchestration = true;
+    preparation.resolve(undefined);
+    await eventually(() => expect(transport.capabilityRefreshes).toHaveLength(1));
+    expect(transport.capabilityRefreshes[0]).toEqual({ connectionId: 'connection:1', capabilities });
+
+    await client.stop();
+  });
+
+  it('stops without waiting for optional preparation or refreshing a stale connection', async () => {
+    const preparation = deferred<void>();
+    const transport = new FakeTransport();
+    transport.startsEveryConnection = false;
+    const device = new FakeDevice();
+    device.preparation = preparation.promise;
+    const states: string[] = [];
+    const client = new VoiceMediaClient('client', 'connection', transport, device, (state) => states.push(state));
+
+    client.start();
+    await eventually(() => expect(transport.longPolls).toHaveLength(1));
+    await expect(client.stop(false)).resolves.toBeUndefined();
+
+    expect(device.close).not.toHaveBeenCalled();
+    expect(transport.connectionIds).toEqual(['connection:1']);
+    expect(transport.disconnect).toHaveBeenCalledOnce();
+    expect(states).toEqual(['connecting', 'connected', 'disconnected']);
+
+    preparation.resolve(undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(transport.capabilityRefreshes).toHaveLength(0);
+    expect(transport.connectionIds).toEqual(['connection:1']);
   });
 
   it.each(['detector', 'sendAudio'] as const)(

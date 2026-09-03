@@ -55,6 +55,13 @@ class FakeSpeechUtterance {
 
   public constructor(public readonly text: string) {}
 }
+class PendingWorker {
+  public onmessage: ((event: { data: unknown }) => void) | null = null;
+  public onerror: ((event: { message?: string }) => void) | null = null;
+  public readonly postMessage = vi.fn();
+  public readonly terminate = vi.fn();
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -100,6 +107,35 @@ describe('browser media device recovery guards', () => {
 
     const device = new BrowserVoiceMediaDevice();
     await expect(device.prepare()).resolves.toBeUndefined();
+    expect(device.capabilities.captureActivity).toBe(false);
+    expect(device.capabilities.autonomousOrchestration).toBe(false);
+    expect(device.createSpeechPresenceDetector()).toBeUndefined();
+  });
+
+  it('terminates pending detector initialization without restoring capabilities after close', async () => {
+    class TestWorker extends PendingWorker {
+      public static instance: TestWorker | undefined;
+
+      public constructor() {
+        super();
+        TestWorker.instance = this;
+      }
+    }
+    vi.stubGlobal('Worker', TestWorker);
+    vi.stubGlobal('WebAssembly', WebAssembly);
+    const device = new BrowserVoiceMediaDevice(true);
+
+    const preparation = device.prepare();
+    await Promise.resolve();
+    const worker = TestWorker.instance;
+    const lateReply = worker?.onmessage;
+    expect(worker?.postMessage).toHaveBeenCalledOnce();
+
+    await device.close();
+    await expect(preparation).resolves.toBeUndefined();
+    expect(worker?.terminate).toHaveBeenCalledOnce();
+    lateReply?.({ data: { id: 1, result: true } });
+    await Promise.resolve();
     expect(device.capabilities.captureActivity).toBe(false);
     expect(device.capabilities.autonomousOrchestration).toBe(false);
     expect(device.createSpeechPresenceDetector()).toBeUndefined();

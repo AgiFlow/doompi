@@ -734,7 +734,7 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
     case 'agent_settled': {
       const closed = options.transcriptFromProtocol ? state : closeAssistant(state, undefined);
       const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
-      return { ...marked, activeTools: [], streaming: false, settled: true };
+      return { ...marked, activeTools: [], dialog: null, streaming: false, settled: true };
     }
 
     case 'queue_update': {

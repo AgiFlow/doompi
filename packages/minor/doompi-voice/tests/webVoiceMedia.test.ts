@@ -158,7 +158,8 @@ describe('browser voice media', () => {
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
     const source = await readFile(new URL('../src/web/clientMediaTransport.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain("controlLocation: sealedTransport.active() ? 'remote' : 'local'");
+    expect(source).toContain("const controlLocation = sealedTransport.active() ? 'remote' : 'local'");
+    expect(source).toContain('this.controlLocation = controlLocation');
   });
 
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {

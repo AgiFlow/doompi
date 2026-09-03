@@ -60,6 +60,7 @@ function jsonBody(value: object): RequestInit {
 
 export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
   private push: PushConnection | undefined;
+  private controlLocation: 'local' | 'remote' | undefined;
 
   public constructor(private readonly sessionId: string) {}
 
@@ -69,21 +70,24 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     capabilities: VoiceMediaCapabilities,
   ): Promise<VoiceMediaConnectResult> {
     this.push = undefined;
-    const response = await sealedTransport.fetch(
-      voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientConnect),
-      jsonBody({
-        version: VOICE_MEDIA_PROTOCOL_VERSION,
-        clientId,
-        connectionId,
-        clientKind: 'browser',
-        controlLocation: sealedTransport.active() ? 'remote' : 'local',
-        capabilities,
-      }),
-    );
+    const controlLocation = sealedTransport.active() ? 'remote' : 'local';
+    const response = await this.declareClient(clientId, connectionId, capabilities, controlLocation);
     if (!response.ok) throw await responseError(response);
     const connected = (await response.json()) as VoiceMediaConnectResult;
+    this.controlLocation = controlLocation;
     this.push = pushConnection(connected);
     return connected;
+  }
+
+  public async refreshCapabilities(
+    clientId: string,
+    connectionId: string,
+    capabilities: VoiceMediaCapabilities,
+  ): Promise<void> {
+    const controlLocation = this.controlLocation;
+    if (controlLocation === undefined) throw new Error('Voice media client is not connected.');
+    const response = await this.declareClient(clientId, connectionId, capabilities, controlLocation);
+    if (!response.ok) throw await responseError(response);
   }
 
   public async disconnect(clientId: string, connectionId: string): Promise<void> {
@@ -95,6 +99,7 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
       if (!response.ok && response.status !== 409) throw await responseError(response);
     } finally {
       this.push = undefined;
+      this.controlLocation = undefined;
     }
   }
 
@@ -117,6 +122,25 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
       return event;
     }
     return undefined;
+  }
+
+  private declareClient(
+    clientId: string,
+    connectionId: string,
+    capabilities: VoiceMediaCapabilities,
+    controlLocation: 'local' | 'remote',
+  ): Promise<Response> {
+    return sealedTransport.fetch(
+      voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientConnect),
+      jsonBody({
+        version: VOICE_MEDIA_PROTOCOL_VERSION,
+        clientId,
+        connectionId,
+        clientKind: 'browser',
+        controlLocation,
+        capabilities,
+      }),
+    );
   }
 
   private async fetchEvent(

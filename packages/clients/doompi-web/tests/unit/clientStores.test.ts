@@ -655,10 +655,17 @@ describe('session actions', () => {
       { kind: 'queued', text: 'later', images: userImages },
     ]);
   });
-  it('take an explicit session id past the focus', () => {
+  it('clears queued work before aborting an explicit session', () => {
     setActiveSession('s1');
+    applySessionFrame('s2', { type: 'queue_update', steering: ['interrupt'], followUp: ['later'] });
+
     abortRun('s2');
-    expect(sent).toEqual([{ type: 'session_command', sessionId: 's2', frame: { type: 'abort' } }]);
+
+    expect(sessionStoreFor('s2').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
+    expect(sent).toEqual([
+      { type: 'session_command', sessionId: 's2', frame: { type: 'clear_queue' } },
+      { type: 'session_command', sessionId: 's2', frame: { type: 'abort' } },
+    ]);
   });
 
   it('refuse to send blank drafts', () => {

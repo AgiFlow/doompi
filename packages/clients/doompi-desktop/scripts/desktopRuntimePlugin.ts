@@ -141,10 +141,17 @@ interface CatalogPackage {
   dependencies: string[];
 }
 
-function bundledDoomPiPackages(workspaceRoot: string, target: string): CatalogPackage[] {
+export function bundledDoomPiPackages(workspaceRoot: string, target: string): CatalogPackage[] {
   const packages: CatalogPackage[] = [];
-  for (const group of DOOMPI_PACKAGE_DIRECTORIES) {
-    const groupRoot = path.join(workspaceRoot, 'packages', group);
+  const layerRoot = path.join(workspaceRoot, 'layers');
+  const groupRoots = [
+    ...DOOMPI_PACKAGE_DIRECTORIES.map((group) => path.join(workspaceRoot, 'packages', group)),
+    ...fs
+      .readdirSync(layerRoot, { withFileTypes: true })
+      .filter((directory) => directory.isDirectory())
+      .map((directory) => path.join(layerRoot, directory.name)),
+  ];
+  for (const groupRoot of groupRoots) {
     for (const directory of fs.readdirSync(groupRoot, { withFileTypes: true })) {
       if (!directory.isDirectory()) continue;
       const root = path.join(groupRoot, directory.name);

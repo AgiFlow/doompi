@@ -7,6 +7,7 @@ import {
   VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_STATE_HEADER,
   VOICE_MEDIA_CONTENT_TYPE,
+  type VoiceMediaCapabilities,
   type VoiceMediaClientEvent,
   VOICE_MEDIA_HEARTBEAT_MS,
   type VoiceMediaWake,
@@ -17,7 +18,13 @@ import {
 const INTERNAL_TOKEN = 'internal-test-token';
 const CLIENT_ID = 'browser-client';
 const CONNECTION_ID = 'browser-connection';
-
+const DEFAULT_CAPABILITIES: VoiceMediaCapabilities = {
+  capture: true,
+  playback: true,
+  captureActivity: true,
+  autonomousOrchestration: true,
+  playbackDucking: true,
+};
 function request(route: string, init: RequestInit = {}, host = false): Request {
   const headers = new Headers(init.headers);
   if (host) headers.set('authorization', `Bearer ${INTERNAL_TOKEN}`);
@@ -35,7 +42,11 @@ function json(value: object, host = false): RequestInit {
   };
 }
 
-async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId = CONNECTION_ID): Promise<Response> {
+async function connect(
+  api: ReturnType<typeof createVoiceMediaApi>,
+  connectionId = CONNECTION_ID,
+  capabilities: VoiceMediaCapabilities = DEFAULT_CAPABILITIES,
+): Promise<Response> {
   const response = await api.fetch(
     request(
       VOICE_MEDIA_ROUTES.clientConnect,
@@ -45,13 +56,7 @@ async function connect(api: ReturnType<typeof createVoiceMediaApi>, connectionId
         connectionId,
         clientKind: 'browser',
         controlLocation: 'local',
-        capabilities: {
-          capture: true,
-          playback: true,
-          captureActivity: true,
-          autonomousOrchestration: true,
-          playbackDucking: true,
-        },
+        capabilities,
       }),
     ),
   );
@@ -217,6 +222,67 @@ describe('voice client media session API', () => {
 
     expect((await capture).status).toBe(201);
     expect(await nextEvent(api, 0)).toMatchObject({ type: 'capture-start', captureId: 'capture-waiting' });
+    api.close();
+  });
+
+  it('refreshes exact-identity capabilities without failing active capture or changing its configuration', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN });
+    await connect(api, CONNECTION_ID, {
+      ...DEFAULT_CAPABILITIES,
+      captureActivity: false,
+      autonomousOrchestration: false,
+    });
+    const firstStarted = await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.hostCaptureStart,
+        json({
+          captureId: 'capture-before-refresh',
+          configuration: { mode: 'autonomous', activityControl: 'client' },
+        }),
+        true,
+      ),
+    );
+    expect(await firstStarted.json()).toMatchObject({ configuration: { activityControl: 'host' } });
+    const firstEvent = await nextEvent(api, 0);
+
+    await connect(api);
+    const pcm = new Uint8Array([1, 2, 3, 4]);
+    const uploaded = await api.fetch(
+      request(
+        `${VOICE_MEDIA_ROUTES.clientAudio}?clientId=${CLIENT_ID}&connectionId=${CONNECTION_ID}&captureId=capture-before-refresh`,
+        { method: 'POST', headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE }, body: pcm },
+      ),
+    );
+    expect(uploaded.status).toBe(204);
+    const audio = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-before-refresh`, {}, true),
+    );
+    expect(new Uint8Array(await audio.arrayBuffer())).toEqual(pcm);
+
+    expect(
+      (
+        await api.fetch(
+          request(VOICE_MEDIA_ROUTES.hostCaptureAbort, json({ captureId: 'capture-before-refresh' }), true),
+        )
+      ).status,
+    ).toBe(204);
+    const aborted = await nextEvent(api, firstEvent.sequence);
+    const nextStarted = await api.fetch(
+      request(
+        VOICE_MEDIA_ROUTES.hostCaptureStart,
+        json({
+          captureId: 'capture-after-refresh',
+          configuration: { mode: 'autonomous', activityControl: 'client' },
+        }),
+        true,
+      ),
+    );
+    expect(await nextStarted.json()).toMatchObject({ configuration: { activityControl: 'client' } });
+    expect(await nextEvent(api, aborted.sequence)).toMatchObject({
+      type: 'capture-start',
+      captureId: 'capture-after-refresh',
+      configuration: { activityControl: 'client' },
+    });
     api.close();
   });
 

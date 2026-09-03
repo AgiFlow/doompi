@@ -426,6 +426,12 @@ export function Composer() {
     : streaming
       ? 'steer the run without stopping it…'
       : 'ask anything · / for commands · $ for skills · @ for files…';
+  const abortAction = (
+    <Button variant="danger-outline" size="md" data-testid="composer-abort" onClick={() => abortRun(sessionId)}>
+      <StopIcon className="h-2 w-2 fill-current" />
+      abort
+    </Button>
+  );
 
   // A tool waiting on an answer takes the input's place rather than opening
   // over the conversation: the transcript is what the reader needs in order
@@ -442,6 +448,7 @@ export function Composer() {
         <div className="rounded-lg border border-doom-edge-magenta bg-doom-deep">
           <ComposerPrompt claim={prompt} sessionId={sessionId} />
         </div>
+        <div className="mt-2 flex justify-end">{abortAction}</div>
       </div>
     );
   }
@@ -682,17 +689,7 @@ export function Composer() {
                 <PlusIcon className="h-3 w-3" />
               </Button>
               <span className="min-w-0 flex-1" />
-              {streaming ? (
-                <Button
-                  variant="danger-outline"
-                  size="md"
-                  data-testid="composer-abort"
-                  onClick={() => abortRun(sessionId)}
-                >
-                  <StopIcon className="h-2 w-2 fill-current" />
-                  abort
-                </Button>
-              ) : null}
+              {streaming ? abortAction : null}
               <span className="contents" data-testid="composer-actions">
                 <PluginSurface slot={HOST_SLOTS.composerActions} sessionId={sessionId} />
               </span>

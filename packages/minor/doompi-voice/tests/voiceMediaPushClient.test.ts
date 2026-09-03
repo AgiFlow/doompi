@@ -81,6 +81,47 @@ describe('browser voice media push transport', () => {
     expect(requestUrl(eventCall ?? [])).toContain('wait=0');
   });
 
+  it('refreshes capabilities without replacing push state, control location, or event position', async () => {
+    let declarations = 0;
+    vi.mocked(sealedTransport.active).mockReturnValue(false);
+    vi.mocked(sealedTransport.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/client/connect')) {
+        if (typeof init?.body !== 'string') throw new Error('Expected a JSON connect body.');
+        const body = JSON.parse(init.body) as { controlLocation: string; capabilities: typeof capabilities };
+        expect(body.controlLocation).toBe('local');
+        declarations += 1;
+        if (declarations === 2) expect(body.capabilities.captureActivity).toBe(true);
+        return jsonResponse({
+          version: 5,
+          cursor: declarations === 1 ? 0 : 99,
+          eventEpoch: declarations === 1 ? 'epoch-stable' : 'epoch-ignored',
+          heartbeatMs: 1_000,
+        });
+      }
+      if (url.includes('/client/events')) return jsonResponse(captureEvent(1));
+      throw new Error(`Unexpected voice request: ${url}`);
+    });
+    const transport = new BrowserVoiceMediaTransport('session-refresh');
+    await transport.connect('client', 'connection', {
+      ...capabilities,
+      captureActivity: false,
+      autonomousOrchestration: false,
+    });
+
+    vi.mocked(sealedTransport.active).mockReturnValue(true);
+    await transport.refreshCapabilities('client', 'connection', capabilities);
+    const next = transport.nextEvent('client', 'connection', 0, new AbortController().signal);
+    driveChannel(voiceMediaWakeChannel, 'session-refresh', { eventEpoch: 'epoch-stable', sequence: 1 });
+
+    expect(await next).toEqual(captureEvent(1));
+    expect(declarations).toBe(2);
+    const eventCall = vi
+      .mocked(sealedTransport.fetch)
+      .mock.calls.find((call) => requestUrl(call).includes('/client/events'));
+    expect(requestUrl(eventCall ?? [])).toContain('wait=0');
+  });
+
   it.each([
     { eventEpoch: '', heartbeatMs: 1_000 },
     { eventEpoch: 'x'.repeat(201), heartbeatMs: 1_000 },
