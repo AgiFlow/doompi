@@ -40,6 +40,10 @@ process.stderr.write('the agent binary is missing\\n');
 process.exit(3);
 `;
 
+const REFUSING_SYNC = `#!/usr/bin/env node
+process.exit(1);
+`;
+
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = net.createServer();
@@ -133,10 +137,20 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   },
   cockpit: async ({ sessionCount, spawnStub, assets }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
+    const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
+    const syncedHome = process.env.DOOMPI_E2E_SYNCED_HOME;
+    const syncedWorkRoot = process.env.DOOMPI_E2E_SYNCED_WORK_ROOT;
+    if (assets === 'synced' && (!syncedDist || !syncedHome || !syncedWorkRoot)) {
+      throw new Error('global setup did not publish the synchronized test composition');
+    }
     const registryDir = path.join(root, 'run');
     const stateDir = path.join(root, 'state');
+    const homeDir = assets === 'synced' ? (syncedHome as string) : path.join(root, 'home');
     const stub = path.join(root, 'fake-doompi-server');
+    const syncStub = path.join(root, 'refuse-doompi-sync');
+    fs.mkdirSync(homeDir, { recursive: true });
     fs.writeFileSync(stub, spawnStub === 'ok' ? REGISTERING_SERVER : FAILING_SERVER, { mode: 0o755 });
+    fs.writeFileSync(syncStub, REFUSING_SYNC, { mode: 0o755 });
 
     // An isolated Pi agent directory: doom-runner keeps its store under it, and
     // runner specs write records there.
@@ -153,7 +167,16 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     for (let index = 0; index < sessionCount; index += 1) {
       const id = `s${index + 1}`;
       const apiSocketPath = path.join(apiSockets, `${id}.sock`);
-      sessions.push(await startFakeSession({ id, name: `session-${index + 1}`, registryDir, apiSocketPath }));
+      const cwd = assets === 'synced' ? fs.mkdtempSync(path.join(syncedWorkRoot as string, `${id}-`)) : undefined;
+      sessions.push(
+        await startFakeSession({
+          id,
+          name: `session-${index + 1}`,
+          registryDir,
+          apiSocketPath,
+          ...(cwd === undefined ? {} : { cwd }),
+        }),
+      );
       sessionApiStops.push(startRunnerApiSocket(runnerStore, id, apiSocketPath));
     }
 
@@ -161,15 +184,21 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     // An isolated workflow home: the hub must never watch the developer's
     // real registry from a test, and workflow specs write runs into this one.
     const workflowHome = path.join(root, 'workflow-mcp');
-    // The hub also resolves provider auth from the environment; the developer's
-    // own keys must not make a throwaway hub look signed in.
-    const env: NodeJS.ProcessEnv = { ...process.env, WORKFLOW_MCP_HOME: workflowHome, PI_CODING_AGENT_DIR: agentDir };
+    // Provider auth and personal Doom configuration are isolated from the
+    // developer. The synchronized suites resolve the one generation global
+    // setup published, while the refusing command prevents accidental rebuilds.
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+      WORKFLOW_MCP_HOME: workflowHome,
+      PI_CODING_AGENT_DIR: agentDir,
+      DOOMPI_SYNC_COMMAND: syncStub,
+    };
     for (const key of Object.keys(env)) if (/_API_KEY$|_AUTH_TOKEN$|_OAUTH_TOKEN$/.test(key)) delete env[key];
-    const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
-    if (assets === 'synced' && !syncedDist) throw new Error('global setup did not publish the synced bundle');
     // Assets are always explicit: without this, the server would prefer the
     // developer's machine-wide ~/.doompi/web bundle over the freshly built one.
-    const assetsDir = assets === 'synced' && syncedDist ? syncedDist : path.join(packageRoot, 'dist', 'web');
+    const assetsDir = assets === 'synced' ? (syncedDist as string) : path.join(packageRoot, 'dist', 'web');
     const child: ChildProcess = spawn(
       process.execPath,
       [

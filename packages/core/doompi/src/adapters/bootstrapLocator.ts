@@ -8,6 +8,8 @@ import { readSyncRegistration } from './syncRegistration.ts';
 import { readSyncState } from './syncState.ts';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from './syncStateContract.ts';
 
+const BOOTSTRAP_ENTRY_ENV = 'DOOMPI_BOOTSTRAP_ENTRY';
+
 /**
  * One recorded build input: the stat pair for speed, the digest for truth.
  *
@@ -167,6 +169,8 @@ function isInside(directory: string, target: string): boolean {
 }
 
 function packagedDoomEntry(moduleUrl: string = import.meta.url): string {
+  const configuredEntry = process.env[BOOTSTRAP_ENTRY_ENV];
+  if (configuredEntry) return configuredEntry;
   const extension = moduleUrl.endsWith('.ts') ? 'ts' : 'mjs';
   const sourceRoot = path.dirname(path.dirname(fileURLToPath(moduleUrl)));
   return path.join(sourceRoot, 'extensions', 'entries', `doom.${extension}`);

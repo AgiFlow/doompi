@@ -17,10 +17,12 @@ import { TopBar } from '../features/status/TopBar.tsx';
 import { HOST_SLOTS, webTabs } from '../lib/pluginRegistry.ts';
 import { useActiveSession } from '../stores/sessionStore.ts';
 import { sessionsStore, setActiveSession, useNoSessions } from '../stores/sessionsStore.ts';
+import { useWebPluginRegistry } from '../stores/useWebPluginRegistry.ts';
 import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore.ts';
 import { setDockOpen, uiStore } from '../stores/uiStore.ts';
 
 export function CockpitPage() {
+  useWebPluginRegistry();
   const dockOpen = useStore(uiStore, (state) => state.dockOpen);
   const [railOpen, setRailOpen] = useState(false);
   const [mobileActivityOpen, setMobileActivityOpen] = useState(false);

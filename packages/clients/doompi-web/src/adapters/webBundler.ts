@@ -3,7 +3,13 @@ import path from 'node:path';
 import { PLUGIN_ROOTS_FILE } from '../services/webDevRoots.ts';
 import { SERVER_REGISTRY_FILE, webHostPackageRoot, writeSyncWebPluginModules } from './webPluginGenerate.ts';
 import { scanWebPlugins } from './webPluginScan.ts';
-import { webPluginCssAlias, webPluginOverridePlugin } from './webPluginVite.ts';
+import {
+  WEB_PLUGIN_RUNTIME_SPECIFIERS,
+  webPluginCssAlias,
+  webPluginOverridePlugin,
+  webPluginRuntimeAliases,
+  webPluginRuntimeGlobal,
+} from './webPluginVite.ts';
 
 /** Shared runtime packages every plugin's client code must resolve to the host copies. */
 const DEDUPED_RUNTIMES = [
@@ -26,14 +32,16 @@ const DEDUPED_RUNTIMES = [
 export interface BundleCockpitWebOptions {
   /** Package roots to scan for doompiWeb manifests, usually the installed composition. */
   pluginRoots: readonly string[];
-  /** Output directory; receives web/ (the bundle), generated/ (the entry modules), and pluginRoots.json. */
+  /** Output directory; receives web/, plugins/, generated/, and pluginRoots.json. */
   outDir: string;
   onNotice?: (message: string) => void;
 }
 
 export interface BundleCockpitWebResult {
-  /** Public assets directory. Server-only registry metadata remains beside it. */
+  /** Full synchronized SPA retained for CLI compatibility. */
   assetsDir: string;
+  /** Standalone session plugin composition artifacts. */
+  pluginsDir: string;
   pluginIds: string[];
 }
 
@@ -58,6 +66,7 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
 
   const generatedDir = path.join(options.outDir, 'generated');
   const assetsDir = path.join(options.outDir, 'web');
+  const pluginsDir = path.join(options.outDir, 'plugins');
   const generated = writeSyncWebPluginModules(plugins, generatedDir);
   const roots = [...new Set(options.pluginRoots.map((root) => path.resolve(root)))];
   fs.writeFileSync(path.join(options.outDir, PLUGIN_ROOTS_FILE), `${JSON.stringify(roots, null, 2)}\n`);
@@ -78,7 +87,7 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
     plugins: [webPluginOverridePlugin(clientRoot, generated), react(), tailwindcss()],
     resolve: {
       dedupe: [...DEDUPED_RUNTIMES],
-      alias: [webPluginCssAlias(generated)],
+      alias: [...webPluginRuntimeAliases(clientRoot), webPluginCssAlias(generated)],
     },
     build: {
       outDir: assetsDir,
@@ -87,6 +96,40 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
     },
   });
 
+  await build({
+    configFile: false,
+    envDir: false,
+    logLevel: 'warn',
+    base: './',
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      dedupe: [...DEDUPED_RUNTIMES],
+      alias: [webPluginCssAlias(generated)],
+    },
+    build: {
+      cssCodeSplit: false,
+      outDir: pluginsDir,
+      emptyOutDir: true,
+      sourcemap: false,
+      assetsInlineLimit: 0,
+      manifest: 'manifest.json',
+      rollupOptions: {
+        input: generated.compositionModulePath,
+        external: [...WEB_PLUGIN_RUNTIME_SPECIFIERS],
+        output: {
+          format: 'iife',
+          name: 'DoomPiWebPluginCompositionBundle',
+          entryFileNames: 'composition.js',
+          globals: Object.fromEntries(
+            WEB_PLUGIN_RUNTIME_SPECIFIERS.map((specifier) => [specifier, webPluginRuntimeGlobal(specifier)]),
+          ),
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  });
+  fs.writeFileSync(path.join(pluginsDir, 'index.html'), '<!doctype html>\n<title>DoomPi plugin composition</title>\n');
+
   fs.writeFileSync(path.join(options.outDir, SERVER_REGISTRY_FILE), generated.serverRegistry);
-  return { assetsDir, pluginIds: plugins.map((plugin) => plugin.pluginId) };
+  return { assetsDir, pluginsDir, pluginIds: plugins.map((plugin) => plugin.pluginId) };
 }

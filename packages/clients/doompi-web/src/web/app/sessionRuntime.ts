@@ -19,7 +19,8 @@ import {
   REMOTE_STATE_TYPE,
   type RemoteAccessStateView,
 } from '../../types/remoteAccess.ts';
-import { dispatchChannelFrame, dropPluginSessionData } from '../lib/pluginRegistry.ts';
+import { dispatchChannelFrame } from '../lib/pluginRegistry.ts';
+import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
 import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
@@ -135,6 +136,7 @@ export function startSessionRuntime(): () => void {
   const syncSubscription = (force = false): void => {
     const { activeId, byId } = sessionsStore.state;
     const target = activeId !== null && activeId in byId ? activeId : null;
+    void focusSessionWebPlugins(target, target === null ? undefined : byId[target].summary.webComposition);
     protocol.focus(target);
     if (!force && target === subscribed) return;
     if (subscribed !== null && subscribed !== target) sendHubFrame(unsubscribeFrame(subscribed));
@@ -183,10 +185,11 @@ export function startSessionRuntime(): () => void {
           applySessionRemoved(frame);
           dropComposerState(frame.sessionId);
           dropSessionStore(frame.sessionId);
-          dropPluginSessionData(frame.sessionId);
+          removeSessionWebPluginRuntime(frame.sessionId);
           dropThreads(frame.sessionId);
           dropTransientTabs(frame.sessionId);
           if (subscribed === frame.sessionId) subscribed = null;
+          syncSubscription();
           return;
         }
         case SESSION_BACKLOG_TYPE: {
@@ -279,6 +282,7 @@ export function startSessionRuntime(): () => void {
   return () => {
     stopBundleWatch();
     subscription.unsubscribe();
+    void focusSessionWebPlugins(null, undefined);
     protocol.stop();
     releaseTransport();
     socket.close();

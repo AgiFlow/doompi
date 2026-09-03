@@ -2,10 +2,12 @@ import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/do
 import { afterEach, describe, expect, it } from 'vitest';
 import { leaderGroup } from '../../src/web/lib/leaderTree.ts';
 import {
+  activateWebPluginSession,
   activityGroupSlot,
   dispatchChannelFrame,
   dropPluginSessionData,
   HOST_SLOTS,
+  installSessionWebPlugins,
   installWebPlugins,
   paletteCommands,
   pluginActivityGroups,
@@ -14,10 +16,13 @@ import {
   pluginRepositorySettingsPanels,
   pluginSelectionAxes,
   pluginToolRenderer,
+  removeSessionWebPlugins,
   resetWebPlugins,
   slotFills,
   startWebPlugins,
+  subscribeWebPluginRegistry,
   webPluginDiagnostics,
+  webPluginRegistryRevision,
   webTabs,
 } from '../../src/web/lib/pluginRegistry.ts';
 import { settingsSections } from '../../src/web/lib/settingsSections.ts';
@@ -537,6 +542,69 @@ describe('the web plugin registry', () => {
     ]);
     dropPluginSessionData('s9');
     expect(log).toEqual(['drop:one:s9', 'drop:two:s9']);
+  });
+
+  it('isolates contributions and channels by session', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('session-a', [
+      defineWebPlugin({
+        id: 'shared-id',
+        tabs: [{ id: 'session-tab', label: 'A', panel: Panel }],
+        channels: [itemsChannel(log, 'shared_channel', 'a')],
+      }),
+    ]);
+    installSessionWebPlugins('session-b', [
+      defineWebPlugin({
+        id: 'shared-id',
+        tabs: [{ id: 'session-tab', label: 'B', panel: Other }],
+        channels: [itemsChannel(log, 'shared_channel', 'b')],
+      }),
+    ]);
+
+    activateWebPluginSession('session-a');
+    expect(webTabs().map((tab) => tab.label)).toEqual(['A']);
+    activateWebPluginSession('session-b');
+    expect(webTabs().map((tab) => tab.label)).toEqual(['B']);
+
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-a', payload: { items: ['one'] } })).toBe(
+      true,
+    );
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-b', payload: { items: ['two'] } })).toBe(
+      true,
+    );
+    expect(log).toEqual(['apply:a:session-a:one', 'apply:b:session-b:two']);
+
+    removeSessionWebPlugins('session-a');
+    expect(log.at(-1)).toBe('drop:a:session-a');
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-a', payload: { items: [] } })).toBe(
+      false,
+    );
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-b', payload: { items: [] } })).toBe(true);
+  });
+
+  it('replays the latest channel snapshot after an asynchronous session registry install', () => {
+    const log: string[] = [];
+    activateWebPluginSession('late');
+    expect(dispatchChannelFrame({ type: 'late_items', sessionId: 'late', payload: { items: ['first'] } })).toBe(false);
+    expect(dispatchChannelFrame({ type: 'late_items', sessionId: 'late', payload: { items: ['latest'] } })).toBe(false);
+
+    installSessionWebPlugins('late', [defineWebPlugin({ id: 'late', channels: [itemsChannel(log, 'late_items')] })]);
+
+    expect(log).toEqual(['apply:late_items:late:latest']);
+  });
+
+  it('notifies contribution readers when the active session registry changes', () => {
+    const revisions: number[] = [];
+    const unsubscribe = subscribeWebPluginRegistry(() => revisions.push(webPluginRegistryRevision()));
+    installSessionWebPlugins('session-a', [defineWebPlugin({ id: 'a' })]);
+    activateWebPluginSession('session-a');
+    installSessionWebPlugins('session-a', [defineWebPlugin({ id: 'a-next' })]);
+    removeSessionWebPlugins('session-a');
+    unsubscribe();
+
+    expect(revisions).toHaveLength(3);
+    expect(revisions[0]).toBeLessThan(revisions[1] ?? 0);
+    expect(revisions[1]).toBeLessThan(revisions[2] ?? 0);
   });
 
   it('starts runtimes in install order and disposes in reverse', () => {

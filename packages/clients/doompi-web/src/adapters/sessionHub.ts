@@ -28,6 +28,7 @@ import {
   type SessionBacklogFrame,
   type SessionGitStatus,
   type SessionSummary,
+  type SessionWebComposition,
 } from '../types/hub.ts';
 import type { SessionRecord } from '../types/registry.ts';
 import { REPLAY_TYPE, type BridgeState, type SessionFrame } from '../types/session.ts';
@@ -111,8 +112,12 @@ export interface SessionHubOptions {
   spawner?: SessionSpawner;
   /** Injectable for tests; defaults to asking git about the session cwd. */
   readGit?: (cwd: string) => Promise<SessionGitStatus | undefined>;
-  /** The hub's data channels (built-in and plugin-provided sources). */
+  /** Base channels installed into every session-local channel registry. */
   channels?: readonly WebHubChannel[];
+  /** Dynamically loads the channel composition resolved for one session. */
+  loadChannels?: (record: SessionRecord) => Promise<readonly WebHubChannel[]>;
+  /** Advertises the signed client composition paired with one session's loaded channels. */
+  webComposition?: (record: SessionRecord, channelTypes: readonly string[]) => SessionWebComposition | undefined;
   /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
   signal?: (pid: number) => void;
   /** How long a restart waits for the stopped server to withdraw its record. */
@@ -148,12 +153,14 @@ export interface SessionHub {
   channelFrames(sessionId: string): ChannelFrame[];
   /** The journal behind one thread of a session, from the first data channel that names it; undefined until one does. */
   threadJournal(sessionId: string, threadId: string): string | undefined;
-  /** Whether a channel accepts authenticated acknowledgements after subscription changes. */
-  channelReceivesWithoutSubscription(frameType: string): boolean;
+  /** Whether one session's channel accepts authenticated acknowledgements after subscription changes. */
+  channelReceivesWithoutSubscription(sessionId: string, frameType: string): boolean;
   /** Routes a page payload to exactly one loaded channel for a live session. */
   receiveChannel(sessionId: string, frameType: string, payload: unknown, connectionId: string): void;
   /** Withdraws connection-scoped channel state when a page socket closes. */
   disconnectChannels(connectionId: string): void;
+  /** Reloads one session's channels after its synchronized generation changes. */
+  reloadChannels(sessionId: string): void;
   command(sessionId: string, frame: SessionFrame): void;
   create(input: SpawnSessionInput): Promise<SpawnOutcome>;
   /**
@@ -211,6 +218,9 @@ interface ManagedSession {
    * cannot let a later command overtake an earlier one.
    */
   commands: Promise<void>;
+  /** Channel definitions and sources loaded only for this session's composition. */
+  channels: StartedChannel[];
+  channelLoadToken: symbol;
 }
 
 interface StartedChannel {
@@ -389,57 +399,38 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     return true;
   };
 
-  const startedChannels: StartedChannel[] = (options.channels ?? []).map((channel) => ({
-    channel,
-    frameType: channel.frameType,
-    source: channel.start({
-      sessions: () => [...sessions.values()].map((managed) => scopeOf(managed.record)),
-      publish: (sessionId, payload) => {
-        if (closed) return;
-        emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload });
-      },
-      publishToConnection: (connectionId, sessionId, payload) => {
-        if (closed || connectionId === '') return false;
-        emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload, connectionId });
-        return true;
-      },
-      requestSessionApi: async (scope, request) => {
-        const managed = sessions.get(scope.sessionId);
-        if (managed === undefined || managed.record.cwd !== scope.cwd || managed.record.apiSocketPath === undefined)
-          return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
-        const token = readTokenFile(managed.record);
-        const headers = new Headers({ authorization: `Bearer ${token}` });
-        return await proxyToSocket({
-          socketPath: managed.record.apiSocketPath,
-          path: sessionApiPath(request),
-          method: request.method,
-          headers,
-          body: request.body ?? null,
-          ...(request.signal === undefined ? {} : { signal: request.signal }),
-        });
-      },
-      onNotice: (message) => options.onNotice?.(message),
-    }),
-  }));
-
-  const toSummary = (managed: ManagedSession): SessionSummary => ({
-    id: managed.record.id,
-    name: managed.presence.sessionName ?? managed.record.name,
-    cwd: managed.record.cwd,
-    createdAt: managed.record.createdAt,
-    updatedAt: managed.presence.updatedAt,
-    phase: managed.presence.phase,
-    phaseSince: managed.presence.phaseSince,
-    attach: managed.attach,
-    ...(managed.attachReason === undefined ? {} : { attachReason: managed.attachReason }),
-    pendingMessageCount: managed.presence.pendingMessageCount,
-    everPrompted: managed.presence.everPrompted,
-    awaitingInput: managed.presence.awaitingInput,
-    ...(managed.presence.lastSettledAt === undefined ? {} : { lastSettledAt: managed.presence.lastSettledAt }),
-    socketPath: managed.record.socketPath,
-    ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
-    ...(managed.git === undefined ? {} : { git: managed.git }),
-  });
+  const toSummary = (managed: ManagedSession): SessionSummary => {
+    let webComposition: SessionWebComposition | undefined;
+    try {
+      webComposition = options.webComposition?.(
+        managed.record,
+        managed.channels.map((channel) => channel.frameType),
+      );
+    } catch (error) {
+      options.onNotice?.(
+        `session ${managed.record.id} plugin composition unavailable (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+    return {
+      id: managed.record.id,
+      name: managed.presence.sessionName ?? managed.record.name,
+      cwd: managed.record.cwd,
+      createdAt: managed.record.createdAt,
+      updatedAt: managed.presence.updatedAt,
+      phase: managed.presence.phase,
+      phaseSince: managed.presence.phaseSince,
+      attach: managed.attach,
+      ...(managed.attachReason === undefined ? {} : { attachReason: managed.attachReason }),
+      pendingMessageCount: managed.presence.pendingMessageCount,
+      everPrompted: managed.presence.everPrompted,
+      awaitingInput: managed.presence.awaitingInput,
+      ...(managed.presence.lastSettledAt === undefined ? {} : { lastSettledAt: managed.presence.lastSettledAt }),
+      socketPath: managed.record.socketPath,
+      ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
+      ...(managed.git === undefined ? {} : { git: managed.git }),
+      ...(webComposition === undefined ? {} : { webComposition }),
+    };
+  };
 
   const pushSummary = (managed: ManagedSession): void => {
     const summary = toSummary(managed);
@@ -447,6 +438,86 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     if (json === managed.lastSummaryJson) return;
     managed.lastSummaryJson = json;
     emit({ kind: 'upsert', session: summary });
+  };
+
+  const closeSessionChannels = (managed: ManagedSession): void => {
+    for (const started of managed.channels) {
+      started.source.sessionRemoved?.(managed.record.id);
+      started.source.close();
+    }
+    managed.channels = [];
+  };
+
+  const startSessionChannels = async (managed: ManagedSession): Promise<void> => {
+    const token = managed.channelLoadToken;
+    let definitions: readonly WebHubChannel[];
+    try {
+      const dynamic = options.loadChannels === undefined ? [] : await options.loadChannels(managed.record);
+      definitions = [...(options.channels ?? []), ...dynamic];
+    } catch (error) {
+      options.onNotice?.(
+        `session ${managed.record.id} hub plugins unavailable (${error instanceof Error ? error.message : String(error)})`,
+      );
+      return;
+    }
+    if (closed || sessions.get(managed.record.id) !== managed || managed.channelLoadToken !== token) return;
+
+    const seen = new Set<string>();
+    const scope = scopeOf(managed.record);
+    for (const channel of definitions) {
+      if (seen.has(channel.frameType)) {
+        options.onNotice?.(
+          `duplicate web channel '${channel.frameType}' dropped for session ${managed.record.id}; frame types are session-local`,
+        );
+        continue;
+      }
+      seen.add(channel.frameType);
+      try {
+        const source = channel.start({
+          sessions: () => [scopeOf(managed.record)],
+          publish: (sessionId, payload) => {
+            if (closed || sessionId !== managed.record.id) return;
+            emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload });
+          },
+          publishToConnection: (connectionId, sessionId, payload) => {
+            if (closed || connectionId === '' || sessionId !== managed.record.id) return false;
+            emit({ kind: 'channel', frameType: channel.frameType, sessionId, payload, connectionId });
+            return true;
+          },
+          requestSessionApi: async (requestedScope, request) => {
+            const current = sessions.get(requestedScope.sessionId);
+            if (
+              current !== managed ||
+              current.record.cwd !== requestedScope.cwd ||
+              current.record.apiSocketPath === undefined
+            ) {
+              return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
+            }
+            const token = readTokenFile(current.record);
+            const headers = new Headers({ authorization: `Bearer ${token}` });
+            return await proxyToSocket({
+              socketPath: current.record.apiSocketPath,
+              path: sessionApiPath(request),
+              method: request.method,
+              headers,
+              body: request.body ?? null,
+              ...(request.signal === undefined ? {} : { signal: request.signal }),
+            });
+          },
+          onNotice: (message) => options.onNotice?.(message),
+        });
+        managed.channels.push({ channel, frameType: channel.frameType, source });
+        source.sessionAdded?.(scope);
+        const payload = source.payloadFor(scope);
+        if (payload !== undefined)
+          emit({ kind: 'channel', frameType: channel.frameType, sessionId: scope.sessionId, payload });
+      } catch (error) {
+        options.onNotice?.(
+          `web channel '${channel.frameType}' failed for session ${managed.record.id} (${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
+    }
+    pushSummary(managed);
   };
 
   const refreshGit = (managed: ManagedSession): void => {
@@ -579,6 +650,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       restoredJournal: false,
       frameCount: 0,
       commands: Promise.resolve(),
+      channels: [],
+      channelLoadToken: Symbol(record.id),
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
@@ -586,7 +659,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     startAttachment(managed);
     pushSummary(managed);
     refreshGit(managed);
-    for (const channel of startedChannels) channel.source.sessionAdded?.(scopeOf(record));
+    void startSessionChannels(managed);
   };
 
   const reconcile = (records: SessionRecord[]): void => {
@@ -612,6 +685,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     for (const [id, managed] of sessions) {
       if (seen.has(id)) continue;
       managed.attachment?.close();
+      managed.channelLoadToken = Symbol(id);
+      closeSessionChannels(managed);
       sessions.delete(id);
       const ring = managed.ring.snapshot();
       emitTelemetry('web.session.summary', {
@@ -620,7 +695,6 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         'session.state': 'removed',
       });
       emitTelemetry('web.session.lifecycle', { 'session.state': 'removed', 'session.count': sessions.size });
-      for (const channel of startedChannels) channel.source.sessionRemoved?.(id);
       options.onNotice?.(`session ${id} left`);
       emit({ kind: 'removed', sessionId: id });
     }
@@ -682,14 +756,16 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       };
     },
     channelTypes() {
-      return startedChannels.map((channel) => channel.frameType);
+      return [
+        ...new Set([...sessions.values()].flatMap((managed) => managed.channels.map((channel) => channel.frameType))),
+      ];
     },
     channelFrames(sessionId) {
       const managed = sessions.get(sessionId);
       if (!managed) return [];
       const scope = scopeOf(managed.record);
       const frames: ChannelFrame[] = [];
-      for (const channel of startedChannels) {
+      for (const channel of managed.channels) {
         const payload = channel.source.payloadFor(scope);
         if (payload !== undefined) frames.push({ type: channel.frameType, sessionId, payload });
       }
@@ -699,26 +775,40 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const managed = sessions.get(sessionId);
       if (!managed) return undefined;
       const scope = scopeOf(managed.record);
-      for (const channel of startedChannels) {
+      for (const channel of managed.channels) {
         const journal = channel.source.threadJournal?.(scope, threadId);
         if (journal !== undefined) return journal;
       }
       return undefined;
     },
-    channelReceivesWithoutSubscription(frameType) {
-      return startedChannels.some(
-        (candidate) => candidate.frameType === frameType && candidate.channel.receiveWithoutSubscription === true,
+    channelReceivesWithoutSubscription(sessionId, frameType) {
+      return (
+        sessions
+          .get(sessionId)
+          ?.channels.some(
+            (candidate) => candidate.frameType === frameType && candidate.channel.receiveWithoutSubscription === true,
+          ) ?? false
       );
     },
     receiveChannel(sessionId, frameType, payload, connectionId) {
       const managed = sessions.get(sessionId);
       if (managed === undefined || connectionId === '') return;
-      const started = startedChannels.find((candidate) => candidate.frameType === frameType);
+      const started = managed.channels.find((candidate) => candidate.frameType === frameType);
       started?.channel.receive?.(scopeOf(managed.record), payload, { connectionId });
     },
     disconnectChannels(connectionId) {
       if (connectionId === '') return;
-      for (const started of startedChannels) started.channel.disconnected?.({ connectionId });
+      for (const managed of sessions.values()) {
+        for (const started of managed.channels) started.channel.disconnected?.({ connectionId });
+      }
+    },
+    reloadChannels(sessionId) {
+      const managed = sessions.get(sessionId);
+      if (managed === undefined) return;
+      managed.channelLoadToken = Symbol(sessionId);
+      closeSessionChannels(managed);
+      pushSummary(managed);
+      void startSessionChannels(managed);
     },
     command(sessionId, frame) {
       const managed = sessions.get(sessionId);
@@ -827,9 +917,10 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     close() {
       closed = true;
       options.source.close();
-      for (const channel of startedChannels) channel.source.close();
       if (gitTimer) clearInterval(gitTimer);
       for (const managed of sessions.values()) {
+        managed.channelLoadToken = Symbol(managed.record.id);
+        closeSessionChannels(managed);
         managed.attachment?.close();
         emitTelemetry('web.session.summary', {
           frames: managed.frameCount,

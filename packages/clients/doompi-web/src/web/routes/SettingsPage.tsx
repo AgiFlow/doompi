@@ -19,6 +19,7 @@ import {
   settingsSection,
 } from '../lib/settingsSections.ts';
 import { sessionsStore } from '../stores/sessionsStore.ts';
+import { useWebPluginRegistry } from '../stores/useWebPluginRegistry.ts';
 
 /**
  * The settings pages, in the cockpit's frame: the rail stays so a session is
@@ -26,6 +27,7 @@ import { sessionsStore } from '../stores/sessionsStore.ts';
  * An unknown section falls back to the first one.
  */
 export function SettingsPage() {
+  useWebPluginRegistry();
   const { section } = useParams({ strict: false });
   const navigate = useNavigate();
   const activeId = useStore(sessionsStore, (state) => state.activeId);

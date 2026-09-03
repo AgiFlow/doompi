@@ -24,6 +24,8 @@ export interface SyncDrift {
 
 export interface ReadSyncDriftOptions {
   repoRoot: string;
+  /** Launcher-owned Doom entry used to build this repository's generated bootstrap. */
+  expectedBootstrapEntry?: string;
   homeDirectory?: string;
 }
 
@@ -78,13 +80,20 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   // The same question the `--check` path asks, so the cockpit and the CLI
   // cannot disagree about whether one repository is synced.
   try {
-    if (!readBootstrapStatus(options.repoRoot, undefined, homeDirectory).fresh) reasons.push('runtime-stale');
+    if (!readBootstrapStatus(options.repoRoot, options.expectedBootstrapEntry, homeDirectory).fresh) {
+      reasons.push('runtime-stale');
+    }
   } catch {
     // An unreadable bootstrap record is exactly as unusable as a stale one, and
     // syncing is what reports the underlying cause.
     reasons.push('runtime-stale');
   }
-  if (registration.webDirectory !== null && !fs.existsSync(path.join(registration.webDirectory, 'index.html'))) {
+  if (
+    registration.webDirectory !== null &&
+    (!fs.existsSync(path.join(registration.webDirectory, 'index.html')) ||
+      !fs.existsSync(path.join(path.dirname(registration.webDirectory), 'plugins', 'composition.js')) ||
+      !fs.existsSync(path.join(path.dirname(registration.webDirectory), 'plugins', 'manifest.json')))
+  ) {
     reasons.push('cockpit-bundle-missing');
   }
   if (!fs.existsSync(registration.apiDirectory)) reasons.push('package-apis-missing');

@@ -26,6 +26,7 @@ const DOOMPI_RUNTIME_PACKAGES = new Set([
 ]);
 const DOOMPI_PACKAGE_DIRECTORIES = ['core', 'default', 'minor'] as const;
 const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;
+const EXTERNAL_RUNTIME_PACKAGES = new Set(['@earendil-works/pi-coding-agent']);
 
 const WEB_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi-extension-contracts',
@@ -52,13 +53,14 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
     apply: 'build',
     enforce: 'pre',
     resolveId(source) {
+      if (isExternalRuntimePackage(source)) return { id: source, external: true };
       const packageName = dependencyPackageName(source);
       if (packageName === undefined || !packageName.includes(target)) return null;
       runtimePackages.add(packageName);
       return { id: source, external: true };
     },
     transform(source, id) {
-      if (id.includes('/doompi/src/adapters/modules/moduleResolution.')) {
+      if (id.includes('/doompi/') && id.includes('/src/adapters/modules/moduleResolution.')) {
         const original = 'path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))))';
         if (source.includes(original)) {
           return source.replace(original, `(process.env.DOOMPI_PACKAGE_ROOT || ${original})`);
@@ -207,6 +209,11 @@ function dependencyPackageName(source: string): string | undefined {
   return name === undefined || name === '' || path.isAbsolute(source) ? undefined : name;
 }
 
+/** Keeps identity-sensitive runtime packages outside the generated bundle. */
+export function isExternalRuntimePackage(source: string): boolean {
+  const packageName = dependencyPackageName(source);
+  return packageName !== undefined && EXTERNAL_RUNTIME_PACKAGES.has(packageName);
+}
 function copyRuntimePackages(
   workspaceRoot: string,
   destinationRoot: string,

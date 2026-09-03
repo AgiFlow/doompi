@@ -5,7 +5,7 @@ import { DOOM_NOTIFICATION_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contra
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
-import type { SessionSummary } from '../../src/types/hub.ts';
+import { HUB_PROTOCOL_VERSION, type SessionSummary } from '../../src/types/hub.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
 vi.mock('../../src/adapters/syncGuard.ts', () => ({
@@ -108,7 +108,7 @@ describe('the hub bridge', () => {
     const { server } = await bridge();
     const response = await fetch(`${server.url}/api/health`);
     expect(response.ok).toBe(true);
-    expect(await response.json()).toMatchObject({ ok: true, role: 'hub', protocol: 1, sessions: 1 });
+    expect(await response.json()).toMatchObject({ ok: true, role: 'hub', protocol: HUB_PROTOCOL_VERSION, sessions: 1 });
   });
 
   it('validates a create request before it reaches the spawner', async () => {
@@ -203,7 +203,7 @@ describe('the hub bridge', () => {
     await waitFor(() => frames.length >= 2, 'the hello and snapshot');
     // Zero channels: every data source is a plugin, and plugins arrive via a
     // synced bundle's server registry; this server runs on a bare assets dir.
-    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: 1, channels: [] });
+    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: HUB_PROTOCOL_VERSION, channels: [] });
     expect(frames[1].type).toBe('sessions_snapshot');
 
     await session.waitForAttach();

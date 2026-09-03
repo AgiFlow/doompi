@@ -497,7 +497,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
         this.capabilities.captureActivity = false;
         this.capabilities.autonomousOrchestration = false;
       });
-      await detector.initialize(new URL('../models/silero_vad_v6.2.1.onnx', import.meta.url).href);
+      await detector.initialize(new URL('../../models/silero_vad_v6.2.1.onnx', import.meta.url).href);
       this.speechDetector = detector;
       this.capabilities.captureActivity = true;
       this.capabilities.autonomousOrchestration = this.rebindProtocolSupported;

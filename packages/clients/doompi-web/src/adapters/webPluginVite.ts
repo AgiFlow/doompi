@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { readSyncRegistration } from '@agimon-ai/doompi/services';
 import type { Alias, Plugin } from 'vite';
@@ -6,6 +7,50 @@ import { devPluginRoots, PLUGIN_ROOTS_ENV, PLUGIN_ROOTS_FILE } from '../services
 import type { SyncGeneratedModules } from './webPluginGenerate.ts';
 
 const DOOMPI_ROOT_ENV = 'DOOMPI_ROOT';
+
+export const WEB_PLUGIN_RUNTIME_SPECIFIERS = [
+  'react',
+  'react/jsx-runtime',
+  'react/jsx-dev-runtime',
+  'react-dom',
+  'react-dom/client',
+  '@tanstack/store',
+  '@tanstack/react-store',
+  '@agimon-ai/doompi-web-contracts',
+  '@agimon-ai/doompi-web-components',
+  '@agimon-ai/doompi-web-security/browser',
+  '@codemirror/state',
+  '@codemirror/view',
+] as const;
+
+const WEB_PLUGIN_RUNTIME_PROPERTIES: Record<(typeof WEB_PLUGIN_RUNTIME_SPECIFIERS)[number], string> = {
+  react: 'react',
+  'react/jsx-runtime': 'reactJsxRuntime',
+  'react/jsx-dev-runtime': 'reactJsxDevRuntime',
+  'react-dom': 'reactDom',
+  'react-dom/client': 'reactDomClient',
+  '@tanstack/store': 'tanstackStore',
+  '@tanstack/react-store': 'tanstackReactStore',
+  '@agimon-ai/doompi-web-contracts': 'webContracts',
+  '@agimon-ai/doompi-web-components': 'webComponents',
+  '@agimon-ai/doompi-web-security/browser': 'webSecurityBrowser',
+  '@codemirror/state': 'codemirrorState',
+  '@codemirror/view': 'codemirrorView',
+};
+
+/** Rollup expression for a shared module supplied by the session shell. */
+export function webPluginRuntimeGlobal(specifier: (typeof WEB_PLUGIN_RUNTIME_SPECIFIERS)[number]): string {
+  return `globalThis.DoomPiWebPluginRuntime.${WEB_PLUGIN_RUNTIME_PROPERTIES[specifier]}`;
+}
+
+/** Resolves generated JSX imports from the host instead of a plugin's optional React peer tree. */
+export function webPluginRuntimeAliases(clientRoot: string): Alias[] {
+  const runtimeRequire = createRequire(path.join(clientRoot, 'index.html'));
+  return WEB_PLUGIN_RUNTIME_SPECIFIERS.filter((specifier) => specifier.startsWith('react/jsx-')).map((specifier) => ({
+    find: new RegExp(`^${specifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'u'),
+    replacement: runtimeRequire.resolve(specifier),
+  }));
+}
 
 /**
  * Swaps the committed builtin registry modules for generated ones. A

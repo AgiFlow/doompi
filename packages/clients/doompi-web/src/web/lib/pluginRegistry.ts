@@ -129,8 +129,24 @@ function emptyState(): RegistryState {
   };
 }
 
-let state = emptyState();
-let installed = false;
+let defaultState = emptyState();
+let installingState = defaultState;
+let defaultInstalled = false;
+const sessionStates = new Map<string, RegistryState>();
+const pendingSessionFrames = new Map<string, Map<string, Record<string, unknown>>>();
+const MAX_PENDING_CHANNEL_TYPES = 64;
+let activeSessionId: string | null = null;
+let registryRevision = 0;
+const registryListeners = new Set<() => void>();
+
+function activeState(): RegistryState {
+  return (activeSessionId === null ? undefined : sessionStates.get(activeSessionId)) ?? defaultState;
+}
+
+function emitRegistryChange(): void {
+  registryRevision += 1;
+  for (const listener of registryListeners) listener();
+}
 
 /** The TUI's leader alphabet: one lowercase letter or digit per segment. */
 const LEADER_KEY = /^[a-z0-9]$/;
@@ -196,7 +212,7 @@ function claim(owners: Map<string, string>, thing: SharedNamespace, id: string, 
     throw new Error(`Web plugin '${pluginId}' declares ${thing.replace('-', ' ')} '${id}' twice.`);
   }
   if (holder !== undefined) {
-    state.diagnostics.push({
+    installingState.diagnostics.push({
       pluginId,
       kind: `duplicate-${thing}`,
       message: `Web plugin '${pluginId}' ${thing.replace('-', ' ')} '${id}' is already provided by '${holder}'; keeping the first.`,
@@ -241,9 +257,9 @@ const byDisplayOrder = (left: { order?: number; name: string }, right: { order?:
   (left.order ?? DEFAULT_FILL_ORDER) - (right.order ?? DEFAULT_FILL_ORDER) || left.name.localeCompare(right.name);
 
 function placeFill(pluginId: string, fill: SlotFillContribution): void {
-  const declaration = state.slots.get(fill.slot);
+  const declaration = installingState.slots.get(fill.slot);
   if (declaration === undefined) {
-    state.diagnostics.push({
+    installingState.diagnostics.push({
       pluginId,
       kind: 'orphan-fill',
       message: `Web plugin '${pluginId}' fills slot '${fill.slot}', which no installed plugin declares; nothing is placed.`,
@@ -254,7 +270,7 @@ function placeFill(pluginId: string, fill: SlotFillContribution): void {
   if (data !== undefined && declaration.parse !== undefined) {
     const parsed = declaration.parse(data);
     if (parsed === null) {
-      state.diagnostics.push({
+      installingState.diagnostics.push({
         pluginId,
         kind: 'rejected-fill',
         message: `Web plugin '${pluginId}' fill '${fill.id}' into '${fill.slot}' was rejected by the slot's parse gate.`,
@@ -271,8 +287,8 @@ function placeFill(pluginId: string, fill: SlotFillContribution): void {
     ...(data === undefined ? {} : { data }),
     ...(fill.component === undefined ? {} : { component: fill.component }),
   };
-  const list = state.fills.get(fill.slot);
-  if (list === undefined) state.fills.set(fill.slot, [placed]);
+  const list = installingState.fills.get(fill.slot);
+  if (list === undefined) installingState.fills.set(fill.slot, [placed]);
   else list.push(placed);
 }
 
@@ -287,13 +303,13 @@ function resolveLeaderConflicts(bindings: readonly PendingBinding[]): void {
       );
     }
     if (conflict.kind === 'leaf-override') {
-      state.diagnostics.push({
+      installingState.diagnostics.push({
         pluginId: loser,
         kind: 'leader-leaf-override',
         message: `Web plugin '${loser}' Leader Space leaf '${conflict.path}' ('${conflict.loser.id}') is taken over by '${winner}' ('${conflict.winner.id}').`,
       });
     } else {
-      state.diagnostics.push({
+      installingState.diagnostics.push({
         pluginId: loser,
         kind: 'leader-group-label',
         message: `Web plugin '${loser}' words Leader Space group '${conflict.path}' differently from '${winner}', which named it first; keeping the first label.`,
@@ -302,140 +318,202 @@ function resolveLeaderConflicts(bindings: readonly PendingBinding[]): void {
   }
 }
 
-export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void {
-  if (installed) throw new Error('Web plugins are already installed.');
-  const owners: Record<SharedNamespace, Map<string, string>> = {
-    plugin: new Map(),
-    tab: new Map(),
-    channel: new Map(),
-    tool: new Map(),
-    'activity-group': new Map(),
-    'minor-mode': new Map(),
-    'selection-axis': new Map(),
-    'palette-command': new Map(),
-    'settings-section': new Map(),
-  };
-  const pendingFills: PendingFill[] = [];
-  const pendingSections: PendingSection[] = [];
-  const pendingBindings: PendingBinding[] = [];
-  const pendingSlots: SlotDeclaration[] = [];
+function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryState {
+  const previous = installingState;
+  installingState = emptyState();
+  try {
+    const owners: Record<SharedNamespace, Map<string, string>> = {
+      plugin: new Map(),
+      tab: new Map(),
+      channel: new Map(),
+      tool: new Map(),
+      'activity-group': new Map(),
+      'minor-mode': new Map(),
+      'selection-axis': new Map(),
+      'palette-command': new Map(),
+      'settings-section': new Map(),
+    };
+    const pendingFills: PendingFill[] = [];
+    const pendingSections: PendingSection[] = [];
+    const pendingBindings: PendingBinding[] = [];
+    const pendingSlots: SlotDeclaration[] = [];
 
-  // Phase 1: collect, in the generated (registrationOrder, pluginId) order.
-  for (const plugin of plugins) {
-    if (RESERVED_PLUGIN_IDS.has(plugin.id)) {
-      throw new Error(`Web plugin id '${plugin.id}' is reserved for a host slot.`);
+    // Phase 1: collect, in the generated (registrationOrder, pluginId) order.
+    for (const plugin of plugins) {
+      if (RESERVED_PLUGIN_IDS.has(plugin.id)) {
+        throw new Error(`Web plugin id '${plugin.id}' is reserved for a host slot.`);
+      }
+      if (owners.plugin.has(plugin.id)) {
+        installingState.diagnostics.push({
+          pluginId: plugin.id,
+          kind: 'duplicate-plugin',
+          message: `Web plugin id '${plugin.id}' is declared twice; keeping the first definition.`,
+        });
+        continue;
+      }
+      owners.plugin.set(plugin.id, plugin.id);
+      installingState.plugins.push(plugin);
+      for (const tab of plugin.tabs ?? []) {
+        if (claim(owners.tab, 'tab', tab.id, plugin.id)) installingState.tabs.push(tab);
+      }
+      // A panel and a section both become a /settings/:id route, so the two
+      // share one id namespace rather than racing to own the same URL.
+      for (const section of plugin.settingsSections ?? []) {
+        if (claim(owners['settings-section'], 'settings-section', section.id, plugin.id)) {
+          installingState.settingsSections.push(section);
+        }
+      }
+      for (const panel of plugin.settingsPanels ?? []) {
+        if (claim(owners['settings-section'], 'settings-section', panel.id, plugin.id)) {
+          installingState.settingsPanels.push({ pluginId: plugin.id, ...panel });
+        }
+      }
+      for (const channel of plugin.channels ?? []) {
+        if (claim(owners.channel, 'channel', channel.channel, plugin.id))
+          installingState.channels.set(channel.channel, channel);
+      }
+      for (const command of plugin.paletteCommands ?? []) {
+        if (claim(owners['palette-command'], 'palette-command', command.id, plugin.id))
+          installingState.commands.push(command);
+      }
+      for (const binding of plugin.leaderBindings ?? []) {
+        checkLeaderBinding(plugin.id, binding);
+        pendingBindings.push({ pluginId: plugin.id, binding });
+      }
+      for (const axis of plugin.selectionAxes ?? []) {
+        if (claim(owners['selection-axis'], 'selection-axis', axis.name, plugin.id))
+          installingState.selectionAxes.push(axis);
+      }
+      for (const mode of plugin.minorModes ?? []) {
+        if (claim(owners['minor-mode'], 'minor-mode', mode.name, plugin.id)) installingState.minorModes.push(mode);
+      }
+      for (const group of plugin.activityGroups ?? []) {
+        if (claim(owners['activity-group'], 'activity-group', group.name, plugin.id))
+          installingState.activityGroups.push(group);
+      }
+      for (const renderer of plugin.toolRenderers ?? []) {
+        for (const tool of renderer.tools) {
+          if (claim(owners.tool, 'tool', tool, plugin.id)) installingState.toolRenderers.set(tool, renderer);
+        }
+        if (renderer.matches !== undefined) installingState.toolMatchers.push(renderer);
+      }
+      const declared = new Set<string>();
+      for (const declaration of plugin.slots ?? []) {
+        checkSlotDeclaration(plugin.id, declared, declaration);
+        pendingSlots.push(declaration);
+      }
+      const filled = new Set<string>();
+      for (const fill of plugin.fills ?? []) {
+        checkFill(plugin.id, filled, fill);
+        pendingFills.push({ pluginId: plugin.id, fill });
+      }
+      for (const surface of plugin.overlays ?? []) {
+        pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.overlay, surface) });
+      }
+      for (const surface of plugin.railSections ?? []) {
+        pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.rail, surface) });
+      }
+      for (const surface of plugin.selectionBarItems ?? []) {
+        pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.selectionBar, surface) });
+      }
+      for (const surface of plugin.composerActions ?? []) {
+        pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.composerActions, surface) });
+      }
+      for (const section of plugin.activitySections ?? []) pendingSections.push({ pluginId: plugin.id, section });
+      if (plugin.fileLinks !== undefined) installingState.fileLinks.push(plugin.fileLinks);
     }
-    if (owners.plugin.has(plugin.id)) {
-      state.diagnostics.push({
-        pluginId: plugin.id,
-        kind: 'duplicate-plugin',
-        message: `Web plugin id '${plugin.id}' is declared twice; keeping the first definition.`,
+
+    // Phase 2: resolve by name, now that every declaration is known.
+    for (const slot of Object.values(HOST_SLOTS)) installingState.slots.set(slot, { slot });
+    for (const group of installingState.activityGroups) {
+      installingState.slots.set(activityGroupSlot(group.name), { slot: activityGroupSlot(group.name) });
+    }
+    for (const declaration of pendingSlots) installingState.slots.set(declaration.slot, declaration);
+    for (const { pluginId, section } of pendingSections) {
+      const keyed = activityGroupSlot(section.id);
+      pendingFills.push({
+        pluginId,
+        fill: surfaceFill(installingState.slots.has(keyed) ? keyed : HOST_SLOTS.activity, section),
       });
-      continue;
     }
-    owners.plugin.set(plugin.id, plugin.id);
-    state.plugins.push(plugin);
-    for (const tab of plugin.tabs ?? []) {
-      if (claim(owners.tab, 'tab', tab.id, plugin.id)) state.tabs.push(tab);
-    }
-    // A panel and a section both become a /settings/:id route, so the two
-    // share one id namespace rather than racing to own the same URL.
-    for (const section of plugin.settingsSections ?? []) {
-      if (claim(owners['settings-section'], 'settings-section', section.id, plugin.id)) {
-        state.settingsSections.push(section);
-      }
-    }
-    for (const panel of plugin.settingsPanels ?? []) {
-      if (claim(owners['settings-section'], 'settings-section', panel.id, plugin.id)) {
-        state.settingsPanels.push({ pluginId: plugin.id, ...panel });
-      }
-    }
-    for (const channel of plugin.channels ?? []) {
-      if (claim(owners.channel, 'channel', channel.channel, plugin.id)) state.channels.set(channel.channel, channel);
-    }
-    for (const command of plugin.paletteCommands ?? []) {
-      if (claim(owners['palette-command'], 'palette-command', command.id, plugin.id)) state.commands.push(command);
-    }
-    for (const binding of plugin.leaderBindings ?? []) {
-      checkLeaderBinding(plugin.id, binding);
-      pendingBindings.push({ pluginId: plugin.id, binding });
-    }
-    for (const axis of plugin.selectionAxes ?? []) {
-      if (claim(owners['selection-axis'], 'selection-axis', axis.name, plugin.id)) state.selectionAxes.push(axis);
-    }
-    for (const mode of plugin.minorModes ?? []) {
-      if (claim(owners['minor-mode'], 'minor-mode', mode.name, plugin.id)) state.minorModes.push(mode);
-    }
-    for (const group of plugin.activityGroups ?? []) {
-      if (claim(owners['activity-group'], 'activity-group', group.name, plugin.id)) state.activityGroups.push(group);
-    }
-    for (const renderer of plugin.toolRenderers ?? []) {
-      for (const tool of renderer.tools) {
-        if (claim(owners.tool, 'tool', tool, plugin.id)) state.toolRenderers.set(tool, renderer);
-      }
-      if (renderer.matches !== undefined) state.toolMatchers.push(renderer);
-    }
-    const declared = new Set<string>();
-    for (const declaration of plugin.slots ?? []) {
-      checkSlotDeclaration(plugin.id, declared, declaration);
-      pendingSlots.push(declaration);
-    }
-    const filled = new Set<string>();
-    for (const fill of plugin.fills ?? []) {
-      checkFill(plugin.id, filled, fill);
-      pendingFills.push({ pluginId: plugin.id, fill });
-    }
-    for (const surface of plugin.overlays ?? []) {
-      pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.overlay, surface) });
-    }
-    for (const surface of plugin.railSections ?? []) {
-      pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.rail, surface) });
-    }
-    for (const surface of plugin.selectionBarItems ?? []) {
-      pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.selectionBar, surface) });
-    }
-    for (const surface of plugin.composerActions ?? []) {
-      pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.composerActions, surface) });
-    }
-    for (const section of plugin.activitySections ?? []) pendingSections.push({ pluginId: plugin.id, section });
-    if (plugin.fileLinks !== undefined) state.fileLinks.push(plugin.fileLinks);
-  }
+    for (const { pluginId, fill } of pendingFills) placeFill(pluginId, fill);
+    for (const list of installingState.fills.values()) list.sort(byFillOrder);
 
-  // Phase 2: resolve by name, now that every declaration is known.
-  for (const slot of Object.values(HOST_SLOTS)) state.slots.set(slot, { slot });
-  for (const group of state.activityGroups) {
-    state.slots.set(activityGroupSlot(group.name), { slot: activityGroupSlot(group.name) });
+    resolveLeaderConflicts(pendingBindings);
+    installingState.leaderBindings.push(...pendingBindings.map((entry) => entry.binding));
+    installingState.selectionAxes.sort(byDisplayOrder);
+    installingState.minorModes.sort(byDisplayOrder);
+    installingState.activityGroups.sort(byDisplayOrder);
+    return installingState;
+  } finally {
+    installingState = previous;
   }
-  for (const declaration of pendingSlots) state.slots.set(declaration.slot, declaration);
-  for (const { pluginId, section } of pendingSections) {
-    const keyed = activityGroupSlot(section.id);
-    pendingFills.push({ pluginId, fill: surfaceFill(state.slots.has(keyed) ? keyed : HOST_SLOTS.activity, section) });
-  }
-  for (const { pluginId, fill } of pendingFills) placeFill(pluginId, fill);
-  for (const list of state.fills.values()) list.sort(byFillOrder);
+}
 
-  resolveLeaderConflicts(pendingBindings);
-  state.leaderBindings.push(...pendingBindings.map((entry) => entry.binding));
-  state.selectionAxes.sort(byDisplayOrder);
-  state.minorModes.sort(byDisplayOrder);
-  state.activityGroups.sort(byDisplayOrder);
-  installed = true;
+export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void {
+  if (defaultInstalled) throw new Error('Web plugins are already installed.');
+  defaultState = buildWebPluginState(plugins);
+  installingState = defaultState;
+  defaultInstalled = true;
 }
 
 /** Unit-test escape hatch; production installs exactly once. */
 export function resetWebPlugins(): void {
-  state = emptyState();
-  installed = false;
+  defaultState = emptyState();
+  installingState = defaultState;
+  defaultInstalled = false;
+  sessionStates.clear();
+  pendingSessionFrames.clear();
+  activeSessionId = null;
+  emitRegistryChange();
+}
+
+/** Installs one session's independently synchronized plugin definitions. */
+export function installSessionWebPlugins(sessionId: string, plugins: readonly WebPluginDefinition[]): void {
+  const state = buildWebPluginState(plugins);
+  sessionStates.set(sessionId, state);
+  const pending = pendingSessionFrames.get(sessionId);
+  if (pending !== undefined) {
+    pendingSessionFrames.delete(sessionId);
+    for (const frame of pending.values()) dispatchFrameToState(state, frame);
+  }
+  if (sessionId === activeSessionId) emitRegistryChange();
+}
+
+/** Selects which session composition the no-argument contribution readers expose. */
+export function activateWebPluginSession(sessionId: string | null): void {
+  if (activeSessionId === sessionId) return;
+  activeSessionId = sessionId;
+  emitRegistryChange();
+}
+
+/** Removes one session registry after its plugin-owned stores have been dropped. */
+export function removeSessionWebPlugins(sessionId: string): void {
+  const sessionState = sessionStates.get(sessionId);
+  pendingSessionFrames.delete(sessionId);
+  if (sessionState === undefined) return;
+  for (const channel of sessionState.channels.values()) channel.drop(sessionId);
+  sessionStates.delete(sessionId);
+  if (sessionId === activeSessionId) emitRegistryChange();
+}
+
+export function subscribeWebPluginRegistry(listener: () => void): () => void {
+  registryListeners.add(listener);
+  return () => registryListeners.delete(listener);
+}
+
+export function webPluginRegistryRevision(): number {
+  return registryRevision;
 }
 
 /** What the install had to resolve between plugins; empty for a composition whose plugins never collide. */
 export function webPluginDiagnostics(): readonly InstallDiagnostic[] {
-  return state.diagnostics;
+  return activeState().diagnostics;
 }
 
 /** Every installed plugin definition, in install order; the settings page lists them. */
 export function installedWebPlugins(): readonly WebPluginDefinition[] {
-  return state.plugins;
+  return activeState().plugins;
 }
 
 export interface InstalledRepositorySettingsPanel extends RepositorySettingsPanelContribution {
@@ -444,8 +522,8 @@ export interface InstalledRepositorySettingsPanel extends RepositorySettingsPane
 
 /** Package panels placed under the host's repository controls, in stable display order. */
 export function pluginRepositorySettingsPanels(): readonly InstalledRepositorySettingsPanel[] {
-  return state.plugins
-    .flatMap((plugin) =>
+  return activeState()
+    .plugins.flatMap((plugin) =>
       plugin.repositorySettingsPanel === undefined ? [] : [{ pluginId: plugin.id, ...plugin.repositorySettingsPanel }],
     )
     .sort(
@@ -456,7 +534,7 @@ export function pluginRepositorySettingsPanels(): readonly InstalledRepositorySe
 }
 
 export function webTabs(): readonly TabContribution[] {
-  return state.tabs;
+  return activeState().tabs;
 }
 
 /**
@@ -464,7 +542,7 @@ export function webTabs(): readonly TabContribution[] {
  * at the reader so the menu and the page agree without either sorting twice.
  */
 export function pluginSettingsSections(): readonly SettingsSectionContribution[] {
-  return state.settingsSections;
+  return activeState().settingsSections;
 }
 
 export interface InstalledSettingsPanel extends SettingsPanelContribution {
@@ -473,36 +551,36 @@ export interface InstalledSettingsPanel extends SettingsPanelContribution {
 
 /** The settings pages plugins draw themselves, in install order; the reader sorts them with the sections. */
 export function pluginSettingsPanels(): readonly InstalledSettingsPanel[] {
-  return state.settingsPanels;
+  return activeState().settingsPanels;
 }
 
 /** The fills placed into one slot, in slot order; empty for a slot nobody declared. */
 export function slotFills(slot: string): readonly ResolvedFill[] {
-  return state.fills.get(slot) ?? [];
+  return activeState().fills.get(slot) ?? [];
 }
 
 export function paletteCommands(): readonly PaletteCommandContribution[] {
-  return state.commands;
+  return activeState().commands;
 }
 
 /** Leader Space bindings from every installed plugin, in install order: a later binding on a bound leaf wins. */
 export function pluginLeaderBindings(): readonly LeaderBindingContribution[] {
-  return state.leaderBindings;
+  return activeState().leaderBindings;
 }
 
 /** Selection-axis declarations from every installed plugin, in display order. */
 export function pluginSelectionAxes(): readonly SelectionAxisContribution[] {
-  return state.selectionAxes;
+  return activeState().selectionAxes;
 }
 
 /** Minor-mode declarations from every installed plugin, in display order. */
 export function pluginMinorModes(): readonly MinorModeContribution[] {
-  return state.minorModes;
+  return activeState().minorModes;
 }
 
 /** Activity-dock group declarations from every installed plugin, in display order. */
 export function pluginActivityGroups(): readonly ActivityGroupContribution[] {
-  return state.activityGroups;
+  return activeState().activityGroups;
 }
 
 /**
@@ -514,7 +592,7 @@ export function pluginActivityGroups(): readonly ActivityGroupContribution[] {
  * file.
  */
 export function pluginFileLinks(): readonly FileLinkSource[] {
-  return state.fileLinks;
+  return activeState().fileLinks;
 }
 
 /**
@@ -528,7 +606,8 @@ export function pluginToolRenderer(
   statuses: Readonly<Record<string, string>> = {},
 ): ToolRendererContribution | undefined {
   return (
-    state.toolRenderers.get(toolName) ?? state.toolMatchers.find((renderer) => renderer.matches?.(toolName, statuses))
+    activeState().toolRenderers.get(toolName) ??
+    activeState().toolMatchers.find((renderer) => renderer.matches?.(toolName, statuses))
   );
 }
 
@@ -537,7 +616,7 @@ export function pluginToolRenderer(
  * channel claims it, so the demux can fall through silently the way unknown
  * frames always have.
  */
-export function dispatchChannelFrame(frame: Record<string, unknown>): boolean {
+function dispatchFrameToState(state: RegistryState, frame: Record<string, unknown>): boolean {
   if (typeof frame.type !== 'string' || typeof frame.sessionId !== 'string') return false;
   const channel = state.channels.get(frame.type);
   if (channel === undefined) return false;
@@ -546,19 +625,46 @@ export function dispatchChannelFrame(frame: Record<string, unknown>): boolean {
   return true;
 }
 
+export function dispatchChannelFrame(frame: Record<string, unknown>): boolean {
+  if (typeof frame.type !== 'string' || typeof frame.sessionId !== 'string') return false;
+  const state = sessionStates.get(frame.sessionId);
+  if (state !== undefined) return dispatchFrameToState(state, frame);
+  if (activeSessionId === null) return dispatchFrameToState(defaultState, frame);
+  const pending = pendingSessionFrames.get(frame.sessionId) ?? new Map<string, Record<string, unknown>>();
+  if (!pending.has(frame.type) && pending.size >= MAX_PENDING_CHANNEL_TYPES) {
+    const oldest = pending.keys().next().value as string | undefined;
+    if (oldest !== undefined) pending.delete(oldest);
+  }
+  pending.set(frame.type, frame);
+  pendingSessionFrames.set(frame.sessionId, pending);
+  return false;
+}
+
 /** Session teardown: every channel forgets the session's data. */
 export function dropPluginSessionData(sessionId: string): void {
-  for (const channel of state.channels.values()) channel.drop(sessionId);
+  pendingSessionFrames.delete(sessionId);
+  const state = sessionStates.get(sessionId) ?? (activeSessionId === null ? defaultState : undefined);
+  for (const channel of state?.channels.values() ?? []) channel.drop(sessionId);
 }
 
 /** Starts every plugin runtime in install order; the disposer runs in reverse. */
-export function startWebPlugins(runtime: WebPluginRuntime): () => void {
+export function startPluginDefinitions(plugins: readonly WebPluginDefinition[], runtime: WebPluginRuntime): () => void {
   const disposers: Array<() => void> = [];
-  for (const plugin of state.plugins) {
-    const dispose = plugin.start?.(runtime);
-    if (dispose) disposers.push(dispose);
-  }
-  return () => {
+  const disposeStarted = (): void => {
     for (const dispose of disposers.reverse()) dispose();
   };
+  try {
+    for (const plugin of plugins) {
+      const dispose = plugin.start?.(runtime);
+      if (dispose) disposers.push(dispose);
+    }
+  } catch (error) {
+    disposeStarted();
+    throw error;
+  }
+  return disposeStarted;
+}
+
+export function startWebPlugins(runtime: WebPluginRuntime): () => void {
+  return startPluginDefinitions(activeState().plugins, runtime);
 }

@@ -1,9 +1,17 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '../support/cockpit.ts';
 
 test.use({ assets: 'synced' });
+
+const writtenTimelines = new Set<string>();
+
+test.afterEach(() => {
+  for (const timelinePath of writtenTimelines) fs.rmSync(timelinePath, { force: true });
+  writtenTimelines.clear();
+});
 
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
@@ -38,10 +46,21 @@ function writeChangedFiles(registryDir: string, agentDir: string): void {
   const hiddenPath = path.join(record.cwd, 'src/HiddenTarget.ts');
   events.push({ version: 2, path: hiddenPath, tool: 'write', at: 1, origin: 'scan', verified: true });
 
-  const timelineDir = path.join(agentDir, 'doom-file-edit');
+  let timelineDir = path.join(agentDir, 'doom-file-edit');
+  try {
+    const gitCommonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd: record.cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (gitCommonDir !== '') timelineDir = path.join(gitCommonDir, 'doom-file-edit');
+  } catch {
+    // A non-git fixture uses the same agent-directory fallback as FileEditPaths.
+  }
   fs.mkdirSync(timelineDir, { recursive: true });
   const timelinePath = path.join(timelineDir, `${hash(fs.realpathSync(record.cwd))}-${hash('s1')}.jsonl`);
   fs.writeFileSync(timelinePath, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
+  writtenTimelines.add(timelinePath);
 }
 
 test('files browser searches and opens the complete changed-file list', async ({ page, cockpit }) => {
