@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-file-edit",
-  "version": "0.0.1-alpha.52",
+  "version": "0.0.1-alpha.53",
   "description": "Pi extension for session-scoped file-change timelines and external editor workflows.",
   "keywords": [
     "ai",

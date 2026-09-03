@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-mcp",
-  "version": "0.0.1-alpha.52",
+  "version": "0.0.1-alpha.53",
   "description": "Domain-aware MCP server selection and access boundaries for Pi sessions composed with DoomPi.",
   "keywords": [
     "ai",
