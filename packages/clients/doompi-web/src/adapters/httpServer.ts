@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
@@ -12,12 +13,11 @@ import { readSyncState, type SyncState } from '@agimon-ai/doompi/services/syncSt
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
 import { createPiHubService } from './piHubService.ts';
-import { createSyncGuard, type SyncGuard } from './syncGuard.ts';
+import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
 import { type Context, Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { bodyLimit } from 'hono/body-limit';
-import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApi,
@@ -26,7 +26,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
-import { findRepositoryRoot } from '@agimon-ai/doompi/utils/repository';
+import { findRepositoryRoot, resolveDoomConfigurationRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
@@ -37,7 +37,6 @@ import {
   DIRECTORIES_API_ROUTE,
   HISTORY_REQUEST_TYPE,
   HUB_PROTOCOL_VERSION,
-  HUB_RESYNCED_TYPE,
   HUB_ROLE,
   SESSIONS_API_ROUTE,
   SESSIONS_SNAPSHOT_TYPE,
@@ -58,7 +57,7 @@ import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
 import { readRegistryRecords, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
-import { createSessionHub, type SessionHub } from './sessionHub.ts';
+import { createSessionHub, type SessionHub, type SessionHubOptions } from './sessionHub.ts';
 import { allowedOriginsFromEnv } from '../services/remoteGuardPolicy.ts';
 import { describeStranded, planSessionMigration } from '../services/sessionMigration.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
@@ -66,7 +65,7 @@ import { registerSettingsRoutes } from './settingsRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
 import { createRemoteGuard } from './remoteGuard.ts';
 import { createRemoteAccess } from './remoteAccess.ts';
-import { createBundlePublication } from './bundlePublication.ts';
+import { createBundlePublication, createPluginBundlePublication } from './bundlePublication.ts';
 import { createLiveWebPush, type LiveWebPush } from './webPush.ts';
 import { createRemoteAccessStore } from './remoteAccessStore.ts';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
@@ -100,7 +99,7 @@ import {
   shutdownWebTelemetry,
   WEB_TELEMETRY_ROUTE,
 } from './webTelemetry.ts';
-import { resolveWebComposition } from './webComposition.ts';
+import { resolveSessionWebArtifacts } from './sessionWebComposition.ts';
 
 // Pi's protocol rides its own socket so the DoomPi channel keeps the
 // vocabulary the protocol has no shape for: dialogs, minor modes, selection.
@@ -114,6 +113,8 @@ const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
 /** Comma-separated origins the operator allows past the guard, for dev setups this package cannot guess. */
 const ALLOW_ORIGIN_ENV = 'DOOMPI_WEB_ALLOW_ORIGIN';
 const RAW_BUNDLE_PREFIX = '/bundle-assets/';
+const PLUGIN_BUNDLE_PREFIX = '/api/web-plugins/';
+const VERIFIED_PLUGIN_PREFIX = '/verified-plugins/';
 const PWA_ASSET_PREFIX = '/pwa/';
 const SEALED_HTTP_VERSION = 1;
 /** Upper bound for any body accepted from the tunnel before route-specific limits. */
@@ -312,7 +313,7 @@ function threadKey(sessionId: string, threadId: string): string {
 function buildHub(
   options: WebServerOptions,
   notice: (message: string) => void,
-  channels: readonly WebHubChannel[],
+  plugins: Pick<SessionHubOptions, 'loadChannels' | 'webComposition'>,
   telemetry: DoomTelemetry,
 ): SessionHub {
   return createSessionHub({
@@ -323,7 +324,7 @@ function buildHub(
       onNotice: notice,
     }),
     readGit: readGitStatus,
-    channels,
+    ...plugins,
     telemetry,
     onNotice: notice,
   });
@@ -486,60 +487,27 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       return undefined;
     }
   };
-  const compositionRoot = (directory: string): string | undefined => {
-    const repository = repositoryRoot(directory);
-    if (repository !== undefined) return repository;
-    const globalRoot = globalDoomConfigDirectory();
+  const compositionRoot = (directory: string): string => {
+    const home = os.homedir();
+    const root = resolveDoomConfigurationRoot(directory, home);
+    if (root === globalDoomConfigDirectory(home)) return root;
     try {
-      return readSyncRegistration(globalRoot)?.root;
-    } catch (error) {
-      notice(`global cockpit composition is unreadable (${describeError(error)})`);
-      return undefined;
+      return fs.realpathSync(root);
+    } catch {
+      return path.resolve(root);
     }
   };
   const pinnedRoot = options.compositionDir === undefined ? undefined : repositoryRoot(options.compositionDir);
   if (options.compositionDir !== undefined && pinnedRoot === undefined) {
     throw new Error(`Cockpit composition directory is not inside a repository: ${options.compositionDir}`);
   }
-  const initialRecords = readRegistryRecords(options.registryDir, notice);
-  const liveRoots = initialRecords
-    .map((record) => compositionRoot(record.cwd))
-    .filter((root): root is string => root !== undefined);
-  const compositionRoots = [...new Set(pinnedRoot === undefined ? liveRoots : [pinnedRoot])].sort((left, right) =>
-    left.localeCompare(right),
-  );
-  const syncGuards = new Map<string, SyncGuard>();
-  for (const root of compositionRoots) {
-    syncGuards.set(root, createSyncGuard({ repoRoot: root, onNotice: notice }));
-  }
-  await Promise.all([...syncGuards.values()].map(async (guard) => await guard.ensureSynced()));
-  const resolveComposition = async () =>
-    await resolveWebComposition({
-      repositoryRoots: compositionRoots,
-      stateDirectory: store.directory,
-      onNotice: notice,
-    });
-  // A repository whose web plugins cannot be bundled must not stop the hub
-  // from binding. Serving the packaged cockpit loses the plugins, which the
-  // notice says out loud, but a reachable hub can still be used to fix them;
-  // a hub that refused to start could not.
-  let startupComposition: Awaited<ReturnType<typeof resolveComposition>>;
-  try {
-    startupComposition = await resolveComposition();
-  } catch (error) {
-    notice(`the cockpit composition is unavailable (${describeError(error)}); serving the packaged bundle`);
-    startupComposition = undefined;
-  }
-  let served = {
-    assetsDir: resolveAssetsDir(options.assetsDir, startupComposition, notice),
-    apiDirectory: startupComposition?.apiDirectory,
-  };
-  const ensureSessionSynced = async (directory: string): Promise<void> => {
-    const root = compositionRoot(directory);
-    if (root === undefined) return;
-    const existing = syncGuards.get(root);
-    if (existing !== undefined) {
-      await existing.ensureSynced();
+  const cockpitRoot = globalDoomConfigDirectory(os.homedir());
+  const cockpitSyncGuard = createSyncGuard({ repoRoot: cockpitRoot, onNotice: notice });
+  await cockpitSyncGuard.ensureSynced();
+
+  const ensureRootSynced = async (root: string): Promise<void> => {
+    if (root === cockpitRoot) {
+      await cockpitSyncGuard.ensureSynced();
       return;
     }
     const guard = createSyncGuard({ repoRoot: root, onNotice: notice });
@@ -549,7 +517,55 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       guard.close();
     }
   };
-  const hub = buildHub(options, notice, await loadHubChannels(served.assetsDir, notice), telemetry);
+  const ensureSessionSynced = async (directory: string): Promise<void> =>
+    await ensureRootSynced(compositionRoot(directory));
+  const initialRecords = readRegistryRecords(options.registryDir, notice);
+  const initialRoots = [
+    ...initialRecords.map((record) => compositionRoot(record.cwd)),
+    ...(pinnedRoot === undefined ? [] : [compositionRoot(pinnedRoot)]),
+  ];
+  await Promise.all([...new Set(initialRoots)].map(async (root) => await ensureRootSynced(root)));
+
+  // The shell is package-owned and stable. Synchronized roots contribute only
+  // immutable session plugin compositions and session-local hub channels.
+  const served = {
+    assetsDir: resolveAssetsDir(options.assetsDir, undefined, notice),
+    apiDirectory: undefined,
+  };
+  const pluginPublication = createPluginBundlePublication(store.directory, notice);
+  const hub = buildHub(
+    options,
+    notice,
+    {
+      loadChannels: async (record) => {
+        const root = compositionRoot(record.cwd);
+        await ensureRootSynced(root);
+        const registration = readSyncRegistration(root);
+        return registration?.webDirectory === null || registration?.webDirectory === undefined
+          ? []
+          : await loadHubChannels(registration.webDirectory, notice);
+      },
+      webComposition: (record, channels) => {
+        const artifacts = resolveSessionWebArtifacts(compositionRoot(record.cwd));
+        if (artifacts === undefined) return undefined;
+        const published = pluginPublication.publish(artifacts.id, artifacts.pluginsDir);
+        if (published === undefined) return undefined;
+        const revision = published.signed.manifest.revision;
+        const route = `${PLUGIN_BUNDLE_PREFIX}${artifacts.id}/${String(revision)}`;
+        return {
+          id: artifacts.id,
+          revision,
+          manifestUrl: `${route}/manifest`,
+          rawAssetBaseUrl: `${route}/assets`,
+          verifiedAssetBaseUrl: `${VERIFIED_PLUGIN_PREFIX}${artifacts.id}/${String(revision)}`,
+          entryPath: artifacts.entryPath,
+          stylePaths: artifacts.stylePaths,
+          channels: [...channels],
+        };
+      },
+    },
+    telemetry,
+  );
   // Threads are journals the data channels can name (a subagent run's own
   // session file); the hub tails one only while a page follows it.
   const threads = createThreadJournals({
@@ -951,6 +967,18 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     if (!isRecord(body) || typeof body.cwd !== 'string' || body.cwd === '') {
       return context.json({ error: 'A cwd string is required.' }, 400);
     }
+    let stats: fs.Stats;
+    try {
+      stats = fs.statSync(body.cwd);
+    } catch {
+      return context.json({ error: `No such directory: ${body.cwd}` }, 400);
+    }
+    if (!path.isAbsolute(body.cwd) || !stats.isDirectory()) {
+      return context.json(
+        { error: `The working directory must be an absolute path to a directory, received "${body.cwd}".` },
+        400,
+      );
+    }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
     await ensureSessionSynced(body.cwd);
     const outcome = await hub.create({ cwd: body.cwd, name, trace: readTraceContext(context.req.raw.headers) });
@@ -1190,7 +1218,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           if (
             typeof parsed.type === 'string' &&
             hub.channelTypes().includes(parsed.type) &&
-            (subscriptions.has(sessionId) || hub.channelReceivesWithoutSubscription(parsed.type))
+            (subscriptions.has(sessionId) || hub.channelReceivesWithoutSubscription(sessionId, parsed.type))
           ) {
             hub.receiveChannel(sessionId, parsed.type, parsed.payload, connectionId);
             return;
@@ -1359,6 +1387,33 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       'X-Content-Type-Options': 'nosniff',
     });
   });
+  app.get(`${PLUGIN_BUNDLE_PREFIX}*`, (context) => {
+    const requested = new URL(context.req.url).pathname;
+    const matched = /^\/api\/web-plugins\/([a-f0-9]{64})\/([1-9][0-9]*)\/(manifest|assets(\/.*))$/u.exec(requested);
+    const revision = matched === null ? undefined : Number(matched[2]);
+    const published =
+      matched === null || !Number.isSafeInteger(revision)
+        ? undefined
+        : pluginPublication.get(matched[1] ?? '', revision as number);
+    if (matched === null || published === undefined) {
+      return context.text('That signed plugin composition is unavailable.', 404);
+    }
+    if (matched[3] === 'manifest') {
+      return context.json(published.signed, 200, { 'Cache-Control': 'no-store' });
+    }
+    const asset = assetFor(published.signed.manifest, matched[4] ?? '');
+    const file = asset === undefined ? undefined : resolveAssetPath(published.assetsDir, asset.path);
+    const body = file === undefined ? undefined : readAsset(file);
+    if (asset === undefined || file === undefined || body === undefined) {
+      return context.text('Plugin composition asset not found.', 404);
+    }
+    return context.body(new Uint8Array(body), 200, {
+      'Cache-Control': 'no-store',
+      'Content-Length': String(body.byteLength),
+      'Content-Type': asset.contentType,
+      'X-Content-Type-Options': 'nosniff',
+    });
+  });
   app.get(BUNDLE_MANIFEST_ROUTE, (context) => {
     const current = publication.current();
     if (current === undefined) return context.json({ error: 'No signed cockpit bundle is available.' }, 503);
@@ -1400,24 +1455,13 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.text('Not found.', 404);
   });
 
-  // A rebuilt bundle only changes on disk, so re-resolve the synchronized
-  // registrations and tell every page to stage the replacement.
-  const refreshServedComposition = async (): Promise<void> => {
-    try {
-      const rebuilt = await resolveComposition();
-      if (rebuilt !== undefined && rebuilt.webDirectory !== served.assetsDir) {
-        served = { assetsDir: rebuilt.webDirectory, apiDirectory: rebuilt.apiDirectory };
-        notice(`serving the rebuilt cockpit bundle from ${served.assetsDir}`);
-      }
-      publication.refresh();
-      broadcast({ type: HUB_RESYNCED_TYPE }, false);
-    } catch (error) {
-      notice(`the rebuilt cockpit composition is unavailable (${describeError(error)}); keeping the served bundle`);
+  // Only the global cockpit configuration is watched. A completed global sync
+  // reloads the matching sessions' plugins without replacing the stable shell.
+  cockpitSyncGuard.watch(() => {
+    for (const record of hub.records()) {
+      if (compositionRoot(record.cwd) === cockpitRoot) hub.reloadChannels(record.id);
     }
-  };
-  for (const guard of syncGuards.values()) {
-    guard.watch(() => void refreshServedComposition());
-  }
+  });
 
   return new Promise<WebServer>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, port: options.port, hostname: host }, (info) => {
@@ -1434,7 +1478,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         await remote.close();
         await new Promise<void>((done) => {
           threads.close();
-          for (const guard of syncGuards.values()) guard.close();
+          cockpitSyncGuard.close();
           void localProtocolServer.close();
           void remoteProtocolServer.close();
           disconnectLivePush();
@@ -1442,6 +1486,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           hub.close();
           providerAuth.close();
           for (const handler of pluginApis) handler.close();
+          pluginPublication.close();
           // An upgraded socket leaves the HTTP server's connection tracking,
           // so only the WebSocket server can let go of it. Without this the
           // close callback waits on a browser that has no reason to leave.
@@ -1459,6 +1504,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       });
     });
     server.once('error', (error) => {
+      cockpitSyncGuard.close();
       threads.close();
       disconnectLivePush();
       livePush?.close();
@@ -1466,6 +1512,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       providerAuth.close();
       void remote.close();
       for (const handler of pluginApis) handler.close();
+      pluginPublication.close();
       void telemetry.shutdown();
       reject(error);
     });

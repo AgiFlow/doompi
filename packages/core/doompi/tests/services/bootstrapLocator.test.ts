@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   readBootstrapPointer,
   readBootstrapStatus,
@@ -111,6 +111,7 @@ function stateWith(overrides: Record<string, unknown>): string {
 
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
 describe('readBootstrapState contract', () => {
@@ -210,6 +211,18 @@ describe('readBootstrapStatus freshness', () => {
     const { bootstrap } = bundledState(root);
 
     expect(readBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: true });
+  });
+
+  it('loads the generated bootstrap built from a launcher-staged Doom entry', () => {
+    const root = temporaryRoot();
+    const stagedEntry = path.join(root, 'runtime', 'doompi', 'dist', 'src', 'extensions', 'entries', 'doom.mjs');
+    fs.mkdirSync(path.dirname(stagedEntry), { recursive: true });
+    fs.writeFileSync(stagedEntry, 'export default () => undefined;\n');
+    const { bootstrap, bootstrapManifest } = bundledState(root, { bootstrapEntry: stagedEntry });
+    fs.writeFileSync(bootstrapManifest, JSON.stringify(compilerManifest(bootstrap, [stagedEntry])));
+    vi.stubEnv('DOOMPI_BOOTSTRAP_ENTRY', stagedEntry);
+
+    expect(readBootstrapStatus(root, undefined, homeFor(root))).toEqual({ bootstrap, fresh: true });
   });
 
   it('rejects output built for a different package entry or precompile contract', () => {

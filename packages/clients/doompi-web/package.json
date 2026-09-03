@@ -70,6 +70,8 @@
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.9",
     "@earendil-works/pi-client": "0.84.4",
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@earendil-works/pi-protocol": "0.84.4",

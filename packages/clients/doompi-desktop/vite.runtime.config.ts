@@ -28,6 +28,7 @@ export default defineConfig({
         'doompi/dist/src/adapters/syncedRuntimeBuilder': source(
           'packages/core/doompi/src/adapters/syncedRuntimeBuilder.ts',
         ),
+        'doompi/dist/src/extensions/entries/doom': source('packages/core/doompi/src/extensions/entries/doom.ts'),
         'doompi/dist/src/extensions/entries/cordisFinalizer': source(
           'packages/core/doompi/src/extensions/entries/cordisFinalizer.ts',
         ),
@@ -43,6 +44,9 @@ export default defineConfig({
         ),
         'doompi/dist/src/extensions/entries/ollamaProvider': source(
           'packages/core/doompi/src/extensions/entries/ollamaProvider.ts',
+        ),
+        'doompi/dist/src/extensions/entries/styleSystem': source(
+          'packages/core/doompi/src/extensions/entries/styleSystem.ts',
         ),
         'doompi/dist/src/extensions/entries/transitionCoordinator': source(
           'packages/core/doompi/src/extensions/entries/transitionCoordinator.ts',

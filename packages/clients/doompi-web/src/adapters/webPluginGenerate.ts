@@ -98,10 +98,13 @@ function pluginSourceRoot(plugin: DeclaredWebPlugin): string {
   return path.dirname(path.join(plugin.packageDir, plugin.client.entry));
 }
 
-function renderCssModule(plugins: readonly DeclaredWebPlugin[]): string {
-  const lines = [`/* ${HEADER.slice(3)} */`];
+function renderCssModule(plugins: readonly DeclaredWebPlugin[], leadingSourceRoots: readonly string[]): string {
+  // Sync CSS is compiled from a generated directory, so Tailwind cannot infer
+  // the stable shell tree from app.css. Its caller names that tree explicitly
+  // so later plugin utilities do not override missing responsive shell utilities.
+  const lines = [`/* ${HEADER.slice(3)} */`, ...leadingSourceRoots.map((root) => `@source "${root}";`)];
   for (const plugin of plugins) {
-    if (plugin.isHost) continue; // The host tree is already inside Tailwind's scan root.
+    if (plugin.isHost) continue;
     lines.push(`@source "${pluginSourceRoot(plugin)}";`);
   }
   lines.push('');
@@ -136,7 +139,7 @@ export function renderBuiltinWebPluginModules(): Map<string, string> {
   return new Map([
     [BUILTIN_CLIENT_MODULE, renderClientModule(plugins, 'relative')],
     [BUILTIN_HUB_MODULE, renderBuiltinHubModule(plugins)],
-    [BUILTIN_CSS_MODULE, renderCssModule(plugins)],
+    [BUILTIN_CSS_MODULE, renderCssModule(plugins, [])],
   ]);
 }
 
@@ -167,6 +170,7 @@ export function ensureBuiltinWebPluginModules({ check = false }: { check?: boole
 
 export interface SyncGeneratedModules {
   clientModulePath: string;
+  compositionModulePath: string;
   cssModulePath: string;
   serverRegistry: string;
 }
@@ -183,8 +187,18 @@ export function writeSyncWebPluginModules(
 ): SyncGeneratedModules {
   fs.mkdirSync(generatedDir, { recursive: true });
   const clientModulePath = path.join(generatedDir, 'webPlugins.generated.ts');
+  const compositionModulePath = path.join(generatedDir, 'webPluginComposition.generated.ts');
   const cssModulePath = path.join(generatedDir, 'webPluginSources.generated.css');
   fs.writeFileSync(clientModulePath, renderClientModule(plugins, 'absolute'));
-  fs.writeFileSync(cssModulePath, renderCssModule(plugins));
-  return { clientModulePath, cssModulePath, serverRegistry: renderServerRegistry(plugins) };
+  fs.writeFileSync(
+    compositionModulePath,
+    `${HEADER}\nimport '${pathToFileURL(path.join(packageRoot, 'src', 'web', 'styles', 'app.css')).href}';\nimport { webPlugins } from './webPlugins.generated.ts';\n\nglobalThis.DoomPiWebPluginComposition = webPlugins;\n`,
+  );
+  fs.writeFileSync(cssModulePath, renderCssModule(plugins, [path.join(packageRoot, 'src', 'web')]));
+  return {
+    clientModulePath,
+    compositionModulePath,
+    cssModulePath,
+    serverRegistry: renderServerRegistry(plugins),
+  };
 }

@@ -439,6 +439,12 @@ importers:
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
+      '@codemirror/state':
+        specifier: 6.7.1
+        version: 6.7.1
+      '@codemirror/view':
+        specifier: 6.43.9
+        version: 6.43.9
       '@earendil-works/pi-client':
         specifier: 0.84.4
         version: 0.84.4

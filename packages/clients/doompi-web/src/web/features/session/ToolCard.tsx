@@ -12,6 +12,7 @@ import { imagesFromContent, type ToolEntry } from '../../lib/sessionModel.ts';
 import { toolMessageProps } from '../../lib/toolMessageProps.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
+import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
 
 const MAX_PREVIEW_LINES = 12;
 
@@ -206,6 +207,7 @@ function HostToolMessage({ entry }: { entry: ToolEntry }) {
  * throws, and stands in for a tool nobody claims.
  */
 export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: string | null }) {
+  useWebPluginRegistry();
   const statuses = useActiveSession((state) => state.statuses);
   const slotProps = usePluginSlotProps(sessionId);
   const renderer = pluginToolRenderer(entry.name, statuses);

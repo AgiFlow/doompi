@@ -1,3 +1,5 @@
+import type { SessionWebComposition } from '../types/hub.ts';
+
 export interface BundleActivationRequest {
   publicKey: string;
   minimumRevision: number;
@@ -49,6 +51,17 @@ async function requestWorker(message: object): Promise<WorkerResult> {
 
 export async function activateVerifiedBundle(request: BundleActivationRequest): Promise<WorkerResult> {
   return await requestWorker({ type: 'doompi:activate-bundle', ...request });
+}
+
+export async function activateVerifiedPluginComposition(composition: SessionWebComposition): Promise<WorkerResult> {
+  return await requestWorker({
+    type: 'doompi:activate-plugin-composition',
+    compositionId: composition.id,
+    revision: composition.revision,
+    manifestUrl: composition.manifestUrl,
+    rawAssetBaseUrl: composition.rawAssetBaseUrl,
+    verifiedAssetBaseUrl: composition.verifiedAssetBaseUrl,
+  });
 }
 
 export async function refreshVerifiedBundle(): Promise<WorkerResult> {

@@ -6,6 +6,7 @@ import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
+const { spawned } = vi.hoisted(() => ({ spawned: [] as Array<{ cwd: string; name?: string }> }));
 vi.mock('../../src/adapters/syncGuard.ts', () => ({
   createSyncGuard: () => ({
     ensureSynced: async () => undefined,
@@ -14,6 +15,14 @@ vi.mock('../../src/adapters/syncGuard.ts', () => ({
   }),
 }));
 
+vi.mock('../../src/adapters/serverSpawner.ts', () => ({
+  createServerSpawner: () => ({
+    spawn: async (input: { cwd: string; name?: string }) => {
+      spawned.push(input);
+      return { ok: true as const, sessionId: 'created' };
+    },
+  }),
+}));
 const SESSION = 'routed';
 
 let server: WebServer;
@@ -22,6 +31,7 @@ let registryDir: string;
 let assetsDir: string;
 
 beforeEach(async () => {
+  spawned.length = 0;
   registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-routes-'));
   assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-assets-'));
   fs.writeFileSync(path.join(assetsDir, 'index.html'), '<!doctype html><title>cockpit</title>');
@@ -108,6 +118,47 @@ describe('the directory picker', () => {
 });
 
 describe('session lifecycle routes', () => {
+  it.each([
+    ['Doom', (root: string) => fs.mkdirSync(path.join(root, '.doom'))],
+    [
+      'Pi',
+      (root: string) => {
+        fs.mkdirSync(path.join(root, '.pi'));
+        fs.writeFileSync(path.join(root, '.pi', 'settings.json'), '{}');
+      },
+    ],
+    ['Git', (root: string) => fs.mkdirSync(path.join(root, '.git'))],
+  ])('creates a session in the selected directory below a %s-marked ancestor', async (_label, mark) => {
+    const outer = path.join(registryDir, 'outer');
+    const root = path.join(outer, 'project');
+    const selected = path.join(root, 'packages', 'feature');
+    fs.mkdirSync(selected, { recursive: true });
+    fs.mkdirSync(path.join(outer, '.git'));
+    mark(root);
+
+    const response = await fetch(url('/api/sessions'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cwd: selected, name: 'selected' }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(spawned).toEqual([expect.objectContaining({ cwd: selected, name: 'selected' })]);
+  });
+
+  it('creates a session in the selected directory when no marked ancestor exists', async () => {
+    const selected = path.join(registryDir, 'plain', 'nested');
+    fs.mkdirSync(selected, { recursive: true });
+
+    const response = await fetch(url('/api/sessions'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cwd: selected }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(spawned).toEqual([expect.objectContaining({ cwd: selected })]);
+  });
   it('refuses a create with no cwd', async () => {
     const response = await fetch(url('/api/sessions'), {
       method: 'POST',

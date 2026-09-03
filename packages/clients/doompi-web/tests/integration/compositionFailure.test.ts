@@ -50,7 +50,7 @@ const start = async (): Promise<WebServer> =>
     onNotice: (message) => notices.push(message),
   });
 
-describe('a cockpit composition that cannot be built', () => {
+describe('the stable cockpit shell', () => {
   it('still binds the hub and answers its health probe', async () => {
     mocks.resolveWebComposition.mockRejectedValue(new Error('vite build failed'));
 
@@ -63,16 +63,16 @@ describe('a cockpit composition that cannot be built', () => {
     expect(response.status).toBe(200);
   });
 
-  it('says why the plugins are missing rather than failing silently', async () => {
+  it('does not rebuild a global plugin union before binding', async () => {
     mocks.resolveWebComposition.mockRejectedValue(new Error('vite build failed'));
 
     server = await start();
 
-    expect(notices.some((message) => message.includes('vite build failed'))).toBe(true);
-    expect(notices.some((message) => message.includes('serving the packaged bundle'))).toBe(true);
+    expect(mocks.resolveWebComposition).not.toHaveBeenCalled();
+    expect(notices.some((message) => message.includes('vite build failed'))).toBe(false);
   });
 
-  it('still serves a composition when one resolves', async () => {
+  it('serves the packaged shell without a synchronized composition', async () => {
     mocks.resolveWebComposition.mockResolvedValue(undefined);
 
     server = await start();

@@ -8,6 +8,8 @@ import { repositoryDoomPiCli } from './bundledServer.ts';
 const DOOMPI_PACKAGE = '@agimon-ai/doompi';
 const AGENT_COMMAND_ENV = 'DOOMPI_AGENT_COMMAND';
 const SYNC_COMMAND_ENV = 'DOOMPI_SYNC_COMMAND';
+const BOOTSTRAP_ENTRY_ENV = 'DOOMPI_BOOTSTRAP_ENTRY';
+const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const CLI_SEGMENTS = ['dist', 'bin', 'cli.mjs'];
 const SYNC_ARGS = ['sync'];
 /** How often the watcher re-reads the drift inputs. */
@@ -28,8 +30,8 @@ export interface SyncGuardOptions {
   onNotice?: (message: string) => void;
   /** Test seam for running the sync itself; returning nothing reads as success. */
   runSync?: (repoRoot: string) => Promise<SyncRunOutcome | void>;
-  /** Test seam for the drift read. */
-  readDrift?: (repoRoot: string) => { fresh: boolean; reasons: readonly string[] };
+  /** Test seam for the per-repository drift read and launcher-owned Doom entry. */
+  readDrift?: (repoRoot: string, expectedBootstrapEntry?: string) => { fresh: boolean; reasons: readonly string[] };
   /** Test seam over repository discovery. */
   findRoot?: (cwd: string) => string;
   intervalMs?: number;
@@ -75,7 +77,11 @@ function syncCliFor(repoRoot: string): string {
 function spawnSync(repoRoot: string): Promise<SyncRunOutcome> {
   const cli = syncCliFor(repoRoot);
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [cli, ...SYNC_ARGS], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [cli, ...SYNC_ARGS], {
+      cwd: repoRoot,
+      env: { ...process.env, [HARNESS_ROOT_ENV]: repoRoot },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     const tail: string[] = [];
     const keep = (chunk: Buffer): void => {
       tail.push(chunk.toString());
@@ -113,7 +119,10 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
     }
   }
   const runSync = options.runSync ?? ((root: string) => spawnSync(root));
-  const readDrift = options.readDrift ?? ((root: string) => readSyncDrift({ repoRoot: root }));
+  const expectedBootstrapEntry = process.env[BOOTSTRAP_ENTRY_ENV];
+  const readDrift =
+    options.readDrift ??
+    ((root: string, entry?: string) => readSyncDrift({ repoRoot: root, expectedBootstrapEntry: entry }));
   const baseInterval = options.intervalMs ?? WATCH_INTERVAL_MS;
   let inFlight: Promise<boolean> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -141,7 +150,7 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
       }
       return false;
     }
-    const remaining = readDrift(repoRoot);
+    const remaining = readDrift(repoRoot, expectedBootstrapEntry);
     if (!remaining.fresh) {
       consecutiveFailures += 1;
       const message = `sync completed but did not resolve drift (${describeSyncDrift({ fresh: false, reasons: remaining.reasons as never })})`;
@@ -162,7 +171,7 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
     // Joining the run already in flight is what makes concurrent launches
     // wait for one sync instead of starting several.
     if (inFlight) return inFlight;
-    const drift = readDrift(repoRoot);
+    const drift = readDrift(repoRoot, expectedBootstrapEntry);
     if (drift.fresh) return false;
     inFlight = syncOnce(drift).finally(() => {
       inFlight = undefined;
@@ -191,7 +200,7 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
           schedule();
           return;
         }
-        const drift = readDrift(repoRoot);
+        const drift = readDrift(repoRoot, expectedBootstrapEntry);
         if (drift.fresh) {
           schedule();
           return;

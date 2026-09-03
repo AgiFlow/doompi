@@ -1,7 +1,14 @@
 import type { SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { useCallback, useSyncExternalStore } from 'react';
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
-import { pluginActivityGroups, pluginFileLinks, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
+import {
+  pluginActivityGroups,
+  pluginFileLinks,
+  pluginMinorModes,
+  pluginSelectionAxes,
+  subscribeWebPluginRegistry,
+  webPluginRegistryRevision,
+} from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
 
 export interface SelectionAxis {
@@ -206,18 +213,35 @@ export interface ActivityGroup {
   placement?: 'bottom';
 }
 
-/** Subscribe once to every package-owned source that can change a group's active state. */
+/** Subscribe to package-owned activity sources, rewiring when the focused composition changes. */
 function subscribeActivitySources(listener: () => void): () => void {
-  const subscriptions = pluginActivityGroups().flatMap((source) =>
-    source.activeSource === undefined ? [] : [source.activeSource.subscribe(listener)],
-  );
-  return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+  let subscriptions: (() => void)[] = [];
+  const unsubscribeSources = (): void => {
+    subscriptions.forEach((unsubscribe) => unsubscribe());
+    subscriptions = [];
+  };
+  const subscribeSources = (): void => {
+    subscriptions = pluginActivityGroups().flatMap((source) =>
+      source.activeSource === undefined ? [] : [source.activeSource.subscribe(listener)],
+    );
+  };
+  subscribeSources();
+  const unsubscribeRegistry = subscribeWebPluginRegistry(() => {
+    unsubscribeSources();
+    subscribeSources();
+    listener();
+  });
+  return () => {
+    unsubscribeRegistry();
+    unsubscribeSources();
+  };
 }
 
 function activitySourceFingerprint(sessionId: string | null): string {
-  return pluginActivityGroups()
+  const activeSources = pluginActivityGroups()
     .map((source) => (source.activeSource?.isActive(sessionId) === true ? '1' : '0'))
     .join('');
+  return `${webPluginRegistryRevision()}:${activeSources}`;
 }
 
 /**
@@ -288,14 +312,31 @@ export function useActivityGroups(
 export type FileLinkResolver = (path: string) => TransientTab | undefined;
 
 function subscribeFileLinks(listener: () => void): () => void {
-  const subscriptions = pluginFileLinks().map((source) => source.subscribe(listener));
-  return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+  let subscriptions: (() => void)[] = [];
+  const unsubscribeSources = (): void => {
+    subscriptions.forEach((unsubscribe) => unsubscribe());
+    subscriptions = [];
+  };
+  const subscribeSources = (): void => {
+    subscriptions = pluginFileLinks().map((source) => source.subscribe(listener));
+  };
+  subscribeSources();
+  const unsubscribeRegistry = subscribeWebPluginRegistry(() => {
+    unsubscribeSources();
+    subscribeSources();
+    listener();
+  });
+  return () => {
+    unsubscribeRegistry();
+    unsubscribeSources();
+  };
 }
 
 function fileLinkFingerprint(sessionId: string | null): string {
-  return pluginFileLinks()
+  const sourceFingerprints = pluginFileLinks()
     .map((source) => source.fingerprint(sessionId))
     .join('\n');
+  return `${webPluginRegistryRevision()}:${sourceFingerprints}`;
 }
 
 /**

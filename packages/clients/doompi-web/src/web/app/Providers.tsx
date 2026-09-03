@@ -5,7 +5,8 @@ import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
 import { RemoteBanner } from '../features/remote/RemoteBanner.tsx';
 import { ThreadView } from '../features/session/ThreadView.tsx';
-import { installWebPlugins, startWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
+import { installWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
+import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
 import { bindThreadRenderer } from '../lib/threadRenderer.ts';
 import { onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { routeTree } from '../routes/routeTree.tsx';
@@ -46,8 +47,8 @@ export function Providers() {
     let cancelled = false;
     void restoreSealedSession().then(() => {
       if (cancelled) return;
+      stopPlugins = startSessionWebPluginRuntime({ sendSessionFrame: sendFrame, sendHubFrame, onHubConnected });
       stopRuntime = startSessionRuntime();
-      stopPlugins = startWebPlugins({ sendSessionFrame: sendFrame, sendHubFrame, onHubConnected });
       // One read at start; after that the hub pushes state, so nothing polls.
       void refreshRemoteState();
       void restoreLivePushRegistration();

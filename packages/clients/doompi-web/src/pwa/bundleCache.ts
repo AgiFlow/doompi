@@ -2,12 +2,23 @@ export const PWA_DATABASE = 'doompi-pwa';
 export const PWA_DATABASE_VERSION = 1;
 export const PWA_STATE_STORE = 'state';
 export const ACTIVE_BUNDLE_KEY = 'active-bundle';
+const PLUGIN_COMPOSITION_KEY_PREFIX = 'plugin-composition:';
 
 export interface ActiveBundleState {
   signerPublicKey: string;
   manifestDigest: string;
   revision: number;
   cacheName: string;
+}
+
+export interface VerifiedPluginCompositionState {
+  compositionId: string;
+  signerPublicKey: string;
+  manifestDigest: string;
+  revision: number;
+  cacheName: string;
+  verifiedAssetBaseUrl: string;
+  lastUsedAt: number;
 }
 
 function requestValue<T>(request: IDBRequest<T>): Promise<T> {
@@ -72,6 +83,64 @@ export async function clearActiveBundle(): Promise<void> {
   try {
     const transaction = database.transaction(PWA_STATE_STORE, 'readwrite', { durability: 'strict' });
     transaction.objectStore(PWA_STATE_STORE).delete(ACTIVE_BUNDLE_KEY);
+    await transactionDone(transaction);
+  } finally {
+    database.close();
+  }
+}
+
+function pluginCompositionKey(compositionId: string): string {
+  return `${PLUGIN_COMPOSITION_KEY_PREFIX}${compositionId}`;
+}
+
+export async function readVerifiedPluginComposition(
+  compositionId: string,
+): Promise<VerifiedPluginCompositionState | undefined> {
+  const database = await openPwaDatabase();
+  try {
+    const transaction = database.transaction(PWA_STATE_STORE, 'readonly');
+    const value = await requestValue(transaction.objectStore(PWA_STATE_STORE).get(pluginCompositionKey(compositionId)));
+    await transactionDone(transaction);
+    return value as VerifiedPluginCompositionState | undefined;
+  } finally {
+    database.close();
+  }
+}
+
+export async function listVerifiedPluginCompositions(): Promise<VerifiedPluginCompositionState[]> {
+  const database = await openPwaDatabase();
+  try {
+    const transaction = database.transaction(PWA_STATE_STORE, 'readonly');
+    const store = transaction.objectStore(PWA_STATE_STORE);
+    const keys = await requestValue(store.getAllKeys());
+    const values = await Promise.all(
+      keys
+        .filter((key): key is string => typeof key === 'string' && key.startsWith(PLUGIN_COMPOSITION_KEY_PREFIX))
+        .map(async (key) => (await requestValue(store.get(key))) as VerifiedPluginCompositionState),
+    );
+    await transactionDone(transaction);
+    return values;
+  } finally {
+    database.close();
+  }
+}
+
+export async function commitVerifiedPluginComposition(state: VerifiedPluginCompositionState): Promise<void> {
+  const database = await openPwaDatabase();
+  try {
+    const transaction = database.transaction(PWA_STATE_STORE, 'readwrite', { durability: 'strict' });
+    transaction.objectStore(PWA_STATE_STORE).put(state, pluginCompositionKey(state.compositionId));
+    await transactionDone(transaction);
+  } finally {
+    database.close();
+  }
+}
+
+export async function clearVerifiedPluginComposition(compositionId: string): Promise<void> {
+  const database = await openPwaDatabase();
+  try {
+    const transaction = database.transaction(PWA_STATE_STORE, 'readwrite', { durability: 'strict' });
+    transaction.objectStore(PWA_STATE_STORE).delete(pluginCompositionKey(compositionId));
     await transactionDone(transaction);
   } finally {
     database.close();

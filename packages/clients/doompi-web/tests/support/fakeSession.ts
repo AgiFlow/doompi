@@ -284,7 +284,9 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
 
   const backlogLimit = options.backlogLimit ?? 512;
   const received: Frame[] = [];
+  const connections = new Set<net.Socket>();
   let client: net.Socket | undefined;
+  let closing = false;
   let backlog: Frame[] = [];
   let dropped = 0;
   const attachWaiters: Array<() => void> = [];
@@ -308,6 +310,11 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
     }),
   });
   const server = net.createServer((connection) => {
+    connections.add(connection);
+    if (closing) {
+      connection.destroy();
+      return;
+    }
     connection.setEncoding('utf8');
     let buffered = '';
     let authenticated = false;
@@ -355,6 +362,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
     });
 
     const detach = (): void => {
+      connections.delete(connection);
       if (client === connection) client = undefined;
     };
     connection.on('close', detach);
@@ -445,7 +453,8 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
       return () => rival.destroy();
     },
     async close() {
-      client?.destroy();
+      closing = true;
+      for (const connection of connections) connection.destroy();
       if (recordPath !== undefined) fs.rmSync(recordPath, { force: true });
       await protocolSocket.close();
       await new Promise<void>((resolve) => {

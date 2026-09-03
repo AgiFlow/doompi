@@ -706,6 +706,54 @@ describe('the session hub over a registry', () => {
     expect(lifecycle.at(-1)).toBe('closed');
   });
 
+  it('loads duplicate channel names into isolated session registries and disposes them independently', async () => {
+    const registryDir = freshRegistryDir();
+    const received: string[] = [];
+    const closed: string[] = [];
+    const first = await startRegisteredSession(registryDir, { id: 'first' });
+    const second = await startRegisteredSession(registryDir, { id: 'second' });
+    const harness = startHub(registryDir, undefined, [], undefined, {
+      loadChannels: async (record) => [
+        {
+          frameType: 'shared_data',
+          start: () => ({
+            payloadFor: () => ({ owner: record.id }),
+            close: () => closed.push(record.id),
+          }),
+          receive: (_scope, _payload, connection) => received.push(`${record.id}:${connection.connectionId}`),
+        },
+      ],
+      webComposition: (record, channels) => ({
+        id: (record.id === 'first' ? 'a' : 'b').repeat(64),
+        revision: record.id === 'first' ? 1 : 2,
+        manifestUrl: '/manifest',
+        rawAssetBaseUrl: '/raw',
+        verifiedAssetBaseUrl: '/verified',
+        entryPath: '/composition.js',
+        stylePaths: [],
+        channels: [...channels],
+      }),
+    });
+    await first.waitForAttach();
+    await second.waitForAttach();
+    await waitFor(
+      () =>
+        harness.latest('first')?.webComposition?.channels.includes('shared_data') === true &&
+        harness.latest('second')?.webComposition?.channels.includes('shared_data') === true,
+      'both session channel compositions',
+    );
+
+    expect(harness.hub.channelFrames('first')[0]?.payload).toEqual({ owner: 'first' });
+    expect(harness.hub.channelFrames('second')[0]?.payload).toEqual({ owner: 'second' });
+    harness.hub.receiveChannel('first', 'shared_data', {}, 'page');
+    harness.hub.receiveChannel('second', 'shared_data', {}, 'page');
+    expect(received).toEqual(['first:page', 'second:page']);
+
+    await first.close();
+    await waitFor(() => closed.includes('first'), 'the first channel closing');
+    expect(closed).not.toContain('second');
+  });
+
   it('routes incoming channel payloads by live scope, frame type, and connection', async () => {
     const registryDir = freshRegistryDir();
     const received: unknown[] = [];

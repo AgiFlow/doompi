@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSyncGuard } from '../../src/adapters/syncGuard.ts';
 
 vi.mock('node:child_process', async (importOriginal) => ({
@@ -11,6 +11,10 @@ vi.mock('node:child_process', async (importOriginal) => ({
 const REPO = '/workspace/repo';
 const drifted = { fresh: false, reasons: ['configuration-changed'] as const };
 const fresh = { fresh: true, reasons: [] as const };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function guard(readDrift: () => { fresh: boolean; reasons: readonly string[] }, runSync = vi.fn(async () => {})) {
   return {
@@ -58,7 +62,19 @@ describe('cwd sync guard', () => {
     await subject.ensureSynced();
 
     expect(findRoot).toHaveBeenCalledWith('/workspace/repo/packages/web');
-    expect(readDrift).toHaveBeenCalledWith(REPO);
+    expect(readDrift).toHaveBeenCalledWith(REPO, undefined);
+    subject.close();
+  });
+
+  it('checks the selected repository against the launcher-staged Doom entry', async () => {
+    const stagedEntry = '/runtime/doompi/dist/src/extensions/entries/doom.mjs';
+    vi.stubEnv('DOOMPI_BOOTSTRAP_ENTRY', stagedEntry);
+    const readDrift = vi.fn((_repoRoot: string, _expectedBootstrapEntry?: string) => fresh);
+    const subject = createSyncGuard({ repoRoot: REPO, readDrift });
+
+    await subject.ensureSynced();
+
+    expect(readDrift).toHaveBeenCalledWith(REPO, stagedEntry);
     subject.close();
   });
 });
@@ -137,7 +153,7 @@ describe('sync guard', () => {
     expect(spawn).toHaveBeenCalledWith(
       process.execPath,
       [expect.stringMatching(/cli\.mjs$/), 'sync'],
-      expect.objectContaining({ cwd: REPO }),
+      expect.objectContaining({ cwd: REPO, env: expect.objectContaining({ DOOMPI_ROOT: REPO }) }),
     );
     subject.close();
   });

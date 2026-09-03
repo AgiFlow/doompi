@@ -82,13 +82,13 @@ test.describe('responsive repository settings plugins', () => {
     await page.getByTestId('settings-menu-open').click();
     await page.getByTestId('settings-menu-sheet').getByTestId('settings-section-repository-mcp').click();
 
-    await expect(page.getByText('Select a repository to inspect its synced MCP catalog.')).toBeVisible();
+    await expect(page.getByTestId('repository-settings-panel-mcp')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
     await page.setViewportSize({ width: 800, height: 844 });
     await expect(page.getByTestId('settings-menu')).toBeHidden();
     await expect(page.getByTestId('settings-menu-open')).toBeVisible();
-    await expect(page.getByText('Select a repository to inspect its synced MCP catalog.')).toBeVisible();
+    await expect(page.getByTestId('repository-settings-panel-mcp')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(800);
   });
 });

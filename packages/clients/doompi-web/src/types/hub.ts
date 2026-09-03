@@ -8,7 +8,7 @@ import type { BridgeState, SessionFrame } from './session.ts';
  * Field naming follows @earendil-works/pi-protocol so a future swap to the
  * upstream session server stays a transport change, not a rename.
  */
-export const HUB_PROTOCOL_VERSION = 1;
+export const HUB_PROTOCOL_VERSION = 2;
 
 /** Role marker in the health payload; doompi-server probes for it before binding the port. */
 export const HUB_ROLE = 'hub';
@@ -48,6 +48,26 @@ export interface SessionGitStatus {
   dirty: boolean;
 }
 
+/** One immutable, signed client composition resolved for a session. */
+export interface SessionWebComposition {
+  /** Stable identity of the synchronized root and generation. */
+  id: string;
+  /** Monotonic signing revision advertised by the manifest. */
+  revision: number;
+  /** Same-origin signed-manifest route read by the trusted service worker. */
+  manifestUrl: string;
+  /** Same-origin prefix for the untrusted source bytes verified by the worker. */
+  rawAssetBaseUrl: string;
+  /** Worker-owned prefix from which the page may execute verified bytes. */
+  verifiedAssetBaseUrl: string;
+  /** Absolute path below both asset prefixes to the composition script. */
+  entryPath: string;
+  /** Absolute paths below both asset prefixes, replaced when this session is focused. */
+  stylePaths: string[];
+  /** Frame types owned by the matching session-local hub composition. */
+  channels: string[];
+}
+
 /**
  * Everything the rail needs to render one session without subscribing to it.
  */
@@ -79,6 +99,8 @@ export interface SessionSummary {
   apiSocketPath?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
+  /** Signed plugin composition independently resolved for this session. */
+  webComposition?: SessionWebComposition;
 }
 
 /**

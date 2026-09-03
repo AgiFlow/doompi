@@ -46,13 +46,18 @@ describe('the runtime handed to the cockpit', () => {
     expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_SYNC_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi', 'dist', 'src'));
+    expect(environment.DOOMPI_BOOTSTRAP_ENTRY).toBe(
+      path.join('/runtime', 'doompi', 'dist', 'src', 'extensions', 'entries', 'doom.mjs'),
+    );
     expect(environment.DOOMPI_PACKAGE_CATALOG).toBe(path.join('/runtime', 'catalog', 'index.json'));
     expect(environment.DOOMPI_NPM_CLI).toBe(path.join('/runtime', 'vendor', 'npm', 'bin', 'npm-cli.js'));
     expect(environment.DOOMPI_WEB_MODULE).toBe('file:///runtime/doompi-web/dist/index.mjs');
     expect(environment.DOOMPI_WEB_DIST).toBeUndefined();
     expect(environment.DOOMPI_WEB_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi-web'));
     expect(environment.DOOMPI_VITE_PACKAGE_ROOT).toBe(path.join('/runtime', 'vendor', 'vite'));
-    expect(environment.NODE_PATH).toBe(path.join('/runtime', 'native', 'node_modules'));
+    expect(environment.NODE_PATH).toBe(
+      [path.join('/runtime', 'node_modules'), path.join('/runtime', 'native', 'node_modules')].join(path.delimiter),
+    );
     expect(environment.DOOMPI_RMUX_BINARY).toBe(
       path.join(
         '/runtime',
