@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-runner-rtk-darwin-x64",
-  "version": "0.0.1-alpha.49",
+  "version": "0.0.1-alpha.50",
   "description": "Prebuilt RTK v0.45.0 log processor for DoomPi Runner on macOS x64.",
   "keywords": [
     "ai",

@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-workflow",
-  "version": "0.0.1-alpha.52",
+  "version": "0.0.1-alpha.53",
   "description": "GitHub Actions-style workflow graphs, artifacts, recovery, and asynchronous runs for DoomPi.",
   "keywords": [
     "ai",

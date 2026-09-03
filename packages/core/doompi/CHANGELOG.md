@@ -1,3 +1,28 @@
+## 0.0.1-alpha.53 (2026-09-03)
+
+### 🩹 Fixes
+
+- **doompi-web:** isolate synchronized plugins by session ([5907ee9](https://github.com/AgiFlow/doompi/commit/5907ee9))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.52
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.52
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.52
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.53
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.52 (2026-09-03)
 
 ### 🩹 Fixes
