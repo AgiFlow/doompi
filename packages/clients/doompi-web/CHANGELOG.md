@@ -1,3 +1,26 @@
+## 0.0.1-alpha.13 (2026-09-03)
+
+### 🩹 Fixes
+
+- **release:** handle private packages ([6ed1aae](https://github.com/AgiFlow/doompi/commit/6ed1aae))
+- **doompi-desktop:** bundle a self-contained runtime ([dc6655b](https://github.com/AgiFlow/doompi/commit/dc6655b))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.52
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.12
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.13
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.48
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.12 (2026-09-02)
 
 ### 🩹 Fixes
