@@ -1,6 +1,7 @@
 import type {
   ActivityGroupContribution,
   ContextActionContribution,
+  DockFaceContribution,
   FileLinkSource,
   LeaderBindingContribution,
   MinorModeContribution,
@@ -43,6 +44,7 @@ import { leaderConflicts } from './leaderTree.ts';
 export type InstallDiagnosticKind =
   | 'duplicate-plugin'
   | 'duplicate-tab'
+  | 'duplicate-dock-face'
   | 'duplicate-channel'
   | 'duplicate-tool'
   | 'duplicate-activity-group'
@@ -98,6 +100,7 @@ export function activityGroupSlot(name: string): string {
 interface RegistryState {
   plugins: WebPluginDefinition[];
   tabs: TabContribution[];
+  dockFaces: DockFaceContribution[];
   channels: Map<string, SessionChannelContribution>;
   commands: PaletteCommandContribution[];
   contextActions: InstalledContextAction[];
@@ -119,6 +122,7 @@ function emptyState(): RegistryState {
   return {
     plugins: [],
     tabs: [],
+    dockFaces: [],
     channels: new Map(),
     commands: [],
     contextActions: [],
@@ -201,6 +205,7 @@ interface PendingBinding {
 type SharedNamespace =
   | 'plugin'
   | 'tab'
+  | 'dock-face'
   | 'channel'
   | 'tool'
   | 'activity-group'
@@ -344,6 +349,7 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
     const owners: Record<SharedNamespace, Map<string, string>> = {
       plugin: new Map(),
       tab: new Map(),
+      'dock-face': new Map(),
       channel: new Map(),
       tool: new Map(),
       'activity-group': new Map(),
@@ -374,6 +380,15 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
       installingState.plugins.push(plugin);
       for (const tab of plugin.tabs ?? []) {
         if (claim(owners.tab, 'tab', tab.id, plugin.id)) installingState.tabs.push(tab);
+      }
+      for (const face of plugin.dockFaces ?? []) {
+        if (face.id === 'activity' || face.id === 'context') {
+          throw new Error(`Web plugin '${plugin.id}' dock face '${face.id}' is reserved by the host.`);
+        }
+        if (face.id.trim() === '' || face.label.trim() === '') {
+          throw new Error(`Web plugin '${plugin.id}' has an unlabeled dock face.`);
+        }
+        if (claim(owners['dock-face'], 'dock-face', face.id, plugin.id)) installingState.dockFaces.push(face);
       }
       // A panel and a section both become a /settings/:id route, so the two
       // share one id namespace rather than racing to own the same URL.
@@ -477,6 +492,10 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
     installingState.selectionAxes.sort(byDisplayOrder);
     installingState.minorModes.sort(byDisplayOrder);
     installingState.activityGroups.sort(byDisplayOrder);
+    installingState.dockFaces.sort(
+      (left, right) =>
+        (left.order ?? DEFAULT_FILL_ORDER) - (right.order ?? DEFAULT_FILL_ORDER) || left.id.localeCompare(right.id),
+    );
     return installingState;
   } finally {
     installingState = previous;
@@ -568,6 +587,11 @@ export function pluginRepositorySettingsPanels(): readonly InstalledRepositorySe
 
 export function webTabs(): readonly TabContribution[] {
   return activeState().tabs;
+}
+
+/** Optional right-dock faces from the active session composition, in display order. */
+export function pluginDockFaces(): readonly DockFaceContribution[] {
+  return activeState().dockFaces;
 }
 
 /**

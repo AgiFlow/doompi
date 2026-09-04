@@ -1,4 +1,5 @@
 import {
+  Button,
   MessageItem,
   MessageItemBody,
   MessageItemHeader,
@@ -6,7 +7,6 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { useEffect, useRef } from 'react';
 import { authorFileTab } from './AuthorDocumentPanel.tsx';
 
 export function openAuthoringFileTab(
@@ -32,13 +32,7 @@ export function OpenAuthoringFileToolCard({
   openTransientTab,
   openTab,
 }: ToolMessageRenderProps) {
-  const opened = useRef(false);
   const path = resultPath(result);
-  useEffect(() => {
-    if (opened.current || running || isError || path === undefined) return;
-    opened.current = true;
-    openAuthoringFileTab(path, openTransientTab, openTab);
-  }, [isError, openTab, openTransientTab, path, running]);
 
   const requestedPath = typeof args.path === 'string' ? args.path : 'document';
   return (
@@ -52,8 +46,18 @@ export function OpenAuthoringFileToolCard({
           </MessageItemHeader>
           <MessageItemBody data-testid="tool-result-open_authoring_file">
             <MessageItemStatus tone={isError ? 'error' : running ? 'running' : undefined}>
-              {isError ? 'failed' : running ? 'validating' : path === undefined ? 'waiting' : 'opened in Author'}
+              {isError ? 'failed' : running ? 'validating' : path === undefined ? 'waiting' : 'ready'}
             </MessageItemStatus>
+            {!running && !isError && path !== undefined ? (
+              <Button
+                size="xs"
+                variant="outline"
+                data-testid="author-open-file"
+                onClick={() => openAuthoringFileTab(path, openTransientTab, openTab)}
+              >
+                open in Author
+              </Button>
+            ) : null}
           </MessageItemBody>
         </>
       )}

@@ -5,14 +5,10 @@ const DOCK_STORAGE_KEY = 'doompi.web.dock';
 const DOCK_TAB_STORAGE_KEY = 'doompi.web.dock-tab';
 
 /**
- * Which face of the dock is showing.
- *
- * `activity` is asynchronous work that outlives the turn; `context` is the
- * composition that work runs under. Both answer "what is this session doing",
- * so they share one column rather than competing for it.
+ * Which face of the dock is showing. The host owns `activity` and `context`;
+ * installed plugins may contribute additional opaque ids.
  */
-export type DockTab = 'activity' | 'context';
-
+export type DockTab = string;
 export interface UiState {
   /** Whether the activity dock is shown; survives route changes and reloads. */
   dockOpen: boolean;
@@ -30,7 +26,7 @@ function readDock(): boolean {
 
 function readDockTab(): DockTab {
   try {
-    return window.localStorage.getItem(DOCK_TAB_STORAGE_KEY) === 'context' ? 'context' : 'activity';
+    return window.localStorage.getItem(DOCK_TAB_STORAGE_KEY)?.trim() || 'activity';
   } catch {
     return 'activity';
   }

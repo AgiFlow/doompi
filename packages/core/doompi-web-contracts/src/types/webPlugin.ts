@@ -319,6 +319,16 @@ export interface SurfaceContribution {
   id: string;
   component: ComponentType<WebPluginSlotProps>;
 }
+
+/** One optional face inside the host-owned right dock. */
+export interface DockFaceContribution {
+  /** Unique across plugins. The host reserves `activity` and `context`. */
+  id: string;
+  label: string;
+  /** Lower values appear first after the host faces, then id breaks ties. */
+  order?: number;
+  panel: ComponentType<WebPluginSlotProps>;
+}
 export interface PaletteCommandContext {
   sessionId: string | null;
   /** Host navigation; null returns to the conversation tab. */
@@ -641,6 +651,8 @@ export interface WebPluginRuntime {
 export interface WebPluginDefinition {
   id: string;
   tabs?: TabContribution[];
+  /** Optional faces placed after the host-owned Activity and Context faces. */
+  dockFaces?: DockFaceContribution[];
   channels?: SessionChannelContribution[];
   selectionAxes?: SelectionAxisContribution[];
   minorModes?: MinorModeContribution[];

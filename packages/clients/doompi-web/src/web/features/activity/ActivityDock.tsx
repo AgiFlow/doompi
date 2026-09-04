@@ -1,12 +1,13 @@
 import { Button, EmptyState, Kbd, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+import { useEffect } from 'react';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { type ActivityGroup, useActivityGroups } from '../../lib/composition.ts';
+import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition.ts';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry.ts';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { uiStore } from '../../stores/uiStore.ts';
+import { setDockTab, uiStore } from '../../stores/uiStore.ts';
 import { ContextPanel } from './ContextPanel.tsx';
 import { DockTabs } from './DockTabs.tsx';
 
@@ -30,11 +31,18 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
   const widgets = useActiveSession((state) => state.widgets);
   const slotProps = usePluginSlotProps(activeId, onOpenContent);
   const tab = useStore(uiStore, (state) => state.dockTab);
+  const dockFaces = useDockFaces();
+  const selectedFace = dockFaces.find((face) => face.id === tab);
+  const resolvedTab = tab === 'context' || tab === 'activity' || selectedFace !== undefined ? tab : 'activity';
+  const DockPanel = selectedFace?.panel;
   const groups = useActivityGroups(statuses, widgets, activeId);
   const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
   const pinnedGroups = groups.filter((group) => group.placement === 'bottom');
   const busy = groups.filter((group) => group.active).length;
 
+  useEffect(() => {
+    if (resolvedTab !== tab) setDockTab(resolvedTab);
+  }, [resolvedTab, tab]);
   return (
     <aside
       data-testid="activity-dock"
@@ -45,7 +53,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
           <DockTabs />
           {/* The count belongs to the activity face; on the context face it
               would be a number about a list the reader is not looking at. */}
-          {busy > 0 && tab === 'activity' ? (
+          {busy > 0 && resolvedTab === 'activity' ? (
             <StatusBadge tone="running" size="xs" data-testid="activity-busy" className="normal-case">
               {busy} running
             </StatusBadge>
@@ -56,7 +64,9 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
         </Button>
       </div>
 
-      {tab === 'context' ? (
+      {DockPanel !== undefined ? (
+        <DockPanel {...slotProps} />
+      ) : resolvedTab === 'context' ? (
         <ContextPanel />
       ) : (
         <>

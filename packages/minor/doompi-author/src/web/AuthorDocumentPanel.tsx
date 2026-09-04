@@ -1,29 +1,24 @@
-import {
-  Button,
-  CodeEditor,
-  Markdown,
-  MediaPreview,
-  type EditorSelectionRange,
-} from '@agimon-ai/doompi-web-components';
+import { Button } from '@agimon-ai/doompi-web-components';
+import { AuthorMediaView } from './AuthorMediaView.tsx';
+import { AuthorTextView } from './AuthorTextView.tsx';
 import type { FileLinkSource, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 import { focusAuthorViewport } from './authorBrowserBridge.ts';
-import { attachAuthorCapture, imageCaptureProvider } from './authorCapture.ts';
 import { loadAuthorDocument, saveAuthorDocument } from './authorFiles.ts';
 import { authorProfilesForDocument } from './authorProfiles.ts';
 import {
-  addAuthorAnnotation,
   authorDocumentKey,
   authorWorkspace,
   completeAuthorSave,
+  focusAuthorDocument,
   normalizeAuthorPath,
   putAuthorDocument,
+  releaseAuthorDocumentFocus,
   requestAuthorSave,
-  reviseAuthorDocument,
-  reviseAuthorFragment,
+  syncAuthorDocumentFocus,
 } from './authorWorkspaceStore.ts';
-
+import { AuthorStructuredView } from './AuthorStructuredView.tsx';
 interface AuthorDocumentPanelProps extends WebPluginSlotProps {
   path: string;
 }
@@ -34,13 +29,14 @@ function tabId(path: string): string {
   return `author-file-${(hash >>> 0).toString(36)}`;
 }
 
-export function AuthorDocumentPanel({ path, sessionId, attachComposerCapture }: AuthorDocumentPanelProps) {
+export function AuthorDocumentPanel({ path, sessionId }: AuthorDocumentPanelProps) {
   const document = useStore(authorWorkspace.store, (state) =>
     sessionId === null ? undefined : state.documents[authorDocumentKey(sessionId, path)],
   );
-  const imageRef = useRef<HTMLImageElement>(null);
-  const selection = useRef<EditorSelectionRange | undefined>(undefined);
-  const [comment, setComment] = useState('');
+  const focusGeneration = useRef<number | undefined>(undefined);
+  const activeTool = useStore(authorWorkspace.store, (state) =>
+    sessionId === null ? 'select' : (state.sessions[sessionId]?.activeTool ?? 'select'),
+  );
   const [markdownPreview, setMarkdownPreview] = useState(true);
   const [status, setStatus] = useState<string | undefined>();
   const kind = document?.kind;
@@ -50,6 +46,7 @@ export function AuthorDocumentPanel({ path, sessionId, attachComposerCapture }: 
     setStatus('loading');
     void loadAuthorDocument(sessionId, path, controller.signal)
       .then((loaded) => {
+        if (controller.signal.aborted) return;
         putAuthorDocument(sessionId, loaded);
         setStatus(undefined);
       })
@@ -58,6 +55,17 @@ export function AuthorDocumentPanel({ path, sessionId, attachComposerCapture }: 
       });
     return () => controller.abort();
   }, [document, path, sessionId]);
+  useEffect(() => {
+    if (document === undefined || sessionId === null) return;
+    const generation = focusAuthorDocument(sessionId, path, document.version, document.sourceSha256);
+    focusGeneration.current = generation;
+    return () => releaseAuthorDocumentFocus(sessionId, generation);
+  }, [kind, document?.sourceSha256, path, sessionId]);
+  useEffect(() => {
+    const generation = focusGeneration.current;
+    if (document === undefined || sessionId === null || generation === undefined) return;
+    syncAuthorDocumentFocus(sessionId, generation, document.version, document.sourceSha256);
+  }, [document?.sourceSha256, document?.version, sessionId]);
   useEffect(() => {
     if (kind === undefined || sessionId === null) return;
     const profiles = authorProfilesForDocument(sessionId, path, kind);
@@ -76,19 +84,6 @@ export function AuthorDocumentPanel({ path, sessionId, attachComposerCapture }: 
     return <p className="p-4 text-[11px] text-doom-faint">{status ?? 'Loading document...'}</p>;
   }
 
-  const addComment = (): void => {
-    if (comment.trim() === '') return;
-    const range = selection.current;
-    addAuthorAnnotation(sessionId, path, {
-      id: `${Date.now()}:${document.annotations.length}`,
-      kind: 'comment',
-      body: comment,
-      ...(range?.text === undefined || range.text === '' ? {} : { quote: range.text }),
-      ...(range === undefined ? {} : { startLine: range.startLine, endLine: range.endLine }),
-    });
-    setComment('');
-  };
-
   const save = async (): Promise<void> => {
     const savedVersion = document.version;
     const savedFragments = document.fragments;
@@ -102,39 +97,14 @@ export function AuthorDocumentPanel({ path, sessionId, attachComposerCapture }: 
       setStatus(error instanceof Error ? error.message : String(error));
     }
   };
-  const capture = async (): Promise<void> => {
-    const image = imageRef.current;
-    if (image === null) return;
-    await attachAuthorCapture(
-      imageCaptureProvider(image, document.crop),
-      {
-        kind: 'author-viewport',
-        source: 'author',
-        id: `${sessionId}:${document.path}`,
-        label: document.title ?? document.path.split('/').at(-1) ?? document.path,
-        content: JSON.stringify({ path: document.path, crop: document.crop, annotations: document.annotations }),
-      },
-      attachComposerCapture,
-    );
-  };
 
-  const textPanel =
-    document.kind === 'markdown' && markdownPreview ? (
-      <div data-testid="author-markdown" className="min-h-0 flex-1 overflow-auto p-4 text-[12px] text-doom-text">
-        <Markdown text={document.content ?? ''} />
-      </div>
-    ) : (
-      <CodeEditor
-        value={document.content ?? ''}
-        path={document.path}
-        data-testid="author-editor"
-        className="min-h-[24rem] flex-1"
-        onChange={(content) => reviseAuthorDocument(sessionId, path, content)}
-        onSelect={(range) => {
-          selection.current = range;
-        }}
-      />
-    );
+  const textPanel = (
+    <AuthorTextView
+      sessionId={sessionId}
+      document={document}
+      preview={document.kind === 'markdown' && markdownPreview && activeTool === 'select'}
+    />
+  );
 
   return (
     <section data-testid="author-document" className="flex min-h-0 flex-1 flex-col">
@@ -164,69 +134,10 @@ export function AuthorDocumentPanel({ path, sessionId, attachComposerCapture }: 
       {document.kind === 'text' || document.kind === 'markdown' ? (
         textPanel
       ) : document.structuredFormat !== undefined ? (
-        <div data-testid="author-structured" className="min-h-0 flex-1 space-y-2 overflow-auto p-4">
-          {(document.fragments ?? []).map((fragment) => (
-            <label key={fragment.id} className="block text-[10px] text-doom-faint">
-              {fragment.location}
-              <textarea
-                value={fragment.text}
-                readOnly={fragment.readOnly === true}
-                className="mt-1 min-h-16 w-full rounded border border-doom-border bg-doom-deep p-2 text-[11px] text-doom-text"
-                onChange={(event) => reviseAuthorFragment(sessionId, path, fragment.id, event.target.value)}
-              />
-            </label>
-          ))}
-        </div>
-      ) : document.kind === 'image' ? (
-        <div className="relative min-h-0 flex-1 overflow-auto p-4">
-          <img ref={imageRef} src={document.mediaUrl} alt={document.path} className="max-h-[36rem] max-w-full" />
-          {document.crop === undefined ? null : (
-            <div
-              data-testid="author-crop-overlay"
-              className="pointer-events-none absolute border-2 border-doom-green bg-doom-green/10"
-              style={{
-                left: document.crop.x,
-                top: document.crop.y,
-                width: document.crop.width,
-                height: document.crop.height,
-              }}
-            />
-          )}
-          <Button size="xs" variant="outline" data-testid="author-capture" onClick={() => void capture()}>
-            attach capture
-          </Button>
-        </div>
+        <AuthorStructuredView sessionId={sessionId} document={document} />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-4">
-          <MediaPreview
-            src={document.mediaUrl ?? ''}
-            path={document.path}
-            kind={document.kind === 'video' || document.kind === 'pdf' ? document.kind : 'download'}
-            data-testid="author-media"
-          />
-          <span data-testid="author-capture-unavailable" className="text-[10px] text-doom-faint">
-            capture unavailable
-          </span>
-        </div>
+        <AuthorMediaView key={document.path} sessionId={sessionId} document={document} activeTool={activeTool} />
       )}
-      <footer className="border-t border-doom-border p-3">
-        <div className="flex gap-2">
-          <input
-            value={comment}
-            aria-label="Annotation comment"
-            className="min-w-0 flex-1 rounded border border-doom-border bg-doom-deep px-2 text-[11px]"
-            onChange={(event) => setComment(event.target.value)}
-          />
-          <Button size="xs" variant="ghost" data-testid="author-add-comment" onClick={addComment}>
-            add comment
-          </Button>
-        </div>
-        {document.annotations.map((annotation) => (
-          <p key={annotation.id} data-testid="author-annotation" className="mt-1 text-[10px] text-doom-text">
-            {annotation.kind}: {annotation.body || `${annotation.startLine}-${annotation.endLine}`}
-          </p>
-        ))}
-      </footer>
     </section>
   );
 }

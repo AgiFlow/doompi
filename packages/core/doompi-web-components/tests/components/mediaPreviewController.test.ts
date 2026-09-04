@@ -5,6 +5,8 @@ function video(overrides: Partial<HTMLVideoElement> = {}): HTMLVideoElement {
   return {
     currentTime: 3,
     duration: 10,
+    videoWidth: 1920,
+    videoHeight: 1080,
     paused: false,
     ended: false,
     pause: vi.fn(),
@@ -35,8 +37,8 @@ describe('MediaPreview video controller', () => {
       currentTime: 7,
       duration: 0,
     });
+    expect(mediaPreviewController({ current: mounted }).getIntrinsicSize()).toEqual({ width: 1920, height: 1080 });
   });
-
   it('is safe during mount and unmount boundaries', async () => {
     const controller = mediaPreviewController({ current: null });
     await controller.play();

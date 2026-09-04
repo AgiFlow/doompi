@@ -1,36 +1,35 @@
 import { Button, SectionLabel } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+import { useDockFaces } from '../../lib/composition.ts';
 import { type DockTab, setDockTab, uiStore } from '../../stores/uiStore.ts';
 
-const TABS: readonly DockTab[] = ['activity', 'context'];
+const HOST_TABS: readonly { id: DockTab; label: string }[] = [
+  { id: 'activity', label: 'activity' },
+  { id: 'context', label: 'context' },
+];
 
-/**
- * The dock's two faces.
- *
- * These read as section headings rather than as a control strip, because the
- * dock has always been headed by one tracked-out label and the eye already
- * looks there for "what am I seeing". The selected face keeps the bright
- * colour the single label used to carry, so nothing new has to be learned.
- */
+/** Host faces followed by the active session's plugin-contributed faces. */
 export function DockTabs() {
   const active = useStore(uiStore, (state) => state.dockTab);
+  const contributed = useDockFaces();
+  const tabs = [...HOST_TABS, ...contributed.map(({ id, label }) => ({ id, label }))];
 
   return (
     <div className="flex items-center gap-3" role="tablist" aria-label="dock view">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Button
-          key={tab}
+          key={tab.id}
           variant="ghost"
           size="xs"
           role="tab"
-          aria-selected={tab === active}
-          data-testid={`dock-tab-${tab}`}
-          data-active={tab === active}
-          onClick={() => setDockTab(tab)}
+          aria-selected={tab.id === active}
+          data-testid={`dock-tab-${tab.id}`}
+          data-active={tab.id === active}
+          onClick={() => setDockTab(tab.id)}
           className="h-auto rounded-none px-0 py-0 hover:bg-transparent"
         >
-          <SectionLabel className={tab === active ? 'text-doom-hi' : 'text-doom-faint hover:text-doom-dim'}>
-            {tab}
+          <SectionLabel className={tab.id === active ? 'text-doom-hi' : 'text-doom-faint hover:text-doom-dim'}>
+            {tab.label}
           </SectionLabel>
         </Button>
       ))}

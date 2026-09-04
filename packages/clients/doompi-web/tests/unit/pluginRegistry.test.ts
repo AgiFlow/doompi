@@ -12,6 +12,7 @@ import {
   paletteCommands,
   pluginActivityGroups,
   pluginContextActions,
+  pluginDockFaces,
   pluginLeaderBindings,
   pluginMinorModes,
   pluginRepositorySettingsPanels,
@@ -98,6 +99,27 @@ describe('the web plugin registry', () => {
     expect(pluginToolRenderer('edit')).toBe(second);
     expect(kinds()).toEqual([['two', 'duplicate-tool']]);
     expect(webPluginDiagnostics()[0]?.message).toContain("tool 'bash' is already provided by 'one'");
+  });
+
+  it('orders dock faces, keeps the first collision, and reserves host faces', () => {
+    installWebPlugins([
+      defineWebPlugin({ id: 'later', dockFaces: [{ id: 'notes', label: 'notes', order: 20, panel: Other }] }),
+      defineWebPlugin({ id: 'first', dockFaces: [{ id: 'authoring', label: 'authoring', order: 10, panel: Panel }] }),
+      defineWebPlugin({ id: 'collision', dockFaces: [{ id: 'notes', label: 'other notes', panel: Panel }] }),
+    ]);
+
+    expect(pluginDockFaces().map(({ id, label }) => [id, label])).toEqual([
+      ['authoring', 'authoring'],
+      ['notes', 'notes'],
+    ]);
+    expect(kinds()).toEqual([['collision', 'duplicate-dock-face']]);
+
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({ id: 'bad', dockFaces: [{ id: 'activity', label: 'activity', panel: Panel }] }),
+      ]),
+    ).toThrow(/reserved by the host/);
   });
 
   it('installs contributions once and serves them per host slot', () => {

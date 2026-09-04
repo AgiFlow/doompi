@@ -1,8 +1,9 @@
-import type { SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
+import type { DockFaceContribution, SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { useCallback, useSyncExternalStore } from 'react';
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
 import {
   pluginActivityGroups,
+  pluginDockFaces,
   pluginFileLinks,
   pluginMinorModes,
   pluginSelectionAxes,
@@ -292,6 +293,12 @@ export function activityGroups(
     }
   }
   return groups;
+}
+
+/** Dock faces update when the active session composition changes. */
+export function useDockFaces(): readonly DockFaceContribution[] {
+  useSyncExternalStore(subscribeWebPluginRegistry, webPluginRegistryRevision, webPluginRegistryRevision);
+  return pluginDockFaces();
 }
 
 /** Activity groups that update when either host signals or a plugin's session store changes. */

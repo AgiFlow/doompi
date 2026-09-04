@@ -14,6 +14,7 @@ describe('Author browser file seams', () => {
       .mockResolvedValueOnce(
         Response.json({
           format: 'csv',
+          manifest: { sourceDigest: SOURCE_SHA, metadata: { delimiter: ';', quote: '"', recordDelimiter: '\r\n' } },
           fragments: [{ id: 'cell', location: 'A1', text: 'before' }],
         }),
       );
@@ -23,6 +24,7 @@ describe('Author browser file seams', () => {
       path: 'report.csv',
       kind: 'csv',
       structuredFormat: 'csv',
+      csvDialect: { delimiter: ';', quote: '"', recordDelimiter: '\r\n' },
       sourceSha256: SOURCE_SHA,
       fragments: [{ id: 'cell', location: 'A1', text: 'before' }],
       originalFragments: [{ id: 'cell', location: 'A1', text: 'before' }],
@@ -45,6 +47,7 @@ describe('Author browser file seams', () => {
         path: 'report.csv',
         kind: 'csv',
         structuredFormat: 'csv',
+        csvDialect: { delimiter: ';', quote: '"', recordDelimiter: '\r\n' },
         sourceSha256: SOURCE_SHA,
         originalFragments: [{ id: 'cell', kind: 'cell', location: 'A1', text: 'before' }],
         fragments: [{ id: 'cell', kind: 'cell', location: 'A1', text: 'after' }],
@@ -59,11 +62,38 @@ describe('Author browser file seams', () => {
     expect(JSON.parse((fetch.mock.calls[0]?.[1]?.body as string) ?? '')).toEqual({
       path: 'report.csv',
       format: 'csv',
+      csvDialect: { delimiter: ';', quote: '"', recordDelimiter: '\r\n' },
       operations: [{ fragmentId: 'cell', replacement: 'after' }],
     });
     expect(fetch.mock.calls[2]?.[1]).toMatchObject({
       method: 'PUT',
       headers: { 'Content-Type': 'application/octet-stream', 'X-Expected-SHA256': SOURCE_SHA },
     });
+  });
+  it('rejects a source change between the file response and structured parsing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(new Response('source', { headers: { 'X-File-SHA256': SOURCE_SHA } }))
+        .mockResolvedValueOnce(Response.json({ manifest: { sourceDigest: SAVED_SHA }, fragments: [] })),
+    );
+    await expect(loadAuthorDocument('session', 'report.csv')).rejects.toThrow('source changed while opening');
+  });
+
+  it('does not serialize or write when preflight inspected a different source', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ accepted: true, digest: 'digest', sourceDigest: SAVED_SHA, issues: [] }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(
+      saveAuthorDocument('session', {
+        path: 'report.csv',
+        kind: 'csv',
+        structuredFormat: 'csv',
+        sourceSha256: SOURCE_SHA,
+      }),
+    ).rejects.toThrow('source changed before saving');
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

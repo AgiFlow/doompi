@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  AUTHOR_DOCUMENT_MAX_BYTES,
   AUTHOR_DOCUMENT_OPEN_PATH,
   AUTHOR_DOCUMENT_SERIALIZE_PATH,
   createAuthorDocumentApi,
@@ -133,5 +135,25 @@ describe('structured document adapters', () => {
     });
     expect(serialized.status).toBe(200);
     expect(await fixture('slides.md')).toEqual(original);
+  });
+  it('rejects an oversized document before reading it', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-author-'));
+    try {
+      const target = path.join(root, 'large.csv');
+      await fs.writeFile(target, '');
+      await fs.truncate(target, AUTHOR_DOCUMENT_MAX_BYTES + 1);
+      const response = await createAuthorDocumentApi({ cwd: root }).request(AUTHOR_DOCUMENT_OPEN_PATH, {
+        method: 'POST',
+        body: JSON.stringify({ path: 'large.csv', format: 'csv' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      expect(response.status).toBe(413);
+      await expect(response.json()).resolves.toEqual({
+        error: `Document exceeds the ${AUTHOR_DOCUMENT_MAX_BYTES} byte preview limit.`,
+      });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });

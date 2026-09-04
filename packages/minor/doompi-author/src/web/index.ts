@@ -1,5 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { authorFileLinks } from './AuthorDocumentPanel.tsx';
+import { AuthorPanel } from './AuthorPanel.tsx';
 import { startAuthorBrowserBridge } from './authorBrowserBridge.ts';
 import { authorChannel } from './authorStore.ts';
 import { DescribeAuthorToolsToolCard } from './DescribeAuthorToolsToolCard.tsx';
@@ -13,6 +14,7 @@ import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'author',
+  dockFaces: [{ id: 'authoring', label: 'authoring', order: 30, panel: AuthorPanel }],
   minorModes: [{ name: 'author', keys: 'o a', order: 45 }],
   leaderBindings: [
     {

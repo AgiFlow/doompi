@@ -19,6 +19,9 @@ export type MediaKind = (typeof MEDIA_KINDS)[number];
  */
 export interface EditorSelectionRange {
   text: string;
+  /** Zero-based, half-open offsets in the mounted document. */
+  from: number;
+  to: number;
   startLine: number;
   endLine: number;
 }
@@ -34,12 +37,22 @@ export interface EditorEdit extends EditorTextRange {
   insert: string;
 }
 
+/** A client-coordinate rectangle over the visible editor viewport. */
+export interface EditorViewportRectangle {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 /** The deliberately small imperative surface exposed by a mounted editor. */
 export interface CodeEditorController {
   focus: () => void;
   revealAndSelect: (range: EditorTextRange) => void;
   applyEdits: (edits: readonly EditorEdit[]) => void;
   setClosedRanges: (ranges: readonly EditorTextRange[]) => void;
+  /** Resolves visible geometry to a document-native range, or null when it misses the document. */
+  resolveViewportRegion: (rectangle: EditorViewportRectangle) => EditorSelectionRange | null;
 }
 
 export interface CodeEditorProps {

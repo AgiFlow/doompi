@@ -5,7 +5,9 @@ import {
   replicatedState,
   type Context,
   type RemoteServiceEndpoint,
+  type RemoteServiceBinding,
 } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import { createUnixTransportFactory } from '@earendil-works/pi-client/unix';
 import {
@@ -89,14 +91,15 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
         transportFactory: createUnixTransportFactory({ path: record.protocolSocketPath }),
         onListenerError: (error) => options.onNotice?.(`session ${record.id} listener error: ${error.message}`),
       });
-      await client.connect();
+      let binding: RemoteServiceBinding | undefined;
       try {
+        await client.connect();
         await client.request(
           { serverId: record.protocolServerId },
           { serviceId: DoomSessionManagementService.id, member: 'attach', args: [record.id] },
           context.abortSignal,
         );
-        const binding = createRemoteServiceBinding({
+        binding = createRemoteServiceBinding({
           services: [DoomSessionService],
           transport: createClientServiceTransport(client, () => client.attachment),
           onError: (error) => options.onNotice?.(`session ${record.id} service error: ${error.message}`),
@@ -121,18 +124,45 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
           setThinking: (thinkingLevel, callContext) => session.setThinking(thinkingLevel, callContext),
         });
         let closed = false;
-        return {
-          attachClient: () => endpointAttachment(createRemoteServiceEndpoint(provider)),
-          async close(closeContext: Context) {
-            if (closed) return;
-            closed = true;
-            unsubscribe();
-            provider.dispose();
-            await binding.dispose(closeContext).catch(() => undefined);
+        let terminate!: (error: Error | undefined) => void;
+        const terminated = new Promise<Error | undefined>((resolve) => {
+          terminate = resolve;
+        });
+        const close = async (closeContext: Context): Promise<void> => {
+          if (closed) return;
+          closed = true;
+          stopConnectionWatch();
+          terminate(undefined);
+          unsubscribe();
+          provider.dispose();
+          try {
+            await binding?.dispose(closeContext);
+          } catch (error) {
+            options.onNotice?.(`session ${record.id} binding cleanup failed: ${String(error)}`);
+          } finally {
             await client.dispose();
-          },
+          }
+        };
+        // The router caches handles by session id. End this handle when its
+        // process disappears so the next attach reads the new registry identity.
+        const stopConnectionWatch = client.onConnectionStateChange((change) => {
+          if (closed || change.state !== 'disconnected') return;
+          terminate(change.error ?? new Error(`Session ${record.id} protocol disconnected`));
+          void close(BACKGROUND_CONTEXT).catch((error) => {
+            options.onNotice?.(`session ${record.id} connection cleanup failed: ${String(error)}`);
+          });
+        });
+        return {
+          terminated,
+          attachClient: () => endpointAttachment(createRemoteServiceEndpoint(provider)),
+          close,
         };
       } catch (error) {
+        try {
+          await binding?.dispose(context);
+        } catch (cleanupError) {
+          options.onNotice?.(`session ${record.id} binding cleanup failed: ${String(cleanupError)}`);
+        }
         await client.dispose();
         throw error;
       }

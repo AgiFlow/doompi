@@ -210,4 +210,67 @@ describe('hub protocol endpoint', () => {
   it('refuses a session the registry does not list', async () => {
     await expect(connect('no-such-session')).rejects.toThrow();
   });
+
+  it('invalidates a stopped upstream and streams from its replacement on the same browser connection', async () => {
+    const { client: connected } = await connect();
+    const socketPath = sessionSocket!.socketPath;
+    const previousServerId = sessionSocket!.serverId;
+    await sessionSocket!.close();
+    sessionSocket = undefined;
+
+    await vi.waitFor(() => expect(connected.attachment).toBeUndefined());
+    expect(connected.connected).toBe(true);
+    await binding!.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
+    binding = undefined;
+
+    agent = fakeAgent();
+    sessionSocket = await serveProtocolSocket({
+      socketPath,
+      service: createAgentServerService({
+        agent,
+        sessionId: SESSION_ID,
+        sessionName: 'replacement',
+        cwd: workDir,
+        createdAt: 2,
+      }),
+    });
+    expect(sessionSocket.serverId).not.toBe(previousServerId);
+    const recordPath = path.join(registryDir, 'sessions', `${SESSION_ID}.json`);
+    const record = JSON.parse(fs.readFileSync(recordPath, 'utf8')) as Record<string, unknown>;
+    fs.writeFileSync(recordPath, JSON.stringify({ ...record, protocolServerId: sessionSocket.serverId }));
+
+    // The registry can still contain the old server identity during restart.
+    await vi.waitFor(
+      async () => {
+        await connected.request(
+          { serverId: DOOM_COCKPIT_SERVER_ID },
+          { serviceId: DoomSessionManagementService.id, member: 'attach', args: [SESSION_ID] },
+        );
+      },
+      { timeout: 5000 },
+    );
+    binding = createRemoteServiceBinding({
+      services: [DoomSessionService],
+      transport: createClientServiceTransport(connected, () => connected.attachment),
+    });
+    const session = binding.use(DoomSessionService);
+    await binding.ready(BACKGROUND_CONTEXT);
+    agent.emit({ type: 'agent_start' });
+    agent.emit({ type: 'message_start', message: { id: 'after-restart', role: 'assistant', content: [] } });
+    agent.emit({
+      type: 'message_end',
+      message: {
+        id: 'after-restart',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'live again' }],
+        stopReason: 'stop',
+      },
+    });
+    await vi.waitFor(() =>
+      expect(session.state.value?.snapshot.transcript).toContainEqual(
+        expect.objectContaining({ role: 'assistant', content: [{ type: 'text', text: 'live again' }] }),
+      ),
+    );
+    expect(connected.connected).toBe(true);
+  });
 });

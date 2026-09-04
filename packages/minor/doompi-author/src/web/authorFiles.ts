@@ -1,4 +1,5 @@
 import type {
+  CsvDialect,
   DocumentFragment,
   DocumentOperation,
   DocumentPreflightReport,
@@ -70,12 +71,18 @@ export async function loadAuthorDocument(
       { path, format },
       signal,
     );
+    const parsedDigest = parsed.manifest?.sourceDigest;
+    if (sourceSha256 !== undefined && parsedDigest !== undefined && sourceSha256 !== parsedDigest) {
+      throw new Error('Document source changed while opening. Reopen the document.');
+    }
+    const csvDialect = format === 'csv' ? csvDialectFromMetadata(parsed.manifest?.metadata) : undefined;
     return {
       path,
       kind,
       title: path.split('/').at(-1) ?? path,
       structuredFormat: format,
       fragments: parsed.fragments,
+      ...(csvDialect === undefined ? {} : { csvDialect }),
       originalFragments: parsed.fragments.map((fragment) => ({ ...fragment })),
       ...(sourceSha256 === undefined ? {} : { sourceSha256 }),
     };
@@ -110,12 +117,20 @@ async function bytesToSave(sessionId: string, document: AuthorDocumentInput, sig
   if (document.kind === 'text' || document.kind === 'markdown') return document.content ?? '';
   if (document.structuredFormat === undefined) throw new Error('This Author view cannot be saved.');
   const operations = operationsFor(document);
-  const request = { path: document.path, format: document.structuredFormat, operations };
+  const request = {
+    path: document.path,
+    format: document.structuredFormat,
+    operations,
+    ...(document.csvDialect === undefined ? {} : { csvDialect: document.csvDialect }),
+  };
   const preflight = await jsonRequest<DocumentPreflightReport>(
     authorDocumentApiUrl(sessionId, 'preflight'),
     request,
     signal,
   );
+  if (preflight.sourceDigest !== undefined && preflight.sourceDigest !== document.sourceSha256) {
+    throw new Error('Document source changed before saving. Reopen the document.');
+  }
   if (!preflight.accepted)
     throw new Error(preflight.issues.map((issue) => issue.message).join('\n') || 'Author preflight rejected the edit.');
   const serialized = await jsonRequest<{ bytes: string; encoding: string }>(
@@ -144,6 +159,21 @@ export async function saveAuthorDocument(
   const sha256 = response.headers.get('X-File-SHA256');
   if (sha256 === null || !/^[a-f0-9]{64}$/.test(sha256)) throw new Error('Author save returned an invalid digest.');
   return sha256;
+}
+
+function csvDialectFromMetadata(
+  metadata: Record<string, string | number | boolean> | undefined,
+): CsvDialect | undefined {
+  if (metadata === undefined) return undefined;
+  const { delimiter, quote, recordDelimiter } = metadata;
+  if (
+    (delimiter !== ',' && delimiter !== ';' && delimiter !== '\t' && delimiter !== '|') ||
+    (quote !== '"' && quote !== "'") ||
+    (recordDelimiter !== '\n' && recordDelimiter !== '\r\n')
+  ) {
+    throw new Error('Author document API returned an invalid CSV dialect.');
+  }
+  return { delimiter, quote, recordDelimiter };
 }
 
 export function editableStructuredFragments(document: AuthorDocumentInput): readonly DocumentFragment[] {

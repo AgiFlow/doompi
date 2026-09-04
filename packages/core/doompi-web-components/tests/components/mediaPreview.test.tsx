@@ -19,10 +19,11 @@ describe('MediaPreview', () => {
     expect(markup).not.toContain('autoplay');
   });
 
-  it('renders a pdf in a frame titled with its path', () => {
+  it('renders a page-aware PDF canvas titled with its path', () => {
     const markup = renderToStaticMarkup(<MediaPreview src={SRC} path="docs/report.pdf" />);
-    expect(markup).toContain('<iframe');
-    expect(markup).toContain('title="docs/report.pdf"');
+    expect(markup).toContain('<canvas');
+    expect(markup).toContain('aria-label="docs/report.pdf"');
+    expect(markup).toContain('data-kind="pdf"');
   });
 
   it('offers anything else as a download named after the file', () => {
@@ -35,7 +36,7 @@ describe('MediaPreview', () => {
     // A server may serve bytes under a name that says nothing, so the kind it
     // reports wins over the extension.
     const markup = renderToStaticMarkup(<MediaPreview src={SRC} path="attachment" kind="pdf" />);
-    expect(markup).toContain('<iframe');
+    expect(markup).toContain('<canvas');
   });
 
   it('carries the test id and the kind, so a page can find and assert on it', () => {

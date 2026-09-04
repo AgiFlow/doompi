@@ -26,8 +26,32 @@ import { cn } from '../lib/cn.ts';
 import { boundedEditorEdits, boundedEditorRanges } from '../lib/editorController.ts';
 import { grammarKeyOf, loadGrammar } from '../lib/editorLanguage.ts';
 import { DOOM_EDITOR_STYLES, DOOM_SYNTAX_STYLES } from '../lib/editorTheme.ts';
-import type { CodeEditorProps } from '../types/editor.ts';
+import type { CodeEditorProps, EditorSelectionRange, EditorViewportRectangle } from '../types/editor.ts';
 
+function selectionRange(editor: { readonly state: EditorState }, from: number, to: number): EditorSelectionRange {
+  const start = Math.min(from, to);
+  const end = Math.max(from, to);
+  return {
+    text: editor.state.sliceDoc(start, end),
+    from: start,
+    to: end,
+    startLine: editor.state.doc.lineAt(start).number,
+    endLine: editor.state.doc.lineAt(end).number,
+  };
+}
+
+export function resolveEditorViewportRegion(
+  editor: {
+    readonly state: EditorState;
+    posAtCoords(coords: { x: number; y: number }): number | null;
+  },
+  rectangle: EditorViewportRectangle,
+): EditorSelectionRange | null {
+  const start = editor.posAtCoords({ x: rectangle.left, y: rectangle.top });
+  const end = editor.posAtCoords({ x: rectangle.right, y: rectangle.bottom });
+  if (start === null || end === null) return null;
+  return selectionRange(editor, start, end);
+}
 /**
  * The editor itself, mounted on a real CodeMirror view.
  *
@@ -155,11 +179,7 @@ export function CodeEditorView({
             const report = handlers.current.onSelect;
             if (report === undefined) return;
             const range = update.state.selection.main;
-            report({
-              text: update.state.sliceDoc(range.from, range.to),
-              startLine: update.state.doc.lineAt(range.from).number,
-              endLine: update.state.doc.lineAt(range.to).number,
-            });
+            report(selectionRange(update.view, range.from, range.to));
           }),
         ],
       }),
@@ -206,6 +226,10 @@ export function CodeEditorView({
               ),
         );
         editor.dispatch({ effects: setClosedDecorations.of(Decoration.set(decorations)) });
+      },
+      resolveViewportRegion: (rectangle) => {
+        const editor = view.current;
+        return editor === null ? null : resolveEditorViewportRegion(editor, rectangle);
       },
     }),
     [],

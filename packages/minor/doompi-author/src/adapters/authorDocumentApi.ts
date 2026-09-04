@@ -12,7 +12,7 @@ import type { CsvDialect, DocumentOperation, StructuredDocumentFormat } from '..
 export const AUTHOR_DOCUMENT_OPEN_PATH = '/documents/open';
 export const AUTHOR_DOCUMENT_PREFLIGHT_PATH = '/documents/preflight';
 export const AUTHOR_DOCUMENT_SERIALIZE_PATH = '/documents/serialize';
-
+export const AUTHOR_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
 interface DocumentRequest {
   path?: unknown;
   format?: unknown;
@@ -74,6 +74,10 @@ async function readDocument(cwd: string, requestedPath: unknown): Promise<Uint8A
   const realCandidate = await fs.realpath(candidate);
   if (realCandidate !== root && !realCandidate.startsWith(`${root}${path.sep}`)) {
     throw new Error('Document path is outside the working directory.');
+  }
+  const stat = await fs.stat(realCandidate);
+  if (stat.size > AUTHOR_DOCUMENT_MAX_BYTES) {
+    throw new Error(`Document exceeds the ${AUTHOR_DOCUMENT_MAX_BYTES} byte preview limit.`);
   }
   return await fs.readFile(realCandidate);
 }

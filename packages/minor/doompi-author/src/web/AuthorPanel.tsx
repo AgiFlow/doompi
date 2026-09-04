@@ -4,6 +4,9 @@ import { useStore } from '@tanstack/react-store';
 import { authorFileTab } from './AuthorDocumentPanel.tsx';
 import { author } from './authorStore.ts';
 import { authorWorkspace } from './authorWorkspaceStore.ts';
+import { AuthorToolPalette } from './AuthorToolPalette.tsx';
+import { AuthorRegionDrafts } from './AuthorRegionDrafts.tsx';
+import { AuthorRequestLog } from './AuthorRequestLog.tsx';
 
 export function AuthorPanel({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const view = useStore(author.store, (state) => author.select(state, sessionId));
@@ -14,12 +17,27 @@ export function AuthorPanel({ sessionId, openTransientTab }: WebPluginSlotProps)
       .filter(([key]) => key.startsWith(prefix))
       .map(([, document]) => document);
   });
+  const workspace = useStore(authorWorkspace.store, (state) =>
+    sessionId === null ? undefined : state.sessions[sessionId],
+  );
+  const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
   return (
-    <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-2 px-6 py-4">
+    <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
       <strong className="text-[11px] text-doom-text">Author {view.activation}</strong>
       <span className="text-[10px] text-doom-faint">
         {view.capabilityCount === 1 ? '1 viewport capability' : `${view.capabilityCount} viewport capabilities`}
       </span>
+      {workspace?.focusedDocument === undefined ? null : (
+        <span data-testid="author-focused-document" className="text-[10px] text-doom-dim">
+          focused: {workspace.focusedDocument.path}
+        </span>
+      )}
+      {sessionId !== null && workspace !== undefined && focused !== undefined ? (
+        <>
+          <AuthorToolPalette sessionId={sessionId} kind={focused.kind} activeTool={workspace.activeTool} />
+          <AuthorRegionDrafts key={focused.path} sessionId={sessionId} workspace={workspace} />
+        </>
+      ) : null}
       <div className="mt-2 flex flex-col gap-1">
         {documents.length === 0 ? <span className="text-[10px] text-doom-faint">No open documents</span> : null}
         {documents.map((document) => (
@@ -35,6 +53,7 @@ export function AuthorPanel({ sessionId, openTransientTab }: WebPluginSlotProps)
           </Button>
         ))}
       </div>
+      <AuthorRequestLog requests={workspace?.requests ?? []} />
     </section>
   );
 }
