@@ -73,7 +73,25 @@ jobs:
           cache: pnpm
 
       - name: Reject known high-severity production vulnerabilities
-        run: pnpm audit --prod --audit-level high
+        run: |
+          for attempt in 1 2 3; do
+            set +e
+            output="$(pnpm audit --prod --audit-level high 2>&1)"
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+            if [[ $status -eq 0 ]]; then
+              exit 0
+            fi
+            if ! grep -Eqi 'timeout|timed out|error \(23\)|ECONNRESET|ETIMEDOUT|EAI_AGAIN' <<<"$output"; then
+              exit "$status"
+            fi
+            if [[ $attempt -eq 3 ]]; then
+              exit "$status"
+            fi
+            echo "Registry audit transport failed, retrying attempt $((attempt + 1)) of 3."
+            sleep $((attempt * 15))
+          done
 
       - name: Install dependencies without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts
