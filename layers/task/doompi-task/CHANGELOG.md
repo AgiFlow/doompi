@@ -1,3 +1,21 @@
+## 0.0.1-alpha.55 (2026-09-04)
+
+### 🚀 Features
+
+- **doompi:** improve background work and CI ([09a53a1](https://github.com/AgiFlow/doompi/commit/09a53a1))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.15
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.18
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.54 (2026-09-04)
 
 ### 🚀 Features

@@ -1,3 +1,20 @@
+## 0.0.1-alpha.18 (2026-09-04)
+
+### 🚀 Features
+
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.54
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.52
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.17 (2026-09-04)
 
 ### 🚀 Features
