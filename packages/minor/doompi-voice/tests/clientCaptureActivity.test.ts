@@ -37,6 +37,29 @@ describe('portable client capture activity', () => {
     expect(lifecycle.push(pcmChunk(0), [{ speech: true, sampleCount: 1_024 }]).state).toBe('speech');
   });
 
+  it('counts only Silero speech from consecutive exact-reference-discriminated batches', () => {
+    const lifecycle = new ClientCaptureActivityLifecycle();
+    expect(lifecycle.push(pcmChunk(0), windows(true))).not.toHaveProperty('echoDiscriminatedSpeechMs');
+    lifecycle.resetActivity();
+
+    const first = lifecycle.push(pcmChunk(2_000), windows(true, true, true, true), {
+      echoReferenceActive: true,
+      echoDiscriminated: true,
+    });
+    const second = lifecycle.push(pcmChunk(2_000), windows(true, true, true, true), {
+      echoReferenceActive: true,
+      echoDiscriminated: true,
+    });
+    const uncertain = lifecycle.push(pcmChunk(2_000), windows(true, true), {
+      echoReferenceActive: true,
+      echoDiscriminated: false,
+    });
+
+    expect(first).toMatchObject({ classifiedSpeechMs: 128, echoDiscriminatedSpeechMs: 0 });
+    expect(second).toMatchObject({ classifiedSpeechMs: 256, echoDiscriminatedSpeechMs: 128 });
+    expect(uncertain).toMatchObject({ classifiedSpeechMs: 320, echoDiscriminatedSpeechMs: 128 });
+  });
+
   it('never treats ambient RMS or isolated energy spikes as authoritative speech', () => {
     const lifecycle = new ClientCaptureActivityLifecycle();
     const ambientAtMinus41Dbfs = pcmChunk(292, 100);

@@ -1491,10 +1491,10 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     await pipeline.shutdown();
   });
 
-  it('keeps imperfect self-narration private even when the speech classifier hears it', async () => {
+  it('does not combine trusted natural-speech duration across activity epochs', async () => {
     const recorder = new WorkerRecorder();
     const clock = new ScheduledWorkerClock();
-    const transcribe = vi.fn(async (_request: TranscriptionRequest) => 'The plan was ready for revue');
+    const transcribe = vi.fn(async (_request: TranscriptionRequest) => 'The plan is ready please run all tests');
     const pipeline = new VoiceWorkerPipeline({
       clock,
       recorder,
@@ -1525,7 +1525,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
         sessionId: 'session-1',
         playbackGeneration: 5,
         active: true,
-        referenceText: 'The plan is ready for review',
+        referenceText: 'The plan is ready',
         startPhrases: ['hey doom'],
         stopPhrases: ['stop speaking'],
       },
@@ -1534,9 +1534,18 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     recorder.emitActivity({
       state: 'speech',
       levelDbfs: -34,
-      elapsedMs: 200,
+      elapsedMs: 100,
       epoch: 1,
-      classifiedSpeechMs: 640,
+      classifiedSpeechMs: 200,
+      echoDiscriminatedSpeechMs: 200,
+    });
+    recorder.emitActivity({
+      state: 'speech',
+      levelDbfs: -34,
+      elapsedMs: 200,
+      epoch: 2,
+      classifiedSpeechMs: 100,
+      echoDiscriminatedSpeechMs: 100,
     });
     for (let index = 0; index < 90; index += 1) {
       clock.advance(20);
@@ -1552,13 +1561,13 @@ describe('VoiceWorkerPipeline manual dictation', () => {
     );
     await pipeline.shutdown();
   });
-  it('promotes explicitly addressed client overlap and honors its queued endpoint', async () => {
+  it('promotes natural client overlap only with echo-discriminated speech and semantic novelty', async () => {
     const recorder = new WorkerRecorder();
     const clock = new ScheduledWorkerClock();
     let transcription = 0;
     const transcribe = vi.fn(async (_request: TranscriptionRequest) => {
       transcription += 1;
-      return transcription === 1 ? 'The plan is ready hey doom please run all tests' : 'please run all tests';
+      return transcription === 1 ? 'The plan is ready please run all tests' : 'please run all tests';
     });
     const pipeline = new VoiceWorkerPipeline({
       clock,
@@ -1601,7 +1610,8 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       levelDbfs: -34,
       elapsedMs: 200,
       epoch: 1,
-      classifiedSpeechMs: 160,
+      classifiedSpeechMs: 640,
+      echoDiscriminatedSpeechMs: 320,
     });
     for (let index = 0; index < 85; index += 1) {
       clock.advance(20);
@@ -1613,7 +1623,8 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       levelDbfs: -75,
       elapsedMs: 1_800,
       epoch: 1,
-      classifiedSpeechMs: 160,
+      classifiedSpeechMs: 640,
+      echoDiscriminatedSpeechMs: 320,
     });
     await vi.waitFor(() =>
       expect(events).toContainEqual(
@@ -1621,9 +1632,9 @@ describe('VoiceWorkerPipeline manual dictation', () => {
           kind: 'barge-in-evidence',
           playbackGeneration: 5,
           evidence: expect.objectContaining({
-            intentionalAddress: true,
+            intentionalAddress: false,
             classifierConfirmed: true,
-            classifierSpeechMs: 160,
+            classifierSpeechMs: 640,
           }),
         }),
       ),
@@ -1674,7 +1685,7 @@ describe('VoiceWorkerPipeline manual dictation', () => {
       expect.objectContaining({
         kind: 'transcript-candidate',
         transcript: 'please run all tests',
-        evidence: expect.objectContaining({ classifier: 'client', classifierSpeechMs: 160, playbackOverlapMs: 1_700 }),
+        evidence: expect.objectContaining({ classifier: 'client', classifierSpeechMs: 640, playbackOverlapMs: 1_700 }),
       }),
     );
     await pipeline.shutdown();

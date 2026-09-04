@@ -21,6 +21,7 @@ import type {
   VoiceMediaAudioPoll,
 } from '../../types/index.ts';
 import {
+  VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
   VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
   VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
@@ -244,14 +245,21 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
     const elapsedMs = Number(headers[VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]);
     const epochHeader = headers[VOICE_MEDIA_ACTIVITY_EPOCH_HEADER];
     const speechMsHeader = headers[VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER];
+    const echoSpeechMsHeader = headers[VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER];
     const epoch = epochHeader === undefined ? undefined : Number(epochHeader);
     const classifiedSpeechMs = speechMsHeader === undefined ? undefined : Number(speechMsHeader);
+    const echoDiscriminatedSpeechMs = echoSpeechMsHeader === undefined ? undefined : Number(echoSpeechMsHeader);
     if (
       (state !== 'listening' && state !== 'speech' && state !== 'endpoint') ||
       !Number.isFinite(levelDbfs) ||
       !Number.isSafeInteger(elapsedMs) ||
       (epoch !== undefined && (!Number.isSafeInteger(epoch) || epoch < 0)) ||
-      (classifiedSpeechMs !== undefined && (!Number.isSafeInteger(classifiedSpeechMs) || classifiedSpeechMs < 0))
+      (classifiedSpeechMs !== undefined && (!Number.isSafeInteger(classifiedSpeechMs) || classifiedSpeechMs < 0)) ||
+      (echoDiscriminatedSpeechMs !== undefined &&
+        (!Number.isSafeInteger(echoDiscriminatedSpeechMs) ||
+          echoDiscriminatedSpeechMs < 0 ||
+          classifiedSpeechMs === undefined ||
+          echoDiscriminatedSpeechMs > classifiedSpeechMs))
     )
       throw new Error('Voice media client returned invalid capture activity.');
     return {
@@ -260,6 +268,7 @@ export class UnixVoiceMediaHostConnection implements IVoiceMediaHostConnection {
       elapsedMs,
       ...(epoch === undefined ? {} : { epoch }),
       ...(classifiedSpeechMs === undefined ? {} : { classifiedSpeechMs }),
+      ...(echoDiscriminatedSpeechMs === undefined ? {} : { echoDiscriminatedSpeechMs }),
     };
   }
   private async expect(pending: Promise<UnixResponse>, status: number): Promise<void> {

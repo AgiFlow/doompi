@@ -1,4 +1,4 @@
-import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import { defineGlobalStore, type WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
 import { browserVoiceMediaClientId } from './browserMediaIdentity.ts';
 import { BrowserVoiceMediaDevice } from './browserMediaDevice.ts';
 import { BrowserVoiceMediaTransport } from './clientMediaTransport.ts';
@@ -13,6 +13,7 @@ class PageVoiceMediaRuntime {
   private boundSessionId: string | undefined;
   private operation: Promise<void> = Promise.resolve();
   private readonly unsubscribe: () => void;
+  private readonly closeOnPageHide = (): void => this.close();
   private closed = false;
 
   public constructor() {
@@ -21,12 +22,14 @@ class PageVoiceMediaRuntime {
     this.device.armUserGesture();
     const subscription = activeVoiceSession.store.subscribe(() => this.select(activeVoiceSession.store.state));
     this.unsubscribe = () => subscription.unsubscribe();
+    window.addEventListener('pagehide', this.closeOnPageHide, { once: true });
     this.select(activeVoiceSession.store.state);
   }
 
   public close(): void {
     if (this.closed) return;
     this.closed = true;
+    window.removeEventListener('pagehide', this.closeOnPageHide);
     this.unsubscribe();
     const dispose = async (): Promise<void> => {
       try {
@@ -89,11 +92,15 @@ class PageVoiceMediaRuntime {
   }
 }
 
+const pageVoiceMediaRuntime = defineGlobalStore<PageVoiceMediaRuntime | undefined>(undefined);
+
 export function startVoiceMediaRuntime(_runtime: WebPluginRuntime): () => void {
-  const instance = new PageVoiceMediaRuntime();
-  return () => {
-    instance.close();
-    activeVoiceSession.reset();
-    voiceMediaBrowserState.reset();
-  };
+  let instance = pageVoiceMediaRuntime.store.state;
+  if (instance === undefined) {
+    instance = new PageVoiceMediaRuntime();
+    pageVoiceMediaRuntime.update(() => instance);
+  }
+  // Session plugin compositions are route-scoped, but microphone ownership is page-scoped.
+  // The pagehide listener owns real cleanup so focus changes cannot disconnect active capture.
+  return () => undefined;
 }

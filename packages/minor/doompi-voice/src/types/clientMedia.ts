@@ -12,6 +12,7 @@ export const VOICE_MEDIA_ACTIVITY_LEVEL_HEADER = 'x-doompi-voice-activity-level'
 export const VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER = 'x-doompi-voice-activity-elapsed';
 export const VOICE_MEDIA_ACTIVITY_EPOCH_HEADER = 'x-doompi-voice-activity-epoch';
 export const VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER = 'x-doompi-voice-activity-speech-ms';
+export const VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER = 'x-doompi-voice-activity-echo-speech-ms';
 export const VOICE_MEDIA_WAKE_TYPE = 'voice_media_wake';
 export const VOICE_MEDIA_HEARTBEAT_MS = 5_000;
 export const VOICE_MEDIA_EVENT_WAIT_NONE = '0';
@@ -58,6 +59,7 @@ export interface VoiceMediaCaptureActivity {
   elapsedMs: number;
   epoch?: number;
   classifiedSpeechMs?: number;
+  echoDiscriminatedSpeechMs?: number;
 }
 
 export interface VoiceMediaCaptureConfiguration {
@@ -157,6 +159,13 @@ export interface VoiceMediaCapture {
   stop(): Promise<void>;
 }
 
+/** Optional browser-local speech input. The original capture PCM remains authoritative for transport. */
+export interface VoiceMediaCaptureSpeechAnalysis {
+  speechPcm: Uint8Array;
+  echoReferenceActive: boolean;
+  echoDiscriminated: boolean;
+}
+
 export interface VoiceMediaPlayback {
   readonly completion: Promise<VoiceMediaPlaybackResult>;
   stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void;
@@ -169,7 +178,9 @@ export interface VoiceMediaDevice {
   /** Initializes optional authoritative media processors after baseline capabilities are available. */
   prepare?(): Promise<void>;
   createSpeechPresenceDetector?(): SpeechPresenceDetector | undefined;
-  startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture>;
+  startCapture(
+    onPcm: (pcm: Uint8Array, speechAnalysis?: VoiceMediaCaptureSpeechAnalysis) => void,
+  ): Promise<VoiceMediaCapture>;
   speak(
     request: Extract<VoiceMediaClientEvent, { type: 'playback-start' }>,
     audio?: Promise<Uint8Array>,

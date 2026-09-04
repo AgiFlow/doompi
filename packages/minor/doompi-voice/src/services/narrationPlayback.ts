@@ -9,6 +9,7 @@ import {
 
 const NARRATION_HISTORY_MS = 60_000;
 const MAX_RECENT_NARRATIONS = 16;
+const MAX_DETERMINISTIC_COMPACTION_CHARACTERS = 640;
 const NARRATION_PLAYBACK_FAILED_EVENT = 'doom_voice.narration_playback_failed';
 const NARRATION_LIFECYCLE_OBSERVER_FAILED_EVENT = 'doom_voice.narration_lifecycle_observer_failed';
 const NARRATION_COMPACTION_FAILED_EVENT = 'doom_voice.narration_compaction_failed';
@@ -49,6 +50,7 @@ interface NarrationCompaction {
 export class VoiceNarrationPlayback {
   private active = false;
   private enabled = true;
+  private deferred = false;
   private config: ResolvedVoiceConfig | undefined;
   private compactor: IVoiceNarrationCompactor | undefined;
   private playback: NarrationPlaybackCoordinator | undefined;
@@ -67,6 +69,7 @@ export class VoiceNarrationPlayback {
     if (this.playback) throw new Error('Voice narration playback must be deactivated before activation.');
     this.active = true;
     this.enabled = true;
+    this.deferred = false;
     this.config = config;
     this.compactor = compactor;
     const activationGeneration = this.activationGeneration + 1;
@@ -117,6 +120,12 @@ export class VoiceNarrationPlayback {
     return this.deactivation;
   }
 
+  public setDeferred(deferred: boolean): void {
+    if (this.deferred === deferred) return;
+    this.deferred = deferred;
+    if (!deferred) this.pump();
+  }
+
   public narrate(
     text: string,
     kind: Extract<NarrationKind, 'final' | 'clarification'>,
@@ -137,7 +146,7 @@ export class VoiceNarrationPlayback {
         this.settleCaller(caller, 'interrupted');
         return;
       }
-      if (!this.activeNarration && !this.compaction && this.pendingNarrations.length === 0) {
+      if (!this.deferred && !this.activeNarration && !this.compaction && this.pendingNarrations.length === 0) {
         this.startNarration(entry);
         return;
       }
@@ -214,13 +223,20 @@ export class VoiceNarrationPlayback {
     )
       return;
     this.compaction = undefined;
-    const retained = operation.entries.filter((entry) => entry.callers.some((caller) => !caller.settled));
-    this.pendingNarrations.unshift(...retained);
+    const callers = operation.entries.flatMap((entry) => entry.callers).filter((caller) => !caller.settled);
+    if (callers.length > 0) {
+      const kind = operation.entries.some((entry) => entry.kind === 'clarification') ? 'clarification' : 'final';
+      this.pendingNarrations.unshift({
+        text: this.deterministicCompaction(operation.entries.map((entry) => entry.text)),
+        kind,
+        callers,
+      });
+    }
     this.pump();
     try {
       void this.dependencies.logger.recordError(NARRATION_COMPACTION_FAILED_EVENT, error);
     } catch {
-      // Telemetry must never affect FIFO fallback.
+      // Telemetry must never affect deterministic fallback.
     }
   }
 
@@ -250,9 +266,22 @@ export class VoiceNarrationPlayback {
   }
 
   private pump(): void {
-    if (this.activeNarration || this.compaction || !this.active || !this.enabled) return;
+    if (this.deferred || this.activeNarration || this.compaction || !this.active || !this.enabled) return;
     const next = this.pendingNarrations.shift();
     if (next) this.startNarration(next);
+  }
+
+  private deterministicCompaction(narrations: readonly string[]): string {
+    const separatorCharacters = Math.max(0, narrations.length - 1);
+    const itemLimit = Math.max(
+      1,
+      Math.floor((MAX_DETERMINISTIC_COMPACTION_CHARACTERS - separatorCharacters) / Math.max(1, narrations.length)),
+    );
+    const combined = narrations
+      .map((narration) => Array.from(narration.trim()).slice(0, itemLimit).join('').trim())
+      .filter(Boolean)
+      .join(' ');
+    return Array.from(combined).slice(0, MAX_DETERMINISTIC_COMPACTION_CHARACTERS).join('');
   }
 
   private cancelCaller(caller: NarrationCaller): void {
@@ -302,6 +331,7 @@ export class VoiceNarrationPlayback {
       this.disableAfterFailure('final', { outcome: 'failed', error });
     } finally {
       if (this.playback === playback) this.playback = undefined;
+      this.deferred = false;
       this.config = undefined;
       this.compactor = undefined;
       this.currentNarration = undefined;

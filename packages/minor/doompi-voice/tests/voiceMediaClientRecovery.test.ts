@@ -4,6 +4,7 @@ import type {
   VoiceMediaCapabilities,
   VoiceMediaCapture,
   VoiceMediaCaptureActivity,
+  VoiceMediaCaptureSpeechAnalysis,
   VoiceMediaClientEvent,
   VoiceMediaDevice,
   VoiceMediaPlayback,
@@ -44,8 +45,10 @@ async function eventually(assertion: () => void): Promise<void> {
 }
 
 class FakeDetector implements SpeechPresenceDetector {
+  public readonly inputs: Uint8Array[] = [];
   public constructor(private readonly pushResult: () => Promise<readonly SpeechPresenceWindow[]>) {}
-  public push(): Promise<readonly SpeechPresenceWindow[]> {
+  public push(pcm: Uint8Array): Promise<readonly SpeechPresenceWindow[]> {
+    this.inputs.push(new Uint8Array(pcm));
     return this.pushResult();
   }
   public readonly reset = vi.fn(async () => undefined);
@@ -60,7 +63,7 @@ interface FakePlayback extends VoiceMediaPlayback {
 
 class FakeDevice implements VoiceMediaDevice {
   public readonly capabilities: VoiceMediaCapabilities = { ...capabilities };
-  public readonly callbacks: Array<(pcm: Uint8Array) => void> = [];
+  public readonly callbacks: Array<(pcm: Uint8Array, speechAnalysis?: VoiceMediaCaptureSpeechAnalysis) => void> = [];
   public readonly captures: Array<VoiceMediaCapture & { stop: ReturnType<typeof vi.fn> }> = [];
   public readonly playbacks: FakePlayback[] = [];
   public close = vi.fn(async () => undefined);
@@ -71,7 +74,9 @@ class FakeDevice implements VoiceMediaDevice {
   public createSpeechPresenceDetector(): SpeechPresenceDetector | undefined {
     return this.detectors.shift();
   }
-  public async startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture> {
+  public async startCapture(
+    onPcm: (pcm: Uint8Array, speechAnalysis?: VoiceMediaCaptureSpeechAnalysis) => void,
+  ): Promise<VoiceMediaCapture> {
     this.callbacks.push(onPcm);
     const capture = { stop: vi.fn(async () => undefined) };
     this.captures.push(capture);
@@ -420,11 +425,23 @@ describe('voice media client browser recovery', () => {
     });
     await eventually(() => expect(device.playbacks).toHaveLength(1));
 
-    for (let index = 0; index < 4; index += 1) device.callbacks[0]!(pcm);
+    const residualPcm = new Uint8Array(3_200).fill(7);
+    for (let index = 0; index < 4; index += 1)
+      device.callbacks[0]!(pcm, {
+        speechPcm: residualPcm,
+        echoReferenceActive: true,
+        echoDiscriminated: true,
+      });
     await eventually(() => expect(transport.audioSends).toHaveLength(5));
     expect(device.playbacks[0]?.duck).not.toHaveBeenCalled();
     expect(device.playbacks[0]?.stop).not.toHaveBeenCalled();
-    expect(transport.audioSends[4]?.activity).toMatchObject({ epoch: 1, classifiedSpeechMs: 400 });
+    expect(detector.inputs[4]).toEqual(residualPcm);
+    expect(transport.audioSends[4]?.pcm).toEqual(pcm);
+    expect(transport.audioSends[4]?.activity).toMatchObject({
+      epoch: 1,
+      classifiedSpeechMs: 400,
+      echoDiscriminatedSpeechMs: 300,
+    });
 
     device.playbacks[0]!.finish('completed');
     await eventually(() => expect(transport.playbackFinished).toHaveBeenCalledOnce());

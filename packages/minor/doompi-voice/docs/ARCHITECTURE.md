@@ -79,6 +79,8 @@ The manual `SPC v v` dictation path is a separate controller
 (`adapters/process/voiceWorkerSessionController.ts`) that reuses the same worker but none of the
 lifecycle machine below.
 
+In the browser, `VoiceMediaRuntime.tsx` stores one media runtime in a page-global plugin store. Session routes may remount their plugin compositions, but those route disposers do not reset server-selected ownership or disconnect the media client. The runtime follows ownership changes reactively and closes its microphone, device, and lease only when the page itself is hidden for teardown. This keeps capture alive when cockpit focus moves away from and back to the owning session.
+
 ---
 
 ## 2. One autonomous turn
@@ -475,67 +477,52 @@ Pipeline operations and shutdown share one ordered barrier. Shutdown marks the p
 
 ## 6. Narration, gating, and barge-in
 
-The hardest part of the package, and the easiest to misread. The default is **half-duplex**: the
-recorder never stops, but while TTS plays, its frames are excluded from the user's turn.
+The fail-closed default is **half-duplex**: the recorder never stops, but playback and echo-tail frames remain outside the user's turn. Streamed browser playback adds a narrower full-duplex route because the browser receives the exact 16 kHz PCM that its audio graph plays.
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant U as User
-  participant Mic as Recorder
-  participant GT as playbackGate
-  participant Ring as Overlap ring (2 s, memory)
+  participant Mic as Browser microphone
+  participant Ref as Exact PCM discriminator
+  participant Silero as Browser Silero
+  participant Ring as Worker overlap ring (2 s)
   participant BI as Barge-in monitor
   participant M as XState machine
-  participant TTS as say
+  participant TTS as Streamed playback
 
-  M->>TTS: playback starts
-  M->>GT: playback-state(active, generation N)
+  M->>TTS: playback starts with exact PCM
+  TTS->>Ref: register PCM at audio-clock start time
   loop While playing
-    Mic->>GT: 20 ms frame
-    GT-->>Ring: excluded from spool, VAD, activity, endpoint
-    BI->>BI: every 500 ms, transcribe last 1.2 s
-    BI->>BI: remove narration-aligned tokens, rank residual
-    alt Rank clears the threshold
+    Mic->>Ref: timestamped raw PCM
+    Ref->>Silero: residual, raw near-end, or silence
+    Mic->>Ring: unchanged raw PCM, excluded from spool
+    Silero-->>BI: cumulative trusted speech duration only
+    BI->>BI: transcribe raw 1.2 s probe and remove narration-aligned text
+    alt Exact stop, addressed novelty, or trusted natural novelty
       BI-->>M: barge-in-evidence
-      M->>M: independently recompute the rank
+      M->>M: independently recompute actionability
       alt Exact stop phrase
-        M->>TTS: abort, discard the whole ring
-      else Addressed novel speech
-        M->>TTS: abort, promote the ring into the turn
+        M->>TTS: abort and discard whole ring
+      else Novel user speech
+        M->>TTS: abort and promote ring into turn
       end
     end
   end
-  TTS-->>M: playback ends
-  M->>GT: playback-state(inactive, generation N)
-  Note over GT: 800 ms echo tail, then reopen
+  TTS-->>Ref: playback settles
+  Note over Ref,M: retain 800 ms echo tail, then reopen
 ```
 
-Evidence is ranked deterministically (`narrationBargeIn.ts`):
+The discriminator keeps two seconds of reference history, searches 0 to 500 ms lag over a 300 ms analysis window, and emits conservative `echo`, `mixed`, `near-end`, or `uncertain` classifications. `mixed` supplies residual PCM to browser Silero, `near-end` supplies raw local PCM, and `echo` or `uncertain` supplies silence. The original microphone bytes are still uploaded and used for the bounded semantic probe.
 
-| Guard                                              | Weight |
-| -------------------------------------------------- | ------ |
-| Exact command-only stop phrase after echo removal  | 100    |
-| At least two novel residual tokens                 | 45     |
-| Configured intentional-address phrase detected     | 40     |
-| Novel residual is at least 30% of the probe        | 20     |
-| At least four novel residual tokens                | 15     |
-| At least 400 ms voiced                             | 15     |
-| Peak at least 6 dB above the session noise profile | 10     |
-| Signal variation at least 3 dB                     | 10     |
-| Whole probe remains strongly narration-aligned     | -40    |
+Voice Media protocol version 6 carries optional cumulative `echoDiscriminatedSpeechMs`. Its presence proves exact streamed PCM was available; zero means no trusted residual speech. The host accepts only nonnegative monotonic integers no greater than `classifiedSpeechMs` and clears trusted accumulation at every activity epoch. Reference PCM, residual PCM, transcript, correlation, and gain never cross this boundary. The worker protocol remains unchanged: trusted duration controls existing `classifierConfirmed`, while ordinary `classifierSpeechMs` remains available to preserve intentional-address ranking.
 
-Free-form interruption requires a configured address phrase, at least two novel residual tokens,
-and a total of at least 80. An exact stop phrase scores 100 but resolves as `discard`, never
-`promote`, so the command and any trailing narration words cannot become a prompt.
+Evidence is ranked deterministically (`narrationBargeIn.ts`). Addressed novelty still clears the existing score threshold, and exact stop still resolves as `discard`. Address-free natural speech additionally requires at least 300 ms trusted residual Silero speech, at least three novel tokens, residual ratio at least 0.30, narration similarity below 0.60, and score at least 80.
 
-**The default that catches people out:** `startPhrases` resolves to an empty list
-(`configPolicy.ts`), and free-form interruption requires an address. Out of the box, therefore,
-only an exact configured stop phrase can interrupt narration, and if `stopPhrases` is also empty
-nothing can. Raw VAD energy alone may never abort TTS.
+Browser SpeechSynthesis has no exact PCM reference and is never registered with the discriminator. Missing reference, uncertain alignment, capture discontinuity, clipping or distortion, failed local Silero, and unsupported clients all retain the address or exact-stop fallback. Raw host or client VAD cannot unlock natural interruption. The 800 ms host echo tail remains authoritative.
 
-Note also that no acoustic echo cancellation exists. Echo is rejected _semantically_, by diffing
-the probe transcript against the exact narration reference.
+The session separately closes the playback admission gate when capture enters confirmed `speech` and keeps it closed through finalization, transcription, policy, and synchronous delivery to Pi. New direct, fallback, and external narration remains in the existing playback queue during that interval. Two or more requests are compacted through the narrator resolved from `autoCapture.model`; a failed compaction produces one bounded deterministic concatenation. Delivery opens the gate and releases only the resulting utterance. Existing playback is not aborted by this admission gate, so ranked barge-in remains the sole authority for interrupting audio already in progress. Overlap-continuation summaries are queued before transcript policy proceeds, then released only after delivery.
+
+These DSP thresholds are provisional. A physical speaker-to-microphone qualification is still required before describing the behavior as reliable full duplex.
 
 ---
 

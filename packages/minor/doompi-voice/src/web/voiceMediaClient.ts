@@ -213,9 +213,17 @@ export class VoiceMediaClient {
     this.speechDetector = speechDetector;
     this.activityLifecycle = activityLifecycle;
     try {
-      this.capture = await this.device.startCapture((pcm) => {
+      this.capture = await this.device.startCapture((pcm, speechAnalysis) => {
         if (generation !== this.captureGeneration || this.captureId !== captureId) return;
         const owned = new Uint8Array(pcm);
+        const speechPcm = speechAnalysis === undefined ? owned : new Uint8Array(speechAnalysis.speechPcm);
+        const classification =
+          speechAnalysis === undefined
+            ? undefined
+            : {
+                echoReferenceActive: speechAnalysis.echoReferenceActive,
+                echoDiscriminated: speechAnalysis.echoDiscriminated,
+              };
         this.audioUploads = this.audioUploads.then(async () => {
           if (
             this.audioUploadError !== undefined ||
@@ -224,9 +232,11 @@ export class VoiceMediaClient {
           )
             return;
           try {
-            const windows = await speechDetector?.push(owned);
+            if (speechPcm.byteLength !== owned.byteLength)
+              throw new Error('Local speech analysis must preserve the capture sample count.');
+            const windows = await speechDetector?.push(speechPcm);
             if (generation !== this.captureGeneration || this.captureId !== captureId) return;
-            const activity = activityLifecycle?.push(owned, windows);
+            const activity = activityLifecycle?.push(owned, windows, classification);
             await this.transport.sendAudio(this.clientId, connectionId, captureId, owned, activity);
           } catch (error) {
             if (generation !== this.captureGeneration || this.captureId !== captureId) return;

@@ -93,6 +93,7 @@ export interface AutonomousVoiceSessionDependencies {
   abortPlayback(): Promise<void>;
   telemetry?: AutonomousVoiceTelemetry;
   onActivationStateChange(state: AutoCaptureActivationState): void;
+  onNarrationDeferredChange?(deferred: boolean): void;
   onStopped(): void;
   identityNonceFactory?: AutonomousTurnNonceFactory;
 }
@@ -112,6 +113,16 @@ function activationState(snapshot: AutonomousVoiceSnapshot): AutoCaptureActivati
   if (snapshot.matches('failed')) return 'shuttingDown';
   if (snapshot.matches('stopping') || snapshot.context.stopRequested) return 'draining';
   return 'active';
+}
+
+function narrationDeferred(snapshot: AutonomousVoiceSnapshot): boolean {
+  return (
+    snapshot.matches({ active: { capture: 'speech' } }) ||
+    snapshot.matches({ active: { capture: 'finalizing' } }) ||
+    snapshot.matches({ active: { capture: 'transcribing' } }) ||
+    snapshot.matches({ active: { capture: 'applyingPolicy' } }) ||
+    snapshot.matches({ active: { capture: 'delivering' } })
+  );
 }
 
 export class AutonomousVoiceSession {
@@ -746,15 +757,11 @@ export class AutonomousVoiceSession {
       this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
       return;
     }
+    this.transcriptAdmissionAbort = undefined;
     void Promise.resolve()
       .then(() => narrate(summary, controller.signal))
-      .catch(() => undefined)
-      .then(() => {
-        if (this.transcriptAdmissionAbort !== controller || controller.signal.aborted || !this.effectIsCurrent(effect))
-          return;
-        this.transcriptAdmissionAbort = undefined;
-        this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
-      });
+      .catch(() => undefined);
+    this.applyAdmittedTranscript({ ...effect, narrationOverlapPromoted: false }, assessment.residualText);
   }
 
   private effectIsCurrent(effect: Extract<AutonomousVoiceEffect, { type: 'effect.applyTranscriptPolicy' }>): boolean {
@@ -965,6 +972,7 @@ export class AutonomousVoiceSession {
     this.dependencies.ui.setStatus(projection.status);
     const state = activationState(snapshot);
     this.dependencies.onActivationStateChange(state);
+    this.dependencies.onNarrationDeferredChange?.(narrationDeferred(snapshot));
     const stopped = state === 'disabled' && this.lastActivationState !== 'disabled';
     this.lastActivationState = state;
     if (stopped) this.dependencies.onStopped();

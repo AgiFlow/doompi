@@ -3,6 +3,7 @@ import type { SpeechPresenceDetector } from '../types/clientCaptureActivity.ts';
 import type {
   VoiceMediaCapabilities,
   VoiceMediaCapture,
+  VoiceMediaCaptureSpeechAnalysis,
   VoiceMediaDevice,
   VoiceMediaPlayback,
   VoiceMediaPlaybackOutcome,
@@ -10,6 +11,7 @@ import type {
 } from '../types/clientMedia.ts';
 import { VOICE_MEDIA_SAMPLE_RATE } from '../types/clientMedia.ts';
 import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url';
+import { BrowserNarrationEchoDiscriminator } from './browserNarrationEchoDiscriminator.ts';
 import { BrowserSpeechPresenceDetector, type SpeechWorker } from './browserSpeechPresenceDetector.ts';
 import sileroVadWorkerUrl from './sileroVadWorker.ts?worker&url';
 
@@ -26,8 +28,21 @@ const PCM_MAXIMUM = 32_767;
 const PCM_MINIMUM = -32_768;
 const PCM_UPLOAD_BYTES = (VOICE_MEDIA_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * AUDIO_UPLOAD_DURATION_MS) / 1_000;
 const SILENT_OUTPUT_GAIN = 1e-8;
+const CAPTURE_CLOCK_DISCONTINUITY_SECONDS = 0.05;
+const ECHO_REACQUISITION_SAMPLES = (VOICE_MEDIA_SAMPLE_RATE * 300) / 1_000;
 
 type SpeechUtteranceConstructor = new (text?: string) => SpeechSynthesisUtterance;
+
+interface CaptureWorkletMessage {
+  samples: Float32Array;
+  capturedAt: number;
+}
+
+function isCaptureWorkletMessage(value: unknown): value is CaptureWorkletMessage {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as { samples?: unknown; capturedAt?: unknown };
+  return candidate.samples instanceof Float32Array && typeof candidate.capturedAt === 'number';
+}
 
 function browserSpeechPlaybackAvailable(): boolean {
   return typeof window !== 'undefined' && typeof window.speechSynthesis?.speak === 'function';
@@ -171,11 +186,13 @@ class BrowserPcmPlayback implements VoiceMediaPlayback {
   private settled = false;
   private settleCompletion!: (result: VoiceMediaPlaybackResult) => void;
   private restoreTimer: ReturnType<typeof setTimeout> | undefined;
+  private startedAt: number | undefined;
 
   public constructor(
     private readonly context: AudioContext,
     audio: Promise<Uint8Array>,
     private readonly playbackId: string,
+    private readonly echoDiscriminator: BrowserNarrationEchoDiscriminator,
   ) {
     this.completion = new Promise((resolve) => {
       this.settleCompletion = resolve;
@@ -185,6 +202,7 @@ class BrowserPcmPlayback implements VoiceMediaPlayback {
 
   public stop(outcome: Extract<VoiceMediaPlaybackOutcome, 'stopped' | 'aborted'>): void {
     if (this.settled) return;
+    if (this.source !== undefined) this.source.onended = null;
     this.source?.stop();
     this.settle(outcome);
   }
@@ -224,7 +242,10 @@ class BrowserPcmPlayback implements VoiceMediaPlayback {
       gain.connect(this.context.destination);
       this.source = source;
       this.gain = gain;
-      source.start();
+      const startedAt = this.context.currentTime;
+      this.startedAt = startedAt;
+      this.echoDiscriminator.beginPlayback(this.playbackId, buffer.getChannelData(0), startedAt);
+      source.start(startedAt);
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       this.settle('failed', message);
@@ -236,6 +257,7 @@ class BrowserPcmPlayback implements VoiceMediaPlayback {
     this.settled = true;
     if (this.restoreTimer !== undefined) clearTimeout(this.restoreTimer);
     if (this.source !== undefined) this.source.onended = null;
+    if (this.startedAt !== undefined) this.echoDiscriminator.endPlayback(this.playbackId, this.context.currentTime);
     this.source?.disconnect();
     this.gain?.disconnect();
     this.source = undefined;
@@ -268,6 +290,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   private listeningForMediaUnlock = false;
   private speechWarmup: SpeechSynthesisUtterance | undefined;
   private speechWarmupTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly echoDiscriminator = new BrowserNarrationEchoDiscriminator();
 
   private readonly unlockMedia = (): void => {
     if (typeof AudioContext !== 'undefined') {
@@ -296,7 +319,9 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     return this.speechDetector;
   }
 
-  public async startCapture(onPcm: (pcm: Uint8Array) => void): Promise<VoiceMediaCapture> {
+  public async startCapture(
+    onPcm: (pcm: Uint8Array, speechAnalysis?: VoiceMediaCaptureSpeechAnalysis) => void,
+  ): Promise<VoiceMediaCapture> {
     if (!this.capabilities.capture) throw new Error('This browser cannot capture microphone audio.');
     if (this.activeCapture !== undefined) throw new Error('Browser microphone capture is already active.');
     this.stream ??= await navigator.mediaDevices.getUserMedia({
@@ -314,8 +339,13 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     const muted = this.context.createGain();
     muted.gain.value = SILENT_OUTPUT_GAIN;
     const resampler = new Pcm16Resampler(this.context.sampleRate);
+    this.echoDiscriminator.resetCapture();
     let pendingPcmChunks: Uint8Array[] = [];
     let pendingPcmBytes = 0;
+    let captureStartedAt: number | undefined;
+    let emittedPcmSamples = 0;
+    let expectedCaptureAt: number | undefined;
+    let echoTrustBlockedSamples = 0;
     const emitPcm = (byteLength: number): void => {
       const upload = new Uint8Array(byteLength);
       let offset = 0;
@@ -329,9 +359,33 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
         else pendingPcmChunks[0] = chunk.subarray(accepted);
       }
       pendingPcmBytes -= byteLength;
-      onPcm(upload);
+      const sampleCount = byteLength / PCM_BYTES_PER_SAMPLE;
+      const endedAt =
+        (captureStartedAt ?? this.context!.currentTime) + (emittedPcmSamples + sampleCount) / VOICE_MEDIA_SAMPLE_RATE;
+      emittedPcmSamples += sampleCount;
+      const discrimination = this.echoDiscriminator.process(upload, endedAt);
+      const trustBlocked = echoTrustBlockedSamples > 0;
+      echoTrustBlockedSamples = Math.max(0, echoTrustBlockedSamples - sampleCount);
+      onPcm(upload, {
+        speechPcm: trustBlocked ? new Uint8Array(upload.byteLength) : discrimination.speechPcm,
+        echoReferenceActive: discrimination.referenceActive,
+        echoDiscriminated: !trustBlocked && discrimination.speechDiscriminated,
+      });
     };
-    const acceptSamples = (samples: Float32Array): void => {
+    const acceptSamples = (samples: Float32Array, capturedAt?: number): void => {
+      const timestamp = capturedAt !== undefined && Number.isFinite(capturedAt) ? capturedAt : undefined;
+      if (
+        timestamp !== undefined &&
+        expectedCaptureAt !== undefined &&
+        Math.abs(timestamp - expectedCaptureAt) > CAPTURE_CLOCK_DISCONTINUITY_SECONDS
+      ) {
+        this.echoDiscriminator.resetCapture();
+        echoTrustBlockedSamples = pendingPcmBytes / PCM_BYTES_PER_SAMPLE + ECHO_REACQUISITION_SAMPLES;
+        captureStartedAt =
+          timestamp - (emittedPcmSamples + pendingPcmBytes / PCM_BYTES_PER_SAMPLE) / VOICE_MEDIA_SAMPLE_RATE;
+      }
+      if (timestamp !== undefined) expectedCaptureAt = timestamp + samples.length / this.context!.sampleRate;
+      captureStartedAt ??= timestamp ?? this.context!.currentTime - samples.length / this.context!.sampleRate;
       const pcm = resampler.push(samples);
       if (pcm.byteLength === 0) return;
       pendingPcmChunks.push(pcm);
@@ -347,7 +401,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
       }
       const worklet = new AudioWorkletNode(this.context, AUDIO_WORKLET_NAME);
       worklet.port.onmessage = (event: MessageEvent<unknown>) => {
-        if (event.data instanceof Float32Array) acceptSamples(event.data);
+        if (isCaptureWorkletMessage(event.data)) acceptSamples(event.data.samples, event.data.capturedAt);
       };
       processor = worklet;
       stopProcessor = () => {
@@ -356,7 +410,8 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
       };
     } else {
       const scriptProcessor = this.context.createScriptProcessor(AUDIO_BUFFER_SIZE, 1, 1);
-      scriptProcessor.onaudioprocess = (event) => acceptSamples(event.inputBuffer.getChannelData(0));
+      scriptProcessor.onaudioprocess = (event) =>
+        acceptSamples(event.inputBuffer.getChannelData(0), event.playbackTime);
       processor = scriptProcessor;
       stopProcessor = () => {
         scriptProcessor.onaudioprocess = null;
@@ -395,7 +450,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
       if (typeof AudioContext !== 'function') throw new Error('This browser cannot play streamed narration audio.');
       if (this.context === undefined || this.context.state !== 'running')
         throw new Error('Browser audio playback is not unlocked. Tap the voice control and try again.');
-      playback = new BrowserPcmPlayback(this.context, audio, request.playbackId);
+      playback = new BrowserPcmPlayback(this.context, audio, request.playbackId, this.echoDiscriminator);
     } else {
       this.finishSpeechWarmup(false);
       const synthesis = window.speechSynthesis;
@@ -441,6 +496,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     for (const track of this.stream?.getTracks() ?? []) track.stop();
     this.stream = undefined;
     if (this.context !== undefined && this.context.state !== 'closed') await this.context.close();
+    this.echoDiscriminator.reset();
     this.context = undefined;
     this.workletInstalled = false;
   }

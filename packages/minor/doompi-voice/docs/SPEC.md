@@ -384,12 +384,15 @@ Responsibilities:
 
 Impact on result: determines whether speech exists, whether audio is complete, and whether the UI truthfully says `listening`.
 
+Browser autonomous capture ownership MUST be page-global, not scoped to the focused cockpit route. Remounting or disposing a session plugin composition MUST NOT reset the server-selected owner, disconnect its media client, stop its microphone, or acknowledge its active capture. Ownership changes MAY move the page-global runtime between sessions. Removing the owner or tearing down the page MUST release its media resources and lease.
+
 ### 4.4 Playback-overlap aspect
 
 **Modules:**
 
 - `src/services/playbackGate.ts`
 - `src/services/narrationBargeIn.ts`
+- `src/web/browserNarrationEchoDiscriminator.ts`
 
 Responsibilities:
 
@@ -397,14 +400,16 @@ Responsibilities:
 - define `playing`, 800 ms `echoTail`, and `open` phases;
 - tell capture persistence and VAD whether a frame is eligible;
 - keep unconfirmed overlap in a bounded in-memory ring outside the user turn spool;
-- rank bounded probes against the exact narration reference using independent semantic and acoustic guards;
-- require configured intentional address before free-form playback interruption, while allowing exact stop commands directly;
-- reset provisional VAD/endpoint state at playback boundaries;
-- let XState authorize either promotion of addressed novel speech or discard of command-only interruption audio.
+- register exact streamed 16 kHz PCM against browser audio-clock playback time and acoustically classify a separate local Silero input;
+- upload the original microphone PCM unchanged and report only cumulative trusted speech duration;
+- rank bounded raw probes against the narration text using semantic novelty and acoustic evidence;
+- allow free-form interruption through either configured intentional address or the trusted natural-speech route, while allowing exact stop commands directly;
+- reset provisional VAD, endpoint, alignment, and trusted activity state at playback boundaries;
+- let XState authorize promotion of novel speech or discard of command-only interruption audio.
 
 Impact on result: prevents narration from becoming user input or terminating itself while allowing proven user interruptions.
 
-The default lane remains half-duplex: playback and echo-tail PCM is excluded from the user turn. Section 10 defines the only compliant promotion path.
+The fail-closed lane remains half-duplex: playback and echo-tail PCM is excluded from the user turn unless Section 10 authorizes promotion. Eligible browser playback using exact streamed PCM may use the trusted natural-speech route; playback without that reference retains the intentional-address and exact-stop behavior.
 
 ### 4.5 Acoustic endpoint aspect
 
@@ -474,13 +479,14 @@ Responsibilities:
 - detect exact composition start, send, and cancel phrases using bounded machine state;
 - detect an exact command-only stop phrase after playback/echo separation;
 - reject known narration-only echo if overlap evidence exists;
-- require and strip intentional address from XState-authorized narration-overlap turns;
-- remove at most four ASR-misaligned narration-tail tokens before that address;
+- strip intentional address from an authorized addressed narration-overlap turn;
+- accept an authorized unaddressed overlap turn only when trusted acoustic and semantic evidence satisfy Section 10;
+- remove at most four ASR-misaligned narration-tail tokens before an address or exact stop command;
 - return deterministic delivery, composition, discard, or stop outcomes without rewriting clean-lane prompts.
 
 Impact on result: determines what exact text reaches Pi and whether control speech is treated as a command.
 
-Start phrases remain optional leading control phrases during ordinary active listening. During narration and its protected overlap handoff, however, one configured start phrase is the mandatory intentional-address gate for free-form interruption; if none is configured, only an exact stop command may interrupt. Stop phrases MUST match a normalized command-only utterance, not a fuzzy substring anywhere in arbitrary dictation. Reserved composition phrases MUST be evaluated before ordinary leading start-phrase removal so a configured `doom` address cannot turn `doom send` into ordinary `send` content. Optional model correction MUST run only on accepted content segments, never on control commands.
+Start phrases remain optional leading control phrases during ordinary active listening. During narration and its protected overlap handoff, a configured start phrase remains one valid free-form interruption gate. Address-free interruption is valid only when exact streamed PCM supports at least 300 ms of echo-discriminated Silero speech and the Section 10 semantic guards pass. Without either route, only an exact stop command may interrupt. Stop phrases MUST match a normalized command-only utterance, not a fuzzy substring anywhere in arbitrary dictation. Reserved composition phrases MUST be evaluated before ordinary leading start-phrase removal so a configured `doom` address cannot turn `doom send` into ordinary `send` content. Optional model correction MUST run only on accepted content segments, never on control commands.
 
 ### 4.9 Command-correction aspect
 
@@ -536,6 +542,8 @@ Responsibilities:
 - track only whether a direct `narrate` call was attempted and the terminal assistant text needed by the zero-call safety net;
 - sanitize, bound, and deterministically speak short omitted finals;
 - generate one bounded long-final fallback with the configured model and degrade deterministically on generation failure;
+- defer new playback from confirmed user speech through synchronous turn delivery without aborting narration that was already active;
+- compact multiple deferred requests into one bounded utterance with the configured `autoCapture.model`, falling back to one bounded deterministic utterance on model failure;
 - coordinate priority, per-request cancellation, and exact-once physical TTS settlement without owning capture lifecycle;
 - report playback start/end generations to the machine and retain bounded echo references;
 - route direct and fallback speech at `final` priority and narration-bus speech at `clarification` priority;
@@ -706,7 +714,7 @@ Narration priority remains:
 intent < plan < final < clarification < question
 ```
 
-The coordinator retains this ordering for shared playback. The direct `narrate` tool and zero-call final fallback enter as `final`; external narration requests enter as `clarification`. No automatic lifecycle source produces `intent`, `plan`, milestone, or tool-progress speech. Higher-priority narration may supersede lower-priority narration. Toggle-off, hard stop, and extension disposal abort playback and pending fallback generation.
+The coordinator retains this ordering for shared playback. The direct `narrate` tool and zero-call final fallback enter as `final`; external narration requests enter as `clarification`. No automatic lifecycle source produces `intent`, `plan`, milestone, or tool-progress speech. Higher-priority narration may supersede lower-priority narration. From confirmed speech through synchronous delivery of that turn to Pi, new narration MUST remain queued and MUST NOT start TTS. Narration already active remains under ranked barge-in control. Two or more deferred requests MUST become one bounded utterance through the configured `autoCapture.model`; failure MUST produce one bounded deterministic utterance rather than sequential replay. Delivery MUST precede release of an overlap-continuation summary. Toggle-off, hard stop, and extension disposal abort playback, queued narration, compaction, and pending fallback generation.
 
 ### AV-TTS-003: Failure isolation
 
@@ -743,32 +751,40 @@ The canonical worker listens during narration through a bounded overlap lane. Th
 A compliant implementation MUST:
 
 - retain at most two seconds of playback-overlap PCM in memory outside the user turn spool;
-- use the exact narration reference and bounded local overlap probes or acoustic echo cancellation;
-- remove playback-correlated content before stop-command and novelty classification;
-- require configured intentional address plus semantic novelty, or an exact command-only stop phrase; raw VAD energy alone MUST NOT abort TTS;
-- disable free-form playback interruption when no start phrase is configured;
-- send privacy-safe evidence, never transcript or PCM, across the worker control protocol;
+- use exact server-streamed 16 kHz PCM as the browser-local acoustic reference when available;
+- search only 0 to 500 ms lag over a 300 ms window and retain the stopped reference only through the 800 ms echo tail;
+- keep uploaded microphone PCM byte-identical and filter only the separate browser-local Silero input;
+- count trusted residual Silero speech only for confident near-end or mixed classifications;
+- carry only optional cumulative `echoDiscriminatedSpeechMs` duration in Voice Media protocol version 6;
+- reject malformed, excessive, or nonmonotonic trusted duration within an activity epoch;
+- transcribe the raw bounded overlap probe and remove narration-aligned text before stop-command and novelty classification;
+- require configured intentional address plus semantic novelty, an exact command-only stop phrase, or the trusted natural-speech route defined below;
+- ensure raw client VAD, host VAD, and ordinary `classifiedSpeechMs` cannot unlock the trusted natural-speech route;
+- send no reference PCM, residual PCM, transcript, correlation, or gain across the media or worker control boundary;
 - let XState independently recompute the evidence rank before emitting playback-abort and worker-resolution effects;
 - preserve authorized novel speech, including bounded pre-roll, as the beginning of the current user turn;
 - discard the entire overlap ring for a command-only stop interruption, so the command and trailing narration words cannot become a user prompt;
-- retain the 800 ms echo tail for all unconfirmed playback;
+- fail closed to intentional address or exact stop when exact PCM, alignment, or trusted Silero evidence is unavailable;
 - pass real speaker-to-microphone integration tests.
 
 The deterministic rank uses these explicit guards:
 
-| Evidence guard                                        | Weight |
-| ----------------------------------------------------- | -----: |
-| Configured intentional-address phrase detected        |     40 |
-| At least two novel residual tokens                    |     45 |
-| At least four novel residual tokens                   |     15 |
-| Novel residual is at least 30% of the probe           |     20 |
-| At least 400 ms voiced                                |     15 |
-| Peak is at least 6 dB above the session noise profile |     10 |
-| Signal variation is at least 3 dB                     |     10 |
-| Whole probe remains strongly narration-aligned        |    -40 |
-| Exact command-only stop phrase after echo removal     |    100 |
+| Evidence guard                                                | Weight |
+| ------------------------------------------------------------- | -----: |
+| Configured intentional-address phrase detected                |     30 |
+| Trusted confirmation or at least 120 ms classifier speech     |     35 |
+| At least 300 ms classifier speech                             |     15 |
+| At least one novel residual token                             |     30 |
+| At least two novel residual tokens                            |     20 |
+| At least four novel residual tokens                           |     10 |
+| Novel residual is at least 30% of the probe                   |     15 |
+| At least 300 ms voiced                                        |     10 |
+| Peak is at least 6 dB above the session noise profile         |     10 |
+| Signal variation is at least 3 dB                             |     10 |
+| Residual exists and whole probe is strongly narration-aligned |    -50 |
+| Exact command-only stop phrase after echo removal             |    100 |
 
-Free-form interruption requires a configured intentional-address phrase, a score of at least 80, and at least two novel residual tokens after removing that phrase. The intentional-address boolean is privacy-safe evidence and XState independently requires it before promotion. An exact stop command scores 100 but resolves as `discard`, not `promote`; it may optionally follow the address phrase. When otherwise-aligned narration ends with a small ASR-mismatched tail, at most four such tail tokens may precede the address or exact stop command; they are treated as narration contamination and excluded from delivery.
+Addressed free-form interruption requires at least one novel residual token and a score of at least 80. Natural address-free interruption requires all of: exact-reference acoustic confirmation, at least 300 ms trusted residual Silero speech within the current activity epoch, at least three novel residual tokens, a residual ratio of at least 0.30, narration similarity below 0.60, and a score of at least 80. Trusted duration controls the existing `classifierConfirmed` evidence field, while `classifierSpeechMs` retains ordinary classifier duration so uncertain acoustic separation cannot regress the intentional-address route. The media boundary enforces trusted duration no greater than ordinary duration, so confirmation still proves the 300 ms natural-speech floor. No new worker protocol payload is required. XState independently applies the same actionability rule before promotion. An exact stop command scores 100 but resolves as `discard`, not `promote`; it may optionally follow the address phrase. When otherwise-aligned narration ends with a small ASR-mismatched tail, at most four such tail tokens may precede the address or exact stop command; they are treated as narration contamination and excluded from delivery.
 
 ## 11. Privacy and security
 
@@ -779,6 +795,7 @@ Free-form interruption requires a configured intentional-address phrase, a score
 - For command correction, the configured model receives only the accepted prompt and bounded, sanitized reference context. For the zero-call fallback, the same model receives only the sanitized final assistant response, bounded to 4,096 characters. Both request types disable cache retention and exclude raw branch history, tool output, descriptions, previews, credentials, and private paths.
 - Direct narration text flows from the primary agent to the configured TTS adapter without a narrator-model request. Agent guidance MUST prohibit secrets, code, raw paths, and private payloads in spoken wording. Fallback input and model output MUST be sanitized independently before speech.
 - Playback-suppressed PCM is outside the user turn and is not persisted to its spool unless XState authorizes novel-speech promotion.
+- The browser uploads original microphone PCM unchanged. Its exact playback reference and residual analysis PCM never leave the browser; only trusted duration may be reported.
 - Bounded probe WAVs use private temporary storage and are removed immediately after local classification.
 - Each probe ASR call has an independent deadline of at most five seconds; timeout or cancellation yields no interruption evidence and permits the newest pending probe to run.
 - Command-only interruption PCM is always discarded rather than promoted.

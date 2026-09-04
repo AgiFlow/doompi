@@ -81,7 +81,9 @@ narration and capture follow the user to the remote device. Local clients cannot
 while the remote client remains connected. Standalone terminal launches retain the macOS FFmpeg and
 `say` adapters as a host-owned fallback. In the browser, `tts.voice` selects an exact
 SpeechSynthesis voice name or URI. If it does not match, the browser uses its default voice. Portable
-clients implement the declared ports through `@agimon-ai/doompi-voice/client-media`.
+clients implement the declared ports through `@agimon-ai/doompi-voice/client-media`. Browser media ownership is page-global rather than tied to the focused cockpit route, so switching sessions does not disconnect an autonomous capture owned by another session.
+
+For server-streamed narration, the browser uses the exact 16 kHz PCM as a local echo reference while uploading microphone PCM unchanged. A bounded discriminator filters only the local Silero input and reports cumulative trusted speech duration, never reference audio, residual audio, transcript, correlation, or gain. Natural address-free interruption requires 300 ms of trusted residual speech plus semantic novelty. Missing or uncertain alignment, failed local Silero, unsupported clients, and browser SpeechSynthesis all fail closed to the existing intentional-address or exact-stop behavior. The 800 ms echo tail remains active. Acoustic thresholds are provisional until physical speaker-to-microphone qualification passes.
 
 ## Commands and tools
 
@@ -102,6 +104,7 @@ Before a final response, narration contains the complete answer, including every
 conclusion, question, warning, result, and next action in the written response. It does not use
 a shorter spoken summary that leaves essential information only in text. Each narration is
 limited to 4,096 characters and returns `completed`, `interrupted`, `superseded`, or `failed`.
+Once confirmed user speech begins, new narration waits in memory until that turn is synchronously delivered to Pi. Multiple waiting requests use the configured `autoCapture.model` to become one bounded spoken update, with one bounded deterministic utterance if compaction fails. Narration that was already playing is not stopped by this queue gate; the existing ranked barge-in policy remains responsible for interruption.
 Narration fails closed while Voice is starting or draining, during shutdown, reload, or
 deactivation, and when the request belongs to a stale session.
 Only the currently active TUI session receives Voice-owned tools.

@@ -31,7 +31,7 @@ describe('ranked narration barge-in', () => {
     expect(decision.evidence.residualTokenCount).toBe(0);
   });
 
-  it('classifies an imperfect transcription of the spoken narration as narration, not user input', () => {
+  it('classifies an imperfect transcription of the spoken narration as narration even with trusted speech', () => {
     const decision = analyzeNarrationBargeIn({
       transcript: 'The plan was ready for revue',
       referenceText: 'The plan is ready for review',
@@ -39,6 +39,7 @@ describe('ranked narration barge-in', () => {
       stopPhrases: ['stop speaking'],
       pcm: speechWindow(),
       classifierSpeechMs: 640,
+      classifierConfirmed: true,
     });
 
     expect(decision.evidence).toMatchObject({
@@ -49,22 +50,38 @@ describe('ranked narration barge-in', () => {
     expect(decision).toMatchObject({ actionable: false, speechSource: 'narration' });
   });
 
-  it('rejects high-scoring narration residuals without intentional address', () => {
-    const decision = analyzeNarrationBargeIn({
-      transcript: 'The plan is ready please handle my new request',
+  it('allows natural speech only with 300 ms of trusted acoustic evidence and semantic novelty', () => {
+    const input = {
+      transcript: 'The plan is ready please run all tests',
       referenceText: 'The plan is ready',
       startPhrases: ['hey doom'],
       stopPhrases: ['stop speaking'],
       pcm: speechWindow(),
-    });
+    };
 
-    expect(decision.evidence).toMatchObject({
+    const trusted = analyzeNarrationBargeIn({
+      ...input,
+      classifierSpeechMs: 300,
+      classifierConfirmed: true,
+    });
+    expect(trusted.evidence).toMatchObject({
       exactStopCommand: false,
       intentionalAddress: false,
-      residualTokenCount: 5,
+      classifierConfirmed: true,
+      classifierSpeechMs: 300,
+      residualTokenCount: 4,
     });
-    expect(decision.score).toBeGreaterThanOrEqual(80);
-    expect(decision).toMatchObject({ actionable: false, speechSource: 'ambiguous' });
+    expect(trusted.evidence.residualRatio).toBeGreaterThanOrEqual(0.3);
+    expect(trusted.evidence.narrationSimilarity).toBeLessThan(0.6);
+    expect(trusted.score).toBeGreaterThanOrEqual(80);
+    expect(trusted).toMatchObject({ actionable: true, speechSource: 'user' });
+
+    expect(analyzeNarrationBargeIn({ ...input, classifierSpeechMs: 299, classifierConfirmed: true }).actionable).toBe(
+      false,
+    );
+    expect(analyzeNarrationBargeIn({ ...input, classifierSpeechMs: 640, classifierConfirmed: false }).actionable).toBe(
+      false,
+    );
   });
 
   it('classifies novel unaddressed speech but does not let the classifier alone interrupt narration', () => {
@@ -80,26 +97,28 @@ describe('ranked narration barge-in', () => {
     expect(decision.evidence).toMatchObject({
       exactStopCommand: false,
       intentionalAddress: false,
-      classifierConfirmed: true,
+      classifierConfirmed: false,
       classifierSpeechMs: 160,
       residualTokenCount: 5,
     });
     expect(decision).toMatchObject({ actionable: false, speechSource: 'user' });
   });
 
-  it('combines intentional address with semantic and acoustic guards for novel user speech', () => {
+  it('preserves intentional address when trusted acoustic confirmation is unavailable', () => {
     const decision = analyzeNarrationBargeIn({
-      transcript: 'The plan is ready hey doom please handle my new request',
+      transcript: 'The plan is ready hey doom continue',
       referenceText: 'The plan is ready',
       startPhrases: ['hey doom'],
       stopPhrases: ['stop speaking'],
       pcm: speechWindow(),
+      classifierSpeechMs: 160,
+      classifierConfirmed: false,
     });
 
     expect(decision.evidence).toMatchObject({
       exactStopCommand: false,
       intentionalAddress: true,
-      residualTokenCount: 5,
+      residualTokenCount: 1,
     });
     expect(decision.score).toBeGreaterThanOrEqual(80);
     expect(decision.actionable).toBe(true);
@@ -204,7 +223,7 @@ describe('ranked narration barge-in', () => {
       0,
     );
 
-    for (let index = 0; index < 85; index += 1) monitor.observe(pcmFrame(7_000), index * 20, undefined, 160);
+    for (let index = 0; index < 85; index += 1) monitor.observe(pcmFrame(7_000), index * 20, undefined, 640, false);
     await vi.waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
 
     expect(onEvidence).not.toHaveBeenCalled();

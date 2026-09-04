@@ -256,11 +256,16 @@ describe('browser voice media', () => {
     expect(composer.html).toContain('data-voice-phase="blocked"');
     expect(composer.html).toContain('manual voice is unavailable while autonomous voice is active');
   });
-  it('switches browser media from the server-selected global value without acknowledgements', async () => {
+  it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
     const source = await readFile(new URL('../src/web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
+    expect(source).toContain('defineGlobalStore<PageVoiceMediaRuntime | undefined>');
+    expect(source).toContain('pageVoiceMediaRuntime.store.state');
+    expect(source).toContain("window.addEventListener('pagehide', this.closeOnPageHide");
     expect(source).toContain('this.boundSessionId = sessionId');
+    expect(source).toContain('return () => undefined');
+    expect(source).not.toContain('activeVoiceSession.reset()');
     expect(source).not.toContain('sendHubFrame');
     expect(source).not.toContain('browser-media-ack');
     expect(source).not.toContain('setInterval');

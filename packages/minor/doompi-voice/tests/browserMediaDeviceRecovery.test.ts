@@ -6,8 +6,9 @@ class FakeNode {
 }
 
 class FakeScriptProcessor extends FakeNode {
-  public onaudioprocess: ((event: { inputBuffer: { getChannelData(channel: number): Float32Array } }) => void) | null =
-    null;
+  public onaudioprocess:
+    | ((event: { inputBuffer: { getChannelData(channel: number): Float32Array }; playbackTime?: number }) => void)
+    | null = null;
 }
 
 class FakeBufferSource extends FakeNode {
@@ -22,6 +23,7 @@ class FakeAudioContext {
   public readonly processor = new FakeScriptProcessor();
   public readonly bufferSource = new FakeBufferSource();
   public readonly copiedSamples: Float32Array[] = [];
+  public currentTime = 0;
   public state: 'running' | 'suspended' | 'closed' = 'running';
 
   public async resume(): Promise<void> {}
@@ -34,8 +36,21 @@ class FakeAudioContext {
   public createScriptProcessor(): FakeScriptProcessor {
     return this.processor;
   }
-  public createBuffer(): { copyToChannel: (samples: Float32Array) => void } {
-    return { copyToChannel: (samples) => this.copiedSamples.push(samples) };
+  public createBuffer(
+    _channels: number,
+    length: number,
+  ): {
+    copyToChannel: (samples: Float32Array) => void;
+    getChannelData: () => Float32Array;
+  } {
+    const channel = new Float32Array(length);
+    return {
+      copyToChannel: (samples) => {
+        channel.set(samples);
+        this.copiedSamples.push(channel);
+      },
+      getChannelData: () => channel,
+    };
   }
   public createBufferSource(): FakeBufferSource {
     return this.bufferSource;
@@ -283,6 +298,95 @@ describe('browser media device recovery guards', () => {
     await expect(playback.completion).resolves.toEqual({ playbackId: 'streamed-playback', outcome: 'completed' });
     await device.close();
   });
+  it('uses streamed playback PCM only for local echo-aware speech analysis', async () => {
+    const track = { stop: vi.fn() };
+    const stream = { getTracks: () => [track] };
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream) } });
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('AudioWorkletNode', undefined);
+    vi.stubGlobal('Worker', undefined);
+    const device = new BrowserVoiceMediaDevice();
+    const rawUploads: Uint8Array[] = [];
+    const analyses: Array<{ speechPcm: Uint8Array; echoReferenceActive: boolean; echoDiscriminated: boolean }> = [];
+    const capture = await device.startCapture((pcm, analysis) => {
+      rawUploads.push(pcm);
+      if (analysis !== undefined) analyses.push(analysis);
+    });
+    const context = (device as unknown as { context: FakeAudioContext }).context;
+    let random = 8;
+    const reference = Float32Array.from({ length: 16_000 }, (_, index) => {
+      random = (Math.imul(random, 1_664_525) + 1_013_904_223) >>> 0;
+      return ((random / 0xffff_ffff) * 2 - 1) * (0.15 + 0.1 * Math.sin(index / 700));
+    });
+    const referencePcm = new Uint8Array(reference.length * 2);
+    const referenceView = new DataView(referencePcm.buffer);
+    reference.forEach((sample, index) => referenceView.setInt16(index * 2, Math.round(sample * 32_767), true));
+    const playback = device.speak(
+      {
+        sequence: 1,
+        type: 'playback-start',
+        playbackId: 'echo-reference',
+        text: 'Exact backend PCM.',
+        delivery: 'streamed',
+      },
+      Promise.resolve(referencePcm),
+    );
+    await vi.waitFor(() => expect(context.bufferSource.start).toHaveBeenCalledOnce());
+
+    for (let index = 0; index < 6; index += 1) {
+      context.currentTime = index / 10;
+      const input = reference.slice(index * 1_600, (index + 1) * 1_600);
+      context.processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => input }, playbackTime: index / 10 });
+    }
+
+    expect(rawUploads).toHaveLength(6);
+    expect(rawUploads[5]).toEqual(new Pcm16Resampler(16_000).push(reference.slice(8_000, 9_600)));
+    expect(analyses.slice(-3).every((analysis) => analysis.echoReferenceActive)).toBe(true);
+    expect(analyses.slice(-3).some((analysis) => analysis.echoDiscriminated)).toBe(false);
+    const residual = analyses.at(-1)?.speechPcm;
+    expect(residual).toBeDefined();
+    const residualView = new DataView(residual!.buffer, residual!.byteOffset, residual!.byteLength);
+    expect(
+      Math.max(
+        ...Array.from({ length: residual!.byteLength / 2 }, (_, index) =>
+          Math.abs(residualView.getInt16(index * 2, true)),
+        ),
+      ),
+    ).toBeLessThanOrEqual(1);
+
+    const discontinuousInputs = [
+      reference.slice(9_600, 10_400),
+      new Float32Array(800).fill(0.2),
+      new Float32Array(1_600).fill(0.2),
+      new Float32Array(1_600).fill(0.2),
+      new Float32Array(1_600).fill(0.2),
+    ];
+    const discontinuousTimestamps = [0.6, 1, 1.05, 1.15, 1.25];
+    for (const [index, input] of discontinuousInputs.entries())
+      context.processor.onaudioprocess?.({
+        inputBuffer: { getChannelData: () => input },
+        playbackTime: discontinuousTimestamps[index],
+      });
+
+    const expectedDiscontinuousInput = new Float32Array(6_400);
+    let expectedOffset = 0;
+    for (const input of discontinuousInputs) {
+      expectedDiscontinuousInput.set(input, expectedOffset);
+      expectedOffset += input.length;
+    }
+    const expectedDiscontinuousPcm = new Pcm16Resampler(16_000).push(expectedDiscontinuousInput);
+    expect(rawUploads).toHaveLength(10);
+    for (let index = 0; index < 4; index += 1)
+      expect(rawUploads[index + 6]).toEqual(expectedDiscontinuousPcm.slice(index * 3_200, (index + 1) * 3_200));
+    expect(analyses.slice(6).every((analysis) => !analysis.echoDiscriminated)).toBe(true);
+    expect(analyses.slice(6).every((analysis) => analysis.speechPcm.every((value) => value === 0))).toBe(true);
+    await capture.stop();
+    context.currentTime = 1.35;
+    context.bufferSource.onended?.();
+    await expect(playback.completion).resolves.toMatchObject({ outcome: 'completed' });
+    await device.close();
+  });
+
   it('emits exact 100 ms PCM batches and one final remainder for a large ScriptProcessor input', async () => {
     const track = { stop: vi.fn() };
     const stream = { getTracks: () => [track] };

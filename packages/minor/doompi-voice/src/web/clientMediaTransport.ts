@@ -1,5 +1,6 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import {
+  VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
   VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
   VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
@@ -200,6 +201,11 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
                 ...(activity.classifiedSpeechMs === undefined
                   ? {}
                   : { [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(activity.classifiedSpeechMs) }),
+                ...(activity.echoDiscriminatedSpeechMs === undefined
+                  ? {}
+                  : {
+                      [VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER]: String(activity.echoDiscriminatedSpeechMs),
+                    }),
               }),
         },
         body: new Blob([new Uint8Array(pcm)], { type: VOICE_MEDIA_CONTENT_TYPE }),

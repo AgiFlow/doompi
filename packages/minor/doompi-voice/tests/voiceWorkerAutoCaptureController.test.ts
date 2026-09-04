@@ -286,6 +286,27 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.resolveCommandCorrector).toHaveBeenCalledWith('provider/model');
   });
 
+  it('queues narration from confirmed speech until the captured turn is delivered', async () => {
+    const h = harness();
+    await enable(h);
+    const identity = h.current();
+
+    h.speech(identity);
+    const narration = h.controller.narrateAgent('Wait for the user turn.');
+    await flush();
+    expect(h.tts.speak).not.toHaveBeenCalled();
+
+    h.endpoint(identity);
+    h.drained(identity);
+    h.candidate(identity, 'Handle my request', 1, strongEvidence);
+    await flush();
+
+    expect(h.deliver).toHaveBeenCalledWith('Handle my request');
+    expect(h.tts.speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Wait for the user turn.' }));
+    h.finishPlayback();
+    await expect(narration).resolves.toBe('completed');
+  });
+
   it('mutes autonomous capture without interrupting narration and unmutes into a fresh capture', async () => {
     const h = harness();
     await enable(h);
@@ -603,7 +624,7 @@ describe('VoiceWorkerAutoCaptureController', () => {
     expect(h.deliver).not.toHaveBeenCalled();
   });
 
-  it('plays a grounded overlap summary before delivering classifier-confirmed user speech', async () => {
+  it('delivers classifier-confirmed user speech before releasing a grounded overlap summary', async () => {
     const decide = vi.fn(async () => ({
       admit: true,
       continuationSummary: 'The plan was ready.',
@@ -639,18 +660,17 @@ describe('VoiceWorkerAutoCaptureController', () => {
     h.drained(identity, 1);
     h.candidate(identity, 'The plan is ready please run all tests', 1, { ...strongEvidence, playbackOverlapMs: 1_200 });
     await vi.waitFor(() => expect(decide).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(h.deliver).toHaveBeenCalledWith('please run all tests'));
     await vi.waitFor(() => expect(h.tts.speak).toHaveBeenCalledTimes(2));
     expect(h.tts.speak).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'clarification', text: 'The plan was ready.' }),
     );
-    expect(h.deliver).not.toHaveBeenCalled();
 
     h.finishPlayback();
     h.finishPlayback();
     await flush();
 
     expect(h.deliver).toHaveBeenCalledOnce();
-    expect(h.deliver).toHaveBeenCalledWith('please run all tests');
   });
 
   it('shortens the endpoint window for the turns that follow an opened draft', async () => {

@@ -1,7 +1,7 @@
 import { driveChannel } from '@agimon-ai/doompi-web-contracts/testing';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { VoiceMediaClientEvent } from '../src/types/clientMedia.ts';
+import { VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER, type VoiceMediaClientEvent } from '../src/types/clientMedia.ts';
 import { BrowserVoiceMediaTransport } from '../src/web/clientMediaTransport.ts';
 import { parseVoiceMediaWakePayload, voiceMediaWakeChannel, voiceMediaWakes } from '../src/web/voiceMediaWakeStore.ts';
 
@@ -243,6 +243,7 @@ describe('browser voice media push transport', () => {
       elapsedMs: 80,
       epoch: 2,
       classifiedSpeechMs: 60,
+      echoDiscriminatedSpeechMs: 40,
     });
     await transport.captureStopped('client', 'connection', 'capture');
     await transport.captureStopped('client', 'connection', 'capture', 'device failed');
@@ -254,6 +255,8 @@ describe('browser voice media push transport', () => {
     vi.mocked(sealedTransport.fetch).mockResolvedValueOnce(new Response(null, { status: 409 }));
     await expect(transport.disconnect('client', 'connection')).resolves.toBeUndefined();
     expect(vi.mocked(sealedTransport.fetch)).toHaveBeenCalledTimes(7);
+    const uploadHeaders = new Headers(vi.mocked(sealedTransport.fetch).mock.calls[2]?.[1]?.headers);
+    expect(uploadHeaders.get(VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER)).toBe('40');
   });
 
   it('reports server JSON errors and response bodies without usable errors', async () => {

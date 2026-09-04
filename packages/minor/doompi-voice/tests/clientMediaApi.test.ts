@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
 import {
+  VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
   VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
   VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
@@ -610,6 +611,7 @@ describe('voice client media session API', () => {
             [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: '700',
             [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: '2',
             [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: '640',
+            [VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER]: '320',
           },
           body: pcm,
         },
@@ -625,6 +627,7 @@ describe('voice client media session API', () => {
     expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER)).toBe('700');
     expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER)).toBe('2');
     expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER)).toBe('640');
+    expect(audio.headers.get(VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER)).toBe('320');
 
     expect(
       (await api.fetch(request(VOICE_MEDIA_ROUTES.hostCaptureStop, json({ captureId: 'capture-1' }), true))).status,
@@ -925,6 +928,7 @@ describe('voice client media session API', () => {
       elapsedMs: number,
       epoch = 0,
       classifiedSpeechMs = 0,
+      echoDiscriminatedSpeechMs?: number,
     ): Promise<Response> =>
       Promise.resolve(
         api.fetch(
@@ -937,26 +941,39 @@ describe('voice client media session API', () => {
               [VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER]: String(elapsedMs),
               [VOICE_MEDIA_ACTIVITY_EPOCH_HEADER]: String(epoch),
               [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(classifiedSpeechMs),
+              ...(echoDiscriminatedSpeechMs === undefined
+                ? {}
+                : { [VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER]: String(echoDiscriminatedSpeechMs) }),
             },
             body: new Uint8Array([1, 2]),
           }),
         ),
       );
 
-    expect((await send('speech', 500, 0, 160)).status).toBe(204);
+    expect((await send('speech', 500, 0, 160, Number.NaN)).status).toBe(400);
+    expect((await send('speech', 500, 0, 160, 200)).status).toBe(400);
+    expect((await send('speech', 500, 0, 160, 120)).status).toBe(204);
     const speech = await api.fetch(
       request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
     );
     expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
     expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER)).toBe('0');
     expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER)).toBe('160');
+    expect(speech.headers.get(VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER)).toBe('120');
 
-    expect((await send('endpoint', 400, 0, 160)).status).toBe(204);
-    const reordered = await api.fetch(
+    expect((await send('speech', 550, 0, 180)).status).toBe(204);
+    const omitted = await api.fetch(
       request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
     );
-    expect(new Uint8Array(await reordered.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
-    expect(reordered.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBeNull();
+    expect(omitted.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('speech');
+    expect(omitted.headers.get(VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER)).toBeNull();
+
+    expect((await send('endpoint', 600, 0, 200, 100)).status).toBe(204);
+    const nonmonotonic = await api.fetch(
+      request(`${VOICE_MEDIA_ROUTES.hostCaptureAudio}?captureId=capture-ordered`, {}, true),
+    );
+    expect(new Uint8Array(await nonmonotonic.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
+    expect(nonmonotonic.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBeNull();
 
     expect((await send('listening', 600, 1)).status).toBe(204);
     const reset = await api.fetch(

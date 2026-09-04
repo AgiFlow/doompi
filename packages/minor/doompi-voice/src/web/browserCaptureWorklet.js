@@ -5,7 +5,7 @@ class DoomPiVoiceCaptureProcessor extends AudioWorkletProcessor {
     const input = inputs[0]?.[0];
     if (input === undefined) return true;
     outputs[0]?.[0]?.set(input);
-    this.port.postMessage(input.slice());
+    this.port.postMessage({ samples: input.slice(), capturedAt: currentTime });
     return true;
   }
 }
