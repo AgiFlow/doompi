@@ -179,6 +179,7 @@ function createExtensionFixture(
         ...askUserTools,
         'mcp',
         MINOR_MODE_TOOL_NAME,
+        'open_authoring_file',
         ...AUTHOR_FACADE_TOOL_NAMES,
         ...VOICE_MODE_TOOL_NAMES,
         UNRELATED_TOOL_NAME,
@@ -1241,7 +1242,7 @@ describe('plan mode entry', () => {
       'plan-live-facades-session',
     );
     const unrelatedTool = UNRELATED_TOOL_NAME;
-    const facadeToolNames = [...AUTHOR_FACADE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES];
+    const facadeToolNames = ['open_authoring_file', ...AUTHOR_FACADE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES];
     const facadeToolSet = new Set<string>(facadeToolNames);
     await fixture.handler('session_start')({}, fixture.ctx);
     fixture.pi.setActiveTools([...fixture.activeTools(), unrelatedTool, ...facadeToolNames]);

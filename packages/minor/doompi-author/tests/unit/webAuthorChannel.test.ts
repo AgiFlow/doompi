@@ -83,6 +83,14 @@ describe('the Author targeted web hub bridge', () => {
     h.source.close();
   });
 
+  it('releases the accepted catalog when the document viewport blurs', async () => {
+    const h = harness();
+    h.channel.receive!(scope, { kind: 'register', generation: 1 }, h.connection);
+    await vi.waitFor(() => expect(h.targeted).toHaveLength(1));
+    h.channel.receive!(scope, { kind: 'release', generation: 1 }, h.connection);
+    await vi.waitFor(() => expect(() => h.state.describe()).toThrow('No Author viewport'));
+    h.source.close();
+  });
   it('releases the connection binding when its socket disconnects', async () => {
     const h = harness();
     h.channel.receive!(scope, { kind: 'register', generation: 1 }, h.connection);

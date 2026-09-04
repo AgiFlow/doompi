@@ -82,7 +82,7 @@ export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
   });
   app.post(AUTHOR_BRIDGE_ROUTES.disconnect, async (context) => {
     const value = await body(context.req.raw);
-    state.disconnect(text(value, 'bindingId'));
+    state.disconnect(text(value, 'bindingId'), generation(value));
     return context.json({ accepted: true });
   });
   app.get(AUTHOR_BRIDGE_ROUTES.describe, (context) => context.json(state.describe()));

@@ -16,16 +16,16 @@ pi install npm:@agimon-ai/doompi-computer-use
 
 ## Use
 
-Open the **Computer Use** cockpit panel, refresh the Desktop targets, select an application window, and request activation. The request stays blocked until you confirm it in the panel. Only one session can hold a live Desktop run.
+Enable the default-off **Computer Use** minor mode in the cockpit. Its Activity section then lists eligible Desktop targets, lets you select one, and starts the activation and confirmation flow. Only one session can hold a live Desktop run.
 
-The `computer-use` session minor mode also exposes Activate and Stop actions. Activate requires the Desktop bundle id and window id. `/computer-use` reports the current state.
+The `computer-use` minor mode exposes Activate, Deactivate, and Doctor actions. `/computer-use` reports the current state.
 
 While active, the package exposes exactly two tools:
 
 - `computer_state` observes the authorized window and returns a semantic snapshot.
 - `computer_action` performs one semantic press, value change, or scroll against a current snapshot.
 
-Both tools and their model guidance are removed when the session is dormant. The panel shows activation status, busy ownership, stop controls, and completed recording or trace metadata. Browser clients cannot call observation or action routes.
+Both tools and their model guidance remain unavailable during setup and are exposed only after the native grant becomes active. The Activity section shows activation status, busy ownership, stop controls, and completed recording or trace metadata. Browser clients cannot call observation or action routes.
 
 ## Public API
 

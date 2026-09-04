@@ -6,6 +6,7 @@ import {
   preflightStructuredDocument,
   serializeStructuredDocument,
 } from './structuredDocuments/index.ts';
+import type { AuthorOpenFileResult } from '../types/author.ts';
 import type { CsvDialect, DocumentOperation, StructuredDocumentFormat } from '../types/structuredDocuments.ts';
 
 export const AUTHOR_DOCUMENT_OPEN_PATH = '/documents/open';
@@ -91,6 +92,9 @@ export function createAuthorDocumentApi(options: AuthorDocumentApiOptions = {}):
     try {
       const body = await bodyOf(context.req.raw);
       const bytes = await readDocument(cwd, body.path);
+      if (body.format === undefined) {
+        return context.json({ path: body.path as string, byteLength: bytes.byteLength } satisfies AuthorOpenFileResult);
+      }
       return context.json(
         await parseStructuredDocument(requestFormat(body.format), bytes, body.csvDialect as Partial<CsvDialect>),
       );

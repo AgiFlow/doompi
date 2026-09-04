@@ -39,7 +39,13 @@ export function installAuthorRuntime(
     return () => contribution.dispose();
   });
 
-  installAuthorMode(cordis, pi, dependencies.catalog, registerAuthorToolFacades);
+  installAuthorMode(cordis, pi, dependencies.catalog, registerAuthorToolFacades, {
+    schedule(callback, delayMs) {
+      const timer = setTimeout(callback, delayMs);
+      timer.unref?.();
+      return () => clearTimeout(timer);
+    },
+  });
   registerAuthorCommand(pi, dependencies.service);
 }
 

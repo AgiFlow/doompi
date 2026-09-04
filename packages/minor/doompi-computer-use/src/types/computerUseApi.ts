@@ -2,6 +2,9 @@ import type { DoomApiCaller } from '@agimon-ai/doompi-extension-contracts/packag
 
 export const API_BASE_PATH = 'computer-use';
 export const computerUseChannelType = 'computer_use_state';
+export const COMPUTER_USE_MODE_ID = 'computer-use';
+export const COMPUTER_USE_STATUS_KEY = 'doom-computer-use';
+export const COMPUTER_USE_MODE_STATUS_KEY = 'doom-computer-use-mode';
 export const SESSION_QUERY_PARAM = 'session';
 export const COMPUTER_USE_MAX_DURATION_MS = 1_800 * 1_000;
 export const COMPUTER_USE_DEFAULT_DURATION_MS = 300 * 1_000;

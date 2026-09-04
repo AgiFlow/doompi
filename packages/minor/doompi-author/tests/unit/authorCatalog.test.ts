@@ -88,6 +88,17 @@ describe('the Author bridge catalog', () => {
     now = 10_001;
     expect(state.register('second', 1)).toMatchObject({ kind: 'accepted', ownerToken: 'owner' });
   });
+
+  it('does not let a stale release disconnect a newer generation', () => {
+    const tokens = ['first-owner', 'second-owner'];
+    const state = createAuthorBridgeState({ now: Date.now, issueToken: () => tokens.shift()!, scheduleTimeout });
+    state.register('binding', 1);
+    state.register('binding', 2);
+
+    state.disconnect('binding', 1);
+
+    expect(state.register('binding', 2)).toMatchObject({ kind: 'accepted', ownerToken: 'second-owner' });
+  });
 });
 
 describe('the Author facade trust boundary', () => {

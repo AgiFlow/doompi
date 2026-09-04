@@ -65,7 +65,7 @@ export interface AuthorBridgeState {
     result: unknown,
   ): void;
   cancelled(bindingId: string, generation: number, ownerToken: string, catalogToken: string, requestId: string): void;
-  disconnect(bindingId: string): void;
+  disconnect(bindingId: string, generation: number): void;
   close(): void;
 }
 
@@ -279,8 +279,8 @@ export function createAuthorBridgeState(options: AuthorBridgeStateOptions): Auth
       rememberCancellation(requestId);
       current.reject(new AuthorBridgeError('The Author viewport cancelled the request.'));
     },
-    disconnect(bindingId) {
-      if (owner?.bindingId !== bindingId) return;
+    disconnect(bindingId, generation) {
+      if (owner?.bindingId !== bindingId || owner.generation !== generation) return;
       rejectPending('The Author viewport disconnected.', false);
       owner = undefined;
       delivery = undefined;

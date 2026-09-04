@@ -7,6 +7,10 @@ export interface AuthorRegisterMessage {
   generation: number;
 }
 
+export interface AuthorReleaseMessage {
+  kind: 'release';
+  generation: number;
+}
 export interface AuthorCatalogMessage {
   kind: 'catalog';
   generation: number;
@@ -33,6 +37,7 @@ export interface AuthorCancelledMessage {
 
 export type AuthorBrowserMessage =
   | AuthorRegisterMessage
+  | AuthorReleaseMessage
   | AuthorCatalogMessage
   | AuthorResultMessage
   | AuthorCancelledMessage;

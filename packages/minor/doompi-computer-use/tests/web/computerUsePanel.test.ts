@@ -5,7 +5,8 @@ import { webPlugin } from '../../src/web/index.ts';
 
 afterEach(() => computerUse.reset());
 
-const render = () => renderPlugin(webPlugin.tabs![0]!.panel, slotPropsFixture({ sessionId: 's1' }).props);
+const render = () =>
+  renderPlugin(webPlugin.activitySections![0]!.component, slotPropsFixture({ sessionId: 's1' }).props);
 
 describe('computer-use panel', () => {
   it('renders target activation controls for an inactive session', () => {
@@ -40,7 +41,15 @@ describe('computer-use panel', () => {
     expect(render().html).toContain('Actions:');
   });
 
-  it('registers both tool cards', () => {
+  it('registers as a default-off minor mode and Activity section without a permanent tab', () => {
+    expect(webPlugin.tabs).toBeUndefined();
+    expect(webPlugin.minorModes).toEqual([
+      expect.objectContaining({ name: 'computer use', modeId: 'computer-use', statusKey: 'doom-computer-use-mode' }),
+    ]);
+    expect(webPlugin.activityGroups).toEqual([
+      expect.objectContaining({ name: 'computer-use', statusKey: 'doom-computer-use', hideWhenEmpty: true }),
+    ]);
+    expect(webPlugin.activitySections?.[0]?.component).toBeDefined();
     expect(webPlugin.toolRenderers?.flatMap((renderer) => renderer.tools ?? [])).toEqual([
       'computer_state',
       'computer_action',

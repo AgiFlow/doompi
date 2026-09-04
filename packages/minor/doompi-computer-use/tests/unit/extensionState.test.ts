@@ -18,6 +18,17 @@ describe('computer-use Pi runtime projection', () => {
     expect(modeState(state(phase))).toMatchObject({ activation, condition });
   });
 
+  it('projects an enabled setup state without activating the grant-gated tools', () => {
+    const projected = modeState(state('inactive'), true);
+    expect(projected).toMatchObject({ activation: 'active', condition: 'ready' });
+    expect(projected.detail).toContain('Activity');
+    expect(projected.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'activate', enabled: false }),
+        expect.objectContaining({ id: 'deactivate', enabled: true }),
+      ]),
+    );
+  });
   it('preserves unrelated tools and avoids redundant host updates', () => {
     let activeTools = ['read', 'computer_state'];
     const setActiveTools = vi.fn((next: string[]) => {

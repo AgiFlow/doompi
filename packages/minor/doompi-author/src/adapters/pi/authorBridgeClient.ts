@@ -4,9 +4,15 @@ import {
   DOOM_API_ROUTE_PREFIX,
   DOOM_API_SOCKET_ENV,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { AUTHOR_DOCUMENT_OPEN_PATH } from '../authorDocumentApi.ts';
 import type { AuthorCatalog } from '../../services/authorCatalog.ts';
 import { API_BASE_PATH, AUTHOR_BRIDGE_ROUTES } from '../../types/authorApi.ts';
-import type { AuthorToolResult, AuthorViewportCatalogSnapshot, UseAuthorToolInput } from '../../types/author.ts';
+import type {
+  AuthorOpenFileResult,
+  AuthorToolResult,
+  AuthorViewportCatalogSnapshot,
+  UseAuthorToolInput,
+} from '../../types/author.ts';
 
 interface ClientOptions {
   socketPath: string;
@@ -57,6 +63,10 @@ export class UnixAuthorCatalog implements AuthorCatalog {
     });
   }
 
+  public async open(path: string, signal?: AbortSignal): Promise<AuthorOpenFileResult> {
+    return (await this.request(AUTHOR_DOCUMENT_OPEN_PATH, 'POST', { path }, signal)) as AuthorOpenFileResult;
+  }
+
   public async describe(signal?: AbortSignal): Promise<AuthorViewportCatalogSnapshot> {
     return (await this.request(
       AUTHOR_BRIDGE_ROUTES.describe,
@@ -72,6 +82,10 @@ export class UnixAuthorCatalog implements AuthorCatalog {
 }
 
 class UnavailableAuthorCatalog implements AuthorCatalog {
+  public open(): Promise<AuthorOpenFileResult> {
+    return Promise.reject(new Error('The Author session API is unavailable.'));
+  }
+
   public describe(): Promise<AuthorViewportCatalogSnapshot> {
     return Promise.reject(new Error('The Author session API is unavailable.'));
   }

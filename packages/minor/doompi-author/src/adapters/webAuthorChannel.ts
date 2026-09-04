@@ -22,7 +22,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function browserMessage(value: unknown): AuthorBrowserMessage | undefined {
   if (!isRecord(value) || typeof value.kind !== 'string') return undefined;
-  if (!['register', 'catalog', 'result', 'cancelled'].includes(value.kind)) return undefined;
+  if (!['register', 'release', 'catalog', 'result', 'cancelled'].includes(value.kind)) return undefined;
   return value as unknown as AuthorBrowserMessage;
 }
 
@@ -88,18 +88,20 @@ export function createAuthorChannel(): WebHubChannel {
             if (binding.scope.sessionId !== sessionId) continue;
             binding.poll?.abort();
             bindings.delete(key);
-            void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, { bindingId: binding.connectionId }).catch(
-              (error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)),
-            );
+            void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+              bindingId: binding.connectionId,
+              generation: binding.generation,
+            }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
           }
         },
         close() {
           closed = true;
           for (const binding of bindings.values()) {
             binding.poll?.abort();
-            void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, { bindingId: binding.connectionId }).catch(
-              () => undefined,
-            );
+            void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+              bindingId: binding.connectionId,
+              generation: binding.generation,
+            }).catch(() => undefined);
           }
           bindings.clear();
         },
@@ -111,10 +113,20 @@ export function createAuthorChannel(): WebHubChannel {
       if (message === undefined || host === undefined || closed) return;
       void (async () => {
         const key = keyOf(scope.sessionId, connection.connectionId);
+        const previous = bindings.get(key);
+        if (message.kind === 'release') {
+          if (previous === undefined || previous.generation !== message.generation) return;
+          previous.poll?.abort();
+          bindings.delete(key);
+          await send(scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+            bindingId: connection.connectionId,
+            generation: message.generation,
+          });
+          return;
+        }
         const route = AUTHOR_BRIDGE_ROUTES[message.kind];
         const response = await send(scope, route, { ...message, bindingId: connection.connectionId });
         const reply = await responsePayload(response);
-        const previous = bindings.get(key);
         if (reply.kind === 'accepted') {
           const binding: Binding = {
             scope,
@@ -134,9 +146,10 @@ export function createAuthorChannel(): WebHubChannel {
         if (binding.connectionId !== connection.connectionId) continue;
         binding.poll?.abort();
         bindings.delete(key);
-        void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, { bindingId: binding.connectionId }).catch(
-          (error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)),
-        );
+        void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+          bindingId: binding.connectionId,
+          generation: binding.generation,
+        }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
       }
     },
   };

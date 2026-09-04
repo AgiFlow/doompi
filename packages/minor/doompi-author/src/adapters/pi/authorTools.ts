@@ -5,9 +5,19 @@ import {
   AuthorUseToolsInputSchema,
 } from '@agimon-ai/doompi-extension-contracts/author-facade';
 import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { parseDescribeAuthorToolsInput, parseUseAuthorToolInput } from '../../schemas/authorTools.ts';
+import {
+  OpenAuthoringFileInputSchema,
+  parseDescribeAuthorToolsInput,
+  parseOpenAuthoringFileInput,
+  parseUseAuthorToolInput,
+} from '../../schemas/authorTools.ts';
 import type { AuthorCatalog } from '../../services/authorCatalog.ts';
-import type { AuthorToolResult, AuthorViewportCatalogSnapshot } from '../../types/author.ts';
+import {
+  OPEN_AUTHORING_FILE_TOOL_NAME,
+  type AuthorOpenFileResult,
+  type AuthorToolResult,
+  type AuthorViewportCatalogSnapshot,
+} from '../../types/author.ts';
 
 export interface AuthorToolFacadeRegistration {
   dispose(): void;
@@ -28,6 +38,23 @@ export function registerAuthorToolFacades(
     if (!isActive()) throw new Error('Author mode is not active.');
   };
 
+  pi.registerTool({
+    name: OPEN_AUTHORING_FILE_TOOL_NAME,
+    label: 'Open Authoring File',
+    description: 'Validate a relative repository path and open it in a focused transient Author document tab.',
+    promptSnippet: 'Open a repository document in the Author viewport',
+    promptGuidelines: [
+      'Pass a relative repository path. This tool validates and opens the document without writing it.',
+    ],
+    parameters: OpenAuthoringFileInputSchema,
+    executionMode: 'sequential',
+    renderShell: 'self',
+    async execute(_toolCallId, params, signal): Promise<AgentToolResult<AuthorOpenFileResult>> {
+      assertAvailable();
+      const input = parseOpenAuthoringFileInput(params);
+      return textResult(await catalog.open(input.path, signal));
+    },
+  });
   pi.registerTool({
     name: AUTHOR_DESCRIBE_TOOL_NAME,
     label: 'Describe Author tools',

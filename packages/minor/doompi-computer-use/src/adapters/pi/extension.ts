@@ -10,26 +10,32 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { registerComputerUseCommand } from '../../commands/computerUseCommand.ts';
 import { createComputerUseContainer } from '../../container/index.ts';
-import type { ComputerUseSessionView } from '../../types/computerUseApi.ts';
+import {
+  COMPUTER_USE_MODE_ID,
+  COMPUTER_USE_MODE_STATUS_KEY,
+  COMPUTER_USE_STATUS_KEY,
+  type ComputerUseSessionView,
+} from '../../types/computerUseApi.ts';
 import type { ComputerUseAction } from '../../types/computerUse.ts';
 import type { ComputerUseExtensionDependencies } from '../../types/extension.ts';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-computer-use';
-export const COMPUTER_USE_MODE_ID = 'computer-use';
+export { COMPUTER_USE_MODE_ID };
 export const COMPUTER_USE_TOOL_NAMES = ['computer_state', 'computer_action'] as const;
 export const COMPUTER_USE_GUIDANCE = `[COMPUTER USE ACTIVE]
 Use computer_state before acting and after any action that may change the interface. Use only element refs and snapshot ids returned by computer_state. Use computer_action for one semantic press, set_value, or scroll at a time. Never infer coordinates, inspect another application, bypass secure elements, or retry an uncertain outcome. Stop computer use when the task is complete.`;
 
-export function modeState(state?: ComputerUseSessionView): MinorModeState {
+export function modeState(state?: ComputerUseSessionView, enabled = false): MinorModeState {
   const phase = state?.phase ?? 'inactive';
-  const activation =
-    phase === 'active'
-      ? 'active'
-      : phase === 'inactive' || phase === 'failed'
-        ? 'inactive'
-        : phase === 'stopping'
-          ? 'deactivating'
-          : 'activating';
+  const running = phase !== 'inactive' && phase !== 'failed';
+  const modeEnabled = enabled || running;
+  const activation = modeEnabled
+    ? phase === 'stopping'
+      ? 'deactivating'
+      : phase === 'awaiting_confirmation' || phase === 'activating'
+        ? 'activating'
+        : 'active'
+    : 'inactive';
   return {
     activation,
     condition:
@@ -40,19 +46,18 @@ export function modeState(state?: ComputerUseSessionView): MinorModeState {
           : phase === 'activating' || phase === 'stopping'
             ? 'queued'
             : 'ready',
-    ...(phase === 'awaiting_confirmation' ? { detail: 'awaiting confirmation in Computer Use' } : {}),
+    ...(modeEnabled && phase === 'inactive' ? { detail: 'configure computer use in Activity' } : {}),
+    ...(phase === 'awaiting_confirmation' ? { detail: 'awaiting confirmation in Activity' } : {}),
     actions: [
       {
         id: 'activate',
-        enabled: phase === 'inactive' || phase === 'failed',
-        ...(phase === 'inactive' || phase === 'failed'
-          ? {}
-          : { disabledReason: 'Computer use is already running or pending.' }),
+        enabled: !modeEnabled,
+        ...(!modeEnabled ? {} : { disabledReason: 'Computer use is already enabled.' }),
       },
       {
         id: 'deactivate',
-        enabled: phase === 'active',
-        ...(phase === 'active' ? {} : { disabledReason: 'No computer-use run is active.' }),
+        enabled: modeEnabled,
+        ...(modeEnabled ? {} : { disabledReason: 'Computer use is not enabled.' }),
       },
       { id: 'doctor', enabled: true },
     ],
@@ -74,24 +79,47 @@ export function installComputerUseRuntime(
 ): void {
   const client = dependencies.client;
   let state: ComputerUseSessionView | undefined;
+  let enabled = false;
   let mode: MinorModeOwnerHandle | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
+  let activeContext: ExtensionContext | undefined;
+  let publishedMode = '';
+  let publishedModeStatus: string | undefined;
+  let publishedActivityStatus: string | undefined;
 
+  const publish = (): void => {
+    const phase = state?.phase ?? 'inactive';
+    const projection = `${enabled}:${phase}:${state?.revision ?? 'none'}`;
+    if (mode !== undefined && projection !== publishedMode) {
+      mode.publish(modeState(state, enabled));
+      publishedMode = projection;
+    }
+    const modeStatus = state === undefined ? undefined : enabled || phase !== 'inactive' ? phase : '';
+    if (activeContext !== undefined && modeStatus !== publishedModeStatus) {
+      activeContext.ui.setStatus(COMPUTER_USE_MODE_STATUS_KEY, modeStatus);
+      publishedModeStatus = modeStatus;
+    }
+    const activityStatus = enabled || phase !== 'inactive' ? `computer use: ${phase}` : undefined;
+    if (activeContext !== undefined && activityStatus !== publishedActivityStatus) {
+      activeContext.ui.setStatus(COMPUTER_USE_STATUS_KEY, activityStatus);
+      publishedActivityStatus = activityStatus;
+    }
+  };
   const refresh = async (): Promise<void> => {
     if (client === undefined) {
       state = undefined;
       reconcileTools(pi, false);
-      mode?.publish(modeState());
+      publish();
       return;
     }
     try {
       state = await client.state();
       reconcileTools(pi, state.phase === 'active');
-      mode?.publish(modeState(state));
+      publish();
     } catch {
       state = undefined;
       reconcileTools(pi, false);
-      mode?.publish(modeState());
+      publish();
     }
   };
 
@@ -133,7 +161,6 @@ export function installComputerUseRuntime(
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
     },
   });
-  reconcileTools(pi, false);
 
   cordis.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (context) => {
     const owner = registerMinorModeOwner<ExtensionContext>(requireMinorModeCatalog(context), {
@@ -167,11 +194,15 @@ export function installComputerUseRuntime(
           },
         ],
       },
-      initialState: modeState(state),
+      initialState: modeState(state, enabled),
       async handleAction(actionId, _argumentsValue, execution) {
+        activeContext = execution.context;
         if (actionId === 'activate') {
+          if (client === undefined) throw new Error('DoomPi Desktop computer use is unavailable.');
+          enabled = true;
           await refresh();
-          return { message: 'Select a target and confirm activation in the Computer Use cockpit panel.' };
+          publish();
+          return { message: 'Computer use is ready to configure in Activity.' };
         }
         if (actionId === 'doctor') {
           await refresh();
@@ -184,15 +215,17 @@ export function installComputerUseRuntime(
         }
         if (actionId === 'deactivate') {
           if (client === undefined) throw new Error('DoomPi Desktop computer use is unavailable.');
-          await client.stop(execution.signal);
+          if (state !== undefined && state.phase !== 'inactive' && state.phase !== 'failed')
+            await client.stop(execution.signal);
+          enabled = false;
           await refresh();
-          return { message: 'Computer use is stopping.' };
+          publish();
+          return { message: 'Computer use is off.' };
         }
         throw new Error(`Unknown computer-use action: ${actionId}`);
       },
     });
     mode = owner;
-    void refresh();
     return () => {
       owner.dispose();
       if (mode === owner) mode = undefined;
@@ -202,7 +235,9 @@ export function installComputerUseRuntime(
   pi.on('before_agent_start', (event) =>
     state?.phase === 'active' ? { systemPrompt: `${event.systemPrompt}\n\n${COMPUTER_USE_GUIDANCE}` } : undefined,
   );
-  pi.on('session_start', () => {
+  pi.on('session_start', (_event, context) => {
+    activeContext = context;
+    reconcileTools(pi, false);
     void refresh();
     if (timer) clearInterval(timer);
     timer = setInterval(() => void refresh(), 250);
@@ -213,6 +248,9 @@ export function installComputerUseRuntime(
       if (timer) clearInterval(timer);
       timer = undefined;
       reconcileTools(pi, false);
+      activeContext?.ui.setStatus(COMPUTER_USE_MODE_STATUS_KEY, undefined);
+      activeContext?.ui.setStatus(COMPUTER_USE_STATUS_KEY, undefined);
+      activeContext = undefined;
       mode?.dispose();
       mode = undefined;
     },

@@ -9,7 +9,7 @@ interface DesktopRuntimePluginOptions {
   workspaceRoot: string;
 }
 
-const DOOMPI_RUNTIME_PACKAGES = new Set([
+export const DOOMPI_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-cache',
@@ -23,6 +23,8 @@ const DOOMPI_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi-telemetry',
   '@agimon-ai/doompi-ui',
   '@earendil-works/pi-coding-agent',
+  // The coding agent's experimental server entry imports this consumer-provided peer at runtime.
+  '@earendil-works/pi-server',
 ]);
 const DOOMPI_PACKAGE_DIRECTORIES = ['core', 'default', 'minor'] as const;
 const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;

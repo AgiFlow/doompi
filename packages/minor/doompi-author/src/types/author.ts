@@ -1,4 +1,5 @@
 export const AUTHOR_MODE_ID = 'author' as const;
+export const OPEN_AUTHORING_FILE_TOOL_NAME = 'open_authoring_file' as const;
 
 export type AuthorModeActivation = 'inactive' | 'active';
 
@@ -24,6 +25,11 @@ export interface AuthorViewportCapability extends AuthorViewportCapabilityDescri
 export interface AuthorViewportCatalogSnapshot {
   catalogToken: string;
   tools: AuthorViewportCapabilityDescriptor[];
+}
+
+export interface AuthorOpenFileResult {
+  path: string;
+  byteLength: number;
 }
 
 export interface UseAuthorToolInput {

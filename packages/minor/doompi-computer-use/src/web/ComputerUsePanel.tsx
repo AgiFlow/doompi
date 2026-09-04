@@ -18,11 +18,12 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
   };
 
   useEffect(() => {
-    if (sessionId !== null)
-      sendSessionFrame(sessionId, { type: computerUseChannelType, payload: { action: 'status' } });
+    if (sessionId === null) return;
+    sendSessionFrame(sessionId, { type: computerUseChannelType, payload: { action: 'status' } });
+    sendSessionFrame(sessionId, { type: computerUseChannelType, payload: { action: 'targets' } });
   }, [sendSessionFrame, sessionId]);
 
-  if (sessionId === null) return <p className="px-6 py-4 text-[11px] text-doom-faint">Select a session.</p>;
+  if (sessionId === null) return <p className="px-1 text-[10px] text-doom-faint">Select a session.</p>;
   const state = session.state;
   const target = session.targets[selected];
   const artifact = state.artifact;
@@ -44,15 +45,9 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
   };
 
   return (
-    <section
-      data-testid="computer-use-panel"
-      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 py-4 text-[11px] text-doom-text"
-    >
+    <div data-testid="computer-use-panel" className="flex flex-col gap-2 text-[10px] text-doom-text">
       <header className="flex items-center justify-between gap-2">
-        <div>
-          <strong>Computer Use</strong>
-          <p className="text-doom-faint">{state.phase.replaceAll('_', ' ')}</p>
-        </div>
+        <span className="text-doom-faint">{state.phase.replaceAll('_', ' ')}</span>
         <button type="button" className="rounded bg-doom-panel px-2 py-1" onClick={() => send({ action: 'targets' })}>
           Refresh targets
         </button>
@@ -136,6 +131,6 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
           {artifact.downloadUrl ? <a href={artifact.downloadUrl}>Download</a> : null}
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }

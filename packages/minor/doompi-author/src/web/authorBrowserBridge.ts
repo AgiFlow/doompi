@@ -163,7 +163,11 @@ class AuthorBrowserBridge {
   #clearActive(): void {
     clearTimeout(this.#leaseTimer);
     this.#leaseTimer = undefined;
-    this.#active?.release();
+    const active = this.#active;
+    if (active !== undefined) {
+      this.#send(active.sessionId, { kind: 'release', generation: active.generation });
+      active.release();
+    }
     this.#active = undefined;
     for (const controller of this.#pending.values()) controller.abort(new Error('Author viewport changed'));
     this.#pending.clear();

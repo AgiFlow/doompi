@@ -145,6 +145,7 @@ describe('Author browser bridge', () => {
     await vi.waitFor(() => expect(h.sent.at(-1)).toMatchObject({ kind: 'cancelled', requestId: 'request' }));
 
     dropAuthorViewportSession('session');
+    expect(h.sent.at(-1)).toEqual({ kind: 'release', generation: 1 });
     expect(authorBridgeView('session')).toEqual({ activation: 'inactive', capabilityCount: 0 });
     expect(h.tools.size).toBe(0);
   });

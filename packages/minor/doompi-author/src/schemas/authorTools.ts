@@ -4,6 +4,12 @@ import {
   type AuthorUseToolsInput,
 } from '@agimon-ai/doompi-extension-contracts/author-facade';
 
+export const OpenAuthoringFileInputSchema = {
+  type: 'object',
+  properties: { path: { type: 'string', minLength: 1, maxLength: 4096 } },
+  required: ['path'],
+  additionalProperties: false,
+} as const;
 export const DescribeAuthorToolsInputSchema = AuthorDescribeToolsInputSchema;
 export const UseAuthorToolInputSchema = AuthorUseToolsInputSchema;
 
@@ -20,6 +26,21 @@ function decoded(value: unknown): unknown {
   }
 }
 
+export function parseOpenAuthoringFileInput(value: unknown): { path: string } {
+  const input = decoded(value);
+  if (!isRecord(input) || Object.keys(input).some((key) => key !== 'path')) {
+    throw new Error('open_authoring_file input is invalid.');
+  }
+  if (
+    typeof input.path !== 'string' ||
+    input.path.length === 0 ||
+    input.path.length > 4096 ||
+    input.path.includes('\0')
+  ) {
+    throw new Error('A bounded relative document path is required.');
+  }
+  return { path: input.path };
+}
 export function parseDescribeAuthorToolsInput(value: unknown): Record<string, never> {
   const input = decoded(value);
   if (!isRecord(input) || Object.keys(input).length !== 0) throw new Error('describe_author_tools accepts no input.');
