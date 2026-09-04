@@ -236,9 +236,14 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
             }
             await refresh(scope);
           } catch (error) {
-            host.onNotice(
-              `computer-use command failed for ${scope.sessionId} (${error instanceof Error ? error.message : String(error)})`,
-            );
+            if (error instanceof MissingComputerUseApiError) {
+              unavailableUntil.set(scope.sessionId, missingComputerUseApiRetryAt(Date.now()));
+              latest.delete(scope.sessionId);
+            } else {
+              host.onNotice(
+                `computer-use command failed for ${scope.sessionId} (${error instanceof Error ? error.message : String(error)})`,
+              );
+            }
           }
         })();
       };

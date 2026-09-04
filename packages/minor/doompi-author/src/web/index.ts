@@ -1,14 +1,9 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { useStore } from '@tanstack/react-store';
-import { AuthorPanel } from './AuthorPanel.tsx';
 import { authorFileLinks } from './AuthorDocumentPanel.tsx';
 import { startAuthorBrowserBridge } from './authorBrowserBridge.ts';
-import { author, authorChannel } from './authorStore.ts';
+import { authorChannel } from './authorStore.ts';
 import { DescribeAuthorToolsToolCard } from './DescribeAuthorToolsToolCard.tsx';
 import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard.tsx';
-export function useAuthorBadge(sessionId: string | null): number {
-  return useStore(author.store, (state) => author.select(state, sessionId).capabilityCount);
-}
 
 /**
  * This package's cockpit presence: the named export the generated plugin
@@ -17,15 +12,6 @@ export function useAuthorBadge(sessionId: string | null): number {
  */
 export const webPlugin = defineWebPlugin({
   id: 'author',
-  tabs: [
-    {
-      id: 'author',
-      label: 'author',
-      panel: AuthorPanel,
-      retainComposer: true,
-      useBadge: useAuthorBadge,
-    },
-  ],
   channels: [authorChannel],
   fileLinks: authorFileLinks,
   toolRenderers: [

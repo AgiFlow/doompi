@@ -1,22 +1,16 @@
-import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { afterEach, describe, expect, it } from 'vitest';
-import { author, authorChannel } from '../../src/web/authorStore.ts';
+import { describe, expect, it } from 'vitest';
+import { authorFileTab } from '../../src/web/AuthorDocumentPanel.tsx';
 import { webPlugin } from '../../src/web/index.ts';
 
-afterEach(() => author.reset());
-
-describe('the author tab', () => {
-  it('draws the inactive foundation state', () => {
-    const rendered = renderPlugin(webPlugin.tabs![0]!.panel, slotPropsFixture({ sessionId: 's1' }).props);
-    expect(rendered.error).toBeUndefined();
-    expect(rendered.html).toContain('Author inactive');
+describe('the Author web plugin', () => {
+  it('does not register a permanent workspace tab', () => {
+    expect(webPlugin.tabs ?? []).toEqual([]);
   });
 
-  it('draws the trusted session view', () => {
-    expect(driveChannel(authorChannel, 's1', { activation: 'active', capabilityCount: 2 }).accepted).toBe(true);
-    const rendered = renderPlugin(webPlugin.tabs![0]!.panel, slotPropsFixture({ sessionId: 's1' }).props);
-    expect(rendered.error).toBeUndefined();
-    expect(rendered.html).toContain('Author active');
-    expect(rendered.html).toContain('2 viewport capabilities');
+  it('opens documents as closeable retained-Composer tabs', () => {
+    expect(authorFileTab('docs/report.md')).toMatchObject({
+      label: 'report.md',
+      retainComposer: true,
+    });
   });
 });

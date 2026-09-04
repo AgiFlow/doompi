@@ -2,6 +2,7 @@ import {
   createRemoteServiceBinding,
   createRemoteServiceEndpoint,
   RemoteServiceProvider,
+  replicatedState,
   type Context,
   type RemoteServiceEndpoint,
 } from '@earendil-works/chord';
@@ -16,6 +17,7 @@ import {
 import {
   DoomSessionManagementService,
   DoomSessionService,
+  type SessionServiceState,
 } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { SessionRecord } from '../types/registry.ts';
 import type { SpawnSessionInput, SpawnOutcome } from './serverSpawner.ts';
@@ -101,9 +103,17 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
         });
         const session = binding.use(DoomSessionService);
         await binding.ready(context);
+        const initial = session.state.value;
+        if (!initial) throw new Error(`Session ${record.id} did not publish initial state`);
+        const state = replicatedState<SessionServiceState>(initial);
+        const unsubscribe = session.state.subscribe((value, publishContext) => {
+          state.state.snapshot = value.snapshot;
+          state.state.progress = value.progress;
+          state.publish(publishContext);
+        });
         const provider = new RemoteServiceProvider([{ service: DoomSessionService, mode: 'singleton' }]);
         provider.provide(DoomSessionService, {
-          state: session.state,
+          state,
           prompt: (text, callContext) => session.prompt(text, callContext),
           steer: (text, callContext) => session.steer(text, callContext),
           abort: (callContext) => session.abort(callContext),
@@ -116,8 +126,9 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
           async close(closeContext: Context) {
             if (closed) return;
             closed = true;
+            unsubscribe();
             provider.dispose();
-            await binding.dispose(closeContext);
+            await binding.dispose(closeContext).catch(() => undefined);
             await client.dispose();
           },
         };
