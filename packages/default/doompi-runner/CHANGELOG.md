@@ -1,3 +1,30 @@
+## 0.0.1-alpha.54 (2026-09-04)
+
+### 🚀 Features
+
+- **doompi:** improve background work and CI ([09a53a1](https://github.com/AgiFlow/doompi/commit/09a53a1))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.14
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.17
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.15
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.53 (2026-09-03)
 
 ### 🧱 Updated Dependencies

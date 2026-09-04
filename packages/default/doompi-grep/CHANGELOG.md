@@ -1,3 +1,22 @@
+## 0.0.1-alpha.26 (2026-09-04)
+
+### 🚀 Features
+
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+- improve interactive session recovery ([2cf4dfb](https://github.com/AgiFlow/doompi/commit/2cf4dfb))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.14
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.17
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.25 (2026-09-03)
 
 ### 🧱 Updated Dependencies

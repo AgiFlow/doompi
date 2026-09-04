@@ -1,3 +1,15 @@
+## 0.0.1-alpha.17 (2026-09-04)
+
+### 🚀 Features
+
+- **doompi:** improve background work and CI ([09a53a1](https://github.com/AgiFlow/doompi/commit/09a53a1))
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+- improve interactive session recovery ([2cf4dfb](https://github.com/AgiFlow/doompi/commit/2cf4dfb))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.16 (2026-09-03)
 
 This was a version bump only for @agimon-ai/doompi-web-contracts to align it with other projects, there were no code changes.

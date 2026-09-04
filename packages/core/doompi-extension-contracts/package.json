@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-extension-contracts",
-  "version": "0.0.1-alpha.52",
+  "version": "0.0.1-alpha.53",
   "description": "Typed lifecycle, protocol, and Leader contracts for independently bundled DoomPi extensions.",
   "keywords": [
     "ai",
