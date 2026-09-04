@@ -1,3 +1,17 @@
+## 0.0.1-alpha.15 (2026-09-04)
+
+### 🚀 Features
+
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.51
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.14 (2026-09-04)
 
 ### 🚀 Features

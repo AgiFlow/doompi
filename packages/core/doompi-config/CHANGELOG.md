@@ -1,3 +1,10 @@
+## 0.0.1-alpha.54 (2026-09-04)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.54
+
 ## 0.0.1-alpha.53 (2026-09-04)
 
 ### 🧱 Updated Dependencies
