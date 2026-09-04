@@ -39,6 +39,45 @@ test('the input grows with a multi-line draft instead of hiding it', async ({ pa
   expect(cleared).toBeLessThan(singleLine * 1.5);
 });
 
+test('quotes whole messages or selected message text into the prompt', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const input = page.getByTestId('composer-input');
+  await input.fill('Keep this context.');
+  await page.getByTestId('composer-send').click();
+  await cockpit.session.waitForCommand('prompt');
+
+  const userEntry = page.getByTestId('entry-user');
+  await userEntry.getByTestId('entry-quote').click();
+  await expect(input).toHaveValue('> Keep this context.\n\n');
+  await expect(input).toBeFocused();
+  await input.fill('');
+
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'Alpha beta gamma.' },
+  });
+  cockpit.session.emit({ type: 'agent_settled' });
+
+  const assistantEntry = page.getByTestId('entry-assistant');
+  await expect(assistantEntry).toContainText('Alpha beta gamma.');
+  await assistantEntry.locator('p').evaluate((element) => {
+    const text = element.firstChild;
+    if (text === null) throw new Error('assistant message has no text node');
+    const range = document.createRange();
+    range.setStart(text, 6);
+    range.setEnd(text, 10);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await assistantEntry.getByTestId('entry-quote').click();
+
+  await expect(input).toHaveValue('> beta\n\n');
+  await expect(input).toBeFocused();
+});
 test('typing / completes the session commands', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForCommand('get_commands');

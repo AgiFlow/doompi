@@ -6,6 +6,7 @@ export type {
   ChannelFrame,
   HubChannelConnection,
   HubChannelHost,
+  HubChannelLifecycle,
   HubChannelSource,
   HubSessionApiRequest,
   HubSessionScope,

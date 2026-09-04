@@ -67,9 +67,16 @@ export interface HubChannelSource {
   close(): void;
 }
 
+export type HubChannelLifecycle = 'session' | 'hub';
+
 export interface WebHubChannel {
   /** Wire frame type; globally unique across every loaded plugin. */
   frameType: string;
+  /**
+   * Whether this channel source belongs to one session or the whole hub.
+   * Omitted channels retain the session-local lifecycle for compatibility.
+   */
+  lifecycle?: HubChannelLifecycle;
   start(host: HubChannelHost): HubChannelSource;
   /** Allows an authenticated connection to acknowledge targeted frames after its session subscription changes. */
   receiveWithoutSubscription?: boolean;

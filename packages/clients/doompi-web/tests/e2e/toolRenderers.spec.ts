@@ -146,11 +146,36 @@ test('the read plugin renders anchored text and attached images', async ({ page,
     },
     isError: false,
   });
+  await expect(page.getByTestId('tool-result-read')).toHaveCount(0);
+  await page.getByTestId('tool-expand').click();
   const result = page.getByTestId('tool-result-read');
   await expect(result).toContainText('const x = 1;');
   await expect(result).toContainText('export { x };');
   await expect(result).not.toContainText('#abc|');
   await expect(page.getByTestId('tool-result-read-image')).toBeVisible();
+});
+
+test('the grep plugin keeps matches collapsed until opened', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'call-grep',
+    toolName: 'grep',
+    args: { pattern: 'MessageItem', path: 'src' },
+  });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'call-grep',
+    result: { content: [{ type: 'text', text: '@file src/card.ts#tag\n>> 4#abc|export const MessageItem = true;' }] },
+    isError: false,
+  });
+
+  await expect(page.getByTestId('tool-call-grep')).toContainText('MessageItem');
+  await expect(page.getByTestId('tool-result-grep')).toHaveCount(0);
+  await page.getByTestId('tool-expand').click();
+  await expect(page.getByTestId('tool-result-grep')).toContainText('export const MessageItem = true;');
 });
 
 test('the edit plugin renders the diff its result details carry', async ({ page, cockpit }) => {

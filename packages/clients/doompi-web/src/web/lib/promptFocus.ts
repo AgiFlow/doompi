@@ -19,7 +19,8 @@ export function registerPromptInput(element: HTMLTextAreaElement | null): () => 
 }
 
 /** Returns the caret to the composer, if there is one and it can take it. */
-export function focusPrompt(): void {
+export function focusPrompt(caret?: number): void {
   if (promptInput === null || promptInput.disabled) return;
   promptInput.focus();
+  if (caret !== undefined) promptInput.setSelectionRange(caret, caret);
 }

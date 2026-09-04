@@ -71,6 +71,25 @@ export function appendComposerDraft(sessionId: string | null, text: string): voi
   });
 }
 
+/** Adds message text as a Markdown blockquote and leaves the caret ready for an instruction. */
+export function appendComposerQuote(sessionId: string | null, text: string): number | null {
+  const transcript = text.trim().replace(/\r\n?/g, '\n');
+  if (sessionId === null || transcript === '') return null;
+  let caret = 0;
+  updateComposerState(sessionId, (state) => {
+    const separator =
+      state.draft === '' ? '' : state.draft.endsWith('\n\n') ? '' : state.draft.endsWith('\n') ? '\n' : '\n\n';
+    const quote = transcript
+      .split('\n')
+      .map((line) => (line === '' ? '>' : `> ${line}`))
+      .join('\n');
+    const draft = `${state.draft}${separator}${quote}\n\n`;
+    caret = draft.length;
+    return { ...state, draft, caret, dismissedToken: null };
+  });
+  return caret;
+}
+
 export function clearComposerState(sessionId: string | null): void {
   if (sessionId === null) return;
   composerStore.setState((state) => ({ ...state, [sessionId]: EMPTY_COMPOSER_SESSION }));

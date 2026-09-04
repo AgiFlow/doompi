@@ -754,6 +754,73 @@ describe('the session hub over a registry', () => {
     expect(closed).not.toContain('second');
   });
 
+  it('shares a hub-scoped ownership channel across all registered sessions', async () => {
+    const registryDir = freshRegistryDir();
+    const sessions = await Promise.all(
+      ['one', 'two', 'three'].map(async (id) => await startRegisteredSession(registryDir, { id, name: id })),
+    );
+    let starts = 0;
+    let handoff: ((sourceSessionId: string, targetHandle: string) => string | undefined) | undefined;
+    const catalogs = new Map<string, Array<{ handle: string; label: string; order: number }>>();
+    const ownership: WebHubChannel = {
+      frameType: 'voice_ownership',
+      lifecycle: 'hub',
+      start(host) {
+        starts += 1;
+        const refresh = (): void => {
+          const participants = host.sessions();
+          for (const participant of participants) {
+            catalogs.set(
+              participant.sessionId,
+              participants
+                .filter((candidate) => candidate.sessionId !== participant.sessionId)
+                .sort((left, right) => left.sessionId.localeCompare(right.sessionId))
+                .map((target, index) => ({ handle: target.sessionId, label: target.sessionId, order: index + 1 })),
+            );
+          }
+        };
+        handoff = (sourceSessionId, targetHandle) =>
+          catalogs.get(sourceSessionId)?.find((target) => target.handle === targetHandle)?.handle;
+        return {
+          payloadFor: (scope) => ({ targets: catalogs.get(scope.sessionId) ?? [] }),
+          sessionAdded: refresh,
+          sessionRemoved: refresh,
+          close: () => undefined,
+        };
+      },
+    };
+    const harness = startHub(registryDir, undefined, [], undefined, {
+      loadChannels: async () => [ownership],
+    });
+
+    await waitFor(() => harness.hub.snapshot().length === sessions.length, 'all ownership sessions');
+    const targetsFor = (sessionId: string): Array<{ handle: string; label: string; order: number }> => {
+      const payload = harness.hub.channelFrames(sessionId).find((frame) => frame.type === 'voice_ownership')?.payload;
+      if (typeof payload !== 'object' || payload === null || !('targets' in payload) || !Array.isArray(payload.targets))
+        return [];
+      return payload.targets as Array<{ handle: string; label: string; order: number }>;
+    };
+    await waitFor(
+      () => sessions.every((session) => targetsFor(session.id).length === 2),
+      'two targets in every ownership catalog',
+    );
+
+    expect(starts).toBe(1);
+    expect(targetsFor('one')).toEqual([
+      { handle: 'three', label: 'three', order: 1 },
+      { handle: 'two', label: 'two', order: 2 },
+    ]);
+    expect(targetsFor('two')).toEqual([
+      { handle: 'one', label: 'one', order: 1 },
+      { handle: 'three', label: 'three', order: 2 },
+    ]);
+    expect(targetsFor('three')).toEqual([
+      { handle: 'one', label: 'one', order: 1 },
+      { handle: 'two', label: 'two', order: 2 },
+    ]);
+    expect(handoff?.('one', 'two')).toBe('two');
+  });
+
   it('routes incoming channel payloads by live scope, frame type, and connection', async () => {
     const registryDir = freshRegistryDir();
     const received: unknown[] = [];

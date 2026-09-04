@@ -37,6 +37,17 @@ function startupIconPath(): string {
     ? path.join(process.resourcesPath, 'startup-icon.png')
     : path.resolve(app.getAppPath(), '..', 'doompi-web', 'src', 'web', 'public', 'icon-512.png');
 }
+
+/** Allows local E2E runs to replace the staged hub without weakening packaged startup. */
+function launchHubEntry(): string {
+  const developmentEntry = process.env.DOOMPI_DESKTOP_E2E_HUB_ENTRY;
+  if (!app.isPackaged && developmentEntry !== undefined && developmentEntry !== '') return developmentEntry;
+  return hubEntry({
+    resourcesPath: process.resourcesPath,
+    packaged: app.isPackaged,
+    projectRoot: app.getAppPath(),
+  });
+}
 /** The default port when it is usable, so pairing keeps a stable origin. */
 async function resolvePort(): Promise<number> {
   if (await portIsFree(LOOPBACK_HOST, DEFAULT_PORT)) return DEFAULT_PORT;
@@ -73,11 +84,7 @@ async function start(): Promise<void> {
 
   hub = await startHub(
     {
-      entry: hubEntry({
-        resourcesPath: process.resourcesPath,
-        packaged: app.isPackaged,
-        projectRoot: app.getAppPath(),
-      }),
+      entry: launchHubEntry(),
       host: LOOPBACK_HOST,
       port: await resolvePort(),
       registryDir,

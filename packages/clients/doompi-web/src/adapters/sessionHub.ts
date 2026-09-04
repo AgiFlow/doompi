@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type {
   ChannelFrame,
+  HubChannelHost,
   HubChannelSource,
   HubSessionApiRequest,
   HubSessionScope,
@@ -218,7 +219,7 @@ interface ManagedSession {
    * cannot let a later command overtake an earlier one.
    */
   commands: Promise<void>;
-  /** Channel definitions and sources loaded only for this session's composition. */
+  /** Channel definitions and sources loaded for this session's composition. */
   channels: StartedChannel[];
   channelLoadToken: symbol;
 }
@@ -227,6 +228,7 @@ interface StartedChannel {
   channel: WebHubChannel;
   frameType: string;
   source: HubChannelSource;
+  lifecycle: 'session' | 'hub';
 }
 
 /**
@@ -349,6 +351,7 @@ function sessionApiPath(request: HubSessionApiRequest): string {
  */
 export function createSessionHub(options: SessionHubOptions): SessionHub {
   const sessions = new Map<string, ManagedSession>();
+  const hubChannels = new Map<string, StartedChannel>();
   const listeners = new Set<(event: HubEvent) => void>();
   const readGit = options.readGit;
   const restoreLimit = options.restoreLimit ?? DEFAULT_RESTORE_LIMIT;
@@ -440,8 +443,80 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     emit({ kind: 'upsert', session: summary });
   };
 
+  const hubHost = (frameType: string): HubChannelHost => ({
+    sessions: () => [...sessions.values()].map((managed) => scopeOf(managed.record)),
+    publish: (sessionId, payload) => {
+      if (closed || !sessions.has(sessionId)) return;
+      emit({ kind: 'channel', frameType, sessionId, payload });
+    },
+    publishToConnection: (connectionId, sessionId, payload) => {
+      if (closed || connectionId === '' || !sessions.has(sessionId)) return false;
+      emit({ kind: 'channel', frameType, sessionId, payload, connectionId });
+      return true;
+    },
+    requestSessionApi: async (requestedScope, request) => {
+      const current = sessions.get(requestedScope.sessionId);
+      if (
+        closed ||
+        current === undefined ||
+        current.record.cwd !== requestedScope.cwd ||
+        current.record.apiSocketPath === undefined
+      ) {
+        return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
+      }
+      const token = readTokenFile(current.record);
+      const headers = new Headers({ authorization: `Bearer ${token}` });
+      return await proxyToSocket({
+        socketPath: current.record.apiSocketPath,
+        path: sessionApiPath(request),
+        method: request.method,
+        headers,
+        body: request.body ?? null,
+        ...(request.signal === undefined ? {} : { signal: request.signal }),
+      });
+    },
+    onNotice: (message) => options.onNotice?.(message),
+  });
+
+  const attachHubChannel = (managed: ManagedSession, started: StartedChannel): void => {
+    if (managed.channels.some((candidate) => candidate.frameType === started.frameType)) return;
+    managed.channels.push(started);
+    const scope = scopeOf(managed.record);
+    const payload = started.source.payloadFor(scope);
+    if (payload !== undefined)
+      emit({ kind: 'channel', frameType: started.frameType, sessionId: scope.sessionId, payload });
+    pushSummary(managed);
+  };
+
+  const startHubChannel = (channel: WebHubChannel): StartedChannel | undefined => {
+    const existing = hubChannels.get(channel.frameType);
+    if (existing !== undefined) return existing;
+    let source: HubChannelSource;
+    try {
+      source = channel.start(hubHost(channel.frameType));
+    } catch (error) {
+      options.onNotice?.(
+        `web hub channel '${channel.frameType}' failed (${error instanceof Error ? error.message : String(error)})`,
+      );
+      return undefined;
+    }
+    const started: StartedChannel = { channel, frameType: channel.frameType, source, lifecycle: 'hub' };
+    hubChannels.set(channel.frameType, started);
+    for (const managed of sessions.values()) {
+      try {
+        source.sessionAdded?.(scopeOf(managed.record));
+      } catch (error) {
+        options.onNotice?.(
+          `web hub channel '${channel.frameType}' failed for session ${managed.record.id} (${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
+    }
+    return started;
+  };
+
   const closeSessionChannels = (managed: ManagedSession): void => {
     for (const started of managed.channels) {
+      if (started.lifecycle === 'hub') continue;
       started.source.sessionRemoved?.(managed.record.id);
       started.source.close();
     }
@@ -472,6 +547,17 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         continue;
       }
       seen.add(channel.frameType);
+      if (channel.lifecycle === 'hub') {
+        try {
+          const started = startHubChannel(channel);
+          if (started !== undefined) attachHubChannel(managed, started);
+        } catch (error) {
+          options.onNotice?.(
+            `web hub channel '${channel.frameType}' failed for session ${managed.record.id} (${error instanceof Error ? error.message : String(error)})`,
+          );
+        }
+        continue;
+      }
       try {
         const source = channel.start({
           sessions: () => [scopeOf(managed.record)],
@@ -506,7 +592,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           },
           onNotice: (message) => options.onNotice?.(message),
         });
-        managed.channels.push({ channel, frameType: channel.frameType, source });
+        managed.channels.push({ channel, frameType: channel.frameType, source, lifecycle: 'session' });
         source.sessionAdded?.(scope);
         const payload = source.payloadFor(scope);
         if (payload !== undefined)
@@ -656,6 +742,15 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);
     emitTelemetry('web.session.lifecycle', { 'session.state': 'appeared', 'session.count': sessions.size });
+    for (const started of hubChannels.values()) {
+      try {
+        started.source.sessionAdded?.(scopeOf(record));
+      } catch (error) {
+        options.onNotice?.(
+          `web hub channel '${started.frameType}' failed for session ${record.id} (${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
+    }
     startAttachment(managed);
     pushSummary(managed);
     refreshGit(managed);
@@ -686,6 +781,15 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       if (seen.has(id)) continue;
       managed.attachment?.close();
       managed.channelLoadToken = Symbol(id);
+      for (const started of hubChannels.values()) {
+        try {
+          started.source.sessionRemoved?.(id);
+        } catch (error) {
+          options.onNotice?.(
+            `web hub channel '${started.frameType}' failed removing session ${id} (${error instanceof Error ? error.message : String(error)})`,
+          );
+        }
+      }
       closeSessionChannels(managed);
       sessions.delete(id);
       const ring = managed.ring.snapshot();
@@ -700,6 +804,9 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     }
   };
 
+  for (const channel of options.channels ?? []) {
+    if (channel.lifecycle === 'hub') startHubChannel(channel);
+  }
   options.source.subscribe(reconcile);
   const gitTimer = readGit
     ? setInterval(() => {
@@ -757,7 +864,10 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     },
     channelTypes() {
       return [
-        ...new Set([...sessions.values()].flatMap((managed) => managed.channels.map((channel) => channel.frameType))),
+        ...new Set([
+          ...hubChannels.keys(),
+          ...[...sessions.values()].flatMap((managed) => managed.channels.map((channel) => channel.frameType)),
+        ]),
       ];
     },
     channelFrames(sessionId) {
@@ -793,13 +903,17 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
     receiveChannel(sessionId, frameType, payload, connectionId) {
       const managed = sessions.get(sessionId);
       if (managed === undefined || connectionId === '') return;
-      const started = managed.channels.find((candidate) => candidate.frameType === frameType);
+      const started =
+        managed.channels.find((candidate) => candidate.frameType === frameType) ?? hubChannels.get(frameType);
       started?.channel.receive?.(scopeOf(managed.record), payload, { connectionId });
     },
     disconnectChannels(connectionId) {
       if (connectionId === '') return;
+      for (const started of hubChannels.values()) started.channel.disconnected?.({ connectionId });
       for (const managed of sessions.values()) {
-        for (const started of managed.channels) started.channel.disconnected?.({ connectionId });
+        for (const started of managed.channels) {
+          if (started.lifecycle === 'session') started.channel.disconnected?.({ connectionId });
+        }
       }
     },
     reloadChannels(sessionId) {
@@ -920,6 +1034,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       if (gitTimer) clearInterval(gitTimer);
       for (const managed of sessions.values()) {
         managed.channelLoadToken = Symbol(managed.record.id);
+        for (const started of hubChannels.values()) started.source.sessionRemoved?.(managed.record.id);
         closeSessionChannels(managed);
         managed.attachment?.close();
         emitTelemetry('web.session.summary', {
@@ -928,6 +1043,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           'session.state': 'shutdown',
         });
       }
+      for (const started of hubChannels.values()) started.source.close();
+      hubChannels.clear();
       sessions.clear();
       listeners.clear();
     },

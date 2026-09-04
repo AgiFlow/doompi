@@ -13,6 +13,7 @@ import type { Store } from '@tanstack/store';
 import { useActivityGroups } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
+import { focusPrompt } from '../../lib/promptFocus.ts';
 import {
   isSupportedImageMimeType,
   type SessionState,
@@ -20,6 +21,7 @@ import {
   type ToolEntry,
 } from '../../lib/sessionModel.ts';
 import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups.ts';
+import { appendComposerQuote } from '../../stores/composerStore.ts';
 import {
   requestOlderHistory,
   sessionStoreFor,
@@ -133,6 +135,24 @@ function ToolGroupRow({
   );
 }
 const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
+  const quoteSource = useRef<HTMLDivElement>(null);
+  const quoteMessage = (text: string): void => {
+    const selection = window.getSelection();
+    const source = quoteSource.current;
+    const selected =
+      source !== null &&
+      selection !== null &&
+      !selection.isCollapsed &&
+      selection.anchorNode !== null &&
+      selection.focusNode !== null &&
+      source.contains(selection.anchorNode) &&
+      source.contains(selection.focusNode)
+        ? selection.toString()
+        : text;
+    const caret = appendComposerQuote(sessionId, selected);
+    if (caret !== null) requestAnimationFrame(() => focusPrompt(caret));
+  };
+
   if (entry.kind === 'user') {
     return (
       // What the reader said sits inboard of what the session said, on its own
@@ -144,7 +164,10 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
         data-testid="entry-user"
         className="flex flex-col-reverse gap-1 sm:flex-row sm:items-center sm:gap-3 sm:pl-10"
       >
-        <div className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi">
+        <div
+          ref={quoteSource}
+          className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi"
+        >
           <MessageMarkdown sessionId={sessionId} text={entry.text} />
           {entry.images && entry.images.length > 0 ? (
             <div data-testid="user-attachments" className="flex flex-wrap gap-2">
@@ -162,6 +185,16 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
             </div>
           ) : null}
           {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
+          <Button
+            variant="ghost"
+            size="xs"
+            data-testid="entry-quote"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => quoteMessage(entry.text)}
+            className="h-auto self-end px-1 py-0 text-[9px] font-normal text-doom-faint hover:text-doom-text"
+          >
+            quote
+          </Button>
         </div>
         {/* The label trails what the reader said and the session's leads what
             it answered, so the two voices read as two lanes at a glance. */}
@@ -190,10 +223,20 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
               <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
             </div>
           ) : null}
-          <div className="text-[13px] text-doom-text">
+          <div ref={quoteSource} className="text-[13px] text-doom-text">
             <MessageMarkdown sessionId={sessionId} text={entry.text} />
             {entry.streaming ? <StreamCursor /> : null}
           </div>
+          <Button
+            variant="ghost"
+            size="xs"
+            data-testid="entry-quote"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => quoteMessage(entry.text)}
+            className="h-auto self-end px-1 py-0 text-[9px] font-normal text-doom-faint hover:text-doom-text"
+          >
+            quote
+          </Button>
         </div>
       </div>
     );

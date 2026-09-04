@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   appendComposerDraft,
+  appendComposerQuote,
   clearComposerState,
   composerStore,
   dropComposerState,
@@ -56,6 +57,18 @@ describe('composer state', () => {
     expect(Object.keys(composerStore.state)).toEqual(['s1']);
   });
 
+  it('formats quoted messages and separates them from an existing instruction', () => {
+    expect(appendComposerQuote('s1', 'first line\n\nsecond line')).toBe(30);
+    expect(composerStore.state.s1?.draft).toBe('> first line\n>\n> second line\n\n');
+
+    updateComposerState('s1', (state) => ({ ...state, draft: `${state.draft}Focus here.` }));
+    expect(appendComposerQuote('s1', '  another message  ')).toBe(62);
+    expect(composerStore.state.s1?.draft).toBe(
+      '> first line\n>\n> second line\n\nFocus here.\n\n> another message\n\n',
+    );
+    expect(appendComposerQuote('s1', '   ')).toBeNull();
+    expect(appendComposerQuote(null, 'detached')).toBeNull();
+  });
   it('ignores detached updates and removes state for sessions that leave', () => {
     updateComposerState(null, () => {
       throw new Error('detached composer update should not run');

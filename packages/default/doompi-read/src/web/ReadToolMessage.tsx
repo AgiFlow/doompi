@@ -28,9 +28,9 @@ function resultImages(content: readonly unknown[]): Array<{ data: string; mimeTy
 }
 /**
  * The read tool's timeline item, the web half of its renderCall and
- * renderResult: the call summary in the header and the anchored lines with
- * a line-number gutter in the body, collapsed to the TUI's budget until the
- * item expands. A failure shows the tool's message in red instead.
+ * renderResult: the call summary in the header and, when expanded, the
+ * anchored lines with a line-number gutter in the body. A failure shows the
+ * tool's message in red inside the expanded body instead.
  */
 export function ReadToolMessage({
   args,
@@ -46,12 +46,10 @@ export function ReadToolMessage({
   // A read is the one call whose file the session usually has not changed, so
   // this is the link that opens it read-only rather than in its history.
   const tab = fileTabFor(view.path);
-  const collapsed = result === null || isError ? null : hashlineBody(result, output, 'read', false);
+  const body = result === null || isError ? null : hashlineBody(result, output, 'read', true);
   return (
-    <MessageItem tone={toolTone({ running, isError })} expandable={collapsed !== null && collapsed.hidden > 0}>
+    <MessageItem tone={toolTone({ running, isError })} expandable>
       {({ expanded }) => {
-        const body =
-          result === null || isError ? null : expanded ? hashlineBody(result, output, 'read', true) : collapsed;
         return (
           <>
             <MessageItemHeader title="read">
@@ -65,49 +63,50 @@ export function ReadToolMessage({
                 ) : null}
               </span>
             </MessageItemHeader>
-            {isError ? (
-              <MessageItemBody data-testid="tool-result-read" className="flex flex-col">
-                <MessageItemStatus tone="error">failed</MessageItemStatus>
-                {resultTextLines(result, output).map((line, index) => (
-                  <span key={`${String(index)}-${line}`} className="whitespace-pre-wrap break-words text-doom-red">
-                    {line}
-                  </span>
-                ))}
-              </MessageItemBody>
-            ) : body === null ? (
-              running ? (
-                <MessageItemBody data-testid="tool-result-read">
-                  <MessageItemStatus tone="running">running</MessageItemStatus>
+            {expanded ? (
+              isError ? (
+                <MessageItemBody data-testid="tool-result-read" className="flex flex-col">
+                  <MessageItemStatus tone="error">failed</MessageItemStatus>
+                  {resultTextLines(result, output).map((line, index) => (
+                    <span key={`${String(index)}-${line}`} className="whitespace-pre-wrap break-words text-doom-red">
+                      {line}
+                    </span>
+                  ))}
                 </MessageItemBody>
-              ) : null
-            ) : body.shown.length === 0 && body.notice === undefined && images.length === 0 ? null : (
-              <MessageItemBody data-testid="tool-result-read" className="flex flex-col gap-1">
-                {/* A read body is one file with no heading of its own, so the
-                    call's path is what names the grammar for it. */}
-                <HashlineLines lines={body.shown} gutter={body.gutter} path={view.path} />
-                {images.map((image, index) => {
-                  const url = `data:${image.mimeType};base64,${image.data}`;
-                  return (
-                    <a
-                      key={`${image.mimeType}:${String(index)}`}
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="self-start"
-                    >
-                      <img
-                        src={url}
-                        alt={`Read result ${String(index + 1)}`}
-                        data-testid="tool-result-read-image"
-                        className="h-auto max-h-96 max-w-full rounded-md border border-doom-border-soft object-contain"
-                      />
-                    </a>
-                  );
-                })}
-                {body.hidden > 0 ? <MessageItemStatus expands>{body.hidden} more lines</MessageItemStatus> : null}
-                {body.notice !== undefined ? <span className="text-doom-faint">{body.notice}</span> : null}
-              </MessageItemBody>
-            )}
+              ) : body === null ? (
+                running ? (
+                  <MessageItemBody data-testid="tool-result-read">
+                    <MessageItemStatus tone="running">running</MessageItemStatus>
+                  </MessageItemBody>
+                ) : null
+              ) : body.shown.length === 0 && body.notice === undefined && images.length === 0 ? null : (
+                <MessageItemBody data-testid="tool-result-read" className="flex flex-col gap-1">
+                  {/* A read body is one file with no heading of its own, so the
+                      call's path is what names the grammar for it. */}
+                  <HashlineLines lines={body.shown} gutter={body.gutter} path={view.path} />
+                  {images.map((image, index) => {
+                    const url = `data:${image.mimeType};base64,${image.data}`;
+                    return (
+                      <a
+                        key={`${image.mimeType}:${String(index)}`}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="self-start"
+                      >
+                        <img
+                          src={url}
+                          alt={`Read result ${String(index + 1)}`}
+                          data-testid="tool-result-read-image"
+                          className="h-auto max-h-96 max-w-full rounded-md border border-doom-border-soft object-contain"
+                        />
+                      </a>
+                    );
+                  })}
+                  {body.notice !== undefined ? <span className="text-doom-faint">{body.notice}</span> : null}
+                </MessageItemBody>
+              )
+            ) : null}
           </>
         );
       }}

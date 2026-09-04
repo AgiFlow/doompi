@@ -91,11 +91,17 @@ jobs:
       - name: Build the cockpit and the servers it spawns
         run: pnpm cockpit:build
 
+      - name: Build the desktop main and preload
+        run: pnpm nx run @agimon-ai/doompi-desktop:build
+
       - name: Install the Chromium the suite drives
         run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
 
       - name: Drive the cockpit in a browser
         run: pnpm nx run @agimon-ai/doompi-web:test:e2e
+
+      - name: Drive the desktop app in Electron
+        run: pnpm nx run @agimon-ai/doompi-desktop:test:e2e
 
       - name: Keep the traces of a failed run
         if: failure()
@@ -105,6 +111,8 @@ jobs:
           path: |
             packages/clients/doompi-web/playwright-report
             packages/clients/doompi-web/test-results
+            packages/clients/doompi-desktop/playwright-report
+            packages/clients/doompi-desktop/test-results
           retention-days: 7
 
   # Packed-install gate: packs and installs every package for real, checks the

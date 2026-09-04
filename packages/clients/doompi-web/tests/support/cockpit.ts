@@ -114,6 +114,8 @@ interface CockpitOptions {
   spawnStub: 'ok' | 'fail';
   /** Which bundle to serve: the package's own dist, or the synced-style bundle global setup built. */
   assets: 'packaged' | 'synced';
+  /** Maximum frames buffered by a fake session while the hub is detached. */
+  backlogLimit: number;
 }
 
 /**
@@ -128,6 +130,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
   spawnStub: ['ok', { option: true }],
   assets: ['packaged', { option: true }],
+  backlogLimit: [512, { option: true }],
   page: async ({ page, cockpit }, use) => {
     await page.goto(`${cockpit.url}/pair`);
     await page.waitForURL(`${cockpit.url}/`);
@@ -135,7 +138,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     await page.goto('about:blank');
     await use(page);
   },
-  cockpit: async ({ sessionCount, spawnStub, assets }, use) => {
+  cockpit: async ({ sessionCount, spawnStub, assets, backlogLimit }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
     const syncedHome = process.env.DOOMPI_E2E_SYNCED_HOME;
@@ -170,6 +173,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       const cwd = assets === 'synced' ? fs.mkdtempSync(path.join(syncedWorkRoot as string, `${id}-`)) : undefined;
       sessions.push(
         await startFakeSession({
+          backlogLimit,
           id,
           name: `session-${index + 1}`,
           registryDir,
