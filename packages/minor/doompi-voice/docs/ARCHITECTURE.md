@@ -420,11 +420,15 @@ flowchart TB
 | Direction | Service                           | Site                                              |
 | --------- | --------------------------------- | ------------------------------------------------- |
 | provides  | `DOOM_VOICE_TOOLS_SERVICE`        | `voice.ts`                                        |
-| provides  | `DOOM_NARRATION_SERVICE`          | `voice.ts`                                        |
+| provides  | `DOOM_NARRATION_SERVICE`          | `voice.ts`, inside the Cordis session fiber       |
 | injects   | `DOOM_HELP_SERVICE`               | `extension.ts`                                    |
 | injects   | `DOOM_UI_HUB_SERVICE`             | `extension.ts`                                    |
 | injects   | `DOOM_MINOR_MODE_CATALOG_SERVICE` | `voice.ts`                                        |
 | listens   | `DOOM_ASK_USER_BLOCKED_EVENT`     | `voice.ts`, blocks delivery while a modal is open |
+
+`DOOM_NARRATION_SERVICE` is a session capability rather than a runtime-root service. Each request is checked against the exact-active narration tool runtime for the Cordis session that provided it. Disposing that session invalidates retained service references and aborts its in-flight external narration.
+
+Browser media ownership remains page-global so an enabled background Voice session stays connected across route changes. That continuity does not authorize narration from another session: an inactive or mismatched session cannot borrow the active session's controller.
 
 ### Worker protocol
 

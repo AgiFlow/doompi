@@ -10,6 +10,10 @@ import {
 } from '@agimon-ai/doompi-config/config';
 import { type DoomConfig, type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
 import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-extension-contracts/ask-user';
+import {
+  DOOM_CORDIS_SESSION_SERVICE,
+  type DoomCordisSessionService,
+} from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
@@ -384,17 +388,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+export interface VoiceNarrationServiceBinding {
+  readonly generation: string;
+  readonly signal: AbortSignal;
+  isCurrentSession(): boolean;
+}
+
 export function createVoiceNarrationService(
   controller: Pick<VoiceWorkerAutoCaptureController, 'narrateExternal'>,
+  binding: VoiceNarrationServiceBinding,
 ): DoomNarrationService {
   const service: DoomNarrationService = {
-    generation: `${VOICE_SOURCE}:narration:${crypto.randomUUID()}`,
+    generation: binding.generation,
     async request(request) {
       if (!isNarrationRequest(request)) throw new Error('Invalid narration request.');
-      await controller.narrateExternal(request.text);
+      if (binding.signal.aborted || !binding.isCurrentSession()) return;
+      await controller.narrateExternal(request.text, binding.signal);
     },
   };
   return Object.freeze(service);
+}
+
+export function registerSessionVoiceNarrationService(
+  cordis: Context,
+  controller: Pick<VoiceWorkerAutoCaptureController, 'narrateExternal'>,
+  runtimeProvider: () => NarrationToolRuntime | undefined,
+): void {
+  cordis.inject([DOOM_CORDIS_SESSION_SERVICE], (sessionContext) => {
+    const session = sessionContext.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
+    const sessionAbort = new AbortController();
+    let mounted = true;
+    sessionContext.provide(
+      DOOM_NARRATION_SERVICE,
+      createVoiceNarrationService(controller, {
+        generation: `${session.generation}:voice-narration`,
+        signal: sessionAbort.signal,
+        isCurrentSession: () => mounted && isNarrationRuntimeActive(runtimeProvider(), session.context),
+      }),
+    );
+    return () => {
+      mounted = false;
+      sessionAbort.abort();
+    };
+  });
 }
 
 export function registerAutoCaptureCordisEventHandlers(
@@ -1033,7 +1069,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       }, VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS);
     };
 
-    cordis.provide(DOOM_NARRATION_SERVICE, createVoiceNarrationService(autoController));
+    registerSessionVoiceNarrationService(cordis, autoController, () => narrationToolRuntime);
     if (typeof pi.registerTool === 'function') {
       registerNarrationTool(pi, () => narrationToolRuntime, options.waitUntilConfigured);
     }
