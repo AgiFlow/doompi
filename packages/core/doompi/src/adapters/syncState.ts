@@ -222,7 +222,10 @@ function updateFileInputHash(hash: ReturnType<typeof crypto.createHash>, filePat
 
 /** Package root owning a resolved entry, or undefined when it sits outside one. */
 function owningPackageRoot(entryPath: string): string | undefined {
-  let directory = path.dirname(path.resolve(entryPath));
+  // The resolved map also carries package-name metadata. Relative metadata must
+  // not become a filesystem path whose meaning changes with process.cwd().
+  if (!path.isAbsolute(entryPath)) return undefined;
+  let directory = path.dirname(entryPath);
   for (;;) {
     if (fs.existsSync(path.join(directory, PACKAGE_MANIFEST_FILE))) return directory;
     const parent = path.dirname(directory);

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
+import { computeWebSourcesHash } from '../../src/adapters/syncState.ts';
 import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
 import {
   publishSyncRegistration,
@@ -472,6 +473,29 @@ describe('sync state file', () => {
     expect(readLocatedSyncState(root, home)).toBeUndefined();
     expect(fs.existsSync(syncStatePath(root))).toBe(false);
     expect(fs.readFileSync(legacyPath, 'utf8')).toBe(serialized);
+  });
+});
+
+describe('web sources hash', () => {
+  it('does not resolve package-name metadata relative to the process directory', () => {
+    const first = makeRoot();
+    const second = makeRoot();
+    fs.writeFileSync(path.join(first, 'package.json'), '{"name":"first","version":"1.0.0"}');
+    fs.writeFileSync(path.join(second, 'package.json'), '{"name":"second","version":"2.0.0"}');
+    const resolved = { [localPackageNameKey('./plugin', '/repo')]: '@scope/plugin' };
+    const originalDirectory = process.cwd();
+    let firstHash: string;
+    let secondHash: string;
+    try {
+      process.chdir(first);
+      firstHash = computeWebSourcesHash(resolved);
+      process.chdir(second);
+      secondHash = computeWebSourcesHash(resolved);
+    } finally {
+      process.chdir(originalDirectory);
+    }
+
+    expect(secondHash).toBe(firstHash);
   });
 });
 
