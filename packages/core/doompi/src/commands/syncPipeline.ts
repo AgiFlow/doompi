@@ -75,6 +75,12 @@ export class SyncPipeline {
 
     const releaseLock = await acquireSyncLocationLock(resolveSyncLocation(repoRoot, homeDirectory));
     try {
+      // A concurrent publisher may have resolved the drift while this command
+      // waited for the lock. Do not rebuild and republish the same generation.
+      if (!args.includes(FORCE_OPTION) && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+        output.write('doompi sync is already up to date\n');
+        return 0;
+      }
       const progress = new SyncProgress(output);
       await this.refreshPackages(environment, currentDirectory, progress);
 

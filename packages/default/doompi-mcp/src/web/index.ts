@@ -1,5 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { McpRepositorySettingsPanel } from './McpRepositorySettingsPanel.tsx';
+import { McpSessionAuthSection } from './McpSessionAuthSection.tsx';
 import { McpToolMessage } from './McpToolMessage.tsx';
 import { matchMcpTool } from './mcpToolMatch.ts';
 
@@ -18,6 +19,7 @@ export const webPlugin = defineWebPlugin({
     order: 100,
     component: McpRepositorySettingsPanel,
   },
+  contextSections: [{ id: 'session-auth', component: McpSessionAuthSection }],
   toolRenderers: [
     {
       tools: [],

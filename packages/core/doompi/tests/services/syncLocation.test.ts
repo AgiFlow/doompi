@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveSyncLocation, sanitizeSyncLabel } from '../../src/adapters/syncLocation';
+import { acquireSyncLocationLock, resolveSyncLocation, sanitizeSyncLabel } from '../../src/adapters/syncLocation';
 
 const temporaryDirectories: string[] = [];
 
@@ -67,5 +67,40 @@ describe('sync location', () => {
     expect(sanitizeSyncLabel(' feature/a ', 'fallback')).toBe('feature-a');
     expect(sanitizeSyncLabel('../..', 'fallback')).toBe('fallback');
     expect(sanitizeSyncLabel('Crème brûlée', 'fallback')).toBe('Creme-brulee');
+  });
+
+  it('removes a lock left by a publisher that has exited', async () => {
+    const root = temporaryDirectory();
+    const home = temporaryDirectory();
+    const location = resolveSyncLocation(root, home);
+    fs.mkdirSync(location.directory, { recursive: true });
+    fs.writeFileSync(path.join(location.directory, '.sync.lock'), '{"pid":2147483647,"token":"abandoned"}\n');
+
+    const release = await acquireSyncLocationLock(location);
+
+    await release();
+    expect(fs.existsSync(path.join(location.directory, '.sync.lock'))).toBe(false);
+  });
+
+  it('waits for an active publisher and acquires the lock after release', async () => {
+    const root = temporaryDirectory();
+    const home = temporaryDirectory();
+    const location = resolveSyncLocation(root, home);
+    const releaseFirst = await acquireSyncLocationLock(location);
+    const second = acquireSyncLocationLock(location).then(
+      (release) => ({ state: 'acquired' as const, release }),
+      (error: unknown) => ({ state: 'rejected' as const, error }),
+    );
+
+    const beforeRelease = await Promise.race([
+      second,
+      new Promise<{ state: 'waiting' }>((resolve) => setTimeout(() => resolve({ state: 'waiting' }), 20)),
+    ]);
+    expect(beforeRelease.state).toBe('waiting');
+
+    await releaseFirst();
+    const afterRelease = await second;
+    expect(afterRelease.state).toBe('acquired');
+    if (afterRelease.state === 'acquired') await afterRelease.release();
   });
 });

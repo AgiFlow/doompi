@@ -58,6 +58,47 @@ test('says so plainly when the session has published no composition', async ({ p
   await expect(page.getByTestId('context-empty')).toBeVisible();
 });
 
+test.describe('with the synced MCP context contribution', () => {
+  test.use({ assets: 'synced' });
+
+  test('shows zero-tool auth needs, sends one exact keyboard request, and follows live status changes', async ({
+    page,
+    cockpit,
+  }) => {
+    const serverName = 'pencil/v2 --profile=review';
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+
+    cockpit.session.emit(status('doom-mcp-session-auth', JSON.stringify([{ name: serverName, state: 'needs-auth' }])));
+    await page.getByTestId('dock-tab-context').click();
+
+    await expect(page.getByTestId('context-empty')).toBeVisible();
+    const auth = page.getByTestId('context-mcp-auth');
+    await expect(auth).toBeVisible();
+    const serverList = auth.getByRole('list', { name: 'MCP servers needing authorization' });
+    const serverRow = serverList.getByRole('listitem').filter({ hasText: serverName });
+    await expect(serverRow).toHaveCount(1);
+
+    const authorize = serverRow.getByRole('button', { name: 'authorize' });
+    await authorize.focus();
+    await expect(authorize).toBeFocused();
+    const commandOffset = cockpit.session.received.length;
+    await page.keyboard.press('Enter');
+
+    await expect
+      .poll(() => cockpit.session.received.slice(commandOffset).filter((frame) => frame.type === 'prompt'))
+      .toEqual([{ type: 'prompt', message: `/mcp auth ${serverName}` }]);
+
+    cockpit.session.emit(status('doom-mcp-session-auth', ''));
+    await expect(auth).toBeHidden();
+
+    cockpit.session.emit(status('doom-mcp-session-auth', JSON.stringify([{ name: 'linear', state: 'needs-auth' }])));
+    await expect(auth).toBeVisible();
+    await expect(serverList.getByRole('listitem')).toHaveCount(1);
+    await expect(serverList).toContainText('linear');
+    await expect(serverList).not.toContainText(serverName);
+  });
+});
 test('reports the estimate as an estimate', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

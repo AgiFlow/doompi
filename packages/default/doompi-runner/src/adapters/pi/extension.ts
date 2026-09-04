@@ -1,3 +1,9 @@
+import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundProviderWorkItem,
+  type BackgroundWorkProviderHandle,
+  readDoomBackgroundWorkService,
+} from '@agimon-ai/doompi-extension-contracts/background-work';
 import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
@@ -38,6 +44,7 @@ const COMPLETED_STATE = 'completed';
 const RMUX_BACKEND = 'rmux';
 const STOPPED_REASON = 'stopped';
 const RUNNER_STATUS_KEY = 'doom-runner-runners';
+const BACKGROUND_WORK_PROVIDER = 'doom-runner';
 const RUNNER_FOOTER_ORDER = 10;
 const RUNNER_STATUS_POLL_MS = 500;
 /**
@@ -112,6 +119,9 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
   let lastRunnerCount: number | undefined;
   const notifiedRunnerIds = new Set<string>();
   const pendingPromotedRunnerIds = new Set<string>();
+  const terminalRunners = new Map<string, RunnerRecord>();
+  let backgroundWorkItems: BackgroundProviderWorkItem[] = [];
+  let backgroundWorkProvider: BackgroundWorkProviderHandle | undefined;
   const pendingOperations = new Set<Promise<unknown>>();
   const trackOperation = <T>(operation: Promise<T>): Promise<T> => {
     pendingOperations.add(operation);
@@ -145,6 +155,36 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
       enableTraces: true,
     });
     return telemetry;
+  };
+  const publishBackgroundWork = (): void => {
+    const activeSessionId = sessionId;
+    const representedIds = new Set([...runners.map((record) => record.id), ...terminalRunners.keys()]);
+    const next = activeSessionId
+      ? [
+          ...runners
+            .filter((record) => record.sessionId === activeSessionId && record.promoted)
+            .map((record) => ({
+              id: record.id,
+              sessionId: record.sessionId,
+              label: record.name,
+              status: record.state,
+            })),
+          ...[...terminalRunners.values()]
+            .filter((record) => record.sessionId === activeSessionId)
+            .map((record) => ({
+              id: record.id,
+              sessionId: record.sessionId,
+              label: record.name,
+              status: record.state,
+            })),
+          ...[...pendingPromotedRunnerIds]
+            .filter((id) => !representedIds.has(id))
+            .map((id) => ({ id, sessionId: activeSessionId, status: 'running' })),
+        ]
+      : [];
+    if (JSON.stringify(next) === JSON.stringify(backgroundWorkItems)) return;
+    backgroundWorkItems = next;
+    backgroundWorkProvider?.update();
   };
   /** Performs one bounded pass over active state and explicitly monitored runners. */
   const refreshNow = async (shouldReconcile: boolean): Promise<void> => {
@@ -192,12 +232,19 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
       if (!id) continue;
       if (!record || record.sessionId !== activeSessionId) {
         pendingPromotedRunnerIds.delete(id);
+        terminalRunners.delete(id);
+        runners = runners.filter((candidate) => candidate.id !== id);
         continue;
       }
-      if (record.state !== COMPLETED_STATE) continue;
-      pendingPromotedRunnerIds.delete(record.id);
+      if (record.state === COMPLETED_STATE) {
+        runners = runners.filter((candidate) => candidate.id !== record.id);
+        terminalRunners.set(record.id, record);
+      }
+    }
+    publishBackgroundWork();
+    for (const record of monitored) {
+      if (!record || record.sessionId !== activeSessionId || record.state !== COMPLETED_STATE) continue;
       if (notifiedRunnerIds.has(record.id)) continue;
-      notifiedRunnerIds.add(record.id);
       const outcome = record.exit?.reason ?? COMPLETED_STATE;
       const code =
         record.exit?.code === null || record.exit?.code === undefined ? '' : `, exit code ${record.exit.code}`;
@@ -211,6 +258,10 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
         { customType: RUNNER_FINISHED_MESSAGE, content, display: true },
         { triggerTurn: true, deliverAs: 'steer' },
       );
+      notifiedRunnerIds.add(record.id);
+      pendingPromotedRunnerIds.delete(record.id);
+      terminalRunners.delete(record.id);
+      publishBackgroundWork();
       if (sessionContext) {
         void trackOperation(
           getTelemetry(sessionContext).recordEvent('doom_runner.process_finished', {
@@ -356,6 +407,8 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
     runners = [];
     notifiedRunnerIds.clear();
     pendingPromotedRunnerIds.clear();
+    terminalRunners.clear();
+    publishBackgroundWork();
 
     await Promise.all([
       runCleanup('dispose the runner lifeline', () => lifeline.dispose()),
@@ -386,6 +439,19 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
       if (footerContribution === contribution) footerContribution = undefined;
     };
   });
+  cordis.inject([DOOM_BACKGROUND_WORK_SERVICE], (serviceContext) => {
+    const service = readDoomBackgroundWorkService(serviceContext);
+    if (!service) return undefined;
+    const registration = service.register({
+      provider: BACKGROUND_WORK_PROVIDER,
+      listActiveWork: () => backgroundWorkItems,
+    });
+    backgroundWorkProvider = registration;
+    return () => {
+      registration.dispose();
+      if (backgroundWorkProvider === registration) backgroundWorkProvider = undefined;
+    };
+  });
   unsubscribeRegistry = registry.subscribe(() => scheduleRefresh(false));
   statusPoll = setInterval(() => scheduleRefresh(true), RUNNER_STATUS_POLL_MS);
   statusPoll.unref?.();
@@ -402,6 +468,7 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
     onRunnerStarted: (id) => {
       if (!active || !sessionReady) return;
       pendingPromotedRunnerIds.add(id);
+      publishBackgroundWork();
       scheduleRefresh(false);
     },
   });
@@ -522,8 +589,11 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
     sessionContext = context;
     sessionReady = false;
     lastRunnerCount = undefined;
+    runners = [];
     notifiedRunnerIds.clear();
     pendingPromotedRunnerIds.clear();
+    terminalRunners.clear();
+    publishBackgroundWork();
 
     const initializeSession = async (signal: AbortSignal): Promise<readonly string[]> => {
       const stillCurrent = (): boolean => !signal.aborted && isCurrent(generation, activeSessionId);

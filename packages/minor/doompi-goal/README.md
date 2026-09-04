@@ -35,7 +35,10 @@ pi install npm:@agimon-ai/doompi-goal
 ```
 
 Budgets accept compact values such as `100k` and `1.5m`. Goal adds `goal_complete` and
-`goal_blocked` only while host policy permits and the objective is operational.
+`goal_blocked` only while host policy permits and the objective is operational. An active Goal
+continues after genuinely idle turns. In a composed DoomPi session it waits for same-session
+subagents, tasks, runners, workflows, and their completion turns before continuing. Only a
+successful `goal_complete` call marks the objective complete.
 
 In DoomPi, `SPC g e` starts a goal. If another goal is active, it ends and archives that goal first. `SPC g g` shows status, and `SPC g l` opens history. These views require a TUI; slash commands and tools support headless operation.
 

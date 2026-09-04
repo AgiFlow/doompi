@@ -13,7 +13,7 @@ import {
   StreamCursor,
   UserIcon,
 } from '@agimon-ai/doompi-web-components';
-import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
 import { useActivityGroups } from '../../lib/composition.ts';
@@ -61,6 +61,20 @@ const PAGE_BACK_THRESHOLD_PX = 400;
  * there; everything above it is what makes a long session slow.
  */
 const LIVE_TAIL_ENTRIES = 40;
+
+function noticeHref(line: string): string | null {
+  if (/\s/u.test(line) || !/^https?:\/\//i.test(line)) return null;
+
+  try {
+    const url = new URL(line);
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.host || url.username || url.password) {
+      return null;
+    }
+    return url.href;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The speaker's label.
@@ -323,8 +337,24 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       >
         {isError ? '!' : '·'}
       </span>
-      <p className={`min-w-0 flex-1 break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}>
-        {entry.text}
+      <p
+        className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}
+      >
+        {entry.text.split('\n').map((line, index) => {
+          const href = noticeHref(line);
+          return (
+            <Fragment key={index}>
+              {index > 0 ? '\n' : null}
+              {href === null ? (
+                line
+              ) : (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                  {line}
+                </a>
+              )}
+            </Fragment>
+          );
+        })}
       </p>
     </div>
   );

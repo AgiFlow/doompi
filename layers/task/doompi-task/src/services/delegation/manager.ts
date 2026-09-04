@@ -135,6 +135,11 @@ interface AssignAttempt extends DelegationOutcome {
   task?: Task;
 }
 
+interface PendingTask {
+  readonly taskId: number;
+  readonly sessionId?: string;
+}
+
 function truncate(value: string | undefined, limit = MAX_STORED_OUTPUT): string | undefined {
   if (!value) return undefined;
   return value.length <= limit ? value : `${value.slice(0, limit)}\n… (truncated)`;
@@ -212,7 +217,8 @@ function buildBrief(task: Task, instructions: string | undefined, context: Brief
 export class DelegationManager {
   private readonly options: DelegationManagerOptions;
   private readonly progress = new Map<string, DelegationProgress>();
-  private readonly pendingTasks = new Map<string, number>();
+  private readonly pendingTasks = new Map<string, PendingTask>();
+  private readonly settlingRequests = new Set<string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly subscriptions: Array<() => void> = [];
   private service: DoomDelegationService | undefined;
@@ -288,11 +294,9 @@ export class DelegationManager {
 
   /** Items still in flight, surfaced so auto-stop will not kill the harness. */
   listActiveWork(): Array<{ id: string; sessionId: string }> {
-    const sessionId = this.options.getSessionId?.() ?? '';
-    return [...this.pendingTasks.entries()].map(([requestId, taskId]) => ({
-      id: `task-${taskId}:${requestId}`,
-      sessionId,
-    }));
+    return [...this.pendingTasks.entries()].flatMap(([requestId, pending]) =>
+      pending.sessionId ? [{ id: `task-${pending.taskId}:${requestId}`, sessionId: pending.sessionId }] : [],
+    );
   }
 
   /**
@@ -333,6 +337,7 @@ export class DelegationManager {
 
     const requestId = this.options.platform.createRequestId();
     const startedAt = this.now();
+    const sessionId = this.options.getSessionId?.();
     const context = briefContext(options, this.options.cwd, this.options.platform);
 
     const { value: outcome } = await this.options.store.mutate<AssignAttempt>((current) => {
@@ -358,7 +363,7 @@ export class DelegationManager {
         state: 'requested',
         pid: this.options.platform.processId,
         startedAt,
-        ...(this.options.getSessionId?.() ? { sessionId: this.options.getSessionId!() } : {}),
+        ...(sessionId ? { sessionId } : {}),
         ...(options.model ? { model: options.model } : {}),
       };
 
@@ -373,10 +378,10 @@ export class DelegationManager {
     if (!outcome.ok || !outcome.task) return { ok: false, message: outcome.message };
 
     const contextNotesLength = context.notes?.length ?? 0;
-    this.pendingTasks.set(requestId, taskId);
+    this.pendingTasks.set(requestId, { taskId, sessionId });
     this.progress.set(requestId, { agent, contextFileCount: context.files.length, contextNotesLength });
     this.armStartedTimeout(requestId);
-
+    this.options.onChange?.();
     const request = {
       requestId,
       taskId,
@@ -431,8 +436,6 @@ export class DelegationManager {
       [CONTEXT_NOTES_LENGTH_ATTRIBUTE]: contextNotesLength,
       [BRIEF_LENGTH_ATTRIBUTE]: request.prompt.length,
     });
-
-    this.options.onChange?.();
 
     return {
       ok: true,
@@ -492,7 +495,7 @@ export class DelegationManager {
   private armRunTimeout(requestId: string): void {
     const grace = Math.min(MAX_RUN_TIMEOUT_GRACE_MS, this.runTimeoutMs);
     this.armTimer(requestId, this.runTimeoutMs + grace, () => {
-      const taskId = this.pendingTasks.get(requestId);
+      const taskId = this.pendingTasks.get(requestId)?.taskId;
       const agent = this.progress.get(requestId)?.agent;
       const error = new Error(`Delegation produced no result within ${this.runTimeoutMs}ms`);
       this.options.report?.warn(TASK_EVENT.delegationTimedOut, error, {
@@ -543,7 +546,7 @@ export class DelegationManager {
 
   private handleStarted(event: DelegationStartedPayload): void {
     const { runId } = event;
-    const taskId = this.pendingTasks.get(event.requestId);
+    const taskId = this.pendingTasks.get(event.requestId)?.taskId;
     if (taskId === undefined) return;
     this.armRunTimeout(event.requestId);
     const existing = this.progress.get(event.requestId);
@@ -622,60 +625,65 @@ export class DelegationManager {
    * just not by that agent); a failure marks it `failed` so it stays visible
    * rather than silently rejoining the backlog.
    *
-   * Dropping the pending entry first makes this single-shot: a response racing
-   * the watchdog cannot settle the same run twice. A failed write therefore
-   * must not abort the rest — the model still gets told, the run stops counting
-   * as active work, and `reconcile` repairs the file at the next session start.
+   * The request is claimed in `settlingRequests` while it remains published as
+   * active work. It is removed only after the terminal state and model notification
+   * have been handed off, so an auto-stop observer cannot end the session between
+   * receiving the result and delivering it to the model.
    */
   private async settle(requestId: string, state: SettlementState, result: TaskDelegation['result']): Promise<void> {
-    const taskId = this.pendingTasks.get(requestId);
-    if (taskId === undefined) return;
-    this.pendingTasks.delete(requestId);
+    const pending = this.pendingTasks.get(requestId);
+    if (!pending || this.settlingRequests.has(requestId)) return;
+    this.settlingRequests.add(requestId);
     this.clearTimer(requestId);
+    const { taskId } = pending;
     const progress = this.progress.get(requestId);
-    this.progress.delete(requestId);
 
-    const endedAt = this.now();
-    let task: Task | undefined;
     try {
-      const { value } = await this.options.store.mutate((document) =>
-        this.patchDelegation(document, requestId, (current, delegation) => ({
-          ...current,
-          status: state === COMPLETED_STATE ? COMPLETED_STATE : state === CANCELLED_STATE ? 'pending' : FAILED_STATE,
-          updatedAt: endedAt,
-          delegation: { ...delegation, state, endedAt, ...(result ? { result } : {}) },
-        })),
-      );
-      task = value;
-    } catch (error) {
-      this.report(TASK_EVENT.delegationSettleFailed, error, {
+      const endedAt = this.now();
+      let task: Task | undefined;
+      try {
+        const { value } = await this.options.store.mutate((document) =>
+          this.patchDelegation(document, requestId, (current, delegation) => ({
+            ...current,
+            status: state === COMPLETED_STATE ? COMPLETED_STATE : state === CANCELLED_STATE ? 'pending' : FAILED_STATE,
+            updatedAt: endedAt,
+            delegation: { ...delegation, state, endedAt, ...(result ? { result } : {}) },
+          })),
+        );
+        task = value;
+      } catch (error) {
+        this.report(TASK_EVENT.delegationSettleFailed, error, {
+          [TASK_ID_ATTRIBUTE]: taskId,
+          [REQUEST_ID_ATTRIBUTE]: requestId,
+        });
+      }
+
+      const agent = task?.delegation?.agent ?? progress?.agent ?? 'subagent';
+      const subject = task?.subject ?? `#${taskId}`;
+
+      // Repeats the assign-time context shape so the cost question ("did packs
+      // reduce child tool calls?") is one grouping rather than a self-join.
+      // A run that never started reports neither metric, keeping the medians clean.
+      this.options.report?.event(TASK_EVENT.delegationCompleted, {
         [TASK_ID_ATTRIBUTE]: taskId,
         [REQUEST_ID_ATTRIBUTE]: requestId,
+        [AGENT_ATTRIBUTE]: agent,
+        [OUTCOME_ATTRIBUTE]: state,
+        [CONTEXT_PRESENT_ATTRIBUTE]: (progress?.contextFileCount ?? 0) > 0 || (progress?.contextNotesLength ?? 0) > 0,
+        [CONTEXT_FILE_COUNT_ATTRIBUTE]: progress?.contextFileCount ?? 0,
+        [CONTEXT_NOTES_LENGTH_ATTRIBUTE]: progress?.contextNotesLength ?? 0,
+        ...(result?.toolCount === undefined ? {} : { [TOOL_COUNT_ATTRIBUTE]: result.toolCount }),
+        ...(result?.durationMs === undefined ? {} : { [DURATION_MS_ATTRIBUTE]: result.durationMs }),
       });
+      const listComplete =
+        state === COMPLETED_STATE && task !== undefined && isTaskListComplete(this.options.store.snapshot.tasks);
+      this.notifyModel(state, taskId, subject, agent, result, listComplete);
+    } finally {
+      this.pendingTasks.delete(requestId);
+      this.progress.delete(requestId);
+      this.settlingRequests.delete(requestId);
+      this.options.onChange?.();
     }
-
-    this.options.onChange?.();
-
-    const agent = task?.delegation?.agent ?? progress?.agent ?? 'subagent';
-    const subject = task?.subject ?? `#${taskId}`;
-
-    // Repeats the assign-time context shape so the cost question ("did packs
-    // reduce child tool calls?") is one grouping rather than a self-join.
-    // A run that never started reports neither metric, keeping the medians clean.
-    this.options.report?.event(TASK_EVENT.delegationCompleted, {
-      [TASK_ID_ATTRIBUTE]: taskId,
-      [REQUEST_ID_ATTRIBUTE]: requestId,
-      [AGENT_ATTRIBUTE]: agent,
-      [OUTCOME_ATTRIBUTE]: state,
-      [CONTEXT_PRESENT_ATTRIBUTE]: (progress?.contextFileCount ?? 0) > 0 || (progress?.contextNotesLength ?? 0) > 0,
-      [CONTEXT_FILE_COUNT_ATTRIBUTE]: progress?.contextFileCount ?? 0,
-      [CONTEXT_NOTES_LENGTH_ATTRIBUTE]: progress?.contextNotesLength ?? 0,
-      ...(result?.toolCount === undefined ? {} : { [TOOL_COUNT_ATTRIBUTE]: result.toolCount }),
-      ...(result?.durationMs === undefined ? {} : { [DURATION_MS_ATTRIBUTE]: result.durationMs }),
-    });
-    const listComplete =
-      state === COMPLETED_STATE && task !== undefined && isTaskListComplete(this.options.store.snapshot.tasks);
-    this.notifyModel(state, taskId, subject, agent, result, listComplete);
   }
 
   private notifyModel(
@@ -754,9 +762,12 @@ export class DelegationManager {
 
   /** Clear one Pi session's transient delegation state without losing service injection. */
   reset(): void {
+    const changed = this.pendingTasks.size > 0 || this.progress.size > 0;
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     this.pendingTasks.clear();
+    this.settlingRequests.clear();
     this.progress.clear();
+    if (changed) this.options.onChange?.();
   }
 }

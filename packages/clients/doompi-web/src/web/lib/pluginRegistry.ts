@@ -80,6 +80,7 @@ export interface InstalledContextAction extends ContextActionContribution {
 export const HOST_SLOTS = {
   overlay: 'overlay',
   rail: 'rail',
+  context: 'context',
   selectionBar: 'selection-bar',
   activity: 'activity',
   composerActions: 'composer-actions',
@@ -435,6 +436,9 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
       }
       for (const surface of plugin.railSections ?? []) {
         pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.rail, surface) });
+      }
+      for (const surface of plugin.contextSections ?? []) {
+        pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.context, surface) });
       }
       for (const surface of plugin.selectionBarItems ?? []) {
         pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.selectionBar, surface) });

@@ -1,3 +1,4 @@
+import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-extension-contracts/background-work';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { activateGoalExtension } from '../../src/adapters/pi/runtimeActivation.ts';
@@ -13,6 +14,8 @@ function createFixture(options: { autoActivateRegisteredTools?: boolean } = {}) 
   const commands = new Map<string, { handler: (args: string, context: ExtensionContext) => Promise<void> }>();
   const tools: ToolDefinition[] = [];
   let activeTools = ['read'];
+  let idle = true;
+  let pendingMessages = false;
   const appendEntry = vi.fn();
   const sendUserMessage = vi.fn();
   const abort = vi.fn();
@@ -35,8 +38,8 @@ function createFixture(options: { autoActivateRegisteredTools?: boolean } = {}) 
       getBranch: () => [],
       getEntries: () => [],
     },
-    isIdle: () => true,
-    hasPendingMessages: () => false,
+    isIdle: () => idle,
+    hasPendingMessages: () => pendingMessages,
     abort,
   } as unknown as ExtensionContext;
   const history: GoalHistoryPort = {
@@ -72,6 +75,12 @@ function createFixture(options: { autoActivateRegisteredTools?: boolean } = {}) 
     appendEntry,
     sendUserMessage,
     activeTools: () => activeTools,
+    setIdle: (value: boolean) => {
+      idle = value;
+    },
+    setPendingMessages: (value: boolean) => {
+      pendingMessages = value;
+    },
     history,
   };
 }
@@ -91,6 +100,46 @@ async function dispatchEvent(
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+function createBackgroundWorkService(
+  initialItems: Array<{ id: string; sessionId: string }> = [],
+  initialErrors: Array<{ provider: string; message: string }> = [],
+) {
+  let items = initialItems;
+  let errors = initialErrors;
+  let snapshotError: Error | undefined;
+  const service = {
+    generation: `background-${crypto.randomUUID()}`,
+    register: vi.fn(),
+    snapshot: vi.fn((sessionId?: string) => {
+      if (snapshotError) throw snapshotError;
+      return {
+        items: items
+          .filter((item) => sessionId === undefined || item.sessionId === sessionId)
+          .map((item) => ({ provider: 'test', ...item })),
+        errors,
+      };
+    }),
+  } as unknown as DoomBackgroundWorkService;
+  return {
+    service,
+    setItems(next: Array<{ id: string; sessionId: string }>) {
+      items = next;
+    },
+    setErrors(next: Array<{ provider: string; message: string }>) {
+      errors = next;
+    },
+    setSnapshotError(error: Error | undefined) {
+      snapshotError = error;
+    },
+  };
+}
+
+async function finishGoalTurn(fixture: ReturnType<typeof createFixture>): Promise<void> {
+  await dispatch(fixture, 'agent_start');
+  await dispatchEvent(fixture, 'agent_end', {
+    messages: [{ role: 'assistant', content: [{ type: 'text', text: 'partial work' }], stopReason: 'stop' }],
+  });
+}
 describe('Goal Pi manager activation', () => {
   it('keeps a fresh session dormant and activates only after an objective is accepted', async () => {
     const fixture = createFixture({ autoActivateRegisteredTools: true });
@@ -162,10 +211,11 @@ describe('Goal Pi manager activation', () => {
       fixture.context,
     );
     expect(completed.details.error).toBe(false);
+    expect(completed).toMatchObject({ terminate: true });
     expect(archive).toHaveBeenCalledWith(expect.objectContaining({ status: 'complete' }));
     expect(fixture.activeTools()).toEqual(['read']);
     expect(fixture.context.ui.setStatus).toHaveBeenLastCalledWith('goal', undefined);
-    expect(fixture.context.abort).toHaveBeenCalled();
+    expect(fixture.context.abort).not.toHaveBeenCalled();
 
     const beforeStart = fixture.handlers.find((candidate) => candidate.event === 'before_agent_start');
     const promptAfterCompletion = await beforeStart?.handler({ systemPrompt: 'base' } as never, fixture.context);
@@ -381,6 +431,141 @@ describe('Goal lifecycle safety and fencing', () => {
   });
 });
 
+describe('Goal background-work coordination', () => {
+  async function activate(fixture: ReturnType<typeof createFixture>) {
+    const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
+    const activation = runtime.activateGoalRuntime(fixture.pi, {
+      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
+      history: fixture.history,
+    });
+    await dispatch(fixture, 'session_start');
+    await fixture.commands.get('goal')?.handler('ship it', fixture.context);
+    return activation;
+  }
+
+  it('suppresses exact-session work and resumes from an authoritative change', async () => {
+    const fixture = createFixture();
+    const activation = await activate(fixture);
+    const background = createBackgroundWorkService([{ id: 'task-1', sessionId: 'manager-session' }]);
+    activation.manager.bindBackgroundWork(background.service);
+    await finishGoalTurn(fixture);
+
+    await dispatch(fixture, 'agent_settled');
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(background.service.snapshot).toHaveBeenCalledWith('manager-session');
+
+    background.setItems([]);
+    activation.manager.backgroundWorkChanged(background.service);
+    await vi.waitFor(() => expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2));
+    expect(fixture.sendUserMessage).toHaveBeenLastCalledWith('[goal]\nContinue.', { deliverAs: 'followUp' });
+    activation.dispose();
+  });
+
+  it('ignores foreign-session work and coalesces duplicate readiness events', async () => {
+    const fixture = createFixture();
+    const activation = await activate(fixture);
+    const background = createBackgroundWorkService([{ id: 'task-foreign', sessionId: 'another-session' }]);
+    activation.manager.bindBackgroundWork(background.service);
+    await finishGoalTurn(fixture);
+
+    activation.manager.backgroundWorkChanged(background.service);
+    await dispatch(fixture, 'agent_settled');
+
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(activation.manager.snapshot().goal?.iteration).toBe(1);
+    activation.dispose();
+  });
+
+  it('fails closed for provider errors, snapshot failures, and service loss without consuming an iteration', async () => {
+    const fixture = createFixture();
+    const activation = await activate(fixture);
+    const background = createBackgroundWorkService([], [{ provider: 'task', message: 'unavailable' }]);
+    const unbind = activation.manager.bindBackgroundWork(background.service);
+    await finishGoalTurn(fixture);
+    const iteration = activation.manager.snapshot().goal?.iteration;
+
+    await dispatch(fixture, 'agent_settled');
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(activation.manager.snapshot().goal?.iteration).toBe(iteration);
+
+    background.setErrors([]);
+    background.setSnapshotError(new Error('snapshot failed'));
+    activation.manager.backgroundWorkChanged(background.service);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(activation.manager.snapshot().goal?.iteration).toBe(iteration);
+
+    background.setSnapshotError(undefined);
+    unbind();
+    await dispatch(fixture, 'agent_settled');
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(activation.manager.snapshot().goal?.iteration).toBe(iteration);
+    activation.dispose();
+  });
+
+  it('lets a queued producer completion turn settle before continuing', async () => {
+    const fixture = createFixture();
+    const activation = await activate(fixture);
+    const background = createBackgroundWorkService([{ id: 'workflow-1', sessionId: 'manager-session' }]);
+    activation.manager.bindBackgroundWork(background.service);
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+
+    fixture.setPendingMessages(true);
+    background.setItems([]);
+    activation.manager.backgroundWorkChanged(background.service);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+
+    fixture.setPendingMessages(false);
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2);
+    activation.dispose();
+  });
+
+  it('fences a queued background invalidation when user input arrives', async () => {
+    const fixture = createFixture();
+    const activation = await activate(fixture);
+    const background = createBackgroundWorkService([{ id: 'runner-1', sessionId: 'manager-session' }]);
+    activation.manager.bindBackgroundWork(background.service);
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+
+    background.setItems([]);
+    activation.manager.backgroundWorkChanged(background.service);
+    for (const item of fixture.handlers.filter((candidate) => candidate.event === 'input')) {
+      await item.handler({} as never, fixture.context);
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+    activation.dispose();
+  });
+
+  it('rejects stale invalidations after the coordination service is replaced', async () => {
+    const fixture = createFixture();
+    const activation = await activate(fixture);
+    const first = createBackgroundWorkService([{ id: 'task-old', sessionId: 'manager-session' }]);
+    const second = createBackgroundWorkService([{ id: 'task-current', sessionId: 'manager-session' }]);
+    activation.manager.bindBackgroundWork(first.service);
+    await finishGoalTurn(fixture);
+    await dispatch(fixture, 'agent_settled');
+
+    first.setItems([]);
+    activation.manager.backgroundWorkChanged(first.service);
+    activation.manager.bindBackgroundWork(second.service);
+    await new Promise((resolve) => setImmediate(resolve));
+    activation.manager.backgroundWorkChanged(first.service);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(fixture.sendUserMessage).toHaveBeenCalledTimes(1);
+
+    second.setItems([]);
+    activation.manager.backgroundWorkChanged(second.service);
+    await vi.waitFor(() => expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2));
+    activation.dispose();
+  });
+});
 describe('Goal manager command and restore branches', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
     const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
@@ -585,19 +770,6 @@ describe('Goal manager completion and archive branches', () => {
     return activation;
   }
 
-  async function completeCurrent(fixture: ReturnType<typeof createFixture>, id: string): Promise<void> {
-    const tool = fixture.tools.find((candidate) => candidate.name === 'goal_complete')?.execute as unknown as (
-      ...args: unknown[]
-    ) => Promise<unknown>;
-    await tool(
-      'call',
-      { goal_id: id, summary: 'all requirements are verified' },
-      undefined,
-      undefined,
-      fixture.context,
-    );
-  }
-
   it('clears the goal on completion and archives it, with no follow-up turn', async () => {
     const fixture = createFixture();
     const archive = vi.spyOn(fixture.history, 'archive');
@@ -606,13 +778,24 @@ describe('Goal manager completion and archive branches', () => {
     const id = activation.manager.snapshot().goal?.id;
     expect(id).toBeDefined();
     fixture.sendUserMessage.mockClear();
+    const tool = fixture.tools.find((candidate) => candidate.name === 'goal_complete')?.execute as unknown as (
+      ...args: unknown[]
+    ) => Promise<unknown>;
 
-    await completeCurrent(fixture, id as string);
+    const result = await tool(
+      'call',
+      { goal_id: id, summary: 'all requirements are verified' },
+      undefined,
+      undefined,
+      fixture.context,
+    );
 
+    expect(result).toMatchObject({ terminate: true, details: { error: false } });
     expect(activation.manager.snapshot()).toMatchObject({ goal: undefined, execution: 'dormant' });
     expect(archive).toHaveBeenCalledWith(expect.objectContaining({ objective: 'first', status: 'complete' }));
     expect(fixture.sendUserMessage).not.toHaveBeenCalled();
     expect(fixture.context.ui.setStatus).toHaveBeenLastCalledWith('goal', undefined);
+    expect(fixture.context.abort).not.toHaveBeenCalled();
     activation.dispose();
   });
 

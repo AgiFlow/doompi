@@ -80,8 +80,15 @@ Hono server.
 /mcp reload
 ```
 
-The interactive status and authentication surfaces require a TUI. Resolved configuration and
-catalog APIs remain usable by headless hosts.
+In a TUI, the bare `/mcp` command opens the interactive overlay. In the web cockpit, the focused
+session's Context panel lists only servers currently waiting for authorization. Its `authorize`
+action sends one `/mcp auth <server>` prompt frame to that session. The authorization URL then appears
+as a clickable notice in the transcript. Headless hosts never open a desktop browser automatically.
+
+The live browser status is intentionally compact: `doom-mcp-session-auth` contains JSON rows shaped
+as `[{"name":"server","state":"needs-auth"}]` and is cleared when no server needs authorization.
+It never includes authorization URLs, errors, credentials, or credential-store data. Repository
+catalog and authorization APIs remain separate from this live-session view.
 
 ## Credentials and trust
 
@@ -89,8 +96,13 @@ Allowed stdio entries execute their configured commands with the Pi process envi
 operating system privileges. Review configuration as executable code.
 
 OAuth credentials use the operating system keyring when available. The private-file fallback is
-stored under `~/.mcp-proxy/oauth` with owner-only permissions. Treat both the configuration and
-credential store as sensitive.
+stored under `~/.mcp-proxy/oauth` with owner-only permissions. Credentials remain machine-wide and
+keyed by server name, while their upstream URL binding prevents blind replay to another endpoint.
+Treat both the configuration and credential store as sensitive.
+
+The default OAuth callback is `http://127.0.0.1:19876/callback`. Authorization therefore requires the
+browser and DoomPi runtime to share that loopback network namespace. A remote browser cannot complete
+the callback when its `127.0.0.1` resolves to another machine or container.
 
 ## Public API
 

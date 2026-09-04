@@ -31,6 +31,10 @@ export default defineConfig({
         replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },
       {
+        find: '@agimon-ai/doompi-extension-contracts/background-work',
+        replacement: `${doomExtensionContractsExports}backgroundWork.ts`,
+      },
+      {
         find: '@agimon-ai/doompi-extension-contracts/child-process',
         replacement: `${doomExtensionContractsExports}childProcess.ts`,
       },

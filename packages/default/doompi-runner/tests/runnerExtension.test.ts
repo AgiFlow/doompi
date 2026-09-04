@@ -1,3 +1,8 @@
+import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundWorkProvider,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-extension-contracts/background-work';
 import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
@@ -21,6 +26,9 @@ const extensionMocks = vi.hoisted(() => {
     footerDispose: vi.fn(),
     leaderDispose,
     registerLeader: vi.fn(() => ({ update: vi.fn(), dispose: leaderDispose })),
+    backgroundProvider: undefined as BackgroundWorkProvider | undefined,
+    backgroundUpdate: vi.fn(),
+    backgroundDispose: vi.fn(),
     telemetryEvent: vi.fn(async (_name: string, _attributes?: Record<string, unknown>) => undefined),
     telemetryError: vi.fn(async (_name: string, _error?: unknown, _attributes?: Record<string, unknown>) => undefined),
     telemetryShutdown: vi.fn(async () => undefined),
@@ -191,6 +199,10 @@ async function createHarness(options: { activate?: boolean } = {}) {
     setStatus,
     notify,
     sweepHistoryAsync,
+    backgroundItems: () => extensionMocks.backgroundProvider?.listActiveWork() ?? [],
+    setActive: (records: RunnerRecord[]) => {
+      activeRecords = records;
+    },
     command: () => commandHandler,
     registryListener: () => registryListener?.(),
     bashDependencies: () => extensionMocks.registerBashTool.mock.calls.at(-1)?.[1] as BashToolDependencies,
@@ -219,6 +231,7 @@ let previousRootSession: string | undefined;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  extensionMocks.backgroundProvider = undefined;
   extensionMocks.registerLeader.mockImplementation(() => ({
     update: vi.fn(),
     dispose: extensionMocks.leaderDispose,
@@ -241,7 +254,28 @@ beforeEach(() => {
       registerLeader: extensionMocks.registerLeader,
       registerLeaderActions: vi.fn(),
     } as unknown as DoomUiHubService;
-    await root.plugin((context) => context.provide(DOOM_UI_HUB_SERVICE, hub));
+    const backgroundWork: DoomBackgroundWorkService = {
+      generation: 'runner-test-background-work',
+      register(provider) {
+        extensionMocks.backgroundProvider = provider;
+        return {
+          provider: provider.provider,
+          generation: 'runner-test-background-work:doom-runner',
+          update: extensionMocks.backgroundUpdate,
+          dispose: extensionMocks.backgroundDispose,
+        };
+      },
+      snapshot(sessionId) {
+        const items = (extensionMocks.backgroundProvider?.listActiveWork() ?? [])
+          .filter((item) => sessionId === undefined || item.sessionId === sessionId)
+          .map((item) => ({ provider: 'doom-runner', ...item }));
+        return { items, errors: [] };
+      },
+    };
+    await root.plugin((context) => {
+      context.provide(DOOM_UI_HUB_SERVICE, hub);
+      context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
+    });
   });
   extensionMocks.disposeCordisConnection.mockImplementation(async () => undefined);
   vi.useFakeTimers();
@@ -325,6 +359,65 @@ describe('runnerExtension refresh', () => {
 
     expect(harness.sendMessage).toHaveBeenCalledOnce();
     expect(extensionMocks.footerUpdate).toHaveBeenCalledTimes(publishedCount);
+    await harness.handlers.get('session_shutdown')?.({}, harness.context);
+  });
+
+  it('publishes only promoted runners owned by the exact active session', async () => {
+    const harness = await createHarness();
+    await startSession(harness);
+
+    expect(extensionMocks.backgroundProvider?.provider).toBe('doom-runner');
+    expect(harness.backgroundItems()).toEqual([
+      { id: 'runner-a', sessionId: 'session-a', label: 'api', status: 'running' },
+    ]);
+
+    const nextContext = {
+      ...harness.context,
+      sessionManager: { getSessionId: () => 'session-b' },
+    };
+    await startSession(harness, nextContext);
+
+    expect(harness.backgroundItems()).toEqual([]);
+    await harness.handlers.get('session_shutdown')?.({}, nextContext);
+    expect(extensionMocks.backgroundDispose).toHaveBeenCalledOnce();
+  });
+
+  it('publishes a promoted runner before the asynchronous registry refresh settles', async () => {
+    const harness = await createHarness();
+    await startSession(harness);
+
+    harness.bashDependencies().onRunnerStarted('runner-new');
+
+    expect(harness.backgroundItems()).toContainEqual({
+      id: 'runner-new',
+      sessionId: 'session-a',
+      status: 'running',
+    });
+    expect(extensionMocks.backgroundUpdate).toHaveBeenCalled();
+    await harness.handlers.get('session_shutdown')?.({}, harness.context);
+  });
+  it('retains terminal work and retries until Pi accepts the completion notification', async () => {
+    const warnings = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+    const harness = await createHarness();
+    await startSession(harness);
+    harness.setActive([]);
+    harness.setPersisted(completedRecord());
+    harness.sendMessage.mockImplementationOnce(() => {
+      throw new Error('handoff unavailable');
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(harness.sendMessage).toHaveBeenCalledOnce();
+    expect(harness.backgroundItems()).toEqual([
+      { id: 'runner-a', sessionId: 'session-a', label: 'api', status: 'completed' },
+    ]);
+    expect(warnings).toHaveBeenCalledWith(expect.stringContaining('handoff unavailable'));
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(harness.sendMessage).toHaveBeenCalledTimes(2);
+    expect(harness.backgroundItems()).toEqual([]);
     await harness.handlers.get('session_shutdown')?.({}, harness.context);
   });
 

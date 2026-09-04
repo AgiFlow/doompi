@@ -633,6 +633,8 @@ export interface WebPluginDefinition {
   contextActions?: ContextActionContribution[];
   leaderBindings?: LeaderBindingContribution[];
   railSections?: SurfaceContribution[];
+  /** Sections placed before the host's built-in Context composition groups. */
+  contextSections?: SurfaceContribution[];
   selectionBarItems?: SurfaceContribution[];
   /** Compact controls placed in the mobile composer's action row, immediately before queue. */
   composerActions?: SurfaceContribution[];

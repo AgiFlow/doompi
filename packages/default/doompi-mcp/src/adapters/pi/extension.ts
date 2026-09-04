@@ -20,6 +20,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import path from 'node:path';
 import { registerCommand } from '../../commands/mcpCommand.ts';
 import type { McpSessionConfig } from '../../types/mcpConfig.ts';
+import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp.ts';
 import { mcpSessionConfigFromProjection } from '../node/projection.ts';
 import { readSessionConfig } from '../process/sessionConfig.ts';
 import { registerLeaderContribution } from './leader.ts';
@@ -136,14 +137,15 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
     const expectedSessionId = hostSession.sessionId;
     let sessionActive = true;
     activeContext = context;
-    // Published for RPC clients as much as the TUI: the cockpit matches MCP
-    // tool calls by these names. Absent UI (a bare headless host) is skipped.
+    // The legacy server-name status remains available to every UI. The compact
+    // authorization status is browser-only so the TUI footer stays unchanged.
     const publishServerStatus = (): void => {
-      const names = session
-        .getSnapshot()
-        .servers.map((server) => server.name)
-        .join(',');
+      const servers = session.getSnapshot().servers;
+      const names = servers.map((server) => server.name).join(',');
       context.ui?.setStatus(MCP_STATUS_KEY, names);
+      if (context.mode !== 'tui') {
+        context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, formatMcpSessionAuthStatus(servers));
+      }
     };
     const stopPublishing = session.onChange(publishServerStatus);
     publishServerStatus();
@@ -186,6 +188,7 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
       sessionActive = false;
       stopPublishing();
       context.ui?.setStatus(MCP_STATUS_KEY, undefined);
+      if (context.mode !== 'tui') context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, undefined);
       if (activeContext === context) activeContext = undefined;
       if (!disposed) await session.reconfigure(failClosedSessionConfig(context.cwd));
     };

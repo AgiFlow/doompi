@@ -107,6 +107,7 @@ describe('the web plugin registry', () => {
         tabs: [{ id: 'demo', label: 'demo', panel: Panel }],
         overlays: [{ id: 'demo-overlay', component: Panel }],
         railSections: [{ id: 'demo-rail', component: Panel }],
+        contextSections: [{ id: 'demo-context', component: Panel }],
         selectionBarItems: [{ id: 'demo-selection', component: Panel }],
         composerActions: [{ id: 'demo-composer', component: Panel }],
         activitySections: [{ id: 'demo-activity', component: Panel }],
@@ -119,6 +120,7 @@ describe('the web plugin registry', () => {
     expect(webTabs().map((tab) => tab.id)).toEqual(['demo']);
     expect(slotFills(HOST_SLOTS.overlay).map((fill) => fill.id)).toEqual(['demo-overlay']);
     expect(slotFills(HOST_SLOTS.rail).map((fill) => fill.id)).toEqual(['demo-rail']);
+    expect(slotFills(HOST_SLOTS.context).map((fill) => fill.id)).toEqual(['demo-context']);
     expect(slotFills(HOST_SLOTS.selectionBar).map((fill) => fill.id)).toEqual(['demo-selection']);
     expect(slotFills(HOST_SLOTS.composerActions).map((fill) => fill.id)).toEqual(['demo-composer']);
     // No group is named demo-activity, so the section lands in the activity tail.

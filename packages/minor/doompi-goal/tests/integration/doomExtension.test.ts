@@ -1,3 +1,8 @@
+import {
+  DOOM_BACKGROUND_WORK_CHANGED_EVENT,
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-extension-contracts/background-work';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -6,6 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   activateGoalRuntime: vi.fn(),
   runtimeDispose: vi.fn(),
+  bindBackgroundWork: vi.fn(),
+  backgroundWorkChanged: vi.fn(),
+  backgroundDispose: vi.fn(),
   leaderUpdate: vi.fn(),
   leaderDispose: vi.fn(),
   actionDispose: vi.fn(),
@@ -15,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   prepareCordisRoot: vi.fn(),
   stateDispose: vi.fn(),
 }));
-
 const cordisRoots: Context[] = [];
 
 vi.mock('../../src/adapters/pi/runtimeActivation.ts', () => ({
@@ -52,6 +59,8 @@ interface Fixture {
     endFromLeader: ReturnType<typeof vi.fn>;
     listHistory: ReturnType<typeof vi.fn>;
     subscribeState: ReturnType<typeof vi.fn>;
+    bindBackgroundWork: ReturnType<typeof vi.fn>;
+    backgroundWorkChanged: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -69,6 +78,8 @@ function createFixture(): Fixture {
       stateListener = listener;
       return mocks.stateDispose;
     }),
+    bindBackgroundWork: mocks.bindBackgroundWork,
+    backgroundWorkChanged: mocks.backgroundWorkChanged,
   };
   mocks.activateGoalRuntime.mockReturnValue({ manager, dispose: mocks.runtimeDispose });
   const pi = {
@@ -91,8 +102,15 @@ const context = {
   sessionManager: { getSessionId: () => 'goal-session' },
 } as unknown as ExtensionContext;
 
+const backgroundWorkService = {
+  generation: 'goal-background-test',
+  register: vi.fn(),
+  snapshot: vi.fn(() => ({ items: [], errors: [] })),
+} as unknown as DoomBackgroundWorkService;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.bindBackgroundWork.mockReturnValue(mocks.backgroundDispose);
   mocks.createCordisRoot.mockImplementation(() => {
     const root = new Context();
     cordisRoots.push(root);
@@ -105,7 +123,10 @@ beforeEach(() => {
       registerLeader: mocks.leader,
       registerLeaderActions: mocks.actions,
     } as unknown as DoomUiHubService;
-    await root.plugin((context) => context.provide(DOOM_UI_HUB_SERVICE, hub));
+    await root.plugin((cordis) => {
+      cordis.provide(DOOM_UI_HUB_SERVICE, hub);
+      cordis.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWorkService);
+    });
   });
   mocks.leader.mockReturnValue({ update: mocks.leaderUpdate, dispose: mocks.leaderDispose });
   mocks.actions.mockReturnValue(mocks.actionDispose);
@@ -175,5 +196,22 @@ describe('standard Goal entrypoint', () => {
 
     await registerGoalExtension(fixture.pi);
     expect(mocks.activateGoalRuntime).toHaveBeenCalledTimes(2);
+  });
+
+  it('binds the current background-work generation and forwards invalidations', async () => {
+    const fixture = createFixture();
+    await registerGoalExtension(fixture.pi);
+    const root = cordisRoots.at(-1);
+
+    expect(mocks.bindBackgroundWork).toHaveBeenCalledWith(backgroundWorkService);
+    root?.emit(DOOM_BACKGROUND_WORK_CHANGED_EVENT, {
+      provider: 'workflow',
+      generation: 'workflow-1',
+      kind: 'updated',
+    });
+    expect(mocks.backgroundWorkChanged).toHaveBeenCalledWith(backgroundWorkService);
+
+    await fixture.listeners.get('session_shutdown')?.({}, context);
+    expect(mocks.backgroundDispose).toHaveBeenCalledOnce();
   });
 });

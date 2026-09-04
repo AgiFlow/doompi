@@ -935,16 +935,49 @@ describe('recovery across a session restart', () => {
 });
 
 describe('background work reporting', () => {
-  it('lists in-flight delegations and drops them once settled', async () => {
+  it('retains the assignment session when the current session changes', async () => {
+    let currentSession = 'session-1';
+    manager.dispose();
+    manager = makeManager({}, { getSessionId: () => currentSession });
     const task = await seed('Add reducer tests');
     await manager.assign(task.id, { agent: 'reviewer' });
     const { requestId } = bus.lastRequest();
 
+    currentSession = 'session-2';
+
     expect(manager.listActiveWork()).toEqual([{ id: `task-${task.id}:${requestId}`, sessionId: 'session-1' }]);
+  });
+
+  it('invalidates publication when work starts and after its completion handoff', async () => {
+    const snapshots: Array<Array<{ id: string; sessionId: string }>> = [];
+    manager.dispose();
+    manager = makeManager({}, { onChange: () => snapshots.push(manager.listActiveWork()) });
+    const task = await seed('Add reducer tests');
+    await manager.assign(task.id, { agent: 'reviewer' });
+    const { requestId } = bus.lastRequest();
+
+    expect(snapshots.at(-1)).toEqual([{ id: `task-${task.id}:${requestId}`, sessionId: 'session-1' }]);
 
     bus.emit(SUBAGENT_DELEGATION_RESPONSE_EVENT, { version: 1, requestId, status: 'completed' });
     await flush();
 
+    expect(snapshots.at(-1)).toEqual([]);
+  });
+
+  it('keeps work active through the terminal store commit and model notification', async () => {
+    const task = await seed('Add reducer tests');
+    await manager.assign(task.id, { agent: 'reviewer' });
+    const { requestId } = bus.lastRequest();
+    const active = [{ id: `task-${task.id}:${requestId}`, sessionId: 'session-1' }];
+    narrate.mockClear();
+    narrate.mockImplementationOnce(() => expect(manager.listActiveWork()).toEqual(active));
+    notify.mockImplementationOnce(() => expect(manager.listActiveWork()).toEqual(active));
+
+    bus.emit(SUBAGENT_DELEGATION_RESPONSE_EVENT, { version: 1, requestId, status: 'completed' });
+    await flush();
+
+    expect(narrate).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledOnce();
     expect(manager.listActiveWork()).toEqual([]);
   });
 });

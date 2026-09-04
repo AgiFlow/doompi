@@ -40,9 +40,9 @@
  *   registry needs neither
  * - Retention-then-eviction happens on the SAME poll tick as the status
  *   refresh, rather than the predecessor's per-job `setTimeout`
- *   (`scheduleCleanup`): a terminal job aged past `retentionMs` is simply
- *   dropped the next time `run()` walks the map. One clock, not one timer per
- *   job
+ *   (`scheduleCleanup`): a terminal job is dropped only after its result was
+ *   safely handed off and `retentionMs` elapsed. Failed delivery therefore
+ *   keeps the tracker entry available for `ResultWatcher`'s later retry
  *
  * AVOID:
  * - Scanning `currentRunsDir()` to guess which run ids "belong" to this session on
@@ -83,7 +83,7 @@ import type { ActivityState } from '../types';
  */
 export const TERMINAL_ASYNC_JOB_STATES = new Set(['complete', 'completed', 'failed', 'paused', 'stopped']);
 
-/** How long a terminal job stays queryable before eviction. */
+/** Minimum time a handed-off terminal job stays queryable before eviction. */
 const DEFAULT_RETENTION_MS = 10_000;
 /** How often tracked jobs' status is refreshed from disk. */
 const DEFAULT_POLL_INTERVAL_MS = 250;
@@ -126,7 +126,7 @@ export type TrackedAsyncJobsContract = {
   track(runId: string): void;
   /** Stop tracking `runId` immediately, without waiting out its retention window. */
   untrack(runId: string): void;
-  /** Every currently tracked job (in-flight, or terminal within its retention window). */
+  /** Every tracked job, including terminal jobs still awaiting a safe handoff. */
   list(): TrackedAsyncJob[];
   get(runId: string): TrackedAsyncJob | undefined;
   /** Drop every tracked job. */
@@ -158,6 +158,7 @@ export function resolveTrackedRunId(jobs: TrackedAsyncJobsContract, id: string):
 interface SessionJobs {
   jobs: Map<string, TrackedAsyncJob>;
   terminalAt: Map<string, number>;
+  handedOff: Set<string>;
 }
 
 const UNSCOPED_SESSION = '__unscoped__';
@@ -236,15 +237,20 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
   }
 
   private readonly sessions = new Map<string, SessionJobs>();
+  private readonly listeners = new Map<string, Set<() => void>>();
   private unregisterPoll: (() => void) | undefined;
 
   private session(sessionId: string): SessionJobs {
     let session = this.sessions.get(sessionId);
     if (!session) {
-      session = { jobs: new Map(), terminalAt: new Map() };
+      session = { jobs: new Map(), terminalAt: new Map(), handedOff: new Set() };
       this.sessions.set(sessionId, session);
     }
     return session;
+  }
+
+  private invalidate(sessionId: string): void {
+    for (const listener of this.listeners.get(sessionId) ?? []) listener();
   }
 
   forSession(sessionId: string): TrackedAsyncJobsContract {
@@ -298,7 +304,7 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
       // a previously known status for one polling pass.
       if (existing) return false;
       session.jobs.set(runId, { runId, status: undefined });
-      return false;
+      return true;
     }
 
     const job: TrackedAsyncJob = { runId, ...read };
@@ -306,7 +312,10 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
     const wasTerminal = existing?.status !== undefined && TERMINAL_ASYNC_JOB_STATES.has(existing.status);
     const isTerminal = job.status !== undefined && TERMINAL_ASYNC_JOB_STATES.has(job.status);
     if (isTerminal && !wasTerminal) session.terminalAt.set(runId, this.now());
-    if (!isTerminal) session.terminalAt.delete(runId);
+    if (!isTerminal) {
+      session.terminalAt.delete(runId);
+      session.handedOff.delete(runId);
+    }
     return (
       !existing ||
       existing.status !== job.status ||
@@ -318,11 +327,15 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
   }
 
   private refresh(sessionId: string, runId: string): boolean {
-    return this.applyStatus(sessionId, runId, this.readStatus(runId));
+    const changed = this.applyStatus(sessionId, runId, this.readStatus(runId));
+    if (changed) this.invalidate(sessionId);
+    return changed;
   }
 
   private async refreshAsync(sessionId: string, runId: string): Promise<boolean> {
-    return this.applyStatus(sessionId, runId, await this.readStatusAsync(runId));
+    const changed = this.applyStatus(sessionId, runId, await this.readStatusAsync(runId));
+    if (changed) this.invalidate(sessionId);
+    return changed;
   }
 
   /** One scheduler tick: asynchronously refresh every tracked status, then evict expired terminal jobs. */
@@ -334,9 +347,11 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
         if (await this.refreshAsync(sessionId, runId)) changed = true;
       }
       for (const [runId, terminatedAt] of session.terminalAt) {
-        if (now - terminatedAt <= this.retentionMs) continue;
+        if (!session.handedOff.has(runId) || now - terminatedAt <= this.retentionMs) continue;
         session.jobs.delete(runId);
         session.terminalAt.delete(runId);
+        session.handedOff.delete(runId);
+        this.invalidate(sessionId);
         changed = true;
       }
       // Only drop the entry this pass actually walked: a `track()` that landed
@@ -353,6 +368,27 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
 
   untrack(runId: string): void {
     this.untrackInSession(UNSCOPED_SESSION, runId);
+  }
+
+  /** Mark one session's terminal result as safely handed off. */
+  acknowledgeHandoff(sessionId: string, runId: string): void {
+    this.acknowledgeHandoffInSession(sessionId, runId);
+  }
+
+  /** Work that still suppresses same-session idle continuation. */
+  listBackgroundWork(sessionId: string): TrackedAsyncJob[] {
+    const session = this.sessions.get(sessionId);
+    if (!session) return [];
+    return [...session.jobs.values()].filter(
+      (job) =>
+        job.status === undefined || !TERMINAL_ASYNC_JOB_STATES.has(job.status) || !session.handedOff.has(job.runId),
+    );
+  }
+
+  /** Subscribe to invalidations for one exact Pi session. */
+  subscribe(sessionId: string, listener: () => void): () => void {
+    if (!sessionId.trim()) throw new Error('Pi session identity is required to subscribe to subagent runs.');
+    return this.subscribeInSession(sessionId, listener);
   }
 
   list(): TrackedAsyncJob[] {
@@ -376,9 +412,29 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
 
   private untrackInSession(sessionId: string, runId: string): void {
     const session = this.sessions.get(sessionId);
-    session?.jobs.delete(runId);
+    const deleted = session?.jobs.delete(runId) ?? false;
     session?.terminalAt.delete(runId);
+    session?.handedOff.delete(runId);
     if (session?.jobs.size === 0) this.sessions.delete(sessionId);
+    if (deleted) this.invalidate(sessionId);
+  }
+
+  private acknowledgeHandoffInSession(sessionId: string, runId: string): void {
+    const session = this.sessions.get(sessionId);
+    const status = session?.jobs.get(runId)?.status;
+    if (!session || !status || !TERMINAL_ASYNC_JOB_STATES.has(status) || session.handedOff.has(runId)) return;
+    session.handedOff.add(runId);
+    this.invalidate(sessionId);
+  }
+
+  private subscribeInSession(sessionId: string, listener: () => void): () => void {
+    const listeners = this.listeners.get(sessionId) ?? new Set<() => void>();
+    listeners.add(listener);
+    this.listeners.set(sessionId, listeners);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) this.listeners.delete(sessionId);
+    };
   }
 
   private listInSession(sessionId: string): TrackedAsyncJob[] {
@@ -390,7 +446,9 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
   }
 
   private resetSession(sessionId: string): void {
+    const hadJobs = (this.sessions.get(sessionId)?.jobs.size ?? 0) > 0;
     this.sessions.delete(sessionId);
+    if (hadJobs) this.invalidate(sessionId);
   }
 
   start(): void {
@@ -406,5 +464,6 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
     this.unregisterPoll?.();
     this.unregisterPoll = undefined;
     this.sessions.clear();
+    this.listeners.clear();
   }
 }

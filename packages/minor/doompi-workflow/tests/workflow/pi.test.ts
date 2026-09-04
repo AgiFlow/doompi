@@ -2153,9 +2153,13 @@ describe('workflow-mcp Pi extension', () => {
   // The registry is one directory under $HOME shared by every repo and every
   // Pi session on the machine, so "a run finished" has to mean "a run this
   // session launched finished" or the notice goes to the wrong agent.
-  it('announces a finished run to the session that launched it', async () => {
+  it('keeps terminal work published until Pi accepts the completion turn', async () => {
     const running = runRecord({ runKey: 'ixx-324', stage: 'running' });
     const harness = createHarness([running], { monitorIntervalMs: 10 });
+    let snapshotAtDelivery: ReturnType<typeof harness.backgroundWorkSnapshot> | undefined;
+    harness.sendMessage.mockImplementation((message) => {
+      if (message.customType === MESSAGE_TYPE_RUN_FINISHED) snapshotAtDelivery = harness.backgroundWorkSnapshot();
+    });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     listRuns(harness, [{ ...running, stage: 'completed' }]);
@@ -2168,6 +2172,10 @@ describe('workflow-mcp Pi extension', () => {
       ([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED,
     );
     expect(finished?.[1]).toEqual({ triggerTurn: true, deliverAs: 'steer' });
+    expect(snapshotAtDelivery?.items).toEqual([
+      expect.objectContaining({ id: running.runId, provider: 'workflow-mcp', sessionId: SESSION_ID }),
+    ]);
+    expect(harness.backgroundWorkSnapshot()).toEqual({ items: [], errors: [] });
   });
 
   it('announces a failed run with its pushed job and step evidence', async () => {
@@ -2262,26 +2270,63 @@ describe('workflow-mcp Pi extension', () => {
     });
   });
 
-  it('retries terminal delivery after a send failure', async () => {
+  it('retains terminal work and retries after a send failure', async () => {
     const running = runRecord({ runId: 'retry-run-id', runKey: 'retry-run', stage: 'running' });
     const harness = createHarness([running], { monitorIntervalMs: 10 });
-    let failed = false;
+    let acceptDelivery = false;
     harness.sendMessage.mockImplementation((message) => {
-      if (!failed && message.customType === MESSAGE_TYPE_RUN_FINISHED) {
-        failed = true;
-        throw new Error('send failed');
-      }
+      if (!acceptDelivery && message.customType === MESSAGE_TYPE_RUN_FINISHED) throw new Error('send failed');
     });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     listRuns(harness, [{ ...running, stage: 'completed' }]);
 
     await vi.waitFor(() => {
-      const messages = harness.sendMessage.mock.calls.filter(
-        ([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED,
-      );
-      expect(messages).toHaveLength(2);
+      expect(
+        harness.sendMessage.mock.calls.filter(([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED).length,
+      ).toBeGreaterThanOrEqual(1);
     });
+    expect(harness.backgroundWorkSnapshot().items).toEqual([
+      expect.objectContaining({ id: 'retry-run-id', provider: 'workflow-mcp', sessionId: SESSION_ID }),
+    ]);
+
+    acceptDelivery = true;
+    await vi.waitFor(() => expect(harness.backgroundWorkSnapshot()).toEqual({ items: [], errors: [] }));
+    expect(
+      harness.sendMessage.mock.calls.filter(([message]) => message.customType === MESSAGE_TYPE_RUN_FINISHED).length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('fences a stale status callback when the session restarts', async () => {
+    const running = runRecord({ stage: 'running' });
+    const harness = createHarness([running], { monitorIntervalMs: 10 });
+    await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
+    const callsBeforeStaleRead = harness.listRunsPage.mock.calls.length;
+    let resolveStaleRead = (_value: Awaited<ReturnType<typeof harness.listRunsPage>>): void => undefined;
+    harness.listRunsPage.mockImplementationOnce(
+      () =>
+        new Promise((resolveRead) => {
+          resolveStaleRead = resolveRead;
+        }),
+    );
+    await vi.waitFor(() => expect(harness.listRunsPage.mock.calls.length).toBeGreaterThan(callsBeforeStaleRead));
+
+    await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
+    resolveStaleRead({
+      hasNextPage: false,
+      hasPreviousPage: false,
+      items: [{ ...running, stage: 'completed' }],
+      page: 1,
+      pageSize: 100,
+      total: 1,
+      totalPages: 1,
+    });
+    await new Promise((settle) => setTimeout(settle, 0));
+
+    expect(harness.sendMessage).not.toHaveBeenCalled();
+    expect(harness.backgroundWorkSnapshot().items).toEqual([
+      expect.objectContaining({ id: running.runId, provider: 'workflow-mcp', sessionId: SESSION_ID }),
+    ]);
   });
 
   it('stays silent when a run belonging to another session finishes', async () => {

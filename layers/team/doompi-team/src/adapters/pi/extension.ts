@@ -576,9 +576,13 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
         // same scope must not reset its in-flight claims.
         if (watchedScopeKey !== scope.scopeKey) {
           watchedScopeKey = scope.scopeKey;
-          resultWatcher.start((result) =>
-            currentSessionJobs?.get(result.runId) ? completionNotifier.deliver(result) : false,
-          );
+          resultWatcher.start(async (result) => {
+            const jobs = currentSessionJobs;
+            if (!jobs?.get(result.runId)) return false;
+            const accepted = await completionNotifier.deliver(result);
+            if (accepted) asyncJobTracker.acknowledgeHandoff(sessionId, result.runId);
+            return accepted;
+          });
         }
         const parentModel = normalizeParentModel(ctx.model);
         const activeSession = activeCordisSession;
@@ -592,6 +596,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
             ...(parentModel ? { parentModel } : {}),
             captureForkSource: () => captureSessionForkSource(ctx.sessionManager, 'tool'),
           },
+          directRunTracker: asyncJobTracker,
           delegation: delegationBridge,
           fablePlan: fablePlanBridge,
           policies: capabilityPolicies,
