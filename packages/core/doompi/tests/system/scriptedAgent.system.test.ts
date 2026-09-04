@@ -42,8 +42,9 @@ interface Fixture {
 
 const fixtures: string[] = [];
 const models: ScriptedModel[] = [];
-/** Shared so the package install happens once, in the warm-up, not per test. */
+/** Shared so the registry-backed package install happens once in the warm-up. */
 let agentDirectory = '';
+let warmedPackageDirectory = '';
 
 beforeAll(async () => {
   agentDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-scripted-agent-'));
@@ -53,6 +54,8 @@ beforeAll(async () => {
   try {
     runtime.send({ id: 'warmup', type: 'prompt', message: 'say hello' });
     await runtime.waitForRecord((record) => record.type === 'agent_settled', WARMUP_TIMEOUT_MS);
+    warmedPackageDirectory = path.join(agentDirectory, 'managed-packages');
+    fs.cpSync(path.join(fixture.root, '.pi', 'npm'), warmedPackageDirectory, { recursive: true });
   } finally {
     await shutdownRuntime(runtime);
     await model.close();
@@ -82,7 +85,9 @@ function createFixture(model: ScriptedModel): Fixture {
   for (const directory of [root, home]) fs.mkdirSync(directory, { recursive: true });
   writeMinimalDoomRepository(root);
   fs.copyFileSync(CHECKED_IN_MODES, path.join(root, '.doom', 'modes.yaml'));
-
+  if (warmedPackageDirectory !== '') {
+    fs.cpSync(warmedPackageDirectory, path.join(root, '.pi', 'npm'), { recursive: true });
+  }
   return {
     root,
     environment: {
