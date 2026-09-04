@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
-import { PiServer, PiServerError } from '@earendil-works/pi-server';
+import { Server } from '@earendil-works/pi-server';
 import { readSyncDrift, readSyncRegistration } from '@agimon-ai/doompi/services';
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
 import { readSyncState, type SyncState } from '@agimon-ai/doompi/services/syncState';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
+import { DOOM_COCKPIT_SERVER_ID } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
@@ -21,6 +22,7 @@ import { bodyLimit } from 'hono/body-limit';
 import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApi,
+  type DoomApiCaller,
   type DoomApiHandler,
   type DoomRepositorySyncView,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
@@ -29,7 +31,12 @@ import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-har
 import { findRepositoryRoot, resolveDoomConfigurationRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
-import { MAX_SESSION_FILE_BYTES, SESSION_FILE_ROUTE } from '../types/media.ts';
+import {
+  MAX_SESSION_FILE_BYTES,
+  SESSION_FILE_EXPECTED_SHA256_HEADER,
+  SESSION_FILE_ROUTE,
+  SESSION_FILE_SHA256_HEADER,
+} from '../types/media.ts';
 import type { SettingsRepository } from '../types/settings.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
@@ -82,7 +89,7 @@ import {
   type RemoteAccessSettings,
 } from '../types/remoteAccess.ts';
 import { suggestDirectories } from './directoryListing.ts';
-import { listSessionFiles, readSessionFile } from './sessionFiles.ts';
+import { listSessionFiles, readSessionFile, writeSessionFile } from './sessionFiles.ts';
 import { proxyToSocket } from './packageApiProxy.ts';
 import { createThreadJournals } from './threadJournals.ts';
 import { loadHubChannels } from './webHubPluginLoader.ts';
@@ -295,6 +302,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function singleByteRange(value: string, size: number): { start: number; end: number } | undefined {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value);
+  if (match === null || size === 0) return undefined;
+  const [, rawStart = '', rawEnd = ''] = match;
+  if (rawStart === '' && rawEnd === '') return undefined;
+  if (rawStart === '') {
+    const suffix = Number(rawEnd);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return undefined;
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(rawStart);
+  const requestedEnd = rawEnd === '' ? size - 1 : Number(rawEnd);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start >= size || requestedEnd < start) {
+    return undefined;
+  }
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
 /** A compact rail name while Pi starts and reports the thread's persisted name. */
 function resumedSessionName(info: { name?: string; firstMessage: string }, cwd: string): string {
   const firstLine = info.firstMessage.split('\n', 1)[0]?.trim();
@@ -325,6 +350,7 @@ function buildHub(
     }),
     readGit: readGitStatus,
     ...plugins,
+    ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     telemetry,
     onNotice: notice,
   });
@@ -443,6 +469,7 @@ function mountSessionApiProxy(
   hub: SessionHub,
   notice: (message: string) => void,
   telemetry: DoomTelemetry,
+  resolveCaller: (context: Context) => DoomApiCaller | undefined,
 ): void {
   app.all(`${DOOM_API_ROUTE_PREFIX}/*`, async (context) => {
     const sessionId = context.req.query(API_SESSION_QUERY_PARAM);
@@ -466,6 +493,7 @@ function mountSessionApiProxy(
             method: context.req.method,
             headers: context.req.raw.headers,
             body: context.req.raw.body,
+            caller: resolveCaller(context),
             trace: forwardedTraceContext(trace, parent),
           }),
         parent,
@@ -908,17 +936,13 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     spawn: (input) => hub.create(input),
     onNotice: notice,
   });
-  const remoteProtocolService = {
-    ...protocolService,
-    createSession: async () => {
-      throw new PiServerError('not_implemented', 'Remote protocol clients cannot create sessions');
-    },
-  };
-  const localProtocolServer = new PiServer(protocolService, {
+  const localProtocolServer = new Server(protocolService, {
+    serverId: DOOM_COCKPIT_SERVER_ID,
     listeners: [localProtocolListener],
     onError: (error) => notice(`protocol: ${error.message}`),
   });
-  const remoteProtocolServer = new PiServer(remoteProtocolService, {
+  const remoteProtocolServer = new Server(protocolService, {
+    serverId: DOOM_COCKPIT_SERVER_ID,
     listeners: [remoteProtocolListener],
     onError: (error) => notice(`protocol: ${error.message}`),
   });
@@ -974,7 +998,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     pluginApis.add(apis);
   };
   await Promise.all([...new Set([cockpitRoot, ...initialRoots])].map(registerRootHubApis));
-  mountSessionApiProxy(app, hub, notice, telemetry);
+  mountSessionApiProxy(app, hub, notice, telemetry, (context) => guard.callerOf(context));
 
   app.get('/api/health', (context) =>
     context.json({
@@ -1124,7 +1148,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ directories });
   });
 
-  // The timeline's @file previews: one cwd-contained file, capped in size.
+  // The timeline's @file previews and guarded host saves: one cwd-contained file, capped in size.
   app.get(SESSION_FILE_ROUTE, async (context) => {
     const sessionId = context.req.param('sessionId');
     const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
@@ -1134,7 +1158,63 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     if (file.status === 'forbidden') return context.json({ error: 'The path leaves the session directory.' }, 403);
     if (file.status === 'not-found') return context.json({ error: 'No such file.' }, 404);
     if (file.status === 'too-large') return context.json({ error: 'The file is too large to preview.' }, 413);
-    return context.body(new Uint8Array(file.body), 200, sessionFileHeaders(relativePath));
+
+    const headers = {
+      ...sessionFileHeaders(relativePath),
+      [SESSION_FILE_SHA256_HEADER]: file.sha256,
+      'Accept-Ranges': 'bytes',
+    };
+    const requestedRange = context.req.header('range');
+    if (requestedRange === undefined) return context.body(new Uint8Array(file.body), 200, headers);
+    const range = singleByteRange(requestedRange, file.body.byteLength);
+    if (range === undefined) {
+      return context.body(null, 416, { ...headers, 'Content-Range': `bytes */${String(file.body.byteLength)}` });
+    }
+    const body = file.body.subarray(range.start, range.end + 1);
+    return context.body(new Uint8Array(body), 206, {
+      ...headers,
+      'Content-Range': `bytes ${String(range.start)}-${String(range.end)}/${String(file.body.byteLength)}`,
+      'Content-Length': String(body.byteLength),
+    });
+  });
+
+  const sessionFileBodyLimit = bodyLimit({
+    maxSize: MAX_SESSION_FILE_BYTES,
+    onError: (context) => context.json({ error: 'The file is too large to save.' }, 413),
+  });
+  app.put(SESSION_FILE_ROUTE, sessionFileBodyLimit, async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const summary = hub.snapshot().find((candidate) => candidate.id === sessionId);
+    if (!summary) return context.json({ error: 'Unknown session.' }, 404);
+    if (hub.planSaveState(sessionId) !== 'allowed') {
+      return context.json({ error: 'Host saves are locked until Plan is authoritatively inactive.' }, 423);
+    }
+    const expectedSha256 = context.req.header(SESSION_FILE_EXPECTED_SHA256_HEADER);
+    if (expectedSha256 === undefined || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+      return context.json(
+        { error: `A lowercase SHA-256 ${SESSION_FILE_EXPECTED_SHA256_HEADER} header is required.` },
+        400,
+      );
+    }
+    const body = Buffer.from(await context.req.arrayBuffer());
+    const result = await writeSessionFile(
+      summary.cwd,
+      context.req.query('path') ?? '',
+      body,
+      expectedSha256,
+      MAX_SESSION_FILE_BYTES,
+      () => hub.planSaveState(sessionId) === 'allowed',
+    );
+    if (result.status === 'ok') {
+      return context.body(null, 204, { [SESSION_FILE_SHA256_HEADER]: result.sha256 });
+    }
+    if (result.status === 'forbidden') return context.json({ error: 'The path leaves the session directory.' }, 403);
+    if (result.status === 'not-found') return context.json({ error: 'No such file.' }, 404);
+    if (result.status === 'too-large') return context.json({ error: 'The file is too large to save.' }, 413);
+    if (result.status === 'locked') {
+      return context.json({ error: 'Host saves are locked until Plan is authoritatively inactive.' }, 423);
+    }
+    return context.json({ error: 'The file changed after it was read.' }, 409);
   });
 
   app.get(

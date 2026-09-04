@@ -1,21 +1,24 @@
-import type {
-  ModelRef,
-  SessionMetadata,
-  SessionPhase,
-  SessionSnapshot,
-  ThinkingLevel,
-} from '@earendil-works/pi-protocol';
-import { PiServerError } from '@earendil-works/pi-server';
-import type {
-  CreateSessionOptions,
-  PiServerService,
-  PiSessionRuntime,
-  PiSessionRuntimeEvent,
-  PromptInput,
-  SteerInput,
-} from '@earendil-works/pi-server';
+import {
+  createRemoteServiceEndpoint,
+  RemoteServiceProvider,
+  replicatedState,
+  type Context,
+  type MutableReplicatedState,
+  type RemoteServiceEndpoint,
+} from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import type { RoutedServerServiceHost, RoutedSessionHandle, ServerHost } from '@earendil-works/pi-server';
+import { SessionNotFoundError } from '@earendil-works/pi-server';
 import { createRpcTranscript, type RpcTranscript } from '../services/rpcTranscript.ts';
 import type { AgentProcess } from '../types/session.ts';
+import {
+  DoomSessionManagementService,
+  DoomSessionService,
+  type ModelRef,
+  type SessionServiceState,
+  type SessionSnapshot,
+  type ThinkingLevel,
+} from '../types/protocol.ts';
 import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 const SETTLED = 'agent_settled';
@@ -30,105 +33,89 @@ export interface AgentSessionRuntimeOptions {
   transcript?: RpcTranscript;
 }
 
-/**
- * One acquired DoomPi session, presented as a protocol runtime.
- *
- * Pi's rpc mode answers a prompt the moment it accepts one and reports the
- * turn as a stream afterwards, while the protocol expects `prompt()` to settle
- * when the turn does. Bridging that is this adapter's main job: it holds the
- * caller until the agent says it settled, so a client's request completes at
- * the point the transcript is actually final.
- */
-export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): PiSessionRuntime {
+export interface AgentSessionRuntime {
+  readonly state: MutableReplicatedState<SessionServiceState>;
+  prompt(text: string, context: Context): Promise<void>;
+  steer(text: string, context: Context): Promise<void>;
+  abort(context: Context): Promise<void>;
+  setModel(model: ModelRef, context: Context): Promise<void>;
+  setThinking(thinkingLevel: ThinkingLevel, context: Context): Promise<void>;
+  dispose(): Promise<void>;
+}
+
+/** Projects one supervised RPC agent as a Chord session service. */
+export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): AgentSessionRuntime {
   const transcript =
     options.transcript ??
     createRpcTranscript({ id: options.sessionId, cwd: options.cwd, name: options.sessionName, now: Date.now });
-  const listeners = new Set<(event: PiSessionRuntimeEvent) => void>();
+  const state = replicatedState<SessionServiceState>({ snapshot: transcript.snapshot(), progress: null });
   const settlers = new Set<() => void>();
   let disposed = false;
 
-  const emit = (event: PiSessionRuntimeEvent): void => {
-    for (const listener of listeners) listener(event);
-  };
-
   options.agent.onFrame((frame) => {
     const reduction = transcript.apply(frame);
-    if (reduction.aggregate && options.telemetry)
+    if (reduction.aggregate && options.telemetry) {
       observe(
         options.telemetry.recordEvent('doompi_server.transcript.aggregate', {
           session_id: options.sessionId,
           ...reduction.aggregate,
         }),
       );
-    if (reduction.snapshot) emit({ type: 'snapshot' });
-    if (reduction.progress) emit({ type: 'progress', progress: reduction.progress });
+    }
+    if (reduction.snapshot) state.state.snapshot = reduction.snapshot;
+    state.state.progress = reduction.progress ?? null;
+    if (reduction.snapshot || reduction.progress) state.publish(BACKGROUND_CONTEXT);
     if (frame.type === SETTLED) {
-      // Copied before draining: a settler may start the next turn.
       const waiting = [...settlers];
       settlers.clear();
       for (const settle of waiting) settle();
     }
   });
 
-  /** Resolves when the agent reports it settled, or immediately if it already has. */
+  const requireLive = (): void => {
+    if (disposed) throw new Error('The session runtime is disposed');
+  };
   const awaitSettled = (): Promise<void> =>
     new Promise((resolve) => {
       settlers.add(resolve);
     });
 
-  const requireLive = (): void => {
-    if (disposed) throw new PiServerError('not_found', 'The session runtime is disposed');
-  };
-
   return {
-    snapshot: () => transcript.snapshot(),
-    getPhase: (): SessionPhase => transcript.phase(),
-
-    async prompt(input: PromptInput) {
+    state,
+    async prompt(text) {
       requireLive();
-      if (transcript.phase() !== 'idle') throw new PiServerError('busy', 'A turn is already running');
+      if (transcript.phase() !== 'idle') throw new Error('A turn is already running');
       const settled = awaitSettled();
       const run = async (): Promise<void> => {
-        options.agent.send({ type: 'prompt', message: input.text });
+        options.agent.send({ type: 'prompt', message: text });
         await settled;
       };
-      if (options.telemetry)
+      if (options.telemetry) {
         await options.telemetry.runInSpan('doompi_server.prompt_to_settled', { session_id: options.sessionId }, run);
-      else await run();
+      } else {
+        await run();
+      }
     },
-
-    async steer(input: SteerInput) {
+    async steer(text) {
       requireLive();
-      if (transcript.phase() === 'idle') throw new PiServerError('busy', 'There is no active turn to steer');
-      options.agent.send({ type: 'steer', message: input.text });
+      if (transcript.phase() === 'idle') throw new Error('There is no active turn to steer');
+      options.agent.send({ type: 'steer', message: text });
     },
-
     async abort() {
       requireLive();
-      if (transcript.phase() === 'idle') throw new PiServerError('busy', 'There is no active turn to abort');
+      if (transcript.phase() === 'idle') throw new Error('There is no active turn to abort');
       options.agent.send({ type: 'abort' });
     },
-
-    async setModel(model: ModelRef) {
+    async setModel(model) {
       requireLive();
       options.agent.send({ type: 'set_model', provider: model.provider, modelId: model.id });
     },
-
-    async setThinking(thinkingLevel: ThinkingLevel) {
+    async setThinking(thinkingLevel) {
       requireLive();
       options.agent.send({ type: 'set_thinking_level', level: thinkingLevel });
     },
-
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-
     async dispose() {
-      // Releasing a client's hold must not take the agent down: the server
-      // owns its lifetime, and another client may attach a moment later.
       disposed = true;
-      listeners.clear();
       settlers.clear();
     },
   };
@@ -138,34 +125,69 @@ export interface AgentServerServiceOptions extends AgentSessionRuntimeOptions {
   createdAt: number;
 }
 
-/**
- * The single supervised session, served through the protocol's service contract.
- *
- * This server exists to supervise exactly one agent, so creating a session is
- * refused rather than silently handing back the running one, and every open
- * returns a fresh hold on the same runtime.
- */
-export function createAgentServerService(options: AgentServerServiceOptions): PiServerService {
-  const metadata: SessionMetadata = {
+export interface DoomSessionMetadata {
+  id: string;
+  createdAt: number;
+  storageVersion: number;
+  cwd: string;
+  sessionName: string;
+}
+
+function endpointAttachment(endpoint: RemoteServiceEndpoint): {
+  invokeService: RemoteServiceEndpoint['invoke'];
+  release(): void;
+} {
+  return {
+    invokeService: (call, publish, context) => endpoint.invoke(call, publish, context),
+    release: () => endpoint.dispose(),
+  };
+}
+
+function managementHost(): RoutedServerServiceHost {
+  return {
+    attachClient(presentation) {
+      const provider = new RemoteServiceProvider([{ service: DoomSessionManagementService, mode: 'singleton' }]);
+      provider.provide(DoomSessionManagementService, {
+        attach: (sessionId, context) => presentation.attachSession(sessionId, context),
+        detach: (context) => presentation.detachSession(context),
+      });
+      return endpointAttachment(createRemoteServiceEndpoint(provider));
+    },
+  };
+}
+
+/** Creates the 0.85 routed host for one supervised DoomPi session. */
+export function createAgentServerService(options: AgentServerServiceOptions): ServerHost<DoomSessionMetadata> {
+  const metadata: DoomSessionMetadata = {
     id: options.sessionId,
     createdAt: options.createdAt,
-    sessionName: options.sessionName,
+    storageVersion: 1,
     cwd: options.cwd,
+    sessionName: options.sessionName,
   };
   const runtime = createAgentSessionRuntime(options);
-  // The runtime is shared, so a client releasing its hold must not disable the
-  // session for the next one. Only the server's own shutdown ends it.
-  const shared: PiSessionRuntime = { ...runtime, dispose: async () => undefined };
+  let closed = false;
 
   return {
-    listSessions: async () => [metadata],
-    listModels: async () => [],
-    async createSession(_create: CreateSessionOptions): Promise<PiSessionRuntime> {
-      throw new PiServerError('not_implemented', 'This server supervises one session and cannot create another');
+    serverServices: managementHost(),
+    async resolveSession(sessionId) {
+      if (sessionId !== metadata.id) throw new SessionNotFoundError(`No session ${sessionId}`);
+      return metadata;
     },
-    async openSession(sessionId: string): Promise<PiSessionRuntime> {
-      if (sessionId !== options.sessionId) throw new PiServerError('not_found', `No session ${sessionId}`);
-      return shared;
+    async openSession() {
+      if (closed) throw new SessionNotFoundError('The session service is closed');
+      const provider = new RemoteServiceProvider([{ service: DoomSessionService, mode: 'singleton' }]);
+      provider.provide(DoomSessionService, runtime);
+      const handle: RoutedSessionHandle = {
+        attachClient: () => endpointAttachment(createRemoteServiceEndpoint(provider)),
+        async close() {
+          if (closed) return;
+          closed = true;
+          provider.dispose();
+          await runtime.dispose();
+        },
+      };
+      return handle;
     },
   };
 }

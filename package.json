@@ -7,7 +7,7 @@
     "audit:workspace": "node scripts/audit-workspace.mjs",
     "build": "nx run-many -t build",
     "cockpit": "pnpm cockpit:build && pnpm doompi-web",
-    "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web @agimon-ai/doompi-autocompact @agimon-ai/doompi-edit @agimon-ai/doompi-file-edit @agimon-ai/doompi-goal @agimon-ai/doompi-grep @agimon-ai/doompi-help @agimon-ai/doompi-hook @agimon-ai/doompi-log @agimon-ai/doompi-loop @agimon-ai/doompi-mcp @agimon-ai/doompi-plan @agimon-ai/doompi-prompt @agimon-ai/doompi-read @agimon-ai/doompi-runner @agimon-ai/doompi-sandbox @agimon-ai/doompi-task @agimon-ai/doompi-team @agimon-ai/doompi-user-feedback @agimon-ai/doompi-voice @agimon-ai/doompi-workflow",
+    "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web @agimon-ai/doompi-autocompact @agimon-ai/doompi-author @agimon-ai/doompi-edit @agimon-ai/doompi-file-edit @agimon-ai/doompi-goal @agimon-ai/doompi-grep @agimon-ai/doompi-help @agimon-ai/doompi-hook @agimon-ai/doompi-log @agimon-ai/doompi-loop @agimon-ai/doompi-mcp @agimon-ai/doompi-plan @agimon-ai/doompi-prompt @agimon-ai/doompi-read @agimon-ai/doompi-runner @agimon-ai/doompi-sandbox @agimon-ai/doompi-task @agimon-ai/doompi-team @agimon-ai/doompi-user-feedback @agimon-ai/doompi-voice @agimon-ai/doompi-workflow",
     "examples:check": "node scripts/check-examples.mjs",
     "hooks:check": "node scripts/emit-hooks.mjs --check",
     "hooks:write": "node scripts/emit-hooks.mjs --write",
@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@agiflowai/scaffold-mcp": "1.3.0",
+    "@agimon-ai/doompi-author": "workspace:*",
     "@agimon-ai/doompi-edit": "workspace:*",
     "@agimon-ai/doompi-goal": "workspace:*",
     "@agimon-ai/doompi-grep": "workspace:*",

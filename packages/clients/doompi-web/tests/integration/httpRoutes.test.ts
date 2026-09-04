@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
+import { SESSION_FILE_EXPECTED_SHA256_HEADER, SESSION_FILE_SHA256_HEADER } from '../../src/types/media.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
 const { spawned } = vi.hoisted(() => ({ spawned: [] as Array<{ cwd: string; name?: string }> }));
@@ -34,10 +36,11 @@ beforeEach(async () => {
   spawned.length = 0;
   registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-routes-'));
   assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-assets-'));
+  fs.writeFileSync(path.join(registryDir, 'package.json'), '{"name":"doompi-web"}');
   fs.writeFileSync(path.join(assetsDir, 'index.html'), '<!doctype html><title>cockpit</title>');
   fs.mkdirSync(path.join(assetsDir, 'assets'));
   fs.writeFileSync(path.join(assetsDir, 'assets', 'app.js'), 'globalThis.ok = 1;');
-  session = await startFakeSession({ id: SESSION, registryDir, cwd: process.cwd() });
+  session = await startFakeSession({ id: SESSION, registryDir, cwd: registryDir });
   server = await serveWeb({
     registryDir,
     spawnCommand: path.join(registryDir, 'no-such-server'),
@@ -55,6 +58,24 @@ afterEach(async () => {
 });
 
 const url = (route: string): string => `${server.url}${route}`;
+const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
+
+async function projectPlan(activation?: 'inactive' | 'activating' | 'active' | 'deactivating'): Promise<void> {
+  await session.waitForAttach();
+  session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      customType: 'doom-minor-modes',
+      data: {
+        version: 1,
+        revision: 1,
+        modes: activation === undefined ? [] : [{ id: 'plan', activation }],
+      },
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
 
 describe('signed bundle assets', () => {
   it('serves a real file only through its signed revision route', async () => {
@@ -89,10 +110,70 @@ describe('session-scoped routes', () => {
     expect((await fetch(url('/api/sessions/nope/file?path=x'))).status).toBe(404);
   });
 
-  it('reads a file inside the session directory', async () => {
-    const response = await fetch(url(`/api/sessions/${SESSION}/file?path=package.json`));
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain('doompi-web');
+  it('reads a file with its digest and supports one byte range for video', async () => {
+    fs.writeFileSync(path.join(registryDir, 'clip.mp4'), '0123456789');
+    const response = await fetch(url(`/api/sessions/${SESSION}/file?path=clip.mp4`), {
+      headers: { range: 'bytes=2-5' },
+    });
+    expect(response.status).toBe(206);
+    expect(response.headers.get(SESSION_FILE_SHA256_HEADER)).toBe(sha256('0123456789'));
+    expect(response.headers.get('content-range')).toBe('bytes 2-5/10');
+    expect(response.headers.get('accept-ranges')).toBe('bytes');
+    expect(await response.text()).toBe('2345');
+
+    const multiple = await fetch(url(`/api/sessions/${SESSION}/file?path=clip.mp4`), {
+      headers: { range: 'bytes=0-1,3-4' },
+    });
+    expect(multiple.status).toBe(416);
+    expect(multiple.headers.get('content-range')).toBe('bytes */10');
+  });
+
+  it('requires an authoritative inactive Plan projection and the expected digest to save', async () => {
+    const route = `/api/sessions/${SESSION}/file?path=package.json`;
+    const unavailable = await fetch(url(route), {
+      method: 'PUT',
+      headers: { [SESSION_FILE_EXPECTED_SHA256_HEADER]: sha256('{"name":"doompi-web"}') },
+      body: '{"name":"changed"}',
+    });
+    expect(unavailable.status).toBe(423);
+
+    await projectPlan('inactive');
+    const stale = await fetch(url(route), {
+      method: 'PUT',
+      headers: { [SESSION_FILE_EXPECTED_SHA256_HEADER]: '0'.repeat(64) },
+      body: '{"name":"changed"}',
+    });
+    expect(stale.status).toBe(409);
+
+    const saved = await fetch(url(route), {
+      method: 'PUT',
+      headers: { [SESSION_FILE_EXPECTED_SHA256_HEADER]: sha256('{"name":"doompi-web"}') },
+      body: '{"name":"changed"}',
+    });
+    expect(saved.status).toBe(204);
+    expect(saved.headers.get(SESSION_FILE_SHA256_HEADER)).toBe(sha256('{"name":"changed"}'));
+    expect(fs.readFileSync(path.join(registryDir, 'package.json'), 'utf8')).toBe('{"name":"changed"}');
+  });
+
+  it('allows a valid projection where Plan is absent', async () => {
+    await projectPlan();
+    const response = await fetch(url(`/api/sessions/${SESSION}/file?path=package.json`), {
+      method: 'PUT',
+      headers: { [SESSION_FILE_EXPECTED_SHA256_HEADER]: sha256('{"name":"doompi-web"}') },
+      body: '{"name":"changed"}',
+    });
+    expect(response.status).toBe(204);
+  });
+
+  it.each(['activating', 'active', 'deactivating'] as const)('locks a save while Plan is %s', async (activation) => {
+    await projectPlan(activation);
+    const response = await fetch(url(`/api/sessions/${SESSION}/file?path=package.json`), {
+      method: 'PUT',
+      headers: { [SESSION_FILE_EXPECTED_SHA256_HEADER]: sha256('{"name":"doompi-web"}') },
+      body: '{"name":"changed"}',
+    });
+    expect(response.status).toBe(423);
+    expect(fs.readFileSync(path.join(registryDir, 'package.json'), 'utf8')).toBe('{"name":"doompi-web"}');
   });
 
   it('refuses a path that leaves the session directory', async () => {

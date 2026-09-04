@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type {
+  ComposerCapture,
   ContextAction,
   SlotDataFill,
   SlotDeclaration,
@@ -25,6 +26,7 @@ import type {
 export interface RecordedSlotAction {
   action:
     | 'appendComposerDraft'
+    | 'attachComposerCapture'
     | 'attachComposerContext'
     | 'openTab'
     | 'openTransientTab'
@@ -36,6 +38,8 @@ export interface RecordedSlotAction {
   text?: string;
   /** The structured item passed to `attachComposerContext`. */
   context?: WebPluginContextItem;
+  /** The atomic screenshot and context passed to `attachComposerCapture`. */
+  capture?: ComposerCapture;
   /** The frame a component sent, for `sendSessionFrame`. */
   frame?: Record<string, unknown>;
 }
@@ -85,6 +89,9 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
     },
     attachComposerContext: (context) => {
       actions.push({ action: 'attachComposerContext', target: props.sessionId, context });
+    },
+    attachComposerCapture: (capture) => {
+      actions.push({ action: 'attachComposerCapture', target: props.sessionId, capture });
     },
     contextActionsFor: (item) => options.contextActions?.(item) ?? [],
     sendSessionFrame: (sessionId, frame) => {

@@ -1,4 +1,5 @@
 import type {
+  ComposerCapture,
   SlotDataFill,
   SlotDeclaration,
   TransientTab,
@@ -29,6 +30,7 @@ export function pluginSlotProps(
   tabs: TransientTabActions,
   appendComposerDraft: (text: string) => void,
   attachComposerContext: (item: WebPluginContextItem) => void,
+  attachComposerCapture: (capture: ComposerCapture) => void = () => undefined,
 ): WebPluginSlotProps {
   const props: WebPluginSlotProps = {
     sessionId,
@@ -40,6 +42,7 @@ export function pluginSlotProps(
     fileTabFor: (path) => fileTabForPath(sessionId, path),
     appendComposerDraft,
     attachComposerContext,
+    attachComposerCapture,
     contextActionsFor(item) {
       return pluginContextActions().flatMap((action) =>
         action.kinds.includes(item.kind)

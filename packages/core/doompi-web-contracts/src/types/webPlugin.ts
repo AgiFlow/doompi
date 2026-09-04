@@ -1,4 +1,5 @@
 import type { Store } from '@tanstack/store';
+import type { ModelContextBinding } from './modelContext.ts';
 import type { ComponentType, ReactNode } from 'react';
 
 /**
@@ -57,6 +58,8 @@ export interface TransientTab {
   id: string;
   label: string;
   panel: ComponentType<WebPluginSlotProps>;
+  /** Keeps the host composer below this panel. Defaults to false. */
+  retainComposer?: boolean;
 }
 /**
  * Which paths a message names can be opened, and what tab each one opens.
@@ -114,6 +117,15 @@ export interface WebPluginContextItem {
   url?: string;
 }
 
+/** An atomic screenshot-and-context handoff from a plugin to the host composer. */
+export interface ComposerCapture {
+  /** Unprefixed base64 bytes. The host accepts PNG and JPEG only. */
+  data: string;
+  mimeType: 'image/png' | 'image/jpeg';
+  /** The model-facing context attached beside the screenshot. */
+  context: WebPluginContextItem;
+}
+
 /** One installed action another plugin may offer for a compatible context item. */
 export interface ContextAction {
   /** Namespaced at install as `<pluginId>.<id>`. */
@@ -148,6 +160,8 @@ export interface WebPluginSlotProps {
   appendComposerDraft: (text: string) => void;
   /** Adds browser-safe structured context as a removable chip without changing the visible draft. */
   attachComposerContext: (item: WebPluginContextItem) => void;
+  /** Atomically stages a validated PNG or JPEG capture and its structured context for explicit submission. */
+  attachComposerCapture: (capture: ComposerCapture) => void;
   /** Actions installed independent plugins offer for this context item, in display order. */
   contextActionsFor: (item: WebPluginContextItem) => readonly ContextAction[];
   /** The same sender palette commands and `start` receive; components act through it. */
@@ -182,6 +196,8 @@ export interface TabContribution {
   id: string;
   label: string;
   panel: ComponentType<WebPluginSlotProps>;
+  /** Keeps the host composer below this panel. Defaults to false. */
+  retainComposer?: boolean;
   /** A React hook, fully typed inside the plugin; 0 hides the badge. */
   useBadge?: (sessionId: string | null) => number;
 }
@@ -619,6 +635,8 @@ export interface WebPluginRuntime {
   sendSessionFrame: SessionFrameSender;
   sendHubFrame(frame: Record<string, unknown>): void;
   onHubConnected(listener: () => void): () => void;
+  /** Acquires the browser's WebMCP surface, or the page-lifetime simulator when unavailable. */
+  acquireModelContext?(): Promise<ModelContextBinding>;
 }
 export interface WebPluginDefinition {
   id: string;

@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-computer-use",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/minor/doompi-computer-use/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}

@@ -8,7 +8,7 @@ import type {
   TranscriptItem,
   TranscriptProgress,
   UserTranscriptItem,
-} from '@earendil-works/pi-protocol';
+} from '../types/protocol.ts';
 import type { SessionFrame } from '../types/session.ts';
 
 const THINKING_LEVELS = new Set<string>(['off', 'minimal', 'low', 'medium', 'high']);

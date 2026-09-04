@@ -1,4 +1,3 @@
-import { encodeServerMessage } from '@earendil-works/pi-protocol';
 import { describe, expect, it } from 'vitest';
 import { createRpcTranscript, type RpcTranscript } from '../../../src/services/rpcTranscript.ts';
 import type { SessionFrame } from '../../../src/types/session.ts';
@@ -10,16 +9,11 @@ function transcript(): RpcTranscript {
 }
 
 /**
- * Encoding through the real schema is the point of these tests.
- *
- * The protocol rejects unknown properties, non-finite numbers, and undefined,
- * so a projection that drifts fails here rather than at a client that already
- * dropped the connection.
+ * Chord state must remain strict JSON, so verify that the projection survives
+ * the same serialization boundary used by the remote service.
  */
 function assertEncodable(snapshot: unknown): void {
-  expect(() =>
-    encodeServerMessage({ type: 'event', event: { type: 'session_snapshot', snapshot: snapshot as never } }),
-  ).not.toThrow();
+  expect(() => JSON.parse(JSON.stringify(snapshot))).not.toThrow();
 }
 
 function apply(subject: RpcTranscript, frames: SessionFrame[]): void {

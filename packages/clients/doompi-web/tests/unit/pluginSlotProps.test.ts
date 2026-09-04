@@ -1,4 +1,5 @@
 import {
+  type ComposerCapture,
   defineSlot,
   defineWebPlugin,
   type TransientTab,
@@ -10,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps.ts';
 import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer.ts';
+import { bindTransport, releaseTransport } from '../../src/web/lib/transport.ts';
 import {
   appendComposerDraft,
   composerStore,
@@ -33,6 +35,7 @@ afterEach(() => {
   resetWebPlugins();
   resetComposerStore();
   releaseThreadRenderer();
+  releaseTransport();
 });
 
 describe('pluginSlotProps', () => {
@@ -90,7 +93,10 @@ describe('pluginSlotProps', () => {
       content: 'Fix the repository authentication flow.',
     };
     const attached: WebPluginContextItem[] = [];
+    const captures: ComposerCapture[] = [];
     const opened: TransientTab[] = [];
+    const sent: object[] = [];
+    bindTransport((frame) => sent.push(frame));
     installWebPlugins([
       defineWebPlugin({
         id: 'team',
@@ -116,11 +122,16 @@ describe('pluginSlotProps', () => {
       { open: (tab) => opened.push(tab), close: () => undefined },
       noAppend,
       (context) => attached.push(context),
+      (capture) => captures.push(capture),
     );
 
     props.attachComposerContext(item);
+    const capture: ComposerCapture = { data: 'iVBORw==', mimeType: 'image/png', context: item };
+    props.attachComposerCapture(capture);
     const actions = props.contextActionsFor(item);
     expect(attached).toEqual([item]);
+    expect(captures).toEqual([capture]);
+    expect(sent).toEqual([]);
     expect(actions.map(({ id, label }) => [id, label])).toEqual([['team.launch', 'Launch Agent']]);
     actions[0]?.run();
     expect(opened.map((tab) => tab.id)).toEqual(['team-task-1']);

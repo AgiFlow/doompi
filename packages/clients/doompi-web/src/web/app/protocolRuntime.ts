@@ -1,5 +1,12 @@
-import { PiClient } from '@earendil-works/pi-client';
-import { RemoteSession } from '@earendil-works/pi-coding-agent/client';
+import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
+import {
+  DOOM_COCKPIT_SERVER_ID,
+  DoomSessionManagementService,
+  DoomSessionService,
+  type SessionServiceState,
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
 import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
 import { toQueuedEntries, toTimelineEntries } from '../lib/protocolTimeline.ts';
@@ -14,56 +21,70 @@ export interface ProtocolRuntime {
   stop(): void;
 }
 
-/**
- * Runs Pi's own client for whichever session the page is showing.
- *
- * The transcript is the protocol's to state and the cockpit's only to draw, so
- * this holds one session open and republishes what the server says. Everything
- * DoomPi owns, dialogs and modes and plugin channels, stays on the hub socket
- * beside it, because the protocol has no shape for any of it.
- */
+/** Runs Pi 0.85's routed client and Chord session binding for the visible session. */
 export function startProtocolRuntime(location: Location = window.location): ProtocolRuntime {
-  const client = new PiClient({ transportFactory: createProtocolTransport(protocolSocketUrl(location)) });
-  let session: RemoteSession | undefined;
+  const client = new Client({
+    serverId: DOOM_COCKPIT_SERVER_ID,
+    transportFactory: createProtocolTransport(protocolSocketUrl(location)),
+  });
+  let binding: RemoteServiceBinding | undefined;
   let unsubscribe: (() => void) | undefined;
   let focused: string | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
-  /** Guards against a slow open landing after the page moved on. */
   let generation = 0;
+
+  const publish = (sessionId: string, state: SessionServiceState): void => {
+    applyProtocolTranscript(sessionId, toTimelineEntries(state.snapshot.transcript), state.snapshot.phase !== 'idle');
+    applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
+  };
 
   const release = async (): Promise<void> => {
     unsubscribe?.();
     unsubscribe = undefined;
-    const previous = session;
-    session = undefined;
-    if (previous?.id) releaseProtocolTranscript(previous.id);
-    await previous?.dispose().catch(() => undefined);
-  };
-
-  const publish = (sessionId: string, remote: RemoteSession): void => {
-    const state = remote.state;
-    if (!state.snapshot) return;
-    applyProtocolTranscript(sessionId, toTimelineEntries(state.transcript), state.snapshot.phase !== 'idle');
-    applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
+    const previous = binding;
+    binding = undefined;
+    if (focused !== null) releaseProtocolTranscript(focused);
+    if (previous) await previous.dispose(BACKGROUND_CONTEXT);
   };
 
   const open = async (sessionId: string): Promise<void> => {
     const mine = ++generation;
     await release();
     try {
-      const remote = await RemoteSession.open(client, sessionId);
+      await client.request(
+        { serverId: DOOM_COCKPIT_SERVER_ID },
+        { serviceId: DoomSessionManagementService.id, member: 'attach', args: [sessionId] },
+      );
+      const next = createRemoteServiceBinding({
+        services: [DoomSessionService],
+        transport: createClientServiceTransport(client, () => client.attachment),
+      });
+      const service = next.use(DoomSessionService);
+      await next.ready(BACKGROUND_CONTEXT);
       if (stopped || mine !== generation) {
-        await remote.dispose().catch(() => undefined);
+        await next.dispose(BACKGROUND_CONTEXT);
         return;
       }
-      session = remote;
-      unsubscribe = remote.subscribe(() => publish(sessionId, remote));
-      publish(sessionId, remote);
+      binding = next;
+      const initial = service.state.value;
+      if (initial) publish(sessionId, initial);
+      unsubscribe = service.state.subscribe((state) => publish(sessionId, state));
     } catch {
       releaseProtocolTranscript(sessionId);
-      // A session the hub has not caught up with yet is normal right after a
-      // page creates one; legacy frames remain the realtime fallback.
+    }
+  };
+
+  const reconnect = async (): Promise<void> => {
+    if (stopped) return;
+    const started = performance.now();
+    try {
+      await client.reconnect();
+      recordBrowserPerformance({ name: 'web.browser.protocol_ready', duration_ms: performance.now() - started });
+      if (focused !== null) await open(focused);
+    } catch {
+      if (focused !== null) releaseProtocolTranscript(focused);
+      if (!stopped) retry = setTimeout(() => void reconnect(), RECONNECT_MS);
     }
   };
 
@@ -86,19 +107,6 @@ export function startProtocolRuntime(location: Location = window.location): Prot
     retry = setTimeout(() => void reconnect(), RECONNECT_MS);
   });
 
-  const reconnect = async (): Promise<void> => {
-    if (stopped) return;
-    const started = performance.now();
-    try {
-      await client.reconnect();
-      recordBrowserPerformance({ name: 'web.browser.protocol_ready', duration_ms: performance.now() - started });
-      if (focused !== null) await open(focused);
-    } catch {
-      if (focused !== null) releaseProtocolTranscript(focused);
-      if (!stopped) retry = setTimeout(() => void reconnect(), RECONNECT_MS);
-    }
-  };
-
   void connect();
 
   return {
@@ -111,7 +119,7 @@ export function startProtocolRuntime(location: Location = window.location): Prot
     stop() {
       stopped = true;
       if (retry) clearTimeout(retry);
-      void release().then(() => client.dispose().catch(() => undefined));
+      void release().then(() => client.dispose());
     },
   };
 }

@@ -11,7 +11,7 @@ as a standalone [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-age
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.4 for standalone extension use
+- Pi 0.85.0 for standalone extension use
 
 ## Install
 

@@ -1,4 +1,5 @@
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
+import type { ComputerUseHostBinding } from '@agimon-ai/doompi-web-contracts';
 import type { AuthRuntime } from './auth.ts';
 import type { MigratingSession, RemoteAccessSettings, TunnelLauncher } from './remoteAccess.ts';
 import type { BridgeStatusFrame, SessionFrame } from './session.ts';
@@ -41,6 +42,8 @@ export interface WebServerOptions {
   remoteStateDir?: string;
   /** Explicit cloudflared binary; the default is resolved from the environment and PATH. */
   cloudflaredPath?: string;
+  /** Present only when this hub is the authenticated child of DoomPi Desktop. */
+  computerUse?: ComputerUseHostBinding;
   /**
    * Called when the cockpit is asked to hand over to a container.
    *

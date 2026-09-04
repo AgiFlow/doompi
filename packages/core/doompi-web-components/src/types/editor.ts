@@ -23,6 +23,25 @@ export interface EditorSelectionRange {
   endLine: number;
 }
 
+/** A zero-based half-open range in the mounted editor document. */
+export interface EditorTextRange {
+  from: number;
+  to: number;
+}
+
+/** One replacement applied with the other edits in a single editor transaction. */
+export interface EditorEdit extends EditorTextRange {
+  insert: string;
+}
+
+/** The deliberately small imperative surface exposed by a mounted editor. */
+export interface CodeEditorController {
+  focus: () => void;
+  revealAndSelect: (range: EditorTextRange) => void;
+  applyEdits: (edits: readonly EditorEdit[]) => void;
+  setClosedRanges: (ranges: readonly EditorTextRange[]) => void;
+}
+
 export interface CodeEditorProps {
   value: string;
   /**
@@ -40,4 +59,6 @@ export interface CodeEditorProps {
   'data-testid'?: string;
   onChange?: (value: string) => void;
   onSelect?: (range: EditorSelectionRange) => void;
+  /** Receives the controller while the CodeMirror view is mounted, and `null` after it is destroyed. */
+  controllerRef?: import('react').Ref<CodeEditorController>;
 }

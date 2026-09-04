@@ -1,4 +1,4 @@
-import type { TranscriptItem, UserTranscriptItem } from '@earendil-works/pi-protocol';
+import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { describe, expect, it } from 'vitest';
 import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline.ts';
 

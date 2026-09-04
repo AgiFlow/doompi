@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type {
   ChannelFrame,
+  ComputerUseHostBinding,
   HubChannelHost,
   HubChannelSource,
   HubSessionApiRequest,
@@ -119,6 +120,8 @@ export interface SessionHubOptions {
   loadChannels?: (record: SessionRecord) => Promise<readonly WebHubChannel[]>;
   /** Advertises the signed client composition paired with one session's loaded channels. */
   webComposition?: (record: SessionRecord, channelTypes: readonly string[]) => SessionWebComposition | undefined;
+  /** Present only when this hub is the authenticated child of DoomPi Desktop. */
+  computerUse?: ComputerUseHostBinding;
   /** Injectable for tests; defaults to SIGTERM, which doompi-server treats as a clean stop. */
   signal?: (pid: number) => void;
   /** How long a restart waits for the stopped server to withdraw its record. */
@@ -135,11 +138,14 @@ export interface SessionHubOptions {
 }
 
 export type StopOutcome = { ok: true } | { ok: false; code: 'unknown' | 'self' | 'signal_failed'; error: string };
+export type PlanSaveState = 'allowed' | 'locked' | 'unavailable';
 
 export interface SessionHub {
   snapshot(): SessionSummary[];
   /** The registry records behind the live sessions, for clients that dial them directly. */
   records(): SessionRecord[];
+  /** Whether the latest authoritative minor-mode projection permits a host file save. */
+  planSaveState(sessionId: string): PlanSaveState;
   /** Asks a session's server to exit; the session leaves once its record is withdrawn. */
   stop(sessionId: string): StopOutcome;
   /** Streams every change; pages filter frame events by their subscriptions. */
@@ -360,6 +366,38 @@ function sessionApiPath(request: HubSessionApiRequest): string {
   return `/api/plugin/${request.basePath}${request.path}`;
 }
 
+const MODE_ACTIVATIONS = new Set(['inactive', 'activating', 'active', 'deactivating']);
+
+/** Reads only the journaled host projection, without importing an owning mode package. */
+function planStateFromProjection(frame: SessionFrame | undefined): PlanSaveState {
+  if (frame === undefined) return 'unavailable';
+  const replayed = frame.frame;
+  const projected =
+    frame.type === REPLAY_TYPE && typeof replayed === 'object' && replayed !== null && !Array.isArray(replayed)
+      ? (replayed as SessionFrame)
+      : frame;
+  if (projected.type !== ENTRY_APPENDED_TYPE || typeof projected.entry !== 'object' || projected.entry === null) {
+    return 'unavailable';
+  }
+  const entry = projected.entry as Record<string, unknown>;
+  if (entry.type !== 'custom' || entry.customType !== MINOR_MODE_ENTRY_TYPE) return 'unavailable';
+  const data = entry.data;
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return 'unavailable';
+  const projection = data as Record<string, unknown>;
+  if (projection.version !== 1 || !Number.isInteger(projection.revision) || !Array.isArray(projection.modes)) {
+    return 'unavailable';
+  }
+  let planActivation: string | undefined;
+  for (const rawMode of projection.modes) {
+    if (typeof rawMode !== 'object' || rawMode === null || Array.isArray(rawMode)) return 'unavailable';
+    const mode = rawMode as Record<string, unknown>;
+    if (typeof mode.id !== 'string' || typeof mode.activation !== 'string' || !MODE_ACTIVATIONS.has(mode.activation)) {
+      return 'unavailable';
+    }
+    if (mode.id === 'plan') planActivation = mode.activation;
+  }
+  return planActivation === undefined || planActivation === 'inactive' ? 'allowed' : 'locked';
+}
 /**
  * Holds the hub's live view of every registered session.
  *
@@ -497,6 +535,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
     },
+    ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     onNotice: (message) => options.onNotice?.(message),
   });
 
@@ -612,6 +651,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
               ...(request.signal === undefined ? {} : { signal: request.signal }),
             });
           },
+          ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
           onNotice: (message) => options.onNotice?.(message),
         });
         managed.channels.push({ channel, frameType: channel.frameType, source, lifecycle: 'session' });
@@ -848,6 +888,10 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
             left.record.id.localeCompare(right.record.id),
         )
         .map(toSummary);
+    },
+    planSaveState(sessionId) {
+      const projection = sessions.get(sessionId)?.uiProjections.get(`entry:${MINOR_MODE_ENTRY_TYPE}`);
+      return planStateFromProjection(projection);
     },
     stop: stopSession,
     onEvent(listener) {

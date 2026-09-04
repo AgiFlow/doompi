@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { resetHarnessStore } from '@agimon-ai/doompi-config';
+import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-extension-contracts/author-facade';
 import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
@@ -178,6 +179,7 @@ function createExtensionFixture(
         ...askUserTools,
         'mcp',
         MINOR_MODE_TOOL_NAME,
+        ...AUTHOR_FACADE_TOOL_NAMES,
         ...VOICE_MODE_TOOL_NAMES,
         UNRELATED_TOOL_NAME,
         ...registeredTools.keys(),
@@ -1231,7 +1233,7 @@ describe('plan mode entry', () => {
     standardSession.dispose();
   });
 
-  it('keeps live voice tools and unrelated tools without resurrecting stale voice tools', async () => {
+  it('keeps live facade and unrelated tools without resurrecting stale facade tools', async () => {
     const fixture = createExtensionFixture(
       [],
       'Exit plan mode and start implementation',
@@ -1239,31 +1241,32 @@ describe('plan mode entry', () => {
       'plan-live-facades-session',
     );
     const unrelatedTool = UNRELATED_TOOL_NAME;
-    const voiceToolNames = new Set<string>(VOICE_MODE_TOOL_NAMES);
+    const facadeToolNames = [...AUTHOR_FACADE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES];
+    const facadeToolSet = new Set<string>(facadeToolNames);
     await fixture.handler('session_start')({}, fixture.ctx);
-    fixture.pi.setActiveTools([...fixture.activeTools(), unrelatedTool, ...VOICE_MODE_TOOL_NAMES]);
+    fixture.pi.setActiveTools([...fixture.activeTools(), unrelatedTool, ...facadeToolNames]);
 
     await fixture.invokeLeaderAction('plan.normal');
-    expect(fixture.activeTools()).toEqual(expect.arrayContaining([...VOICE_MODE_TOOL_NAMES, unrelatedTool]));
+    expect(fixture.activeTools()).toEqual(expect.arrayContaining([...facadeToolNames, unrelatedTool]));
     await expect(
       fixture.handler('tool_call')({ toolName: 'narrate', input: { text: 'Planning update.' } }, fixture.ctx),
     ).resolves.toBeUndefined();
 
-    fixture.pi.setActiveTools(fixture.activeTools().filter((name) => !voiceToolNames.has(name)));
+    fixture.pi.setActiveTools(fixture.activeTools().filter((name) => !facadeToolSet.has(name)));
     await fixture.invokeLeaderAction('plan.debug');
-    expect(fixture.activeTools()).not.toEqual(expect.arrayContaining([...VOICE_MODE_TOOL_NAMES]));
+    expect(fixture.activeTools()).not.toEqual(expect.arrayContaining(facadeToolNames));
     expect(fixture.activeTools()).not.toContain('narrate');
     expect(fixture.activeTools()).toContain(unrelatedTool);
 
     await fixture.invokeLeaderAction('plan.exit');
     expect(fixture.activeTools()).toContain(unrelatedTool);
-    expect(fixture.activeTools()).not.toEqual(expect.arrayContaining([...VOICE_MODE_TOOL_NAMES]));
+    expect(fixture.activeTools()).not.toEqual(expect.arrayContaining(facadeToolNames));
 
-    fixture.pi.setActiveTools([...fixture.activeTools(), ...VOICE_MODE_TOOL_NAMES]);
+    fixture.pi.setActiveTools([...fixture.activeTools(), ...facadeToolNames]);
     await fixture.invokeLeaderAction('plan.fable');
-    expect(fixture.activeTools()).toEqual(expect.arrayContaining([...VOICE_MODE_TOOL_NAMES]));
+    expect(fixture.activeTools()).toEqual(expect.arrayContaining(facadeToolNames));
     await fixture.invokeLeaderAction('plan.exit');
-    expect(fixture.activeTools()).toEqual(expect.arrayContaining([...VOICE_MODE_TOOL_NAMES]));
+    expect(fixture.activeTools()).toEqual(expect.arrayContaining(facadeToolNames));
   });
 
   it('toggles plan mode, blocks writes, constrains subagents, and restores tools', async () => {

@@ -30,6 +30,21 @@ export interface HubSessionApiRequest {
   signal?: AbortSignal;
 }
 
+export type ComputerUseHostOperation = 'status' | 'targets' | 'activate' | 'observe' | 'act' | 'stop';
+
+export interface ComputerUseHostRequest {
+  readonly operation: ComputerUseHostOperation;
+  readonly payload?: unknown;
+  readonly signal?: AbortSignal;
+}
+
+/** Narrow optional binding supplied only by a Desktop-owned cockpit hub. */
+export interface ComputerUseHostBinding {
+  readonly available: boolean;
+  request(scope: HubSessionScope, request: ComputerUseHostRequest): Promise<unknown>;
+  close?(): void;
+}
+
 export interface HubChannelConnection {
   /** Opaque for one page socket lifetime. */
   connectionId: string;
@@ -45,6 +60,8 @@ export interface HubChannelHost {
   publishToConnection?(connectionId: string, sessionId: string, payload: unknown): boolean;
   /** Authenticated machine-local transport to a session package API. */
   requestSessionApi(scope: HubSessionScope, request: HubSessionApiRequest): Promise<Response>;
+  /** Absent unless this exact hub is the child owned by DoomPi Desktop. */
+  computerUse?: ComputerUseHostBinding;
   onNotice(message: string): void;
 }
 

@@ -8,8 +8,10 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, StateEffect, StateField } from '@codemirror/state';
 import {
+  Decoration,
+  type DecorationSet,
   drawSelection,
   EditorView,
   highlightActiveLine,
@@ -19,8 +21,9 @@ import {
   rectangularSelection,
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { useEffect, useRef } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
+import { boundedEditorEdits, boundedEditorRanges } from '../lib/editorController.ts';
 import { grammarKeyOf, loadGrammar } from '../lib/editorLanguage.ts';
 import { DOOM_EDITOR_STYLES, DOOM_SYNTAX_STYLES } from '../lib/editorTheme.ts';
 import type { CodeEditorProps } from '../types/editor.ts';
@@ -66,6 +69,19 @@ const DOOM_HIGHLIGHT = HighlightStyle.define([
   { tag: tags.invalid, ...DOOM_SYNTAX_STYLES.invalid },
 ]);
 
+const setClosedDecorations = StateEffect.define<DecorationSet>();
+const closedDecorations = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (decorations, transaction) => {
+    let next = decorations.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (effect.is(setClosedDecorations)) next = effect.value;
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
 /** Everything that never changes for the life of an editor. */
 const FIXED_EXTENSIONS = [
   lineNumbers(),
@@ -84,6 +100,7 @@ const FIXED_EXTENSIONS = [
   // the keymap and Escape then Tab still moves focus out.
   keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
   syntaxHighlighting(DOOM_HIGHLIGHT),
+  closedDecorations,
   DOOM_THEME,
 ];
 
@@ -95,6 +112,7 @@ export function CodeEditorView({
   className,
   onChange,
   onSelect,
+  controllerRef,
   'data-testid': testId,
 }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
@@ -116,7 +134,7 @@ export function CodeEditorView({
     handlers.current = { onChange, onSelect };
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const parent = host.current;
     if (parent === null) return;
     const { language, readOnly: readOnlyPart, wrapping } = compartments.current;
@@ -153,6 +171,45 @@ export function CodeEditorView({
     };
     // Built once.
   }, []);
+
+  useImperativeHandle(
+    controllerRef,
+    () => ({
+      focus: () => view.current?.focus(),
+      revealAndSelect: (range) => {
+        const editor = view.current;
+        if (editor === null) return;
+        const [bounded] = boundedEditorRanges(editor.state.doc.length, [range]);
+        if (bounded === undefined) return;
+        editor.dispatch({
+          selection: { anchor: bounded.from, head: bounded.to },
+          effects: EditorView.scrollIntoView(bounded.from, { y: 'center' }),
+        });
+      },
+      applyEdits: (edits) => {
+        const editor = view.current;
+        if (editor === null || edits.length === 0) return;
+        editor.dispatch({ changes: boundedEditorEdits(editor.state.doc.length, edits) });
+      },
+      setClosedRanges: (ranges) => {
+        const editor = view.current;
+        if (editor === null) return;
+        const bounded = boundedEditorRanges(editor.state.doc.length, ranges);
+        const decorations = bounded.map((range) =>
+          range.from === range.to
+            ? Decoration.line({ attributes: { class: 'cm-closed-tone', 'data-tone': 'closed' } }).range(
+                editor.state.doc.lineAt(range.from).from,
+              )
+            : Decoration.mark({ class: 'cm-closed-tone', attributes: { 'data-tone': 'closed' } }).range(
+                range.from,
+                range.to,
+              ),
+        );
+        editor.dispatch({ effects: setClosedDecorations.of(Decoration.set(decorations)) });
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     const editor = view.current;

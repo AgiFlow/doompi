@@ -2,7 +2,12 @@ export { spawnAgentProcess } from '../adapters/agentProcess.ts';
 // The protocol surface, published so a client can compose the same session
 // server it dials rather than reimplementing the projection behind it.
 export { createAgentServerService, createAgentSessionRuntime } from '../adapters/piSessionRuntime.ts';
-export type { AgentServerServiceOptions, AgentSessionRuntimeOptions } from '../adapters/piSessionRuntime.ts';
+export type {
+  AgentServerServiceOptions,
+  AgentSessionRuntime,
+  AgentSessionRuntimeOptions,
+  DoomSessionMetadata,
+} from '../adapters/piSessionRuntime.ts';
 export { serveProtocolSocket } from '../adapters/protocolSocket.ts';
 export type { ProtocolSocket, ProtocolSocketOptions } from '../adapters/protocolSocket.ts';
 export { createRpcTranscript } from '../services/rpcTranscript.ts';

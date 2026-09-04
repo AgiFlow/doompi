@@ -3,7 +3,21 @@ export { defineGlobalStore } from '../services/globalStore.ts';
 export { defineSessionStore } from '../services/sessionStore.ts';
 export { toolResultText, toolResultTextLines } from '../services/toolResult.ts';
 export type {
+  ModelContext,
+  ModelContextAbortSignal,
+  ModelContextBinding,
+  ModelContextExecutionOptions,
+  ModelContextRegistrationOptions,
+  ModelContextTool,
+  ModelContextToolChangeEvent,
+  ModelContextToolChangeListener,
+  ModelContextToolDescriptor,
+} from '../types/modelContext.ts';
+export type {
   ChannelFrame,
+  ComputerUseHostBinding,
+  ComputerUseHostOperation,
+  ComputerUseHostRequest,
   HubChannelConnection,
   HubChannelHost,
   HubChannelLifecycle,
@@ -29,6 +43,7 @@ export type {
   SessionFrameSender,
   SessionRecords,
   SessionStore,
+  ComposerCapture,
   SessionStoreChannel,
   SlotDataFill,
   SlotDeclaration,

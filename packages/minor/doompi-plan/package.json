@@ -110,7 +110,7 @@
     "hono": "4.13.5"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-coding-agent": "0.85.0",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.4.0",
@@ -123,7 +123,7 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.4"
+    "@earendil-works/pi-coding-agent": "0.85.0"
   },
   "engines": {
     "node": ">=22.19.0"

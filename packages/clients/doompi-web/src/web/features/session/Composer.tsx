@@ -23,7 +23,9 @@ import {
   type ComposerAttachment,
   type ComposerImageAttachment,
   MAX_COMPOSER_ATTACHMENTS,
+  MAX_COMPOSER_IMAGE_BYTES,
   MAX_COMPOSER_TEXT_BYTES,
+  MAX_COMPOSER_TOTAL_IMAGE_BYTES,
   MAX_COMPOSER_TOTAL_TEXT_BYTES,
   updateComposerState,
   useComposerState,
@@ -56,8 +58,6 @@ const SKILL_PREFIX = 'skill:';
 type CompletionKind = 'command' | 'skill' | 'file';
 const TRIGGER_CHARS: Record<CompletionKind, string> = { command: '/', skill: '$', file: '@' };
 const FILE_SEARCH_DEBOUNCE_MS = 150;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const TEXT_EXTENSIONS = new Set([
   'c',
@@ -346,11 +346,11 @@ export function Composer() {
         }
         const id = `attachment-${String(attachmentId++)}`;
         if (IMAGE_TYPES.has(file.type)) {
-          if (file.size > MAX_IMAGE_BYTES) {
+          if (file.size > MAX_COMPOSER_IMAGE_BYTES) {
             rejected.push(`${file.name} exceeds the 10 MB image limit.`);
             continue;
           }
-          if (imageBytes + file.size > MAX_TOTAL_IMAGE_BYTES) {
+          if (imageBytes + file.size > MAX_COMPOSER_TOTAL_IMAGE_BYTES) {
             rejected.push(`${file.name} exceeds the 20 MB total image limit.`);
             continue;
           }

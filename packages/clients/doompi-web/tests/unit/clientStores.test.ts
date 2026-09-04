@@ -855,12 +855,14 @@ describe('transient tabs', () => {
 
   it('opens once per id, closes, and leaves with its session', () => {
     const Panel = (): null => null;
-    const tab = { id: 'owner-x-1', label: 'x', panel: Panel };
+    const tab = { id: 'owner-x-1', label: 'x', panel: Panel, retainComposer: true };
     openTransientTab('s1', tab);
-    openTransientTab('s1', { ...tab, label: 'replaced' });
+    openTransientTab('s1', { ...tab, label: 'replaced', retainComposer: false });
     openTransientTab('s2', { id: 'owner-y-1', label: 'y', panel: Panel });
     expect(transientTabsOf(transientTabsStore.state, 's1')).toEqual([tab]);
     expect(findTransientTab(transientTabsStore.state, 's1', 'owner-x-1')).toBe(tab);
+    expect(findTransientTab(transientTabsStore.state, 's1', 'owner-x-1')?.retainComposer).toBe(true);
+    expect(findTransientTab(transientTabsStore.state, 's2', 'owner-y-1')?.retainComposer).toBeUndefined();
     expect(findTransientTab(transientTabsStore.state, 's1', 'owner-y-1')).toBeUndefined();
     expect(findTransientTab(transientTabsStore.state, undefined, 'owner-x-1')).toBeUndefined();
 

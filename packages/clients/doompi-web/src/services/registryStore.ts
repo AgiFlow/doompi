@@ -77,6 +77,9 @@ export function parseSessionRecord(raw: string): SessionRecord | undefined {
     ...(typeof record.protocolSocketPath === 'string' && record.protocolSocketPath !== ''
       ? { protocolSocketPath: record.protocolSocketPath }
       : {}),
+    ...(typeof record.protocolServerId === 'string' && record.protocolServerId !== ''
+      ? { protocolServerId: record.protocolServerId }
+      : {}),
     pid: record.pid,
     createdAt: record.createdAt as string,
   };

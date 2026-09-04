@@ -158,6 +158,7 @@ async function main(): Promise<number> {
         tokenFile: path.resolve(options.tokenFile),
         ...(apis.socketPath === undefined ? {} : { apiSocketPath: apis.socketPath }),
         protocolSocketPath: protocol.socketPath,
+        protocolServerId: protocol.serverId,
         pid: process.pid,
         createdAt: new Date().toISOString(),
       });

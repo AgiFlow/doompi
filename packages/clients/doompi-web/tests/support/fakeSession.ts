@@ -3,7 +3,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { createAgentServerService, serveProtocolSocket } from '@agimon-ai/doompi-server';
-import type { SessionSnapshot, TranscriptItem } from '@earendil-works/pi-protocol';
+import type { SessionSnapshot, TranscriptItem } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 export type Frame = Record<string, unknown>;
 type ToolContent = Extract<TranscriptItem, { role: 'tool' }>['content'];
 export interface FakeSession {
@@ -389,6 +389,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
         socketPath,
         tokenFile,
         protocolSocketPath: protocolSocket.socketPath,
+        protocolServerId: protocolSocket.serverId,
         ...(options.apiSocketPath === undefined ? {} : { apiSocketPath: options.apiSocketPath }),
         pid: options.pid ?? process.pid,
         createdAt: new Date().toISOString(),

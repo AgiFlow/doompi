@@ -79,8 +79,8 @@ describe('doom voice package boundary', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig?.access).toBe('public');
-    expect(manifest.peerDependencies?.[piPackage]).toBe('0.84.4');
-    expect(manifest.devDependencies?.[piPackage]).toBe('0.84.4');
+    expect(manifest.peerDependencies?.[piPackage]).toBe('0.85.0');
+    expect(manifest.devDependencies?.[piPackage]).toBe('0.85.0');
     expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.6');
   });
 

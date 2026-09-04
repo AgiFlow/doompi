@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
+import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend.ts';
 import { freePort, portIsFree, startHub } from '../adapters/hubProcess.ts';
 import { createMainWindow, showCockpit } from '../adapters/mainWindow.ts';
+import { ComputerUseHost } from '../services/computerUseHost.ts';
 import { assertSocketHeadroom, DEFAULT_PORT, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch.ts';
 import type { RunningHub } from '../types/hub.ts';
 
@@ -81,7 +84,44 @@ async function start(): Promise<void> {
   const window = createMainWindow({ preloadPath, startupIconPath: startupIconPath() });
   const registryDir = registryDirectory();
   assertSocketHeadroom(registryDir);
-
+  const computerUseHost =
+    app.isPackaged && process.platform === 'darwin'
+      ? new ComputerUseHost({
+          backend: createMacOsComputerUseBackend(),
+          hostGeneration: randomUUID(),
+          now: Date.now,
+          newId: randomUUID,
+          confirmLocalActivation: async ({ applicationName, windowTitle, durationSeconds }) => {
+            const result = await dialog.showMessageBox(window, {
+              type: 'warning',
+              title: 'Confirm computer control',
+              message: `Allow DoomPi to control ${applicationName}?`,
+              detail: `Window: ${windowTitle}\nDuration: ${String(durationSeconds)} seconds\n\nOnly the current agent session receives control.`,
+              buttons: ['Allow', 'Cancel'],
+              defaultId: 1,
+              cancelId: 1,
+              noLink: true,
+            });
+            return result.response === 0;
+          },
+        })
+      : undefined;
+  if (computerUseHost !== undefined) {
+    const menu = Menu.getApplicationMenu() ?? new Menu();
+    menu.append(
+      new MenuItem({
+        label: 'Computer Use',
+        submenu: [
+          {
+            label: 'Stop Computer Use',
+            accelerator: 'CmdOrCtrl+Shift+Escape',
+            click: () => void computerUseHost.stopActive().catch((error: unknown) => notice(String(error))),
+          },
+        ],
+      }),
+    );
+    Menu.setApplicationMenu(menu);
+  }
   hub = await startHub(
     {
       entry: launchHubEntry(),
@@ -91,6 +131,7 @@ async function start(): Promise<void> {
       cwd: os.homedir(),
     },
     notice,
+    computerUseHost,
   );
 
   if (!window.isDestroyed()) showCockpit(window, hub.url);

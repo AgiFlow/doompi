@@ -1,0 +1,114 @@
+{
+  "name": "@agimon-ai/doompi-computer-use",
+  "version": "0.0.0",
+  "description": "Session scoped semantic computer control through the DoomPi Desktop capability.",
+  "keywords": [
+    "coding-agent",
+    "computer-use",
+    "doompi",
+    "pi-coding-agent",
+    "pi-extension",
+    "pi-package",
+    "typescript"
+  ],
+  "homepage": "https://agimon.ai",
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "files": [
+    "dist",
+    "src/web",
+    "src/types/computerUse.ts",
+    "src/types/computerUseApi.ts",
+    "src/exports/webClient.ts",
+    "src/prompts",
+    "llms.txt",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./session-api": {
+      "types": "./dist/sessionApi.d.mts",
+      "import": "./dist/sessionApi.mjs",
+      "require": "./dist/sessionApi.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.85.0",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@vitest/coverage-v8": "4.1.11",
+    "react": "19.2.8",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "computer-use",
+    "session": {
+      "entry": "./src/exports/sessionApi.ts",
+      "dist": "./dist/sessionApi.mjs"
+    }
+  },
+  "doompiWeb": {
+    "pluginId": "computer-use",
+    "channels": [
+      "computer_use_state"
+    ],
+    "client": "./src/exports/webClient.ts",
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "dist": "./dist/webHub.mjs"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

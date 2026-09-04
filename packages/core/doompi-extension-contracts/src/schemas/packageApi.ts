@@ -32,6 +32,39 @@ export const DOOM_API_SOCKET_ENV = 'DOOMPI_SESSION_API_SOCKET';
 /** Bearer token for agent-only routes on a session API socket. */
 export const DOOM_API_INTERNAL_TOKEN_ENV = 'DOOMPI_SESSION_API_INTERNAL_TOKEN';
 
+/** Trusted caller headers written only by the cockpit-to-session proxy. */
+export const DOOM_API_CALLER_LOCALITY_HEADER = 'x-doompi-api-caller-locality';
+export const DOOM_API_CALLER_DEVICE_ID_HEADER = 'x-doompi-api-caller-device-id';
+export const DOOM_API_CALLER_STEP_UP_HEADER = 'x-doompi-api-caller-step-up';
+export const DOOM_API_CALLER_HEADERS = [
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_DEVICE_ID_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
+] as const;
+
+export type DoomApiCallerStepUp = 'not-required' | 'verified' | 'unavailable';
+export type DoomApiCaller =
+  | { locality: 'local'; stepUp: 'not-required' }
+  | { locality: 'remote'; deviceId: string; stepUp: DoomApiCallerStepUp };
+
+/** Reads the proxy-authenticated caller identity, rejecting partial or contradictory stamps. */
+export function doomApiCallerFrom(headers: Headers): DoomApiCaller | undefined {
+  const locality = headers.get(DOOM_API_CALLER_LOCALITY_HEADER);
+  const deviceId = headers.get(DOOM_API_CALLER_DEVICE_ID_HEADER);
+  const stepUp = headers.get(DOOM_API_CALLER_STEP_UP_HEADER);
+  if (locality === 'local') {
+    return deviceId === null && stepUp === 'not-required' ? { locality, stepUp } : undefined;
+  }
+  if (
+    locality === 'remote' &&
+    deviceId !== null &&
+    deviceId !== '' &&
+    (stepUp === 'not-required' || stepUp === 'verified' || stepUp === 'unavailable')
+  ) {
+    return { locality, deviceId, stepUp };
+  }
+  return undefined;
+}
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;

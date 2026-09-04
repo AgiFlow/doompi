@@ -3,7 +3,7 @@ import type {
   ToolTranscriptItem,
   TranscriptItem,
   UserTranscriptItem,
-} from '@earendil-works/pi-protocol';
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 import {
   imagesFromContent,

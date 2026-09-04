@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { hubArguments, hubEnvironment } from '../services/hubLaunch.ts';
+import type { ComputerUseHost } from '../services/computerUseHost.ts';
 import type { HubLaunchPlan, RunningHub } from '../types/hub.ts';
+import { attachComputerUseHostBridge } from './computerUseHostBridge.ts';
 
 const HEALTH_TIMEOUT_MS = 10 * 60_000;
 const HEALTH_POLL_MS = 150;
@@ -91,6 +93,7 @@ export function nodeRuntimeExecutable(
 export async function startHub(
   plan: HubLaunchPlan,
   onNotice: (message: string) => void = () => {},
+  computerUseHost?: ComputerUseHost,
 ): Promise<RunningHub> {
   const url = `http://${plan.host}:${String(plan.port)}`;
   if (await cockpitAnswers(plan.host, plan.port)) {
@@ -101,20 +104,24 @@ export async function startHub(
   const child = spawn(nodeRuntimeExecutable(process.execPath), hubArguments(plan), {
     cwd: plan.cwd,
     env: hubEnvironment(process.env, plan.entry),
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
+  const computerUseBridge =
+    computerUseHost === undefined ? undefined : attachComputerUseHostBridge(child, computerUseHost, onNotice);
   child.stdout?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
   child.stderr?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
 
   try {
     await waitForHealth(plan.host, plan.port, child);
   } catch (error) {
+    await computerUseBridge?.close();
     child.kill('SIGKILL');
     throw error;
   }
   onNotice(`cockpit serving at ${url}`);
 
   const stop = async (): Promise<void> => {
+    await computerUseBridge?.close();
     if (child.exitCode !== null || child.signalCode !== null) return;
     const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
     child.kill('SIGTERM');
