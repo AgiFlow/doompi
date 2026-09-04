@@ -133,7 +133,7 @@ jobs:
         run: pnpm --filter @agimon-ai/doompi-desktop exec playwright install-deps
 
       - name: Drive the desktop app in Electron
-        run: pnpm nx run @agimon-ai/doompi-desktop:test:e2e
+        run: xvfb-run -a pnpm nx run @agimon-ai/doompi-desktop:test:e2e
 
       - name: Keep the traces of a failed run
         if: failure()
