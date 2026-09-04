@@ -391,6 +391,7 @@ test('code results wear the editor grammar and log output keeps its own colours'
     isError: false,
   });
 
+  await page.getByTestId('tool-expand').click();
   // The grammar loads in its own chunk, so the plain text paints first and the
   // colours arrive after; the palette is the editor's, named as theme tokens.
   const comment = page.locator('[data-testid="tool-result-read"] span[style*="--doom-faint"]');
@@ -412,9 +413,12 @@ test('code results wear the editor grammar and log output keeps its own colours'
     result: { content: [{ type: 'text', text: tail }], details: { tail, tailLines: 1, exitCode: 0 } },
     isError: false,
   });
-  await page.getByTestId('tool-expand').last().click();
-  await expect(page.locator('[data-testid="tool-result-bash-output"] span.text-doom-red')).toHaveText('Error:');
-  await expect(page.getByTestId('tool-result-bash-output')).not.toContainText('[31m');
+  const bashCard = page.locator('[data-testid="entry-tool"][data-tool-name="bash"]');
+  await expect(bashCard).toHaveAttribute('data-tool-state', 'ok');
+  const bashOutput = bashCard.getByTestId('tool-result-bash-output');
+  if (!(await bashOutput.isVisible())) await bashCard.getByTestId('tool-expand').click();
+  await expect(bashOutput.locator('span.text-doom-red')).toHaveText('Error:');
+  await expect(bashOutput).not.toContainText('[31m');
 });
 
 test('a run of calls to one tool shares a frame, and a lone call keeps its card', async ({ page, cockpit }) => {

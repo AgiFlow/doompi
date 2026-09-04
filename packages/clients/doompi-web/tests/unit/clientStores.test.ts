@@ -525,13 +525,26 @@ describe('promptFocus', () => {
     expect(focused).toBe(1);
     expect(selections).toEqual([[3, 3]]);
 
+    let replacementFocused = 0;
+    const replacement = {
+      disabled: false,
+      focus: () => (replacementFocused += 1),
+      setSelectionRange: () => undefined,
+    } as unknown as HTMLTextAreaElement;
+    const releaseReplacement = registerPromptInput(replacement);
+    release();
+    focusPrompt();
+    expect(replacementFocused).toBe(1);
+    releaseReplacement();
+    registerPromptInput(input);
     // A composer with no session behind it cannot take the caret.
     (input as unknown as { disabled: boolean }).disabled = true;
     focusPrompt();
     expect(focused).toBe(1);
 
     (input as unknown as { disabled: boolean }).disabled = false;
-    release();
+    const finalRelease = registerPromptInput(input);
+    finalRelease();
     focusPrompt();
     expect(focused).toBe(1);
 

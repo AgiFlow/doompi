@@ -60,9 +60,19 @@ describe('browser notification delivery', () => {
     ]);
   });
 
-  it('returns silent outcomes when delivery is unavailable or not granted', () => {
-    expect(deliverBrowserNotification('s', 'e', data)).toBe('unsupported');
+  it('uses compact fallback copy when optional notification labels are empty', () => {
+    vi.stubGlobal('Notification', FakeNotification);
 
+    expect(deliverBrowserNotification('s', 'e', { ...data, title: '', subtitle: '' })).toBe('delivered');
+    expect(FakeNotification.seen).toEqual([
+      { title: 'DoomPi', options: { body: 'All checks passed.', tag: 'doompi:s:e' } },
+    ]);
+  });
+
+  it('returns silent outcomes when delivery is unavailable or not granted', async () => {
+    expect(browserNotificationPermission()).toBe('unsupported');
+    await expect(requestBrowserNotificationPermission()).resolves.toBe('unsupported');
+    expect(deliverBrowserNotification('s', 'e', data)).toBe('unsupported');
     vi.stubGlobal('Notification', FakeNotification);
     FakeNotification.permission = 'default';
     expect(deliverBrowserNotification('s', 'e', data)).toBe('permission-default');

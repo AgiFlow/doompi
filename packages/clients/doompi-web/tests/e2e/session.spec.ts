@@ -47,23 +47,26 @@ test('renders a tool call from running to finished', async ({ page, cockpit }) =
   const card = page.getByTestId('entry-tool');
   await expect(card).toHaveAttribute('data-tool-state', 'running');
   await expect(card).toContainText('pnpm nx test doompi');
-
+  await card.getByTestId('tool-expand').click();
   cockpit.session.emit({
     type: 'tool_execution_update',
     toolCallId: 'call-1',
     partialResult: { content: [{ type: 'text', text: 'running 4 tests' }] },
   });
-  await expect(page.getByTestId('tool-output')).toContainText('running 4 tests');
+  await expect(page.getByTestId('tool-result-bash-output')).toContainText('running 4 tests');
 
   cockpit.session.emit({
     type: 'tool_execution_end',
     toolCallId: 'call-1',
-    result: { content: [{ type: 'text', text: 'Tests 11 passed (11)' }] },
+    result: {
+      content: [{ type: 'text', text: 'Tests 11 passed (11)' }],
+      details: { tail: 'Tests 11 passed (11)', tailLines: 1, exitCode: 0 },
+    },
     isError: false,
   });
 
   await expect(card).toHaveAttribute('data-tool-state', 'ok');
-  await expect(page.getByTestId('tool-output')).toContainText('11 passed');
+  await expect(page.getByTestId('tool-result-bash-output')).toContainText('11 passed');
 });
 
 test('marks a failed tool call as an error', async ({ page, cockpit }) => {
