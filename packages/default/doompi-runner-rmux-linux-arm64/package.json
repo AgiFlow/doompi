@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-runner-rmux-linux-arm64",
-  "version": "0.0.1-alpha.50",
+  "version": "0.0.1-alpha.51",
   "description": "Prebuilt RMUX runtime for DoomPi Runner on Linux arm64.",
   "keywords": [
     "ai",

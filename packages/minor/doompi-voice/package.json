@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-voice",
-  "version": "0.0.1-alpha.53",
+  "version": "0.0.1-alpha.54",
   "description": "Client audio capture, host transcription, and autonomous narration for Pi agents.",
   "keywords": [
     "ai",

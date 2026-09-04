@@ -1,3 +1,34 @@
+## 0.0.1-alpha.15 (2026-09-04)
+
+### 🚀 Features
+
+- **doompi:** improve background work and CI ([09a53a1](https://github.com/AgiFlow/doompi/commit/09a53a1))
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+- improve interactive session recovery ([2cf4dfb](https://github.com/AgiFlow/doompi/commit/2cf4dfb))
+- improve interactive session recovery ([c364797](https://github.com/AgiFlow/doompi/commit/c364797))
+
+### 🩹 Fixes
+
+- **doompi:** harden contended CI gates ([906e170](https://github.com/AgiFlow/doompi/commit/906e170))
+- harden interactive recovery edge cases ([be771d2](https://github.com/AgiFlow/doompi/commit/be771d2))
+- harden packaged runtime startup ([c097375](https://github.com/AgiFlow/doompi/commit/c097375))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.17
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.53
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.14
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.17
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.15
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.50
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.14 (2026-09-03)
 
 ### 🩹 Fixes

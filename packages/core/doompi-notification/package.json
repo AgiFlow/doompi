@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-notification",
-  "version": "0.0.1-alpha.30",
+  "version": "0.0.1-alpha.31",
   "description": "Desktop notifications and an animated shell-tab title for DoomPi sessions.",
   "keywords": [
     "ai",
