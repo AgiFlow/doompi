@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { openCatalog, workflowCatalogChannel } from './catalogStore.ts';
+import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from './catalogStore.ts';
 import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
 import { workflowsTab } from './WorkflowsPanel.tsx';
 import { WorkflowToolMessage } from './WorkflowToolMessage.tsx';
@@ -23,6 +23,16 @@ export const webPlugin = defineWebPlugin({
   // No declared tab: the runs surface is a panel the reader opens from the
   // dock's workflows group, and closes when they are done with it.
   channels: [workflowRunsChannel, workflowCatalogChannel],
+  contextActions: [
+    {
+      id: 'launch-workflow',
+      label: 'Launch Workflow',
+      detail: 'Choose a workflow, review its inputs, then launch it.',
+      kinds: ['work-item'],
+      order: 20,
+      run: (context) => openWorkflowCatalogForContext(context, workflowsTab),
+    },
+  ],
   minorModes: [{ name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress', order: 50 }],
   activityGroups: [
     {

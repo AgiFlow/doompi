@@ -97,6 +97,32 @@ export interface ThreadViewOptions {
   /** Card scale: tighter spacing, no history paging, no jump control. */
   compact?: boolean;
 }
+
+/** Structured, browser-safe context one plugin may hand to the composer or another plugin. */
+export interface WebPluginContextItem {
+  /** Shared semantic kind, such as `work-item`; consumers opt into the kinds they understand. */
+  kind: string;
+  /** Stable source namespace, such as `agiflow`. */
+  source: string;
+  /** Stable identity inside the source namespace. */
+  id: string;
+  /** Compact human label shown on a composer chip. */
+  label: string;
+  /** Model-facing context carried by the chip and handed to context actions. */
+  content: string;
+  /** Optional browser-safe destination for actions that need the source record. */
+  url?: string;
+}
+
+/** One installed action another plugin may offer for a compatible context item. */
+export interface ContextAction {
+  /** Namespaced at install as `<pluginId>.<id>`. */
+  id: string;
+  label: string;
+  detail?: string;
+  run(): void;
+}
+
 /** Every slot component receives the focused session; null while nothing is focused. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
@@ -120,6 +146,10 @@ export interface WebPluginSlotProps {
   renderThread: (threadId: string, options?: ThreadViewOptions) => ReactNode;
   /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */
   appendComposerDraft: (text: string) => void;
+  /** Adds browser-safe structured context as a removable chip without changing the visible draft. */
+  attachComposerContext: (item: WebPluginContextItem) => void;
+  /** Actions installed independent plugins offer for this context item, in display order. */
+  contextActionsFor: (item: WebPluginContextItem) => readonly ContextAction[];
   /** The same sender palette commands and `start` receive; components act through it. */
   sendSessionFrame: SessionFrameSender;
   /** The component fills of one slot, in slot order; the host resolves them, so this contract holds no state. */
@@ -286,6 +316,24 @@ export interface PaletteCommandContribution {
   title: string;
   description?: string;
   run(context: PaletteCommandContext): void;
+}
+
+/** Host actions and the item handed to one independent plugin's contextual action. */
+export interface ContextActionRunContext extends PaletteCommandContext {
+  item: WebPluginContextItem;
+}
+
+/** A contextual action a plugin contributes for semantic item kinds it understands. */
+export interface ContextActionContribution {
+  /** Unique inside this plugin. */
+  id: string;
+  label: string;
+  detail?: string;
+  /** Semantic kinds this action accepts, such as `work-item`. */
+  kinds: readonly string[];
+  /** Lower values appear first, then plugin id and action id. */
+  order?: number;
+  run(context: ContextActionRunContext): void;
 }
 /**
  * One step of a Leader Space key path: the key pressed and the label the
@@ -581,8 +629,12 @@ export interface WebPluginDefinition {
   activityGroups?: ActivityGroupContribution[];
   overlays?: SurfaceContribution[];
   paletteCommands?: PaletteCommandContribution[];
+  /** Actions this plugin offers when another plugin presents compatible structured context. */
+  contextActions?: ContextActionContribution[];
   leaderBindings?: LeaderBindingContribution[];
   railSections?: SurfaceContribution[];
+  /** Sections placed before the host's built-in Context composition groups. */
+  contextSections?: SurfaceContribution[];
   selectionBarItems?: SurfaceContribution[];
   /** Compact controls placed in the mobile composer's action row, immediately before queue. */
   composerActions?: SurfaceContribution[];

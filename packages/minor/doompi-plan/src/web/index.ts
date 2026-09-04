@@ -2,6 +2,7 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { PLAN_STATUS_KEY } from '../types/planApi.ts';
 import { PlanActivitySection } from './PlanActivitySection.tsx';
 import { planSettingsSection } from './planSettings.ts';
+import { claimsPlanReviewPrompt, PlanReviewPrompt } from './PlanReviewPrompt.tsx';
 import { PlanToolMessage } from './PlanToolMessage.tsx';
 import { PLAN_TOOL_NAMES } from './planToolRender.ts';
 
@@ -27,8 +28,15 @@ export const webPlugin = defineWebPlugin({
   // The same five fields the TUI's SPC e c panel draws, from one descriptor
   // table; the host renders them and owns which config file an edit lands in.
   settingsSections: [planSettingsSection],
-  // The plan tools' timeline cards; the TUI leaves these on Pi's default shell.
-  toolRenderers: [{ tools: [...PLAN_TOOL_NAMES], message: PlanToolMessage }],
+  // The complete_plan selector takes over the composer so the plan remains visible
+  // while the reader decides whether implementation should begin.
+  toolRenderers: [
+    {
+      tools: [...PLAN_TOOL_NAMES],
+      message: PlanToolMessage,
+      prompt: { claims: claimsPlanReviewPrompt, component: PlanReviewPrompt },
+    },
+  ],
   // The TUI's SPC p e through /minor, which asks for the flavor; the direct
   // debug (p d) and fable (p f) keys are leader actions the RPC road lacks.
   leaderBindings: [

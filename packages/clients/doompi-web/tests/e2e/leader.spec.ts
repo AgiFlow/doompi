@@ -14,8 +14,10 @@ const COMMANDS = {
   },
 };
 
-test.describe('with the package bundle, which installs no plugins', () => {
-  test('says so when no package registered leader keys', async ({ page, cockpit }) => {
+test.describe('with the packaged shell and synchronized session plugins', () => {
+  test.use({ assets: 'packaged' });
+
+  test('loads leader keys from the session composition', async ({ page, cockpit }) => {
     await page.goto(cockpit.url);
     await cockpit.session.waitForCommand('get_commands');
     cockpit.session.emit(COMMANDS);
@@ -23,8 +25,8 @@ test.describe('with the package bundle, which installs no plugins', () => {
     await page.keyboard.press('Control+k');
 
     await expect(page.getByTestId('palette')).toBeVisible();
-    await expect(page.getByTestId('palette-empty')).toBeVisible();
-    await expect(page.getByTestId('palette-count')).toHaveText('0');
+    await expect(page.locator('[data-testid^="palette-item-"][data-key="a"]')).toHaveCount(1);
+    await expect(page.getByTestId('palette-count')).not.toHaveText('0');
   });
 
   test('slash searches the commands the session reports and runs one as a slash prompt', async ({ page, cockpit }) => {

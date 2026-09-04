@@ -1,3 +1,4 @@
+import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-extension-contracts/background-work';
 import type {
   AgentToolResult,
   ExtensionAPI,
@@ -70,7 +71,21 @@ type RunOrigin = 'manual' | 'automatic';
 type AgentEndEventLike = { messages?: readonly unknown[] };
 type CompactEventLike = { reason?: string; willRetry?: boolean };
 type CompactState = { goalId: string; hadAutomaticRun: boolean; willRetry: boolean };
-
+type BackgroundWorkBinding = {
+  readonly token: symbol;
+  readonly service: DoomBackgroundWorkService;
+  readonly serviceGeneration: string;
+};
+type ContinuationLease = {
+  readonly managerGeneration: number;
+  readonly continuationGeneration: number;
+  readonly executionGeneration: number;
+  readonly goalId?: string;
+  readonly runGoalId?: string;
+  readonly sessionId?: string;
+  readonly backgroundToken?: symbol;
+  readonly backgroundServiceGeneration?: string;
+};
 export interface GoalStateEvent {
   readonly goalId: string;
   readonly status: string;
@@ -78,8 +93,12 @@ export interface GoalStateEvent {
   readonly summary?: string;
 }
 
-function messageResult(text: string, isError = false): ToolResult {
-  return { content: [{ type: 'text', text }], details: { error: isError } };
+function messageResult(text: string, isError = false, terminate = false): ToolResult {
+  return {
+    content: [{ type: 'text', text }],
+    details: { error: isError },
+    ...(terminate ? { terminate: true } : {}),
+  };
 }
 
 function errorText(error: unknown): string {
@@ -109,9 +128,11 @@ export class GoalPiManager {
   private lastGoalId?: string;
   private runToolAttempted = false;
   private disposed = false;
+  private backgroundWork?: BackgroundWorkBinding;
+  private observedBackgroundWork = false;
+  private continuationGeneration = 0;
   private readonly disposers: Array<() => void> = [];
   private readonly stateListeners = new Set<(event: GoalStateEvent) => void>();
-
   constructor(pi: ExtensionAPI, dependencies?: GoalExtensionDependencies, legacyCommandService?: GoalExtensionService) {
     this.pi = pi;
     this.dependencies = dependencies;
@@ -128,6 +149,29 @@ export class GoalPiManager {
   public subscribeState(listener: (event: GoalStateEvent) => void): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
+  }
+
+  public bindBackgroundWork(service: DoomBackgroundWorkService): () => void {
+    this.observedBackgroundWork = true;
+    const binding: BackgroundWorkBinding = {
+      token: Symbol(service.generation),
+      service,
+      serviceGeneration: service.generation,
+    };
+    this.backgroundWork = binding;
+    this.invalidateContinuation();
+    if (this.context) this.scheduleContinuation(this.context);
+    return () => {
+      if (this.backgroundWork?.token !== binding.token) return;
+      this.backgroundWork = undefined;
+      this.invalidateContinuation();
+    };
+  }
+
+  public backgroundWorkChanged(service: DoomBackgroundWorkService): void {
+    const binding = this.backgroundWork;
+    if (!binding || binding.service !== service || binding.serviceGeneration !== service.generation) return;
+    if (this.context) this.scheduleContinuation(this.context);
   }
 
   public async startFromLeader(ctx: ExtensionContext): Promise<void> {
@@ -220,6 +264,9 @@ export class GoalPiManager {
       this.compactState = undefined;
       this.deactivateTools();
     });
+    this.pi.on('input', () => {
+      this.invalidateContinuation();
+    });
     this.pi.on('before_agent_start', (event, ctx) => {
       if (!this.isCurrent(ctx)) return undefined;
       const goal = this.runtime.snapshot().goal;
@@ -233,6 +280,7 @@ export class GoalPiManager {
     });
     this.pi.on('agent_start', (_event, ctx) => {
       if (!this.isCurrent(ctx)) return;
+      this.invalidateContinuation();
       const goal = this.runtime.snapshot().goal;
       this.runGoalId = goal?.status === 'active' ? goal.id : undefined;
       this.runOrigin = this.runGoalId ? this.pendingRunOrigin : undefined;
@@ -253,7 +301,7 @@ export class GoalPiManager {
       void this.enqueue(() => this.finishAgentRun(event, ctx));
     });
     this.pi.on('agent_settled', (_event, ctx) => {
-      void this.enqueue(() => this.continueAfterSettled(ctx));
+      this.scheduleContinuation(ctx);
     });
     this.pi.on('session_before_compact', (event, ctx) => this.beforeCompact(event, ctx));
     this.pi.on('session_compact', (event, ctx) => {
@@ -384,6 +432,7 @@ export class GoalPiManager {
 
   private fenceExecution(): void {
     this.executionGeneration += 1;
+    this.invalidateContinuation();
     this.runGoalId = undefined;
     this.runOrigin = undefined;
     this.runExecutionGeneration = undefined;
@@ -392,6 +441,25 @@ export class GoalPiManager {
     this.lastToolCallGeneration = undefined;
     this.compactState = undefined;
     this.budgetWrapUpGoalId = undefined;
+  }
+
+  private invalidateContinuation(): void {
+    this.continuationGeneration += 1;
+  }
+
+  private scheduleContinuation(ctx: ExtensionContext): void {
+    const goal = this.runtime.snapshot().goal;
+    const binding = this.backgroundWork;
+    const lease: ContinuationLease = {
+      managerGeneration: this.generation,
+      continuationGeneration: this.continuationGeneration,
+      executionGeneration: this.executionGeneration,
+      goalId: goal?.id,
+      runGoalId: this.runGoalId,
+      sessionId: this.sessionId,
+      ...(binding ? { backgroundToken: binding.token, backgroundServiceGeneration: binding.serviceGeneration } : {}),
+    };
+    void this.enqueue(() => this.continueAfterSettled(ctx, lease));
   }
 
   private noteToolCall(toolName: string): void {
@@ -431,6 +499,7 @@ export class GoalPiManager {
     // A compaction invalidates the current turn's leases. The persisted Goal remains
     // authoritative, while a retry/settled boundary may establish a new lease.
     this.executionGeneration += 1;
+    this.invalidateContinuation();
     this.runGoalId = undefined;
     this.runOrigin = undefined;
     this.runExecutionGeneration = undefined;
@@ -749,15 +818,25 @@ export class GoalPiManager {
     this.refreshStatus();
   }
 
-  private async continueAfterSettled(ctx: ExtensionContext): Promise<void> {
+  private async continueAfterSettled(ctx: ExtensionContext, lease: ContinuationLease): Promise<void> {
     if (!this.isCurrent(ctx) || !ctx.isIdle() || ctx.hasPendingMessages()) return;
+    if (
+      lease.managerGeneration !== this.generation ||
+      lease.continuationGeneration !== this.continuationGeneration ||
+      lease.executionGeneration !== this.executionGeneration ||
+      lease.sessionId !== this.sessionId ||
+      lease.runGoalId !== this.runGoalId
+    )
+      return;
     const snapshot = this.runtime.snapshot();
     const goal = snapshot.goal;
-    if (!goal || goal.status !== 'active' || !this.runGoalId || this.runGoalId !== goal.id) return;
+    if (!goal || goal.id !== lease.goalId || goal.status !== 'active' || !this.runGoalId || this.runGoalId !== goal.id)
+      return;
     if (this.runExecutionGeneration !== this.executionGeneration) {
       this.fenceExecution();
       return;
     }
+    if (this.backgroundWorkBlocks(lease)) return;
     if (!canExecuteGoalTools(this.pi, goal)) {
       this.pauseForToolPolicyDrift(ctx, goal);
       return;
@@ -777,10 +856,29 @@ export class GoalPiManager {
       this.pauseForDeliveryFailure(ctx, next, `Goal continuation failed: ${errorText(error)}`);
       return;
     }
+    this.invalidateContinuation();
     this.runGoalId = undefined;
     this.runOrigin = undefined;
     this.runExecutionGeneration = undefined;
     this.runToolAttempted = false;
+  }
+
+  private backgroundWorkBlocks(lease: ContinuationLease): boolean {
+    const binding = this.backgroundWork;
+    if (!binding) return this.observedBackgroundWork;
+    if (
+      binding.token !== lease.backgroundToken ||
+      binding.serviceGeneration !== lease.backgroundServiceGeneration ||
+      binding.service.generation !== binding.serviceGeneration
+    )
+      return true;
+    try {
+      const snapshot = binding.service.snapshot(this.sessionId);
+      if (this.backgroundWork?.token !== binding.token) return true;
+      return snapshot.items.length > 0 || snapshot.errors.length > 0;
+    } catch {
+      return true;
+    }
   }
 
   private pauseForSafety(ctx: ExtensionContext, goal: ActiveGoal, cause: 'continuation_limit' | 'no_progress'): void {
@@ -854,10 +952,9 @@ export class GoalPiManager {
     this.fenceExecution();
     this.runtime.clear();
     this.deactivateTools();
-    ctx.abort();
     this.refreshStatus();
     this.emitState(undefined, summary);
-    return messageResult(`Goal complete: ${goal.text}`);
+    return messageResult(`Goal complete: ${goal.text}`, false, true);
   }
 
   private async blocked(params: BlockedInput, ctx: ExtensionContext): Promise<ToolResult> {

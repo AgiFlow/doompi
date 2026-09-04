@@ -1,8 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { type Static, Type } from 'typebox';
 
-/** Cordis service that owns the session's background-work contributions. */
+/** Cordis service that owns pull-based background-work contributions for Pi sessions. */
 export const DOOM_BACKGROUND_WORK_SERVICE = 'doom/background-work';
+/**
+ * Snapshot invalidation only. Consumers must reread the authoritative service snapshot
+ * and must not infer current work from the event payload.
+ */
 export const DOOM_BACKGROUND_WORK_CHANGED_EVENT = 'doom/background-work/changed';
 
 export const BackgroundProviderWorkItemSchema = Type.Object(
@@ -24,13 +28,18 @@ export type BackgroundWorkItem = Static<typeof BackgroundWorkItemSchema>;
 
 export interface BackgroundWorkProvider {
   readonly provider: string;
+  /**
+   * Returns the current authoritative work set. Items must use their owning Pi session ID.
+   * Publish work before releasing asynchronous launch ownership, and retain terminal items
+   * until Pi accepts their completion handoff or a durable fallback owns delivery.
+   */
   listActiveWork(): readonly BackgroundProviderWorkItem[];
 }
 
 export interface BackgroundWorkProviderHandle {
   readonly provider: string;
   readonly generation: string;
-  /** Announces that the provider's pull-based snapshot changed. */
+  /** Announces that the provider's pull-based snapshot changed. This carries no snapshot state. */
   update(): void;
   dispose(): void;
 }
@@ -47,8 +56,10 @@ export interface DoomBackgroundWorkChanged {
 }
 
 export interface DoomBackgroundWorkService {
+  /** Changes when the owning coordination service is replaced. */
   readonly generation: string;
   register(provider: BackgroundWorkProvider): BackgroundWorkProviderHandle;
+  /** Returns an authoritative snapshot, filtered to an exact session when supplied. */
   snapshot(sessionId?: string): DoomBackgroundWorkSnapshot;
 }
 
@@ -62,7 +73,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Reads the provider owned by the active Team session. */
+/** Reads the active host-owned background-work coordination service. */
 export function readDoomBackgroundWorkService(ctx: Context): DoomBackgroundWorkService | undefined {
   return ctx.get(DOOM_BACKGROUND_WORK_SERVICE) as DoomBackgroundWorkService | undefined;
 }

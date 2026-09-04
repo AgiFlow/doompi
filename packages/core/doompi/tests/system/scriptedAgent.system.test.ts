@@ -30,10 +30,10 @@ const SETTLE_TIMEOUT_MS = 60_000;
  * The first launch in a fresh agent directory installs the published DoomPi
  * packages the checked-in modes file names, which is a registry download and
  * an npm install, not a turn. That is warmed once here so no test measures it:
- * on a cold machine the install alone outlasts the settle budget, and the
- * failure looks like a composition that never answered.
+ * on a cold or contended runner the install can take several minutes, and the
+ * failure otherwise looks like a composition that never answered.
  */
-const WARMUP_TIMEOUT_MS = 300_000;
+const WARMUP_TIMEOUT_MS = 600_000;
 
 interface Fixture {
   root: string;
@@ -42,8 +42,9 @@ interface Fixture {
 
 const fixtures: string[] = [];
 const models: ScriptedModel[] = [];
-/** Shared so the package install happens once, in the warm-up, not per test. */
+/** Shared so the registry-backed package install happens once in the warm-up. */
 let agentDirectory = '';
+let warmedPackageDirectory = '';
 
 beforeAll(async () => {
   agentDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-scripted-agent-'));
@@ -53,12 +54,14 @@ beforeAll(async () => {
   try {
     runtime.send({ id: 'warmup', type: 'prompt', message: 'say hello' });
     await runtime.waitForRecord((record) => record.type === 'agent_settled', WARMUP_TIMEOUT_MS);
+    warmedPackageDirectory = path.join(agentDirectory, 'managed-packages');
+    fs.cpSync(path.join(fixture.root, '.pi', 'npm'), warmedPackageDirectory, { recursive: true });
   } finally {
     await shutdownRuntime(runtime);
     await model.close();
     models.splice(models.indexOf(model), 1);
   }
-}, WARMUP_TIMEOUT_MS);
+}, WARMUP_TIMEOUT_MS + 30_000);
 
 afterEach(async () => {
   for (const model of models.splice(0)) await model.close();
@@ -82,7 +85,9 @@ function createFixture(model: ScriptedModel): Fixture {
   for (const directory of [root, home]) fs.mkdirSync(directory, { recursive: true });
   writeMinimalDoomRepository(root);
   fs.copyFileSync(CHECKED_IN_MODES, path.join(root, '.doom', 'modes.yaml'));
-
+  if (warmedPackageDirectory !== '') {
+    fs.cpSync(warmedPackageDirectory, path.join(root, '.pi', 'npm'), { recursive: true });
+  }
   return {
     root,
     environment: {

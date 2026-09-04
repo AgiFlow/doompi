@@ -509,6 +509,61 @@ describe('the session hub over a registry', () => {
     ]);
   });
 
+  it('resolves a visible transcript item before navigating the Pi session tree', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const notices: string[] = [];
+    const harness = startHub(registryDir, undefined, [], undefined, { onNotice: (message) => notices.push(message) });
+    await session.waitForCommand('get_entries');
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: {
+        entries: [
+          { id: 'entry-null', type: 'message', message: null },
+          { id: 'entry-array', type: 'message', message: [] },
+          { type: 'message', message: { role: 'user', content: 'anonymous' } },
+          { id: 'entry-user', type: 'message', message: { role: 'user', content: 'question', timestamp: 42 } },
+          { id: 'entry-assistant', type: 'message', message: { id: 'answer-1', role: 'assistant', content: 'answer' } },
+        ],
+        leafId: 'entry-assistant',
+      },
+    });
+    await waitFor(() => harness.framesFor('one').some((frame) => frame.type === 'entry_appended'), 'journal restore');
+
+    harness.hub.command('one', { type: 'rewind', itemId: 'user-42' });
+    expect(await session.waitForCommand('navigate_tree')).toEqual({ type: 'navigate_tree', entryId: 'entry-user' });
+
+    harness.hub.command('one', { type: 'rewind', itemId: 'answer-1' });
+    await waitFor(
+      () => session.received.filter((frame) => frame.type === 'navigate_tree').length === 2,
+      'the second tree navigation',
+    );
+    expect(session.received.filter((frame) => frame.type === 'navigate_tree').at(-1)).toEqual({
+      type: 'navigate_tree',
+      entryId: 'entry-assistant',
+    });
+
+    harness.hub.command('one', { type: 'rewind', itemId: 'entry-user' });
+    await waitFor(
+      () => session.received.filter((frame) => frame.type === 'navigate_tree').length === 3,
+      'the durable entry navigation',
+    );
+    harness.hub.command('one', { type: 'rewind', itemId: '' });
+    harness.hub.command('one', { type: 'rewind', itemId: 'missing' });
+    await waitFor(
+      () => notices.filter((notice) => notice.startsWith('command not delivered:')).length === 2,
+      'rewind errors',
+    );
+    expect(notices).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('no rewind identity'),
+        expect.stringContaining('not available in the session tree'),
+      ]),
+    );
+  });
+
   it('restores only the tail of a transcript longer than the limit', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });
@@ -752,6 +807,73 @@ describe('the session hub over a registry', () => {
     await first.close();
     await waitFor(() => closed.includes('first'), 'the first channel closing');
     expect(closed).not.toContain('second');
+  });
+
+  it('shares a hub-scoped ownership channel across all registered sessions', async () => {
+    const registryDir = freshRegistryDir();
+    const sessions = await Promise.all(
+      ['one', 'two', 'three'].map(async (id) => await startRegisteredSession(registryDir, { id, name: id })),
+    );
+    let starts = 0;
+    let handoff: ((sourceSessionId: string, targetHandle: string) => string | undefined) | undefined;
+    const catalogs = new Map<string, Array<{ handle: string; label: string; order: number }>>();
+    const ownership: WebHubChannel = {
+      frameType: 'voice_ownership',
+      lifecycle: 'hub',
+      start(host) {
+        starts += 1;
+        const refresh = (): void => {
+          const participants = host.sessions();
+          for (const participant of participants) {
+            catalogs.set(
+              participant.sessionId,
+              participants
+                .filter((candidate) => candidate.sessionId !== participant.sessionId)
+                .sort((left, right) => left.sessionId.localeCompare(right.sessionId))
+                .map((target, index) => ({ handle: target.sessionId, label: target.sessionId, order: index + 1 })),
+            );
+          }
+        };
+        handoff = (sourceSessionId, targetHandle) =>
+          catalogs.get(sourceSessionId)?.find((target) => target.handle === targetHandle)?.handle;
+        return {
+          payloadFor: (scope) => ({ targets: catalogs.get(scope.sessionId) ?? [] }),
+          sessionAdded: refresh,
+          sessionRemoved: refresh,
+          close: () => undefined,
+        };
+      },
+    };
+    const harness = startHub(registryDir, undefined, [], undefined, {
+      loadChannels: async () => [ownership],
+    });
+
+    await waitFor(() => harness.hub.snapshot().length === sessions.length, 'all ownership sessions');
+    const targetsFor = (sessionId: string): Array<{ handle: string; label: string; order: number }> => {
+      const payload = harness.hub.channelFrames(sessionId).find((frame) => frame.type === 'voice_ownership')?.payload;
+      if (typeof payload !== 'object' || payload === null || !('targets' in payload) || !Array.isArray(payload.targets))
+        return [];
+      return payload.targets as Array<{ handle: string; label: string; order: number }>;
+    };
+    await waitFor(
+      () => sessions.every((session) => targetsFor(session.id).length === 2),
+      'two targets in every ownership catalog',
+    );
+
+    expect(starts).toBe(1);
+    expect(targetsFor('one')).toEqual([
+      { handle: 'three', label: 'three', order: 1 },
+      { handle: 'two', label: 'two', order: 2 },
+    ]);
+    expect(targetsFor('two')).toEqual([
+      { handle: 'one', label: 'one', order: 1 },
+      { handle: 'three', label: 'three', order: 2 },
+    ]);
+    expect(targetsFor('three')).toEqual([
+      { handle: 'one', label: 'one', order: 1 },
+      { handle: 'two', label: 'two', order: 2 },
+    ]);
+    expect(handoff?.('one', 'two')).toBe('two');
   });
 
   it('routes incoming channel payloads by live scope, frame type, and connection', async () => {

@@ -11,6 +11,7 @@ import {
   installWebPlugins,
   paletteCommands,
   pluginActivityGroups,
+  pluginContextActions,
   pluginLeaderBindings,
   pluginMinorModes,
   pluginRepositorySettingsPanels,
@@ -106,15 +107,20 @@ describe('the web plugin registry', () => {
         tabs: [{ id: 'demo', label: 'demo', panel: Panel }],
         overlays: [{ id: 'demo-overlay', component: Panel }],
         railSections: [{ id: 'demo-rail', component: Panel }],
+        contextSections: [{ id: 'demo-context', component: Panel }],
         selectionBarItems: [{ id: 'demo-selection', component: Panel }],
         composerActions: [{ id: 'demo-composer', component: Panel }],
         activitySections: [{ id: 'demo-activity', component: Panel }],
         paletteCommands: [{ id: 'demo-command', title: 'demo command', run: () => undefined }],
+        contextActions: [
+          { id: 'launch', label: 'Launch', detail: 'launch work', kinds: ['work-item'], run: () => undefined },
+        ],
       }),
     ]);
     expect(webTabs().map((tab) => tab.id)).toEqual(['demo']);
     expect(slotFills(HOST_SLOTS.overlay).map((fill) => fill.id)).toEqual(['demo-overlay']);
     expect(slotFills(HOST_SLOTS.rail).map((fill) => fill.id)).toEqual(['demo-rail']);
+    expect(slotFills(HOST_SLOTS.context).map((fill) => fill.id)).toEqual(['demo-context']);
     expect(slotFills(HOST_SLOTS.selectionBar).map((fill) => fill.id)).toEqual(['demo-selection']);
     expect(slotFills(HOST_SLOTS.composerActions).map((fill) => fill.id)).toEqual(['demo-composer']);
     // No group is named demo-activity, so the section lands in the activity tail.
@@ -123,6 +129,9 @@ describe('the web plugin registry', () => {
     ]);
     expect(slotFills('nobody.declared')).toEqual([]);
     expect(paletteCommands().map((command) => command.id)).toEqual(['demo-command']);
+    expect(pluginContextActions().map(({ pluginId, id, label }) => [pluginId, id, label])).toEqual([
+      ['demo', 'launch', 'Launch'],
+    ]);
     expect(webPluginDiagnostics()).toEqual([]);
 
     expect(() => installWebPlugins([])).toThrow(/already installed/);
@@ -492,6 +501,27 @@ describe('the web plugin registry', () => {
     expect(() =>
       installWebPlugins([defineWebPlugin({ id: 'filler', fills: [{ slot: 'x.y', id: '', component: Panel }] })]),
     ).toThrow(/empty id/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'filler',
+          contextActions: [
+            { id: 'launch', label: 'Launch', kinds: ['work-item'], run: () => undefined },
+            { id: 'launch', label: 'Again', kinds: ['work-item'], run: () => undefined },
+          ],
+        }),
+      ]),
+    ).toThrow(/context action 'launch' twice/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'filler',
+          contextActions: [{ id: 'launch', label: 'Launch', kinds: [], run: () => undefined }],
+        }),
+      ]),
+    ).toThrow(/needs non-empty kinds/);
   });
 
   it("routes an activity section into its group's keyed slot, from any plugin, and the rest into the activity tail", () => {

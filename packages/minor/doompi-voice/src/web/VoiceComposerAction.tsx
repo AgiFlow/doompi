@@ -52,34 +52,27 @@ export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }
   const tone = manualError && !autonomous ? 'text-doom-yellow' : 'text-doom-dim';
 
   return (
-    <>
-      <Button
-        variant={recording ? 'danger-outline' : 'outline'}
-        size="icon"
-        data-testid="composer-voice-action"
-        data-voice-mode={autonomous ? 'auto' : recording ? 'manual' : 'off'}
-        data-voice-phase={phase}
-        aria-label={label}
-        title={label}
-        disabled={sessionId === null || autonomous || manualPhase === 'starting' || manualPhase === 'transcribing'}
-        onClick={act}
-        className={`shrink-0 ${tone}`}
-      >
-        {recording ? (
-          <StopIcon className="h-3 w-3 fill-current" />
-        ) : manualPhase === 'starting' || manualPhase === 'transcribing' ? (
-          <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
-        ) : manualError && !autonomous ? (
-          <AlertIcon className="h-3.5 w-3.5" />
-        ) : (
-          <MicIcon className="h-3.5 w-3.5" />
-        )}
-      </Button>
-      {manualError && !autonomous ? (
-        <output data-testid="composer-voice-error" className="max-w-32 truncate text-[9px] text-doom-yellow">
-          {manualError}
-        </output>
-      ) : null}
-    </>
+    <Button
+      variant={recording ? 'danger-outline' : 'outline'}
+      size="icon"
+      data-testid="composer-voice-action"
+      data-voice-mode={autonomous ? 'auto' : recording ? 'manual' : 'off'}
+      data-voice-phase={phase}
+      aria-label={label}
+      title={label}
+      disabled={sessionId === null || autonomous || manualPhase === 'starting' || manualPhase === 'transcribing'}
+      onClick={act}
+      className={`shrink-0 ${tone}`}
+    >
+      {recording ? (
+        <StopIcon className="h-3 w-3 fill-current" />
+      ) : manualPhase === 'starting' || manualPhase === 'transcribing' ? (
+        <LoaderIcon className="h-3.5 w-3.5 animate-spin" />
+      ) : manualError && !autonomous ? (
+        <AlertIcon className="h-3.5 w-3.5" />
+      ) : (
+        <MicIcon className="h-3.5 w-3.5" />
+      )}
+    </Button>
   );
 }

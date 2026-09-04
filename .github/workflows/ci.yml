@@ -71,12 +71,47 @@ jobs:
   # that exercises the cockpit as a running program: sessions, the transcript,
   # dialogs, leader keys, and the plugin tabs.
   #
-  # It runs on pull requests for the reason the packed-install gate below
-  # already records: a gate that only runs after merge lets regressions through
-  # review. The bundle it serves is built by the same code path `doompi sync`
-  # runs, over every plugin package found by walking the workspace.
+  # Each shard gets a disposable hosted runner. They intentionally start beside
+  # quality instead of waiting for it, trading some runner minutes on an early
+  # failure for a shorter pull-request feedback loop.
   browser:
-    needs: quality
+    name: Browser E2E (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Check out materialized package snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up DoomPi workspace
+        uses: ./.github/actions/setup-monorepo
+
+      - name: Build the cockpit and the servers it spawns
+        run: pnpm cockpit:build
+
+      - name: Install the Chromium the shard drives
+        run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
+
+      - name: Drive the cockpit in a browser
+        run: pnpm nx run @agimon-ai/doompi-web:test:e2e -- --shard=${{ matrix.shard }}/4
+
+      - name: Keep the traces of a failed shard
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-web-${{ matrix.shard }}
+          path: |
+            packages/clients/doompi-web/playwright-report
+            packages/clients/doompi-web/test-results
+          retention-days: 7
+
+  desktop:
+    name: Desktop E2E
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -91,22 +126,24 @@ jobs:
       - name: Build the cockpit and the servers it spawns
         run: pnpm cockpit:build
 
-      - name: Install the Chromium the suite drives
-        run: pnpm --filter @agimon-ai/doompi-web exec playwright install --with-deps chromium
+      - name: Build the desktop main and preload
+        run: pnpm nx run @agimon-ai/doompi-desktop:build
 
-      - name: Drive the cockpit in a browser
-        run: pnpm nx run @agimon-ai/doompi-web:test:e2e
+      - name: Install Electron system dependencies
+        run: pnpm --filter @agimon-ai/doompi-desktop exec playwright install-deps
+
+      - name: Drive the desktop app in Electron
+        run: xvfb-run -a pnpm nx run @agimon-ai/doompi-desktop:test:e2e
 
       - name: Keep the traces of a failed run
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-desktop
           path: |
-            packages/clients/doompi-web/playwright-report
-            packages/clients/doompi-web/test-results
+            packages/clients/doompi-desktop/playwright-report
+            packages/clients/doompi-desktop/test-results
           retention-days: 7
-
   # Packed-install gate: packs and installs every package for real, checks the
   # frozen published compatibility baseline, then asserts startup latency.
   #
@@ -120,7 +157,6 @@ jobs:
   # for flakiness before trusting a failure here, and prefer giving the parity
   # comparison its own allowance over widening the shared jitter again.
   installed-runtime:
-    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

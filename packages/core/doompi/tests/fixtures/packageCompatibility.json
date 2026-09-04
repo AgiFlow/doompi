@@ -2233,7 +2233,6 @@
       "dist",
       "src/web",
       "src/exports/webClient.ts",
-      "models",
       "llms.txt",
       "src/prompts",
       "src/types/clientMedia.ts",

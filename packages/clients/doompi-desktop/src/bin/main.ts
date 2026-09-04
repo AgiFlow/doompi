@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { freePort, portIsFree, startHub } from '../adapters/hubProcess.ts';
-import { createMainWindow } from '../adapters/mainWindow.ts';
+import { createMainWindow, showCockpit } from '../adapters/mainWindow.ts';
 import { assertSocketHeadroom, DEFAULT_PORT, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch.ts';
 import type { RunningHub } from '../types/hub.ts';
 
@@ -32,6 +32,22 @@ function registryDirectory(): string {
   return configured !== undefined && configured !== '' ? configured : path.join(os.homedir(), '.doompi', 'run');
 }
 
+function startupIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'startup-icon.png')
+    : path.resolve(app.getAppPath(), '..', 'doompi-web', 'src', 'web', 'public', 'icon-512.png');
+}
+
+/** Allows local E2E runs to replace the staged hub without weakening packaged startup. */
+function launchHubEntry(): string {
+  const developmentEntry = process.env.DOOMPI_DESKTOP_E2E_HUB_ENTRY;
+  if (!app.isPackaged && developmentEntry !== undefined && developmentEntry !== '') return developmentEntry;
+  return hubEntry({
+    resourcesPath: process.resourcesPath,
+    packaged: app.isPackaged,
+    projectRoot: app.getAppPath(),
+  });
+}
 /** The default port when it is usable, so pairing keeps a stable origin. */
 async function resolvePort(): Promise<number> {
   if (await portIsFree(LOOPBACK_HOST, DEFAULT_PORT)) return DEFAULT_PORT;
@@ -61,16 +77,14 @@ function registerBridgeHandlers(): void {
 }
 
 async function start(): Promise<void> {
+  const preloadPath = path.join(__dirname, 'preload.cjs');
+  const window = createMainWindow({ preloadPath, startupIconPath: startupIconPath() });
   const registryDir = registryDirectory();
   assertSocketHeadroom(registryDir);
 
   hub = await startHub(
     {
-      entry: hubEntry({
-        resourcesPath: process.resourcesPath,
-        packaged: app.isPackaged,
-        projectRoot: app.getAppPath(),
-      }),
+      entry: launchHubEntry(),
       host: LOOPBACK_HOST,
       port: await resolvePort(),
       registryDir,
@@ -79,10 +93,7 @@ async function start(): Promise<void> {
     notice,
   );
 
-  createMainWindow({
-    hubUrl: hub.url,
-    preloadPath: path.join(__dirname, 'preload.cjs'),
-  });
+  if (!window.isDestroyed()) showCockpit(window, hub.url);
 }
 
 // A second launch has to reach the first one: two cockpits over one session
@@ -117,7 +128,11 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0 && hub !== undefined) {
-      createMainWindow({ hubUrl: hub.url, preloadPath: path.join(__dirname, 'preload.cjs') });
+      createMainWindow({
+        hubUrl: hub.url,
+        preloadPath: path.join(__dirname, 'preload.cjs'),
+        startupIconPath: startupIconPath(),
+      });
     }
   });
 

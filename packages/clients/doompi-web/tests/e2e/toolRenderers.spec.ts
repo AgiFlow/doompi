@@ -146,11 +146,36 @@ test('the read plugin renders anchored text and attached images', async ({ page,
     },
     isError: false,
   });
+  await expect(page.getByTestId('tool-result-read')).toHaveCount(0);
+  await page.getByTestId('tool-expand').click();
   const result = page.getByTestId('tool-result-read');
   await expect(result).toContainText('const x = 1;');
   await expect(result).toContainText('export { x };');
   await expect(result).not.toContainText('#abc|');
   await expect(page.getByTestId('tool-result-read-image')).toBeVisible();
+});
+
+test('the grep plugin keeps matches collapsed until opened', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'tool_execution_start',
+    toolCallId: 'call-grep',
+    toolName: 'grep',
+    args: { pattern: 'MessageItem', path: 'src' },
+  });
+  cockpit.session.emit({
+    type: 'tool_execution_end',
+    toolCallId: 'call-grep',
+    result: { content: [{ type: 'text', text: '@file src/card.ts#tag\n>> 4#abc|export const MessageItem = true;' }] },
+    isError: false,
+  });
+
+  await expect(page.getByTestId('tool-call-grep')).toContainText('MessageItem');
+  await expect(page.getByTestId('tool-result-grep')).toHaveCount(0);
+  await page.getByTestId('tool-expand').click();
+  await expect(page.getByTestId('tool-result-grep')).toContainText('export const MessageItem = true;');
 });
 
 test('the edit plugin renders the diff its result details carry', async ({ page, cockpit }) => {
@@ -366,6 +391,7 @@ test('code results wear the editor grammar and log output keeps its own colours'
     isError: false,
   });
 
+  await page.getByTestId('tool-expand').click();
   // The grammar loads in its own chunk, so the plain text paints first and the
   // colours arrive after; the palette is the editor's, named as theme tokens.
   const comment = page.locator('[data-testid="tool-result-read"] span[style*="--doom-faint"]');
@@ -387,9 +413,12 @@ test('code results wear the editor grammar and log output keeps its own colours'
     result: { content: [{ type: 'text', text: tail }], details: { tail, tailLines: 1, exitCode: 0 } },
     isError: false,
   });
-  await page.getByTestId('tool-expand').last().click();
-  await expect(page.locator('[data-testid="tool-result-bash-output"] span.text-doom-red')).toHaveText('Error:');
-  await expect(page.getByTestId('tool-result-bash-output')).not.toContainText('[31m');
+  const bashCard = page.locator('[data-testid="entry-tool"][data-tool-name="bash"]');
+  await expect(bashCard).toHaveAttribute('data-tool-state', 'ok');
+  const bashOutput = bashCard.getByTestId('tool-result-bash-output');
+  if (!(await bashOutput.isVisible())) await bashCard.getByTestId('tool-expand').click();
+  await expect(bashOutput.locator('span.text-doom-red')).toHaveText('Error:');
+  await expect(bashOutput).not.toContainText('[31m');
 });
 
 test('a run of calls to one tool shares a frame, and a lone call keeps its card', async ({ page, cockpit }) => {

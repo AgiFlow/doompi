@@ -22,7 +22,9 @@ import {
   type DoomSubagentPolicyService,
 } from '@agimon-ai/doompi-extension-contracts/subagent-policy';
 import type { Context } from '@deepseek-ai/cordis';
+import type { AsyncJobTracker } from '../asyncJobTracker';
 import type { DelegationBridge, DelegationSessionContext } from './extensions/delegationBridge';
+import { registerDirectRunBackgroundWork } from './extensions/directRunBackgroundWork';
 import type { FablePlanBridge } from './extensions/fablePlanBridge';
 import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 import { createBackgroundWorkService } from '../../services/backgroundWorkService';
@@ -30,6 +32,7 @@ import { createSubagentPolicyService } from '../../services/subagentPolicyServic
 
 export interface TeamCollaborationPluginConfig {
   readonly session: DelegationSessionContext & { readonly cwd: string };
+  readonly directRunTracker: AsyncJobTracker;
   readonly delegation: DelegationBridge;
   readonly fablePlan: FablePlanBridge;
   readonly policies: SubagentCapabilityPolicyStore;
@@ -57,6 +60,7 @@ export function teamCollaborationPlugin(ctx: Context, config: TeamCollaborationP
   ctx.provide(DOOM_SUBAGENT_POLICY_SERVICE, subagentPolicy);
   ctx.provide(DOOM_DELEGATION_SERVICE, delegation);
   ctx.provide(DOOM_FABLE_PLAN_SERVICE, fablePlan);
+  registerDirectRunBackgroundWork(ctx, backgroundWork, config.session.sessionId, config.directRunTracker);
 
   if (config.observeDelegation) {
     ctx.on(DOOM_DELEGATION_REQUESTED_EVENT, (event) => config.observeDelegation?.({ kind: 'requested', event }));

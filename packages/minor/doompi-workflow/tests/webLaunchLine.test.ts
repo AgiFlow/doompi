@@ -3,9 +3,11 @@ import type { WorkflowCatalogEntryView } from '../src/types/webWorkflows.ts';
 import { initialInputs, initialRunner, launchProblems } from '../src/web/launchLine.ts';
 import {
   catalog,
+  closeCatalog,
   filterCatalog,
   openCatalog,
   openLaunch,
+  openWorkflowCatalogForContext,
   selectWorkflow,
   toggleInspect,
   workflowCatalogChannel,
@@ -108,9 +110,40 @@ describe('catalog store', () => {
 
   it('keeps the drawer open across a republish', () => {
     catalog.reset();
-    openCatalog('s1');
+    openCatalog('s1', 'Implement task AGI-1.');
     workflowCatalogChannel.apply('s1', { cwd: '/repo', workflows: [entry()] });
-    expect(catalog.select(catalog.store.state, 's1').open).toBe(true);
+    expect(catalog.select(catalog.store.state, 's1')).toMatchObject({
+      open: true,
+      prompt: 'Implement task AGI-1.',
+    });
+    closeCatalog('s1');
+    expect(catalog.select(catalog.store.state, 's1')).toMatchObject({ open: false, prompt: '' });
+  });
+
+  it('opens the reviewed Workflow launcher from an independent work-item action', () => {
+    const opened: string[] = [];
+    catalog.reset();
+    const context = {
+      item: {
+        kind: 'work-item',
+        source: 'agiflow',
+        id: 'task-1',
+        label: 'AGI-1',
+        content: 'Implement task AGI-1.',
+      },
+      sessionId: 's1',
+      openTab: () => undefined,
+      openTransientTab: (tab: { id: string }) => opened.push(tab.id),
+      sendSessionFrame: () => undefined,
+    };
+
+    openWorkflowCatalogForContext(context, () => ({ id: 'workflows-runs', label: 'workflows', panel: () => null }));
+
+    expect(catalog.select(catalog.store.state, 's1')).toMatchObject({ open: true, prompt: 'Implement task AGI-1.' });
+    expect(opened).toEqual(['workflows-runs']);
+    openWorkflowCatalogForContext({ ...context, sessionId: null }, () => {
+      throw new Error('a detached action must not build a tab');
+    });
   });
 
   it('filters on name, tag and job', () => {

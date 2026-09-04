@@ -45,12 +45,28 @@ import {
   applySessionRemoved,
   applySessionsSnapshot,
   applySessionUpsert,
+  beginSessionTransfer,
+  completeSessionTransfer,
   markSocketClosed,
   sessionsStore,
+  setActiveSession,
 } from '../stores/sessionsStore.ts';
+
+const VOICE_OWNERSHIP_FRAME_TYPE = 'voice_ownership';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function voiceOwner(frame: Record<string, unknown>): string | null | undefined {
+  if (frame.type !== VOICE_OWNERSHIP_FRAME_TYPE || !isRecord(frame.payload)) return undefined;
+  const activeSessionId = frame.payload.activeSessionId;
+  return activeSessionId === null || typeof activeSessionId === 'string' ? activeSessionId : undefined;
+}
+
+function navigateToTransferredSession(sessionId: string): void {
+  window.history.pushState(null, '', `/session/${encodeURIComponent(sessionId)}`);
+  window.dispatchEvent(new Event('popstate'));
 }
 
 /** Every reload this runtime triggers is unasked for, so unsent text is kept first. */
@@ -129,6 +145,10 @@ export function startSessionRuntime(): () => void {
   // The hub-side subscription this page currently holds; it dies with the
   // socket, which is why the snapshot handler re-subscribes.
   let subscribed: string | null = null;
+  let currentVoiceOwner: string | null = null;
+  let pendingVoiceTransferTarget: string | undefined;
+  let pendingVoiceTransferFocus: Promise<void> | undefined;
+  let deferredVoiceOwnershipFrame: Record<string, unknown> | undefined;
   // The transcript comes from Pi's protocol; this socket keeps carrying what
   // the protocol has no shape for.
   const protocol = startProtocolRuntime();
@@ -136,8 +156,20 @@ export function startSessionRuntime(): () => void {
   const syncSubscription = (force = false): void => {
     const { activeId, byId } = sessionsStore.state;
     const target = activeId !== null && activeId in byId ? activeId : null;
-    void focusSessionWebPlugins(target, target === null ? undefined : byId[target].summary.webComposition);
+    const focused = focusSessionWebPlugins(target, target === null ? undefined : byId[target].summary.webComposition);
     protocol.focus(target);
+    if (deferredVoiceOwnershipFrame !== undefined && target !== null && pendingVoiceTransferTarget === target) {
+      const deferred = deferredVoiceOwnershipFrame;
+      const transferFocus = (pendingVoiceTransferFocus ??= focused);
+      void transferFocus.then(() => {
+        if (sessionsStore.state.activeId !== target || pendingVoiceTransferTarget !== target) return;
+        deferredVoiceOwnershipFrame = undefined;
+        pendingVoiceTransferFocus = undefined;
+        pendingVoiceTransferTarget = undefined;
+        dispatchChannelFrame(deferred);
+        completeSessionTransfer(target);
+      });
+    }
     if (!force && target === subscribed) return;
     if (subscribed !== null && subscribed !== target) sendHubFrame(unsubscribeFrame(subscribed));
     subscribed = target;
@@ -258,11 +290,41 @@ export function startSessionRuntime(): () => void {
           applyThreadFrame(threadStoreKey(frame.sessionId, frame.threadId), frame.frame);
           return;
         }
-        default:
+        default: {
+          // A voice handoff must focus the destination plugin runtime before its
+          // ownership frame starts capture there. Otherwise route-driven plugin
+          // teardown disconnects the fresh capture and leaves it only looking live.
+          const owner = voiceOwner(frame);
+          if (owner !== undefined) {
+            const transfer = currentVoiceOwner !== null && owner !== null && owner !== currentVoiceOwner;
+            currentVoiceOwner = owner;
+            if (transfer) {
+              pendingVoiceTransferTarget = owner;
+              pendingVoiceTransferFocus = undefined;
+              deferredVoiceOwnershipFrame = frame;
+              beginSessionTransfer(owner);
+              navigateToTransferredSession(owner);
+              setActiveSession(owner);
+              syncSubscription();
+              return;
+            }
+            if (pendingVoiceTransferTarget !== undefined && pendingVoiceTransferTarget !== owner) {
+              const cancelledTarget = pendingVoiceTransferTarget;
+              pendingVoiceTransferTarget = undefined;
+              pendingVoiceTransferFocus = undefined;
+              deferredVoiceOwnershipFrame = undefined;
+              completeSessionTransfer(cancelledTarget);
+            }
+            if (pendingVoiceTransferTarget === owner) {
+              deferredVoiceOwnershipFrame = frame;
+              return;
+            }
+          }
           // Any other frame type may be a plugin channel; unclaimed types are
           // dropped silently the way unknown frames always have been.
           dispatchChannelFrame(frame);
           return;
+        }
       }
     },
     onOpen() {

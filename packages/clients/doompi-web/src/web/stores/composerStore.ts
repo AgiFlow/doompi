@@ -1,3 +1,4 @@
+import type { WebPluginContextItem } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 
@@ -19,7 +20,21 @@ export interface ComposerTextAttachment {
   content: string;
 }
 
-export type ComposerAttachment = ComposerImageAttachment | ComposerTextAttachment;
+export interface ComposerContextAttachment {
+  id: string;
+  kind: 'context';
+  name: string;
+  size: number;
+  content: string;
+  source: string;
+  contextId: string;
+}
+
+export type ComposerAttachment = ComposerContextAttachment | ComposerImageAttachment | ComposerTextAttachment;
+
+export const MAX_COMPOSER_ATTACHMENTS = 8;
+export const MAX_COMPOSER_TEXT_BYTES = 100 * 1024;
+export const MAX_COMPOSER_TOTAL_TEXT_BYTES = 200 * 1024;
 
 export interface ComposerSessionState {
   draft: string;
@@ -69,6 +84,72 @@ export function appendComposerDraft(sessionId: string | null, text: string): voi
     const draft = `${state.draft}${separator}${transcript}`;
     return { ...state, draft, caret: draft.length, dismissedToken: null };
   });
+}
+
+/** Adds structured plugin context without changing the visible composer draft. */
+export function attachComposerContext(sessionId: string | null, item: WebPluginContextItem): void {
+  if (sessionId === null) return;
+  const name = item.label
+    .trim()
+    .replace(/[\r\n]+/g, ' ')
+    .slice(0, 200);
+  const content = item.content.trim();
+  const validIdentity = item.kind.trim() !== '' && item.source.trim() !== '' && item.id.trim() !== '';
+  updateComposerState(sessionId, (state) => {
+    if (!validIdentity || name === '' || content === '') {
+      return { ...state, attachmentError: 'Context needs a source, id, label, and content.' };
+    }
+    if (state.attachments.length >= MAX_COMPOSER_ATTACHMENTS) {
+      return { ...state, attachmentError: `Only ${String(MAX_COMPOSER_ATTACHMENTS)} attachments are allowed.` };
+    }
+    const size = new TextEncoder().encode(content).byteLength;
+    if (size > MAX_COMPOSER_TEXT_BYTES) {
+      return { ...state, attachmentError: `${name} exceeds the 100 KB context limit.` };
+    }
+    const textBytes = state.attachments.reduce(
+      (total, attachment) => total + (attachment.kind === 'image' ? 0 : attachment.size),
+      0,
+    );
+    if (textBytes + size > MAX_COMPOSER_TOTAL_TEXT_BYTES) {
+      return { ...state, attachmentError: `${name} exceeds the 200 KB total text limit.` };
+    }
+    return {
+      ...state,
+      attachments: [
+        ...state.attachments,
+        {
+          id: `context-${String(state.nextAttachmentId)}`,
+          kind: 'context',
+          name,
+          size,
+          content,
+          source: item.source,
+          contextId: item.id,
+        },
+      ],
+      attachmentError: '',
+      nextAttachmentId: state.nextAttachmentId + 1,
+    };
+  });
+}
+
+/** Adds message text as a Markdown blockquote and leaves the caret ready for an instruction. */
+export function appendComposerQuote(sessionId: string | null, text: string): number | null {
+  const transcript = text.trim().replace(/\r\n?/g, '\n');
+  if (sessionId === null || transcript === '') return null;
+  let caret = 0;
+  updateComposerState(sessionId, (state) => {
+    const separator =
+      state.draft === '' ? '' : state.draft.endsWith('\n\n') ? '' : state.draft.endsWith('\n') ? '\n' : '\n\n';
+    const quote = transcript
+      .split('\n')
+      .map((line) => (line === '' ? '>' : `> ${line}`))
+      .join('\n');
+    const draft = `${state.draft}${separator}${quote}\n\n`;
+    caret = draft.length;
+    return { ...state, draft, caret, dismissedToken: null };
+  });
+  return caret;
 }
 
 export function clearComposerState(sessionId: string | null): void {

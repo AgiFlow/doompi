@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
 import {
+  VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
   VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
   VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
@@ -78,6 +79,8 @@ interface HostedCapture {
   queuedBytes: number;
   configuration: VoiceMediaCaptureConfiguration;
   lastActivity?: VoiceMediaCaptureActivity;
+  lastEchoSpeechEpoch?: number;
+  lastEchoSpeechMs?: number;
   error?: string;
 }
 
@@ -142,11 +145,21 @@ function captureActivity(request: Request): VoiceMediaCaptureActivity | undefine
   const elapsed = request.headers.get(VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER);
   const epoch = request.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER);
   const speechMs = request.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER);
-  if (state === null && level === null && elapsed === null && epoch === null && speechMs === null) return undefined;
+  const echoSpeechMs = request.headers.get(VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER);
+  if (
+    state === null &&
+    level === null &&
+    elapsed === null &&
+    epoch === null &&
+    speechMs === null &&
+    echoSpeechMs === null
+  )
+    return undefined;
   const levelDbfs = Number(level);
   const elapsedMs = Number(elapsed);
   const activityEpoch = epoch === null ? undefined : Number(epoch);
   const classifiedSpeechMs = speechMs === null ? undefined : Number(speechMs);
+  const echoDiscriminatedSpeechMs = echoSpeechMs === null ? undefined : Number(echoSpeechMs);
   if (
     (state !== 'listening' && state !== 'speech' && state !== 'endpoint') ||
     !Number.isFinite(levelDbfs) ||
@@ -155,7 +168,12 @@ function captureActivity(request: Request): VoiceMediaCaptureActivity | undefine
     !Number.isSafeInteger(elapsedMs) ||
     elapsedMs < 0 ||
     (activityEpoch !== undefined && (!Number.isSafeInteger(activityEpoch) || activityEpoch < 0)) ||
-    (classifiedSpeechMs !== undefined && (!Number.isSafeInteger(classifiedSpeechMs) || classifiedSpeechMs < 0))
+    (classifiedSpeechMs !== undefined && (!Number.isSafeInteger(classifiedSpeechMs) || classifiedSpeechMs < 0)) ||
+    (echoDiscriminatedSpeechMs !== undefined &&
+      (!Number.isSafeInteger(echoDiscriminatedSpeechMs) ||
+        echoDiscriminatedSpeechMs < 0 ||
+        classifiedSpeechMs === undefined ||
+        echoDiscriminatedSpeechMs > classifiedSpeechMs))
   )
     return null;
   return {
@@ -164,6 +182,7 @@ function captureActivity(request: Request): VoiceMediaCaptureActivity | undefine
     elapsedMs,
     ...(activityEpoch === undefined ? {} : { epoch: activityEpoch }),
     ...(classifiedSpeechMs === undefined ? {} : { classifiedSpeechMs }),
+    ...(echoDiscriminatedSpeechMs === undefined ? {} : { echoDiscriminatedSpeechMs }),
   };
 }
 
@@ -506,15 +525,26 @@ class VoiceMediaBroker implements DoomApiHandler {
     const previousActivity = capture.lastActivity;
     const previousEpoch = previousActivity?.epoch ?? 0;
     const nextEpoch = activity?.epoch ?? 0;
+    const echoSpeechMonotonic =
+      activity?.echoDiscriminatedSpeechMs === undefined ||
+      capture.lastEchoSpeechMs === undefined ||
+      capture.lastEchoSpeechEpoch === undefined ||
+      nextEpoch > capture.lastEchoSpeechEpoch ||
+      (nextEpoch === capture.lastEchoSpeechEpoch && activity.echoDiscriminatedSpeechMs >= capture.lastEchoSpeechMs);
     if (
       activity !== undefined &&
       (previousActivity === undefined ||
         (activity.elapsedMs >= previousActivity.elapsedMs &&
+          echoSpeechMonotonic &&
           (nextEpoch > previousEpoch ||
             (nextEpoch === previousEpoch && activityOrder(activity.state) >= activityOrder(previousActivity.state)))))
     ) {
       acceptedActivity = activity;
       capture.lastActivity = activity;
+      if (activity.echoDiscriminatedSpeechMs !== undefined) {
+        capture.lastEchoSpeechEpoch = nextEpoch;
+        capture.lastEchoSpeechMs = activity.echoDiscriminatedSpeechMs;
+      }
     }
     capture.batches.push({ pcm, ...(acceptedActivity === undefined ? {} : { activity: acceptedActivity }) });
     capture.queuedBytes += pcm.byteLength;
@@ -634,6 +664,11 @@ class VoiceMediaBroker implements DoomApiHandler {
                 ...(batch.activity.classifiedSpeechMs === undefined
                   ? {}
                   : { [VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER]: String(batch.activity.classifiedSpeechMs) }),
+                ...(batch.activity.echoDiscriminatedSpeechMs === undefined
+                  ? {}
+                  : {
+                      [VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER]: String(batch.activity.echoDiscriminatedSpeechMs),
+                    }),
               }),
         },
       });

@@ -1,7 +1,7 @@
 import { driveChannel } from '@agimon-ai/doompi-web-contracts/testing';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { VoiceMediaClientEvent } from '../src/types/clientMedia.ts';
+import { VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER, type VoiceMediaClientEvent } from '../src/types/clientMedia.ts';
 import { BrowserVoiceMediaTransport } from '../src/web/clientMediaTransport.ts';
 import { parseVoiceMediaWakePayload, voiceMediaWakeChannel, voiceMediaWakes } from '../src/web/voiceMediaWakeStore.ts';
 
@@ -75,6 +75,47 @@ describe('browser voice media push transport', () => {
     });
     expect(await next).toEqual(captureEvent(1));
 
+    const eventCall = vi
+      .mocked(sealedTransport.fetch)
+      .mock.calls.find((call) => requestUrl(call).includes('/client/events'));
+    expect(requestUrl(eventCall ?? [])).toContain('wait=0');
+  });
+
+  it('refreshes capabilities without replacing push state, control location, or event position', async () => {
+    let declarations = 0;
+    vi.mocked(sealedTransport.active).mockReturnValue(false);
+    vi.mocked(sealedTransport.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/client/connect')) {
+        if (typeof init?.body !== 'string') throw new Error('Expected a JSON connect body.');
+        const body = JSON.parse(init.body) as { controlLocation: string; capabilities: typeof capabilities };
+        expect(body.controlLocation).toBe('local');
+        declarations += 1;
+        if (declarations === 2) expect(body.capabilities.captureActivity).toBe(true);
+        return jsonResponse({
+          version: 5,
+          cursor: declarations === 1 ? 0 : 99,
+          eventEpoch: declarations === 1 ? 'epoch-stable' : 'epoch-ignored',
+          heartbeatMs: 1_000,
+        });
+      }
+      if (url.includes('/client/events')) return jsonResponse(captureEvent(1));
+      throw new Error(`Unexpected voice request: ${url}`);
+    });
+    const transport = new BrowserVoiceMediaTransport('session-refresh');
+    await transport.connect('client', 'connection', {
+      ...capabilities,
+      captureActivity: false,
+      autonomousOrchestration: false,
+    });
+
+    vi.mocked(sealedTransport.active).mockReturnValue(true);
+    await transport.refreshCapabilities('client', 'connection', capabilities);
+    const next = transport.nextEvent('client', 'connection', 0, new AbortController().signal);
+    driveChannel(voiceMediaWakeChannel, 'session-refresh', { eventEpoch: 'epoch-stable', sequence: 1 });
+
+    expect(await next).toEqual(captureEvent(1));
+    expect(declarations).toBe(2);
     const eventCall = vi
       .mocked(sealedTransport.fetch)
       .mock.calls.find((call) => requestUrl(call).includes('/client/events'));
@@ -202,6 +243,7 @@ describe('browser voice media push transport', () => {
       elapsedMs: 80,
       epoch: 2,
       classifiedSpeechMs: 60,
+      echoDiscriminatedSpeechMs: 40,
     });
     await transport.captureStopped('client', 'connection', 'capture');
     await transport.captureStopped('client', 'connection', 'capture', 'device failed');
@@ -213,6 +255,8 @@ describe('browser voice media push transport', () => {
     vi.mocked(sealedTransport.fetch).mockResolvedValueOnce(new Response(null, { status: 409 }));
     await expect(transport.disconnect('client', 'connection')).resolves.toBeUndefined();
     expect(vi.mocked(sealedTransport.fetch)).toHaveBeenCalledTimes(7);
+    const uploadHeaders = new Headers(vi.mocked(sealedTransport.fetch).mock.calls[2]?.[1]?.headers);
+    expect(uploadHeaders.get(VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER)).toBe('40');
   });
 
   it('reports server JSON errors and response bodies without usable errors', async () => {

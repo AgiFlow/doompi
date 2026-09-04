@@ -158,13 +158,15 @@ describe('browser voice media', () => {
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
     const source = await readFile(new URL('../src/web/clientMediaTransport.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain("controlLocation: sealedTransport.active() ? 'remote' : 'local'");
+    expect(source).toContain("const controlLocation = sealedTransport.active() ? 'remote' : 'local'");
+    expect(source).toContain('this.controlLocation = controlLocation');
   });
 
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
     const source = await readFile(new URL('../src/web/browserMediaDevice.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain("new URL('./browserCaptureWorklet.js?no-inline', import.meta.url).href");
+    expect(source).toContain("import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url'");
+    expect(source).toContain('audioWorklet.addModule(browserCaptureWorkletUrl)');
     expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
@@ -173,7 +175,7 @@ describe('browser voice media', () => {
     const source = await readFile(new URL('../src/web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
-    expect(source).toContain('data-testid="composer-voice-error"');
+    expect(source).not.toContain('data-testid="composer-voice-error"');
     expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
     expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
     expect(source).toContain('sessionId === null || autonomous');
@@ -254,11 +256,16 @@ describe('browser voice media', () => {
     expect(composer.html).toContain('data-voice-phase="blocked"');
     expect(composer.html).toContain('manual voice is unavailable while autonomous voice is active');
   });
-  it('switches browser media from the server-selected global value without acknowledgements', async () => {
+  it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
     const source = await readFile(new URL('../src/web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
+    expect(source).toContain('defineGlobalStore<PageVoiceMediaRuntime | undefined>');
+    expect(source).toContain('pageVoiceMediaRuntime.store.state');
+    expect(source).toContain("window.addEventListener('pagehide', this.closeOnPageHide");
     expect(source).toContain('this.boundSessionId = sessionId');
+    expect(source).toContain('return () => undefined');
+    expect(source).not.toContain('activeVoiceSession.reset()');
     expect(source).not.toContain('sendHubFrame');
     expect(source).not.toContain('browser-media-ack');
     expect(source).not.toContain('setInterval');

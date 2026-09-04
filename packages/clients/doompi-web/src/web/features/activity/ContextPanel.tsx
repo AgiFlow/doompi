@@ -1,6 +1,7 @@
 import type { ContextItemKind } from '@agimon-ai/doompi/contextApi';
 import { Button, EmptyState } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
+import { PluginSurface } from '../../components/PluginSurface.tsx';
 import {
   type ContextGroup,
   type ContextItemSource,
@@ -11,6 +12,7 @@ import {
   projectedGroups,
   totalTokens,
 } from '../../lib/contextComposition.ts';
+import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
 import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 import { useActiveSession } from '../../stores/sessionStore.ts';
 import { ContextItemDialog } from './ContextItemDialog.tsx';
@@ -61,6 +63,7 @@ export function ContextPanel() {
   return (
     <div data-testid="context-panel" className="flex min-h-0 flex-1 flex-col">
       <div data-testid="context-scroll" className="min-h-0 flex-1 overflow-y-auto">
+        <PluginSurface slot={HOST_SLOTS.context} sessionId={sessionId} />
         {groups.length === 0 ? (
           <EmptyState
             data-testid="context-empty"

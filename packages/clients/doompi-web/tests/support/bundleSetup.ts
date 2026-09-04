@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
 import { readSyncRegistration } from '@agimon-ai/doompi/services';
 import {
   type DeclaredPackageApi,
@@ -76,9 +77,31 @@ export default async function globalSetup(): Promise<() => void> {
     PI_CODING_AGENT_DIR: agentDir,
     DOOMPI_ROOT: workspaceRoot,
   };
-  const commandOptions = { cwd: workspaceRoot, env: syncEnv, maxBuffer: 16 * 1024 * 1024 };
-  await execFileAsync(process.execPath, [cli, 'init'], commandOptions);
-  await execFileAsync(process.execPath, [cli, 'sync'], commandOptions);
+  const inheritedPrefixes = ['AGENT_HARNESS_', 'DOOMPI_', 'DOOM_PI_', 'PI_SUBAGENT_'];
+  for (const key of Object.keys(syncEnv)) {
+    if (inheritedPrefixes.some((prefix) => key.startsWith(prefix))) delete syncEnv[key];
+  }
+  const commandOptions = (root: string) => ({
+    cwd: root,
+    env: { ...syncEnv, DOOMPI_ROOT: root },
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  await execFileAsync(process.execPath, [cli, 'init'], commandOptions(workspaceRoot));
+  const globalRoot = globalDoomConfigDirectory(homeDir);
+  fs.writeFileSync(
+    path.join(globalRoot, 'modes.yaml'),
+    `default:
+  packages: []
+layers: {}
+defaultMajorMode: minimal
+majorMode:
+  minimal:
+    description: Minimal web E2E fixture.
+    layers: []
+`,
+  );
+  await execFileAsync(process.execPath, [cli, 'sync'], commandOptions(globalRoot));
+  await execFileAsync(process.execPath, [cli, 'sync'], commandOptions(workspaceRoot));
 
   const registration = readSyncRegistration(workspaceRoot, homeDir);
   if (registration?.webDirectory === null || registration?.webDirectory === undefined) {

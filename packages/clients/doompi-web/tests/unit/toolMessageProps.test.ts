@@ -12,6 +12,7 @@ describe('toolMessageProps', () => {
       {},
       { open: () => undefined, close: () => undefined },
       () => undefined,
+      () => undefined,
     );
     const entry: ToolEntry = {
       kind: 'tool',

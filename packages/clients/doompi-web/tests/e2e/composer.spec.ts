@@ -39,6 +39,66 @@ test('the input grows with a multi-line draft instead of hiding it', async ({ pa
   expect(cleared).toBeLessThan(singleLine * 1.5);
 });
 
+test('quotes whole messages or selected message text into the prompt', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const input = page.getByTestId('composer-input');
+  await input.fill('Keep this context.');
+  await page.getByTestId('composer-send').click();
+  await cockpit.session.waitForCommand('prompt');
+  cockpit.session.emit({
+    type: 'response',
+    command: 'get_entries',
+    success: true,
+    data: {
+      entries: [{ id: 'u1', type: 'message', message: { role: 'user', content: 'Keep this context.' } }],
+      leafId: 'u1',
+    },
+  });
+
+  const userEntry = page.getByTestId('entry-user');
+  const userActions = userEntry.getByTestId('entry-actions');
+  const userQuote = userEntry.getByTestId('entry-quote');
+  const userRewind = userEntry.getByTestId('entry-rewind');
+  await userEntry.hover();
+  await expect(userActions).toHaveCSS('opacity', '1');
+  await expect(userRewind).toHaveAttribute('aria-label', 'Rewind to message');
+  await expect(userRewind.locator('svg')).toHaveCount(1);
+  await userRewind.click();
+  expect(await cockpit.session.waitForCommand('navigate_tree')).toEqual({ type: 'navigate_tree', entryId: 'u1' });
+  await expect(userQuote).toHaveAttribute('aria-label', 'Quote message');
+  await expect(userQuote.locator('svg')).toHaveCount(1);
+  await userQuote.click();
+  await expect(input).toHaveValue('> Keep this context.\n\n');
+  await expect(input).toBeFocused();
+  await input.fill('');
+
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'Alpha beta gamma.' },
+  });
+  cockpit.session.emit({ type: 'agent_settled' });
+
+  const assistantEntry = page.getByTestId('entry-assistant');
+  await expect(assistantEntry).toContainText('Alpha beta gamma.');
+  await assistantEntry.locator('p').evaluate((element) => {
+    const text = element.firstChild;
+    if (text === null) throw new Error('assistant message has no text node');
+    const range = document.createRange();
+    range.setStart(text, 6);
+    range.setEnd(text, 10);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await assistantEntry.hover();
+  await assistantEntry.getByTestId('entry-quote').click();
+
+  await expect(input).toHaveValue('> beta\n\n');
+  await expect(input).toBeFocused();
+});
 test('typing / completes the session commands', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForCommand('get_commands');

@@ -46,24 +46,40 @@ export function calculateClientPcmDbfs(pcm: Uint8Array): number {
   return rms === 0 ? SILENCE_DBFS : 20 * Math.log10(rms);
 }
 
+export interface ClientCaptureSpeechClassification {
+  readonly echoReferenceActive: boolean;
+  readonly echoDiscriminated: boolean;
+}
+
 /** Portable lifecycle. Classifier windows are authoritative; RMS is level telemetry only. */
 export class ClientCaptureActivityLifecycle {
   private elapsedBytes = 0;
   private activityEpoch = 0;
   private consecutiveSpeechSamples = 0;
+  private consecutiveEchoSpeechSamples = 0;
   private classifiedSpeechSamples = 0;
+  private echoDiscriminatedSpeechSamples = 0;
   private trailingSilenceSamples = 0;
   private speechStarted = false;
   private endpointReached = false;
+  private previousEchoDiscriminated = false;
 
   public constructor(private readonly endpointSilenceMs = DEFAULT_ENDPOINT_SILENCE_MS) {
     if (!Number.isSafeInteger(endpointSilenceMs) || endpointSilenceMs < 250)
       throw new Error('Client endpoint silence must be an integer of at least 250 ms.');
   }
 
-  public push(pcm: Uint8Array, windows: readonly SpeechPresenceWindow[] = []): VoiceMediaCaptureActivity {
+  public push(
+    pcm: Uint8Array,
+    windows: readonly SpeechPresenceWindow[] = [],
+    classification?: ClientCaptureSpeechClassification,
+  ): VoiceMediaCaptureActivity {
     const levelDbfs = calculateClientPcmDbfs(pcm);
     this.elapsedBytes += pcm.byteLength;
+    const echoDiscriminated =
+      classification?.echoReferenceActive === true &&
+      classification.echoDiscriminated &&
+      this.previousEchoDiscriminated;
 
     for (const window of windows) {
       if (!Number.isSafeInteger(window.sampleCount) || window.sampleCount <= 0)
@@ -71,13 +87,17 @@ export class ClientCaptureActivityLifecycle {
       if (this.endpointReached) {
         if (!window.speech) {
           this.consecutiveSpeechSamples = 0;
+          this.consecutiveEchoSpeechSamples = 0;
           continue;
         }
         this.consecutiveSpeechSamples += window.sampleCount;
+        if (echoDiscriminated) this.consecutiveEchoSpeechSamples += window.sampleCount;
         if (this.consecutiveSpeechSamples < MINIMUM_SPEECH_SAMPLES) continue;
         this.activityEpoch += 1;
         this.classifiedSpeechSamples = this.consecutiveSpeechSamples;
+        this.echoDiscriminatedSpeechSamples = this.consecutiveEchoSpeechSamples;
         this.consecutiveSpeechSamples = 0;
+        this.consecutiveEchoSpeechSamples = 0;
         this.trailingSilenceSamples = 0;
         this.speechStarted = true;
         this.endpointReached = false;
@@ -85,19 +105,24 @@ export class ClientCaptureActivityLifecycle {
       }
       if (window.speech) {
         this.classifiedSpeechSamples += window.sampleCount;
+        if (echoDiscriminated) this.echoDiscriminatedSpeechSamples += window.sampleCount;
         this.consecutiveSpeechSamples += window.sampleCount;
+        if (echoDiscriminated) this.consecutiveEchoSpeechSamples += window.sampleCount;
         if (this.consecutiveSpeechSamples >= MINIMUM_SPEECH_SAMPLES) {
           this.speechStarted = true;
           this.consecutiveSpeechSamples = 0;
+          this.consecutiveEchoSpeechSamples = 0;
           this.trailingSilenceSamples = 0;
         }
       } else {
         if (this.speechStarted) this.trailingSilenceSamples += this.consecutiveSpeechSamples + window.sampleCount;
         this.consecutiveSpeechSamples = 0;
+        this.consecutiveEchoSpeechSamples = 0;
       }
       const trailingSilenceMs = (this.trailingSilenceSamples / VOICE_MEDIA_SAMPLE_RATE) * 1_000;
       if (this.speechStarted && trailingSilenceMs >= this.endpointSilenceMs) this.endpointReached = true;
     }
+    this.previousEchoDiscriminated = classification?.echoReferenceActive === true && classification.echoDiscriminated;
 
     return {
       state: this.endpointReached ? 'endpoint' : this.speechStarted ? 'speech' : 'listening',
@@ -105,6 +130,13 @@ export class ClientCaptureActivityLifecycle {
       elapsedMs: Math.round((this.elapsedBytes / PCM_BYTES_PER_SECOND) * 1_000),
       epoch: this.activityEpoch,
       classifiedSpeechMs: Math.round((this.classifiedSpeechSamples / VOICE_MEDIA_SAMPLE_RATE) * 1_000),
+      ...(classification?.echoReferenceActive === true
+        ? {
+            echoDiscriminatedSpeechMs: Math.round(
+              (this.echoDiscriminatedSpeechSamples / VOICE_MEDIA_SAMPLE_RATE) * 1_000,
+            ),
+          }
+        : {}),
     };
   }
 
@@ -112,9 +144,12 @@ export class ClientCaptureActivityLifecycle {
   public resetActivity(): void {
     this.activityEpoch += 1;
     this.consecutiveSpeechSamples = 0;
+    this.consecutiveEchoSpeechSamples = 0;
     this.classifiedSpeechSamples = 0;
+    this.echoDiscriminatedSpeechSamples = 0;
     this.trailingSilenceSamples = 0;
     this.speechStarted = false;
     this.endpointReached = false;
+    this.previousEchoDiscriminated = false;
   }
 }

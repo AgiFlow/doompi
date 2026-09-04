@@ -1,0 +1,53 @@
+diff --git a/dist/modes/rpc/rpc-mode.js b/dist/modes/rpc/rpc-mode.js
+index b8b3c603a54c08699d0e3fd0f56ca2e17ddb2607..83c5fb12e6f4ee64eb09b479887f4379aa96e232 100644
+--- a/dist/modes/rpc/rpc-mode.js
++++ b/dist/modes/rpc/rpc-mode.js
+@@ -487,6 +487,15 @@ export async function runRpcMode(runtimeHost) {
+                 }
+                 return success(id, "fork", { text: result.selectedText, cancelled: result.cancelled });
+             }
++            case "navigate_tree": {
++                const result = await session.navigateTree(command.entryId);
++                return success(id, "navigate_tree", {
++                    entries: session.sessionManager.getBranch(),
++                    leafId: session.sessionManager.getLeafId(),
++                    editorText: result.editorText,
++                    cancelled: result.cancelled,
++                });
++            }
+             case "clone": {
+                 const leafId = session.sessionManager.getLeafId();
+                 if (!leafId) {
+diff --git a/dist/modes/rpc/rpc-types.d.ts b/dist/modes/rpc/rpc-types.d.ts
+index 82b5793d34cb04c1772e0ca0e664ece6b0a5c7ce..aa60ee0c07bcdb18d9ad6305768467ffd3e3e17d 100644
+--- a/dist/modes/rpc/rpc-types.d.ts
++++ b/dist/modes/rpc/rpc-types.d.ts
+@@ -107,6 +107,10 @@ export type RpcCommand = {
+     id?: string;
+     type: "fork";
+     entryId: string;
++} | {
++    id?: string;
++    type: "navigate_tree";
++    entryId: string;
+ } | {
+     id?: string;
+     type: "clone";
+@@ -339,6 +343,17 @@ export type RpcResponse = {
+             text: string;
+         }>;
+     };
++} | {
++    id?: string;
++    type: "response";
++    command: "navigate_tree";
++    success: true;
++    data: {
++        entries: SessionEntry[];
++        leafId: string | null;
++        editorText?: string;
++        cancelled: boolean;
++    };
+ } | {
+     id?: string;
+     type: "response";

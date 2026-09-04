@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   appendComposerDraft,
+  appendComposerQuote,
+  attachComposerContext,
   clearComposerState,
   composerStore,
   dropComposerState,
@@ -45,6 +47,51 @@ describe('composer state', () => {
     expect(composerStore.state.s1?.attachments).toHaveLength(1);
   });
 
+  it('attaches structured context without changing the visible draft', () => {
+    updateComposerState('s1', (state) => ({ ...state, draft: 'keep this', caret: 9 }));
+
+    attachComposerContext('s1', {
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-1',
+      label: 'AGI-1: Fix auth',
+      content: 'Status: Todo\n\nFix repository authentication.',
+    });
+
+    expect(composerStore.state.s1).toMatchObject({
+      draft: 'keep this',
+      caret: 9,
+      attachmentError: '',
+      nextAttachmentId: 1,
+    });
+    expect(composerStore.state.s1?.attachments).toEqual([
+      {
+        id: 'context-0',
+        kind: 'context',
+        name: 'AGI-1: Fix auth',
+        size: 44,
+        content: 'Status: Todo\n\nFix repository authentication.',
+        source: 'agiflow',
+        contextId: 'task-1',
+      },
+    ]);
+  });
+
+  it('rejects malformed or oversized plugin context without adding a chip', () => {
+    attachComposerContext('s1', { kind: 'work-item', source: '', id: 'task-1', label: 'AGI-1', content: 'work' });
+    expect(composerStore.state.s1?.attachmentError).toContain('source');
+
+    attachComposerContext('s1', {
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-1',
+      label: 'AGI-1',
+      content: 'x'.repeat(100 * 1024 + 1),
+    });
+    expect(composerStore.state.s1?.attachmentError).toContain('100 KB');
+    expect(composerStore.state.s1?.attachments).toEqual([]);
+  });
+
   it('uses existing draft whitespace as the separator and ignores empty appends', () => {
     updateComposerState('s1', (state) => ({ ...state, draft: 'first\n' }));
     appendComposerDraft('s1', ' second ');
@@ -56,6 +103,60 @@ describe('composer state', () => {
     expect(Object.keys(composerStore.state)).toEqual(['s1']);
   });
 
+  it('formats quoted messages and separates them from an existing instruction', () => {
+    expect(appendComposerQuote('s1', 'first line\n\nsecond line')).toBe(30);
+    expect(composerStore.state.s1?.draft).toBe('> first line\n>\n> second line\n\n');
+
+    updateComposerState('s1', (state) => ({ ...state, draft: `${state.draft}Focus here.` }));
+    expect(appendComposerQuote('s1', '  another message  ')).toBe(62);
+    expect(composerStore.state.s1?.draft).toBe(
+      '> first line\n>\n> second line\n\nFocus here.\n\n> another message\n\n',
+    );
+    updateComposerState('s2', (state) => ({ ...state, draft: 'one newline\n' }));
+    updateComposerState('s3', (state) => ({ ...state, draft: 'two newlines\n\n' }));
+    expect(appendComposerQuote('s2', 'quote')).toBe(22);
+    expect(appendComposerQuote('s3', 'quote')).toBe(23);
+    expect(appendComposerQuote('s1', '   ')).toBeNull();
+    expect(appendComposerQuote(null, 'detached')).toBeNull();
+  });
+
+  it('rejects detached, full, and over-budget plugin context', () => {
+    const item = { kind: 'work-item', source: 'agiflow', id: 'task-1', label: 'AGI-1', content: 'work' };
+    attachComposerContext(null, item);
+
+    updateComposerState('full', (state) => ({
+      ...state,
+      attachments: Array.from({ length: 8 }, (_, index) => ({
+        id: `image-${String(index)}`,
+        kind: 'image' as const,
+        name: 'image.png',
+        size: 1,
+        dataUrl: 'data:image/png;base64,eA==',
+        data: 'eA==',
+        mimeType: 'image/png',
+      })),
+    }));
+    attachComposerContext('full', item);
+    expect(composerStore.state.full?.attachmentError).toContain('8 attachments');
+
+    updateComposerState('budget', (state) => ({
+      ...state,
+      attachments: [
+        {
+          id: 'image-1',
+          kind: 'image',
+          name: 'image.png',
+          size: 1,
+          dataUrl: 'data:image/png;base64,eA==',
+          data: 'eA==',
+          mimeType: 'image/png',
+        },
+        { id: 'text-1', kind: 'text', name: 'notes.txt', size: 200 * 1024, content: 'notes' },
+      ],
+    }));
+    attachComposerContext('budget', item);
+    expect(composerStore.state.budget?.attachmentError).toContain('200 KB total');
+  });
   it('ignores detached updates and removes state for sessions that leave', () => {
     updateComposerState(null, () => {
       throw new Error('detached composer update should not run');

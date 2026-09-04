@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ resolveWebComposition: vi.fn() }));
+const mocks = vi.hoisted(() => ({ ensureSynced: vi.fn(), resolveWebComposition: vi.fn() }));
 
 vi.mock('../../src/adapters/webComposition.ts', () => ({
   resolveWebComposition: mocks.resolveWebComposition,
@@ -11,7 +11,7 @@ vi.mock('../../src/adapters/webComposition.ts', () => ({
 
 vi.mock('../../src/adapters/syncGuard.ts', () => ({
   createSyncGuard: () => ({
-    ensureSynced: async () => undefined,
+    ensureSynced: mocks.ensureSynced,
     watch: () => undefined,
     close: () => undefined,
   }),
@@ -27,6 +27,7 @@ let notices: string[];
 
 beforeEach(() => {
   notices = [];
+  mocks.ensureSynced.mockResolvedValue(undefined);
   registryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-compfail-'));
   assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-compfail-assets-'));
   fs.writeFileSync(path.join(assetsDir, 'index.html'), '<!doctype html><title>packaged</title>');
@@ -35,6 +36,7 @@ beforeEach(() => {
 afterEach(async () => {
   await server?.close();
   server = undefined;
+  mocks.ensureSynced.mockReset();
   mocks.resolveWebComposition.mockReset();
   fs.rmSync(registryDir, { recursive: true, force: true });
   fs.rmSync(assetsDir, { recursive: true, force: true });
@@ -61,6 +63,15 @@ describe('the stable cockpit shell', () => {
     // escaped, serveWeb would have rejected and there would be nothing to ask.
     const response = await fetch(`${server.url}/api/health`);
     expect(response.status).toBe(200);
+  });
+
+  it('keeps serving when the initial Doom sync fails', async () => {
+    mocks.ensureSynced.mockRejectedValue(new Error('another sync is publishing'));
+
+    server = await start();
+
+    expect((await fetch(`${server.url}/api/health`)).status).toBe(200);
+    expect(notices).toContainEqual(expect.stringContaining('continuing to serve the cockpit'));
   });
 
   it('does not rebuild a global plugin union before binding', async () => {

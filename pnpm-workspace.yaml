@@ -69,4 +69,5 @@ minimumReleaseAgeExclude:
 
 # Avoid repeated full-schema scans when Pi validates recursive JSON snapshot fields.
 patchedDependencies:
+  "@earendil-works/pi-coding-agent@0.84.4": patches/@earendil-works__pi-coding-agent@0.84.4.patch
   "@earendil-works/pi-protocol@0.84.4": patches/@earendil-works__pi-protocol@0.84.4.patch

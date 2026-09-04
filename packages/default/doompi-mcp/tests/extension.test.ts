@@ -19,6 +19,7 @@ import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protoco
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerMcpExtension } from '../src/adapters/pi/extension.ts';
 import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/adapters/pi/mcpConstants.ts';
@@ -60,6 +61,7 @@ let setStatus: ReturnType<typeof vi.fn>;
 let disconnectServer: ReturnType<typeof vi.fn>;
 let ensureConnected: ReturnType<typeof vi.fn>;
 let containerDispose: ReturnType<typeof vi.fn>;
+let emitServerState: ((change: McpServerStateChange) => void) | undefined;
 let sessionManager: { getSessionId(): string };
 
 /** Headless by default: `hasUI` is absent, which is how a non-TUI session reads. */
@@ -222,6 +224,7 @@ beforeEach(() => {
   disconnectServer = vi.fn().mockResolvedValue(undefined);
   ensureConnected = vi.fn().mockResolvedValue(undefined);
   containerDispose = vi.fn().mockResolvedValue(undefined);
+  emitServerState = undefined;
   sessionManager = { getSessionId: () => SESSION_ID };
   repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-ext-'));
   fs.writeFileSync(
@@ -235,7 +238,10 @@ beforeEach(() => {
   createProxyContainer.mockImplementation(() =>
     Promise.resolve({
       clientManager: {
-        onServerStateChange: () => () => undefined,
+        onServerStateChange: (listener: (change: McpServerStateChange) => void) => {
+          emitServerState = listener;
+          return () => undefined;
+        },
         getClient: () => undefined,
         disconnectServer,
         ensureConnected,
@@ -485,7 +491,29 @@ describe('doom mcp extension', () => {
     expect(setStatus).toHaveBeenCalledWith('doom-mcp', 'pencil');
 
     await extension.shutdownSession();
-    expect(setStatus).toHaveBeenLastCalledWith('doom-mcp', undefined);
+    expect(setStatus).toHaveBeenCalledWith('doom-mcp', undefined);
+  });
+
+  it('publishes only compact needs-auth rows and clears that browser status on shutdown', async () => {
+    const extension = registerExtension();
+    await extension.startSession();
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+
+    emitServerState?.({
+      serverName: 'pencil',
+      state: 'needs-auth',
+      error: 'secret=https://auth.example.test/?token=private',
+    });
+
+    const authPayload = JSON.stringify([{ name: 'pencil', state: 'needs-auth' }]);
+    await vi.waitFor(() => expect(setStatus).toHaveBeenCalledWith('doom-mcp-session-auth', authPayload));
+    expect(setStatus.mock.calls.flatMap((call) => call.slice(1)).join('\n')).not.toContain('private');
+
+    emitServerState?.({ serverName: 'pencil', state: 'connected' });
+    await vi.waitFor(() => expect(setStatus).toHaveBeenCalledWith('doom-mcp-session-auth', undefined));
+
+    await extension.shutdownSession();
+    expect(setStatus).toHaveBeenLastCalledWith('doom-mcp-session-auth', undefined);
   });
 
   it('removes the status service after shutdown', async () => {
@@ -595,6 +623,23 @@ describe('doom mcp extension', () => {
       await extension.runCommand('auth pencil', true);
 
       await vi.waitFor(() => expect(openExternalUrl).toHaveBeenCalledWith(authorizationUrl.toString()));
+      expect(setStatus.mock.calls.some(([key]) => key === 'doom-mcp-session-auth')).toBe(false);
+    });
+
+    it('does not open an external browser for an explicit auth action in a headless session', async () => {
+      const authorizationUrl = new URL('https://auth.example.test/authorize?state=headless-state');
+      const extension = registerExtension();
+      await extension.startSession(repoRoot, true, false);
+      await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+      const onAuthorizationUrl = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl;
+      ensureConnected.mockImplementation(async (serverName: string) => {
+        await onAuthorizationUrl(authorizationUrl, serverName);
+      });
+
+      await extension.runCommand('auth pencil', false);
+
+      expect(openExternalUrl).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining(authorizationUrl.toString()), 'info');
     });
 
     it('reconnects on reload', async () => {

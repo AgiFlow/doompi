@@ -160,6 +160,45 @@ describe('VoiceNarrationPlayback', () => {
     await expect(latest).resolves.toBe('completed');
   });
 
+  it('defers new playback, compacts queued requests, and releases one summary when the turn is delivered', async () => {
+    const h = fixture();
+    const compact = vi.fn(async () => 'One concise queued summary.');
+    h.playback.activate(config, { compact });
+    h.playback.setDeferred(true);
+
+    const first = h.playback.narrate('First queued update.', 'final');
+    const second = h.playback.narrate('Second queued warning.', 'clarification');
+    await flush();
+
+    expect(h.speak).not.toHaveBeenCalled();
+    expect(compact).toHaveBeenCalledWith(['First queued update.', 'Second queued warning.'], expect.any(AbortSignal));
+
+    h.playback.setDeferred(false);
+    await flush();
+    expect(h.playbacks).toHaveLength(1);
+    expect(h.playbacks[0]?.request).toMatchObject({ kind: 'clarification', text: 'One concise queued summary.' });
+
+    h.playbacks[0]?.settle();
+    await expect(Promise.all([first, second])).resolves.toEqual(['completed', 'completed']);
+  });
+
+  it('does not interrupt active playback when narration becomes deferred', async () => {
+    const h = fixture();
+    h.playback.activate(config);
+    const active = h.playback.narrate('Already speaking.', 'final');
+
+    h.playback.setDeferred(true);
+    const queued = h.playback.narrate('Wait until delivery.', 'final');
+    h.playbacks[0]?.settle();
+    await expect(active).resolves.toBe('completed');
+    expect(h.playbacks).toHaveLength(1);
+
+    h.playback.setDeferred(false);
+    expect(h.playbacks[1]?.request.text).toBe('Wait until delivery.');
+    h.playbacks[1]?.settle();
+    await expect(queued).resolves.toBe('completed');
+  });
+
   it('compacts two pending requests and settles represented callers after summary playback', async () => {
     const h = fixture();
     let finishCompaction!: (summary: string) => void;
@@ -224,7 +263,7 @@ describe('VoiceNarrationPlayback', () => {
     await expect(Promise.all([first, second, later])).resolves.toEqual(['completed', 'completed', 'completed']);
   });
 
-  it('falls back to FIFO without dropping content when compaction fails', async () => {
+  it('falls back to one bounded deterministic utterance when model compaction fails', async () => {
     const h = fixture();
     const compact = vi.fn(async () => {
       throw new Error('summary unavailable');
@@ -233,17 +272,40 @@ describe('VoiceNarrationPlayback', () => {
 
     const active = h.playback.narrate('Active.', 'final');
     const first = h.playback.narrate('First exact pending.', 'final');
-    const second = h.playback.narrate('Second exact pending.', 'final');
+    const second = h.playback.narrate('Second exact pending.', 'clarification');
     await flush();
     h.playbacks[0]?.settle();
     await active;
-    expect(h.playbacks[1]?.request.text).toBe('First exact pending.');
+    expect(h.playbacks[1]?.request).toMatchObject({
+      kind: 'clarification',
+      text: 'First exact pending. Second exact pending.',
+    });
     h.playbacks[1]?.settle();
-    await first;
-    expect(h.playbacks[2]?.request.text).toBe('Second exact pending.');
-    h.playbacks[2]?.settle();
-    await expect(second).resolves.toBe('completed');
+    await expect(Promise.all([first, second])).resolves.toEqual(['completed', 'completed']);
+    expect(h.playbacks).toHaveLength(2);
     expect(h.logger.recordError).toHaveBeenCalledWith('doom_voice.narration_compaction_failed', expect.any(Error));
+  });
+
+  it('strictly bounds deterministic compaction while representing each queued request', async () => {
+    const h = fixture();
+    h.playback.activate(config, {
+      compact: vi.fn(async () => {
+        throw new Error('summary unavailable');
+      }),
+    });
+    const active = h.playback.narrate('Active.', 'final');
+    const first = h.playback.narrate(`First ${'a'.repeat(1_000)}`, 'final');
+    const second = h.playback.narrate(`Second ${'b'.repeat(1_000)}`, 'final');
+    await flush();
+
+    h.playbacks[0]?.settle();
+    await active;
+    const fallback = h.playbacks[1]?.request.text ?? '';
+    expect(Array.from(fallback).length).toBeLessThanOrEqual(640);
+    expect(fallback).toContain('First ');
+    expect(fallback).toContain('Second ');
+    h.playbacks[1]?.settle();
+    await Promise.all([first, second]);
   });
 
   it('maps caller cancellation and deactivation to interrupted', async () => {

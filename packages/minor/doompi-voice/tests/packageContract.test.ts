@@ -163,10 +163,10 @@ describe('doom voice package boundary', () => {
   it('ships the pinned Silero model and upstream license as package resources', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.files).toContain('models');
-    await expectFile('models/silero_vad_v6.2.1.onnx');
-    await expectFile('models/SILERO-LICENSE');
-    await expectFile('models/README.md');
+    expect(manifest.files).toContain('src/web');
+    await expectFile('src/web/models/silero_vad_v6.2.1.onnx');
+    await expectFile('src/web/models/SILERO-LICENSE');
+    await expectFile('src/web/models/README.md');
   });
 
   it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {

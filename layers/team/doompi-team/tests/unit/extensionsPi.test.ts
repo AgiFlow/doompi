@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
+import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-extension-contracts/background-work';
 import {
   DOOM_DELEGATION_FINISHED_EVENT,
   DOOM_DELEGATION_STARTED_EVENT,
@@ -503,6 +504,29 @@ describe('Team standard runtime', () => {
     expect(firstSession.list().map((job) => job.runId)).toEqual(['run-from-first-session']);
   });
 
+  it('publishes direct runs for the exact active session and invalidates on tracker changes', async () => {
+    resetRuntimeState();
+    const host = fakePi();
+    activateTeamForTest(host.pi);
+    const tracker = runtimeFor(host.pi).asyncJobTracker;
+    const cordis = cordisFor(host.pi);
+    const invalidations: string[] = [];
+    cordis.on('doom/background-work/changed', (event) => invalidations.push(event.kind));
+
+    await host.fireAsync('session_start');
+    await waitForTeamReadiness(host);
+    const service = readDoomBackgroundWorkService(cordis);
+    if (!service) throw new Error('Expected Team to provide doom/background-work.');
+
+    tracker.forSession('other-session').track('other-run');
+    tracker.forSession('session-under-test').track('direct-run');
+
+    expect(service.snapshot()).toEqual({
+      items: [{ provider: 'team-direct-runs', id: 'direct-run', sessionId: 'session-under-test' }],
+      errors: [],
+    });
+    expect(invalidations).toContain('updated');
+  });
   it('serves the typed delegation lifecycle through the session Cordis service', async () => {
     resetRuntimeState();
     const host = fakePi();

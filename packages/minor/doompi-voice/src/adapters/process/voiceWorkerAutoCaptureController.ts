@@ -273,6 +273,7 @@ export class VoiceWorkerAutoCaptureController {
         onActivationStateChange: (state) => {
           if (state !== 'disabled') this.setState(state);
         },
+        onNarrationDeferredChange: (deferred) => this.narration.setDeferred(deferred),
         ...(this.dependencies.identityNonceFactory
           ? { identityNonceFactory: this.dependencies.identityNonceFactory }
           : {}),

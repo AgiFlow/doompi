@@ -266,7 +266,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
   const tool = thread.getByTestId('entry-tool');
   await expect(tool).toHaveAttribute('data-tool-name', 'read');
   await expect(tool).toHaveAttribute('data-tool-state', 'running');
-
+  await tool.getByTestId('tool-expand').click();
   // The journal grows while the tab is open; the result settles the card.
   appendRunJournal(journal, [
     journalEntry('j3', {

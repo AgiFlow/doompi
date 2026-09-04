@@ -71,6 +71,7 @@ import {
   runCommand,
   selectModel,
   selectThinkingLevel,
+  rewindToMessage,
   sessionStoreFor,
   submitMessage,
 } from '../../src/web/stores/sessionStore.ts';
@@ -79,6 +80,8 @@ import {
   applySessionRemoved,
   applySessionsSnapshot,
   applySessionUpsert,
+  beginSessionTransfer,
+  completeSessionTransfer,
   markSocketClosed,
   noSessions,
   resetSessions,
@@ -399,6 +402,16 @@ describe('sessionsStore', () => {
     expect(sessionsStore.state.order).toEqual(['x', 'late']);
   });
 
+  it('tracks a transfer until that same session completes', () => {
+    beginSessionTransfer('a');
+    beginSessionTransfer('a');
+    completeSessionTransfer('b');
+    expect(sessionsStore.state.transferringToId).toBe('a');
+
+    completeSessionTransfer('a');
+    expect(sessionsStore.state.transferringToId).toBeNull();
+  });
+
   it('upserts one session without touching the others', () => {
     applySessionsSnapshot({ type: 'sessions_snapshot', sessions: [summary('a'), summary('b')] });
     applySessionUpsert({ type: 'session_upsert', session: summary('b', { phase: 'turn' }) });
@@ -501,18 +514,37 @@ describe('promptFocus', () => {
     const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus.ts');
 
     let focused = 0;
-    const input = { disabled: false, focus: () => (focused += 1) } as unknown as HTMLTextAreaElement;
+    const selections: Array<[number, number]> = [];
+    const input = {
+      disabled: false,
+      focus: () => (focused += 1),
+      setSelectionRange: (start: number, end: number) => selections.push([start, end]),
+    } as unknown as HTMLTextAreaElement;
     const release = registerPromptInput(input);
-    focusPrompt();
+    focusPrompt(3);
     expect(focused).toBe(1);
+    expect(selections).toEqual([[3, 3]]);
 
+    let replacementFocused = 0;
+    const replacement = {
+      disabled: false,
+      focus: () => (replacementFocused += 1),
+      setSelectionRange: () => undefined,
+    } as unknown as HTMLTextAreaElement;
+    const releaseReplacement = registerPromptInput(replacement);
+    release();
+    focusPrompt();
+    expect(replacementFocused).toBe(1);
+    releaseReplacement();
+    registerPromptInput(input);
     // A composer with no session behind it cannot take the caret.
     (input as unknown as { disabled: boolean }).disabled = true;
     focusPrompt();
     expect(focused).toBe(1);
 
     (input as unknown as { disabled: boolean }).disabled = false;
-    release();
+    const finalRelease = registerPromptInput(input);
+    finalRelease();
     focusPrompt();
     expect(focused).toBe(1);
 
@@ -617,6 +649,17 @@ describe('session actions', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('rewinds only a non-empty item in an addressed session', () => {
+    rewindToMessage('', 's1');
+    rewindToMessage('message-1', null);
+    setActiveSession('s1');
+    rewindToMessage('message-1');
+
+    expect(sent).toEqual([
+      { type: 'session_command', sessionId: 's1', frame: { type: 'rewind', itemId: 'message-1' } },
+    ]);
+  });
+
   it('rename through the agent and read the state back', () => {
     setActiveSession('s1');
     renameSession('  gate-review ');
@@ -655,10 +698,17 @@ describe('session actions', () => {
       { kind: 'queued', text: 'later', images: userImages },
     ]);
   });
-  it('take an explicit session id past the focus', () => {
+  it('clears queued work before aborting an explicit session', () => {
     setActiveSession('s1');
+    applySessionFrame('s2', { type: 'queue_update', steering: ['interrupt'], followUp: ['later'] });
+
     abortRun('s2');
-    expect(sent).toEqual([{ type: 'session_command', sessionId: 's2', frame: { type: 'abort' } }]);
+
+    expect(sessionStoreFor('s2').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
+    expect(sent).toEqual([
+      { type: 'session_command', sessionId: 's2', frame: { type: 'clear_queue' } },
+      { type: 'session_command', sessionId: 's2', frame: { type: 'abort' } },
+    ]);
   });
 
   it('refuse to send blank drafts', () => {

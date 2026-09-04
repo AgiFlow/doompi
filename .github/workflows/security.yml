@@ -72,8 +72,60 @@ jobs:
           node-version: 22.22.1
           cache: pnpm
 
+      - name: Install pinned OSV Scanner
+        run: |
+          scanner="${RUNNER_TEMP}/osv-scanner"
+          curl \
+            --proto '=https' \
+            --tlsv1.2 \
+            --fail \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --output "$scanner" \
+            https://github.com/google/osv-scanner/releases/download/v2.5.1/osv-scanner_linux_amd64
+          echo "f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be  $scanner" | sha256sum --check
+          chmod +x "$scanner"
+
       - name: Reject known high-severity production vulnerabilities
-        run: pnpm audit --prod --audit-level high
+        run: |
+          report="${RUNNER_TEMP}/osv-report.json"
+          set +e
+          "${RUNNER_TEMP}/osv-scanner" scan source --lockfile=pnpm-lock.yaml --format=json >"$report"
+          scan_status=$?
+          set -e
+          node --input-type=module - "$report" "$scan_status" <<'NODE'
+          import fs from 'node:fs';
+
+          const report = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const scanStatus = Number(process.argv[3]);
+          if (!Array.isArray(report.results) || ![0, 1].includes(scanStatus)) {
+            throw new Error('OSV Scanner did not produce a valid vulnerability report');
+          }
+
+          const findings = report.results.flatMap((result) =>
+            (result.packages ?? []).flatMap((entry) =>
+              (entry.vulnerabilities ?? []).map((vulnerability) => ({
+                id: vulnerability.id ?? 'unknown',
+                package: `${entry.package?.name ?? 'unknown'}@${entry.package?.version ?? 'unknown'}`,
+                severity:
+                  typeof vulnerability.database_specific?.severity === 'string'
+                    ? vulnerability.database_specific.severity.toUpperCase()
+                    : 'UNKNOWN',
+              })),
+            ),
+          );
+          if (scanStatus !== 0 && findings.length === 0) {
+            throw new Error('OSV Scanner failed without reporting vulnerability findings');
+          }
+          for (const finding of findings) {
+            console.log(`${finding.severity} ${finding.id} ${finding.package}`);
+          }
+          const blocked = findings.filter((finding) => !['INFO', 'LOW', 'MODERATE'].includes(finding.severity));
+          if (blocked.length > 0) {
+            throw new Error(`Found ${blocked.length} high, critical, or unclassified production vulnerabilities`);
+          }
+          NODE
 
       - name: Install dependencies without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts

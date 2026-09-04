@@ -358,7 +358,7 @@ function modelChoice(value: unknown): ModelChoice | undefined {
 
 function applyResponse(state: SessionState, frame: Frame): SessionState {
   const command = asString(frame.command);
-  if (frame.success === false && PICKER_COMMANDS.has(command)) {
+  if (frame.success === false && (PICKER_COMMANDS.has(command) || command === 'navigate_tree')) {
     return withEntry(state, {
       kind: 'notice',
       id: `n${state.nextId}`,
@@ -382,6 +382,17 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         sessionName: asString(data.sessionName),
         messageCount: asNumber(data.messageCount) ?? 0,
         isStreaming: data.isStreaming === true,
+      },
+    };
+  }
+
+  if (command === 'navigate_tree' && data.cancelled !== true) {
+    const editorText = asString(data.editorText);
+    return {
+      ...state,
+      editorTextRequest: {
+        id: `rewind:${asString(data.leafId, 'root')}:${String(state.nextId)}`,
+        text: editorText,
       },
     };
   }
@@ -734,7 +745,7 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
     case 'agent_settled': {
       const closed = options.transcriptFromProtocol ? state : closeAssistant(state, undefined);
       const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
-      return { ...marked, activeTools: [], streaming: false, settled: true };
+      return { ...marked, activeTools: [], dialog: null, streaming: false, settled: true };
     }
 
     case 'queue_update': {

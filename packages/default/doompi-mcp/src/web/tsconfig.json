@@ -19,5 +19,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": [".", "../types", "../exports/webClient.ts"]
+  "include": [".", "../types", "../exports/webClient.ts", "../../tests/web"]
 }

@@ -247,10 +247,28 @@ describe('reduceSession', () => {
     expect(assistant(state).streaming).toBe(false);
   });
 
-  it('settles the run', () => {
-    const state = fold([{ type: 'agent_start' }, { type: 'agent_settled' }]);
+  it('settles the run and clears run-owned input', () => {
+    let active = reduceSession(initialSessionState, { type: 'agent_start' });
+    active = reduceSession(
+      active,
+      { type: 'tool_execution_start', toolCallId: 'call-ask', toolName: 'ask_user_question', args: {} },
+      { transcriptFromProtocol: true },
+    );
+    active = reduceSession(active, {
+      type: 'extension_ui_request',
+      id: 'request-ask',
+      method: 'select',
+      options: ['continue'],
+    });
+    expect(active.dialog).not.toBeNull();
+    expect(active.activeTools).toMatchObject([{ toolCallId: 'call-ask' }]);
+
+    const state = reduceSession(active, { type: 'agent_settled' }, { transcriptFromProtocol: true });
+
     expect(state.streaming).toBe(false);
     expect(state.settled).toBe(true);
+    expect(state.activeTools).toEqual([]);
+    expect(state.dialog).toBeNull();
   });
 
   it('unwraps replayed frames', () => {
@@ -369,6 +387,24 @@ describe('reduceSession', () => {
     expect(reduceSession(initialSessionState, { type: 'response', command: 'get_state', success: false })).toBe(
       initialSessionState,
     );
+  });
+
+  it('restores the selected prompt after tree navigation and surfaces a refusal', () => {
+    const rewound = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'navigate_tree',
+      success: true,
+      data: { leafId: 'parent-1', editorText: 'revise this prompt', cancelled: false },
+    });
+    expect(rewound.editorTextRequest).toEqual({ id: 'rewind:parent-1:1', text: 'revise this prompt' });
+
+    const refused = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'navigate_tree',
+      success: false,
+      error: 'Wait for the current response to finish before navigating the session tree.',
+    });
+    expect(refused.entries[0]).toMatchObject({ kind: 'notice', tone: 'error' });
   });
 
   it('reads usage out of get_session_stats', () => {

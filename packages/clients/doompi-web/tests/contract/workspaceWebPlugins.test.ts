@@ -151,6 +151,7 @@ describe('the workspace web plugin composition', () => {
       for (const group of [
         'activitySections',
         'composerActions',
+        'contextSections',
         'overlays',
         'railSections',
         'selectionBarItems',
@@ -179,9 +180,11 @@ describe('the workspace web plugin composition', () => {
         const { error } = renderPlugin(tab.panel, props);
         if (error) failures.push(`${definition.id} tab ${tab.id}: ${error.message}`);
       }
-      for (const surface of definition.activitySections ?? []) {
-        const { error } = renderPlugin(surface.component, props);
-        if (error) failures.push(`${definition.id} section ${surface.id}: ${error.message}`);
+      for (const group of ['activitySections', 'contextSections'] as const) {
+        for (const surface of definition[group] ?? []) {
+          const { error } = renderPlugin(surface.component, props);
+          if (error) failures.push(`${definition.id} ${group} ${surface.id}: ${error.message}`);
+        }
       }
     }
 

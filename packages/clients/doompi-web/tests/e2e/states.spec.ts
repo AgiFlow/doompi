@@ -151,6 +151,38 @@ test('an informational notice reads as an aside, an error shouts', async ({ page
   await expect(notices.nth(1)).toHaveAttribute('data-tone', 'error');
 });
 
+test('links only safe standalone URLs in notices and preserves their lines', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await expect(page).toHaveURL(/\/session\/[^/]+$/);
+  const currentUrl = page.url();
+  const message = [
+    'Open this URL:',
+    'https://auth.example.com/oauth?client=doom&state=a%26b',
+    'Embedded https://example.com stays plain text.',
+    'https://user:secret@example.com/private',
+    '<b>not markup</b>',
+  ].join('\n');
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'note-link-1',
+    method: 'notify',
+    message,
+  });
+
+  const notice = page.getByTestId('entry-notice');
+  await expect(notice).toBeVisible();
+  expect(await notice.locator('p').innerText()).toBe(message);
+  await expect(notice.locator('a')).toHaveCount(1);
+  await expect(notice.locator('a')).toHaveText('https://auth.example.com/oauth?client=doom&state=a%26b');
+  await expect(notice.locator('a')).toHaveAttribute('href', 'https://auth.example.com/oauth?client=doom&state=a%26b');
+  await expect(notice.locator('a')).toHaveAttribute('target', '_blank');
+  await expect(notice.locator('a')).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(notice.locator('b')).toHaveCount(0);
+  expect(page.url()).toBe(currentUrl);
+});
+
 test('the activity dock stays hidden across a route change and a reload', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

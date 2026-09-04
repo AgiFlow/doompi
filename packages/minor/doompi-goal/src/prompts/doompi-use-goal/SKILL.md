@@ -18,6 +18,8 @@ Use Goal when work must persist across turns with an explicit objective, optiona
 
 ## Finish accurately
 
-Call `goal_complete` only when the objective is genuinely achieved and no required work remains. Call `goal_blocked` only when the runtime's repeated-blocker threshold is met and progress requires user input or an external state change. Keep the active goal identifier and final summary consistent with the current goal.
+Call `goal_complete` only when authoritative evidence proves the objective is genuinely achieved and no required work remains. A prose claim, passing test, created file, or ordinary agent turn does not complete the Goal. If any requirement remains, continue concrete work. Pending subagents, tasks, runners, and workflows are work in progress, so wait for and incorporate their results before completion.
+
+Call `goal_blocked` only when the runtime's repeated-blocker threshold is met and progress requires user input or an external state change. Keep the active goal identifier and final summary consistent with the current goal.
 
 Goal state persists in Pi session entries, while history is scoped to the repository. Completed, cleared, or blocked goals no longer contribute active instructions or tools. A session holds one goal at a time; starting another replaces and archives the one being worked.

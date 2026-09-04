@@ -266,16 +266,33 @@ describe('AsyncJobTracker retention and eviction', () => {
     expect(tracker.get('run-1')).toBeDefined();
   });
 
-  it('evicts a terminal job once it has aged past retentionMs', async () => {
+  it('retains a terminal job past retention until completion handoff succeeds', async () => {
     tracker.statusFiles.set('run-1', statusJson('running'));
     tracker.track('run-1');
     tracker.statusFiles.set('run-1', statusJson('complete'));
-    await tracker.runOnce(); // observes the transition to terminal, starts the retention clock
-
-    vi.advanceTimersByTime(1001); // past the 1000ms test retentionMs
     await tracker.runOnce();
 
-    expect(tracker.get('run-1')).toBeUndefined();
+    vi.advanceTimersByTime(1001);
+    await tracker.runOnce();
+
+    expect(tracker.get('run-1')).toBeDefined();
+  });
+
+  it('evicts a handed-off terminal job once it has aged past retentionMs', async () => {
+    const session = tracker.forSession('session-a');
+    tracker.statusFiles.set('run-1', statusJson('running'));
+    session.track('run-1');
+    tracker.statusFiles.set('run-1', statusJson('complete'));
+    await tracker.runOnce();
+    expect(tracker.listBackgroundWork('session-a').map((job) => job.runId)).toEqual(['run-1']);
+
+    tracker.acknowledgeHandoff('session-a', 'run-1');
+    expect(tracker.listBackgroundWork('session-a')).toEqual([]);
+    expect(session.get('run-1')).toBeDefined();
+    vi.advanceTimersByTime(1001);
+    await tracker.runOnce();
+
+    expect(session.get('run-1')).toBeUndefined();
   });
 
   it('does not evict an in-flight (non-terminal) job no matter how long it has been tracked', async () => {
@@ -289,20 +306,49 @@ describe('AsyncJobTracker retention and eviction', () => {
   });
 
   it('recognizes each of the five terminal states', async () => {
+    const session = tracker.forSession('session-a');
     for (const state of ['complete', 'completed', 'failed', 'paused', 'stopped']) {
       const runId = `run-${state}`;
       tracker.statusFiles.set(runId, statusJson('running'));
-      tracker.track(runId);
+      session.track(runId);
       tracker.statusFiles.set(runId, statusJson(state));
       await tracker.runOnce();
+      tracker.acknowledgeHandoff('session-a', runId);
     }
 
     vi.advanceTimersByTime(1001);
     await tracker.runOnce();
 
     for (const state of ['complete', 'completed', 'failed', 'paused', 'stopped']) {
-      expect(tracker.get(`run-${state}`)).toBeUndefined();
+      expect(session.get(`run-${state}`)).toBeUndefined();
     }
+  });
+});
+
+describe('AsyncJobTracker invalidations', () => {
+  it('notifies exact-session subscribers for additions, status changes, and removal', async () => {
+    const session = tracker.forSession('session-a');
+    const listener = vi.fn();
+    const unsubscribe = tracker.subscribe('session-a', listener);
+
+    session.track('run-1');
+    tracker.statusFiles.set('run-1', statusJson('running'));
+    await tracker.runOnce();
+    session.untrack('run-1');
+
+    expect(listener).toHaveBeenCalledTimes(3);
+    unsubscribe();
+    session.track('run-2');
+    expect(listener).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not notify a different Pi session', () => {
+    const listener = vi.fn();
+    tracker.subscribe('session-b', listener);
+
+    tracker.forSession('session-a').track('run-1');
+
+    expect(listener).not.toHaveBeenCalled();
   });
 });
 

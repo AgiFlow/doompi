@@ -208,6 +208,7 @@ describe('the sync-time cockpit bundler', () => {
     expect(pluginFiles.some((file) => file.endsWith('.css'))).toBe(true);
     expect(compositionScript).toContain('assets/');
     expect(compositionScript).toContain('document.currentScript');
+    expect(compositionScript).not.toContain('{}.url');
     expect(compositionScript).not.toContain('new URL(`/assets/');
     expect(compositionScript).not.toContain('../models/silero_vad_v6.2.1.onnx');
   });

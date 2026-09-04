@@ -52,6 +52,7 @@ export interface NarrationBargeInProbe {
   stopPhrases: readonly string[];
   noiseProfile?: VadNoiseProfile;
   classifierSpeechMs?: number;
+  classifierConfirmed?: boolean;
 }
 
 export interface NarrationBargeInMonitorDependencies {
@@ -175,12 +176,17 @@ export function classifyNarrationBargeInSource(evidence: NarrationBargeInEvidenc
 }
 
 export function narrationBargeInIsActionable(evidence: NarrationBargeInEvidence): boolean {
-  return (
-    evidence.exactStopCommand ||
-    (evidence.intentionalAddress === true &&
-      evidence.residualTokenCount >= 1 &&
-      rankNarrationBargeInEvidence(evidence) >= MINIMUM_BARGE_IN_SCORE)
-  );
+  const score = rankNarrationBargeInEvidence(evidence);
+  const intentionalAddress =
+    evidence.intentionalAddress === true && evidence.residualTokenCount >= 1 && score >= MINIMUM_BARGE_IN_SCORE;
+  const trustedNaturalSpeech =
+    evidence.classifierConfirmed === true &&
+    (evidence.classifierSpeechMs ?? 0) >= 300 &&
+    evidence.residualTokenCount >= 3 &&
+    evidence.residualRatio >= 0.3 &&
+    evidence.narrationSimilarity < 0.6 &&
+    score >= MINIMUM_BARGE_IN_SCORE;
+  return evidence.exactStopCommand || intentionalAddress || trustedNaturalSpeech;
 }
 
 export function analyzeNarrationBargeIn(input: {
@@ -191,6 +197,7 @@ export function analyzeNarrationBargeIn(input: {
   pcm: Buffer;
   noiseProfile?: VadNoiseProfile;
   classifierSpeechMs?: number;
+  classifierConfirmed?: boolean;
 }): NarrationBargeInDecision {
   const activity = overlapActivity(input.pcm, input.noiseProfile);
   const analysis = extractNovelNarrationResidual(input.transcript, input.referenceText);
@@ -209,7 +216,7 @@ export function analyzeNarrationBargeIn(input: {
       analysis.echoAligned,
     ),
     intentionalAddress: address.detected,
-    classifierConfirmed: classifierSpeechMs >= 120,
+    classifierConfirmed: input.classifierConfirmed === true,
     classifierSpeechMs,
     residualTokenCount,
     residualRatio: transcriptTokenCount > 0 ? residualTokenCount / transcriptTokenCount : 0,
@@ -238,6 +245,7 @@ export class NarrationBargeInMonitor {
   private promoted = false;
   private discarded = false;
   private classifierSpeechMs = 0;
+  private classifierConfirmed = false;
 
   public constructor(private readonly dependencies: NarrationBargeInMonitorDependencies) {}
 
@@ -261,11 +269,18 @@ export class NarrationBargeInMonitor {
     if (!this.promoted) this.reset();
   }
 
-  public observe(frame: Buffer, observedAt: number, noiseProfile?: VadNoiseProfile, classifierSpeechMs = 0): void {
+  public observe(
+    frame: Buffer,
+    observedAt: number,
+    noiseProfile?: VadNoiseProfile,
+    classifierSpeechMs = 0,
+    classifierConfirmed = false,
+  ): void {
     if (!this.reference || this.promoted || this.discarded) return;
     if (frame.length !== PCM_FRAME_BYTES)
       throw new Error(`Barge-in monitor requires ${PCM_FRAME_BYTES}-byte PCM frames`);
     this.classifierSpeechMs = Math.max(this.classifierSpeechMs, classifierSpeechMs);
+    this.classifierConfirmed ||= classifierConfirmed;
     this.frames.push(Buffer.from(frame));
     while (this.frames.length > OVERLAP_RING_FRAMES) this.frames.shift();
     if (this.awaitingAuthority || observedAt < this.nextProbeAt || this.frames.length < PROBE_FRAMES) return;
@@ -280,6 +295,7 @@ export class NarrationBargeInMonitor {
       stopPhrases: [...this.reference.stopPhrases],
       ...(noiseProfile ? { noiseProfile: { ...noiseProfile } } : {}),
       classifierSpeechMs: this.classifierSpeechMs,
+      classifierConfirmed: this.classifierConfirmed,
     };
     this.schedule(probe);
   }
@@ -343,6 +359,9 @@ export class NarrationBargeInMonitor {
         ...(active.probe.classifierSpeechMs === undefined
           ? {}
           : { classifierSpeechMs: active.probe.classifierSpeechMs }),
+        ...(active.probe.classifierConfirmed === undefined
+          ? {}
+          : { classifierConfirmed: active.probe.classifierConfirmed }),
       });
       if (decision.actionable) {
         this.awaitingAuthority = true;
@@ -372,5 +391,6 @@ export class NarrationBargeInMonitor {
     this.promoted = false;
     this.discarded = false;
     this.classifierSpeechMs = 0;
+    this.classifierConfirmed = false;
   }
 }

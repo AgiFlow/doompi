@@ -120,6 +120,8 @@ describe('voice media hub channels', () => {
       VOICE_MEDIA_WAKE_TYPE,
       VOICE_OWNERSHIP_FRAME_TYPE,
     ]);
+    expect(webHubChannels[0]?.lifecycle).toBeUndefined();
+    expect(webHubChannels[1]?.lifecycle).toBe('hub');
   });
 
   it('executes a session activation request on the server and only publishes the selected session id', async () => {

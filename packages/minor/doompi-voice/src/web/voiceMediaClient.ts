@@ -1,5 +1,6 @@
 import { ClientCaptureActivityLifecycle, type SpeechPresenceDetector } from '../types/clientCaptureActivity.ts';
 import {
+  type VoiceMediaCapabilities,
   type VoiceMediaCapture,
   type VoiceMediaClientEvent,
   type VoiceMediaDevice,
@@ -17,6 +18,20 @@ export type VoiceMediaClientConnectionState = 'connecting' | 'connected' | 'conf
 function playbackFailure(playbackId: string, error: unknown): VoiceMediaPlaybackResult {
   const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   return { playbackId, outcome: 'failed', error: failure };
+}
+
+function snapshotCapabilities(capabilities: VoiceMediaCapabilities): VoiceMediaCapabilities {
+  return { ...capabilities };
+}
+
+function capabilitiesMatch(left: VoiceMediaCapabilities, right: VoiceMediaCapabilities): boolean {
+  return (
+    left.capture === right.capture &&
+    left.playback === right.playback &&
+    left.captureActivity === right.captureActivity &&
+    left.autonomousOrchestration === right.autonomousOrchestration &&
+    left.playbackDucking === right.playbackDucking
+  );
 }
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -99,10 +114,15 @@ export class VoiceMediaClient {
       });
       this.failAttempt = rejectAttempt;
       try {
-        await this.device.prepare?.();
-        const connected = await this.transport.connect(this.clientId, connectionId, this.device.capabilities);
+        const advertisedCapabilities = snapshotCapabilities(this.device.capabilities);
+        const connected = await this.transport.connect(this.clientId, connectionId, advertisedCapabilities);
+        if (signal.aborted) {
+          await this.transport.disconnect(this.clientId, connectionId).catch(() => undefined);
+          return;
+        }
         this.activeConnectionId = connectionId;
         this.onConnectionState('connected');
+        this.prepareCapabilities(connectionId, advertisedCapabilities, attemptController.signal);
         let cursor = connected.cursor;
         while (!signal.aborted) {
           const event = await Promise.race([
@@ -128,6 +148,25 @@ export class VoiceMediaClient {
         if (this.failAttempt === rejectAttempt) this.failAttempt = undefined;
       }
     }
+  }
+
+  private prepareCapabilities(
+    connectionId: string,
+    advertisedCapabilities: VoiceMediaCapabilities,
+    attemptSignal: AbortSignal,
+  ): void {
+    void (async () => {
+      try {
+        await this.device.prepare?.();
+        if (attemptSignal.aborted || this.abortController.signal.aborted || this.activeConnectionId !== connectionId)
+          return;
+        const preparedCapabilities = snapshotCapabilities(this.device.capabilities);
+        if (capabilitiesMatch(advertisedCapabilities, preparedCapabilities)) return;
+        await this.transport.refreshCapabilities?.(this.clientId, connectionId, preparedCapabilities);
+      } catch {
+        // Optional client-side activity processing degrades to host control.
+      }
+    })();
   }
 
   private async handle(event: VoiceMediaClientEvent, connectionId: string): Promise<void> {
@@ -174,9 +213,17 @@ export class VoiceMediaClient {
     this.speechDetector = speechDetector;
     this.activityLifecycle = activityLifecycle;
     try {
-      this.capture = await this.device.startCapture((pcm) => {
+      this.capture = await this.device.startCapture((pcm, speechAnalysis) => {
         if (generation !== this.captureGeneration || this.captureId !== captureId) return;
         const owned = new Uint8Array(pcm);
+        const speechPcm = speechAnalysis === undefined ? owned : new Uint8Array(speechAnalysis.speechPcm);
+        const classification =
+          speechAnalysis === undefined
+            ? undefined
+            : {
+                echoReferenceActive: speechAnalysis.echoReferenceActive,
+                echoDiscriminated: speechAnalysis.echoDiscriminated,
+              };
         this.audioUploads = this.audioUploads.then(async () => {
           if (
             this.audioUploadError !== undefined ||
@@ -185,9 +232,11 @@ export class VoiceMediaClient {
           )
             return;
           try {
-            const windows = await speechDetector?.push(owned);
+            if (speechPcm.byteLength !== owned.byteLength)
+              throw new Error('Local speech analysis must preserve the capture sample count.');
+            const windows = await speechDetector?.push(speechPcm);
             if (generation !== this.captureGeneration || this.captureId !== captureId) return;
-            const activity = activityLifecycle?.push(owned, windows);
+            const activity = activityLifecycle?.push(owned, windows, classification);
             await this.transport.sendAudio(this.clientId, connectionId, captureId, owned, activity);
           } catch (error) {
             if (generation !== this.captureGeneration || this.captureId !== captureId) return;

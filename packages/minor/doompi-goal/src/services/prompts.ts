@@ -44,7 +44,10 @@ function rules(label: string): string {
     '- Inspect current worktree, command output, tests, and external state before relying on summaries.',
     '- Audit every explicit requirement against authoritative evidence before completion.',
     `- Call goal_complete only after evidence proves every requirement of ${label} is satisfied.`,
+    '- Do not claim completion only in prose. A successful goal_complete call is the sole completion signal.',
+    '- If any requirement remains, continue concrete work instead of ending the turn as though the goal were complete.',
     '- Use goal_blocked only after the same true external blocker recurs for at least three turns with concrete evidence.',
+    '- Background subagents, tasks, runners, and workflows are still work in progress. Wait for and incorporate their results.',
     '- If incomplete at turn end, expect automatic continuation and keep working.',
   ].join('\n');
 }

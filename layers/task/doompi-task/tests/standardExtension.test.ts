@@ -1,5 +1,6 @@
 import {
   DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
 } from '@agimon-ai/doompi-extension-contracts/background-work';
 import {
@@ -20,12 +21,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const runtimeMocks = vi.hoisted(() => ({
   createCordisRoot: (): unknown => undefined,
   backgroundDispose: vi.fn(),
+  backgroundUpdate: vi.fn(),
   configureSession: vi.fn(),
   createDelegation: vi.fn(),
   createOverlay: vi.fn(),
   createStore: vi.fn(),
   delegationDispose: vi.fn(),
   delegationBind: vi.fn(() => () => undefined),
+  delegationListActiveWork: vi.fn((): Array<{ id: string; sessionId: string }> => []),
   delegationReconcile: vi.fn(async () => undefined),
   delegationReset: vi.fn(),
   leaderDispose: vi.fn(),
@@ -65,7 +68,7 @@ vi.mock('../src/services/delegation/manager.ts', async (importOriginal) => ({
     }
     bind = runtimeMocks.delegationBind;
     dispose = runtimeMocks.delegationDispose;
-    listActiveWork = () => [];
+    listActiveWork = runtimeMocks.delegationListActiveWork;
     reconcile = runtimeMocks.delegationReconcile;
     reset = runtimeMocks.delegationReset;
   },
@@ -178,7 +181,7 @@ beforeEach(() => {
   runtimeMocks.onExternalChange.mockReturnValue(runtimeMocks.unwatch);
   runtimeMocks.registerBackgroundWork.mockReturnValue({
     dispose: runtimeMocks.backgroundDispose,
-    update: vi.fn(),
+    update: runtimeMocks.backgroundUpdate,
   });
   runtimeMocks.registerLeader.mockReturnValue({ dispose: runtimeMocks.leaderDispose, update: vi.fn() });
   runtimeMocks.taskCommitListener = undefined;
@@ -190,6 +193,22 @@ afterEach(async () => {
 });
 
 describe('standard Task extension lifecycle', () => {
+  it.each([
+    ['interactive', true],
+    ['headless', false],
+  ])('publishes background work in %s sessions', async (_mode, hasUI) => {
+    const work = [{ id: `task-${String(hasUI)}`, sessionId: 'session-work' }];
+    runtimeMocks.delegationListActiveWork.mockReturnValueOnce(work);
+    const fixture = createPi();
+    await taskExtension(fixture.pi);
+    await fixture.handler('session_start')({}, { hasUI, sessionManager: { getSessionId: () => 'session-work' } });
+
+    const provider = runtimeMocks.registerBackgroundWork.mock.calls.at(-1)?.[0] as BackgroundWorkProvider | undefined;
+    expect(provider?.listActiveWork()).toEqual(work);
+
+    await fixture.handler('session_shutdown')();
+  });
+
   it('releases Pi session_start while shared readiness owns deferred store initialization', async () => {
     let finishCleanup: (() => void) | undefined;
     runtimeMocks.removeLegacyStore.mockImplementationOnce(

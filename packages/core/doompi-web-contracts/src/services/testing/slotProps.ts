@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import type {
+  ContextAction,
   SlotDataFill,
   SlotDeclaration,
   ThreadViewOptions,
   ToolMessageRenderProps,
   ToolResultView,
   TransientTab,
+  WebPluginContextItem,
   WebPluginSlotProps,
 } from '../../types/webPlugin.ts';
 
@@ -21,11 +23,19 @@ import type {
  */
 
 export interface RecordedSlotAction {
-  action: 'appendComposerDraft' | 'openTab' | 'openTransientTab' | 'closeTransientTab' | 'sendSessionFrame';
-  /** The tab id, the transient tab's id, or the target session of a frame or composer append. */
+  action:
+    | 'appendComposerDraft'
+    | 'attachComposerContext'
+    | 'openTab'
+    | 'openTransientTab'
+    | 'closeTransientTab'
+    | 'sendSessionFrame';
+  /** The tab id, the transient tab's id, or the target session of a frame or composer action. */
   target: string | null;
   /** The text passed to `appendComposerDraft`. */
   text?: string;
+  /** The structured item passed to `attachComposerContext`. */
+  context?: WebPluginContextItem;
   /** The frame a component sent, for `sendSessionFrame`. */
   frame?: Record<string, unknown>;
 }
@@ -49,6 +59,8 @@ export interface SlotPropsOptions {
   thread?: (threadId: string, options?: ThreadViewOptions) => ReactNode;
   /** The tab a path opens; by default no path opens one, as with no file plugin installed. */
   fileTab?: (path: string) => TransientTab | undefined;
+  /** Context actions installed plugins should offer for the item under test. */
+  contextActions?: (item: WebPluginContextItem) => readonly ContextAction[];
 }
 
 const DEFAULT_SESSION_ID = 's1';
@@ -71,6 +83,10 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
     appendComposerDraft: (text) => {
       actions.push({ action: 'appendComposerDraft', target: props.sessionId, text });
     },
+    attachComposerContext: (context) => {
+      actions.push({ action: 'attachComposerContext', target: props.sessionId, context });
+    },
+    contextActionsFor: (item) => options.contextActions?.(item) ?? [],
     sendSessionFrame: (sessionId, frame) => {
       actions.push({ action: 'sendSessionFrame', target: sessionId, frame });
     },

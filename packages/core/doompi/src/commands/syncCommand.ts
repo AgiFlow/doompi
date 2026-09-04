@@ -510,6 +510,12 @@ export class SyncCommand {
       : await acquireSyncLocationLock(resolveSyncLocation(repoRoot, homeDirectory));
     let result: SyncResult;
     try {
+      // A concurrent publisher may have resolved the drift while this command
+      // waited for the lock. Avoid moving the registration for no change.
+      if (!force && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+        output.write('doompi sync is already up to date\n');
+        return 0;
+      }
       result = await this.stage(repoRoot, parsed.options, environment, homeDirectory, progress);
     } finally {
       await releaseLock?.();

@@ -84,10 +84,14 @@ interface ActiveWorkerCapture {
   clientActivityGeneration: number;
   clientActivityObserved: boolean;
   clientActivitySpeechMs: number;
+  clientActivityEchoDiscriminatedSpeechMs: number;
   clientClassifierSpeechMs: number;
+  clientEchoDiscriminatedSpeechMs: number;
   hostClassifierSpeechMs: number;
   bargeInClientClassifierBaselineMs: number;
+  bargeInEchoDiscriminatedBaselineMs: number;
   bargeInHostClassifierBaselineMs: number;
+  bargeInEchoDiscriminationAvailable: boolean;
   playbackOverlapMs: number;
   clientSpeechStarted: boolean;
   finalized: boolean;
@@ -408,10 +412,14 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       clientActivityGeneration: 0,
       clientActivityObserved: false,
       clientActivitySpeechMs: 0,
+      clientActivityEchoDiscriminatedSpeechMs: 0,
       clientClassifierSpeechMs: 0,
+      clientEchoDiscriminatedSpeechMs: 0,
       hostClassifierSpeechMs: 0,
       bargeInClientClassifierBaselineMs: 0,
+      bargeInEchoDiscriminatedBaselineMs: 0,
       bargeInHostClassifierBaselineMs: 0,
+      bargeInEchoDiscriminationAvailable: false,
       playbackOverlapMs: 0,
       clientSpeechStarted: false,
       finalized: false,
@@ -579,15 +587,20 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
           const speechDetected = this.detectSpeech(active, frame);
           if (speechDetected === true) active.hostClassifierSpeechMs += PCM_FRAME_MS;
         }
+        const ordinaryClassifierSpeechMs = Math.max(
+          0,
+          active.clientClassifierSpeechMs - active.bargeInClientClassifierBaselineMs,
+          active.hostClassifierSpeechMs - active.bargeInHostClassifierBaselineMs,
+        );
+        const trustedClassifierSpeechMs = active.bargeInEchoDiscriminationAvailable
+          ? Math.max(0, active.clientEchoDiscriminatedSpeechMs - active.bargeInEchoDiscriminatedBaselineMs)
+          : undefined;
         active.bargeIn?.observe(
           frame,
           this.clock.now(),
           active.vad?.noiseProfile,
-          Math.max(
-            0,
-            active.clientClassifierSpeechMs - active.bargeInClientClassifierBaselineMs,
-            active.hostClassifierSpeechMs - active.bargeInHostClassifierBaselineMs,
-          ),
+          ordinaryClassifierSpeechMs,
+          trustedClassifierSpeechMs !== undefined && trustedClassifierSpeechMs >= 300,
         );
       }
       return;
@@ -630,6 +643,10 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       active.clientActivityState = undefined;
       active.clientActivityObserved = false;
       active.clientActivitySpeechMs = 0;
+      active.clientActivityEchoDiscriminatedSpeechMs = 0;
+      active.clientEchoDiscriminatedSpeechMs = 0;
+      active.bargeInEchoDiscriminatedBaselineMs = 0;
+      active.bargeInEchoDiscriminationAvailable = false;
       active.clientSpeechStarted = false;
     }
     const activityEpoch = activity.epoch ?? 0;
@@ -640,6 +657,10 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       active.clientActivityElapsedMs = -1;
       active.clientActivityState = undefined;
       active.clientActivitySpeechMs = 0;
+      active.clientActivityEchoDiscriminatedSpeechMs = 0;
+      active.clientEchoDiscriminatedSpeechMs = 0;
+      active.bargeInEchoDiscriminatedBaselineMs = 0;
+      active.bargeInEchoDiscriminationAvailable = false;
       if (!active.bargeIn?.confirmed) active.clientSpeechStarted = false;
     }
     if (
@@ -650,6 +671,7 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
       return;
     const previousElapsedMs = active.clientActivityElapsedMs;
     const previousSpeechMs = active.clientActivitySpeechMs;
+    const previousEchoDiscriminatedSpeechMs = active.clientActivityEchoDiscriminatedSpeechMs;
     active.clientActivityElapsedMs = activity.elapsedMs;
     active.clientActivityState = activity.state;
     active.clientActivityObserved = true;
@@ -662,6 +684,16 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     if (epochSpeechMs >= previousSpeechMs) {
       active.clientClassifierSpeechMs += epochSpeechMs - previousSpeechMs;
       active.clientActivitySpeechMs = epochSpeechMs;
+    }
+    const epochEchoDiscriminatedSpeechMs = activity.echoDiscriminatedSpeechMs;
+    if (
+      epochEchoDiscriminatedSpeechMs !== undefined &&
+      epochEchoDiscriminatedSpeechMs >= previousEchoDiscriminatedSpeechMs
+    ) {
+      active.clientEchoDiscriminatedSpeechMs += epochEchoDiscriminatedSpeechMs - previousEchoDiscriminatedSpeechMs;
+      active.clientActivityEchoDiscriminatedSpeechMs = epochEchoDiscriminatedSpeechMs;
+      if (this.isPlaybackSuppressed(active.command.sessionId) && !active.bargeIn?.confirmed)
+        active.bargeInEchoDiscriminationAvailable = true;
     }
     publish({
       kind: 'activity',
@@ -1053,7 +1085,9 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     if (!active?.vad || active.command.sessionId !== command.sessionId) return;
     if (command.active) {
       active.bargeInClientClassifierBaselineMs = active.clientClassifierSpeechMs;
+      active.bargeInEchoDiscriminatedBaselineMs = active.clientEchoDiscriminatedSpeechMs;
       active.bargeInHostClassifierBaselineMs = active.hostClassifierSpeechMs;
+      active.bargeInEchoDiscriminationAvailable = false;
       this.resetVoiceActivity(active);
       this.invalidateEndpoint(active);
       if (command.referenceText)

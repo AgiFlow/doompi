@@ -715,7 +715,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     const monitorIntervalMs = options.monitorIntervalMs ?? MONITOR_INTERVAL_MS;
     const followIntervalMs = options.followIntervalMs ?? FOLLOW_INTERVAL_MS;
     let monitorTimer: NodeJS.Timeout | undefined;
-    let monitorRefreshActive = false;
+    let monitorRefreshGeneration: number | undefined;
     let followTimer: NodeJS.Timeout | undefined;
     let followRefreshActive = false;
     let followedRun: WorkflowRunRecord | undefined;
@@ -1160,22 +1160,25 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     };
 
     const refreshStatus = async (ctx: ExtensionContext, notifyChanges: boolean): Promise<void> => {
-      if (!isRuntimeActive() || ctx !== sessionCtx) return;
+      const refreshGeneration = sessionGeneration;
+      const refreshIsCurrent = (): boolean =>
+        isRuntimeActive() && refreshGeneration === sessionGeneration && ctx === sessionCtx;
+      if (!refreshIsCurrent()) return;
       // Resolved before the guard is latched. Anything that can throw between
       // setting the flag and entering the try would strand it set, and a
       // stranded flag turns every later refresh into the early return above:
       // the run snapshot freezes, so the loop's launch budget never recovers.
       const activeTelemetry = getTelemetry(ctx);
-      if (monitorRefreshActive) {
+      if (monitorRefreshGeneration === refreshGeneration) {
         void activeTelemetry.recordEvent('doom_workflow.monitor_skipped', { outcome: 'already_running' });
         return;
       }
       const startedAt = Date.now();
       const activeRevisionAtRead = activeRunRevision;
-      monitorRefreshActive = true;
+      monitorRefreshGeneration = refreshGeneration;
       try {
         const records = await listAllRuns(registry);
-        if (!isRuntimeActive() || ctx !== sessionCtx) return;
+        if (!refreshIsCurrent()) return;
         const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId());
         const rootProcess = isRootProcess(ctx, sessionId);
         const sessionRecords = records.filter((record) => isSessionRun(record, sessionId));
@@ -1198,7 +1201,6 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
         const mine = runsForSession(records, sessionId).filter((record) => !record.stale);
         sessionRunCount = mine.length;
         publishModeWidget();
-        runProvider?.update(mine.map((record) => ({ id: record.runId ?? record.runKey, sessionId })));
 
         // A run that has left the session's set can never produce output again,
         // so its cached screen is dead weight.
@@ -1225,6 +1227,15 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
           }
         }
 
+        // A terminal run remains background work until Pi accepts the completion
+        // turn. Otherwise another producer can observe an empty snapshot and
+        // continue the agent before the workflow result has been queued.
+        const retainedWork = new Map(mine.map((record) => [runIdentity(record), record]));
+        for (const [identity, record] of pendingTerminalRuns) retainedWork.set(identity, record);
+        if (!refreshIsCurrent()) return;
+        runProvider?.update(
+          [...retainedWork.values()].map((record) => ({ id: record.runId ?? record.runKey, sessionId })),
+        );
         // Accumulated transitions belong to runs still going or still owed a
         // summary. Detect terminal deliveries before pruning so a failed run's
         // in-memory events remain available to its terminal message.
@@ -1273,6 +1284,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
                 return finishedRunSummary(record, summarizeWorkflowProgress(events));
               }),
             );
+            if (!refreshIsCurrent()) return;
             pi.sendMessage(
               {
                 customType: WORKFLOW_FINISHED_MESSAGE,
@@ -1292,6 +1304,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
               },
               { triggerTurn: true, deliverAs: 'steer' },
             );
+            if (!refreshIsCurrent()) return;
             for (const record of terminalRecords) {
               const identity = runIdentity(record);
               deliveredTerminalRuns.add(identity);
@@ -1300,6 +1313,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
               // can never be needed again.
               forgetRun(identity);
             }
+            runProvider?.update(mine.map((record) => ({ id: record.runId ?? record.runKey, sessionId })));
           } catch (error) {
             await activeTelemetry.recordError('doom_workflow.terminal_delivery_failed', error, {
               'workflow.pending_terminal_count': pendingTerminalRuns.size,
@@ -1307,6 +1321,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
           }
         }
 
+        if (!refreshIsCurrent()) return;
         previousStages = nextStages;
         void activeTelemetry.recordEvent('doom_workflow.monitor_finished', {
           duration_ms: Date.now() - startedAt,
@@ -1316,12 +1331,14 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
         await activeTelemetry.recordError('doom_workflow.monitor_failed', error, {
           duration_ms: Date.now() - startedAt,
         });
-        ctx.ui.notify(
-          `Workflow status refresh failed: ${error instanceof Error ? error.message : String(error)}`,
-          'warning',
-        );
+        if (refreshIsCurrent()) {
+          ctx.ui.notify(
+            `Workflow status refresh failed: ${error instanceof Error ? error.message : String(error)}`,
+            'warning',
+          );
+        }
       } finally {
-        monitorRefreshActive = false;
+        if (monitorRefreshGeneration === refreshGeneration) monitorRefreshGeneration = undefined;
       }
     };
 

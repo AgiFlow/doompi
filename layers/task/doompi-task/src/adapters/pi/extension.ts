@@ -98,7 +98,6 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
   let overlay: TaskOverlay | undefined;
   let unwatch: (() => void) | undefined;
   let backgroundWork: BackgroundWorkProviderHandle | undefined;
-  let backgroundWorkEnabled = false;
   let disposeLeader: (() => void) | undefined;
   let sessionId: string | undefined;
   let sessionInitialization:
@@ -154,8 +153,6 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
   const clearSessionResources = (): void => {
     unwatch?.();
     unwatch = undefined;
-    backgroundWorkEnabled = false;
-    backgroundWork?.update();
     delegation?.reset();
     overlay?.dispose();
     sessionId = undefined;
@@ -226,7 +223,7 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
     if (!service) return undefined;
     const handle = service.register({
       provider: BACKGROUND_WORK_PROVIDER,
-      listActiveWork: () => (backgroundWorkEnabled ? delegationManager.listActiveWork() : []),
+      listActiveWork: () => delegationManager.listActiveWork(),
     });
     backgroundWork = handle;
     return () => {
@@ -315,8 +312,6 @@ export function installTaskRuntime(cordis: Context, pi: ExtensionAPI): void {
         const currentSessionId = context.sessionManager?.getSessionId();
         if (!currentSessionId) throw new Error('doom-task requires a session id');
         sessionId = currentSessionId;
-        backgroundWorkEnabled = !context.hasUI;
-        backgroundWork?.update();
         taskStore.configureSession(resolveSessionKey(currentSessionId));
         stage = SESSION_START_STAGE.storeCleanup;
         const cleanup = await removeLegacyStoreDirectoryAsync(taskStore.storePath);

@@ -709,6 +709,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
           sessionId={sessionId}
           workflow={launching}
           cwd={catalogState.cwd}
+          initialPrompt={catalogState.prompt}
           send={sendSessionFrame}
           onClose={() => closeLaunch(sessionId)}
           onLaunched={() => {

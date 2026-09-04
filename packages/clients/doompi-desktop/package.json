@@ -25,10 +25,11 @@
   "main": "./dist/bin/main.cjs",
   "scripts": {
     "build": "tsdown",
-    "build:runtime": "vite build --config vite.runtime.config.ts",
+    "build:runtime": "vite build --config vite.runtime.config.ts && node scripts/downloadCloudflared.mjs",
     "package": "pnpm run build && pnpm run build:runtime && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
     "start": "pnpm run build && pnpm run build:runtime && electron dist/bin/main.cjs",
     "test": "vitest --run",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
@@ -37,6 +38,7 @@
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-server": "workspace:*",
     "@agimon-ai/doompi-web": "workspace:*",
+    "@playwright/test": "1.62.1",
     "@types/node": "26.4.0",
     "electron": "44.0.0",
     "npm": "11.16.0",

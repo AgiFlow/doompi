@@ -19,6 +19,7 @@ const DEFAULT_REPOSITORY_LABEL = 'repo';
 const DEFAULT_WORKTREE_LABEL = 'worktree';
 const LOCK_FILE = '.sync.lock';
 const STALE_LOCK_MS = 5 * 60 * 1000;
+const LOCK_RETRY_INTERVAL_MS = 100;
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 
@@ -181,31 +182,36 @@ function processIsAlive(processId: number): boolean {
 function removeStaleLock(lockPath: string): void {
   try {
     const stat = fs.statSync(lockPath);
-    if (Date.now() - stat.mtimeMs <= STALE_LOCK_MS) return;
     const record = readLockRecord(lockPath);
-    if (record && processIsAlive(record.pid)) return;
+    if (record) {
+      if (processIsAlive(record.pid)) return;
+    } else if (Date.now() - stat.mtimeMs <= STALE_LOCK_MS) {
+      // A publisher may have created the file but not written its record yet.
+      return;
+    }
     fs.rmSync(lockPath, { force: true });
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
   }
 }
 
-/** Acquires the exclusive publisher lock for one worktree namespace. */
+/** Waits for and acquires the exclusive publisher lock for one worktree namespace. */
 export async function acquireSyncLocationLock(location: SyncLocation): Promise<() => Promise<void>> {
   assertSyncLocationSafe(location);
   await fs.promises.mkdir(location.directory, { mode: PRIVATE_DIRECTORY_MODE, recursive: true });
   await fs.promises.chmod(location.directory, PRIVATE_DIRECTORY_MODE);
   const lockPath = path.join(location.directory, LOCK_FILE);
-  removeStaleLock(lockPath);
   const record: SyncLockRecord = { pid: process.pid, token: crypto.randomUUID() };
   let handle: fs.promises.FileHandle;
-  try {
-    handle = await fs.promises.open(lockPath, 'wx', PRIVATE_FILE_MODE);
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-      throw new Error(`Another Doom sync is already publishing ${location.directory}`);
+  for (;;) {
+    removeStaleLock(lockPath);
+    try {
+      handle = await fs.promises.open(lockPath, 'wx', PRIVATE_FILE_MODE);
+      break;
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
+      await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_INTERVAL_MS));
     }
-    throw error;
   }
   await handle.writeFile(`${JSON.stringify(record)}\n`);
   const heartbeat = setInterval(

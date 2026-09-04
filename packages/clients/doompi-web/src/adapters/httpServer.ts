@@ -385,37 +385,47 @@ export function createSettingsRepositoryRegistry(hub: SessionHub): {
  * put it. An API that throws answers 500 for its own routes alone; one bad
  * package never takes the cockpit down with it.
  */
-function mountHubApis(
+export function mountHubApis(
   app: Hono,
-  apis: readonly DoomApi[],
+  initialApis: readonly DoomApi[],
   notice: (message: string) => void,
   resolveRepository: (repositoryId: string) => string | undefined,
   readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
-): DoomApiHandler[] {
+): { handlers: DoomApiHandler[]; add: (apis: readonly DoomApi[]) => void } {
   const handlers: DoomApiHandler[] = [];
-  for (const api of apis) {
-    const mount = `${DOOM_API_ROUTE_PREFIX}/${api.basePath}`;
-    let handler: DoomApiHandler;
-    try {
-      handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository, readRepositorySync });
-    } catch (error) {
-      notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
-      continue;
-    }
-    handlers.push(handler);
-    app.all(`${mount}/*`, async (context) => {
-      if (context.req.query(API_SESSION_QUERY_PARAM) !== undefined) return context.notFound();
-      const url = new URL(context.req.url);
-      url.pathname = url.pathname.slice(mount.length) || '/';
+  const mounted = new Map<string, DoomApiHandler>();
+  const add = (apis: readonly DoomApi[]): void => {
+    for (const api of apis) {
+      if (mounted.has(api.basePath)) continue;
+      let handler: DoomApiHandler;
       try {
-        return await handler.fetch(new Request(url, context.req.raw));
+        handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository, readRepositorySync });
       } catch (error) {
-        notice(`hub API '${api.basePath}' failed on ${url.pathname} (${describeError(error)})`);
-        return context.json({ error: `The '${api.basePath}' API failed.` }, 500);
+        notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
+        continue;
       }
-    });
-  }
-  return handlers;
+      mounted.set(api.basePath, handler);
+      handlers.push(handler);
+    }
+  };
+
+  add(initialApis);
+  app.all(`${DOOM_API_ROUTE_PREFIX}/:basePath/*`, async (context, next) => {
+    if (context.req.query(API_SESSION_QUERY_PARAM) !== undefined) return next();
+    const basePath = context.req.param('basePath');
+    const handler = mounted.get(basePath);
+    if (handler === undefined) return next();
+    const mount = `${DOOM_API_ROUTE_PREFIX}/${basePath}`;
+    const url = new URL(context.req.url);
+    url.pathname = url.pathname.slice(mount.length) || '/';
+    try {
+      return await handler.fetch(new Request(url, context.req.raw));
+    } catch (error) {
+      notice(`hub API '${basePath}' failed on ${url.pathname} (${describeError(error)})`);
+      return context.json({ error: `The '${basePath}' API failed.` }, 500);
+    }
+  });
+  return { handlers, add };
 }
 
 /**
@@ -503,20 +513,29 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   }
   const cockpitRoot = globalDoomConfigDirectory(os.homedir());
   const cockpitSyncGuard = createSyncGuard({ repoRoot: cockpitRoot, onNotice: notice });
-  await cockpitSyncGuard.ensureSynced();
+  let registerRootHubApis = async (_root: string): Promise<void> => {};
 
   const ensureRootSynced = async (root: string): Promise<void> => {
     if (root === cockpitRoot) {
       await cockpitSyncGuard.ensureSynced();
-      return;
+    } else {
+      const guard = createSyncGuard({ repoRoot: root, onNotice: notice });
+      try {
+        await guard.ensureSynced();
+      } finally {
+        guard.close();
+      }
     }
-    const guard = createSyncGuard({ repoRoot: root, onNotice: notice });
+    await registerRootHubApis(root);
+  };
+  const syncRootAtStartup = async (root: string): Promise<void> => {
     try {
-      await guard.ensureSynced();
-    } finally {
-      guard.close();
+      await ensureRootSynced(root);
+    } catch (error) {
+      notice(`WARNING: startup sync failed for ${root}; continuing to serve the cockpit (${describeError(error)})`);
     }
   };
+  await syncRootAtStartup(cockpitRoot);
   const ensureSessionSynced = async (directory: string): Promise<void> =>
     await ensureRootSynced(compositionRoot(directory));
   const initialRecords = readRegistryRecords(options.registryDir, notice);
@@ -524,7 +543,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     ...initialRecords.map((record) => compositionRoot(record.cwd)),
     ...(pinnedRoot === undefined ? [] : [compositionRoot(pinnedRoot)]),
   ];
-  await Promise.all([...new Set(initialRoots)].map(async (root) => await ensureRootSynced(root)));
+  await Promise.all([...new Set(initialRoots)].map(syncRootAtStartup));
 
   // The shell is package-owned and stable. Synchronized roots contribute only
   // immutable session plugin compositions and session-local hub channels.
@@ -944,6 +963,17 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       ? []
       : await loadPackageApis('hub', { apiDirectory, onNotice: notice });
   const pluginApis = mountHubApis(app, hubApis, notice, resolveRepository, readRepositorySync);
+  registerRootHubApis = async (root: string): Promise<void> => {
+    const registration = readSyncRegistration(root);
+    if (registration === undefined) return;
+    const apis = await loadPackageApis('hub', {
+      apiDirectory: registration.apiDirectory,
+      env: {},
+      onNotice: notice,
+    });
+    pluginApis.add(apis);
+  };
+  await Promise.all([...new Set([cockpitRoot, ...initialRoots])].map(registerRootHubApis));
   mountSessionApiProxy(app, hub, notice, telemetry);
 
   app.get('/api/health', (context) =>
@@ -1485,7 +1515,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           livePush?.close();
           hub.close();
           providerAuth.close();
-          for (const handler of pluginApis) handler.close();
+          for (const handler of pluginApis.handlers) handler.close();
           pluginPublication.close();
           // An upgraded socket leaves the HTTP server's connection tracking,
           // so only the WebSocket server can let go of it. Without this the
@@ -1511,7 +1541,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       hub.close();
       providerAuth.close();
       void remote.close();
-      for (const handler of pluginApis) handler.close();
+      for (const handler of pluginApis.handlers) handler.close();
       pluginPublication.close();
       void telemetry.shutdown();
       reject(error);

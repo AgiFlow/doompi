@@ -12,6 +12,13 @@ describe('the slot props a component receives', () => {
     fixture.props.openTab('runners');
     fixture.props.openTab(null);
     fixture.props.appendComposerDraft('continue here');
+    fixture.props.attachComposerContext({
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-1',
+      label: 'AGI-1',
+      content: 'Fix auth.',
+    });
     fixture.props.sendSessionFrame('s1', { type: 'prompt', text: 'go' });
     fixture.props.openTransientTab({ id: 'runner-log-7', label: 'Log', panel: () => null });
     fixture.props.closeTransientTab('runner-log-7');
@@ -20,11 +27,34 @@ describe('the slot props a component receives', () => {
       { action: 'openTab', target: 'runners' },
       { action: 'openTab', target: null },
       { action: 'appendComposerDraft', target: 's1', text: 'continue here' },
+      {
+        action: 'attachComposerContext',
+        target: 's1',
+        context: { kind: 'work-item', source: 'agiflow', id: 'task-1', label: 'AGI-1', content: 'Fix auth.' },
+      },
       { action: 'sendSessionFrame', target: 's1', frame: { type: 'prompt', text: 'go' } },
       { action: 'openTransientTab', target: 'runner-log-7' },
       { action: 'closeTransientTab', target: 'runner-log-7' },
     ]);
     expect(fixture.frames()).toEqual([{ type: 'prompt', text: 'go' }]);
+  });
+
+  it('returns installed context actions for the item under test', () => {
+    const seen: string[] = [];
+    const fixture = slotPropsFixture({
+      contextActions: (item) => [{ id: 'team.launch', label: 'Launch Agent', run: () => seen.push(item.id) }],
+    });
+    const actions = fixture.props.contextActionsFor({
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-1',
+      label: 'AGI-1',
+      content: 'Fix auth.',
+    });
+
+    expect(actions.map(({ id, label }) => [id, label])).toEqual([['team.launch', 'Launch Agent']]);
+    actions[0]?.run();
+    expect(seen).toEqual(['task-1']);
   });
 
   it('defaults to a focused session and no statuses, and takes an unfocused one', () => {

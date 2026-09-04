@@ -27,13 +27,16 @@ test('pages back through a transcript longer than the attach restores', async ({
   await expect(page.getByText('line 120')).toBeVisible();
   await expect(page.getByText('line 60')).toHaveCount(0);
 
-  await timeline.evaluate((element) => {
-    element.scrollTop = 0;
-  });
-
   // Scrolling to the top asks the hub for the window above, which arrives and
-  // is prepended without the reader losing their place.
-  await expect(page.getByText('line 60')).toBeVisible();
+  // is prepended without the reader losing their place. Retry the gesture while
+  // a preceding request is in flight rather than relying on a fixed sleep.
+  await expect(async () => {
+    await timeline.evaluate((element) => {
+      element.scrollTop = 0;
+      element.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+    await expect(page.getByText('line 60')).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.getByText('line 419')).toBeVisible();
 });
 
@@ -52,13 +55,11 @@ test('stops asking once the transcript has no more above it', async ({ page, coc
   const timeline = page.getByTestId('timeline');
   await expect(page.getByText('line 319')).toBeVisible();
 
-  // Two trips are enough to reach the start of a 320-line transcript.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  await expect(async () => {
     await timeline.evaluate((element) => {
       element.scrollTop = 0;
+      element.dispatchEvent(new Event('scroll', { bubbles: true }));
     });
-    await page.waitForTimeout(300);
-  }
-
-  await expect(page.getByText('line 0')).toBeVisible();
+    await expect(page.getByText('line 0')).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 });

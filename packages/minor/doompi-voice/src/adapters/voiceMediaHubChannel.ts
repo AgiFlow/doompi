@@ -65,6 +65,7 @@ export function createVoiceMediaWakeChannel(watch: typeof watchVoiceMediaWake = 
 export function createVoiceOwnershipChannel(options: { pollMs?: number } = {}): WebHubChannel {
   return {
     frameType: VOICE_OWNERSHIP_FRAME_TYPE,
+    lifecycle: 'hub',
     start(host) {
       const scopes = new Map<string, HubSessionScope>();
       const handledRequests = new Set<string>();

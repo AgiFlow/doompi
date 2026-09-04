@@ -117,6 +117,36 @@ test('the questionnaire replaces the composer input and answers every question a
   await expect(page.getByTestId('composer-input')).toBeVisible();
 });
 
+test('host abort stays available while the questionnaire owns the composer', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  cockpit.session.emit({ type: 'agent_start' });
+  ask(cockpit.session);
+
+  await expect(page.getByTestId('questionnaire')).toBeVisible();
+  await expect(page.getByTestId('composer-input')).toBeHidden();
+  await expect(page.getByTestId('composer-abort')).toBeVisible();
+
+  const commandOffset = cockpit.session.received.length;
+  await page.getByTestId('composer-abort').click();
+  await cockpit.session.waitForCommand('clear_queue');
+  await cockpit.session.waitForCommand('abort');
+  expect(
+    cockpit.session.received
+      .slice(commandOffset)
+      .map((frame) => frame.type)
+      .filter((type) => type === 'clear_queue' || type === 'abort'),
+  ).toEqual(['clear_queue', 'abort']);
+
+  cockpit.session.emit({ type: 'tool_execution_end', toolCallId: 'call-ask', result: { content: [] } });
+  cockpit.session.emit({ type: 'agent_settled' });
+
+  await expect(page.getByTestId('questionnaire')).toBeHidden();
+  await expect(page.getByTestId('dialog')).toBeHidden();
+  await expect(page.getByTestId('composer-abort')).toBeHidden();
+  await expect(page.getByTestId('composer-input')).toBeVisible();
+});
+
 test('a step already answered can be reopened and changed before anything is sent', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

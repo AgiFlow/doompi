@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { AgentsActivitySection } from './AgentsActivitySection.tsx';
 import { subagentsTab } from './SubagentsPanel.tsx';
-import { openCatalog, subagentCatalogChannel } from './catalogStore.ts';
+import { openAgentCatalogForContext, openCatalog, subagentCatalogChannel } from './catalogStore.ts';
 import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
 import { activityRuns, isTerminalRun, subagentRunsChannel, subagents } from './subagentsStore.ts';
 import { teamToolRenderers } from './toolRenderers.ts';
@@ -25,6 +25,16 @@ const agentsActivitySource = {
 export const webPlugin = defineWebPlugin({
   id: 'subagents',
   channels: [subagentRunsChannel, subagentCatalogChannel],
+  contextActions: [
+    {
+      id: 'launch-agent',
+      label: 'Launch Agent',
+      detail: 'Choose an agent, review the task, then launch it.',
+      kinds: ['work-item'],
+      order: 10,
+      run: (context) => openAgentCatalogForContext(context, subagentsTab),
+    },
+  ],
   // No declared tab: the fleet is a panel the reader opens from the dock's
   // agents group, and closes when they are done with it.
   activityGroups: [

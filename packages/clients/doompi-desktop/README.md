@@ -34,8 +34,10 @@ same bundle is still served to a remote paired browser.
 **The runtime is a build artifact, not a deployed package tree.** Vite bundles
 the cockpit, server, agent, and workspace JavaScript into `build/runtime`. Its
 runtime plugin copies the built web assets, RMUX and RTK payloads, platform-native
-addons, and the scoped browser package graph needed to compose user plugins. It
-never walks or ships the general workspace `node_modules` tree.
+addons, and the scoped browser package graph needed to compose user plugins. The
+runtime build also downloads a pinned, checksum-verified `cloudflared` binary so
+remote access works without a separate system install. It never walks or ships
+the general workspace `node_modules` tree.
 
 ## Layout
 
@@ -48,6 +50,7 @@ never walks or ships the general workspace `node_modules` tree.
 | `src/services/hubLaunch.ts`       | Pure path, environment and socket-budget logic       |
 | `vite.runtime.config.ts`          | Bundles the child-process runtime artifact           |
 | `scripts/desktopRuntimePlugin.ts` | Copies composition assets and native payloads        |
+| `scripts/downloadCloudflared.mjs` | Stages the pinned remote-access tunnel binary        |
 | `scripts/signHubBinaries.cjs`     | Signs native binaries before the app is signed       |
 
 ## Commands

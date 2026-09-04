@@ -22,6 +22,16 @@
         "cwd": "packages/clients/doompi-desktop",
         "forwardAllArgs": false
       }
+    },
+    "test:e2e": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "cache": false,
+      "options": {
+        "command": "pnpm run test:e2e",
+        "cwd": "packages/clients/doompi-desktop",
+        "forwardAllArgs": false
+      }
     }
   }
 }

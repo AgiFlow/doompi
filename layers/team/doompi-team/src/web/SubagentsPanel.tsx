@@ -472,6 +472,7 @@ export function SubagentsPanel({
           cwd={shelf.cwd}
           models={shelf.models}
           fork={shelf.launch.fork}
+          initialTask={shelf.task}
           send={sendSessionFrame}
           onClose={() => closeLaunch(sessionId)}
           onLaunched={() => closeCatalog(sessionId)}
