@@ -18,6 +18,11 @@ export function followUpCommand(message: string, images: RpcImage[] = []): Frame
   return { type: 'follow_up', message, ...(images.length > 0 ? { images } : {}) };
 }
 
+/** Requests in-place Pi session-tree navigation after the hub resolves the visible transcript id. */
+export function rewindCommand(itemId: string): Frame {
+  return { type: 'rewind', itemId };
+}
+
 export function abortCommand(): Frame {
   return { type: 'abort' };
 }

@@ -509,6 +509,39 @@ describe('the session hub over a registry', () => {
     ]);
   });
 
+  it('resolves a visible transcript item before navigating the Pi session tree', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir);
+    await session.waitForCommand('get_entries');
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: {
+        entries: [
+          { id: 'entry-user', type: 'message', message: { role: 'user', content: 'question', timestamp: 42 } },
+          { id: 'entry-assistant', type: 'message', message: { id: 'answer-1', role: 'assistant', content: 'answer' } },
+        ],
+        leafId: 'entry-assistant',
+      },
+    });
+    await waitFor(() => harness.framesFor('one').some((frame) => frame.type === 'entry_appended'), 'journal restore');
+
+    harness.hub.command('one', { type: 'rewind', itemId: 'user-42' });
+    expect(await session.waitForCommand('navigate_tree')).toEqual({ type: 'navigate_tree', entryId: 'entry-user' });
+
+    harness.hub.command('one', { type: 'rewind', itemId: 'answer-1' });
+    await waitFor(
+      () => session.received.filter((frame) => frame.type === 'navigate_tree').length === 2,
+      'the second tree navigation',
+    );
+    expect(session.received.filter((frame) => frame.type === 'navigate_tree').at(-1)).toEqual({
+      type: 'navigate_tree',
+      entryId: 'entry-assistant',
+    });
+  });
+
   it('restores only the tail of a transcript longer than the limit', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });

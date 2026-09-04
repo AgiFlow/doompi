@@ -1,4 +1,4 @@
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-web-contracts';
 import {
   WORKFLOW_CATALOG_TYPE,
   type WorkflowCatalogEntryView,
@@ -13,6 +13,8 @@ export interface CatalogSession {
   /** True while the catalog drawer is shown in the workflows tab. */
   open: boolean;
   filter: string;
+  /** Prompt carried from the surface that opened the catalog. */
+  prompt: string;
   /** The highlighted row, by workflow path. */
   selected: string | undefined;
   /** The row whose parsed detail is unfolded. */
@@ -27,6 +29,7 @@ export const catalog = defineSessionStore<CatalogSession>({
   warning: undefined,
   open: false,
   filter: '',
+  prompt: '',
   selected: undefined,
   inspected: undefined,
   launch: undefined,
@@ -36,12 +39,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function openCatalog(sessionId: string): void {
-  catalog.update(sessionId, (current) => ({ ...current, open: true }));
+export function openCatalog(sessionId: string, prompt = ''): void {
+  catalog.update(sessionId, (current) => ({ ...current, open: true, prompt }));
+}
+
+/** Opens the Workflow picker with context supplied by another installed plugin. */
+export function openWorkflowCatalogForContext(context: ContextActionRunContext, tab: () => TransientTab): void {
+  if (context.sessionId === null) return;
+  openCatalog(context.sessionId, context.item.content);
+  context.openTransientTab(tab());
 }
 
 export function closeCatalog(sessionId: string): void {
-  catalog.update(sessionId, (current) => ({ ...current, open: false, launch: undefined }));
+  catalog.update(sessionId, (current) => ({ ...current, open: false, prompt: '', launch: undefined }));
 }
 
 export function setCatalogFilter(sessionId: string, filter: string): void {

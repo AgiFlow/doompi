@@ -513,7 +513,6 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   }
   const cockpitRoot = globalDoomConfigDirectory(os.homedir());
   const cockpitSyncGuard = createSyncGuard({ repoRoot: cockpitRoot, onNotice: notice });
-  await cockpitSyncGuard.ensureSynced();
   let registerRootHubApis = async (_root: string): Promise<void> => {};
 
   const ensureRootSynced = async (root: string): Promise<void> => {
@@ -529,6 +528,14 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     }
     await registerRootHubApis(root);
   };
+  const syncRootAtStartup = async (root: string): Promise<void> => {
+    try {
+      await ensureRootSynced(root);
+    } catch (error) {
+      notice(`WARNING: startup sync failed for ${root}; continuing to serve the cockpit (${describeError(error)})`);
+    }
+  };
+  await syncRootAtStartup(cockpitRoot);
   const ensureSessionSynced = async (directory: string): Promise<void> =>
     await ensureRootSynced(compositionRoot(directory));
   const initialRecords = readRegistryRecords(options.registryDir, notice);
@@ -536,7 +543,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     ...initialRecords.map((record) => compositionRoot(record.cwd)),
     ...(pinnedRoot === undefined ? [] : [compositionRoot(pinnedRoot)]),
   ];
-  await Promise.all([...new Set(initialRoots)].map(async (root) => await ensureRootSynced(root)));
+  await Promise.all([...new Set(initialRoots)].map(syncRootAtStartup));
 
   // The shell is package-owned and stable. Synchronized roots contribute only
   // immutable session plugin compositions and session-local hub channels.

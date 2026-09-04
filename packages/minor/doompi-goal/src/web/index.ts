@@ -20,9 +20,20 @@ export const webPlugin = defineWebPlugin({
   // outlives the mode and the footer's terse 'goal' carries no objective to
   // show. There is no `tab`: the goal is one line, so the row is the whole of
   // it, and the chip stays the label for the TUI's SPC g e.
+  // A goal is durable session context, not work that continues after the agent
+  // settles, so it stays out of the running count and resume notice.
   // hideWhenEmpty: the row is the goal, so with no goal there is nothing to
   // put under the header, and the group waits until a session sets one.
-  activityGroups: [{ name: 'goal', keys: 'g e', statusKey: GOAL_VIEW_STATUS_KEY, hideWhenEmpty: true, order: 35 }],
+  activityGroups: [
+    {
+      name: 'goal',
+      keys: 'g e',
+      statusKey: GOAL_VIEW_STATUS_KEY,
+      marksBackgroundWork: false,
+      hideWhenEmpty: true,
+      order: 35,
+    },
+  ],
   // Same name as the group: the dock renders this inside it, in place of the
   // raw status line the session publishes.
   activitySections: [{ id: 'goal', component: GoalActivitySection }],

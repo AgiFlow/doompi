@@ -22,6 +22,9 @@ import {
   clearComposerState,
   type ComposerAttachment,
   type ComposerImageAttachment,
+  MAX_COMPOSER_ATTACHMENTS,
+  MAX_COMPOSER_TEXT_BYTES,
+  MAX_COMPOSER_TOTAL_TEXT_BYTES,
   updateComposerState,
   useComposerState,
 } from '../../stores/composerStore.ts';
@@ -53,11 +56,8 @@ const SKILL_PREFIX = 'skill:';
 type CompletionKind = 'command' | 'skill' | 'file';
 const TRIGGER_CHARS: Record<CompletionKind, string> = { command: '/', skill: '$', file: '@' };
 const FILE_SEARCH_DEBOUNCE_MS = 150;
-const MAX_ATTACHMENTS = 8;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_TEXT_BYTES = 100 * 1024;
-const MAX_TOTAL_TEXT_BYTES = 200 * 1024;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const TEXT_EXTENSIONS = new Set([
   'c',
@@ -114,9 +114,13 @@ function attachmentPrompt(draft: string, attachments: ComposerAttachment[]): str
   const trimmed = draft.trim();
   if (trimmed) parts.push(trimmed);
   for (const attachment of attachments) {
-    if (attachment.kind !== 'text') continue;
+    if (attachment.kind === 'image') continue;
     const safeName = attachment.name.replace(/[\r\n]/g, ' ').slice(0, 200);
-    parts.push(`Attached file "${safeName}":\n\n${attachment.content}`);
+    parts.push(
+      attachment.kind === 'context'
+        ? `Referenced context "${safeName}":\n\n${attachment.content}`
+        : `Attached file "${safeName}":\n\n${attachment.content}`,
+    );
   }
   if (parts.length === 0 && attachments.some((attachment) => attachment.kind === 'image')) {
     parts.push('Please review the attached image.');
@@ -332,12 +336,12 @@ export function Composer() {
       const next = [...attachments];
       const rejected: string[] = [];
       let imageBytes = next.reduce((total, item) => total + (item.kind === 'image' ? item.size : 0), 0);
-      let textBytes = next.reduce((total, item) => total + (item.kind === 'text' ? item.size : 0), 0);
+      let textBytes = next.reduce((total, item) => total + (item.kind === 'image' ? 0 : item.size), 0);
       let attachmentId = nextAttachmentId;
 
       for (const file of files) {
-        if (next.length >= MAX_ATTACHMENTS) {
-          rejected.push(`Only ${String(MAX_ATTACHMENTS)} attachments are allowed.`);
+        if (next.length >= MAX_COMPOSER_ATTACHMENTS) {
+          rejected.push(`Only ${String(MAX_COMPOSER_ATTACHMENTS)} attachments are allowed.`);
           break;
         }
         const id = `attachment-${String(attachmentId++)}`;
@@ -371,11 +375,11 @@ export function Composer() {
           rejected.push(`${file.name} is not a supported image or text file.`);
           continue;
         }
-        if (file.size > MAX_TEXT_BYTES) {
+        if (file.size > MAX_COMPOSER_TEXT_BYTES) {
           rejected.push(`${file.name} exceeds the 100 KB text file limit.`);
           continue;
         }
-        if (textBytes + file.size > MAX_TOTAL_TEXT_BYTES) {
+        if (textBytes + file.size > MAX_COMPOSER_TOTAL_TEXT_BYTES) {
           rejected.push(`${file.name} exceeds the 200 KB total text limit.`);
           continue;
         }
@@ -639,7 +643,7 @@ export function Composer() {
                     {attachment.kind === 'image' ? (
                       <img src={attachment.dataUrl} alt="" className="h-6 w-6 rounded object-cover" />
                     ) : (
-                      <span className="font-bold text-doom-blue">TXT</span>
+                      <span className="font-bold text-doom-blue">{attachment.kind === 'context' ? 'CTX' : 'TXT'}</span>
                     )}
                     <span className="max-w-40 truncate">{attachment.name}</span>
                     <Button

@@ -21,7 +21,7 @@ export function GrepToolMessage({ args, result, output, running, isError }: Tool
   const view = grepCallView(args);
   const body = result === null || isError ? null : hashlineBody(result, output, 'grep', true);
   return (
-    <MessageItem tone={toolTone({ running, isError })} expandable>
+    <MessageItem tone={toolTone({ running, isError })} expandable defaultExpanded={false}>
       {({ expanded }) => {
         return (
           <>

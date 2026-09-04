@@ -97,6 +97,7 @@ export function LaunchWorkflowDialog({
   sessionId,
   workflow,
   cwd,
+  initialPrompt,
   send,
   onClose,
   onLaunched,
@@ -104,11 +105,12 @@ export function LaunchWorkflowDialog({
   sessionId: string;
   workflow: WorkflowCatalogEntryView;
   cwd: string;
+  initialPrompt: string;
   send: SessionFrameSender;
   onClose: () => void;
   onLaunched: () => void;
 }) {
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [inputs, setInputs] = useState<Record<string, string>>(() => initialInputs(workflow));
   const [runner, setRunner] = useState<string | undefined>(() => initialRunner(workflow));
   const request: WorkflowLaunchRequest = {

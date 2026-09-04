@@ -296,6 +296,28 @@ function journalMessages(frame: SessionFrame): Record<string, unknown>[] {
   return messages;
 }
 
+/** Resolves a protocol transcript item back to Pi's durable session-tree entry id. */
+function rewindEntryId(journal: readonly Record<string, unknown>[], itemId: string): string | undefined {
+  for (const entry of journal.toReversed()) {
+    if (entry.type !== 'message' || typeof entry.id !== 'string') continue;
+    const message = entry.message;
+    if (typeof message !== 'object' || message === null || Array.isArray(message)) continue;
+    const record = message as Record<string, unknown>;
+    if (record.id === itemId) return entry.id;
+    if (entry.id === itemId) return entry.id;
+    if (typeof record.timestamp === 'number' && itemId === `user-${String(record.timestamp)}`) return entry.id;
+  }
+  return undefined;
+}
+
+function resolvedCommand(managed: ManagedSession, frame: SessionFrame): SessionFrame {
+  if (frame.type !== 'rewind') return frame;
+  if (typeof frame.itemId !== 'string' || frame.itemId === '') throw new Error('The message has no rewind identity.');
+  const entryId = rewindEntryId(managed.journal, frame.itemId);
+  if (entryId === undefined) throw new Error('The selected message is not available in the session tree.');
+  return { type: 'navigate_tree', entryId };
+}
+
 /**
  * Whether a journal entry is one no live frame reports.
  *
@@ -933,7 +955,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       // the order they were sent, and only a single queue guarantees that.
       managed.commands = managed.commands
         .then(async () => {
-          const outgoing = carriesUserImages(frame) ? await shrinkUserImages(frame, userImageLimits()) : frame;
+          const resolved = resolvedCommand(managed, frame);
+          const outgoing = carriesUserImages(resolved) ? await shrinkUserImages(resolved, userImageLimits()) : resolved;
           managed.attachment?.send(outgoing);
         })
         // A failed send must not poison the chain, or one bad frame would

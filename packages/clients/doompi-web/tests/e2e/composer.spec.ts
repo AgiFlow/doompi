@@ -47,9 +47,29 @@ test('quotes whole messages or selected message text into the prompt', async ({ 
   await input.fill('Keep this context.');
   await page.getByTestId('composer-send').click();
   await cockpit.session.waitForCommand('prompt');
+  cockpit.session.emit({
+    type: 'response',
+    command: 'get_entries',
+    success: true,
+    data: {
+      entries: [{ id: 'u1', type: 'message', message: { role: 'user', content: 'Keep this context.' } }],
+      leafId: 'u1',
+    },
+  });
 
   const userEntry = page.getByTestId('entry-user');
-  await userEntry.getByTestId('entry-quote').click();
+  const userActions = userEntry.getByTestId('entry-actions');
+  const userQuote = userEntry.getByTestId('entry-quote');
+  const userRewind = userEntry.getByTestId('entry-rewind');
+  await userEntry.hover();
+  await expect(userActions).toHaveCSS('opacity', '1');
+  await expect(userRewind).toHaveAttribute('aria-label', 'Rewind to message');
+  await expect(userRewind.locator('svg')).toHaveCount(1);
+  await userRewind.click();
+  expect(await cockpit.session.waitForCommand('navigate_tree')).toEqual({ type: 'navigate_tree', entryId: 'u1' });
+  await expect(userQuote).toHaveAttribute('aria-label', 'Quote message');
+  await expect(userQuote.locator('svg')).toHaveCount(1);
+  await userQuote.click();
   await expect(input).toHaveValue('> Keep this context.\n\n');
   await expect(input).toBeFocused();
   await input.fill('');

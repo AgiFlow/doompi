@@ -482,6 +482,68 @@ describe('rpc transcript projection', () => {
     expect(subject.snapshot().transcript).toHaveLength(0);
   });
 
+  it('replaces abandoned transcript items with the active branch after tree navigation', () => {
+    const subject = transcript();
+    apply(subject, [
+      { type: 'message_start', message: { role: 'user', content: 'old prompt', timestamp: 10 } },
+      {
+        type: 'message_end',
+        message: { id: 'old-answer', role: 'assistant', content: [{ type: 'text', text: 'old answer' }] },
+      },
+    ]);
+
+    const result = subject.apply({
+      type: 'response',
+      command: 'navigate_tree',
+      success: true,
+      data: {
+        cancelled: false,
+        leafId: 'answer-1',
+        entries: [
+          {
+            id: 'prompt-1',
+            type: 'message',
+            timestamp: '2025-01-01T00:00:00.000Z',
+            message: { role: 'user', content: 'keep this', timestamp: 20 },
+          },
+          {
+            id: 'answer-1',
+            type: 'message',
+            timestamp: '2025-01-01T00:00:01.000Z',
+            message: {
+              id: 'assistant-1',
+              role: 'assistant',
+              content: [
+                { type: 'text', text: 'kept answer' },
+                { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: '/a.ts' } },
+              ],
+              stopReason: 'toolUse',
+            },
+          },
+          {
+            id: 'result-1',
+            type: 'message',
+            message: {
+              role: 'toolResult',
+              toolCallId: 'call-1',
+              content: [{ type: 'text', text: 'contents' }],
+              details: { lines: 2 },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.snapshot?.transcript.map((item) => item.id)).toEqual(['user-20', 'assistant-1', 'call-1']);
+    expect(result.snapshot?.transcript[2]).toMatchObject({
+      role: 'tool',
+      toolName: 'read',
+      input: { path: '/a.ts' },
+      details: { lines: 2 },
+    });
+    assertEncodable(result.snapshot);
+  });
+
   it('ignores a message the agent reported without a role', () => {
     const subject = transcript();
 

@@ -389,6 +389,24 @@ describe('reduceSession', () => {
     );
   });
 
+  it('restores the selected prompt after tree navigation and surfaces a refusal', () => {
+    const rewound = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'navigate_tree',
+      success: true,
+      data: { leafId: 'parent-1', editorText: 'revise this prompt', cancelled: false },
+    });
+    expect(rewound.editorTextRequest).toEqual({ id: 'rewind:parent-1:1', text: 'revise this prompt' });
+
+    const refused = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'navigate_tree',
+      success: false,
+      error: 'Wait for the current response to finish before navigating the session tree.',
+    });
+    expect(refused.entries[0]).toMatchObject({ kind: 'notice', tone: 'error' });
+  });
+
   it('reads usage out of get_session_stats', () => {
     const state = reduceSession(initialSessionState, {
       type: 'response',

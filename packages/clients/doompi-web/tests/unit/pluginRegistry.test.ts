@@ -11,6 +11,7 @@ import {
   installWebPlugins,
   paletteCommands,
   pluginActivityGroups,
+  pluginContextActions,
   pluginLeaderBindings,
   pluginMinorModes,
   pluginRepositorySettingsPanels,
@@ -110,6 +111,9 @@ describe('the web plugin registry', () => {
         composerActions: [{ id: 'demo-composer', component: Panel }],
         activitySections: [{ id: 'demo-activity', component: Panel }],
         paletteCommands: [{ id: 'demo-command', title: 'demo command', run: () => undefined }],
+        contextActions: [
+          { id: 'launch', label: 'Launch', detail: 'launch work', kinds: ['work-item'], run: () => undefined },
+        ],
       }),
     ]);
     expect(webTabs().map((tab) => tab.id)).toEqual(['demo']);
@@ -123,6 +127,9 @@ describe('the web plugin registry', () => {
     ]);
     expect(slotFills('nobody.declared')).toEqual([]);
     expect(paletteCommands().map((command) => command.id)).toEqual(['demo-command']);
+    expect(pluginContextActions().map(({ pluginId, id, label }) => [pluginId, id, label])).toEqual([
+      ['demo', 'launch', 'Launch'],
+    ]);
     expect(webPluginDiagnostics()).toEqual([]);
 
     expect(() => installWebPlugins([])).toThrow(/already installed/);
@@ -492,6 +499,27 @@ describe('the web plugin registry', () => {
     expect(() =>
       installWebPlugins([defineWebPlugin({ id: 'filler', fills: [{ slot: 'x.y', id: '', component: Panel }] })]),
     ).toThrow(/empty id/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'filler',
+          contextActions: [
+            { id: 'launch', label: 'Launch', kinds: ['work-item'], run: () => undefined },
+            { id: 'launch', label: 'Again', kinds: ['work-item'], run: () => undefined },
+          ],
+        }),
+      ]),
+    ).toThrow(/context action 'launch' twice/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'filler',
+          contextActions: [{ id: 'launch', label: 'Launch', kinds: [], run: () => undefined }],
+        }),
+      ]),
+    ).toThrow(/needs non-empty kinds/);
   });
 
   it("routes an activity section into its group's keyed slot, from any plugin, and the rest into the activity tail", () => {

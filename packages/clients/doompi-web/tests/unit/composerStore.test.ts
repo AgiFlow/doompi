@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   appendComposerDraft,
   appendComposerQuote,
+  attachComposerContext,
   clearComposerState,
   composerStore,
   dropComposerState,
@@ -44,6 +45,51 @@ describe('composer state', () => {
       attachmentError: 'keep this',
     });
     expect(composerStore.state.s1?.attachments).toHaveLength(1);
+  });
+
+  it('attaches structured context without changing the visible draft', () => {
+    updateComposerState('s1', (state) => ({ ...state, draft: 'keep this', caret: 9 }));
+
+    attachComposerContext('s1', {
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-1',
+      label: 'AGI-1: Fix auth',
+      content: 'Status: Todo\n\nFix repository authentication.',
+    });
+
+    expect(composerStore.state.s1).toMatchObject({
+      draft: 'keep this',
+      caret: 9,
+      attachmentError: '',
+      nextAttachmentId: 1,
+    });
+    expect(composerStore.state.s1?.attachments).toEqual([
+      {
+        id: 'context-0',
+        kind: 'context',
+        name: 'AGI-1: Fix auth',
+        size: 44,
+        content: 'Status: Todo\n\nFix repository authentication.',
+        source: 'agiflow',
+        contextId: 'task-1',
+      },
+    ]);
+  });
+
+  it('rejects malformed or oversized plugin context without adding a chip', () => {
+    attachComposerContext('s1', { kind: 'work-item', source: '', id: 'task-1', label: 'AGI-1', content: 'work' });
+    expect(composerStore.state.s1?.attachmentError).toContain('source');
+
+    attachComposerContext('s1', {
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-1',
+      label: 'AGI-1',
+      content: 'x'.repeat(100 * 1024 + 1),
+    });
+    expect(composerStore.state.s1?.attachmentError).toContain('100 KB');
+    expect(composerStore.state.s1?.attachments).toEqual([]);
   });
 
   it('uses existing draft whitespace as the separator and ignores empty appends', () => {

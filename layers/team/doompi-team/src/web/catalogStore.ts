@@ -1,4 +1,4 @@
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-web-contracts';
 import {
   SUBAGENT_CATALOG_TYPE,
   type SubagentCatalogAgent,
@@ -14,6 +14,8 @@ export interface CatalogSession {
   /** True while the catalog drawer is shown in the subagents tab. */
   open: boolean;
   filter: string;
+  /** Task text carried from the surface that opened the catalog. */
+  task: string;
   /** The highlighted row, by agent name. */
   selected: string | undefined;
   /** The row whose resources are unfolded. */
@@ -29,6 +31,7 @@ export const catalog = defineSessionStore<CatalogSession>({
   warning: undefined,
   open: false,
   filter: '',
+  task: '',
   selected: undefined,
   inspected: undefined,
   launch: undefined,
@@ -38,12 +41,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function openCatalog(sessionId: string): void {
-  catalog.update(sessionId, (current) => ({ ...current, open: true }));
+export function openCatalog(sessionId: string, task = ''): void {
+  catalog.update(sessionId, (current) => ({ ...current, open: true, task }));
+}
+
+/** Opens the Team picker with context supplied by another installed plugin. */
+export function openAgentCatalogForContext(context: ContextActionRunContext, tab: () => TransientTab): void {
+  if (context.sessionId === null) return;
+  openCatalog(context.sessionId, context.item.content);
+  context.openTransientTab(tab());
 }
 
 export function closeCatalog(sessionId: string): void {
-  catalog.update(sessionId, (current) => ({ ...current, open: false, launch: undefined }));
+  catalog.update(sessionId, (current) => ({ ...current, open: false, task: '', launch: undefined }));
 }
 
 export function setCatalogFilter(sessionId: string, filter: string): void {

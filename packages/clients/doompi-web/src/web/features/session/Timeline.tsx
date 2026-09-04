@@ -1,11 +1,17 @@
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Button,
   ChevronDownIcon,
   EmptyState,
   ExternalLinkIcon,
   MessageItemGroup,
+  QuoteIcon,
+  RewindIcon,
   Separator,
   StreamCursor,
+  UserIcon,
 } from '@agimon-ai/doompi-web-components';
 import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
@@ -24,6 +30,7 @@ import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups
 import { appendComposerQuote } from '../../stores/composerStore.ts';
 import {
   requestOlderHistory,
+  rewindToMessage,
   sessionStoreFor,
   submitMessage,
   useActiveSession,
@@ -74,6 +81,67 @@ function Gutter({ label, tone, trailing = false }: { label: string; tone: string
   return <span className={`shrink-0 text-[10px] font-bold ${placement} ${tone}`}>{label}</span>;
 }
 
+function SpeakerAvatar({ speaker }: { speaker: 'assistant' | 'user' }) {
+  if (speaker === 'assistant') {
+    return (
+      <Avatar aria-label="DoomPi" className="h-8 w-8 border border-doom-border-soft bg-doom-deep p-1">
+        <AvatarImage src="/favicon.svg" alt="" />
+        <AvatarFallback className="text-doom-magenta">DP</AvatarFallback>
+      </Avatar>
+    );
+  }
+
+  return (
+    <Avatar aria-label="You" className="h-8 w-8 self-end border border-doom-border-soft bg-doom-panel p-1 sm:self-auto">
+      <AvatarFallback className="text-doom-cyan">
+        <UserIcon aria-hidden="true" className="h-5 w-5" />
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+function MessageActions({
+  disabled,
+  onQuote,
+  onRewind,
+}: {
+  disabled: boolean;
+  onQuote: () => void;
+  onRewind: () => void;
+}) {
+  return (
+    <div
+      data-testid="entry-actions"
+      className="pointer-events-none absolute right-1 bottom-0 z-10 flex translate-y-1/2 gap-1 rounded-md border border-doom-border-soft bg-doom-panel p-0.5 opacity-0 shadow-sm transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
+    >
+      <Button
+        variant="subtle"
+        size="icon"
+        data-testid="entry-rewind"
+        aria-label="Rewind to message"
+        title={disabled ? 'Wait for the current response before rewinding' : 'Rewind to message'}
+        disabled={disabled}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onRewind}
+        className="border-0 shadow-none"
+      >
+        <RewindIcon aria-hidden="true" className="h-3 w-3" />
+      </Button>
+      <Button
+        variant="subtle"
+        size="icon"
+        data-testid="entry-quote"
+        aria-label="Quote message"
+        title="Quote message"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onQuote}
+        className="border-0 shadow-none"
+      >
+        <QuoteIcon aria-hidden="true" className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
 function ToolEntryRow({
   entry,
   sessionId,
@@ -135,6 +203,7 @@ function ToolGroupRow({
   );
 }
 const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
+  const sessionStreaming = useActiveSession((state) => state.streaming);
   const quoteSource = useRef<HTMLDivElement>(null);
   const quoteMessage = (text: string): void => {
     const selection = window.getSelection();
@@ -155,50 +224,40 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 
   if (entry.kind === 'user') {
     return (
-      // What the reader said sits inboard of what the session said, on its own
-      // surface: the transcript is a conversation, and two lanes tell the two
-      // voices apart faster than a gutter label alone.
-      // Column-reverse below `sm` keeps the trailing label reading as a
-      // caption above the block, the same place the other voices' labels sit.
       <div
         data-testid="entry-user"
-        className="flex flex-col-reverse gap-1 sm:flex-row sm:items-center sm:gap-3 sm:pl-10"
+        className="group/message flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:gap-3 sm:pl-10"
       >
-        <div
-          ref={quoteSource}
-          className="flex min-w-0 flex-1 flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi"
-        >
-          <MessageMarkdown sessionId={sessionId} text={entry.text} />
-          {entry.images && entry.images.length > 0 ? (
-            <div data-testid="user-attachments" className="flex flex-wrap gap-2">
-              {entry.images
-                .filter((image) => isSupportedImageMimeType(image.mimeType))
-                .map((image, index) => (
-                  <img
-                    key={`${image.mimeType}:${image.data.slice(0, 24)}:${String(index)}`}
-                    src={`data:${image.mimeType};base64,${image.data}`}
-                    alt={`Attachment ${String(index + 1)}`}
-                    data-testid="user-attached-image"
-                    className="h-auto max-h-80 max-w-full rounded-md object-contain"
-                  />
-                ))}
-            </div>
-          ) : null}
-          {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
-          <Button
-            variant="ghost"
-            size="xs"
-            data-testid="entry-quote"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => quoteMessage(entry.text)}
-            className="h-auto self-end px-1 py-0 text-[9px] font-normal text-doom-faint hover:text-doom-text"
+        <div className="relative min-w-0 flex-1">
+          <div
+            ref={quoteSource}
+            className="flex flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi"
           >
-            quote
-          </Button>
+            <MessageMarkdown sessionId={sessionId} text={entry.text} />
+            {entry.images && entry.images.length > 0 ? (
+              <div data-testid="user-attachments" className="flex flex-wrap gap-2">
+                {entry.images
+                  .filter((image) => isSupportedImageMimeType(image.mimeType))
+                  .map((image, index) => (
+                    <img
+                      key={`${image.mimeType}:${image.data.slice(0, 24)}:${String(index)}`}
+                      src={`data:${image.mimeType};base64,${image.data}`}
+                      alt={`Attachment ${String(index + 1)}`}
+                      data-testid="user-attached-image"
+                      className="h-auto max-h-80 max-w-full rounded-md object-contain"
+                    />
+                  ))}
+              </div>
+            ) : null}
+            {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
+          </div>
+          <MessageActions
+            disabled={sessionStreaming}
+            onQuote={() => quoteMessage(entry.text)}
+            onRewind={() => rewindToMessage(entry.id, sessionId)}
+          />
         </div>
-        {/* The label trails what the reader said and the session's leads what
-            it answered, so the two voices read as two lanes at a glance. */}
-        <Gutter label="you" tone="text-doom-cyan" trailing />
+        <SpeakerAvatar speaker="user" />
       </div>
     );
   }
@@ -208,35 +267,31 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       <div
         data-testid="entry-assistant"
         data-streaming={entry.streaming}
-        className="flex flex-col gap-1 sm:flex-row sm:gap-3"
+        className="group/message flex flex-col gap-2 sm:flex-row sm:gap-3"
       >
-        <Gutter label="pi" tone="text-doom-magenta" />
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          {entry.thinking ? (
-            <div
-              data-testid="entry-thinking"
-              // Grey, one step below the answer on the neutral ramp. Thinking is
-              // context for the reply, not a second voice, and a coloured one
-              // read as loudly as the reply it was only leading up to.
-              className="text-[11px] text-doom-dim [&_strong]:text-doom-text [&_p]:whitespace-pre-wrap"
-            >
-              <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
+        <SpeakerAvatar speaker="assistant" />
+        <div className="relative min-w-0 flex-1">
+          <div className="flex flex-col gap-2">
+            {entry.thinking ? (
+              <div
+                data-testid="entry-thinking"
+                // Thinking stays quiet and neutral, even when its Markdown source
+                // uses strong emphasis for status updates.
+                className="text-[11px] font-normal text-doom-dim [&_p]:whitespace-pre-wrap [&_strong]:font-normal [&_strong]:text-doom-dim"
+              >
+                <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
+              </div>
+            ) : null}
+            <div ref={quoteSource} className="text-[13px] text-doom-text">
+              <MessageMarkdown sessionId={sessionId} text={entry.text} />
+              {entry.streaming ? <StreamCursor /> : null}
             </div>
-          ) : null}
-          <div ref={quoteSource} className="text-[13px] text-doom-text">
-            <MessageMarkdown sessionId={sessionId} text={entry.text} />
-            {entry.streaming ? <StreamCursor /> : null}
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
-            data-testid="entry-quote"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => quoteMessage(entry.text)}
-            className="h-auto self-end px-1 py-0 text-[9px] font-normal text-doom-faint hover:text-doom-text"
-          >
-            quote
-          </Button>
+          <MessageActions
+            disabled={sessionStreaming}
+            onQuote={() => quoteMessage(entry.text)}
+            onRewind={() => rewindToMessage(entry.id, sessionId)}
+          />
         </div>
       </div>
     );

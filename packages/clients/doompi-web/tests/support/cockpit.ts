@@ -143,12 +143,12 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
     const syncedHome = process.env.DOOMPI_E2E_SYNCED_HOME;
     const syncedWorkRoot = process.env.DOOMPI_E2E_SYNCED_WORK_ROOT;
-    if (assets === 'synced' && (!syncedDist || !syncedHome || !syncedWorkRoot)) {
+    if (!syncedDist || !syncedHome || !syncedWorkRoot) {
       throw new Error('global setup did not publish the synchronized test composition');
     }
     const registryDir = path.join(root, 'run');
     const stateDir = path.join(root, 'state');
-    const homeDir = assets === 'synced' ? (syncedHome as string) : path.join(root, 'home');
+    const homeDir = syncedHome;
     const stub = path.join(root, 'fake-doompi-server');
     const syncStub = path.join(root, 'refuse-doompi-sync');
     fs.mkdirSync(homeDir, { recursive: true });
@@ -170,7 +170,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     for (let index = 0; index < sessionCount; index += 1) {
       const id = `s${index + 1}`;
       const apiSocketPath = path.join(apiSockets, `${id}.sock`);
-      const cwd = assets === 'synced' ? fs.mkdtempSync(path.join(syncedWorkRoot as string, `${id}-`)) : undefined;
+      const cwd = fs.mkdtempSync(path.join(syncedWorkRoot, `${id}-`));
       sessions.push(
         await startFakeSession({
           backlogLimit,
@@ -178,7 +178,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           name: `session-${index + 1}`,
           registryDir,
           apiSocketPath,
-          ...(cwd === undefined ? {} : { cwd }),
+          cwd,
         }),
       );
       sessionApiStops.push(startRunnerApiSocket(runnerStore, id, apiSocketPath));

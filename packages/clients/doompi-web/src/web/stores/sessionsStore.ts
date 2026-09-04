@@ -20,11 +20,13 @@ export interface SessionsState {
   order: string[];
   byId: Record<string, SessionMeta>;
   activeId: string | null;
+  /** Destination shown while an autonomous voice handoff changes route and media ownership. */
+  transferringToId: string | null;
   /** False until the first snapshot; routing waits for it before redirecting. */
   hydrated: boolean;
 }
 
-const initialState: SessionsState = { order: [], byId: {}, activeId: null, hydrated: false };
+const initialState: SessionsState = { order: [], byId: {}, activeId: null, transferringToId: null, hydrated: false };
 
 export const sessionsStore = new Store<SessionsState>(initialState);
 
@@ -161,6 +163,18 @@ export function useNoSessions(): boolean {
 
 export function setActiveSession(sessionId: string | null): void {
   sessionsStore.setState((state) => (state.activeId === sessionId ? state : { ...state, activeId: sessionId }));
+}
+
+export function beginSessionTransfer(sessionId: string): void {
+  sessionsStore.setState((state) =>
+    state.transferringToId === sessionId ? state : { ...state, transferringToId: sessionId },
+  );
+}
+
+export function completeSessionTransfer(sessionId: string): void {
+  sessionsStore.setState((state) =>
+    state.transferringToId === sessionId ? { ...state, transferringToId: null } : state,
+  );
 }
 
 export function activeSessionId(): string | null {

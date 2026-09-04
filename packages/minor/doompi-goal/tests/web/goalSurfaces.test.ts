@@ -95,9 +95,9 @@ describe('the plugin declaration', () => {
     expect(webPlugin.activitySections?.map((section) => section.id)).toEqual([group?.name]);
   });
 
-  it('keeps the group out of the dock until a session sets a goal', () => {
-    // The row is the goal. Without one the header would stand over nothing,
-    // and the dock's other groups are what the reader came for.
-    expect(webPlugin.activityGroups?.[0]?.hideWhenEmpty).toBe(true);
+  it('keeps durable goal context out of the background-work state', () => {
+    const group = webPlugin.activityGroups?.[0];
+
+    expect(group).toMatchObject({ hideWhenEmpty: true, marksBackgroundWork: false });
   });
 });

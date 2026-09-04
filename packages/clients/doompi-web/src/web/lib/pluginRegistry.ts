@@ -1,5 +1,6 @@
 import type {
   ActivityGroupContribution,
+  ContextActionContribution,
   FileLinkSource,
   LeaderBindingContribution,
   MinorModeContribution,
@@ -71,6 +72,10 @@ export interface ResolvedFill {
   component?: ComponentType<WebPluginSlotProps>;
 }
 
+export interface InstalledContextAction extends ContextActionContribution {
+  pluginId: string;
+}
+
 /** The slots the host itself declares; a plugin's own slots are namespaced by its id instead. */
 export const HOST_SLOTS = {
   overlay: 'overlay',
@@ -94,6 +99,7 @@ interface RegistryState {
   tabs: TabContribution[];
   channels: Map<string, SessionChannelContribution>;
   commands: PaletteCommandContribution[];
+  contextActions: InstalledContextAction[];
   leaderBindings: LeaderBindingContribution[];
   selectionAxes: SelectionAxisContribution[];
   minorModes: MinorModeContribution[];
@@ -114,6 +120,7 @@ function emptyState(): RegistryState {
     tabs: [],
     channels: new Map(),
     commands: [],
+    contextActions: [],
     leaderBindings: [],
     selectionAxes: [],
     minorModes: [],
@@ -250,6 +257,17 @@ function checkFill(pluginId: string, seen: Set<string>, fill: SlotFillContributi
   seen.add(key);
 }
 
+function checkContextAction(pluginId: string, seen: Set<string>, action: ContextActionContribution): void {
+  if (action.id.trim() === '') throw new Error(`Web plugin '${pluginId}' has a context action with an empty id.`);
+  if (seen.has(action.id)) throw new Error(`Web plugin '${pluginId}' declares context action '${action.id}' twice.`);
+  if (action.label.trim() === '')
+    throw new Error(`Web plugin '${pluginId}' context action '${action.id}' has an empty label.`);
+  if (action.kinds.length === 0 || action.kinds.some((kind) => kind.trim() === '')) {
+    throw new Error(`Web plugin '${pluginId}' context action '${action.id}' needs non-empty kinds.`);
+  }
+  seen.add(action.id);
+}
+
 const byFillOrder = (left: ResolvedFill, right: ResolvedFill): number =>
   left.order - right.order || left.pluginId.localeCompare(right.pluginId) || left.id.localeCompare(right.id);
 
@@ -376,6 +394,11 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
         if (claim(owners['palette-command'], 'palette-command', command.id, plugin.id))
           installingState.commands.push(command);
       }
+      const contextActions = new Set<string>();
+      for (const action of plugin.contextActions ?? []) {
+        checkContextAction(plugin.id, contextActions, action);
+        installingState.contextActions.push({ pluginId: plugin.id, ...action });
+      }
       for (const binding of plugin.leaderBindings ?? []) {
         checkLeaderBinding(plugin.id, binding);
         pendingBindings.push({ pluginId: plugin.id, binding });
@@ -441,6 +464,12 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
 
     resolveLeaderConflicts(pendingBindings);
     installingState.leaderBindings.push(...pendingBindings.map((entry) => entry.binding));
+    installingState.contextActions.sort(
+      (left, right) =>
+        (left.order ?? DEFAULT_FILL_ORDER) - (right.order ?? DEFAULT_FILL_ORDER) ||
+        left.pluginId.localeCompare(right.pluginId) ||
+        left.id.localeCompare(right.id),
+    );
     installingState.selectionAxes.sort(byDisplayOrder);
     installingState.minorModes.sort(byDisplayOrder);
     installingState.activityGroups.sort(byDisplayOrder);
@@ -561,6 +590,11 @@ export function slotFills(slot: string): readonly ResolvedFill[] {
 
 export function paletteCommands(): readonly PaletteCommandContribution[] {
   return activeState().commands;
+}
+
+/** Context actions from every installed plugin, in stable display order. */
+export function pluginContextActions(): readonly InstalledContextAction[] {
+  return activeState().contextActions;
 }
 
 /** Leader Space bindings from every installed plugin, in install order: a later binding on a bound leaf wins. */

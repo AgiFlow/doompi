@@ -15,6 +15,7 @@ import {
   getStateCommand,
   promptCommand,
   type RpcImage,
+  rewindCommand,
   setModelCommand,
   setSessionNameCommand,
   setThinkingLevelCommand,
@@ -367,6 +368,11 @@ export function submitMessage(
     .map(({ data, mimeType }) => ({ data, mimeType }));
   store.setState((state) => appendUserPrompt(state, trimmed, userImages));
   sendFrame(sessionId, streaming ? steerCommand(trimmed, images) : promptCommand(trimmed, images));
+}
+
+export function rewindToMessage(itemId: string, sessionId: string | null = activeSessionId()): void {
+  if (sessionId === null || itemId === '') return;
+  sendFrame(sessionId, rewindCommand(itemId));
 }
 
 export function queueFollowUp(

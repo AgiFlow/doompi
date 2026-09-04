@@ -17,6 +17,7 @@ overrides:
   protobufjs@8.0.0 - 8.7.1: ^8.7.2
 
 patchedDependencies:
+  '@earendil-works/pi-coding-agent@0.84.4': 5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa
   '@earendil-works/pi-protocol@0.84.4': 8eea04836e43f1afc1f6e23266ce76ea70bdafb66f7928143d942cd19d12cf10
 
 importers:
@@ -67,13 +68,13 @@ importers:
         version: link:packages/clients/doompi-web
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(zod@4.4.3))
+        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(zod@4.4.3))
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-extension
       '@agimon-ai/workflow-mcp':
         specifier: 0.23.19
-        version: 0.23.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+        version: 0.23.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@commitlint/cli':
         specifier: 21.2.2
         version: 21.2.2(@types/node@26.4.0)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
@@ -140,7 +141,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -186,7 +187,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -229,7 +230,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -302,7 +303,7 @@ importers:
         version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -399,7 +400,7 @@ importers:
         version: 0.84.4
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -453,7 +454,7 @@ importers:
         version: 0.84.4
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-protocol':
         specifier: 0.84.4
         version: 0.84.4(patch_hash=8eea04836e43f1afc1f6e23266ce76ea70bdafb66f7928143d942cd19d12cf10)
@@ -595,7 +596,7 @@ importers:
         version: 4.0.1
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       cross-spawn:
         specifier: 7.0.6
         version: 7.0.6
@@ -657,7 +658,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -687,14 +688,14 @@ importers:
         version: 4.0.1
       pi-cache-optimizer:
         specifier: 2.8.6
-        version: 2.8.6(@earendil-works/pi-coding-agent@0.84.4(zod@4.4.3))
+        version: 2.8.6(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(zod@4.4.3))
     devDependencies:
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -728,7 +729,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -777,7 +778,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -808,7 +809,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -869,7 +870,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -903,7 +904,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -946,7 +947,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -995,7 +996,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1019,7 +1020,7 @@ importers:
     dependencies:
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.19
-        version: 0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+        version: 0.29.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -1066,7 +1067,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1266,7 +1267,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -1306,7 +1307,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1376,7 +1377,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1443,7 +1444,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1501,7 +1502,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -1537,7 +1538,7 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.19
-        version: 0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+        version: 0.29.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1550,7 +1551,7 @@ importers:
         version: link:../../core/doompi-ui
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1601,7 +1602,7 @@ importers:
         version: link:../../core/doompi-web-contracts
       '@agimon-ai/mcp-proxy':
         specifier: 0.31.19
-        version: 0.31.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+        version: 0.31.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -1623,7 +1624,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1684,7 +1685,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1745,7 +1746,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1818,7 +1819,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1911,7 +1912,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -1966,7 +1967,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -2003,7 +2004,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -2061,7 +2062,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2131,7 +2132,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2182,7 +2183,7 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/workflow-mcp':
         specifier: 0.23.19
-        version: 0.23.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+        version: 0.23.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -2198,7 +2199,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.4
-        version: 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+        version: 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-tui':
         specifier: 0.84.4
         version: 0.84.4
@@ -2244,7 +2245,7 @@ importers:
     devDependencies:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(zod@4.4.3))
+        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(zod@4.4.3))
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -2266,7 +2267,7 @@ importers:
     devDependencies:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(zod@4.4.3))
+        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(zod@4.4.3))
       '@types/node':
         specifier: 26.4.0
         version: 26.4.0
@@ -8747,7 +8748,7 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@agimon-ai/log-sink-mcp@0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
+  '@agimon-ai/log-sink-mcp@0.29.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.4.3)
       '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.4.3)
@@ -8776,7 +8777,7 @@ snapshots:
       yaml: 2.8.3
       zod: 4.4.3
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-coding-agent': 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cfworker/json-schema'
@@ -8810,12 +8811,12 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/mcp-proxy@0.31.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
+  '@agimon-ai/mcp-proxy@0.31.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.4.3)
       '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.4.3)
       '@agimon-ai/foundation-validator': 0.26.19(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@hono/node-server': 2.0.10(hono@4.12.34)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       chalk: 5.6.2
@@ -8859,11 +8860,11 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(zod@4.4.3))':
+  '@agimon-ai/vibe-lint@0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(zod@4.4.3))':
     dependencies:
       '@agimon-ai/foundation-exec': 0.26.19(zod@4.4.3)
       '@agimon-ai/foundation-validator': 0.26.19(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       chalk: 5.6.2
       commander: 14.0.3
@@ -8911,12 +8912,12 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/workflow-mcp@0.23.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
+  '@agimon-ai/workflow-mcp@0.23.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.4.3)
       '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.4.3)
       '@agimon-ai/foundation-validator': 0.26.19(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       chalk: 5.6.2
       commander: 14.0.3
@@ -10189,7 +10190,7 @@ snapshots:
     dependencies:
       '@earendil-works/pi-protocol': 0.84.4(patch_hash=8eea04836e43f1afc1f6e23266ce76ea70bdafb66f7928143d942cd19d12cf10)
 
-  '@earendil-works/pi-coding-agent@0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)':
+  '@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)':
     dependencies:
       '@earendil-works/pi-agent-core': 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
       '@earendil-works/pi-ai': 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
@@ -14532,9 +14533,9 @@ snapshots:
 
   pathe@2.0.3: {}
 
-  pi-cache-optimizer@2.8.6(@earendil-works/pi-coding-agent@0.84.4(zod@4.4.3)):
+  pi-cache-optimizer@2.8.6(@earendil-works/pi-coding-agent@0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(zod@4.4.3)):
     dependencies:
-      '@earendil-works/pi-coding-agent': 0.84.4(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-coding-agent': 0.84.4(patch_hash=5af7ff5c3c08bd38a668df5fecbd569ab56dadc3f312a7179b81c099df7f5caa)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
 
   picocolors@1.1.1: {}
 

@@ -358,7 +358,7 @@ function modelChoice(value: unknown): ModelChoice | undefined {
 
 function applyResponse(state: SessionState, frame: Frame): SessionState {
   const command = asString(frame.command);
-  if (frame.success === false && PICKER_COMMANDS.has(command)) {
+  if (frame.success === false && (PICKER_COMMANDS.has(command) || command === 'navigate_tree')) {
     return withEntry(state, {
       kind: 'notice',
       id: `n${state.nextId}`,
@@ -382,6 +382,17 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         sessionName: asString(data.sessionName),
         messageCount: asNumber(data.messageCount) ?? 0,
         isStreaming: data.isStreaming === true,
+      },
+    };
+  }
+
+  if (command === 'navigate_tree' && data.cancelled !== true) {
+    const editorText = asString(data.editorText);
+    return {
+      ...state,
+      editorTextRequest: {
+        id: `rewind:${asString(data.leafId, 'root')}:${String(state.nextId)}`,
+        text: editorText,
       },
     };
   }

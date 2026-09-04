@@ -137,6 +137,20 @@ test('highlights background work and renders its resume notice once the agent se
   await expect.poll(() => notice.evaluate((element) => element.parentElement?.lastElementChild === element)).toBe(true);
 });
 
+test('shows an active goal without claiming background work is running', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('doom-goal-current', 'active 0s · ship the regression fix'));
+  cockpit.session.emit({ type: 'agent_settled' });
+
+  await expect(page.getByTestId('activity-goal')).toBeVisible();
+  await expect(page.getByTestId('activity-goal')).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('activity-busy')).toBeHidden();
+  await expect(page.getByTestId('mobile-activity-open')).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
+});
+
 test('the group name opens the owning plugin panel, and is a label where there is none', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

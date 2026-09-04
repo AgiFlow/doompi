@@ -48,7 +48,7 @@ export function ReadToolMessage({
   const tab = fileTabFor(view.path);
   const body = result === null || isError ? null : hashlineBody(result, output, 'read', true);
   return (
-    <MessageItem tone={toolTone({ running, isError })} expandable>
+    <MessageItem tone={toolTone({ running, isError })} expandable defaultExpanded={false}>
       {({ expanded }) => {
         return (
           <>

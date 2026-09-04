@@ -40,6 +40,7 @@ export function LaunchAgentDialog({
   cwd,
   models,
   fork: initialFork,
+  initialTask,
   send,
   onClose,
   onLaunched,
@@ -49,11 +50,12 @@ export function LaunchAgentDialog({
   cwd: string;
   models: readonly string[];
   fork: boolean;
+  initialTask: string;
   send: SessionFrameSender;
   onClose: () => void;
   onLaunched: () => void;
 }) {
-  const [task, setTask] = useState('');
+  const [task, setTask] = useState(initialTask);
   const [fork, setFork] = useState(initialFork);
   const [model, setModel] = useState(AGENT_DEFAULT);
   const request: LaunchRequest = { agent: agent.name, task, fork, ...(model === AGENT_DEFAULT ? {} : { model }) };

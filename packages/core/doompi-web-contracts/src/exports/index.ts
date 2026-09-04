@@ -14,6 +14,9 @@ export type {
 } from '../types/webHub.ts';
 export type {
   ActivityGroupContribution,
+  ContextAction,
+  ContextActionContribution,
+  ContextActionRunContext,
   FileLinkSource,
   GlobalStore,
   LeaderBindingContribution,
@@ -48,6 +51,7 @@ export type {
   ToolRendererContribution,
   ToolResultView,
   TransientTab,
+  WebPluginContextItem,
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,

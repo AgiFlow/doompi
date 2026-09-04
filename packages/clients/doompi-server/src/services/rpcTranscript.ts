@@ -182,6 +182,103 @@ function plainContent(value: unknown): UserTranscriptItem['content'] {
   return parts;
 }
 
+interface JournalToolCall {
+  name: string;
+  input: JsonValue;
+}
+
+function timestampFrom(entry: Record<string, unknown>, message: Record<string, unknown>, now: () => number): number {
+  const messageTimestamp = finiteNumber(message.timestamp);
+  if (messageTimestamp !== undefined) return messageTimestamp;
+  const entryTimestamp = finiteNumber(entry.timestamp);
+  if (entryTimestamp !== undefined) return entryTimestamp;
+  const parsed = typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : now();
+}
+
+/** Rebuilds the active protocol transcript after Pi moves its session-tree leaf. */
+function transcriptFromBranch(
+  value: unknown,
+  fallbackModel: { provider: string; id: string },
+  now: () => number,
+): TranscriptItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items: TranscriptItem[] = [];
+  const toolCalls = new Map<string, JournalToolCall>();
+
+  for (const candidate of value) {
+    if (!isRecord(candidate) || candidate.type !== 'message' || !isRecord(candidate.message)) continue;
+    const message = candidate.message;
+    const role = text(message.role);
+    const timestamp = timestampFrom(candidate, message, now);
+
+    if (role === 'user') {
+      const content = plainContent(message.content);
+      if (content.length === 0) continue;
+      const stamp = finiteNumber(message.timestamp);
+      items.push({
+        id: stamp === undefined ? text(candidate.id, `user-${String(timestamp)}`) : `user-${String(stamp)}`,
+        role: 'user',
+        content,
+        timestamp,
+      });
+      continue;
+    }
+
+    if (role === 'assistant') {
+      const content = assistantContent(message.content);
+      for (const part of content) {
+        if (part.type === 'toolCall') {
+          toolCalls.set(part.toolCallId, { name: part.toolName, input: part.input });
+        }
+      }
+      const stopReason = text(message.stopReason);
+      const errorMessage = text(message.errorMessage);
+      const base = {
+        id: text(message.id, text(candidate.id, `assistant-${String(timestamp)}`)),
+        role: 'assistant' as const,
+        content,
+        model: modelRef(message.model ?? fallbackModel),
+        timestamp,
+      };
+      items.push(
+        stopReason === 'aborted'
+          ? { ...base, status: 'aborted', stopReason: 'aborted', ...(errorMessage ? { errorMessage } : {}) }
+          : stopReason === 'error'
+            ? { ...base, status: 'error', stopReason: 'error', ...(errorMessage ? { errorMessage } : {}) }
+            : {
+                ...base,
+                status: 'complete',
+                stopReason: STOP_REASONS.has(stopReason) ? (stopReason as 'stop' | 'length' | 'toolUse') : 'stop',
+              },
+      );
+      continue;
+    }
+
+    if (role === 'toolResult') {
+      const toolCallId = text(message.toolCallId);
+      const call = toolCalls.get(toolCallId);
+      if (!call) continue;
+      const isError = message.isError === true;
+      const base = {
+        id: toolCallId,
+        role: 'tool' as const,
+        toolCallId,
+        toolName: call.name,
+        input: call.input,
+        content: plainContent(message.content),
+        ...(message.details === undefined ? {} : { details: normalizeJson(message.details) }),
+        timestamp,
+      };
+      items.push(
+        isError ? { ...base, status: 'error', isError: true } : { ...base, status: 'complete', isError: false },
+      );
+    }
+  }
+
+  return items;
+}
+
 export interface RpcTranscriptOptions {
   id: string;
   cwd: string;
@@ -443,8 +540,19 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
           const committed = appendUnique(item);
           return committed ? { snapshot: committed } : {};
         }
-        case 'response':
-          return frame.command === 'get_state' ? applyState(frame.data) : {};
+        case 'response': {
+          if (frame.command === 'get_state') return applyState(frame.data);
+          if (frame.command !== 'navigate_tree' || frame.success !== true || !isRecord(frame.data)) return {};
+          if (frame.data.cancelled === true) return {};
+          const rebuilt = transcriptFromBranch(frame.data.entries, snapshot.model, now);
+          if (!rebuilt) return {};
+          streaming.clear();
+          running.clear();
+          activeAssistantId = undefined;
+          return {
+            snapshot: commit({ transcript: rebuilt, queuedSteer: [], queuedSteerCount: 0, phase: 'idle' }),
+          };
+        }
         default:
           return {};
       }

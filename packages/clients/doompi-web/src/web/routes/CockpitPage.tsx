@@ -31,6 +31,10 @@ export function CockpitPage() {
   const slotProps = usePluginSlotProps(sessionId ?? null);
   const order = useStore(sessionsStore, (state) => state.order);
   const hydrated = useStore(sessionsStore, (state) => state.hydrated);
+  const transferLabel = useStore(sessionsStore, (state) => {
+    if (state.transferringToId === null) return null;
+    return state.byId[state.transferringToId]?.summary.name ?? 'destination session';
+  });
   const noSessions = useNoSessions();
   const dialogId = useActiveSession((state) => state.dialog?.id ?? null);
   // A declared tab first, then one a plugin opened at runtime for this session.
@@ -111,6 +115,14 @@ export function CockpitPage() {
         />
       ) : null}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {transferLabel !== null ? (
+          <output
+            data-testid="voice-transfer-transition"
+            className="border-b border-doom-cyan/30 bg-doom-cyan/10 px-4 py-2 text-center text-[11px] font-bold tracking-wide text-doom-cyan"
+          >
+            Transferring voice to {transferLabel}...
+          </output>
+        ) : null}
         <TopBar
           view={tab?.id ?? 'conversation'}
           onShowSessions={() => {
