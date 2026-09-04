@@ -93,6 +93,7 @@ test('quotes whole messages or selected message text into the prompt', async ({ 
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
+  await assistantEntry.hover();
   await assistantEntry.getByTestId('entry-quote').click();
 
   await expect(input).toHaveValue('> beta\n\n');

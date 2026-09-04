@@ -232,6 +232,17 @@ describe('sync guard', () => {
     subject.close();
   });
 
+  it('reports a fallback when sync failure has no detail', async () => {
+    const subject = createSyncGuard({
+      repoRoot: REPO,
+      readDrift: () => drifted,
+      runSync: async () => ({ ok: false }),
+    });
+
+    await expect(subject.ensureSynced()).rejects.toThrow('sync failed (no detail)');
+    subject.close();
+  });
+
   it('refuses a session when sync leaves the repository drifted', async () => {
     const subject = createSyncGuard({
       repoRoot: REPO,

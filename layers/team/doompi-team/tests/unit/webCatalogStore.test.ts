@@ -48,6 +48,7 @@ describe('the catalog store', () => {
     closeLaunch('s1');
     expect(session('s1').launch).toBeUndefined();
     selectAgent('s1', 'a');
+    openLaunch('s1', 'a', true);
 
     // A refresh that lost the selected agent forgets it; the rest of the drawer state stays.
     subagentCatalogChannel.apply('s1', subagentCatalogChannel.parse({ cwd: '/w', agents: [{ name: 'b' }] })!);
@@ -57,6 +58,7 @@ describe('the catalog store', () => {
       inspected: 'b',
       filter: 'x',
       task: 'Fix task AGI-1',
+      launch: undefined,
       warning: undefined,
     });
 

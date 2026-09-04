@@ -102,7 +102,11 @@ function fixtureTranscript(id: string, cwd: string, name: string) {
       const entry = raw as Frame;
       const message =
         typeof entry.message === 'object' && entry.message !== null ? (entry.message as Frame) : undefined;
-      const content = Array.isArray(message?.content) ? (message.content as Frame[]) : [];
+      const content: Frame[] = Array.isArray(message?.content)
+        ? (message.content as Frame[])
+        : typeof message?.content === 'string'
+          ? [{ type: 'text', text: message.content }]
+          : [];
       const textContent = content
         .filter((part) => part.type === 'text')
         .map((part) => ({ type: 'text' as const, text: stringValue(part.text) }));

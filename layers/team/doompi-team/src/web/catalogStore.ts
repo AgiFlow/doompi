@@ -99,6 +99,7 @@ export const subagentCatalogChannel = catalog.channel<SubagentCatalogPayload>({
       warning: payload.warning,
       selected: current.selected !== undefined && names.has(current.selected) ? current.selected : undefined,
       inspected: current.inspected !== undefined && names.has(current.inspected) ? current.inspected : undefined,
+      launch: current.launch !== undefined && names.has(current.launch.agent) ? current.launch : undefined,
     };
   },
 });

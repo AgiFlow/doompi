@@ -112,8 +112,50 @@ describe('composer state', () => {
     expect(composerStore.state.s1?.draft).toBe(
       '> first line\n>\n> second line\n\nFocus here.\n\n> another message\n\n',
     );
+    updateComposerState('s2', (state) => ({ ...state, draft: 'one newline\n' }));
+    updateComposerState('s3', (state) => ({ ...state, draft: 'two newlines\n\n' }));
+    expect(appendComposerQuote('s2', 'quote')).toBe(22);
+    expect(appendComposerQuote('s3', 'quote')).toBe(23);
     expect(appendComposerQuote('s1', '   ')).toBeNull();
     expect(appendComposerQuote(null, 'detached')).toBeNull();
+  });
+
+  it('rejects detached, full, and over-budget plugin context', () => {
+    const item = { kind: 'work-item', source: 'agiflow', id: 'task-1', label: 'AGI-1', content: 'work' };
+    attachComposerContext(null, item);
+
+    updateComposerState('full', (state) => ({
+      ...state,
+      attachments: Array.from({ length: 8 }, (_, index) => ({
+        id: `image-${String(index)}`,
+        kind: 'image' as const,
+        name: 'image.png',
+        size: 1,
+        dataUrl: 'data:image/png;base64,eA==',
+        data: 'eA==',
+        mimeType: 'image/png',
+      })),
+    }));
+    attachComposerContext('full', item);
+    expect(composerStore.state.full?.attachmentError).toContain('8 attachments');
+
+    updateComposerState('budget', (state) => ({
+      ...state,
+      attachments: [
+        {
+          id: 'image-1',
+          kind: 'image',
+          name: 'image.png',
+          size: 1,
+          dataUrl: 'data:image/png;base64,eA==',
+          data: 'eA==',
+          mimeType: 'image/png',
+        },
+        { id: 'text-1', kind: 'text', name: 'notes.txt', size: 200 * 1024, content: 'notes' },
+      ],
+    }));
+    attachComposerContext('budget', item);
+    expect(composerStore.state.budget?.attachmentError).toContain('200 KB total');
   });
   it('ignores detached updates and removes state for sessions that leave', () => {
     updateComposerState(null, () => {

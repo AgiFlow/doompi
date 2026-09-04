@@ -512,7 +512,8 @@ describe('the session hub over a registry', () => {
   it('resolves a visible transcript item before navigating the Pi session tree', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });
-    const harness = startHub(registryDir);
+    const notices: string[] = [];
+    const harness = startHub(registryDir, undefined, [], undefined, { onNotice: (message) => notices.push(message) });
     await session.waitForCommand('get_entries');
     session.emit({
       type: 'response',
@@ -520,6 +521,9 @@ describe('the session hub over a registry', () => {
       success: true,
       data: {
         entries: [
+          { id: 'entry-null', type: 'message', message: null },
+          { id: 'entry-array', type: 'message', message: [] },
+          { type: 'message', message: { role: 'user', content: 'anonymous' } },
           { id: 'entry-user', type: 'message', message: { role: 'user', content: 'question', timestamp: 42 } },
           { id: 'entry-assistant', type: 'message', message: { id: 'answer-1', role: 'assistant', content: 'answer' } },
         ],
@@ -540,6 +544,24 @@ describe('the session hub over a registry', () => {
       type: 'navigate_tree',
       entryId: 'entry-assistant',
     });
+
+    harness.hub.command('one', { type: 'rewind', itemId: 'entry-user' });
+    await waitFor(
+      () => session.received.filter((frame) => frame.type === 'navigate_tree').length === 3,
+      'the durable entry navigation',
+    );
+    harness.hub.command('one', { type: 'rewind', itemId: '' });
+    harness.hub.command('one', { type: 'rewind', itemId: 'missing' });
+    await waitFor(
+      () => notices.filter((notice) => notice.startsWith('command not delivered:')).length === 2,
+      'rewind errors',
+    );
+    expect(notices).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('no rewind identity'),
+        expect.stringContaining('not available in the session tree'),
+      ]),
+    );
   });
 
   it('restores only the tail of a transcript longer than the limit', async () => {

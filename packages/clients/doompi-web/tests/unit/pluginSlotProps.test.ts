@@ -126,6 +126,73 @@ describe('pluginSlotProps', () => {
     expect(opened.map((tab) => tab.id)).toEqual(['team-task-1']);
   });
 
+  it('orders namespaced context actions and binds focused or detached session context', () => {
+    const item: WebPluginContextItem = {
+      kind: 'work-item',
+      source: 'agiflow',
+      id: 'task-2',
+      label: 'AGI-2: Add tests',
+      content: 'Add focused host coverage for plugin actions.',
+    };
+    const image: WebPluginContextItem = {
+      kind: 'image',
+      source: 'uploads',
+      id: 'image-1',
+      label: 'Screenshot',
+      content: 'A screenshot attachment.',
+    };
+    const runs: Array<{ id: string; item: WebPluginContextItem; sessionId: string | null }> = [];
+
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'beta',
+        contextActions: [
+          {
+            id: 'review',
+            label: 'Review',
+            order: 20,
+            kinds: ['work-item'],
+            run: ({ item: received, sessionId }) => runs.push({ id: 'beta.review', item: received, sessionId }),
+          },
+        ],
+      }),
+      defineWebPlugin({
+        id: 'alpha',
+        contextActions: [
+          {
+            id: 'start',
+            label: 'Start',
+            detail: 'Start with this work item',
+            order: 10,
+            kinds: ['work-item'],
+            run: ({ item: received, sessionId }) => runs.push({ id: 'alpha.start', item: received, sessionId }),
+          },
+        ],
+      }),
+    ]);
+
+    const focused = pluginSlotProps('focused-session', () => undefined, {}, noTabs, noAppend, noAttach);
+    const focusedActions = focused.contextActionsFor(item);
+    expect(focusedActions.map(({ id, label }) => [id, label])).toEqual([
+      ['alpha.start', 'Start'],
+      ['beta.review', 'Review'],
+    ]);
+    expect(focusedActions[0]?.detail).toBe('Start with this work item');
+    expect(focused.contextActionsFor(image)).toEqual([]);
+
+    focusedActions.forEach((action) => action.run());
+
+    const detached = pluginSlotProps(null, () => undefined, {}, noTabs, noAppend, noAttach);
+    detached.contextActionsFor(item).forEach((action) => action.run());
+
+    expect(runs).toEqual([
+      { id: 'alpha.start', item, sessionId: 'focused-session' },
+      { id: 'beta.review', item, sessionId: 'focused-session' },
+      { id: 'alpha.start', item, sessionId: null },
+      { id: 'beta.review', item, sessionId: null },
+    ]);
+  });
+
   it('binds composer draft appends to the focused session', () => {
     updateComposerState('s1', (state) => ({ ...state, draft: 'existing' }));
     updateComposerState('s2', (state) => ({ ...state, draft: 'other' }));
