@@ -76,7 +76,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             set +e
-            output="$(pnpm audit --prod --audit-level high 2>&1)"
+            output="$(pnpm --fetch-retries=0 --fetch-timeout=30000 audit --prod --audit-level high 2>&1)"
             status=$?
             set -e
             printf '%s\n' "$output"
