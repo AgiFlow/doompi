@@ -34,7 +34,6 @@ import {
   sessionStoreFor,
   submitMessage,
   useActiveSession,
-  useHasOlderHistory,
 } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
@@ -420,7 +419,6 @@ export function Transcript({
   const lastHeight = useRef(0);
   const following = useRef(true);
   const [unread, setUnread] = useState(false);
-  const hasOlder = useHasOlderHistory(sessionId);
   // Where the bottom of the transcript sat before a window was prepended.
   // Restoring against this is what keeps the reader's place: prepending grows
   // the scroll height above them, and the browser would otherwise leave the
@@ -457,9 +455,8 @@ export function Transcript({
     if (bottom) setUnread(false);
     // A compact fold shows a fixed tail of a live thread; asking for the
     // window above it would page history nobody can read there.
-    if (!compact && element.scrollTop <= PAGE_BACK_THRESHOLD_PX && hasOlder) {
+    if (!compact && element.scrollTop <= PAGE_BACK_THRESHOLD_PX && requestOlderHistory(sessionId)) {
       anchor.current = { height: element.scrollHeight, top: element.scrollTop };
-      requestOlderHistory(sessionId);
     }
   };
 

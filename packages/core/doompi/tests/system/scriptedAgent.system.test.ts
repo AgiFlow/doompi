@@ -30,10 +30,10 @@ const SETTLE_TIMEOUT_MS = 60_000;
  * The first launch in a fresh agent directory installs the published DoomPi
  * packages the checked-in modes file names, which is a registry download and
  * an npm install, not a turn. That is warmed once here so no test measures it:
- * on a cold machine the install alone outlasts the settle budget, and the
- * failure looks like a composition that never answered.
+ * on a cold or contended runner the install can take several minutes, and the
+ * failure otherwise looks like a composition that never answered.
  */
-const WARMUP_TIMEOUT_MS = 300_000;
+const WARMUP_TIMEOUT_MS = 600_000;
 
 interface Fixture {
   root: string;
@@ -61,7 +61,7 @@ beforeAll(async () => {
     await model.close();
     models.splice(models.indexOf(model), 1);
   }
-}, WARMUP_TIMEOUT_MS);
+}, WARMUP_TIMEOUT_MS + 30_000);
 
 afterEach(async () => {
   for (const model of models.splice(0)) await model.close();

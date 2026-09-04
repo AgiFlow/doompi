@@ -123,16 +123,17 @@ export function useHasOlderHistory(sessionId: string | null): boolean {
  * same window repeatedly before the first answer lands, and every copy would
  * be prepended.
  */
-export function requestOlderHistory(sessionId: string | null): void {
-  if (sessionId === null) return;
+export function requestOlderHistory(sessionId: string | null): boolean {
+  if (sessionId === null) return false;
   const current = historyFor(sessionId);
-  if (current.loading || !current.hasMore) return;
+  if (current.loading || !current.hasMore) return false;
   setHistory(sessionId, { ...current, loading: true });
   sendHubFrame({
     type: HISTORY_REQUEST_TYPE,
     sessionId,
     ...(current.cursor === null ? {} : { before: current.cursor }),
   });
+  return true;
 }
 
 /** Folds one answered window above the timeline and records how far back it reached. */
