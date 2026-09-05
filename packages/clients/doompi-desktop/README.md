@@ -1,9 +1,10 @@
 # @agimon-ai/doompi-desktop
 
-The DoomPi desktop app. It bundles the cockpit and the session server so a
-download runs an agent on a machine with no Node, no pnpm, and no checkout.
+Run DoomPi in an Electron window backed by the web cockpit and session server. The packaged app
+includes its Node runtime and agent, so users do not need Node.js, pnpm, or a source checkout.
 
-Private to this workspace: it ships as a GitHub Release artifact, not to npm.
+This workspace-private package builds desktop release artifacts, not an npm package. It declares
+no public package exports and is not a Pi extension.
 
 ## How it works
 
@@ -17,7 +18,7 @@ Electron main
   '- BrowserWindow -> http://127.0.0.1:7433
 ```
 
-Three decisions carry most of the weight.
+The shell owns process startup, the window, and runtime staging:
 
 **The runtime is this app's own binary.** Electron is Node when `ELECTRON_RUN_AS_NODE`
 is set, and the variable is inherited, so one assignment on the cockpit's
@@ -55,6 +56,8 @@ the general workspace `node_modules` tree.
 
 ## Commands
 
+Run from the repository root after installing workspace dependencies:
+
 ```bash
 pnpm nx run @agimon-ai/doompi-desktop:build     # compile main and preload
 pnpm --filter @agimon-ai/doompi-desktop build:runtime # bundle the child runtime
@@ -68,8 +71,16 @@ pnpm --filter @agimon-ai/doompi-desktop test
 The app shares `~/.doompi/run` with the CLI rather than using
 `app.getPath('userData')`, so a session started here is visible to `doompi` in a
 terminal and the other way round. `DOOMPI_RUNTIME_DIR` overrides it. Startup
-measures the resulting socket path against the 104-byte `sun_path` cap and
-refuses early rather than failing later, when the user starts a session.
+checks that the registry path leaves room for session sockets and refuses paths that exceed its
+socket-path budget before starting a session.
+
+## Limits
+
+The staged runtime does not make agents isolated from the host. Sessions retain the filesystem
+and command access of the user running the app. Remote access uses the cockpit's pairing and
+transport controls; see [the cockpit README](../doompi-web/README.md#remote-access).
+
+Local installer builds do not verify release signing, notarization, or every target platform.
 
 ## Signing
 

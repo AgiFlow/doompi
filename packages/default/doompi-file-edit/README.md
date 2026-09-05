@@ -4,11 +4,10 @@ A session-scoped file-change timeline and external-editor launcher for Pi.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-The package records every file the session changed and keeps enough content to diff it, without
-assuming the working directory is a Git repository. `edit` and `write` name their file in the call,
-so both sides of the change are captured exactly. A Bash call names nothing reliable, because the
-agent can put the paths in a script, so the tree is compared either side of the call and whatever
-moved is recorded however it was written.
+The package tracks files changed through session tool calls and captures content for diffs, without
+requiring a Git repository. `edit` and `write` name their file in the call, so the package can capture
+the before and after content within its size and format limits. Bash calls instead trigger a bounded
+tree comparison. See [What this cannot see](#what-this-cannot-see) for gaps in that coverage.
 
 > **Alpha:** timeline and UI contracts may change between releases.
 
@@ -20,7 +19,9 @@ moved is recorded however it was written.
 
 ## Install
 
-DoomPi includes File Edit in every composition. Standalone Pi loads the same extension:
+`doompi init` and `dpi init` include File Edit in `default.packages` in `.doom/modes.yaml`.
+Remove it or move it to a named layer to change which major modes load it. Standalone Pi loads the
+same extension:
 
 ```bash
 pi install npm:@agimon-ai/doompi-file-edit

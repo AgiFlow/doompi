@@ -21,7 +21,8 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 
 ## Install
 
-DoomPi includes Voice in every composition. Standalone Pi loads the same extension:
+The seeded `modes.yaml` selects Voice in `default.packages`. Keep it there or select it through a
+layer; Voice is not fixed host infrastructure. Standalone Pi loads the same extension:
 
 ```bash
 pi install npm:@agimon-ai/doompi-voice
@@ -87,16 +88,19 @@ For server-streamed narration, the browser uses the exact 16 kHz PCM as a local 
 
 ## Commands and tools
 
-- `SPC v v` records and transcribes once; it does not enable autonomous Voice tools.
+- `SPC v m` records and transcribes once; it does not enable autonomous Voice tools.
 - `SPC v e` enters autonomous capture and exits it again.
-- While autonomous capture is active, say `hey doom` at the beginning of a segment to open a long composed prompt. Later finalized segments are buffered until `that's it` submits the combined text or `doom cancel` discards it.
+- `/voice-auto mute` pauses microphone capture without disabling narration; `/voice-auto unmute` resumes capture.
+- While autonomous capture is active, say `hey doom` at the beginning of a segment to open a long composed prompt. Later finalized segments are buffered until `that's it` submits the combined text or `scratch that` discards it in the example configuration.
 - `describe_voice_tools` returns the active session's spoken capability catalog.
 - `use_voice_tools` executes a bounded ordered batch against that catalog.
 - `narrate` speaks one primary-agent-authored utterance and waits for physical playback.
 
 Composition is for long spoken prompts, so a multi-part prompt is not submitted half-written. A short utterance needs no phrase and is delivered as soon as it finalizes.
 
-All three phrase sets are configurable and each ships with two defaults: `composeOpenPhrases` is `hey doom, doom prompt`, `composeSendPhrases` is `that's it, doom send`, and `composeCancelPhrases` is `doom cancel, scratch that`. Matching ignores case, punctuation and apostrophes, and tolerates small transcription differences, so `thats it` and `doom sent` are recognised. Send and cancel act as commands only while a draft is open, and only when the phrase is the whole segment or ends a sentence, so ordinary dictation containing those words stays content. While a draft collects, the endpoint window shortens to `composeUtteranceIdleMs` (default 1,200 ms) so a short command finalizes as its own turn. A composed prompt is queued as a Pi follow-up while Pi is busy.
+Each configured phrase array replaces its defaults rather than extending them. The example above keeps only one phrase per set, so it does not recognize `doom prompt`, `doom send`, or `doom cancel` as composition commands. Omit the arrays to use all defaults:
+
+`composeOpenPhrases` is `hey doom, doom prompt`, `composeSendPhrases` is `that's it, doom send`, and `composeCancelPhrases` is `doom cancel, scratch that`. Matching ignores case, punctuation and apostrophes, and tolerates small transcription differences, so `thats it` and `doom sent` are recognised. Send and cancel act as commands only while a draft is open, and only when the phrase is the whole segment or ends a sentence, so ordinary dictation containing those words stays content. While a draft collects, the endpoint window shortens to `composeUtteranceIdleMs` (default 1,200 ms) so a short command finalizes as its own turn. A composed prompt is queued as a Pi follow-up while Pi is busy.
 
 Drafts are held in memory for the active autonomous session and are limited to 32,768 characters. Worker restarts and five-minute idle capture rotation preserve the draft, but deactivation, extension reload, and process restart discard it. Wait until the status returns to `composing, listening` before speaking the next segment because capture pauses during transcription.
 
@@ -143,8 +147,14 @@ See [Architecture](./docs/ARCHITECTURE.md) for the thread and process topology, 
 ## Public API
 
 The root exports audio infrastructure, PCM, VAD, and utterance services, narration and playback
-contracts, command correction, fallback narration, and Voice types. Host adapters should import
-only declared package exports, including `/extensions/pi`.
+contracts, command correction, fallback narration, and Voice types. Host adapters should import only declared package exports:
+
+| Export                                  | Purpose                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| `@agimon-ai/doompi-voice`               | Host audio adapters, narration, PCM, VAD, correction, and Voice types           |
+| `@agimon-ai/doompi-voice/extensions/pi` | Pi extension activation                                                         |
+| `@agimon-ai/doompi-voice/client-media`  | Client capture activity and media contracts                                     |
+| `@agimon-ai/doompi-voice/session-api`   | Host media/session API factories, manual transcription, and ownership contracts |
 
 ## Development
 

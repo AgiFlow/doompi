@@ -344,11 +344,13 @@ function InlineStepOutput({
   run,
   job,
   step,
+  sessionId,
   onOpenTerminal,
 }: {
   run: WorkflowRunView;
   job: WorkflowJobView;
   step: WorkflowStepView | undefined;
+  sessionId: string | null;
   onOpenTerminal: () => void;
 }) {
   const [lines, setLines] = useState<string[]>([]);
@@ -363,12 +365,17 @@ function InlineStepOutput({
     setLines([]);
     setCapabilities(undefined);
     setEnded(false);
-    return followScreen(run.workspace, run.runKey, (event) => {
-      setLines(event.lines);
-      setCapabilities(event.capabilities);
-      if (event.ended === true) setEnded(true);
-    });
-  }, [run.workspace, run.runKey]);
+    return followScreen(
+      run.workspace,
+      run.runKey,
+      (event) => {
+        setLines(event.lines);
+        setCapabilities(event.capabilities);
+        if (event.ended === true) setEnded(true);
+      },
+      sessionId,
+    );
+  }, [run.workspace, run.runKey, sessionId]);
 
   useEffect(() => {
     screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });
@@ -415,10 +422,12 @@ function InlineStepOutput({
 
 function DeleteWorkflowDialog({
   run,
+  sessionId,
   onClose,
   onDeleted,
 }: {
   run: WorkflowRunView;
+  sessionId: string;
   onClose: () => void;
   onDeleted: () => void;
 }) {
@@ -428,7 +437,7 @@ function DeleteWorkflowDialog({
   const confirm = (): void => {
     setDeleting(true);
     setError(undefined);
-    void deleteWorkflowRun(run.workspace, run.runKey).then((result) => {
+    void deleteWorkflowRun(run.workspace, run.runKey, sessionId).then((result) => {
       if ('error' in result) {
         setDeleting(false);
         setError(result.error);
@@ -681,7 +690,11 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
                   </Button>
                 </div>
                 {pane === 'artifacts' ? (
-                  <ArtifactsPane run={run} onOpen={(path) => openTransientTab(artifactTab(run, path))} />
+                  <ArtifactsPane
+                    run={run}
+                    sessionId={sessionId}
+                    onOpen={(path) => openTransientTab(artifactTab(run, path))}
+                  />
                 ) : job === undefined ? (
                   <EmptyState className="py-6" title="select a job to see its output" />
                 ) : (
@@ -689,6 +702,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
                     run={run}
                     job={job}
                     step={step}
+                    sessionId={sessionId}
                     onOpenTerminal={() => openTransientTab(stepTerminalTab(run, job.name, step?.name))}
                   />
                 )}
@@ -721,6 +735,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
       {sessionId !== null && deletingRun !== undefined ? (
         <DeleteWorkflowDialog
           run={deletingRun}
+          sessionId={sessionId}
           onClose={() => setDeletingRun(undefined)}
           onDeleted={() => {
             removeRun(sessionId, workflowRunIdentity(deletingRun));

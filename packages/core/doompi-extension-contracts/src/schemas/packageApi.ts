@@ -26,6 +26,8 @@ export const DOOM_API_SCOPES: readonly DoomApiScope[] = ['session', 'hub'];
 
 /** The segment an API is mounted under, below this prefix. */
 export const DOOM_API_ROUTE_PREFIX = '/api/plugin';
+/** Selects the hub API bundle that owns the named cockpit session. */
+export const DOOM_HUB_API_SESSION_QUERY_PARAM = 'hubSession';
 
 /** Absolute unix socket path exposed to processes inside a session server. */
 export const DOOM_API_SOCKET_ENV = 'DOOMPI_SESSION_API_SOCKET';

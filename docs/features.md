@@ -25,7 +25,7 @@ The root package carries the fixed host foundation:
 - [`@agimon-ai/doompi-notification`][pkg-doompi-notification] owns desktop notifications and the terminal-tab title. `--mute` disables it for one launch.
 - [`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] defines the shared Cordis services, events, lifecycle host, and serialization contracts.
 - [`@agimon-ai/doompi-ui`][pkg-doompi-ui] provides the shared TUI and Leader services.
-- [`@agimon-ai/doompi-telemetry`][pkg-doompi-telemetry] is the library-level telemetry adapter. It sends nothing unless an OTLP endpoint is configured or discovered.
+- [`@agimon-ai/doompi-telemetry`][pkg-doompi-telemetry] is the library-level telemetry adapter. Export requires a configured or discovered endpoint, unless local file fallback is explicitly enabled.
 
 These packages are not selected through `default.packages`. Selectable packages stay outside the root package's private dependency closure.
 [`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] binds edits to the content the model actually
@@ -193,7 +193,7 @@ handoffs rather than one long conversation.
 
 [`@agimon-ai/doompi-voice`][pkg-doompi-voice] captures PCM audio through the local platform helper
 and can transcribe it locally. Transcript text, session state, and model requests may still cross
-process or provider boundaries according to the configured engines. `SPC v v` is one-shot manual
+process or provider boundaries according to the configured engines. `SPC v m` is one-shot manual
 dictation and never enables Voice tools. `SPC v e` enters autonomous capture and exits it again; only its exact-active
 TUI session receives the two Voice façades plus the standalone `narrate` tool.
 
