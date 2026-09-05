@@ -1,15 +1,17 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { describeSyncDrift, readSyncDrift } from '@agimon-ai/doompi/services';
+import { describeSyncDrift, readSyncDrift, readSyncRegistration } from '@agimon-ai/doompi/services';
 import { findRepositoryRoot } from '@agimon-ai/doompi/utils';
 import { repositoryDoomPiCli } from './bundledServer.ts';
+import { webHostPackageRoot } from './webPluginGenerate.ts';
 
 const DOOMPI_PACKAGE = '@agimon-ai/doompi';
 const AGENT_COMMAND_ENV = 'DOOMPI_AGENT_COMMAND';
 const SYNC_COMMAND_ENV = 'DOOMPI_SYNC_COMMAND';
 const BOOTSTRAP_ENTRY_ENV = 'DOOMPI_BOOTSTRAP_ENTRY';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
+const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
 const CLI_SEGMENTS = ['dist', 'bin', 'cli.mjs'];
 const SYNC_ARGS = ['sync'];
 /** How often the watcher re-reads the drift inputs. */
@@ -79,7 +81,11 @@ function spawnSync(repoRoot: string): Promise<SyncRunOutcome> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cli, ...SYNC_ARGS], {
       cwd: repoRoot,
-      env: { ...process.env, [HARNESS_ROOT_ENV]: repoRoot },
+      env: {
+        ...process.env,
+        [HARNESS_ROOT_ENV]: repoRoot,
+        [WEB_PACKAGE_ROOT_ENV]: process.env[WEB_PACKAGE_ROOT_ENV] || webHostPackageRoot(),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const tail: string[] = [];
@@ -122,7 +128,14 @@ export function createSyncGuard(options: SyncGuardOptions): SyncGuard {
   const expectedBootstrapEntry = process.env[BOOTSTRAP_ENTRY_ENV];
   const readDrift =
     options.readDrift ??
-    ((root: string, entry?: string) => readSyncDrift({ repoRoot: root, expectedBootstrapEntry: entry }));
+    ((root: string, entry?: string) => {
+      const drift = readSyncDrift({ repoRoot: root, expectedBootstrapEntry: entry });
+      // A CLI-only sync is valid for the terminal, but cannot supply session UI.
+      if (drift.fresh && readSyncRegistration(root)?.webDirectory == null) {
+        return { fresh: false, reasons: ['cockpit-bundle-missing'] };
+      }
+      return drift;
+    });
   const baseInterval = options.intervalMs ?? WATCH_INTERVAL_MS;
   let inFlight: Promise<{ ready: boolean; rebuilt: boolean; error?: string }> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
