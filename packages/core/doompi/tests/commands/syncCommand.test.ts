@@ -657,6 +657,52 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(text()).toContain('already up to date');
   });
 
+  it('builds missing web artifacts once for concurrent sessions and reuses their generation', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    await new SyncCommand().execute(
+      ['sync'],
+      environmentFor(root, { DOOMPI_WEB_PACKAGE_ROOT: path.join(root, 'unavailable-web-host') }),
+      root,
+      capture().output,
+    );
+    const cliOnly = readSyncRegistration(root, homeDirectory);
+    expect(cliOnly?.webDirectory).toBeNull();
+
+    const webRoot = path.join(root, 'web-host');
+    fs.mkdirSync(path.join(webRoot, 'dist'), { recursive: true });
+    fs.writeFileSync(
+      path.join(webRoot, 'dist', 'bundler.mjs'),
+      `import fs from 'node:fs';
+import path from 'node:path';
+export async function bundleCockpitWeb({ outDir }) {
+  const assetsDir = path.join(outDir, 'web');
+  fs.mkdirSync(assetsDir, { recursive: true });
+  fs.writeFileSync(path.join(assetsDir, 'index.html'), '<html></html>');
+  const plugins = path.join(outDir, 'plugins');
+  fs.mkdirSync(plugins, { recursive: true });
+  fs.writeFileSync(path.join(plugins, 'composition.js'), 'export {};');
+  fs.writeFileSync(path.join(plugins, 'manifest.json'), '{}');
+  return { assetsDir, pluginIds: [] };
+}
+`,
+    );
+    const environment = { ...environmentFor(root), DOOMPI_WEB_PACKAGE_ROOT: webRoot };
+    const buildsBefore = mocks.buildSyncedRuntime.mock.calls.length;
+    await Promise.all([
+      new SyncCommand().execute(['sync'], environment, root, capture().output),
+      new SyncCommand().execute(['sync'], environment, root, capture().output),
+    ]);
+    const web = readSyncRegistration(root, homeDirectory);
+    expect(web?.webDirectory).not.toBeNull();
+    expect(web?.generation).not.toBe(cliOnly?.generation);
+    expect(mocks.buildSyncedRuntime.mock.calls.length - buildsBefore).toBe(1);
+
+    await new SyncCommand().execute(['sync'], environment, root, capture().output);
+    expect(readSyncRegistration(root, homeDirectory)?.generation).toBe(web?.generation);
+    expect(mocks.buildSyncedRuntime.mock.calls.length - buildsBefore).toBe(1);
+  });
+
   it('prunes generations the published one replaced', async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);

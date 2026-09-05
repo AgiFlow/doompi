@@ -27,6 +27,8 @@ export interface ReadSyncDriftOptions {
   /** Launcher-owned Doom entry used to build this repository's generated bootstrap. */
   expectedBootstrapEntry?: string;
   homeDirectory?: string;
+  /** Web hosts cannot reuse a CLI-only generation without plugin artifacts. */
+  requireWebBundle?: boolean;
 }
 
 /**
@@ -89,10 +91,11 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
     reasons.push('runtime-stale');
   }
   if (
-    registration.webDirectory !== null &&
-    (!fs.existsSync(path.join(registration.webDirectory, 'index.html')) ||
-      !fs.existsSync(path.join(path.dirname(registration.webDirectory), 'plugins', 'composition.js')) ||
-      !fs.existsSync(path.join(path.dirname(registration.webDirectory), 'plugins', 'manifest.json')))
+    (registration.webDirectory === null && options.requireWebBundle) ||
+    (registration.webDirectory !== null &&
+      (!fs.existsSync(path.join(registration.webDirectory, 'index.html')) ||
+        !fs.existsSync(path.join(path.dirname(registration.webDirectory), 'plugins', 'composition.js')) ||
+        !fs.existsSync(path.join(path.dirname(registration.webDirectory), 'plugins', 'manifest.json'))))
   ) {
     reasons.push('cockpit-bundle-missing');
   }

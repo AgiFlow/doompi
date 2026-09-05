@@ -499,7 +499,12 @@ export class SyncCommand {
     // Publishing an identical generation is not a no-op: it moves the
     // registration, so every attached cockpit reloads and the previous
     // generation becomes garbage. Same inputs, same published result.
-    if (!force && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+    const driftOptions = {
+      repoRoot,
+      homeDirectory,
+      requireWebBundle: Boolean(environment.DOOMPI_WEB_PACKAGE_ROOT),
+    };
+    if (!force && readSyncDrift(driftOptions).fresh) {
       output.write('doompi sync is already up to date\n');
       return 0;
     }
@@ -512,7 +517,7 @@ export class SyncCommand {
     try {
       // A concurrent publisher may have resolved the drift while this command
       // waited for the lock. Avoid moving the registration for no change.
-      if (!force && readSyncDrift({ repoRoot, homeDirectory }).fresh) {
+      if (!force && readSyncDrift(driftOptions).fresh) {
         output.write('doompi sync is already up to date\n');
         return 0;
       }

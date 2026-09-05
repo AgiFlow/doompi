@@ -1,13 +1,20 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { readSyncDrift, readSyncRegistration } from '@agimon-ai/doompi/services';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSyncGuard } from '../../src/adapters/syncGuard.ts';
+import { webHostPackageRoot } from '../../src/adapters/webPluginGenerate.ts';
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:child_process')>()),
   spawn: vi.fn(),
 }));
 
+vi.mock('@agimon-ai/doompi/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agimon-ai/doompi/services')>()),
+  readSyncDrift: vi.fn(),
+  readSyncRegistration: vi.fn(),
+}));
 const REPO = '/workspace/repo';
 const drifted = { fresh: false, reasons: ['configuration-changed'] as const };
 const fresh = { fresh: true, reasons: [] as const };
@@ -89,6 +96,28 @@ describe('cwd sync guard', () => {
 });
 
 describe('sync guard', () => {
+  it('rebuilds a CLI-only sync before serving web extensions', async () => {
+    vi.mocked(readSyncDrift).mockReturnValue({ fresh: true, reasons: [] });
+    vi.mocked(readSyncRegistration).mockReturnValue({ webDirectory: null } as ReturnType<typeof readSyncRegistration>);
+    const runSync = vi.fn(async () => {
+      vi.mocked(readSyncRegistration).mockReturnValue({ webDirectory: '/synced/web' } as ReturnType<
+        typeof readSyncRegistration
+      >);
+    });
+    const subject = createSyncGuard({ repoRoot: REPO, runSync });
+    await subject.ensureSynced();
+    expect(runSync).toHaveBeenCalledExactlyOnceWith(REPO);
+    subject.close();
+  });
+
+  it('rejects a sync that still has no web composition', async () => {
+    vi.mocked(readSyncDrift).mockReturnValue({ fresh: true, reasons: [] });
+    vi.mocked(readSyncRegistration).mockReturnValue({ webDirectory: null } as ReturnType<typeof readSyncRegistration>);
+    const subject = createSyncGuard({ repoRoot: REPO, runSync: async () => {} });
+    await expect(subject.ensureSynced()).rejects.toThrow('cockpit bundle is missing');
+    subject.close();
+  });
+
   it('leaves a synced repository alone', async () => {
     const { guard: subject, runSync } = guard(() => fresh);
 
@@ -150,6 +179,7 @@ describe('sync guard', () => {
   });
 
   it('runs the packaged sync command when no runner is injected', async () => {
+    vi.stubEnv('DOOMPI_WEB_PACKAGE_ROOT', '');
     const child = fakeChild();
     const subject = createSyncGuard({ repoRoot: REPO, readDrift: driftOnce() });
 
@@ -160,12 +190,16 @@ describe('sync guard', () => {
     expect(spawn).toHaveBeenCalledWith(
       process.execPath,
       [expect.stringMatching(/cli\.mjs$/), 'sync'],
-      expect.objectContaining({ cwd: REPO, env: expect.objectContaining({ DOOMPI_ROOT: REPO }) }),
+      expect.objectContaining({
+        cwd: REPO,
+        env: expect.objectContaining({ DOOMPI_ROOT: REPO, DOOMPI_WEB_PACKAGE_ROOT: webHostPackageRoot() }),
+      }),
     );
     subject.close();
   });
 
   it('uses the configured bundled agent when the repository has no pinned CLI', async () => {
+    vi.stubEnv('DOOMPI_WEB_PACKAGE_ROOT', '/runtime/doompi-web');
     vi.stubEnv('DOOMPI_AGENT_COMMAND', '/runtime/doompi/dist/bin/cli.mjs');
     const child = fakeChild();
     const subject = createSyncGuard({ repoRoot: REPO, readDrift: driftOnce() });
@@ -177,7 +211,10 @@ describe('sync guard', () => {
     expect(spawn).toHaveBeenCalledWith(
       process.execPath,
       ['/runtime/doompi/dist/bin/cli.mjs', 'sync'],
-      expect.objectContaining({ cwd: REPO }),
+      expect.objectContaining({
+        cwd: REPO,
+        env: expect.objectContaining({ DOOMPI_WEB_PACKAGE_ROOT: '/runtime/doompi-web' }),
+      }),
     );
     subject.close();
     vi.unstubAllEnvs();
