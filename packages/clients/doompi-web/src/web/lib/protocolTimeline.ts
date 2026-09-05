@@ -1,9 +1,10 @@
 import type {
   AssistantTranscriptItem,
+  SessionServiceState,
   ToolTranscriptItem,
   TranscriptItem,
   UserTranscriptItem,
-} from '@earendil-works/pi-protocol';
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 import {
   imagesFromContent,
@@ -83,6 +84,20 @@ function timelineEntry(item: TranscriptItem): TimelineEntry {
 /** Projects the protocol transcript onto the timeline the cockpit renders. */
 export function toTimelineEntries(transcript: readonly TranscriptItem[]): TimelineEntry[] {
   return transcript.map(timelineEntry);
+}
+
+/** Retains concurrent live items between progress events for one protocol binding. */
+export function createProtocolTimeline(): (state: SessionServiceState) => TimelineEntry[] {
+  const pending = new Map<string, TranscriptItem>();
+  return ({ snapshot, progress }) => {
+    if (snapshot.phase === 'idle') pending.clear();
+    if (progress && snapshot.phase !== 'idle') {
+      if (progress.type === 'item_finished') pending.delete(progress.item.id);
+      else pending.set(progress.item.id, progress.item);
+    }
+    for (const item of snapshot.transcript) pending.delete(item.id);
+    return toTimelineEntries([...snapshot.transcript, ...pending.values()]);
+  };
 }
 
 /** Projects the protocol's authoritative pending steer queue onto composer rows. */

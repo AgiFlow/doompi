@@ -72,8 +72,8 @@
     "@deepseek-ai/cordis": "4.0.1"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.4",
-    "@earendil-works/pi-tui": "0.84.4",
+    "@earendil-works/pi-coding-agent": "0.85.0",
+    "@earendil-works/pi-tui": "0.85.0",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
     "@types/node": "26.4.0",
@@ -87,8 +87,8 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.4",
-    "@earendil-works/pi-tui": "0.84.4"
+    "@earendil-works/pi-coding-agent": "0.85.0",
+    "@earendil-works/pi-tui": "0.85.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

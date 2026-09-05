@@ -73,6 +73,7 @@ describe('stepUpActionFor', () => {
     ['POST', '/api/plugin/mcp/repository/discover', 'mcp.discover'],
     ['POST', '/api/plugin/mcp/repository/authorize', 'mcp.authorize'],
     ['DELETE', '/api/plugin/mcp/repository/authorize/flow-1', 'mcp.authorize'],
+    ['POST', '/api/plugin/computer-use/activate', 'computer-use.activate'],
   ])('gates %s %s', (method, path, action) => {
     expect(stepUpActionFor(method, path)).toBe(action);
   });
@@ -96,6 +97,8 @@ describe('stepUpActionFor', () => {
     expect(stepUpActionFor('DELETE', '/api/auth/providers/a/b')).toBeUndefined();
     expect(stepUpActionFor('POST', '/api/auth/logins/a/b/answer')).toBeUndefined();
     expect(stepUpActionFor('POST', '/api/plugin/mcp/repository/discover/extra')).toBeUndefined();
+    expect(stepUpActionFor('GET', '/api/plugin/computer-use/activate')).toBeUndefined();
+    expect(stepUpActionFor('POST', '/api/plugin/computer-use/activate/extra')).toBeUndefined();
   });
 });
 

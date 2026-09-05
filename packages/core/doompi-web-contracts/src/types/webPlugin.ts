@@ -1,4 +1,5 @@
 import type { Store } from '@tanstack/store';
+import type { ModelContextBinding } from './modelContext.ts';
 import type { ComponentType, ReactNode } from 'react';
 
 /**
@@ -57,6 +58,8 @@ export interface TransientTab {
   id: string;
   label: string;
   panel: ComponentType<WebPluginSlotProps>;
+  /** Keeps the host composer below this panel. Defaults to false. */
+  retainComposer?: boolean;
 }
 /**
  * Which paths a message names can be opened, and what tab each one opens.
@@ -114,6 +117,23 @@ export interface WebPluginContextItem {
   url?: string;
 }
 
+/** An atomic screenshot-and-context handoff from a plugin to the host composer. */
+export interface ComposerCapture {
+  /** Unprefixed base64 bytes. The host accepts PNG and JPEG only. */
+  data: string;
+  mimeType: 'image/png' | 'image/jpeg';
+  /** The model-facing context attached beside the screenshot. */
+  context: WebPluginContextItem;
+}
+
+/** One accepted composer delivery, published before its browser draft is cleared. */
+export interface ComposerSubmission {
+  sessionId: string;
+  message: string;
+  delivery: 'submit' | 'queue';
+  submittedAt: number;
+  contextItems: readonly WebPluginContextItem[];
+}
 /** One installed action another plugin may offer for a compatible context item. */
 export interface ContextAction {
   /** Namespaced at install as `<pluginId>.<id>`. */
@@ -148,6 +168,8 @@ export interface WebPluginSlotProps {
   appendComposerDraft: (text: string) => void;
   /** Adds browser-safe structured context as a removable chip without changing the visible draft. */
   attachComposerContext: (item: WebPluginContextItem) => void;
+  /** Atomically stages a validated PNG or JPEG capture and its structured context for explicit submission. */
+  attachComposerCapture: (capture: ComposerCapture) => void;
   /** Actions installed independent plugins offer for this context item, in display order. */
   contextActionsFor: (item: WebPluginContextItem) => readonly ContextAction[];
   /** The same sender palette commands and `start` receive; components act through it. */
@@ -163,6 +185,8 @@ export interface WebPluginSlotProps {
    * own surface needs the same facts the host folds into the selection bar.
    */
   statuses: Readonly<Record<string, string>>;
+  /** Names of minor modes currently active in the session catalog. */
+  activeMinorModes?: readonly string[];
 }
 /**
  * One contribution into a slot, keyed by (pluginId, id): independent plugins
@@ -182,6 +206,8 @@ export interface TabContribution {
   id: string;
   label: string;
   panel: ComponentType<WebPluginSlotProps>;
+  /** Keeps the host composer below this panel. Defaults to false. */
+  retainComposer?: boolean;
   /** A React hook, fully typed inside the plugin; 0 hides the badge. */
   useBadge?: (sessionId: string | null) => number;
 }
@@ -302,6 +328,25 @@ export interface SettingsPanelContribution {
 export interface SurfaceContribution {
   id: string;
   component: ComponentType<WebPluginSlotProps>;
+}
+
+/** One optional face inside the host-owned right dock. */
+export interface DockFaceContribution {
+  /** Unique across plugins. The host reserves `activity` and `context`. */
+  id: string;
+  label: string;
+  /** Lower values appear first after the host faces, then id breaks ties. */
+  order?: number;
+  /** Select this face when it becomes available for the focused session. */
+  autoSelect?: boolean;
+  /** Hide this face unless the session's named minor mode is active. */
+  requiredMinorMode?: string;
+  panel: ComponentType<WebPluginSlotProps>;
+  /** Optional reactive visibility owned by the contributing plugin. */
+  visibility?: {
+    subscribe(listener: () => void): () => void;
+    isVisible(sessionId: string | null): boolean;
+  };
 }
 export interface PaletteCommandContext {
   sessionId: string | null;
@@ -619,10 +664,16 @@ export interface WebPluginRuntime {
   sendSessionFrame: SessionFrameSender;
   sendHubFrame(frame: Record<string, unknown>): void;
   onHubConnected(listener: () => void): () => void;
+  /** Acquires the browser's WebMCP surface, or the page-lifetime simulator when unavailable. */
+  acquireModelContext?(): Promise<ModelContextBinding>;
+  /** Observes accepted composer submissions for page-lifetime plugin correlation. */
+  onComposerSubmitted?(listener: (submission: ComposerSubmission) => void): () => void;
 }
 export interface WebPluginDefinition {
   id: string;
   tabs?: TabContribution[];
+  /** Optional faces placed after the host-owned Activity and Context faces. */
+  dockFaces?: DockFaceContribution[];
   channels?: SessionChannelContribution[];
   selectionAxes?: SelectionAxisContribution[];
   minorModes?: MinorModeContribution[];

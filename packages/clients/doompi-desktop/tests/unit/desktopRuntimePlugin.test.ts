@@ -1,6 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { bundledDoomPiPackages, isExternalRuntimePackage } from '../../scripts/desktopRuntimePlugin.ts';
+import {
+  bundledDoomPiPackages,
+  DOOMPI_RUNTIME_PACKAGES,
+  isExternalRuntimePackage,
+} from '../../scripts/desktopRuntimePlugin.ts';
 import runtimeConfig from '../../vite.runtime.config.ts';
 
 describe('desktop runtime externals', () => {
@@ -11,6 +15,10 @@ describe('desktop runtime externals', () => {
 
   it('continues bundling unrelated dependencies', () => {
     expect(isExternalRuntimePackage('@earendil-works/pi-server')).toBe(false);
+  });
+
+  it('stages the peer required by the coding agent server entry', () => {
+    expect(DOOMPI_RUNTIME_PACKAGES).toContain('@earendil-works/pi-server');
   });
 });
 

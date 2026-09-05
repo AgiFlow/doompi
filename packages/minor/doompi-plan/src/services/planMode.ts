@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import { setDoomConfigValue, unsetDoomConfigValue } from '@agimon-ai/doompi-config/configWriter';
+import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-extension-contracts/author-facade';
 import { CONFIG_ACTION, type DoomConfigContributionHandle } from '@agimon-ai/doompi-extension-contracts/config';
 import {
   DOOM_FABLE_PLAN_SERVICE,
@@ -133,6 +134,7 @@ const PLAN_REVIEW_NARRATION = `${PLAN_REVIEW_TITLE} Options: 1, ${EXIT_PLAN_MODE
 const PLAN_REVIEW_NARRATION_REQUEST = createNarrationRequest(PLAN_REVIEW_NARRATION)!;
 const PLAN_REVIEW_WAIT_MESSAGE =
   "The choices were spoken through autonomous voice. Stop now and wait for the user's next message; it will arrive as an ordinary user message.";
+const AUTHOR_MODE_TOOL_NAMES = ['open_authoring_file', ...AUTHOR_FACADE_TOOL_NAMES] as const;
 const PLAN_MODE_PARENT_TOOLS = new Set([
   'add_directory',
   ASK_USER_TOOL,
@@ -143,6 +145,7 @@ const PLAN_MODE_PARENT_TOOLS = new Set([
   'intercom',
   LIST_TOOL,
   MINOR_MODE_TOOL_NAME,
+  ...AUTHOR_MODE_TOOL_NAMES,
   ...VOICE_MODE_TOOL_NAMES,
   READ_TOOL,
   'search_external_files',
@@ -213,6 +216,7 @@ const PLAN_TRANSIENT_TOOL_NAMES = new Set([
   RECORD_DEBUG_EVIDENCE_TOOL,
   RUN_FABLE_PLAN_TOOL,
   MINOR_MODE_TOOL_NAME,
+  ...AUTHOR_MODE_TOOL_NAMES,
   ...VOICE_MODE_TOOL_NAMES,
 ]);
 
@@ -606,7 +610,7 @@ function planningToolsForFlavor(
   const extras =
     flavor === 'debug' ? [RECORD_DEBUG_EVIDENCE_TOOL, ...diagnosticTools].filter((name) => available.has(name)) : [];
   if (flavor === 'fable' && available.has(RUN_FABLE_PLAN_TOOL)) extras.push(RUN_FABLE_PLAN_TOOL);
-  for (const name of [MINOR_MODE_TOOL_NAME, ...VOICE_MODE_TOOL_NAMES]) {
+  for (const name of [MINOR_MODE_TOOL_NAME, ...AUTHOR_MODE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES]) {
     if (liveTools.includes(name) && available.has(name)) extras.push(name);
   }
   return [...new Set([...base, ...extras])];
@@ -625,7 +629,7 @@ function restoreSnapshotTools(snapshotTools: string[], liveTools: string[], avai
       !PLAN_TRANSIENT_TOOL_NAMES.has(name) &&
       available.has(name),
   );
-  const liveToolsToRestore = [MINOR_MODE_TOOL_NAME, ...VOICE_MODE_TOOL_NAMES].filter(
+  const liveToolsToRestore = [MINOR_MODE_TOOL_NAME, ...AUTHOR_MODE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES].filter(
     (name) => live.has(name) && available.has(name),
   );
   return [...new Set([...restored, ...unrelatedLiveTools, ...liveToolsToRestore])];

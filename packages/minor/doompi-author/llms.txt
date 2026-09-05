@@ -1,0 +1,11 @@
+# @agimon-ai/doompi-author
+
+Package-owned guidance for Visual steering workspace for focused document review and bounded authoring
+
+## How to use
+
+- [Use Author](./src/prompts/doompi-use-author/SKILL.md): Run the package command and follow its package-specific usage guidance.
+
+## Resources
+
+- [Package README](./README.md): Installation, development commands, Pi entrypoint, and extension-specific usage.

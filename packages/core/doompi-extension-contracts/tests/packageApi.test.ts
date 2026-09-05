@@ -2,7 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { declaredApisOf, DoomApiManifestError, isDoomApi, orderDeclaredApis } from '../src/schemas/packageApi.ts';
+import {
+  declaredApisOf,
+  doomApiCallerFrom,
+  DOOM_API_CALLER_DEVICE_ID_HEADER,
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
+  DoomApiManifestError,
+  isDoomApi,
+  orderDeclaredApis,
+} from '../src/schemas/packageApi.ts';
 import { loadPackageApis, packageApiModulePath } from '../src/adapters/packageApiLoader.ts';
 
 let cleanups: Array<() => void> = [];
@@ -92,6 +101,29 @@ describe('narrowing a module export to an API', () => {
   });
 });
 
+describe('trusted package API caller headers', () => {
+  it('parses a complete remote stamp', () => {
+    const headers = new Headers({
+      [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote',
+      [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'phone-1',
+      [DOOM_API_CALLER_STEP_UP_HEADER]: 'verified',
+    });
+    expect(doomApiCallerFrom(headers)).toEqual({ locality: 'remote', deviceId: 'phone-1', stepUp: 'verified' });
+  });
+
+  it('rejects partial and contradictory stamps', () => {
+    expect(doomApiCallerFrom(new Headers({ [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote' }))).toBeUndefined();
+    expect(
+      doomApiCallerFrom(
+        new Headers({
+          [DOOM_API_CALLER_LOCALITY_HEADER]: 'local',
+          [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'spoofed',
+          [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required',
+        }),
+      ),
+    ).toBeUndefined();
+  });
+});
 function generated(source: string): { homeDir: string; apiDirectory: string } {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-api-home-'));
   cleanups.push(() => fs.rmSync(homeDir, { recursive: true, force: true }));

@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { listSessionFiles } from '../../src/adapters/sessionFiles.ts';
+import { listSessionFiles, readSessionFile, writeSessionFile } from '../../src/adapters/sessionFiles.ts';
 
 let workDir: string;
 
@@ -58,5 +59,52 @@ describe('listSessionFiles', () => {
 
     const files = await listSessionFiles(workDir, 'gate', 1);
     expect(files).toEqual(['notes/gate.md']);
+  });
+});
+
+const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
+
+describe('session file IO', () => {
+  it('reads the body with its full SHA-256 digest', async () => {
+    fs.writeFileSync(path.join(workDir, 'note.txt'), 'before');
+
+    await expect(readSessionFile(workDir, 'note.txt', 100)).resolves.toEqual({
+      status: 'ok',
+      body: Buffer.from('before'),
+      sha256: sha256('before'),
+    });
+  });
+
+  it('atomically replaces the expected regular file and cleans its temporary file', async () => {
+    fs.writeFileSync(path.join(workDir, 'note.txt'), 'before');
+
+    await expect(
+      writeSessionFile(workDir, 'note.txt', Buffer.from('after'), sha256('before'), 100, () => true),
+    ).resolves.toEqual({ status: 'ok', sha256: sha256('after') });
+    expect(fs.readFileSync(path.join(workDir, 'note.txt'), 'utf8')).toBe('after');
+    expect(fs.readdirSync(workDir)).toEqual(['note.txt']);
+  });
+
+  it('preserves a concurrently changed file and refuses final-component symlinks', async () => {
+    fs.writeFileSync(path.join(workDir, 'note.txt'), 'newer');
+    await expect(
+      writeSessionFile(workDir, 'note.txt', Buffer.from('after'), sha256('older'), 100, () => true),
+    ).resolves.toEqual({ status: 'conflict' });
+    expect(fs.readFileSync(path.join(workDir, 'note.txt'), 'utf8')).toBe('newer');
+
+    fs.symlinkSync(path.join(workDir, 'note.txt'), path.join(workDir, 'link.txt'));
+    await expect(
+      writeSessionFile(workDir, 'link.txt', Buffer.from('after'), sha256('newer'), 100, () => true),
+    ).resolves.toEqual({ status: 'forbidden' });
+  });
+
+  it('checks authorization immediately before rename and leaves no temporary file when locked', async () => {
+    fs.writeFileSync(path.join(workDir, 'note.txt'), 'before');
+
+    await expect(
+      writeSessionFile(workDir, 'note.txt', Buffer.from('after'), sha256('before'), 100, () => false),
+    ).resolves.toEqual({ status: 'locked' });
+    expect(fs.readFileSync(path.join(workDir, 'note.txt'), 'utf8')).toBe('before');
+    expect(fs.readdirSync(workDir)).toEqual(['note.txt']);
   });
 });

@@ -8,7 +8,7 @@ import type {
   TranscriptItem,
   TranscriptProgress,
   UserTranscriptItem,
-} from '@earendil-works/pi-protocol';
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { SessionFrame } from '../types/session.ts';
 
 const THINKING_LEVELS = new Set<string>(['off', 'minimal', 'low', 'medium', 'high']);
@@ -196,7 +196,28 @@ function timestampFrom(entry: Record<string, unknown>, message: Record<string, u
   return Number.isFinite(parsed) ? parsed : now();
 }
 
-/** Rebuilds the active protocol transcript after Pi moves its session-tree leaf. */
+/** Selects the active branch from a complete get_entries response. */
+function activeBranch(data: Record<string, unknown>): Record<string, unknown>[] | undefined {
+  if (!Array.isArray(data.entries)) return undefined;
+  if (data.leafId === null) return [];
+  if (typeof data.leafId !== 'string') return undefined;
+  const entries = new Map(data.entries.filter(isRecord).map((entry) => [entry.id, entry]));
+  const branch: Record<string, unknown>[] = [];
+  const visited = new Set<string>();
+  let id: unknown = data.leafId;
+  while (id !== null) {
+    if (typeof id !== 'string' || visited.has(id)) return undefined;
+    const entry = entries.get(id);
+    // Incremental answers cannot replace the complete transcript.
+    if (!entry) return undefined;
+    visited.add(id);
+    branch.push(entry);
+    id = entry.parentId;
+  }
+  return branch.reverse();
+}
+
+/** Rebuilds the active protocol transcript from journal messages. */
 function transcriptFromBranch(
   value: unknown,
   fallbackModel: { provider: string; id: string },
@@ -542,6 +563,11 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
         }
         case 'response': {
           if (frame.command === 'get_state') return applyState(frame.data);
+          if (frame.command === 'get_entries' && frame.success === true && isRecord(frame.data)) {
+            const branch = activeBranch(frame.data);
+            const rebuilt = transcriptFromBranch(branch, snapshot.model, now);
+            return rebuilt ? { snapshot: commit({ transcript: rebuilt }) } : {};
+          }
           if (frame.command !== 'navigate_tree' || frame.success !== true || !isRecord(frame.data)) return {};
           if (frame.data.cancelled === true) return {};
           const rebuilt = transcriptFromBranch(frame.data.entries, snapshot.model, now);

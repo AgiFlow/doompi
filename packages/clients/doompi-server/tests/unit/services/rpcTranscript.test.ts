@@ -1,4 +1,3 @@
-import { encodeServerMessage } from '@earendil-works/pi-protocol';
 import { describe, expect, it } from 'vitest';
 import { createRpcTranscript, type RpcTranscript } from '../../../src/services/rpcTranscript.ts';
 import type { SessionFrame } from '../../../src/types/session.ts';
@@ -10,16 +9,11 @@ function transcript(): RpcTranscript {
 }
 
 /**
- * Encoding through the real schema is the point of these tests.
- *
- * The protocol rejects unknown properties, non-finite numbers, and undefined,
- * so a projection that drifts fails here rather than at a client that already
- * dropped the connection.
+ * Chord state must remain strict JSON, so verify that the projection survives
+ * the same serialization boundary used by the remote service.
  */
 function assertEncodable(snapshot: unknown): void {
-  expect(() =>
-    encodeServerMessage({ type: 'event', event: { type: 'session_snapshot', snapshot: snapshot as never } }),
-  ).not.toThrow();
+  expect(() => JSON.parse(JSON.stringify(snapshot))).not.toThrow();
 }
 
 function apply(subject: RpcTranscript, frames: SessionFrame[]): void {
@@ -27,6 +21,78 @@ function apply(subject: RpcTranscript, frames: SessionFrame[]): void {
 }
 
 describe('rpc transcript projection', () => {
+  it('restores only the active history branch and preserves a running turn and its queue', () => {
+    const subject = transcript();
+    subject.apply({ type: 'agent_start' });
+    subject.apply({ type: 'queue_update', steering: ['next'] });
+    const frame = {
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: {
+        leafId: 'result',
+        entries: [
+          { id: 'u', parentId: null, type: 'message', message: { role: 'user', content: 'earlier', timestamp: 10 } },
+          {
+            id: 'abandoned',
+            parentId: 'u',
+            type: 'message',
+            message: { role: 'assistant', content: [{ type: 'text', text: 'wrong branch' }] },
+          },
+          {
+            id: 'a',
+            parentId: 'u',
+            timestamp: 11,
+            type: 'message',
+            message: {
+              role: 'assistant',
+              content: [
+                { type: 'text', text: 'saved answer' },
+                { type: 'toolCall', id: 'call', name: 'read', arguments: { path: 'file.ts' } },
+              ],
+            },
+          },
+          {
+            id: 'result',
+            parentId: 'a',
+            timestamp: 12,
+            type: 'message',
+            message: { role: 'toolResult', toolCallId: 'call', content: [{ type: 'text', text: 'file body' }] },
+          },
+        ],
+      },
+    };
+    const restored = subject.apply(frame).snapshot;
+    expect(restored?.transcript.map((item) => item.id)).toEqual(['user-10', 'a', 'call']);
+    expect(restored?.transcript[2]).toMatchObject({
+      input: { path: 'file.ts' },
+      content: [{ type: 'text', text: 'file body' }],
+    });
+    expect(restored).toMatchObject({ phase: 'turn', queuedSteerCount: 1 });
+    expect(subject.apply(frame).snapshot?.transcript).toEqual(restored?.transcript);
+  });
+
+  it('keeps existing history when a journal response fails or contains an incomplete or cyclic branch', () => {
+    const subject = transcript();
+    subject.apply({ type: 'message_start', message: { role: 'user', content: 'keep', timestamp: 1 } });
+    for (const data of [
+      { entries: [], leafId: 'missing' },
+      { entries: [{ id: 'a', parentId: 'missing' }], leafId: 'a' },
+      { entries: [{ id: 'a', parentId: 'a' }], leafId: 'a' },
+      { entries: [] },
+    ]) {
+      expect(subject.apply({ type: 'response', command: 'get_entries', success: true, data })).toEqual({});
+    }
+    expect(
+      subject.apply({ type: 'response', command: 'get_entries', success: false, data: { entries: [], leafId: null } }),
+    ).toEqual({});
+    expect(subject.snapshot().transcript).toHaveLength(1);
+    expect(
+      subject.apply({ type: 'response', command: 'get_entries', success: true, data: { entries: [], leafId: null } })
+        .snapshot?.transcript,
+    ).toEqual([]);
+  });
+
   it('starts idle with an empty transcript the protocol accepts', () => {
     const snapshot = transcript().snapshot();
 

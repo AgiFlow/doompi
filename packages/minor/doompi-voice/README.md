@@ -12,7 +12,7 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.4
+- Pi 0.85.0
 - A browser with microphone capture and speech synthesis when using `doompi-web`
 - For standalone terminal use on macOS, FFmpeg capture and `say` playback
 - One supported local transcription engine: `whisper-cli`, `whisper`, or `mlx_whisper` (Apple

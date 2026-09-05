@@ -1,10 +1,8 @@
-import type { PiServerListener } from '@earendil-works/pi-server';
+import type { Server, ServerListener } from '@earendil-works/pi-server';
 
-// pi-server names these in PiServerListener's signature but does not export
-// them from its root, so they are recovered from the type that does.
-type ByteConnectionAcceptor = Parameters<PiServerListener['start']>[0];
-type ByteConnection = Parameters<ByteConnectionAcceptor>[0];
-type ByteConnectionHandler = ReturnType<ByteConnectionAcceptor>;
+type ByteConnection = Parameters<Server['accept']>[0];
+type ByteConnectionHandler = ReturnType<Server['accept']>;
+type ByteConnectionAcceptor = (connection: ByteConnection) => ByteConnectionHandler;
 
 /** The minimum of a WebSocket this listener drives, so a test needs no real socket. */
 export interface ListenerSocket {
@@ -15,35 +13,20 @@ export interface ListenerSocket {
 
 const OPEN = 1;
 
-export interface PiWebSocketListener extends PiServerListener {
-  /**
-   * Hands an already-upgraded socket to the server.
-   *
-   * The transport authenticates during the HTTP upgrade, so a socket only
-   * reaches here once the request that opened it was allowed.
-   */
+export interface PiWebSocketListener extends ServerListener {
+  /** Hands an authenticated, already-upgraded socket to the protocol server. */
   accept(socket: ListenerSocket): ByteConnectionHandler | undefined;
 }
 
-/**
- * Feeds PiServer the browser's connections.
- *
- * Pi ships only a Unix listener, where the file mode is the access control.
- * A browser cannot open one, so the cockpit terminates the protocol over a
- * WebSocket instead and keeps the same contract: bytes in order, closure
- * reported once, and no protocol knowledge in the transport itself.
- */
+/** Adapts authenticated browser WebSockets to Pi 0.85 byte connections. */
 export function createPiWebSocketListener(options: { onError?: (error: Error) => void } = {}): PiWebSocketListener {
   let acceptor: ByteConnectionAcceptor | undefined;
   const open = new Set<ListenerSocket>();
 
   return {
-    address: 'websocket',
-
     async start(accept) {
       acceptor = accept;
     },
-
     async close() {
       acceptor = undefined;
       for (const socket of open) {
@@ -55,10 +38,7 @@ export function createPiWebSocketListener(options: { onError?: (error: Error) =>
       }
       open.clear();
     },
-
     accept(socket) {
-      // A socket that arrives before start, or after close, has no server to
-      // talk to. Closing it is the honest answer.
       if (!acceptor) {
         socket.close();
         return undefined;

@@ -48,15 +48,22 @@ function sealedGuardWith(overrides: Partial<Parameters<typeof createRemoteGuard>
 
 async function run(guard: ReturnType<typeof createRemoteGuard>, request: FakeRequest) {
   let passed = false;
-  const answer = await guard.middleware(context(request), async () => {
+  const requestContext = context(request);
+  const answer = await guard.middleware(requestContext, async () => {
     passed = true;
   });
-  return { passed, answer: answer as unknown as { status?: number; body?: unknown } | undefined };
+  return {
+    passed,
+    answer: answer as unknown as { status?: number; body?: unknown } | undefined,
+    caller: guard.callerOf(requestContext),
+  };
 }
 
 describe('the guard on the loopback listener', () => {
-  it('lets a local request through', async () => {
-    expect((await run(guardWith(), { port: LOOPBACK })).passed).toBe(true);
+  it('lets a local request through and stamps it as local without claiming user presence', async () => {
+    const result = await run(guardWith(), { port: LOOPBACK });
+    expect(result.passed).toBe(true);
+    expect(result.caller).toEqual({ locality: 'local', stepUp: 'not-required' });
   });
 
   it('refuses a hostile origin', async () => {
@@ -156,11 +163,12 @@ describe('the step-up gate', () => {
     expect(answer?.body).toMatchObject({ action: 'session.create' });
   });
 
-  it('accepts a valid assertion', async () => {
+  it('accepts a valid assertion and records the verified outcome', async () => {
     const assertion = Buffer.from(JSON.stringify({ id: 'x' })).toString('base64url');
     const guard = sealedGuardWith({ stepUp: { required: () => true, verify: async () => true } });
-    const { passed } = await run(guard, { ...gated, headers: { ...gated.headers, [STEP_UP_HEADER]: assertion } });
-    expect(passed).toBe(true);
+    const result = await run(guard, { ...gated, headers: { ...gated.headers, [STEP_UP_HEADER]: assertion } });
+    expect(result.passed).toBe(true);
+    expect(result.caller).toEqual({ locality: 'remote', deviceId: 'device', stepUp: 'verified' });
   });
 
   it('refuses an assertion the server rejects', async () => {
@@ -176,11 +184,13 @@ describe('the step-up gate', () => {
     expect(passed).toBe(false);
   });
 
-  it('gates nothing where passkeys are unavailable', async () => {
+  it('keeps quick tunnels usable and records that step-up was unavailable', async () => {
     // A quick tunnel has no stable relying party, so there is no gesture to
     // demand and demanding one would lock the phone out entirely.
     const guard = sealedGuardWith({ stepUp: { required: () => false, verify: async () => false } });
-    expect((await run(guard, gated)).passed).toBe(true);
+    const result = await run(guard, gated);
+    expect(result.passed).toBe(true);
+    expect(result.caller).toEqual({ locality: 'remote', deviceId: 'device', stepUp: 'unavailable' });
   });
 
   it('leaves ordinary work ungated', async () => {

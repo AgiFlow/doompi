@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -86,10 +87,18 @@ export async function listSessionFiles(cwd: string, query: string, limit: number
 }
 
 export type SessionFileResult =
-  | { status: 'ok'; body: Buffer }
+  | { status: 'ok'; body: Buffer; sha256: string }
   | { status: 'not-found' }
   | { status: 'forbidden' }
   | { status: 'too-large' };
+
+export type SessionFileWriteResult =
+  | { status: 'ok'; sha256: string }
+  | { status: 'not-found' }
+  | { status: 'forbidden' }
+  | { status: 'too-large' }
+  | { status: 'conflict' }
+  | { status: 'locked' };
 
 function isInside(root: string, candidate: string): boolean {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
@@ -116,5 +125,101 @@ export async function readSessionFile(cwd: string, relativePath: string, maxByte
   if (!isInside(await fs.promises.realpath(root), real)) return { status: 'forbidden' };
   if (!stats.isFile()) return { status: 'not-found' };
   if (stats.size > maxBytes) return { status: 'too-large' };
-  return { status: 'ok', body: await fs.promises.readFile(real) };
+  const body = await fs.promises.readFile(real);
+  if (body.byteLength > maxBytes) return { status: 'too-large' };
+  return { status: 'ok', body, sha256: createHash('sha256').update(body).digest('hex') };
+}
+
+function sameIdentity(left: fs.Stats, right: fs.Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+async function currentFile(
+  candidate: string,
+  maxBytes: number,
+): Promise<{ stats: fs.Stats; sha256: string } | SessionFileWriteResult> {
+  let handle: fs.promises.FileHandle;
+  try {
+    handle = await fs.promises.open(candidate, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return { status: code === 'ELOOP' ? 'forbidden' : 'not-found' };
+  }
+  try {
+    const [stats, pathStats] = await Promise.all([handle.stat(), fs.promises.lstat(candidate)]);
+    if (!stats.isFile() || pathStats.isSymbolicLink() || !sameIdentity(stats, pathStats))
+      return { status: 'forbidden' };
+    if (stats.size > maxBytes) return { status: 'too-large' };
+    const body = await handle.readFile();
+    if (body.byteLength > maxBytes) return { status: 'too-large' };
+    return { stats, sha256: createHash('sha256').update(body).digest('hex') };
+  } catch {
+    return { status: 'conflict' };
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Replaces an existing cwd-contained regular file without following its final
+ * path component. The expected digest and inode are checked again immediately
+ * before the same-directory rename, so a stale editor cannot silently replace
+ * a newer file.
+ */
+export async function writeSessionFile(
+  cwd: string,
+  relativePath: string,
+  body: Buffer,
+  expectedSha256: string,
+  maxBytes: number,
+  authorizeRename: () => boolean,
+): Promise<SessionFileWriteResult> {
+  if (body.byteLength > maxBytes) return { status: 'too-large' };
+  if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath)) return { status: 'forbidden' };
+  const root = path.resolve(cwd);
+  const lexical = path.resolve(root, relativePath);
+  if (!isInside(root, lexical)) return { status: 'forbidden' };
+
+  let realRoot: string;
+  let realParent: string;
+  try {
+    [realRoot, realParent] = await Promise.all([
+      fs.promises.realpath(root),
+      fs.promises.realpath(path.dirname(lexical)),
+    ]);
+  } catch {
+    return { status: 'not-found' };
+  }
+  if (!isInside(realRoot, realParent)) return { status: 'forbidden' };
+  const candidate = path.join(realParent, path.basename(lexical));
+  const initial = await currentFile(candidate, maxBytes);
+  if ('status' in initial) return initial;
+  if (initial.sha256 !== expectedSha256) return { status: 'conflict' };
+
+  const nextSha256 = createHash('sha256').update(body).digest('hex');
+  const temporary = path.join(realParent, `.${path.basename(candidate)}.doompi-${randomUUID()}.tmp`);
+  let temporaryHandle: fs.promises.FileHandle | undefined;
+  try {
+    temporaryHandle = await fs.promises.open(
+      temporary,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
+      initial.stats.mode & 0o777,
+    );
+    await temporaryHandle.writeFile(body);
+    await temporaryHandle.sync();
+    await temporaryHandle.close();
+    temporaryHandle = undefined;
+
+    const current = await currentFile(candidate, maxBytes);
+    if ('status' in current) return current.status === 'not-found' ? { status: 'conflict' } : current;
+    if (!sameIdentity(initial.stats, current.stats) || current.sha256 !== expectedSha256) return { status: 'conflict' };
+    if (!authorizeRename()) return { status: 'locked' };
+    await fs.promises.rename(temporary, candidate);
+    return { status: 'ok', sha256: nextSha256 };
+  } catch {
+    return { status: 'conflict' };
+  } finally {
+    await temporaryHandle?.close().catch(() => undefined);
+    await fs.promises.rm(temporary, { force: true }).catch(() => undefined);
+  }
 }

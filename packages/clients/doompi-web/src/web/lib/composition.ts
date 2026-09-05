@@ -1,8 +1,9 @@
-import type { SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
+import type { DockFaceContribution, SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { useCallback, useSyncExternalStore } from 'react';
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
 import {
   pluginActivityGroups,
+  pluginDockFaces,
   pluginFileLinks,
   pluginMinorModes,
   pluginSelectionAxes,
@@ -96,9 +97,11 @@ export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'plan', keys: 'p e', statusKey: 'plan-mode' },
   { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
   { name: 'goal', keys: 'g e', statusKey: 'goal' },
+  { name: 'author', keys: 'o a' },
   { name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress' },
   // `v e` drives autonomous capture, which the runtime registers as 'voice-auto'.
   { name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice' },
+  { name: 'computer use', modeId: 'computer-use', keys: 'c e', statusKey: 'doom-computer-use-mode' },
 ];
 
 /** The declared source a catalog mode corresponds to, by id, id stem, or label. */
@@ -292,6 +295,23 @@ export function activityGroups(
     }
   }
   return groups;
+}
+
+/** Dock faces update when the active session composition changes. */
+export function useDockFaces(sessionId: string | null): readonly DockFaceContribution[] {
+  useSyncExternalStore(subscribeWebPluginRegistry, webPluginRegistryRevision, webPluginRegistryRevision);
+  const subscribe = (listener: () => void) => {
+    const releases = pluginDockFaces().flatMap((face) =>
+      face.visibility ? [face.visibility.subscribe(listener)] : [],
+    );
+    return () => releases.forEach((release) => release());
+  };
+  const snapshot = () =>
+    pluginDockFaces()
+      .map((face) => (face.visibility?.isVisible(sessionId) !== false ? '1' : '0'))
+      .join('');
+  useSyncExternalStore(subscribe, snapshot, snapshot);
+  return pluginDockFaces().filter((face) => face.visibility?.isVisible(sessionId) !== false);
 }
 
 /** Activity groups that update when either host signals or a plugin's session store changes. */

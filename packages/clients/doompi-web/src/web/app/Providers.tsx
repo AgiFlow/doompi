@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.tsx';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
 import { ThreadView } from '../features/session/ThreadView.tsx';
+import { onComposerSubmitted } from '../lib/composerSubmissions.ts';
+import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelContextAdapter.ts';
 import { installWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
 import { bindThreadRenderer } from '../lib/threadRenderer.ts';
@@ -46,7 +48,13 @@ export function Providers() {
     let cancelled = false;
     void restoreSealedSession().then(() => {
       if (cancelled) return;
-      stopPlugins = startSessionWebPluginRuntime({ sendSessionFrame: sendFrame, sendHubFrame, onHubConnected });
+      stopPlugins = startSessionWebPluginRuntime({
+        sendSessionFrame: sendFrame,
+        sendHubFrame,
+        onHubConnected,
+        acquireModelContext,
+        onComposerSubmitted,
+      });
       stopRuntime = startSessionRuntime();
       // One read at start; after that the hub pushes state, so nothing polls.
       void refreshRemoteState();
@@ -56,6 +64,7 @@ export function Providers() {
       cancelled = true;
       stopPlugins?.();
       stopRuntime?.();
+      disposeModelContextAdapter();
     };
   }, []);
 

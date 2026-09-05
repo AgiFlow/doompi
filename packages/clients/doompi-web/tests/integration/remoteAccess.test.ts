@@ -4,7 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { PiClient } from '@earendil-works/pi-client';
+import { Client } from '@earendil-works/pi-client';
+import {
+  DOOM_COCKPIT_SERVER_ID,
+  DoomSessionManagementService,
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { ByteTransport, ByteTransportHandlers } from '@earendil-works/pi-client';
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
@@ -945,7 +949,8 @@ describe('passkey sign-in', () => {
     });
     expect(accepted.status).toBe(200);
 
-    const protocol = new PiClient({
+    const protocol = new Client({
+      serverId: DOOM_COCKPIT_SERVER_ID,
       transportFactory: sealedProtocolTransport(
         `${tunnelOrigin().replace('http', 'ws')}/api/pi`,
         { host: namedHeaders.host, origin: namedHeaders.origin, cookie: deviceSession },
@@ -954,7 +959,12 @@ describe('passkey sign-in', () => {
     });
     await protocol.connect();
     try {
-      await expect(protocol.createSession({ cwd: process.cwd() })).rejects.toThrow(/Operation is not implemented/);
+      await expect(
+        protocol.request(
+          { serverId: DOOM_COCKPIT_SERVER_ID },
+          { serviceId: DoomSessionManagementService.id, member: 'create', args: [process.cwd()] },
+        ),
+      ).rejects.toThrow();
     } finally {
       await protocol.dispose();
     }

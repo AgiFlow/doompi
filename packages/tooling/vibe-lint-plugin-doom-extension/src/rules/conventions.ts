@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntries.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const PI_VERSION = '0.84.4';
+const PI_VERSION = '0.85.0';
 const PI_PACKAGES = [
   '@earendil-works/pi-agent-core',
   '@earendil-works/pi-ai',
@@ -510,6 +510,8 @@ function isFencedProcessGlobalBoundary(sourceFile: ts.SourceFile, kind: ProcessG
     : hasSymbolFor && hasRelease && hasIdentityComparison;
 }
 
+const PRIVATE_UNRELEASED_PACKAGES = new Set(['@agimon-ai/doompi-author', '@agimon-ai/doompi-desktop']);
+
 export const doomPackageShape: RuleDefinition = {
   preflight: true,
   rule: 'Doom packages are public ESM packages with publish allowlists and closed, explicit exports',
@@ -519,11 +521,13 @@ export const doomPackageShape: RuleDefinition = {
     if (path.basename(filePath) !== PACKAGE_MANIFEST_NAME) return null;
     const manifest = readManifest(filePath);
     if (!manifest) return null;
+    const isPrivateUnreleased = manifest.name !== undefined && PRIVATE_UNRELEASED_PACKAGES.has(manifest.name);
     const problems: string[] = [];
-    if (manifest.private === true) problems.push('private: true is not allowed');
+    if (manifest.private === true && !isPrivateUnreleased) problems.push('private: true is not allowed');
     if (manifest.type !== 'module') problems.push('type must be module');
     if (!manifest.files || manifest.files.length === 0) problems.push('files publish allowlist is required');
-    if (manifest.publishConfig?.access !== 'public') problems.push('publishConfig.access must be public');
+    if (manifest.publishConfig?.access !== 'public' && !isPrivateUnreleased)
+      problems.push('publishConfig.access must be public');
     if (!manifest.exports || Object.keys(manifest.exports).length === 0) problems.push('exports must be explicit');
     if (manifest.exports && Object.keys(manifest.exports).some((key) => key.includes('*'))) {
       problems.push('wildcard exports are not allowed');

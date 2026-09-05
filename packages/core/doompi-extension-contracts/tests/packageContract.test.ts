@@ -97,6 +97,11 @@ describe('doom extension contracts package boundary', () => {
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
+    expect(exportsMap['./author-facade']).toEqual({
+      types: './dist/authorFacade.d.mts',
+      import: './dist/authorFacade.mjs',
+      require: './dist/authorFacade.cjs',
+    });
     expect(exportsMap['./voice-tools']).toEqual({
       types: './dist/voiceTools.d.mts',
       import: './dist/voiceTools.mjs',

@@ -57,6 +57,17 @@ describe('Doom package convention rules', () => {
     expect(result).toContain('wildcard exports are not allowed');
   });
 
+  it('allows the explicit private unreleased Author package without weakening other shape checks', () => {
+    const manifest = writeManifest({
+      name: '@agimon-ai/doompi-author',
+      private: true,
+      type: 'module',
+      files: ['dist'],
+      exports: { '.': './dist/index.mjs' },
+    });
+
+    expect(doomPackageShape.check?.(manifest, root, boundaryContext())).toBeNull();
+  });
   it('ignores non-manifest files and absent manifests', () => {
     const source = write('src/services/run.ts', 'export const run = true;');
 
@@ -67,8 +78,8 @@ describe('Doom package convention rules', () => {
   it('requires exact Pi dependency pins while allowing unrelated manifests', () => {
     const manifest = writeManifest({
       peerDependencies: {
-        '@earendil-works/pi-coding-agent': '^0.84.4',
-        '@earendil-works/pi-tui': '0.84.4',
+        '@earendil-works/pi-coding-agent': '^0.85.0',
+        '@earendil-works/pi-tui': '0.85.0',
       },
       devDependencies: {
         '@earendil-works/pi-tui': '0.84.0',
@@ -82,8 +93,8 @@ describe('Doom package convention rules', () => {
     fs.writeFileSync(
       manifest,
       JSON.stringify({
-        peerDependencies: { '@earendil-works/pi-coding-agent': '0.84.4' },
-        devDependencies: { '@earendil-works/pi-coding-agent': '0.84.4' },
+        peerDependencies: { '@earendil-works/pi-coding-agent': '0.85.0' },
+        devDependencies: { '@earendil-works/pi-coding-agent': '0.85.0' },
       }),
     );
     expect(piPeerVersion.check?.(manifest, root, boundaryContext())).toBeNull();

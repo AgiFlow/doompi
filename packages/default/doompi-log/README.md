@@ -12,7 +12,7 @@ The extension aggregates telemetry it observes in-process and can query historic
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.4 and Pi TUI 0.84.4
+- Pi 0.85.0 and Pi TUI 0.85.0
 
 ## Install
 

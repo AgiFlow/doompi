@@ -3,10 +3,16 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { getRequestListener } from '@hono/node-server';
-import type { DoomApi } from '@agimon-ai/doompi-extension-contracts/package-api';
+import {
+  DOOM_API_CALLER_DEVICE_ID_HEADER,
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
+  type DoomApi,
+} from '@agimon-ai/doompi-extension-contracts/package-api';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountHubApis, serveWeb } from '../../src/adapters/httpServer.ts';
+import { proxyToSocket } from '../../src/adapters/packageApiProxy.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
 
@@ -60,6 +66,9 @@ async function fakeSessionApi(): Promise<string> {
         query: url.search,
         method: request.method,
         traceparent: request.headers.get('traceparent'),
+        callerLocality: request.headers.get(DOOM_API_CALLER_LOCALITY_HEADER),
+        callerDeviceId: request.headers.get(DOOM_API_CALLER_DEVICE_ID_HEADER),
+        callerStepUp: request.headers.get(DOOM_API_CALLER_STEP_UP_HEADER),
       });
     }),
   );
@@ -129,16 +138,46 @@ describe('a package API reached through the hub', () => {
     const socketPath = await fakeSessionApi();
     const { server } = await hubWith(socketPath);
 
-    const response = await fetch(`${server.url}/api/plugin/demo/runners/r1/log?session=session-a&grep=needle`);
+    const response = await fetch(`${server.url}/api/plugin/demo/runners/r1/log?session=session-a&grep=needle`, {
+      headers: {
+        [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote',
+        [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'spoofed-device',
+        [DOOM_API_CALLER_STEP_UP_HEADER]: 'verified',
+      },
+    });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       path: '/api/plugin/demo/runners/r1/log',
       query: '?grep=needle',
       method: 'GET',
       traceparent: null,
+      callerLocality: 'local',
+      callerDeviceId: null,
+      callerStepUp: 'not-required',
     });
   });
 
+  it('replaces caller-supplied identity with the trusted paired remote stamp', async () => {
+    const socketPath = await fakeSessionApi();
+    const response = await proxyToSocket({
+      socketPath,
+      path: '/api/plugin/demo/activate',
+      method: 'POST',
+      headers: new Headers({
+        [DOOM_API_CALLER_LOCALITY_HEADER]: 'local',
+        [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'spoofed-device',
+        [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required',
+      }),
+      body: null,
+      caller: { locality: 'remote', deviceId: 'paired-phone', stepUp: 'verified' },
+    });
+
+    expect(await response.json()).toMatchObject({
+      callerLocality: 'remote',
+      callerDeviceId: 'paired-phone',
+      callerStepUp: 'verified',
+    });
+  });
   it('streams a response through rather than buffering it, so a follow arrives as it is produced', async () => {
     const socketPath = await fakeSessionApi();
     const { server } = await hubWith(socketPath);

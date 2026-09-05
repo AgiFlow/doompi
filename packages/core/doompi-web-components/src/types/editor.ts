@@ -19,8 +19,45 @@ export type MediaKind = (typeof MEDIA_KINDS)[number];
  */
 export interface EditorSelectionRange {
   text: string;
+  /** Zero-based, half-open offsets in the mounted document. */
+  from: number;
+  to: number;
   startLine: number;
   endLine: number;
+}
+
+/** A zero-based half-open range in the mounted editor document. */
+export interface EditorTextRange {
+  from: number;
+  to: number;
+}
+
+/** A persistent numbered annotation drawn over a mounted editor range. */
+export interface EditorMarkedRange extends EditorTextRange {
+  label: string;
+}
+/** One replacement applied with the other edits in a single editor transaction. */
+export interface EditorEdit extends EditorTextRange {
+  insert: string;
+}
+
+/** A client-coordinate rectangle over the visible editor viewport. */
+export interface EditorViewportRectangle {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** The deliberately small imperative surface exposed by a mounted editor. */
+export interface CodeEditorController {
+  focus: () => void;
+  revealAndSelect: (range: EditorTextRange) => void;
+  applyEdits: (edits: readonly EditorEdit[]) => void;
+  setClosedRanges: (ranges: readonly EditorTextRange[]) => void;
+  setMarkedRanges: (ranges: readonly EditorMarkedRange[]) => void;
+  /** Resolves visible geometry to a document-native range, or null when it misses the document. */
+  resolveViewportRegion: (rectangle: EditorViewportRectangle) => EditorSelectionRange | null;
 }
 
 export interface CodeEditorProps {
@@ -40,4 +77,6 @@ export interface CodeEditorProps {
   'data-testid'?: string;
   onChange?: (value: string) => void;
   onSelect?: (range: EditorSelectionRange) => void;
+  /** Receives the controller while the CodeMirror view is mounted, and `null` after it is destroyed. */
+  controllerRef?: import('react').Ref<CodeEditorController>;
 }

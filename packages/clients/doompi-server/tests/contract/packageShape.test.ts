@@ -81,21 +81,17 @@ describe('doompi-server package contract', () => {
     }
   });
 
-  it('bundles the patched Pi protocol runtime into published artifacts', async () => {
-    const [buildConfig, protocolPatch] = await Promise.all([
-      readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8'),
-      readFile(path.resolve(packageDirectory, '../../../patches/@earendil-works__pi-protocol@0.84.4.patch'), 'utf8'),
-    ]);
+  it('bundles the Pi protocol runtime into published artifacts', async () => {
+    const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
 
     expect(buildConfig).toContain('unbundle: false');
     expect(buildConfig).toContain('alwaysBundle: [/^@earendil-works\\/pi-(?:protocol|server)(?:\\/|$)/u]');
-    expect(protocolPatch).toContain('Check(ServerMessageContext, ServerMessageSchema, value)');
   });
 
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.4');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.4');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
   });
 });

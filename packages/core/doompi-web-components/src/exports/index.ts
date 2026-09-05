@@ -73,7 +73,24 @@ export { type FieldSize, type FieldVariant, fieldVariants, Input, type InputProp
 export { Kbd } from '../components/Kbd.tsx';
 export { Label } from '../components/Label.tsx';
 export { Markdown } from '../components/Markdown.tsx';
-export { MediaPreview, type MediaPreviewProps } from '../components/MediaPreview.tsx';
+export {
+  type MediaFrameCapture,
+  type MediaFrameMetadata,
+  type MediaIntrinsicSize,
+  type MediaPlaybackState,
+  MediaPreview,
+  type MediaPreviewController,
+  type MediaPreviewProps,
+} from '../components/MediaPreview.tsx';
+export {
+  type PdfNormalizedRectangle,
+  type PdfPageRegion,
+  type PdfPageState,
+  PdfPreview,
+  type PdfPreviewController,
+  type PdfPreviewProps,
+  resolvePdfViewportRegion,
+} from '../components/PdfPreview.tsx';
 export {
   MessageItem,
   MessageItemBody,
@@ -227,7 +244,17 @@ export {
 } from '../lib/syntaxHighlight.ts';
 export { handleOptionListKey, MAX_DIGIT_SHORTCUT, optionListHint, optionMarker } from '../lib/optionList.ts';
 export { CHIP_TO_STATUS, LINE_TONE_TO_STATUS, STATUS_TO_CHIP, STATUS_TO_DOT } from '../lib/tone.ts';
-export { type CodeEditorProps, type EditorSelectionRange, MEDIA_KINDS, type MediaKind } from '../types/editor.ts';
+export {
+  type CodeEditorController,
+  type CodeEditorProps,
+  type EditorEdit,
+  type EditorMarkedRange,
+  type EditorSelectionRange,
+  type EditorTextRange,
+  type EditorViewportRectangle,
+  MEDIA_KINDS,
+  type MediaKind,
+} from '../types/editor.ts';
 export {
   ACCENT_TONES,
   type AccentTone,

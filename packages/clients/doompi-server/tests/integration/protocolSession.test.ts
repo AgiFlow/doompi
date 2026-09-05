@@ -1,8 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { PiClient } from '@earendil-works/pi-client';
+import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import { createUnixTransportFactory } from '@earendil-works/pi-client/unix';
+import {
+  DoomSessionManagementService,
+  DoomSessionService,
+  type SessionService,
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createAgentServerService } from '../../src/adapters/piSessionRuntime.ts';
 import { type ProtocolSocket, serveProtocolSocket } from '../../src/adapters/protocolSocket.ts';
@@ -29,10 +36,11 @@ function fakeAgent(): AgentProcess & { emit(frame: SessionFrame): void; readonly
 
 let workDir: string;
 let socket: ProtocolSocket | undefined;
-let client: PiClient | undefined;
+let client: Client | undefined;
+let binding: RemoteServiceBinding | undefined;
 let agent: ReturnType<typeof fakeAgent>;
 
-async function connect(): Promise<PiClient> {
+async function connect(): Promise<{ client: Client; session: SessionService }> {
   agent = fakeAgent();
   socket = await serveProtocolSocket({
     socketPath: path.join(workDir, 'p.sock'),
@@ -44,10 +52,29 @@ async function connect(): Promise<PiClient> {
       createdAt: 1,
     }),
   });
-  const connected = new PiClient({ transportFactory: createUnixTransportFactory({ path: socket.socketPath }) });
+  const connected = new Client({
+    serverId: socket.serverId,
+    transportFactory: createUnixTransportFactory({ path: socket.socketPath }),
+  });
   await connected.connect();
   client = connected;
-  return connected;
+  const next = await attach(connected, SESSION_ID);
+  return { client: connected, session: next.use(DoomSessionService) };
+}
+
+async function attach(connected: Client, sessionId: string): Promise<RemoteServiceBinding> {
+  await connected.request(
+    { serverId: connected.serverId },
+    { serviceId: DoomSessionManagementService.id, member: 'attach', args: [sessionId] },
+  );
+  const next = createRemoteServiceBinding({
+    services: [DoomSessionService],
+    transport: createClientServiceTransport(connected, () => connected.attachment),
+  });
+  next.use(DoomSessionService);
+  await next.ready(BACKGROUND_CONTEXT);
+  binding = next;
+  return next;
 }
 
 beforeEach(() => {
@@ -55,51 +82,43 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  await binding?.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
   await client?.dispose();
   await socket?.close();
+  binding = undefined;
   client = undefined;
   socket = undefined;
   fs.rmSync(workDir, { recursive: true, force: true });
 });
 
-/**
- * Pi's own client is the conformance check.
- *
- * It validates every frame against the protocol schemas and enforces the
- * handshake, correlation, and lease rules, so a session that satisfies it is
- * one any PiClient can drive — including the browser's.
- */
+/** Exercises the routed Pi 0.85 transport with its own client and Chord binding. */
 describe('doompi-server over the pi protocol', () => {
-  it('completes the handshake and lists the supervised session', async () => {
-    const connected = await connect();
+  it('completes the handshake and publishes session management', async () => {
+    const { client: connected } = await connect();
 
-    const sessions = await connected.listSessions();
+    const catalogue = await connected.serviceCatalogue({ serverId: connected.serverId });
 
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0]).toMatchObject({ id: SESSION_ID, sessionName: 'probe', cwd: '/workspace/repo' });
+    expect(connected.hello?.serverId).toBe(socket?.serverId);
+    expect(catalogue).toContainEqual({ serviceId: DoomSessionManagementService.id, mode: 'singleton' });
   });
 
   it('hands an attaching client the authoritative snapshot', async () => {
-    const connected = await connect();
+    const { session } = await connect();
 
-    const lease = await connected.attachSession(SESSION_ID);
-
-    expect(lease.snapshot).toMatchObject({ id: SESSION_ID, phase: 'idle', transcript: [] });
+    expect(session.state.value!.snapshot).toMatchObject({ id: SESSION_ID, phase: 'idle', transcript: [] });
   });
 
   it('streams a turn to the client and settles the prompt when the agent does', async () => {
-    const connected = await connect();
-    const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
+    const { session } = await connect();
     const snapshots: number[] = [];
     const progress: unknown[] = [];
-    lease.subscribe((snapshot) => snapshots.push(snapshot.revision));
-    lease.onEvent((event) => {
-      if (event.type === 'session_progress') progress.push(event.progress);
+    session.state.subscribe((state) => {
+      snapshots.push(state.snapshot.revision);
+      if (state.progress) progress.push(state.progress);
     });
-    const prompting = lease.prompt('what changed?');
+    const prompting = session.prompt('what changed?', BACKGROUND_CONTEXT);
     await vitestTick();
 
-    // The agent accepted the prompt, and nothing has settled yet.
     expect(agent.sent).toContainEqual({ type: 'prompt', message: 'what changed?' });
 
     agent.emit({ type: 'agent_start' });
@@ -114,8 +133,9 @@ describe('doompi-server over the pi protocol', () => {
     });
     agent.emit({ type: 'agent_settled' });
 
-    const settled = await prompting;
-
+    await prompting;
+    await waitForIdle(session);
+    const settled = session.state.value!.snapshot;
     expect(settled.phase).toBe('idle');
     expect(settled.transcript).toHaveLength(1);
     expect(settled.transcript[0]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'a file' }] });
@@ -125,88 +145,92 @@ describe('doompi-server over the pi protocol', () => {
         item: expect.objectContaining({ content: [{ type: 'text', text: 'a file' }], status: 'streaming' }),
       }),
     );
-    // Snapshots reached the subscriber, and revisions only ever move forward.
     expect(snapshots.length).toBeGreaterThan(0);
     expect([...snapshots].sort((a, b) => a - b)).toEqual(snapshots);
   });
 
-  it('reports a refused operation as a protocol error rather than dropping the connection', async () => {
-    const connected = await connect();
-    const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
+  it('reports a refused operation as a service error rather than dropping the connection', async () => {
+    const { client: connected, session } = await connect();
 
-    // Steering with no turn running is a service-level refusal.
-    await expect(lease.steer('too soon')).rejects.toThrow();
-
-    // The connection survives it.
-    await expect(connected.listSessions()).resolves.toHaveLength(1);
+    await expect(session.steer('too soon', BACKGROUND_CONTEXT)).rejects.toThrow();
+    await expect(connected.serviceCatalogue({ serverId: connected.serverId })).resolves.toContainEqual({
+      serviceId: DoomSessionManagementService.id,
+      mode: 'singleton',
+    });
   });
 
   it('forwards model and thinking changes to the agent', async () => {
-    const connected = await connect();
-    const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
+    const { session } = await connect();
 
-    await lease.setModel({ provider: 'anthropic', id: 'claude-opus-4-5' });
-    await lease.setThinking('high');
+    await session.setModel({ provider: 'anthropic', id: 'claude-opus-4-5' }, BACKGROUND_CONTEXT);
+    await session.setThinking('high', BACKGROUND_CONTEXT);
 
     expect(agent.sent).toContainEqual({ type: 'set_model', provider: 'anthropic', modelId: 'claude-opus-4-5' });
     expect(agent.sent).toContainEqual({ type: 'set_thinking_level', level: 'high' });
   });
 
-  it('refuses to create a second session on a single-session server', async () => {
-    const connected = await connect();
+  it('refuses to attach a session this server does not supervise', async () => {
+    const { client: connected } = await connect();
 
-    await expect(connected.createSession({ cwd: '/workspace/repo' })).rejects.toThrow();
-  });
-
-  it('refuses to open a session this server does not supervise', async () => {
-    const connected = await connect();
-
-    await expect(connected.attachSession('some-other-session')).rejects.toThrow();
+    await expect(
+      connected.request(
+        { serverId: connected.serverId },
+        { serviceId: DoomSessionManagementService.id, member: 'attach', args: ['some-other-session'] },
+      ),
+    ).rejects.toThrow();
   });
 
   it('aborts a running turn and steers a queued message', async () => {
-    const connected = await connect();
-    const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
-
-    const prompting = lease.prompt('long job');
+    const { session } = await connect();
+    const prompting = session.prompt('long job', BACKGROUND_CONTEXT);
     await vitestTick();
     agent.emit({ type: 'agent_start' });
 
-    await lease.steer('actually, stop after this');
-    await lease.abort();
+    await session.steer('actually, stop after this', BACKGROUND_CONTEXT);
+    await session.abort(BACKGROUND_CONTEXT);
 
     expect(agent.sent).toContainEqual({ type: 'steer', message: 'actually, stop after this' });
     expect(agent.sent).toContainEqual({ type: 'abort' });
 
     agent.emit({ type: 'agent_settled' });
-    await expect(prompting).resolves.toMatchObject({ phase: 'idle' });
+    await expect(prompting).resolves.toBeUndefined();
+    await waitForIdle(session);
+    expect(session.state.value!.snapshot.phase).toBe('idle');
   });
 
   it('refuses a second prompt while a turn is running', async () => {
-    const connected = await connect();
-    const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
-
-    const prompting = lease.prompt('first');
+    const { session } = await connect();
+    const prompting = session.prompt('first', BACKGROUND_CONTEXT);
     await vitestTick();
     agent.emit({ type: 'agent_start' });
 
-    await expect(lease.prompt('second')).rejects.toThrow();
+    await expect(session.prompt('second', BACKGROUND_CONTEXT)).rejects.toThrow();
 
     agent.emit({ type: 'agent_settled' });
     await prompting;
   });
 
-  it('keeps the session usable after a client releases its lease', async () => {
-    const connected = await connect();
-    const first = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
-    await first.dispose();
+  it('keeps the session usable after a client detaches and reattaches', async () => {
+    const { client: connected } = await connect();
+    await binding?.dispose(BACKGROUND_CONTEXT);
+    binding = undefined;
+    await connected.request(
+      { serverId: connected.serverId },
+      { serviceId: DoomSessionManagementService.id, member: 'detach', args: [] },
+    );
 
-    // The agent outlives any one client, so the next attach still works.
-    const second = await connected.attachSession(SESSION_ID);
+    const secondBinding = await attach(connected, SESSION_ID);
+    const second = secondBinding.use(DoomSessionService);
 
-    expect(second.snapshot).toMatchObject({ id: SESSION_ID });
+    expect(second.state.value!.snapshot).toMatchObject({ id: SESSION_ID });
   });
 });
+
+async function waitForIdle(session: SessionService): Promise<void> {
+  for (let attempt = 0; attempt < 50 && session.state.value?.snapshot.phase !== 'idle'; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
 
 /** Lets the server's microtasks run before the test inspects what it received. */
 async function vitestTick(): Promise<void> {

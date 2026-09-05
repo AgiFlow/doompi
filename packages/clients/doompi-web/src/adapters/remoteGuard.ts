@@ -1,3 +1,4 @@
+import type { DoomApiCaller } from '@agimon-ai/doompi-extension-contracts/package-api';
 import type { Context, MiddlewareHandler } from 'hono';
 import { stepUpActionFor, type StepUpAction } from '../services/webauthnPolicy.ts';
 import {
@@ -62,6 +63,8 @@ export interface RemoteGuard {
   middleware: MiddlewareHandler;
   /** Which listener a request arrived on, for the socket factories to tag their connection. */
   listenerOf(context: Context): GuardListener;
+  /** Trusted caller identity established by this guard for downstream package APIs. */
+  callerOf(context: Context): DoomApiCaller | undefined;
 }
 
 function socketPortOf(context: Context): number | undefined {
@@ -119,6 +122,7 @@ export function createRemoteGuard(options: RemoteGuardOptions): RemoteGuard {
     if (cached?.port !== port) cached = { port, policy: localOriginPolicy(port, extraOrigins) };
     return cached.policy;
   };
+  const callers = new WeakMap<Context, DoomApiCaller>();
 
   const listenerFor = (context: Context): GuardListener => listenerOf(socketPortOf(context), options.loopbackPort());
 
@@ -138,8 +142,10 @@ export function createRemoteGuard(options: RemoteGuardOptions): RemoteGuard {
     });
     if (verdict !== 'allow') return context.text(REFUSAL[verdict], FORBIDDEN);
 
-    if (listener === 'local') return next();
-
+    if (listener === 'local') {
+      callers.set(context, { locality: 'local', stepUp: 'not-required' });
+      return next();
+    }
     // `c.req.path` is the percent-decoded value Hono routed on. Comparing
     // anything else would let the guard and the router disagree about which
     // handler a request reaches.
@@ -166,14 +172,21 @@ export function createRemoteGuard(options: RemoteGuardOptions): RemoteGuard {
     // to start an agent in a directory of the caller's choosing. Both are
     // escalation paths out of "drive the agent" and into "own the machine".
     const action = stepUpActionFor(context.req.method, context.req.path);
-    if (action !== undefined && options.stepUp?.required(action) === true) {
-      const assertion = decodeAssertion(context.req.header(STEP_UP_HEADER));
-      if (assertion === undefined || !(await options.stepUp.verify(context, action, assertion))) {
-        return context.json({ error: 'This action needs a fresh passkey gesture.', action }, UNAUTHORIZED);
+    let stepUp: DoomApiCaller['stepUp'] = 'not-required';
+    if (action !== undefined) {
+      if (options.stepUp?.required(action) === true) {
+        const assertion = decodeAssertion(context.req.header(STEP_UP_HEADER));
+        if (assertion === undefined || !(await options.stepUp.verify(context, action, assertion))) {
+          return context.json({ error: 'This action needs a fresh passkey gesture.', action }, UNAUTHORIZED);
+        }
+        stepUp = 'verified';
+      } else {
+        stepUp = 'unavailable';
       }
     }
+    callers.set(context, { locality: 'remote', deviceId, stepUp });
     return next();
   };
 
-  return { middleware, listenerOf: listenerFor };
+  return { middleware, listenerOf: listenerFor, callerOf: (context) => callers.get(context) };
 }

@@ -61,6 +61,11 @@ export const DOOM_EDITOR_STYLES: Readonly<Record<string, Readonly<Record<string,
   '.cm-selectionMatch': {
     backgroundColor: 'var(--doom-tint-blue)',
   },
+  '.cm-closed-tone': {
+    backgroundColor: 'var(--doom-tint-green)',
+    textDecoration: 'line-through',
+    textDecorationColor: 'var(--doom-edge-green)',
+  },
   '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
     backgroundColor: 'var(--doom-tint-green)',
     outline: '1px solid var(--doom-edge-green)',

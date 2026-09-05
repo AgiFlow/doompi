@@ -1,0 +1,11 @@
+# @agimon-ai/doompi-computer-use
+
+Session-scoped semantic computer control through DoomPi Desktop.
+
+## Guidance
+
+- [Use Computer Use](./src/prompts/doompi-use-computer-use/SKILL.md): Active-mode safety, observation, action, confirmation, and shutdown guidance.
+
+## Resources
+
+- [Package README](./README.md): Installation, activation workflow, tools, API boundaries, and development commands.

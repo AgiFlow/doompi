@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   appendComposerDraft,
   appendComposerQuote,
+  attachComposerCapture,
   attachComposerContext,
   clearComposerState,
   composerStore,
@@ -9,6 +10,65 @@ import {
   resetComposerStore,
   updateComposerState,
 } from '../../src/web/stores/composerStore.ts';
+
+function base64(bytes: readonly number[]): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function png(width: number, height: number): string {
+  return base64([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    0x00,
+    0x00,
+    0x00,
+    0x0d,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    (width >>> 24) & 0xff,
+    (width >>> 16) & 0xff,
+    (width >>> 8) & 0xff,
+    width & 0xff,
+    (height >>> 24) & 0xff,
+    (height >>> 16) & 0xff,
+    (height >>> 8) & 0xff,
+    height & 0xff,
+  ]);
+}
+
+function jpeg(width: number, height: number): string {
+  return base64([
+    0xff,
+    0xd8,
+    0xff,
+    0xc0,
+    0x00,
+    0x11,
+    0x08,
+    (height >>> 8) & 0xff,
+    height & 0xff,
+    (width >>> 8) & 0xff,
+    width & 0xff,
+    0x03,
+    0x01,
+    0x11,
+    0x00,
+    0x02,
+    0x11,
+    0x00,
+    0x03,
+    0x11,
+    0x00,
+  ]);
+}
 
 beforeEach(() => resetComposerStore());
 
@@ -73,6 +133,7 @@ describe('composer state', () => {
         content: 'Status: Todo\n\nFix repository authentication.',
         source: 'agiflow',
         contextId: 'task-1',
+        contextKind: 'work-item',
       },
     ]);
   });
@@ -92,6 +153,115 @@ describe('composer state', () => {
     expect(composerStore.state.s1?.attachments).toEqual([]);
   });
 
+  it('atomically stages a validated capture and nested context without changing the draft', () => {
+    updateComposerState('s1', (state) => ({ ...state, draft: 'keep this', caret: 9 }));
+    let updates = 0;
+    const unsubscribe = composerStore.subscribe(() => {
+      updates += 1;
+    });
+
+    attachComposerCapture('s1', {
+      data: png(1, 1),
+      mimeType: 'image/png',
+      context: {
+        kind: 'browser-page',
+        source: 'author',
+        id: 'https://example.com/docs',
+        label: 'Example docs',
+        content: 'Captured from https://example.com/docs',
+        url: 'https://example.com/docs',
+      },
+    });
+    unsubscribe.unsubscribe();
+
+    expect(updates).toBe(1);
+    expect(composerStore.state.s1).toMatchObject({ draft: 'keep this', caret: 9, nextAttachmentId: 2 });
+    expect(composerStore.state.s1?.attachments).toEqual([
+      {
+        id: 'capture-0',
+        kind: 'image',
+        name: 'Example docs.png',
+        size: 24,
+        dataUrl: `data:image/png;base64,${png(1, 1)}`,
+        data: png(1, 1),
+        mimeType: 'image/png',
+      },
+      {
+        id: 'context-1',
+        kind: 'context',
+        name: 'Example docs',
+        size: 38,
+        content: 'Captured from https://example.com/docs',
+        source: 'author',
+        contextId: 'https://example.com/docs',
+        contextKind: 'browser-page',
+        url: 'https://example.com/docs',
+      },
+    ]);
+  });
+
+  it('rejects invalid capture data as one host update without partially staging context', () => {
+    let updates = 0;
+    const unsubscribe = composerStore.subscribe(() => {
+      updates += 1;
+    });
+    attachComposerCapture('s1', {
+      data: 'not base64',
+      mimeType: 'image/png',
+      context: { kind: 'browser-page', source: 'author', id: 'page-1', label: 'Page', content: 'valid context' },
+    });
+    unsubscribe.unsubscribe();
+
+    expect(updates).toBe(1);
+    expect(composerStore.state.s1?.attachments).toEqual([]);
+    expect(composerStore.state.s1?.attachmentError).toContain('base64 PNG or JPEG');
+  });
+
+  it('accepts a bounded JPEG capture using its encoded dimensions', () => {
+    attachComposerCapture('s1', {
+      data: jpeg(1600, 900),
+      mimeType: 'image/jpeg',
+      context: { kind: 'browser-page', source: 'author', id: 'page-1', label: 'Page', content: 'valid context' },
+    });
+
+    expect(composerStore.state.s1?.attachmentError).toBe('');
+    expect(composerStore.state.s1?.attachments[0]).toMatchObject({
+      kind: 'image',
+      mimeType: 'image/jpeg',
+      size: 21,
+    });
+  });
+
+  it.each([
+    ['corrupt PNG', base64([0x89, 0x50, 0x4e, 0x47]), 'image/png' as const],
+    ['PNG labeled as JPEG', png(1, 1), 'image/jpeg' as const],
+    ['oversized dimensions', png(1601, 1), 'image/png' as const],
+    ['zero dimensions', png(0, 1), 'image/png' as const],
+  ])('rejects %s without staging either attachment', (_description, data, mimeType) => {
+    attachComposerCapture('s1', {
+      data,
+      mimeType,
+      context: { kind: 'browser-page', source: 'author', id: 'page-1', label: 'Page', content: 'valid context' },
+    });
+
+    expect(composerStore.state.s1?.attachments).toEqual([]);
+    expect(composerStore.state.s1?.attachmentError).toContain('base64 PNG or JPEG');
+  });
+
+  it('rejects decodable but non-canonical base64', () => {
+    const canonical = base64(Array.from(atob(png(1, 1)), (byte) => byte.charCodeAt(0)).concat(0));
+    const nonCanonical = `${canonical.slice(0, -3)}B==`;
+
+    attachComposerCapture('s1', {
+      data: nonCanonical,
+      mimeType: 'image/png',
+      context: { kind: 'browser-page', source: 'author', id: 'page-1', label: 'Page', content: 'valid context' },
+    });
+
+    expect(atob(nonCanonical)).toBe(atob(canonical));
+    expect(composerStore.state.s1?.attachments).toEqual([]);
+    expect(composerStore.state.s1?.attachmentError).toContain('base64 PNG or JPEG');
+  });
   it('uses existing draft whitespace as the separator and ignores empty appends', () => {
     updateComposerState('s1', (state) => ({ ...state, draft: 'first\n' }));
     appendComposerDraft('s1', ' second ');

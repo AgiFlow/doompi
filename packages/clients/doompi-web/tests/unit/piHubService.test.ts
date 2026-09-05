@@ -1,3 +1,4 @@
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { describe, expect, it, vi } from 'vitest';
 import { createPiHubService } from '../../src/adapters/piHubService.ts';
 import type { SessionRecord } from '../../src/types/registry.ts';
@@ -11,67 +12,47 @@ function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
     socketPath: '/run/s.sock',
     tokenFile: '/run/token',
     protocolSocketPath: '/run/s.sock.pi',
+    protocolServerId: '00000000-0000-4000-8000-000000000001',
     pid: 1234,
     createdAt: '2026-08-26T00:00:00.000Z',
     ...overrides,
   };
 }
 
-function service(records: SessionRecord[], spawn = vi.fn()) {
-  return { service: createPiHubService({ records: () => records, spawn }), spawn };
+function service(records: SessionRecord[]) {
+  return createPiHubService({ records: () => records, spawn: vi.fn() });
 }
 
 describe('hub protocol service', () => {
-  it('lists what the registry knows as protocol metadata', async () => {
-    const { service: subject } = service([record()]);
+  it('resolves registry records as routed session metadata', async () => {
+    const subject = service([record()]);
 
-    await expect(subject.listSessions()).resolves.toEqual([
-      {
-        id: 'session-1',
-        createdAt: Date.parse('2026-08-26T00:00:00.000Z'),
-        sessionName: 'probe',
-        cwd: '/workspace/repo',
-      },
-    ]);
+    await expect(subject.resolveSession('session-1', BACKGROUND_CONTEXT)).resolves.toEqual({
+      id: 'session-1',
+      createdAt: Date.parse('2026-08-26T00:00:00.000Z'),
+      storageVersion: 1,
+      cwd: '/workspace/repo',
+    });
   });
 
-  it('reports an unparsable timestamp as zero rather than NaN, which the schema rejects', async () => {
-    const { service: subject } = service([record({ createdAt: 'not a date' })]);
+  it('reports an unparsable timestamp as zero rather than publishing NaN', async () => {
+    const subject = service([record({ createdAt: 'not a date' })]);
 
-    const [session] = await subject.listSessions();
+    const metadata = await subject.resolveSession('session-1', BACKGROUND_CONTEXT);
 
-    expect(session?.createdAt).toBe(0);
-  });
-
-  it('offers no models of its own; a session reports its own', async () => {
-    const { service: subject } = service([]);
-
-    await expect(subject.listModels()).resolves.toEqual([]);
+    expect(metadata.createdAt).toBe(0);
   });
 
   it('refuses a session the registry does not list', async () => {
-    const { service: subject } = service([]);
+    const subject = service([]);
 
-    await expect(subject.openSession('ghost')).rejects.toThrow(/No session ghost/);
+    await expect(subject.resolveSession('ghost', BACKGROUND_CONTEXT)).rejects.toThrow(/No session ghost/);
   });
 
-  it('refuses a session whose server predates the protocol socket', async () => {
-    const { service: subject } = service([record({ protocolSocketPath: undefined })]);
+  it('refuses a session whose server does not publish the 0.85 endpoint identity', async () => {
+    const subject = service([record({ protocolServerId: undefined })]);
+    const metadata = await subject.resolveSession('session-1', BACKGROUND_CONTEXT);
 
-    await expect(subject.openSession('session-1')).rejects.toThrow(/predates the protocol socket/);
-  });
-
-  it('requires a working directory to create a session', async () => {
-    const { service: subject, spawn } = service([]);
-
-    await expect(subject.createSession({ id: 'new', cwd: '' })).rejects.toThrow(/working directory/);
-    expect(spawn).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a refused spawn instead of waiting for a session that will never appear', async () => {
-    const spawn = vi.fn().mockResolvedValue({ ok: false, code: 'invalid_request', error: 'No such directory: /nope' });
-    const { service: subject } = service([], spawn);
-
-    await expect(subject.createSession({ id: 'new', cwd: '/nope' })).rejects.toThrow(/No such directory/);
+    await expect(subject.openSession(metadata, BACKGROUND_CONTEXT)).rejects.toThrow(/does not publish/);
   });
 });

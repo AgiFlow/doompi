@@ -12,7 +12,7 @@ by the major-mode, domain, and profile transition flows.
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- Pi 0.84.4 as a peer dependency
+- Pi 0.85.0 as a peer dependency
 
 ## Install
 

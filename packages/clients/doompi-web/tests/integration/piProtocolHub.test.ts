@@ -1,9 +1,17 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { PiClient } from '@earendil-works/pi-client';
+import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import type { ByteTransport, ByteTransportHandlers } from '@earendil-works/pi-client';
 import { createAgentServerService, type ProtocolSocket, serveProtocolSocket } from '@agimon-ai/doompi-server';
+import {
+  DOOM_COCKPIT_SERVER_ID,
+  DoomSessionManagementService,
+  DoomSessionService,
+  type SessionService,
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
@@ -63,7 +71,8 @@ let workDir: string;
 let registryDir: string;
 let sessionSocket: ProtocolSocket | undefined;
 let web: WebServer | undefined;
-let client: PiClient | undefined;
+let client: Client | undefined;
+let binding: RemoteServiceBinding | undefined;
 let agent: ReturnType<typeof fakeAgent>;
 
 beforeEach(async () => {
@@ -93,6 +102,7 @@ beforeEach(async () => {
       socketPath: path.join(workDir, 'unused.sock'),
       tokenFile: path.join(workDir, 'unused.token'),
       protocolSocketPath: sessionSocket.socketPath,
+      protocolServerId: sessionSocket.serverId,
       pid: process.pid,
       createdAt: new Date(1).toISOString(),
     }),
@@ -115,22 +125,36 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await binding?.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
   await client?.dispose().catch(() => undefined);
   await web?.close();
   await sessionSocket?.close();
+  binding = undefined;
   client = undefined;
   web = undefined;
   sessionSocket = undefined;
   fs.rmSync(workDir, { recursive: true, force: true });
 });
 
-async function connect(): Promise<PiClient> {
-  const connected = new PiClient({
+async function connect(sessionId = SESSION_ID): Promise<{ client: Client; session: SessionService }> {
+  const connected = new Client({
+    serverId: DOOM_COCKPIT_SERVER_ID,
     transportFactory: webSocketTransport(`${web?.url.replace('http://', 'ws://')}/api/pi`),
   });
   await connected.connect();
   client = connected;
-  return connected;
+  await connected.request(
+    { serverId: DOOM_COCKPIT_SERVER_ID },
+    { serviceId: DoomSessionManagementService.id, member: 'attach', args: [sessionId] },
+  );
+  const next = createRemoteServiceBinding({
+    services: [DoomSessionService],
+    transport: createClientServiceTransport(connected, () => connected.attachment),
+  });
+  const session = next.use(DoomSessionService);
+  await next.ready(BACKGROUND_CONTEXT);
+  binding = next;
+  return { client: connected, session };
 }
 
 /**
@@ -141,27 +165,25 @@ async function connect(): Promise<PiClient> {
  * here is a failure the page would have hit.
  */
 describe('hub protocol endpoint', () => {
-  it('lists the running sessions the registry knows', async () => {
-    const connected = await connect();
+  it('publishes session management over the cockpit endpoint', async () => {
+    const { client: connected } = await connect();
 
-    const sessions = await connected.listSessions();
-
-    expect(sessions.map((session) => session.id)).toContain(SESSION_ID);
+    await expect(connected.serviceCatalogue({ serverId: DOOM_COCKPIT_SERVER_ID })).resolves.toContainEqual({
+      serviceId: DoomSessionManagementService.id,
+      mode: 'singleton',
+    });
   });
 
   it('attaches through to the session server and reports its snapshot', async () => {
-    const connected = await connect();
+    const { session } = await connect();
 
-    const lease = await connected.attachSession(SESSION_ID);
-
-    expect(lease.snapshot).toMatchObject({ id: SESSION_ID, phase: 'idle' });
+    expect(session.state.value!.snapshot).toMatchObject({ id: SESSION_ID, phase: 'idle' });
   });
 
   it('carries a turn from the agent to the client across both hops', async () => {
-    const connected = await connect();
-    const lease = await connected.acquireSession(SESSION_ID, { mode: 'exclusive' });
+    const { session } = await connect();
 
-    const prompting = lease.prompt('what changed?');
+    const prompting = session.prompt('what changed?', BACKGROUND_CONTEXT);
     for (let attempt = 0; attempt < 60 && agent.sent.length === 0; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
@@ -175,15 +197,80 @@ describe('hub protocol endpoint', () => {
     });
     agent.emit({ type: 'agent_settled' });
 
-    const settled = await prompting;
+    await prompting;
+    for (let attempt = 0; attempt < 60 && session.state.value?.snapshot.phase !== 'idle'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    const settled = session.state.value!.snapshot;
 
     expect(settled.phase).toBe('idle');
     expect(settled.transcript[0]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'a file' }] });
   });
 
   it('refuses a session the registry does not list', async () => {
-    const connected = await connect();
+    await expect(connect('no-such-session')).rejects.toThrow();
+  });
 
-    await expect(connected.attachSession('no-such-session')).rejects.toThrow();
+  it('invalidates a stopped upstream and streams from its replacement on the same browser connection', async () => {
+    const { client: connected } = await connect();
+    const socketPath = sessionSocket!.socketPath;
+    const previousServerId = sessionSocket!.serverId;
+    await sessionSocket!.close();
+    sessionSocket = undefined;
+
+    await vi.waitFor(() => expect(connected.attachment).toBeUndefined());
+    expect(connected.connected).toBe(true);
+    await binding!.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
+    binding = undefined;
+
+    agent = fakeAgent();
+    sessionSocket = await serveProtocolSocket({
+      socketPath,
+      service: createAgentServerService({
+        agent,
+        sessionId: SESSION_ID,
+        sessionName: 'replacement',
+        cwd: workDir,
+        createdAt: 2,
+      }),
+    });
+    expect(sessionSocket.serverId).not.toBe(previousServerId);
+    const recordPath = path.join(registryDir, 'sessions', `${SESSION_ID}.json`);
+    const record = JSON.parse(fs.readFileSync(recordPath, 'utf8')) as Record<string, unknown>;
+    fs.writeFileSync(recordPath, JSON.stringify({ ...record, protocolServerId: sessionSocket.serverId }));
+
+    // The registry can still contain the old server identity during restart.
+    await vi.waitFor(
+      async () => {
+        await connected.request(
+          { serverId: DOOM_COCKPIT_SERVER_ID },
+          { serviceId: DoomSessionManagementService.id, member: 'attach', args: [SESSION_ID] },
+        );
+      },
+      { timeout: 5000 },
+    );
+    binding = createRemoteServiceBinding({
+      services: [DoomSessionService],
+      transport: createClientServiceTransport(connected, () => connected.attachment),
+    });
+    const session = binding.use(DoomSessionService);
+    await binding.ready(BACKGROUND_CONTEXT);
+    agent.emit({ type: 'agent_start' });
+    agent.emit({ type: 'message_start', message: { id: 'after-restart', role: 'assistant', content: [] } });
+    agent.emit({
+      type: 'message_end',
+      message: {
+        id: 'after-restart',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'live again' }],
+        stopReason: 'stop',
+      },
+    });
+    await vi.waitFor(() =>
+      expect(session.state.value?.snapshot.transcript).toContainEqual(
+        expect.objectContaining({ role: 'assistant', content: [{ type: 'text', text: 'live again' }] }),
+      ),
+    );
+    expect(connected.connected).toBe(true);
   });
 });

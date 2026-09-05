@@ -134,12 +134,15 @@ export function CockpitPage() {
             setMobileActivityOpen(true);
           }}
         />
-        {/* The composer and the selection bar address the session's agent, so
-            they belong to the conversation alone. A plugin panel is a view of
-            something else, and a prompt box under it would send somewhere the
-            reader is not looking. */}
+        {/* A plugin panel normally replaces the conversation composer because it
+            shows a different surface. A tab opts back in only when composing
+            against that surface is its stated purpose. The selection bar remains
+            conversation-only. */}
         {tab ? (
-          <tab.panel {...slotProps} />
+          <>
+            <tab.panel {...slotProps} />
+            {tab.retainComposer === true ? <Composer /> : null}
+          </>
         ) : noSessions ? (
           // Same reasoning as above, taken to its end: with no session there is
           // no agent to address, so the conversation and everything that talks

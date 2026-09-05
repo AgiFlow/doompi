@@ -473,13 +473,9 @@ test('a run of calls to one tool shares a frame, and a lone call keeps its card'
 /**
  * The path in a call header is the shortest way to the file itself.
  *
- * A read is the case that has to work without the file-edit timeline: the
- * session never changed this file, so the only thing that can open it is the
- * preview route, bounded by the working directory. What this suite proves is
- * the click and the tab it raises. It cannot prove what the tab then shows,
- * because the fixture's session API socket serves the runner route and nothing
- * else, so the preview request has no route to reach; the route itself is
- * covered against a real filesystem in doompi-file-edit's own tests.
+ * A read must open its document even without a file-edit timeline. Author now
+ * owns document tabs. This fixture does not activate its minor mode, so the
+ * click must select the file tab and explain why its editor is unavailable.
  */
 test('a read call opens its file from the path in the header', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
@@ -492,9 +488,7 @@ test('a read call opens its file from the path in the header', async ({ page, co
   });
 
   await page.getByTestId('tool-call-read').getByTestId('tool-path').click();
-  await expect(page.getByTestId('files-preview-panel')).toBeVisible();
-  await expect(page.getByTestId('files-preview-breadcrumb')).toContainText('src/Unchanged.ts');
-  // The tab is the file's own, not the changed-file tab, which this file has no
-  // history for.
-  await expect(page).toHaveURL(/\/files-file-[^/]+-preview$/u);
+  await expect(page.getByRole('link', { name: 'Unchanged.ts', exact: true })).toBeVisible();
+  await expect(page.getByTestId('author-mode-inactive')).toHaveText('Enable Author minor mode to edit this document.');
+  await expect(page).toHaveURL(/\/author-file-[^/]+$/u);
 });

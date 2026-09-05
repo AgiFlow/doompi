@@ -28,6 +28,7 @@ export const STEP_UP_ACTIONS = [
   'settings.write',
   'mcp.discover',
   'mcp.authorize',
+  'computer-use.activate',
 ] as const;
 
 export type StepUpAction = (typeof STEP_UP_ACTIONS)[number];
@@ -54,6 +55,7 @@ const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAc
   { method: 'POST', pattern: /^\/api\/plugin\/mcp\/repository\/discover$/u, action: 'mcp.discover' },
   { method: 'POST', pattern: /^\/api\/plugin\/mcp\/repository\/authorize$/u, action: 'mcp.authorize' },
   { method: 'DELETE', pattern: /^\/api\/plugin\/mcp\/repository\/authorize\/[^/]+$/u, action: 'mcp.authorize' },
+  { method: 'POST', pattern: /^\/api\/plugin\/computer-use\/activate$/u, action: 'computer-use.activate' },
 ];
 export function stepUpActionFor(method: string, path: string): StepUpAction | undefined {
   const wanted = method.toUpperCase();

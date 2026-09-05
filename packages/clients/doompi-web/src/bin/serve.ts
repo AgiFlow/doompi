@@ -2,6 +2,7 @@
 
 import os from 'node:os';
 import { createCockpitContainer } from '../adapters/cockpitContainer.ts';
+import { createComputerUseIpcBinding } from '../adapters/computerUseIpc.ts';
 import { handOffRemoteAccess } from '../adapters/cockpitHandoff.ts';
 import { ensureDoomInitialized } from '../adapters/doomInitialization.ts';
 import { hubAnswers, probeHub } from '../adapters/hubProbe.ts';
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
   const url = `http://${options.host}:${String(options.port)}`;
   const stateDir = options.stateDir ?? defaultRemoteStateDir();
   const container = createCockpitContainer({ stateDir, onNotice: notice });
+  let computerUse = createComputerUseIpcBinding(process, notice);
   // A cockpit that was killed rather than closed leaves its container holding
   // the published port, so the next start would fail to bind for a reason
   // nothing explains.
@@ -108,6 +110,7 @@ async function main(): Promise<void> {
   let shutDown: () => Promise<void> = async () => {};
 
   const start = async (): Promise<WebServer> => {
+    computerUse ??= createComputerUseIpcBinding(process, notice);
     const server = await serveWeb({
       port: options.port,
       host: options.host,
@@ -121,11 +124,16 @@ async function main(): Promise<void> {
       spawnCommand: options.spawnCommand,
       remoteStateDir: stateDir,
       cloudflaredPath: options.cloudflaredPath,
+      ...(computerUse === undefined ? {} : { computerUse }),
       onNotice: notice,
       // Already deferred past its own response by the route that asked, so by
       // the time this runs the caller has its answer and the server can go.
       onHandover: (handover) => {
         void handOver({
+          detachComputerUse: () => {
+            computerUse?.close?.();
+            computerUse = undefined;
+          },
           serving: server,
           restart: start,
           container,
@@ -139,6 +147,8 @@ async function main(): Promise<void> {
       },
     });
     shutDown = async () => {
+      computerUse?.close?.();
+      computerUse = undefined;
       await server.close();
     };
     return server;
@@ -176,6 +186,7 @@ async function main(): Promise<void> {
  * the sessions that were stopped in preparation for a move that did not happen.
  */
 async function handOver(input: {
+  detachComputerUse: () => void;
   serving: WebServer;
   restart: () => Promise<WebServer>;
   container: ReturnType<typeof createCockpitContainer>;
@@ -202,6 +213,7 @@ async function handOver(input: {
     });
     return;
   }
+  input.detachComputerUse();
   input.adopt(async () => {
     await started.container.stop();
   });

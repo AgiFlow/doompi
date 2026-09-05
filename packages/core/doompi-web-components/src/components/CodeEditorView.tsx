@@ -8,8 +8,10 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, StateEffect, StateField } from '@codemirror/state';
 import {
+  Decoration,
+  type DecorationSet,
   drawSelection,
   EditorView,
   highlightActiveLine,
@@ -17,14 +19,40 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
+  WidgetType,
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
-import { useEffect, useRef } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
+import { boundedEditorEdits, boundedEditorRanges } from '../lib/editorController.ts';
 import { grammarKeyOf, loadGrammar } from '../lib/editorLanguage.ts';
 import { DOOM_EDITOR_STYLES, DOOM_SYNTAX_STYLES } from '../lib/editorTheme.ts';
-import type { CodeEditorProps } from '../types/editor.ts';
+import type { CodeEditorProps, EditorSelectionRange, EditorViewportRectangle } from '../types/editor.ts';
 
+function selectionRange(editor: { readonly state: EditorState }, from: number, to: number): EditorSelectionRange {
+  const start = Math.min(from, to);
+  const end = Math.max(from, to);
+  return {
+    text: editor.state.sliceDoc(start, end),
+    from: start,
+    to: end,
+    startLine: editor.state.doc.lineAt(start).number,
+    endLine: editor.state.doc.lineAt(end).number,
+  };
+}
+
+export function resolveEditorViewportRegion(
+  editor: {
+    readonly state: EditorState;
+    posAtCoords(coords: { x: number; y: number }): number | null;
+  },
+  rectangle: EditorViewportRectangle,
+): EditorSelectionRange | null {
+  const start = editor.posAtCoords({ x: rectangle.left, y: rectangle.top });
+  const end = editor.posAtCoords({ x: rectangle.right, y: rectangle.bottom });
+  if (start === null || end === null) return null;
+  return selectionRange(editor, start, end);
+}
 /**
  * The editor itself, mounted on a real CodeMirror view.
  *
@@ -66,6 +94,72 @@ const DOOM_HIGHLIGHT = HighlightStyle.define([
   { tag: tags.invalid, ...DOOM_SYNTAX_STYLES.invalid },
 ]);
 
+const setClosedDecorations = StateEffect.define<DecorationSet>();
+const closedDecorations = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (decorations, transaction) => {
+    let next = decorations.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (effect.is(setClosedDecorations)) next = effect.value;
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+const setMarkedDecorations = StateEffect.define<DecorationSet>();
+const markedDecorations = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (decorations, transaction) => {
+    let next = decorations.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (effect.is(setMarkedDecorations)) next = effect.value;
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+class MarkedRangeLabel extends WidgetType {
+  constructor(private readonly label: string) {
+    super();
+  }
+
+  eq(other: MarkedRangeLabel): boolean {
+    return other.label === this.label;
+  }
+
+  toDOM(): HTMLElement {
+    const label = document.createElement('span');
+    label.className = 'cm-marked-region-label';
+    label.dataset.authorRegionLabel = this.label;
+    label.textContent = this.label;
+    return label;
+  }
+}
+
+const MARKED_REGION_THEME = EditorView.baseTheme({
+  '.cm-marked-region': {
+    backgroundColor: 'var(--doom-tint-yellow)',
+    borderBottom: '1px solid var(--doom-edge-yellow)',
+  },
+  '.cm-marked-region-label': {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '16px',
+    height: '16px',
+    marginRight: '4px',
+    borderRadius: '999px',
+    backgroundColor: 'var(--doom-yellow)',
+    color: 'var(--doom-deep)',
+    fontSize: '9px',
+    fontWeight: '700',
+    lineHeight: '1',
+    verticalAlign: 'text-bottom',
+  },
+});
+
 /** Everything that never changes for the life of an editor. */
 const FIXED_EXTENSIONS = [
   lineNumbers(),
@@ -84,6 +178,9 @@ const FIXED_EXTENSIONS = [
   // the keymap and Escape then Tab still moves focus out.
   keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
   syntaxHighlighting(DOOM_HIGHLIGHT),
+  closedDecorations,
+  markedDecorations,
+  MARKED_REGION_THEME,
   DOOM_THEME,
 ];
 
@@ -95,6 +192,7 @@ export function CodeEditorView({
   className,
   onChange,
   onSelect,
+  controllerRef,
   'data-testid': testId,
 }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null);
@@ -116,7 +214,7 @@ export function CodeEditorView({
     handlers.current = { onChange, onSelect };
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const parent = host.current;
     if (parent === null) return;
     const { language, readOnly: readOnlyPart, wrapping } = compartments.current;
@@ -137,11 +235,7 @@ export function CodeEditorView({
             const report = handlers.current.onSelect;
             if (report === undefined) return;
             const range = update.state.selection.main;
-            report({
-              text: update.state.sliceDoc(range.from, range.to),
-              startLine: update.state.doc.lineAt(range.from).number,
-              endLine: update.state.doc.lineAt(range.to).number,
-            });
+            report(selectionRange(update.view, range.from, range.to));
           }),
         ],
       }),
@@ -153,6 +247,65 @@ export function CodeEditorView({
     };
     // Built once.
   }, []);
+
+  useImperativeHandle(
+    controllerRef,
+    () => ({
+      focus: () => view.current?.focus(),
+      revealAndSelect: (range) => {
+        const editor = view.current;
+        if (editor === null) return;
+        const [bounded] = boundedEditorRanges(editor.state.doc.length, [range]);
+        if (bounded === undefined) return;
+        editor.dispatch({
+          selection: { anchor: bounded.from, head: bounded.to },
+          effects: EditorView.scrollIntoView(bounded.from, { y: 'center' }),
+        });
+      },
+      applyEdits: (edits) => {
+        const editor = view.current;
+        if (editor === null || edits.length === 0) return;
+        editor.dispatch({ changes: boundedEditorEdits(editor.state.doc.length, edits) });
+      },
+      setClosedRanges: (ranges) => {
+        const editor = view.current;
+        if (editor === null) return;
+        const bounded = boundedEditorRanges(editor.state.doc.length, ranges);
+        const decorations = bounded.map((range) =>
+          range.from === range.to
+            ? Decoration.line({ attributes: { class: 'cm-closed-tone', 'data-tone': 'closed' } }).range(
+                editor.state.doc.lineAt(range.from).from,
+              )
+            : Decoration.mark({ class: 'cm-closed-tone', attributes: { 'data-tone': 'closed' } }).range(
+                range.from,
+                range.to,
+              ),
+        );
+        editor.dispatch({ effects: setClosedDecorations.of(Decoration.set(decorations)) });
+      },
+      setMarkedRanges: (ranges) => {
+        const editor = view.current;
+        if (editor === null) return;
+        const decorations = ranges.flatMap((range) => {
+          const [bounded] = boundedEditorRanges(editor.state.doc.length, [range]);
+          if (bounded === undefined || bounded.from === bounded.to) return [];
+          return [
+            Decoration.widget({ widget: new MarkedRangeLabel(range.label), side: -1 }).range(bounded.from),
+            Decoration.mark({
+              class: 'cm-marked-region',
+              attributes: { 'data-author-region': range.label },
+            }).range(bounded.from, bounded.to),
+          ];
+        });
+        editor.dispatch({ effects: setMarkedDecorations.of(Decoration.set(decorations, true)) });
+      },
+      resolveViewportRegion: (rectangle) => {
+        const editor = view.current;
+        return editor === null ? null : resolveEditorViewportRegion(editor, rectangle);
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     const editor = view.current;

@@ -138,7 +138,7 @@ describe('doompi-prompt package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.4');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.84.4');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
   });
 });

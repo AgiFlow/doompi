@@ -57,6 +57,7 @@
           "@agimon-ai/doompi-autocompact",
           "@agimon-ai/doompi-autostop",
           "@agimon-ai/doompi-cache",
+          "@agimon-ai/doompi-computer-use",
           "@agimon-ai/doompi-config",
           "@agimon-ai/doompi-domain",
           "@agimon-ai/doompi-edit",

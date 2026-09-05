@@ -23,6 +23,8 @@ const defaultPackagePaths = [
   './packages/default/doompi-autocompact',
   './packages/minor/doompi-loop',
   './packages/minor/doompi-plan',
+  './packages/minor/doompi-author',
+  './packages/minor/doompi-computer-use',
   './packages/minor/doompi-workflow',
   './packages/default/doompi-log',
   './packages/default/doompi-mcp',

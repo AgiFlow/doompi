@@ -1660,8 +1660,9 @@ describe('consumer ownership boundaries', () => {
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
     const names = PACKAGE_MATRIX.map((entry) => entry.name);
-    expect(PACKAGE_MATRIX).toHaveLength(43);
-    expect(standardPackageSet.size).toBe(28);
+    expect(PACKAGE_MATRIX).toHaveLength(44);
+    expect(standardPackageSet.size).toBe(29);
+    expect(standardPackageSet).toContain('@agimon-ai/doompi-computer-use');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-help');
     expect(names).toContain('@agimon-ai/doompi');
     expect(names).toContain('@agimon-ai/doompi-web-components');
@@ -1720,7 +1721,7 @@ describe('DPI installed experiment runtime', () => {
 
       const version = await runCommand(process.execPath, [executable, '--version'], fixture.root, environment);
       expect(version.code, version.stderr || version.stdout).toBe(0);
-      expect(version.stdout.trim()).toBe('0.84.4');
+      expect(version.stdout.trim()).toBe('0.85.0');
 
       const runtime = startRuntime(
         executable,
