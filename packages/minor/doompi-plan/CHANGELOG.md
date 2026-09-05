@@ -1,3 +1,26 @@
+## 0.0.1-alpha.56 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+- improve interactive session recovery ([c364797](https://github.com/AgiFlow/doompi/commit/c364797))
+
+### 🩹 Fixes
+
+- **root:** harden authoring and computer use workflows ([d582302](https://github.com/AgiFlow/doompi/commit/d582302))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.16
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.19
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.55 (2026-09-04)
 
 ### 🚀 Features

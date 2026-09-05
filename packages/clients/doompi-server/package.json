@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-server",
-  "version": "0.0.1-alpha.18",
+  "version": "0.0.1-alpha.19",
   "description": "Headless DoomPi session server: supervises a Pi RPC agent behind an authenticated unix socket so clients can attach and reattach",
   "keywords": [
     "agent-server",

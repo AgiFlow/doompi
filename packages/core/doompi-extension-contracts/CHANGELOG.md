@@ -1,3 +1,14 @@
+## 0.0.1-alpha.55 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+- **doompi:** improve background work and CI ([09a53a1](https://github.com/AgiFlow/doompi/commit/09a53a1))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.54 (2026-09-04)
 
 ### 🚀 Features
