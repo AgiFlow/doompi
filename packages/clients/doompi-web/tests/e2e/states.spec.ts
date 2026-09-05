@@ -151,7 +151,10 @@ test('an informational notice reads as an aside, an error shouts', async ({ page
   await expect(notices.nth(1)).toHaveAttribute('data-tone', 'error');
 });
 
-test('links only safe standalone URLs in notices and preserves their lines', async ({ page, cockpit }) => {
+test('links safe URLs in notices, including normalized inline OAuth links, and preserves whitespace', async ({
+  page,
+  cockpit,
+}) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   await expect(page).toHaveURL(/\/session\/[^/]+$/);
@@ -159,7 +162,7 @@ test('links only safe standalone URLs in notices and preserves their lines', asy
   const message = [
     'Open this URL:',
     'https://auth.example.com/oauth?client=doom&state=a%26b',
-    'Embedded https://example.com stays plain text.',
+    'Authorize agiflow-mcp by opening: https://example.com',
     'https://user:secret@example.com/private',
     '<b>not markup</b>',
   ].join('\n');
@@ -174,13 +177,41 @@ test('links only safe standalone URLs in notices and preserves their lines', asy
   const notice = page.getByTestId('entry-notice');
   await expect(notice).toBeVisible();
   expect(await notice.locator('p').innerText()).toBe(message);
-  await expect(notice.locator('a')).toHaveCount(1);
-  await expect(notice.locator('a')).toHaveText('https://auth.example.com/oauth?client=doom&state=a%26b');
-  await expect(notice.locator('a')).toHaveAttribute('href', 'https://auth.example.com/oauth?client=doom&state=a%26b');
-  await expect(notice.locator('a')).toHaveAttribute('target', '_blank');
-  await expect(notice.locator('a')).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(notice.locator('a')).toHaveCount(2);
+  const authorizationLink = notice.locator('a').first();
+  await expect(authorizationLink).toHaveText('https://auth.example.com/oauth?client=doom&state=a%26b');
+  await expect(authorizationLink).toHaveAttribute('href', 'https://auth.example.com/oauth?client=doom&state=a%26b');
+  await expect(authorizationLink).toHaveAttribute('target', '_blank');
+  await expect(authorizationLink).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(notice.locator('a').nth(1)).toHaveAttribute('href', 'https://example.com/');
   await expect(notice.locator('b')).toHaveCount(0);
   expect(page.url()).toBe(currentUrl);
+});
+
+test('shows journaled MCP authorization feedback and its link once', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  const frame = {
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      id: 'mcp-auth-feedback',
+      customType: 'doom-notification',
+      data: {
+        version: 1,
+        title: 'Pi',
+        subtitle: 'doompi',
+        body: 'Authorize agiflow-mcp by opening: https://auth.example.com/oauth?state=test',
+        level: 'info',
+      },
+    },
+  };
+  cockpit.session.emit(frame);
+  cockpit.session.emit(frame);
+  const notice = page.getByTestId('entry-notice');
+  await expect(notice).toHaveCount(1);
+  await expect(notice).toContainText('Authorize agiflow-mcp');
+  await expect(notice.locator('a')).toHaveAttribute('href', 'https://auth.example.com/oauth?state=test');
 });
 
 test('the activity dock stays hidden across a route change and a reload', async ({ page, cockpit }) => {

@@ -47,6 +47,20 @@ function tokens(value: number | null): string {
  * because a package is what you add or remove. It reads only; switching stays
  * with the composer chips that already own it.
  */
+function withoutMcpInventory(groups: readonly ContextGroup[]): ContextGroup[] {
+  return groups.map((group) => {
+    const mcp = group.items.filter((item) => item.source === 'mcp');
+    const activeMcpTokens = mcp.reduce((sum, item) => sum + (item.active ? (item.tokens ?? 0) : 0), 0);
+    const inactiveMcpTokens = mcp.reduce((sum, item) => sum + (item.active ? 0 : (item.tokens ?? 0)), 0);
+    return {
+      ...group,
+      items: group.items.filter((item) => item.source !== 'mcp'),
+      tokens: group.tokens === null ? null : Math.max(0, group.tokens - activeMcpTokens),
+      inactiveTokens: Math.max(0, group.inactiveTokens - inactiveMcpTokens),
+    };
+  });
+}
+
 export function ContextPanel() {
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
@@ -59,7 +73,7 @@ export function ContextPanel() {
   const groups = context ? projectedGroups(context) : contextGroups(statuses, widgets, projection);
   const total = totalTokens(groups);
   const idle = inactiveTotal(groups);
-
+  const visibleGroups = withoutMcpInventory(groups);
   return (
     <div data-testid="context-panel" className="flex min-h-0 flex-1 flex-col">
       <div data-testid="context-scroll" className="min-h-0 flex-1 overflow-y-auto">
@@ -73,7 +87,7 @@ export function ContextPanel() {
           />
         ) : (
           <div className="flex flex-col">
-            {groups.map((group) => (
+            {visibleGroups.map((group) => (
               <ContextGroupView key={`${group.kind}:${group.id}`} group={group} onSelect={setTarget} />
             ))}
           </div>

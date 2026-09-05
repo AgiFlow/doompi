@@ -6,6 +6,7 @@ import {
   MINOR_MODE_ENTRY_TYPE,
   type MinorModeProjection,
 } from '../../types/hub.ts';
+import { parseDoomNotificationEntry } from '../../types/notification.ts';
 import { BUILTIN_COMMANDS } from './commands.ts';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
@@ -782,11 +783,21 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
     case DIALOG_ANSWERED_TYPE:
       return state.dialog && state.dialog.id === asString(frame.id) ? { ...state, dialog: null } : state;
 
-    // The runtime journals its minor-mode catalog as a custom entry; every
-    // other custom entry belongs to some extension's own bookkeeping.
+    // Journaled composition and notifications apply independently of protocol-owned messages.
     case 'entry_appended': {
       const entry = isRecord(frame.entry) ? frame.entry : undefined;
       if (!entry) return state;
+      const notification = parseDoomNotificationEntry(frame);
+      if (notification) {
+        if (state.restoredIds.includes(notification.entryId)) return state;
+        const next = withEntry(state, {
+          kind: 'notice',
+          id: `n${state.nextId}`,
+          text: notification.data.body,
+          tone: notification.data.level === 'error' ? 'error' : 'info',
+        });
+        return { ...next, restoredIds: [...next.restoredIds, notification.entryId] };
+      }
       if (entry.type === 'custom' && entry.customType === MINOR_MODE_ENTRY_TYPE) {
         const data = isRecord(entry.data) ? entry.data : undefined;
         if (!data || !Array.isArray(data.modes)) return state;

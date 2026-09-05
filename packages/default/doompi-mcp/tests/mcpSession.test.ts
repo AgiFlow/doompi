@@ -169,6 +169,68 @@ describe('McpSession', () => {
     );
   });
 
+  describe('session-only disconnect', () => {
+    it('closes the connection, deactivates tools, keeps credentials and allows reauthorization', async () => {
+      const { pi, activeTools, definitions } = fakePi();
+      const active = session(pi);
+      active.install();
+      await active.start();
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
+      await active.disconnect('pencil');
+      expect(disconnectServer).toHaveBeenCalledWith('pencil');
+      expect(active.getSnapshot().servers[0]?.state).toBe('closed');
+      expect(activeTools()).toEqual(['read']);
+      const store = createProxyContainer.mock.calls[0]?.[0]?.auth.tokenStore;
+      expect(store.clear).not.toHaveBeenCalled();
+      expect(store.write).not.toHaveBeenCalled();
+      ensureConnected.mockClear();
+      await expect(active.listResources('pencil')).rejects.toThrow('disconnected');
+      await expect(definitions.get('pencil_get_screenshot')?.execute?.('stale-call', {})).rejects.toThrow(
+        'not available',
+      );
+      expect(ensureConnected).not.toHaveBeenCalled();
+      await active.reauthorize('pencil');
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
+    });
+
+    it('ignores late tool discovery and connection events after disconnect', async () => {
+      const { pi, activeTools } = fakePi();
+      const active = session(pi);
+      active.install();
+      await active.start();
+      let finishDiscovery: (tools: never[]) => void = () => undefined;
+      const discovery = new Promise<never[]>((resolve) => {
+        finishDiscovery = resolve;
+      });
+      listTools.mockReturnValue(discovery);
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(listTools).toHaveBeenCalledOnce());
+      await active.disconnect('pencil');
+      finishDiscovery([]);
+      await discovery;
+      await Promise.resolve();
+      emitState({ serverName: 'pencil', state: 'connected' });
+      expect(active.getSnapshot().servers[0]?.state).toBe('closed');
+      expect(activeTools()).toEqual(['read']);
+      expect(listTools).toHaveBeenCalledOnce();
+    });
+
+    it('reports disconnect failures without marking the server closed', async () => {
+      const { pi } = fakePi();
+      const active = session(pi);
+      active.install();
+      await expect(active.disconnect('missing')).rejects.toThrow('Unknown MCP server');
+      await expect(active.disconnect('pencil')).rejects.toThrow();
+      await active.start();
+      disconnectServer.mockRejectedValueOnce(new Error('close failed'));
+      await expect(active.disconnect('pencil')).rejects.toThrow('close failed');
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(active.getSnapshot().servers[0]?.state).toBe('connected'));
+    });
+  });
+
   describe('folding in a server as it connects', () => {
     it('registers and activates its tools', async () => {
       const { pi, registered, activeTools } = fakePi();
@@ -344,6 +406,46 @@ describe('McpSession', () => {
       expect(disconnectServer).toHaveBeenCalledWith('boomlink');
       expect(ensureConnected).toHaveBeenCalledWith('boomlink');
     });
+
+    it('clears the previous URL before retry even when disconnect rejects without a state event', async () => {
+      const active = session(fakePi().pi);
+      active.install();
+      await active.start();
+      const authorize = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl;
+      authorize(new URL('https://auth.example.test/old'), 'pencil');
+      const listener = vi.fn();
+      active.onChange(listener);
+      disconnectServer.mockImplementation(async () => {
+        expect(active.getServers()[0].authorizationUrl).toBeUndefined();
+        throw new Error('disconnect failed');
+      });
+      await expect(active.reauthorize('pencil')).rejects.toThrow('disconnect failed');
+      expect(listener).toHaveBeenCalledOnce();
+    });
+
+    it.each(['connected', 'failed', 'closed', 'degraded'] as const)(
+      'retains URLs while needs-auth is waiting and clears them on %s',
+      async (state) => {
+        const hostCallback = vi.fn().mockRejectedValue(new Error('browser unavailable'));
+        const active = new McpSession({
+          pi: fakePi().pi,
+          onAuthorizationUrl: hostCallback,
+          tokenStore: { read: vi.fn(), write: vi.fn(), clear: vi.fn() },
+        });
+        active.install(configuration());
+        await active.start();
+        const authorize = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl;
+        const url = new URL('https://auth.example.test/waiting');
+        authorize(url, 'pencil');
+        emitState({ serverName: 'pencil', state: 'needs-auth' });
+        await vi.waitFor(() => expect(active.getServers()[0].state).toBe('needs-auth'));
+        await vi.waitFor(() => expect(active.getDiagnostics().join()).toContain('browser unavailable'));
+        expect(active.getServers()[0].authorizationUrl).toBe(url.toString());
+        emitState({ serverName: 'pencil', state });
+        await vi.waitFor(() => expect(active.getServers()[0].state).toBe(state));
+        expect(active.getServers()[0].authorizationUrl).toBeUndefined();
+      },
+    );
 
     it('says so when the runtime has not started', async () => {
       const { pi } = fakePi();

@@ -44,11 +44,11 @@ onlyBuiltDependencies:
 minimumReleaseAge: 2880
 minimumReleaseAgeExclude:
   - "@agimon-ai/foundation-exec@0.26.16||0.26.19"
-  - "@agimon-ai/foundation-port-registry@0.29.16||0.29.19"
-  - "@agimon-ai/foundation-process-registry@0.29.16||0.29.19"
-  - "@agimon-ai/foundation-validator@0.26.16||0.26.19"
-  - "@agimon-ai/log-sink-mcp@0.29.16||0.29.19"
-  - "@agimon-ai/mcp-proxy@0.31.16||0.31.19"
+  - "@agimon-ai/foundation-port-registry@0.29.16||0.29.19||0.29.20"
+  - "@agimon-ai/foundation-process-registry@0.29.16||0.29.19||0.29.20"
+  - "@agimon-ai/foundation-validator@0.26.16||0.26.19||0.26.20"
+  - "@agimon-ai/log-sink-mcp@0.29.16||0.29.19||0.29.20"
+  - "@agimon-ai/mcp-proxy@0.31.16||0.31.19||0.31.20"
   - "@agimon-ai/vibe-lint@0.0.1-alpha.26||0.0.1-alpha.29"
   - "@agimon-ai/workflow-mcp@0.23.16||0.23.19"
   - "@earendil-works/chord@0.85.0"

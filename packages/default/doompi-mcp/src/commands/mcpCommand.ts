@@ -10,7 +10,7 @@ const COMMAND_DESCRIPTION = 'Browse this session MCP servers: authorize, enable,
 const INFO = 'info';
 const WARNING = 'warning';
 
-const SUBCOMMAND = { status: 'status', auth: 'auth', reload: 'reload' } as const;
+const SUBCOMMAND = { status: 'status', auth: 'auth', disconnect: 'disconnect', reload: 'reload' } as const;
 const SUBCOMMANDS = Object.values(SUBCOMMAND).join(', ');
 
 /** `/mcp <subcommand> [argument]`, with the bare command showing status. */
@@ -63,6 +63,22 @@ export function registerCommand(pi: ExtensionAPI, session: McpCommandTarget, dep
       const { subcommand, argument } = parseArguments(raw);
       if (subcommand === SUBCOMMAND.auth) {
         await runAuth(session, argument, ctx);
+        return;
+      }
+      if (subcommand === SUBCOMMAND.disconnect) {
+        if (!argument) {
+          ctx.ui.notify('Name the server to disconnect, for example /mcp disconnect boomlink.', WARNING);
+          return;
+        }
+        try {
+          await session.disconnect(argument);
+          ctx.ui.notify(`${argument} is disconnected from this session. Saved credentials were kept.`, INFO);
+        } catch (error) {
+          ctx.ui.notify(
+            `Could not disconnect ${argument}: ${error instanceof Error ? error.message : 'unknown error'}`,
+            WARNING,
+          );
+        }
         return;
       }
       if (subcommand === SUBCOMMAND.reload) {

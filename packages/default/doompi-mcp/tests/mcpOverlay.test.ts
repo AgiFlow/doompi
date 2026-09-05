@@ -28,6 +28,7 @@ function createOverlay(servers: readonly McpServerView[] = [server()]) {
     getSnapshot: vi.fn(() => ({ servers: [] })),
     getDiagnostics: vi.fn(() => []),
     reauthorize: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn().mockResolvedValue(undefined),
     openAuthorizationPage: vi.fn().mockResolvedValue(undefined),
     start: vi.fn().mockResolvedValue(undefined),
     getServers: vi.fn(() => current),

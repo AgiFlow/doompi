@@ -144,7 +144,7 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
       const names = servers.map((server) => server.name).join(',');
       context.ui?.setStatus(MCP_STATUS_KEY, names);
       if (context.mode !== 'tui') {
-        context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, formatMcpSessionAuthStatus(servers));
+        context.ui?.setStatus(MCP_SESSION_AUTH_STATUS_KEY, formatMcpSessionAuthStatus(session.getServers()));
       }
     };
     const stopPublishing = session.onChange(publishServerStatus);
@@ -176,6 +176,7 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
     const status: DoomMcpStatusService = Object.freeze({
       generation: `${hostSession.generation}:mcp-status`,
       getSnapshot: () => session.getSnapshot(),
+      onChange: (listener: () => void) => session.onChange(listener),
     });
     const toolResolver: DoomMcpToolResolverService = Object.freeze({
       generation: `${hostSession.generation}:mcp-tool-resolver`,
