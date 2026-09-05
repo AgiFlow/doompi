@@ -20,6 +20,10 @@ Bundle resolution is session-scoped:
 
 This order applies consistently to the DoomPi runtime, web plugins, hub channels, and package APIs. Repository artifacts must not be mixed with global artifacts inside one selected bundle. The global bundle is the fallback, not an additional repository layer.
 
+Session-associated hub API requests carry a separate `hubSession` selector. The hub resolves that session through the same repository-first/global-fallback registration used by its web plugins, then dispatches only within that registration's API directory. It does not borrow an API missing from the selected bundle. The existing `session` selector remains reserved for proxying session-scoped APIs.
+
+Hub APIs used outside a session, including machine and repository settings surfaces, use the process's deterministic default API bundle: an explicit API directory override when configured, otherwise the selected global registration.
+
 ## Optional package contributions
 
 A package is not required to provide a web plugin or a package API.

@@ -44,10 +44,11 @@ async function readError(response: Response): Promise<string> {
 
 export async function fetchSavedPrompts(
   signal?: AbortSignal,
+  sessionId?: string | null,
 ): Promise<{ prompts: readonly SavedPromptView[] } | Failure> {
   let response: Response;
   try {
-    response = await sealedTransport.fetch(promptsUrl(), signal ? { signal } : {});
+    response = await sealedTransport.fetch(promptsUrl(sessionId), signal ? { signal } : {});
   } catch (error) {
     // An aborted request is the caller replacing it, not a failure to report.
     if (isAbort(error)) return { error: '' };
@@ -63,10 +64,14 @@ export async function fetchSavedPrompts(
   }
 }
 
-export async function saveSavedPrompt(name: string, text: string): Promise<Failure | undefined> {
+export async function saveSavedPrompt(
+  name: string,
+  text: string,
+  sessionId?: string | null,
+): Promise<Failure | undefined> {
   let response: Response;
   try {
-    response = await sealedTransport.fetch(promptUrl(name), {
+    response = await sealedTransport.fetch(promptUrl(name, sessionId), {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
@@ -77,10 +82,10 @@ export async function saveSavedPrompt(name: string, text: string): Promise<Failu
   return response.ok ? undefined : { error: await readError(response) };
 }
 
-export async function deleteSavedPrompt(name: string): Promise<Failure | undefined> {
+export async function deleteSavedPrompt(name: string, sessionId?: string | null): Promise<Failure | undefined> {
   let response: Response;
   try {
-    response = await sealedTransport.fetch(promptUrl(name), { method: 'DELETE' });
+    response = await sealedTransport.fetch(promptUrl(name, sessionId), { method: 'DELETE' });
   } catch {
     return { error: UNREACHABLE };
   }

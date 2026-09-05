@@ -246,6 +246,7 @@ export function ArtifactViewerPanel({
   workspace,
   runKey,
   path,
+  sessionId,
 }: WebPluginSlotProps & { workspace: string; runKey: string; path: string }) {
   const [content, setContent] = useState<WorkflowArtifactContentResponse>();
   const [error, setError] = useState<string>();
@@ -254,7 +255,7 @@ export function ArtifactViewerPanel({
 
   useEffect(() => {
     let live = true;
-    void fetchArtifact(workspace, runKey, path).then((result) => {
+    void fetchArtifact(workspace, runKey, path, sessionId).then((result) => {
       if (!live) return;
       if ('error' in result) {
         setError(result.error);
@@ -267,10 +268,10 @@ export function ArtifactViewerPanel({
     return () => {
       live = false;
     };
-  }, [workspace, runKey, path, reloads]);
+  }, [workspace, runKey, path, reloads, sessionId]);
 
-  const rawUrl = artifactContentUrl(workspace, runKey, path);
-  const downloadUrl = artifactContentUrl(workspace, runKey, path, true);
+  const rawUrl = artifactContentUrl(workspace, runKey, path, false, sessionId);
+  const downloadUrl = artifactContentUrl(workspace, runKey, path, true, sessionId);
   const mimeType = content === undefined ? undefined : previewMimeType(content);
   const isMarkdown = mimeType === 'text/markdown';
 
@@ -344,14 +345,22 @@ export function ArtifactViewerPanel({
  * including entries no job has produced yet, because the declaration is what
  * the run is for. What the folder holds besides that follows.
  */
-export function ArtifactsPane({ run, onOpen }: { run: WorkflowRunView; onOpen: (path: string) => void }) {
+export function ArtifactsPane({
+  run,
+  sessionId,
+  onOpen,
+}: {
+  run: WorkflowRunView;
+  sessionId: string | null;
+  onOpen: (path: string) => void;
+}) {
   const [listing, setListing] = useState<WorkflowArtifactsResponse>();
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     let live = true;
     const read = (): void => {
-      void fetchArtifacts(run.workspace, run.runKey).then((result) => {
+      void fetchArtifacts(run.workspace, run.runKey, sessionId).then((result) => {
         if (!live) return;
         if ('error' in result) {
           setError(result.error);
@@ -370,7 +379,7 @@ export function ArtifactsPane({ run, onOpen }: { run: WorkflowRunView; onOpen: (
       live = false;
       clearInterval(timer);
     };
-  }, [run.workspace, run.runKey, run.stage]);
+  }, [run.workspace, run.runKey, run.stage, sessionId]);
 
   const declared = listing?.artifacts.filter((entry) => entry.declared) ?? [];
   const found = listing?.artifacts.filter((entry) => !entry.declared) ?? [];

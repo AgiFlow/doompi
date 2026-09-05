@@ -24,6 +24,14 @@ describe('reading the library', () => {
     expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts', {});
   });
 
+  it('routes a focused session through its selected hub bundle', async () => {
+    transport.mockResolvedValue(jsonResponse({ prompts: [] }));
+
+    await fetchSavedPrompts(undefined, 'session/a');
+
+    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts?hubSession=session%2Fa', {});
+  });
+
   it('passes the abort signal through', async () => {
     const controller = new AbortController();
     transport.mockResolvedValue(jsonResponse({ prompts: [] }));
@@ -80,6 +88,18 @@ describe('writing the library', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: 'body' }),
     });
+  });
+
+  it('keeps the selected hub bundle on mutations', async () => {
+    transport.mockResolvedValue(jsonResponse({ prompt: {}, replaced: false }));
+
+    await saveSavedPrompt('review', 'body', 'session-a');
+    await deleteSavedPrompt('review', 'session-a');
+
+    expect(transport.mock.calls.map(([url]) => url)).toEqual([
+      '/api/plugin/prompts/prompts/review?hubSession=session-a',
+      '/api/plugin/prompts/prompts/review?hubSession=session-a',
+    ]);
   });
 
   it('reports a refused write', async () => {

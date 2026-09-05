@@ -21,6 +21,7 @@ import { getCookie } from 'hono/cookie';
 import { bodyLimit } from 'hono/body-limit';
 import {
   DOOM_API_ROUTE_PREFIX,
+  DOOM_HUB_API_SESSION_QUERY_PARAM,
   type DoomApi,
   type DoomApiCaller,
   type DoomApiHandler,
@@ -417,12 +418,20 @@ export function mountHubApis(
   notice: (message: string) => void,
   resolveRepository: (repositoryId: string) => string | undefined,
   readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
-): { handlers: DoomApiHandler[]; add: (apis: readonly DoomApi[]) => void } {
+  resolveBundleKey: (sessionId: string) => string | undefined = () => 'default',
+  initialBundleKey = 'default',
+): {
+  handlers: DoomApiHandler[];
+  add: (apis: readonly DoomApi[], bundleKey?: string) => void;
+  remove: (bundleKey: string) => void;
+} {
   const handlers: DoomApiHandler[] = [];
-  const mounted = new Map<string, DoomApiHandler>();
-  const add = (apis: readonly DoomApi[]): void => {
+  const mounted = new Map<string, Map<string, DoomApiHandler>>();
+  const add = (apis: readonly DoomApi[], bundleKey = initialBundleKey): void => {
+    const bundle = mounted.get(bundleKey) ?? new Map<string, DoomApiHandler>();
+    mounted.set(bundleKey, bundle);
     for (const api of apis) {
-      if (mounted.has(api.basePath)) continue;
+      if (bundle.has(api.basePath)) continue;
       let handler: DoomApiHandler;
       try {
         handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository, readRepositorySync });
@@ -430,20 +439,38 @@ export function mountHubApis(
         notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
         continue;
       }
-      mounted.set(api.basePath, handler);
+      bundle.set(api.basePath, handler);
       handlers.push(handler);
+    }
+  };
+  const remove = (bundleKey: string): void => {
+    const bundle = mounted.get(bundleKey);
+    if (bundle === undefined) return;
+    mounted.delete(bundleKey);
+    for (const handler of bundle.values()) {
+      handler.close();
+      const index = handlers.indexOf(handler);
+      if (index >= 0) handlers.splice(index, 1);
     }
   };
 
   add(initialApis);
   app.all(`${DOOM_API_ROUTE_PREFIX}/:basePath/*`, async (context, next) => {
-    if (context.req.query(API_SESSION_QUERY_PARAM) !== undefined) return next();
+    const sessionApi = context.req.query(API_SESSION_QUERY_PARAM);
+    const hubSession = context.req.query(DOOM_HUB_API_SESSION_QUERY_PARAM);
+    if (sessionApi !== undefined && hubSession !== undefined) {
+      return context.json({ error: 'A package API request cannot select both a session API and a hub bundle.' }, 400);
+    }
+    if (sessionApi !== undefined) return next();
+    const bundleKey = hubSession === undefined ? initialBundleKey : resolveBundleKey(hubSession);
+    if (bundleKey === undefined) return context.notFound();
     const basePath = context.req.param('basePath');
-    const handler = mounted.get(basePath);
+    const handler = mounted.get(bundleKey)?.get(basePath);
     if (handler === undefined) return next();
     const mount = `${DOOM_API_ROUTE_PREFIX}/${basePath}`;
     const url = new URL(context.req.url);
     url.pathname = url.pathname.slice(mount.length) || '/';
+    url.searchParams.delete(DOOM_HUB_API_SESSION_QUERY_PARAM);
     try {
       return await handler.fetch(new Request(url, context.req.raw));
     } catch (error) {
@@ -451,7 +478,7 @@ export function mountHubApis(
       return context.json({ error: `The '${basePath}' API failed.` }, 500);
     }
   });
-  return { handlers, add };
+  return { handlers, add, remove };
 }
 
 /**
@@ -542,16 +569,26 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const cockpitRoot = globalDoomConfigDirectory(os.homedir());
   const cockpitSyncGuard = createSyncGuard({ repoRoot: cockpitRoot, onNotice: notice });
   let registerRootHubApis = async (_root: string): Promise<void> => {};
+  const rootsUsingGlobalFallback = new Set<string>();
   const readyRegistration = (root: string): ReturnType<typeof readSyncRegistration> => {
     try {
-      if (!readSyncDrift({ repoRoot: root, requireWebBundle: true }).fresh) return undefined;
-      return readSyncRegistration(root);
+      const registration = readSyncRegistration(root);
+      if (registration?.webDirectory === null || registration?.webDirectory === undefined) return undefined;
+      const bundleRoot = path.dirname(registration.webDirectory);
+      const complete =
+        fs.existsSync(path.join(registration.webDirectory, INDEX_FILE)) &&
+        fs.existsSync(path.join(bundleRoot, 'plugins', 'composition.js')) &&
+        fs.existsSync(path.join(bundleRoot, 'plugins', 'manifest.json')) &&
+        fs.existsSync(registration.apiDirectory);
+      return complete ? registration : undefined;
     } catch {
       return undefined;
     }
   };
-  const selectedRegistration = (root: string): ReturnType<typeof readSyncRegistration> =>
-    readyRegistration(root) ?? (root === cockpitRoot ? undefined : readyRegistration(cockpitRoot));
+  const selectedRegistration = (root: string): ReturnType<typeof readSyncRegistration> => {
+    if (root !== cockpitRoot && rootsUsingGlobalFallback.has(root)) return readyRegistration(cockpitRoot);
+    return readyRegistration(root) ?? (root === cockpitRoot ? undefined : readyRegistration(cockpitRoot));
+  };
 
   const ensureRootSynced = async (root: string): Promise<void> => {
     try {
@@ -565,8 +602,10 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           guard.close();
         }
       }
+      rootsUsingGlobalFallback.delete(root);
     } catch (error) {
       if (root === cockpitRoot || readyRegistration(cockpitRoot) === undefined) throw error;
+      rootsUsingGlobalFallback.add(root);
       notice(`sync failed for ${root}; using the global DoomPi bundle (${describeError(error)})`);
     }
     await registerRootHubApis(root);
@@ -999,21 +1038,68 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // and everything else still falls through to the bundle. Hub-scoped ones run
   // here; session-scoped ones live in each session's own server and are proxied.
   const apiDirectory = served.apiDirectory;
+  const overriddenApiDirectory = process.env[PACKAGE_API_DIR_ENV];
+  const defaultApiDirectory =
+    apiDirectory ??
+    (overriddenApiDirectory === undefined || overriddenApiDirectory === '' ? undefined : overriddenApiDirectory) ??
+    readyRegistration(cockpitRoot)?.apiDirectory;
+  const defaultApiBundleKey = defaultApiDirectory ?? 'default';
   const hubApis =
-    apiDirectory === undefined && !process.env[PACKAGE_API_DIR_ENV]
+    defaultApiDirectory === undefined
       ? []
-      : await loadPackageApis('hub', { apiDirectory, onNotice: notice });
-  const pluginApis = mountHubApis(app, hubApis, notice, resolveRepository, readRepositorySync);
+      : await loadPackageApis('hub', { apiDirectory: defaultApiDirectory, env: {}, onNotice: notice });
+  const pluginApis = mountHubApis(
+    app,
+    hubApis,
+    notice,
+    resolveRepository,
+    readRepositorySync,
+    (sessionId) => {
+      const session = hub.snapshot().find((candidate) => candidate.id === sessionId);
+      if (session === undefined) return undefined;
+      return selectedRegistration(compositionRoot(session.cwd))?.apiDirectory;
+    },
+    defaultApiBundleKey,
+  );
+  const registeredApiBundles = new Map<string, string>();
+  const apiBundleInUse = (bundleKey: string): boolean =>
+    bundleKey === defaultApiBundleKey ||
+    selectedRegistration(cockpitRoot)?.apiDirectory === bundleKey ||
+    hub.snapshot().some((session) => selectedRegistration(compositionRoot(session.cwd))?.apiDirectory === bundleKey);
+  const removeUnusedApiBundle = (bundleKey: string | undefined): void => {
+    if (bundleKey !== undefined && !apiBundleInUse(bundleKey)) pluginApis.remove(bundleKey);
+  };
   registerRootHubApis = async (root: string): Promise<void> => {
+    const previousBundleKey = registeredApiBundles.get(root);
     const registration = selectedRegistration(root);
-    if (registration === undefined) return;
+    if (registration === undefined) {
+      registeredApiBundles.delete(root);
+      removeUnusedApiBundle(previousBundleKey);
+      return;
+    }
     const apis = await loadPackageApis('hub', {
       apiDirectory: registration.apiDirectory,
       env: {},
       onNotice: notice,
     });
-    pluginApis.add(apis);
+    pluginApis.add(apis, registration.apiDirectory);
+    registeredApiBundles.set(root, registration.apiDirectory);
+    if (previousBundleKey !== registration.apiDirectory) removeUnusedApiBundle(previousBundleKey);
   };
+  const sessionApiRoots = new Map(hub.snapshot().map((session) => [session.id, compositionRoot(session.cwd)]));
+  const disconnectApiBundleCleanup = hub.onEvent((event) => {
+    if (event.kind === 'upsert') {
+      sessionApiRoots.set(event.session.id, compositionRoot(event.session.cwd));
+      return;
+    }
+    if (event.kind !== 'removed') return;
+    const root = sessionApiRoots.get(event.sessionId);
+    sessionApiRoots.delete(event.sessionId);
+    if (root === undefined || root === cockpitRoot || [...sessionApiRoots.values()].includes(root)) return;
+    const bundleKey = registeredApiBundles.get(root);
+    registeredApiBundles.delete(root);
+    removeUnusedApiBundle(bundleKey);
+  });
   await Promise.all([...new Set([cockpitRoot, ...initialRoots])].map(registerRootHubApis));
   mountSessionApiProxy(app, hub, notice, telemetry, (context) => guard.callerOf(context));
 
@@ -1608,6 +1694,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           cockpitSyncGuard.close();
           void localProtocolServer.close();
           void remoteProtocolServer.close();
+          disconnectApiBundleCleanup();
           disconnectLivePush();
           livePush?.close();
           hub.close();
@@ -1633,6 +1720,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     server.once('error', (error) => {
       cockpitSyncGuard.close();
       threads.close();
+      disconnectApiBundleCleanup();
       disconnectLivePush();
       livePush?.close();
       hub.close();
