@@ -1,3 +1,31 @@
+## 0.0.1-alpha.56 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+- harden browser autonomous voice ([f11739a](https://github.com/AgiFlow/doompi/commit/f11739a))
+- improve interactive session recovery ([2cf4dfb](https://github.com/AgiFlow/doompi/commit/2cf4dfb))
+- improve interactive session recovery ([c364797](https://github.com/AgiFlow/doompi/commit/c364797))
+
+### 🩹 Fixes
+
+- **doompi-voice:** bind external narration to session ([2ba2a55](https://github.com/AgiFlow/doompi/commit/2ba2a55))
+- harden packaged runtime startup ([c097375](https://github.com/AgiFlow/doompi/commit/c097375))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.16
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.17
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.55 (2026-09-04)
 
 ### 🚀 Features

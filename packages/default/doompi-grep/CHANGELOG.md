@@ -1,3 +1,23 @@
+## 0.0.1-alpha.28 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+- improve interactive session recovery ([2cf4dfb](https://github.com/AgiFlow/doompi/commit/2cf4dfb))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.16
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.19
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.27 (2026-09-04)
 
 ### 🚀 Features

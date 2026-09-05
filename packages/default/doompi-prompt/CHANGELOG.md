@@ -1,3 +1,22 @@
+## 0.0.1-alpha.6 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.16
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.17
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.53
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.5 (2026-09-04)
 
 ### 🧱 Updated Dependencies

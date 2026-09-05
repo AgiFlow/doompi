@@ -1,3 +1,39 @@
+## 0.0.1-alpha.17 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** complete author workflows and fix Docker CI checks ([3f5733a](https://github.com/AgiFlow/doompi/commit/3f5733a))
+- **root:** extend author viewports and recover live transcripts ([a6b66f5](https://github.com/AgiFlow/doompi/commit/a6b66f5))
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+- **doompi:** improve background work and CI ([09a53a1](https://github.com/AgiFlow/doompi/commit/09a53a1))
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+- improve interactive session recovery ([2cf4dfb](https://github.com/AgiFlow/doompi/commit/2cf4dfb))
+- improve interactive session recovery ([c364797](https://github.com/AgiFlow/doompi/commit/c364797))
+
+### 🩹 Fixes
+
+- **root:** build computer-use before browser CI setup ([34b8512](https://github.com/AgiFlow/doompi/commit/34b8512))
+- **root:** harden author and computer use integration ([eefb2e3](https://github.com/AgiFlow/doompi/commit/eefb2e3))
+- **doompi:** harden contended CI gates ([906e170](https://github.com/AgiFlow/doompi/commit/906e170))
+- harden interactive recovery edge cases ([be771d2](https://github.com/AgiFlow/doompi/commit/be771d2))
+- harden packaged runtime startup ([c097375](https://github.com/AgiFlow/doompi/commit/c097375))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.16
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.17
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.52
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.16 (2026-09-04)
 
 ### 🚀 Features

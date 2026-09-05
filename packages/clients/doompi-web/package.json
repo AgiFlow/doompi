@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-web",
-  "version": "0.0.1-alpha.16",
+  "version": "0.0.1-alpha.17",
   "description": "Web cockpit for DoomPi: serves a browser session console and bridges it to an authenticated doompi-server socket",
   "keywords": [
     "cockpit",

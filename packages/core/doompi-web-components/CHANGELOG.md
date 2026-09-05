@@ -1,3 +1,20 @@
+## 0.0.1-alpha.16 (2026-09-05)
+
+### 🚀 Features
+
+- **root:** complete author workflows and fix Docker CI checks ([3f5733a](https://github.com/AgiFlow/doompi/commit/3f5733a))
+- **root:** extend author viewports and recover live transcripts ([a6b66f5](https://github.com/AgiFlow/doompi/commit/a6b66f5))
+- **root:** add authoring and computer use support ([60c0f77](https://github.com/AgiFlow/doompi/commit/60c0f77))
+- refine cockpit session controls ([d2280e2](https://github.com/AgiFlow/doompi/commit/d2280e2))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.52
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.15 (2026-09-04)
 
 ### 🚀 Features
