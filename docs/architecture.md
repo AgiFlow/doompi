@@ -89,7 +89,18 @@ Parent and child activation lists are derived together and are both included in 
 
 The `doompi` launcher provisions the defaults plus the active mode layers. It builds an aggregate runtime bundle from the canonical activation plan and falls back to the individual ordered entries if bundling is unavailable.
 
-`doompi sync` provisions the defaults plus every declared named layer and stages one complete immutable generation in the canonical home-scoped repository/worktree namespace. State, bootstraps, mode bundles, resources, web assets, and API routes all live beneath that generation. A validated registration is written atomically only after every artifact succeeds, so readers observe either the previous complete generation or the replacement. Failed unpublished generations are removed. Published generations are retained rather than mutated in place.
+`doompi sync` provisions the defaults plus every declared named layer and stages one complete
+immutable generation in the home-scoped repository/worktree namespace. State, bootstraps, mode
+bundles, resources, web assets, and API routes all live beneath that generation.
+
+Publication follows three steps:
+
+1. Build and validate every artifact. Remove the unpublished generation if this fails.
+2. Write the validated registration atomically, so readers select a complete generation.
+3. Retain one superseded generation and attempt to remove older ones. Report cleanup failures
+   without failing the published sync.
+
+Published artifacts are not mutated in place.
 
 Repository and worktree identities are the routing boundary. Consumers accept state only through the exact validated registration for the nearest repository. Registration validation confines paths to the generation, verifies the state hash and repository identity, and pins the DoomPi package root, version, manifest, and Pi entry that produced it. Missing, malformed, foreign, traversing, symlinked, stale, and unsupported registrations fail closed. Consumers do not fall back to another repository, a source checkout, an unregistered legacy state file, or a global `current` directory.
 
@@ -101,7 +112,10 @@ The package bootstrap is inert outside a synchronized repository. Inside one, it
 doompi could not read its synchronized state. Run doompi sync.
 ```
 
-`doompi init` alone owns the global Pi dispatcher, settings integration, and default theme. `doompi sync` requires that integration for normal persisted mode, but does not rewrite it. DPI supplies its overlay in memory and uses the same repository-isolated publication without requiring persisted settings.
+`doompi init` owns the global Pi dispatcher, user settings integration, and default theme.
+`doompi sync` requires that integration for persisted mode but does not rewrite it. It reconciles
+existing repository Pi settings and removes a legacy repository alias. `dpi` supplies its overlay
+in memory and uses the same repository-isolated publication without requiring persisted settings.
 
 The shared hub pins web assets and package APIs to its startup repository. Session API requests resolve through the session `cwd`, so concurrent sessions can use different repositories without changing the hub registration. Outside a synchronized repository, the server uses packaged web assets and inherits the package APIs of the installation running it, so a session in an unsynchronized checkout still mounts the cockpit's own APIs instead of none. Explicit `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` overrides retain precedence.
 

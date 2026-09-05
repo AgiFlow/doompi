@@ -17,7 +17,7 @@ requests while Task remains the source of truth for task status and dependencies
 
 ## Install
 
-Add Team to a DoomPi layer. Add Task separately when you want graph-backed delegation:
+Define a layer and select it in `.doom/modes.yaml`. Add Task separately for graph-backed delegation:
 
 ```yaml
 layers:
@@ -114,11 +114,13 @@ active session. Consumers disconnect and reconnect automatically when that provi
 import { resolveSubagentLaunchContract } from '@agimon-ai/doompi-team';
 ```
 
-Focused subpaths expose the pure capability-ceiling codec, compatibility delegation payload types,
-and team-snapshot contracts. Live cross-extension collaboration contracts come from
-`@agimon-ai/doompi-extension-contracts`; the standard Pi extension is available at `/extensions/pi`.
+Focused subpaths include `/api/capability-ceiling`, `/api/delegation`, `/api/team-snapshot`,
+and `/env`. Live cross-extension collaboration contracts come from
+`@agimon-ai/doompi-extension-contracts`; Pi loads `/extensions/pi` through package metadata.
 
 ## Development
+
+Run from this package directory in the workspace:
 
 ```bash
 pnpm build

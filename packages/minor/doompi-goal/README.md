@@ -16,7 +16,8 @@ is scoped to the repository.
 
 ## Install
 
-DoomPi includes Goal as a built-in minor mode that starts inactive. For standalone Pi:
+The seeded `modes.yaml` selects Goal in `default.packages`; it is not fixed host infrastructure.
+Keep it there or select it through a layer. Goal starts inactive. For standalone Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-goal

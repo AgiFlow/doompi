@@ -11,6 +11,8 @@
  * - Importing anything from src/services or src/adapters here.
  */
 
+import { DOOM_HUB_API_SESSION_QUERY_PARAM } from '@agimon-ai/doompi-extension-contracts/package-api';
+
 /** Where a host mounts this package's API; the segment after /api/plugin/. */
 export const API_BASE_PATH = 'prompts';
 
@@ -22,14 +24,21 @@ export function promptPath(name: string): string {
   return `${PROMPTS_PATH}/${encodeURIComponent(name)}`;
 }
 
+/** Routes a hub request through the bundle selected for the focused session. */
+function hubSessionQuery(sessionId?: string | null): string {
+  return sessionId === undefined || sessionId === null
+    ? ''
+    : `?${DOOM_HUB_API_SESSION_QUERY_PARAM}=${encodeURIComponent(sessionId)}`;
+}
+
 /** The absolute URL a page fetches for the collection. */
-export function promptsUrl(): string {
-  return `/api/plugin/${API_BASE_PATH}${PROMPTS_PATH}`;
+export function promptsUrl(sessionId?: string | null): string {
+  return `/api/plugin/${API_BASE_PATH}${PROMPTS_PATH}${hubSessionQuery(sessionId)}`;
 }
 
 /** The absolute URL a page fetches for one saved prompt. */
-export function promptUrl(name: string): string {
-  return `/api/plugin/${API_BASE_PATH}${promptPath(name)}`;
+export function promptUrl(name: string, sessionId?: string | null): string {
+  return `/api/plugin/${API_BASE_PATH}${promptPath(name)}${hubSessionQuery(sessionId)}`;
 }
 
 /** One saved prompt, as the cockpit shows it. */

@@ -4,18 +4,18 @@
 
 ## Setup commands
 
-| Command               | Effect                                                                                                                                                                                                   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dpi init`            | Creates missing `.doom` files in the current repository. It does not change Pi settings.                                                                                                                 |
-| `dpi init --force`    | Replaces the repository's four `.doom` files with the current templates.                                                                                                                                 |
-| `dpi sync`            | Installs required configured packages, builds synchronized state, and prepares DPI's in-memory Pi settings overlay. It does not persist that overlay.                                                    |
-| `dpi`                 | Runs the pinned Pi version with the synchronized DPI overlay. Other arguments pass to Pi, except `--sandbox`, which DoomPi handles.                                                                      |
-| `doompi init`         | Creates missing files in `~/.pi/.doom`, writes the DoomPi extension alias and theme, and registers both in Pi user settings.                                                                             |
-| `doompi init --force` | Replaces the four personal `.doom` files, then refreshes the Pi integration resources.                                                                                                                   |
-| `doompi sync`         | Installs required configured packages, rebuilds synchronized state, refreshes the extension alias and theme, and updates Pi user settings.                                                               |
-| `doompi sync --check` | Checks package resolution, configuration drift, synchronized artifacts, the alias, the theme, and Pi settings without writing. It exits non-zero when anything is stale or legacy state needs migration. |
+| Command               | Effect                                                                                                                                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dpi init`            | Creates missing `.doom` files in the current repository. It does not change Pi settings.                                                                                                                    |
+| `dpi init --force`    | Replaces the repository's four `.doom` files with the current templates.                                                                                                                                    |
+| `dpi sync`            | Installs required configured packages, builds synchronized state, and prepares an in-memory Pi settings overlay. It does not persist that overlay.                                                          |
+| `dpi`                 | Runs the pinned Pi version with the synchronized DoomPi overlay. Other arguments pass to Pi, except `--sandbox`, which DoomPi handles.                                                                      |
+| `doompi init`         | Creates missing files in `~/.pi/.doom`, writes the DoomPi extension alias and theme, and registers both in Pi user settings.                                                                                |
+| `doompi init --force` | Replaces the four personal `.doom` files, then refreshes the Pi integration resources.                                                                                                                      |
+| `doompi sync`         | Installs required configured packages and publishes synchronized state. Requires the user integration created by `doompi init`; reconciles existing repository Pi settings without rewriting user settings. |
+| `doompi sync --check` | Checks package resolution, configuration drift, synchronized artifacts, the alias, the theme, and Pi settings without writing. It exits non-zero when anything is stale or legacy state needs migration.    |
 
-Both sync commands accept the matrix options below. `doompi sync` stores generated state under `~/.pi/.doom/sync` in a repository- and worktree-specific namespace. It does not remove old generated directories automatically.
+Both sync commands accept the matrix options below. Generated state lives under `~/.pi/.doom/sync` in a repository- and worktree-specific namespace. After publication, sync retains one superseded generation and attempts to remove older generations. Cleanup failures are reported without failing the published sync.
 
 ## Compatibility mode
 

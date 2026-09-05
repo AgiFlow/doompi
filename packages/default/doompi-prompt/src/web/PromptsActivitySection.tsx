@@ -27,7 +27,7 @@ export function PromptsActivitySection({ sessionId, sendSessionFrame }: WebPlugi
   useEffect(() => {
     if (open) return undefined;
     const controller = new AbortController();
-    void fetchSavedPrompts(controller.signal).then((result) => {
+    void fetchSavedPrompts(controller.signal, sessionId).then((result) => {
       if (controller.signal.aborted) return;
       if ('error' in result) setError(result.error);
       else {
@@ -36,7 +36,7 @@ export function PromptsActivitySection({ sessionId, sendSessionFrame }: WebPlugi
       }
     });
     return () => controller.abort();
-  }, [open]);
+  }, [open, sessionId]);
 
   const summary = error !== '' ? error : prompts.length === 0 ? 'idle' : `${String(prompts.length)} saved`;
 

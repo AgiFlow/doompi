@@ -10,7 +10,7 @@ This document describes the required end state. Existing code and passing unit t
 
 The lifecycle MUST be implemented with **XState v5**. Hand-written state flags may exist inside leaf modules, but they MUST NOT independently own autonomous lifecycle transitions.
 
-The manual `SPC v v` dictation flow remains a separate product mode and is not governed by this specification except for shared recorder, transcription, and privacy requirements.
+The manual `SPC v m` dictation flow remains a separate product mode and is not governed by this specification except for shared recorder, transcription, and privacy requirements.
 
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative.
 
@@ -136,7 +136,7 @@ For a run that begins in an exact-active matching TUI Voice session, the adapter
 
 Fallback input MUST undergo control-character, Markdown, code, URL, email, credential, secret, and absolute-path sanitization. The sanitized final MUST be bounded to 4,096 Unicode characters. At most 320 characters MUST be spoken deterministically without a model call. Longer finals MAY reuse `voice.autoCapture.model` to produce one strict JSON `speech` string with an eight-second deadline, a 192-token maximum, no reasoning, no retries, and no cache retention. Model output MUST be sanitized again and bounded to 640 characters. Missing, malformed, failed, or timed-out model output MUST degrade to a bounded deterministic excerpt that points to the written response instead of producing silence. This fallback MUST NOT generate intent, plan, milestone, or tool-progress speech.
 
-Direct and fallback narration use `final` playback priority and await the same physical playback settlement. Session-scoped narration requests from task, workflow, user-feedback, and other extensions remain supported at higher `clarification` priority. Cancellation, confirmed barge-in, mode stop, reload, shutdown, stale-session replacement, or activation-generation replacement MUST settle or cancel affected work rather than strand it. `SPC v v` remains one-shot manual dictation and MUST NOT enable `narrate`, either façade, the fallback, or the Voice minor mode.
+Direct and fallback narration use `final` playback priority and await the same physical playback settlement. Session-scoped narration requests from task, workflow, user-feedback, and other extensions remain supported at higher `clarification` priority. Cancellation, confirmed barge-in, mode stop, reload, shutdown, stale-session replacement, or activation-generation replacement MUST settle or cancel affected work rather than strand it. `SPC v m` remains one-shot manual dictation and MUST NOT enable `narrate`, either façade, the fallback, or the Voice minor mode.
 
 ## 3. Canonical XState lifecycle
 

@@ -2,9 +2,8 @@
 
 Headless DoomPi session server. It supervises a Pi RPC agent behind an authenticated Unix socket so clients can attach and reattach.
 
-This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi) subsystem.
-It is the serving core the web, desktop, and mobile clients attach to. It registers no Pi
-extension and adds nothing to an interactive session.
+Part of [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi). Web and desktop clients use
+this server through the cockpit hub. It registers no Pi extension.
 
 ## How it runs
 
@@ -24,10 +23,10 @@ npm install -g @agimon-ai/doompi-server
 ## Run
 
 ```bash
-printf '%s' "$(openssl rand -base64 32)" > /run/doompi/token
-chmod 600 /run/doompi/token
+runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/doompi-session.XXXXXX")"
+(umask 077; openssl rand -base64 32 > "$runtime_dir/token")
 
-doompi-server --listen /run/doompi/session.sock --auth-token-file /run/doompi/token -- --major-mode copilot
+doompi-server --listen "$runtime_dir/session.sock" --auth-token-file "$runtime_dir/token" -- --major-mode copilot
 ```
 
 The server starts `doompi --mode rpc` with the arguments after `--`, then publishes the session on the socket. It creates the socket with owner-only access under a restrictive umask.
@@ -63,7 +62,7 @@ gone, so a crashed server does not haunt the rail.
 Add `--web` to make sure a browser cockpit is reachable:
 
 ```bash
-doompi-server --listen /run/doompi/session.sock --auth-token-file /run/doompi/token --name doompi-web --web 7433 -- --major-mode copilot
+doompi-server --listen "$runtime_dir/session.sock" --auth-token-file "$runtime_dir/token" --name doompi-web --web 7433 -- --major-mode copilot
 ```
 
 The port is optional and defaults to 7433. The cockpit is a multi-session hub: if one already
@@ -109,6 +108,8 @@ import { serveSessionSocket, spawnAgentProcess } from '@agimon-ai/doompi-server'
 ```
 
 ## Development
+
+Run from this package directory in the workspace:
 
 ```bash
 pnpm build

@@ -25,10 +25,11 @@ DoomPi uses the independent `alpha` release group in `nx.json`. Do not hand-publ
 The release-cut workflow selects affected release projects, runs the full candidate validation, and previews or writes the prerelease versions. After the release pull request merges, the publish workflow:
 
 1. verifies Runner payloads;
-2. runs the workspace audit, build, examples check, lint, architecture preflight, typecheck, tests, and packed-install system tests;
-3. publishes versions missing from npm with `pnpm nx release publish`; and
-4. waits for every version before creating tags.
+2. runs the workspace audit, formatting check, build, examples check, lint, architecture preflight, typecheck, tests, and packed-install system tests;
+3. publishes versions missing from npm under `alpha` with `pnpm nx release publish`;
+4. waits for every release version to appear under `alpha`, then creates its Git tag; and
+5. promotes the published versions to `latest`.
 
-Generated changelogs remain owned by Nx release tooling. See `.github/workflows/release-cut.yml` and `.github/workflows/release-publish.yml` for the executable contract.
+Generated changelogs remain owned by Nx release tooling. See the [release-cut workflow](../.github/workflows/release-cut.yml) and [publish workflow](../.github/workflows/release-publish.yml) for the executable contract.
 
 DoomPi is maintained by [Agimon](https://agimon.ai/about).

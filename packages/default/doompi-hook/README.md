@@ -41,8 +41,9 @@ repository group replaces the global group of the same ID outright.
 
 ## Activation
 
-The DoomPi distribution activates this package by default. Layers only declare the `hookGroups`
-that should run in a major mode:
+The distribution activates this package by default through the `default.packages` list written by
+`doompi init` and `dpi init` in `.doom/modes.yaml`. Keep it there, or declare it in a selected layer,
+for hooks to run. Layers only declare the `hookGroups` to select; they do not define the hook commands:
 
 ```yaml
 # .doom/modes.yaml
@@ -90,7 +91,7 @@ is withdrawn when the package or Help provider unloads.
 
 ## Install
 
-DoomPi already includes this package. For standalone Pi installation:
+For standalone Pi installation:
 
 ```bash
 pi install npm:@agimon-ai/doompi-hook

@@ -29,7 +29,6 @@ import { deleteSavedPrompt, saveSavedPrompt } from './promptsApi.ts';
  * - Sending with no session focused. There would be nowhere for it to land.
  */
 
-const MUTATION_API = { save: saveSavedPrompt, remove: deleteSavedPrompt };
 const NO_SESSION = 'Focus a session first: a prompt has to be sent somewhere.';
 
 export interface PromptsDialogProps {
@@ -86,9 +85,18 @@ export function PromptsDialog({ open, prompts, sessionId, onOpenChange, onSend }
             onFilterChange={setFilter}
             onSend={send}
             onEdit={(prompt) => setDraft(draftOf(prompt))}
-            onDelete={(name) => void runMutation(deleteSavedPrompt(name))}
+            onDelete={(name) => void runMutation(deleteSavedPrompt(name, sessionId))}
             onDraftChange={setDraft}
-            onSave={() => void runMutation(draft ? commitDraft(draft, MUTATION_API) : Promise.resolve(undefined))}
+            onSave={() =>
+              void runMutation(
+                draft
+                  ? commitDraft(draft, {
+                      save: (name, text) => saveSavedPrompt(name, text, sessionId),
+                      remove: (name) => deleteSavedPrompt(name, sessionId),
+                    })
+                  : Promise.resolve(undefined),
+              )
+            }
             onCancelDraft={() => setDraft(undefined)}
           />
         </DialogBody>

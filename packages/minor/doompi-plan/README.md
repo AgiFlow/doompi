@@ -17,8 +17,8 @@ tool-level workflow protection rather than a repository permission boundary.
 
 ## Install
 
-DoomPi includes Plan in every composition; Plan mode itself remains inactive until requested. For
-standalone Pi:
+The seeded `modes.yaml` selects Plan in `default.packages`. Keep it there or select it through a
+layer; Plan remains inactive until requested. For standalone Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-plan

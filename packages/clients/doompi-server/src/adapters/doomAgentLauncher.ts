@@ -117,13 +117,16 @@ export function createDoomAgentLauncher(options: DoomAgentLauncherOptions): Agen
     }
   };
 
-  // An explicit override wins over the repository lookup, which is how a
-  // checkout points sessions at builds that are not installed anywhere.
+  // The repository owns its session composition. The configured launcher is the
+  // complete global fallback when that repository does not pin DoomPi.
   const resolvePinnedCli = options.resolvePinnedCli ?? ((cwd: string) => pinnedDoomPiCli(cwd));
+  const pinned = resolvePinnedCli(options.cwd);
   const configured = environment[AGENT_COMMAND_ENV];
-  const delegate = configured ? launcherCommand(configured) : toDelegate(resolvePinnedCli(options.cwd));
+  const delegate = pinned === undefined ? (configured ? launcherCommand(configured) : undefined) : toDelegate(pinned);
   if (delegate !== undefined) {
-    options.onNotice?.(`composing through ${configured ? 'the configured' : "this repository's"} DoomPi launcher`);
+    options.onNotice?.(
+      `composing through ${pinned === undefined ? 'the configured' : "this repository's"} DoomPi launcher`,
+    );
   }
 
   return {

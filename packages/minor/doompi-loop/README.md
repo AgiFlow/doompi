@@ -16,8 +16,8 @@ prompt belongs to the current session.
 
 ## Install
 
-DoomPi includes Loop in every composition. Pi loads it through package extension metadata. For
-standalone Pi:
+The seeded `modes.yaml` selects Loop in `default.packages`. Keep it there or select it through a
+layer; it is not fixed host infrastructure. For standalone Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-loop

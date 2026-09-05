@@ -6,8 +6,12 @@
  * event names live here rather than being spelled twice.
  */
 
+import { DOOM_HUB_API_SESSION_QUERY_PARAM } from '@agimon-ai/doompi-extension-contracts/package-api';
+
 /** Segment this package's API is mounted under, below /api/plugin/. */
 export const WORKFLOW_API_BASE_PATH = 'workflow';
+/** Host query parameter that selects the focused session's hub API bundle. */
+export const WORKFLOW_HUB_SESSION_QUERY_PARAM = DOOM_HUB_API_SESSION_QUERY_PARAM;
 
 /** The SSE event name the screen stream writes. */
 export const WORKFLOW_SCREEN_EVENT = 'screen';

@@ -33,27 +33,42 @@ function stylePaths(manifestPath: string): string[] {
     .map((value) => `/${value.replace(/^\/+/, '')}`);
 }
 
-/** Resolves the immutable standalone plugin artifacts emitted by the root's latest sync. */
-export function resolveSessionWebArtifacts(configurationRoot: string): SessionWebArtifacts | undefined {
-  const registration = readSyncRegistration(configurationRoot);
-  if (registration?.webDirectory === null || registration?.webDirectory === undefined) return undefined;
-  const pluginsDir = path.join(path.dirname(registration.webDirectory), 'plugins');
-  const entryFile = path.join(pluginsDir, CLIENT_ENTRY);
-  const manifestFile = path.join(pluginsDir, VITE_MANIFEST);
-  if (!fs.existsSync(entryFile) || !fs.existsSync(manifestFile)) return undefined;
-  const id = createHash('sha256')
-    .update(
-      JSON.stringify({
-        root: registration.root,
-        generation: registration.generation,
-        stateSha256: registration.stateSha256,
-      }),
-    )
-    .digest('hex');
-  return {
-    id,
-    pluginsDir,
-    entryPath: `/${CLIENT_ENTRY}`,
-    stylePaths: stylePaths(manifestFile),
-  };
+/** Resolves immutable plugin artifacts, preferring a usable repository generation over the global one. */
+export function resolveSessionWebArtifacts(
+  configurationRoot: string,
+  fallbackRoot?: string,
+): SessionWebArtifacts | undefined {
+  const roots =
+    fallbackRoot === undefined || fallbackRoot === configurationRoot
+      ? [configurationRoot]
+      : [configurationRoot, fallbackRoot];
+  for (const root of roots) {
+    let registration: ReturnType<typeof readSyncRegistration>;
+    try {
+      registration = readSyncRegistration(root);
+    } catch {
+      continue;
+    }
+    if (registration?.webDirectory === null || registration?.webDirectory === undefined) continue;
+    const pluginsDir = path.join(path.dirname(registration.webDirectory), 'plugins');
+    const entryFile = path.join(pluginsDir, CLIENT_ENTRY);
+    const manifestFile = path.join(pluginsDir, VITE_MANIFEST);
+    if (!fs.existsSync(entryFile) || !fs.existsSync(manifestFile)) continue;
+    const id = createHash('sha256')
+      .update(
+        JSON.stringify({
+          root: registration.root,
+          generation: registration.generation,
+          stateSha256: registration.stateSha256,
+        }),
+      )
+      .digest('hex');
+    return {
+      id,
+      pluginsDir,
+      entryPath: `/${CLIENT_ENTRY}`,
+      stylePaths: stylePaths(manifestFile),
+    };
+  }
+  return undefined;
 }

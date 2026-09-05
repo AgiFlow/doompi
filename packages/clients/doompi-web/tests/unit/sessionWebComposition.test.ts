@@ -47,4 +47,29 @@ describe('session web composition artifacts', () => {
       }),
     );
   });
+
+  it('falls back to the global plugin bundle when the repository has no web generation', () => {
+    const generation = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-global-web-composition-'));
+    temporaryDirectories.push(generation);
+    const webDirectory = path.join(generation, 'web');
+    const pluginsDirectory = path.join(generation, 'plugins');
+    fs.mkdirSync(webDirectory);
+    fs.mkdirSync(pluginsDirectory);
+    fs.writeFileSync(path.join(pluginsDirectory, 'composition.js'), 'globalThis.DoomPiWebPluginComposition = [];');
+    fs.writeFileSync(
+      path.join(pluginsDirectory, 'manifest.json'),
+      JSON.stringify({ 'composition.ts': { file: 'composition.js', isEntry: true } }),
+    );
+    mocks.readSyncRegistration.mockImplementation((root: string) =>
+      root === '/global'
+        ? { root, generation: 'global-generation', stateSha256: 'global-state', webDirectory }
+        : { root, generation: 'repo-generation', stateSha256: 'repo-state', webDirectory: null },
+    );
+
+    const resolved = resolveSessionWebArtifacts('/repo', '/global');
+
+    expect(resolved).toEqual(expect.objectContaining({ pluginsDir: pluginsDirectory, entryPath: '/composition.js' }));
+    expect(mocks.readSyncRegistration).toHaveBeenNthCalledWith(1, '/repo');
+    expect(mocks.readSyncRegistration).toHaveBeenNthCalledWith(2, '/global');
+  });
 });

@@ -16,8 +16,9 @@ The extension aggregates telemetry it observes in-process and can query historic
 
 ## Install
 
-DoomPi includes Log in every composition. Pi discovers its sole extension entry through
-`package.json.pi.extensions`. For standalone Pi:
+`doompi init` and `dpi init` include Log in `default.packages` in `.doom/modes.yaml`. Remove it
+or move it to a named layer to change which major modes load it. Pi discovers its sole extension
+entry through `package.json.pi.extensions`. For standalone Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-log

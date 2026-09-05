@@ -1,6 +1,6 @@
 # @agimon-ai/doompi-prompt
 
-Staged recent prompts and saved prompt templates for DoomPi
+Staged recent prompts and saved prompt templates for DoomPi.
 
 This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi) subsystem. Use it with the distribution or install it independently in [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
 
@@ -15,7 +15,9 @@ This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/d
 pi install npm:@agimon-ai/doompi-prompt
 ```
 
-The package declares its Pi extension entry, so Pi loads it after installation. DoomPi users can include the package through their normal profile and domain composition instead.
+The package declares its Pi extension entry, so Pi loads it after installation. DoomPi users can
+add `@agimon-ai/doompi-prompt` to `default.packages` or a selected layer's `packages` list in
+`.doom/modes.yaml`.
 
 ## Use
 

@@ -31,7 +31,7 @@ sees timing and sizes but not content.
 The QR pairing path anchors key exchange out of band. The host's ephemeral P-256 public key is printed on
 the screen the user is holding, so the relay cannot substitute its own. A returning device instead receives
 the current public key after proving a passkey. That path depends on the trusted code-delivery edge described
-above, and the key itself is public rather than secret.
+in [The signed bundle-manifest primitive](#the-signed-bundle-manifest-primitive), and the key itself is public rather than secret.
 
 Three properties worth knowing, because getting any of them wrong is silent:
 

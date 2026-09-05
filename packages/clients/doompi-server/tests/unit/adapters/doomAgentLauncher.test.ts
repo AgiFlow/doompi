@@ -150,18 +150,18 @@ describe('createDoomAgentLauncher', () => {
     expect(notices.some((notice) => notice.includes("this repository's"))).toBe(true);
   });
 
-  it('lets DOOMPI_AGENT_COMMAND override the repository lookup', async () => {
+  it('prefers the repository DoomPi over the configured global fallback', async () => {
     const launcher = createDoomAgentLauncher({
       agentArgs: BASE_ARGS,
       cwd: CWD,
-      environment: { DOOMPI_AGENT_COMMAND: '/checkout/dist/bin/cli.mjs' },
+      environment: { DOOMPI_AGENT_COMMAND: '/global/dist/bin/cli.mjs' },
       resolvePinnedCli: () => '/workspace/repo/node_modules/@agimon-ai/doompi/dist/bin/cli.mjs',
     });
 
     const launch = await launcher.resolve();
 
     expect(launch.command).toBe(process.execPath);
-    expect(launch.args).toEqual(['/checkout/dist/bin/cli.mjs', ...BASE_ARGS]);
+    expect(launch.args).toEqual(['/workspace/repo/node_modules/@agimon-ai/doompi/dist/bin/cli.mjs', ...BASE_ARGS]);
   });
 
   it('treats a configured launcher without a script suffix as the command itself', async () => {

@@ -4,7 +4,7 @@ Ask structured questions in interactive Pi sessions, including sessions using au
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
-The `ask_user_question` tool presents concrete options and waits for the user to choose. It does not let the model guess.
+The `ask_user_question` tool presents concrete options and waits for a choice or custom-text answer.
 
 > **Alpha:** tool and Voice-handoff contracts may change between releases.
 
@@ -15,13 +15,17 @@ The `ask_user_question` tool presents concrete options and waits for the user to
 
 ## Install
 
-Add the package to a DoomPi layer. DoomPi preserves authored layer and package occurrence order,
-while activating this package once per canonical resolved path:
+Define a layer in `.doom/modes.yaml`, then include it in a major mode:
 
 ```yaml
 layers:
   feedback:
     packages: ['@agimon-ai/doompi-user-feedback']
+
+majorMode:
+  minimal:
+    description: Interactive questions without the full default composition.
+    layers: [feedback]
 ```
 
 For standalone Pi:
@@ -100,6 +104,8 @@ contracts. Pi loads the default export of `/extensions/pi` through package metad
 does not require a manual registration call.
 
 ## Development
+
+Run from this package directory in the workspace:
 
 ```bash
 pnpm build

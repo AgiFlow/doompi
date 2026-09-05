@@ -27,21 +27,16 @@ the repository it was handed.
 
 ## Loopback is not an authorization boundary
 
-The cockpit bound `127.0.0.1` and treated that as sufficient. It is not, for three reasons, and two
-of them were live holes before the guard landed.
+Binding the cockpit to `127.0.0.1` keeps it off the public network, but does not authorize callers:
 
-Any process on the machine can reach a loopback port. That much is obvious and was always accepted.
+- Local processes can reach a loopback port.
+- WebSocket handshakes do not use the normal CORS preflight. Without an Origin check, a hostile
+  page could open a socket and drive a session.
+- A cross-origin `POST` with `Content-Type: text/plain` can avoid preflight. The browser may hide
+  the response from the page, but the request can still cause a side effect.
 
-A WebSocket upgrade is exempt from CORS. A page on any origin could open a socket to the cockpit and
-drive a session, and the browser would neither ask nor tell. This is cross-site WebSocket hijacking,
-and it needed no tunnel to work.
-
-A cross-origin `POST` with `Content-Type: text/plain`, or a `fetch` in `no-cors` mode, skips the
-preflight entirely. The response is unreadable to the attacker, but the request happens, and for an
-endpoint that spawns a session the response was never the point.
-
-Both are closed now, on the loopback listener as well as the tunnel one, because a fix that only
-applied when remote access was on would have left the default configuration exposed.
+DoomPi checks Origin and Host on both listeners, including WebSocket upgrades and mutation routes.
+These checks address browser-driven requests; they do not authenticate a hostile local process.
 
 ## The listener is the boundary
 
@@ -290,8 +285,7 @@ than a boundary.
 - **The relay still sees traffic shape.** Timing, message sizes, and connection patterns survive the
   sealed channel.
 - **The first page load is trust-on-first-use.** The pairing page itself is delivered by Cloudflare.
-  Nothing inside a browser can close that window, which is the strongest argument for the WebRTC
-  transport recorded in the `doompi-web` README.
+  Bundle verification does not independently authenticate that initial verifier page.
 - **A local process can do all of this anyway.** None of the above is aimed at code already running
   as you, and none of it should be read as if it were.
 

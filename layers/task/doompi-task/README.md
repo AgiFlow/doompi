@@ -15,7 +15,7 @@ Task owns task records and `tasks.json`. Team owns agents and runs. When both ar
 
 ## Install
 
-Add Task to a DoomPi layer:
+Define a layer and select it in `.doom/modes.yaml`:
 
 ```yaml
 layers:
@@ -111,10 +111,12 @@ import { detectCycle, isBlocked, TaskStore, taskExtension } from '@agimon-ai/doo
 import type { Task, TaskStatus } from '@agimon-ai/doompi-task';
 ```
 
-Focused exports cover schemas, reducers, storage, invariants, delegation management, tool responses,
-and TUI selectors.
+Focused subpaths include `/tool/schema`, `/store/reducer`, `/store/taskStore`,
+`/delegation/manager`, and `/tui/selectors`. Pi loads `/extensions/pi` through package metadata.
 
 ## Development
+
+Run from this package directory in the workspace:
 
 ```bash
 pnpm build

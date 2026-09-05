@@ -43,6 +43,7 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 | [Configuration](docs/configuration.md)                         | The four YAML files, field-specific merge rules, examples, and matrix checks       |
 | [Security model](docs/securities.md)                           | Threat model, remote-access boundaries, containment, and known limits              |
 | [Trust and data boundaries](docs/trust-and-data-boundaries.md) | Executable inputs, credentials, model calls, voice, native binaries, and telemetry |
+| [Observability](docs/observability.md)                         | Session metrics, local log storage, trace lookup, and telemetry controls           |
 | [CLI reference](docs/cli-reference.md)                         | Commands, options, exact effects, and direct package use                           |
 | [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, transitions, and isolation               |
 | [Development](docs/development.md)                             | Workspace commands and maintainer release flow                                     |
@@ -162,15 +163,15 @@ model calls, voice, and telemetry behavior.
 
 ## CLI reference
 
-| Command               | Effect                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------- |
-| `dpi init`            | Creates missing repository `.doom` files without changing Pi settings.                                |
-| `dpi sync`            | Installs required packages and builds synchronized DPI state without persisting its settings overlay. |
-| `dpi`                 | Runs the pinned Pi version with the DPI settings overlay.                                             |
-| `doompi init`         | Seeds personal config, writes integration resources, and registers them in Pi user settings.          |
-| `doompi sync`         | Rebuilds synchronized state and refreshes Pi integration.                                             |
-| `doompi sync --check` | Checks drift and exits non-zero without writing when state is stale.                                  |
-| `doompi --explain`    | Prints the resolved matrix and estimated prompt cost without launching Pi.                            |
+| Command               | Effect                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `dpi init`            | Creates missing repository `.doom` files without changing Pi settings.                            |
+| `dpi sync`            | Installs required packages and builds synchronized state without persisting its settings overlay. |
+| `dpi`                 | Runs the pinned Pi version with an in-memory DoomPi settings overlay.                             |
+| `doompi init`         | Seeds personal config, writes integration resources, and registers them in Pi user settings.      |
+| `doompi sync`         | Rebuilds synchronized state using the integration created by `doompi init`.                       |
+| `doompi sync --check` | Checks drift and exits non-zero without writing when state is stale.                              |
+| `doompi --explain`    | Prints the resolved matrix and estimated prompt cost without launching Pi.                        |
 
 See the [CLI reference](docs/cli-reference.md) for more commands, options, and direct-use guidance.
 

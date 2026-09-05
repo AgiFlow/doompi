@@ -18,9 +18,8 @@ waits, looks again, and only then stops.
 | the scheduled look | still streaming   | look again in 100ms  |
 | the scheduled look | idle, queue empty | `context.shutdown()` |
 
-Any `input` or `agent_start` disarms a pending stop, so a user who starts typing during the
-cooldown keeps their session. The cooldown is the grace period; the 100 ms recheck is the poll
-that waits out a stream that has not finished draining.
+Any `input` or `agent_start` event disarms a pending stop. The cooldown is the grace period;
+the 100 ms recheck waits out a stream that has not finished draining.
 
 `decideOnSettled` and `decideOnRecheck` are the whole policy and take the session state as a
 plain value, so the timing rules are testable without a Pi host.

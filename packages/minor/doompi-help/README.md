@@ -15,8 +15,8 @@ Packages contribute concise `llms.txt` indexes. Help keeps them out of the defau
 
 ## Install
 
-DoomPi includes Help in every parent and detached-child composition. No layer declaration is
-required. To load the package directly in Pi:
+The seeded `modes.yaml` selects Help in `default.packages`. It is configurable, not fixed host
+infrastructure: keep it in that bundle or select it through a layer. To load it directly in Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-help
@@ -54,7 +54,7 @@ service. Missing or inactive packages do not leave placeholder skills in the cat
 
 ## Parent and child behavior
 
-Parent and child sessions load the same distribution-default extension. Replacing a session removes
+Parent and child sessions use the same extension entry when their composition selects Help. Replacing a session removes
 the previous Help service, its contributions, and its UI and mode integrations before activating
 the replacement.
 

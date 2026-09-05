@@ -80,44 +80,49 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
     // A new run's screen has not ended yet; the subscription below is the external system.
     // oxlint-disable-next-line react/set-state-in-effect
     setEnded(false);
-    return followScreen(target.workspace, target.runKey, (event) => {
-      setLines(event.lines);
-      setCapabilities(event.capabilities);
-      if (event.ended === true) setEnded(true);
-    });
-  }, [target.workspace, target.runKey]);
+    return followScreen(
+      target.workspace,
+      target.runKey,
+      (event) => {
+        setLines(event.lines);
+        setCapabilities(event.capabilities);
+        if (event.ended === true) setEnded(true);
+      },
+      sessionId,
+    );
+  }, [sessionId, target.workspace, target.runKey]);
 
   // The keyboard is a lease on the hub, so a tab that goes away must hand it
   // back rather than leaving the next reader locked out until it expires.
   useEffect(() => {
     if (token === undefined) return;
     return () => {
-      void releaseControl(target.workspace, target.runKey, token);
+      void releaseControl(target.workspace, target.runKey, token, sessionId);
     };
-  }, [token, target.workspace, target.runKey]);
+  }, [sessionId, token, target.workspace, target.runKey]);
 
   useEffect(() => {
     screenRef.current?.scrollTo({ top: screenRef.current.scrollHeight });
   }, [lines]);
 
   const arm = useCallback(async () => {
-    const result = await takeControl(target.workspace, target.runKey);
+    const result = await takeControl(target.workspace, target.runKey, undefined, sessionId);
     if (result.held && result.token !== undefined) {
       setToken(result.token);
       setNotice(undefined);
       return;
     }
     setNotice(result.reason ?? 'The keyboard is not available for this run.');
-  }, [target.workspace, target.runKey]);
+  }, [sessionId, target.workspace, target.runKey]);
 
   const disarm = useCallback(async () => {
-    if (token !== undefined) await releaseControl(target.workspace, target.runKey, token);
+    if (token !== undefined) await releaseControl(target.workspace, target.runKey, token, sessionId);
     setToken(undefined);
-  }, [token, target.workspace, target.runKey]);
+  }, [sessionId, token, target.workspace, target.runKey]);
 
   const type = async (data: string): Promise<void> => {
     if (token === undefined) return;
-    const { error } = await sendKeys(target.workspace, target.runKey, token, data);
+    const { error } = await sendKeys(target.workspace, target.runKey, token, data, sessionId);
     if (error !== undefined) {
       setNotice(error);
       setToken(undefined);

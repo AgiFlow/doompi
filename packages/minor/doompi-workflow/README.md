@@ -16,8 +16,8 @@ host-executed steps, while DoomPi provides session-scoped tools and TUI surfaces
 
 ## Install
 
-DoomPi includes Workflow in every composition; its tools remain inactive until Workflow mode is
-enabled. For standalone Pi:
+The seeded `modes.yaml` selects Workflow in `default.packages`. Keep it there or select it through
+a layer; its tools remain inactive until Workflow mode is enabled. For standalone Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-workflow

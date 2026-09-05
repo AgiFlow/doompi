@@ -6,12 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   buildExecute: vi.fn(),
   ensureLayerPackages: vi.fn(),
+  readSyncDrift: vi.fn(),
   syncExecute: vi.fn(),
   syncOptions: vi.fn(),
 }));
 
 vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
+}));
+
+vi.mock('../../src/adapters/syncDrift.ts', () => ({
+  readSyncDrift: mocks.readSyncDrift,
 }));
 
 vi.mock('../../src/commands/buildCommand.ts', () => ({
@@ -43,6 +48,7 @@ describe('SyncPipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.buildExecute.mockResolvedValue(0);
+    mocks.readSyncDrift.mockReturnValue({ fresh: false, reasons: ['never-synced'] });
     mocks.syncExecute.mockResolvedValue(0);
     mocks.ensureLayerPackages.mockResolvedValue({ installed: [], updated: [], unchecked: [] });
   });
@@ -85,6 +91,21 @@ describe('SyncPipeline', () => {
       expect.objectContaining({ settingsMode: 'embedded', lockHeld: true }),
     );
     expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--major-mode', 'minimal'], environment, '/repo', output);
+  });
+
+  it('does not treat a CLI-only generation as current for a web-hosted sync', async () => {
+    const webEnvironment = { ...environment, DOOMPI_WEB_PACKAGE_ROOT: '/runtime/doompi-web' };
+    mocks.readSyncDrift.mockImplementation((options: { requireWebBundle?: boolean }) =>
+      options.requireWebBundle ? { fresh: false, reasons: ['cockpit-bundle-missing'] } : { fresh: true, reasons: [] },
+    );
+
+    await expect(new SyncPipeline().execute(['sync'], webEnvironment, '/repo', output)).resolves.toBe(0);
+
+    expect(mocks.readSyncDrift).toHaveBeenCalledWith(
+      expect.objectContaining({ repoRoot: '/repo', requireWebBundle: true }),
+    );
+    expect(mocks.buildExecute).toHaveBeenCalledOnce();
+    expect(mocks.syncExecute).toHaveBeenCalledOnce();
   });
 
   it('uses the global Doom configuration when the current directory has no repository', async () => {

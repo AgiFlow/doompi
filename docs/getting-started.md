@@ -30,8 +30,8 @@ before registering anything in Pi's settings:
 
 ```bash
 dpi init    # create missing .doom files in this repository
-dpi sync    # install required packages and build synchronized DPI state
-dpi         # run the pinned Pi version with DPI's in-memory settings overlay
+dpi sync    # install required packages and build synchronized state
+dpi         # run the pinned Pi version with an in-memory settings overlay
 pi          # run your existing Pi setup for comparison
 ```
 
@@ -39,7 +39,7 @@ pi          # run your existing Pi setup for comparison
 `.doom/profiles.yaml` in the current repository. It preserves existing files unless you pass
 `--force` and does not create or change `.pi/settings.json`.
 
-`dpi sync` installs missing required feature packages, writes generated state, and refreshes the extension alias and theme. It does not persist DPI's settings overlay in either Pi settings file. Sync provisions every declared layer, so switching to a prepared mode does not depend on the root package's private dependencies.
+`dpi sync` installs missing required feature packages and publishes generated state for the in-memory settings overlay. It does not rewrite Pi user settings, the global extension alias, or the user theme. Sync provisions every declared layer, so switching to a prepared mode does not depend on the root package's private dependencies.
 
 ### Sync storage and worktrees
 
@@ -49,15 +49,15 @@ Git worktree gets isolated runtime state while immutable build artifacts may be 
 `dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension
 and theme settings in memory. It never writes those values to `.pi/settings.json`.
 
-Run `doompi sync --check` to detect stale or legacy state. Run `doompi sync` to rebuild it
-in the current home-scoped layout.
+Use `dpi sync --check` to detect stale state during the side-by-side experiment, and `dpi sync`
+to rebuild it. After permanent registration, use `doompi sync --check` and `doompi sync`.
 
 When you are comfortable with DoomPi and no longer need the side-by-side experiment, register
 it for normal Pi:
 
 ```bash
 doompi init    # seed ~/.pi/.doom and register the extension alias and theme
-doompi sync    # build synchronized state and refresh Pi integration
+doompi sync    # publish synchronized state using the registered integration
 pi             # start DoomPi through the regular Pi command
 ```
 

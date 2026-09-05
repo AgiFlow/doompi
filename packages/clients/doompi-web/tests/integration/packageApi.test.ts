@@ -7,6 +7,7 @@ import {
   DOOM_API_CALLER_DEVICE_ID_HEADER,
   DOOM_API_CALLER_LOCALITY_HEADER,
   DOOM_API_CALLER_STEP_UP_HEADER,
+  DOOM_HUB_API_SESSION_QUERY_PARAM,
   type DoomApi,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { Hono } from 'hono';
@@ -130,6 +131,81 @@ describe('hub-scoped package APIs', () => {
     const response = await app.request('/api/plugin/metrics/report');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ path: '/report' });
+  });
+
+  it('isolates duplicate hub APIs by the bundle selected for a session', async () => {
+    const app = new Hono();
+    const api = (basePath: string, bundle: string): DoomApi => ({
+      basePath,
+      start: () => ({
+        fetch: (request) => {
+          const url = new URL(request.url);
+          return Response.json({ bundle, path: url.pathname, query: url.search });
+        },
+        close: () => undefined,
+      }),
+    });
+    const mounted = mountHubApis(
+      app,
+      [api('metrics', 'global')],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      (sessionId) => ({ repository: 'repo', fallback: 'global', missing: 'repo-without-metrics' })[sessionId],
+      'global',
+    );
+    mounted.add([api('metrics', 'repository')], 'repo');
+    mounted.add([api('other', 'repository')], 'repo-without-metrics');
+
+    const repository = await app.request(
+      `/api/plugin/metrics/report?keep=yes&${DOOM_HUB_API_SESSION_QUERY_PARAM}=repository`,
+    );
+    await expect(repository.json()).resolves.toEqual({ bundle: 'repository', path: '/report', query: '?keep=yes' });
+
+    const fallback = await app.request(`/api/plugin/metrics/report?${DOOM_HUB_API_SESSION_QUERY_PARAM}=fallback`);
+    await expect(fallback.json()).resolves.toMatchObject({ bundle: 'global' });
+    expect((await app.request(`/api/plugin/metrics/report?${DOOM_HUB_API_SESSION_QUERY_PARAM}=missing`)).status).toBe(
+      404,
+    );
+    expect((await app.request(`/api/plugin/metrics/report?${DOOM_HUB_API_SESSION_QUERY_PARAM}=unknown`)).status).toBe(
+      404,
+    );
+    expect(
+      (
+        await app.request(
+          `/api/plugin/metrics/report?session=repository&${DOOM_HUB_API_SESSION_QUERY_PARAM}=repository`,
+        )
+      ).status,
+    ).toBe(400);
+  });
+
+  it('closes a retired generation once and removes its routes', async () => {
+    const app = new Hono();
+    const close = vi.fn();
+    const mounted = mountHubApis(
+      app,
+      [],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      () => 'retired',
+    );
+    mounted.add(
+      [
+        {
+          basePath: 'metrics',
+          start: () => ({ fetch: () => Response.json({ ok: true }), close }),
+        },
+      ],
+      'retired',
+    );
+
+    expect((await app.request('/api/plugin/metrics/report?hubSession=session')).status).toBe(200);
+    mounted.remove('retired');
+    mounted.remove('retired');
+
+    expect((await app.request('/api/plugin/metrics/report?hubSession=session')).status).toBe(404);
+    expect(close).toHaveBeenCalledOnce();
   });
 });
 

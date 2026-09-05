@@ -17,8 +17,9 @@ asynchronous checkpoints and combines each checkpoint with subsequent messages.
 
 ## Install
 
-DoomPi includes Autocompact in every composition. Pi discovers its sole extension entry through
-`package.json.pi.extensions`. For direct Pi installation:
+`doompi init` and `dpi init` include Autocompact in `default.packages` in `.doom/modes.yaml`.
+Remove it or move it to a named layer to change which major modes load it. Pi discovers its sole
+extension entry through `package.json.pi.extensions`. For direct Pi installation:
 
 ```bash
 pi install npm:@agimon-ai/doompi-autocompact
