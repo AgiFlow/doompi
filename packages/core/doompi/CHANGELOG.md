@@ -1,3 +1,13 @@
+## 0.0.1-alpha.57 (2026-09-05)
+
+### 🩹 Fixes
+
+- sync per-session web extensions without forcing generations ([11b6ce2](https://github.com/AgiFlow/doompi/commit/11b6ce2))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.56 (2026-09-05)
 
 ### 🚀 Features
