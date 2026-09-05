@@ -1,6 +1,6 @@
 import { Button, SectionLabel } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useDockFaces } from '../../lib/composition.ts';
+import type { DockFaceContribution } from '@agimon-ai/doompi-web-contracts';
 import { type DockTab, setDockTab, uiStore } from '../../stores/uiStore.ts';
 
 const HOST_TABS: readonly { id: DockTab; label: string }[] = [
@@ -9,9 +9,8 @@ const HOST_TABS: readonly { id: DockTab; label: string }[] = [
 ];
 
 /** Host faces followed by the active session's plugin-contributed faces. */
-export function DockTabs() {
+export function DockTabs({ contributed = [] }: { contributed?: readonly DockFaceContribution[] }) {
   const active = useStore(uiStore, (state) => state.dockTab);
-  const contributed = useDockFaces();
   const tabs = [...HOST_TABS, ...contributed.map(({ id, label }) => ({ id, label }))];
 
   return (

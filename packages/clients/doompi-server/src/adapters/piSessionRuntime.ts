@@ -18,7 +18,7 @@ import {
   type SessionServiceState,
   type SessionSnapshot,
   type ThinkingLevel,
-} from '../types/protocol.ts';
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 const SETTLED = 'agent_settled';

@@ -1,14 +1,15 @@
 import { performance } from 'node:perf_hooks';
-import { parseServerMessage } from '@earendil-works/pi-protocol';
+import { parseServerMessage, type ServerMessage } from '@earendil-works/pi-protocol';
 import { describe, expect, it } from 'vitest';
 
 const TOOL_ITEM_COUNT = 80;
 const VALIDATION_BUDGET_MS = 500;
 
-function largeSnapshotMessage() {
+function largeSnapshotMessage(): ServerMessage {
   return {
-    type: 'event',
-    event: {
+    type: 'service_update',
+    subscriptionId: 'session-1',
+    update: {
       type: 'session_snapshot',
       snapshot: {
         id: 'session-1',

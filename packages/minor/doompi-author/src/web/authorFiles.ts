@@ -113,8 +113,45 @@ function decodeBase64(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
+function imageMimeType(path: string): 'image/png' | 'image/jpeg' | 'image/webp' | undefined {
+  const extension = path.split('.').at(-1)?.toLowerCase();
+  if (extension === 'png') return 'image/png';
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'webp') return 'image/webp';
+  return undefined;
+}
+
+async function croppedImageBytes(documentInput: AuthorDocumentInput, signal?: AbortSignal): Promise<Blob> {
+  const { crop, mediaUrl } = documentInput;
+  if (crop === undefined || mediaUrl === undefined) throw new Error('This Author image has no crop source.');
+  const mimeType = imageMimeType(documentInput.path);
+  if (mimeType === undefined) throw new Error('This image format cannot preserve its encoding after crop.');
+  const response = await fetch(mediaUrl, { signal, cache: 'no-store' });
+  if (!response.ok) throw new Error(`Author could not read the image before saving (${response.status})`);
+  const bitmap = await createImageBitmap(await response.blob());
+  try {
+    const sourceX = Math.round(crop.x * bitmap.width);
+    const sourceY = Math.round(crop.y * bitmap.height);
+    const sourceWidth = Math.max(1, Math.round(crop.width * bitmap.width));
+    const sourceHeight = Math.max(1, Math.round(crop.height * bitmap.height));
+    const canvas = window.document.createElement('canvas');
+    canvas.width = sourceWidth;
+    canvas.height = sourceHeight;
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('Canvas is unavailable for image crop.');
+    context.drawImage(bitmap, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType));
+    if (blob === null || blob.type !== mimeType)
+      throw new Error('The browser cannot encode this cropped image format.');
+    return blob;
+  } finally {
+    bitmap.close();
+  }
+}
+
 async function bytesToSave(sessionId: string, document: AuthorDocumentInput, signal?: AbortSignal): Promise<BodyInit> {
   if (document.kind === 'text' || document.kind === 'markdown') return document.content ?? '';
+  if (document.kind === 'image' && document.crop !== undefined) return await croppedImageBytes(document, signal);
   if (document.structuredFormat === undefined) throw new Error('This Author view cannot be saved.');
   const operations = operationsFor(document);
   const request = {

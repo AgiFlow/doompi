@@ -148,7 +148,16 @@ describe('minorModes', () => {
   });
 
   it('always reports every mode DoomPi ships', () => {
-    expect(minorModes({}, []).map((mode) => mode.name)).toEqual(['help', 'plan', 'loop', 'goal', 'workflow', 'voice']);
+    expect(minorModes({}, []).map((mode) => mode.name)).toEqual([
+      'help',
+      'plan',
+      'loop',
+      'goal',
+      'author',
+      'workflow',
+      'voice',
+      'computer use',
+    ]);
   });
 
   it('prefers plugin-declared modes over the packaged fallback, in declared order', () => {

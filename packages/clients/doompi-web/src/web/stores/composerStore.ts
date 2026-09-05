@@ -28,6 +28,8 @@ export interface ComposerContextAttachment {
   content: string;
   source: string;
   contextId: string;
+  contextKind: string;
+  url?: string;
 }
 
 export type ComposerAttachment = ComposerContextAttachment | ComposerImageAttachment | ComposerTextAttachment;
@@ -226,6 +228,8 @@ export function attachComposerContext(sessionId: string | null, item: WebPluginC
           content,
           source: item.source,
           contextId: item.id,
+          contextKind: item.kind,
+          ...(item.url === undefined ? {} : { url: item.url }),
         },
       ],
       attachmentError: '',
@@ -304,6 +308,8 @@ export function attachComposerCapture(sessionId: string | null, capture: Compose
           content,
           source: capture.context.source,
           contextId: capture.context.id,
+          contextKind: capture.context.kind,
+          ...(capture.context.url === undefined ? {} : { url: capture.context.url }),
         },
       ],
       attachmentError: '',

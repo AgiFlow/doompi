@@ -1,7 +1,8 @@
 import { MediaPreview, type MediaPreviewController, type PdfPreviewController } from '@agimon-ai/doompi-web-components';
-import { useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { registerAuthorGridResolver } from './authorGrid.ts';
 import { normalizedAuthorRectangle } from './authorRegions.ts';
-import type { AuthorNativeAnchor, AuthorToolMode } from './authorViewportTypes.ts';
+import type { AuthorDisplayedRegion, AuthorNativeAnchor, AuthorToolMode } from './authorViewportTypes.ts';
 import {
   authorSessionWorkspace,
   setAuthorRegionCandidate,
@@ -13,18 +14,56 @@ export function AuthorMediaView({
   sessionId,
   document: source,
   activeTool,
+  displayedRegions,
 }: {
   sessionId: string;
   document: AuthorWorkspaceDocument;
   activeTool: AuthorToolMode;
+  displayedRegions: readonly AuthorDisplayedRegion[];
 }) {
   const host = useRef<HTMLDivElement>(null);
+  const image = useRef<HTMLImageElement>(null);
   const video = useRef<MediaPreviewController>(null);
   const pdf = useRef<PdfPreviewController>(null);
   const start = useRef<
     { x: number; y: number; element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement } | undefined
   >(undefined);
   const [error, setError] = useState<string>();
+  useEffect(
+    () =>
+      registerAuthorGridResolver(sessionId, (cell, geometry) => {
+        const target = image.current;
+        if (source.kind !== 'image' || target === null || target.naturalWidth === 0 || target.naturalHeight === 0)
+          return undefined;
+        const { originX = 0, originY = 0, width, height } = geometry.viewport;
+        const cellBounds = {
+          left: originX + cell.rect.x * width,
+          top: originY + cell.rect.y * height,
+          right: originX + (cell.rect.x + cell.rect.width) * width,
+          bottom: originY + (cell.rect.y + cell.rect.height) * height,
+        };
+        const bounds = target.getBoundingClientRect();
+        const left = Math.max(bounds.left, cellBounds.left);
+        const top = Math.max(bounds.top, cellBounds.top);
+        const right = Math.min(bounds.right, cellBounds.right);
+        const bottom = Math.min(bounds.bottom, cellBounds.bottom);
+        if (right <= left || bottom <= top || bounds.width <= 0 || bounds.height <= 0) return undefined;
+        return {
+          anchor: {
+            kind: 'image-rect',
+            rect: {
+              x: (left - bounds.left) / bounds.width,
+              y: (top - bounds.top) / bounds.height,
+              width: (right - left) / bounds.width,
+              height: (bottom - top) / bounds.height,
+            },
+            naturalWidth: target.naturalWidth,
+            naturalHeight: target.naturalHeight,
+          },
+        };
+      }),
+    [sessionId, source.kind, source.path, source.version],
+  );
   const mark = async (event: PointerEvent<HTMLDivElement>) => {
     const drag = start.current;
     start.current = undefined;
@@ -115,7 +154,30 @@ export function AuthorMediaView({
       }}
     >
       {source.kind === 'image' ? (
-        <img src={source.mediaUrl} alt={source.path} draggable={false} className="max-w-full" />
+        <div className="relative inline-block max-w-full">
+          <img ref={image} src={source.mediaUrl} alt={source.path} draggable={false} className="block max-w-full" />
+          {displayedRegions.flatMap(({ ordinal, region }) => {
+            if (region.anchor.kind !== 'image-rect') return [];
+            const { rect } = region.anchor;
+            return [
+              <div
+                key={region.id}
+                data-author-region={ordinal}
+                className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                style={{
+                  left: `${String(rect.x * 100)}%`,
+                  top: `${String(rect.y * 100)}%`,
+                  width: `${String(rect.width * 100)}%`,
+                  height: `${String(rect.height * 100)}%`,
+                }}
+              >
+                <span className="absolute -left-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-doom-yellow px-1 text-[9px] font-bold text-doom-deep">
+                  {ordinal}
+                </span>
+              </div>,
+            ];
+          })}
+        </div>
       ) : (
         <MediaPreview
           src={source.mediaUrl ?? ''}

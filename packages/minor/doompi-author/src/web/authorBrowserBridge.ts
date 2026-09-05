@@ -87,7 +87,9 @@ class AuthorBrowserBridge {
     void this.#runtime
       .execute(message.name, message.arguments, controller.signal)
       .then((result) => {
-        if (this.#current(active, message.requestId, controller))
+        if (!this.#current(active, message.requestId, controller)) return;
+        if (controller.signal.aborted) this.#sendCancelled(active, message.requestId);
+        else
           this.#send(active.sessionId, {
             kind: 'result',
             generation: active.generation,
@@ -97,15 +99,21 @@ class AuthorBrowserBridge {
             result,
           });
       })
-      .catch(() => {
-        if (this.#current(active, message.requestId, controller))
+      .catch((error: unknown) => {
+        if (!this.#current(active, message.requestId, controller)) return;
+        if (controller.signal.aborted) this.#sendCancelled(active, message.requestId);
+        else {
+          const messageText = error instanceof Error ? error.message : String(error);
+          const code = /^([A-Z][A-Z_]+):/u.exec(messageText)?.[1] ?? 'AUTHOR_TOOL_ERROR';
           this.#send(active.sessionId, {
-            kind: 'cancelled',
+            kind: 'result',
             generation: active.generation,
             ownerToken: active.ownerToken!,
             catalogToken: active.catalogToken!,
             requestId: message.requestId,
+            result: { error: { code, message: messageText } },
           });
+        }
       })
       .finally(() => {
         if (this.#pending.get(message.requestId) === controller) this.#pending.delete(message.requestId);
@@ -149,6 +157,16 @@ class AuthorBrowserBridge {
           inputSchema: tool.inputSchema,
         })),
       ),
+    });
+  }
+
+  #sendCancelled(active: ActiveViewport, requestId: string): void {
+    this.#send(active.sessionId, {
+      kind: 'cancelled',
+      generation: active.generation,
+      ownerToken: active.ownerToken!,
+      catalogToken: active.catalogToken!,
+      requestId,
     });
   }
 

@@ -3,8 +3,10 @@
   "version": "0.0.0",
   "description": "Session scoped semantic computer control through the DoomPi Desktop capability.",
   "keywords": [
+    "ai",
     "coding-agent",
     "computer-use",
+    "developer-tools",
     "doompi",
     "pi-coding-agent",
     "pi-extension",
@@ -12,8 +14,16 @@
     "typescript"
   ],
   "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
   "license": "MIT",
   "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/minor/doompi-computer-use"
+  },
   "files": [
     "dist",
     "src/web",

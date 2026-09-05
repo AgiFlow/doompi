@@ -18,6 +18,7 @@ export interface AuthorDocumentInput {
   kind: AuthorDocumentKind;
   content?: string;
   mediaUrl?: string;
+  crop?: AuthorCrop;
   title?: string;
   sourceSha256?: string;
   structuredFormat?: StructuredDocumentFormat;
@@ -110,6 +111,8 @@ export type AuthorNativeAnchor =
 export interface AuthorViewportSnapshot {
   width: number;
   height: number;
+  originX?: number;
+  originY?: number;
   scrollX?: number;
   scrollY?: number;
   zoom?: number;
@@ -152,6 +155,11 @@ export interface AuthorRegionDraft {
   createdAt: number;
 }
 
+/** A region paired with the stable request/draft number shown in the document. */
+export interface AuthorDisplayedRegion {
+  ordinal: number;
+  region: AuthorRegionDraft;
+}
 export type AuthorRequestStatus = 'REQUESTED' | 'CHANGING' | 'CHANGED' | 'COMPLETE' | 'FAILED' | 'CANCELLED';
 
 export interface AuthorRequestRecord {
@@ -160,6 +168,7 @@ export interface AuthorRequestRecord {
   documentPath: string;
   requestText: string;
   regions: readonly AuthorRegionDraft[];
+  pendingRegions?: readonly AuthorRegionDraft[];
   status: AuthorRequestStatus;
   currentOperation?: string;
   before?: string;

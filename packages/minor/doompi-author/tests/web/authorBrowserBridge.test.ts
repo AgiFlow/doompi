@@ -112,6 +112,44 @@ describe('Author browser bridge', () => {
     expect(h.sent.at(-1)).toEqual({ kind: 'register', generation: 1 });
   });
 
+  it('returns structured tool failures instead of reporting cancellation', async () => {
+    const h = fixture();
+    releases.push(startAuthorBrowserBridge(h.runtime));
+    await focusAuthorViewport('session', [
+      {
+        id: 'profile',
+        tools: [
+          {
+            name: 'author_fail',
+            description: 'fail',
+            inputSchema: {},
+            execute: async () => {
+              throw new Error('STALE_GRID: Describe the grid again.');
+            },
+          },
+        ],
+      },
+    ]);
+    applyAuthorHubMessage('session', accepted());
+    applyAuthorHubMessage('session', accepted('catalog'));
+    applyAuthorHubMessage('session', {
+      kind: 'request',
+      generation: 1,
+      ownerToken: 'owner',
+      catalogToken: 'catalog',
+      requestId: 'failed',
+      name: 'author_fail',
+      arguments: {},
+    });
+
+    await vi.waitFor(() =>
+      expect(h.sent.at(-1)).toMatchObject({
+        kind: 'result',
+        requestId: 'failed',
+        result: { error: { code: 'STALE_GRID', message: 'STALE_GRID: Describe the grid again.' } },
+      }),
+    );
+  });
   it('cancels pending work and drops the active session cleanly', async () => {
     const h = fixture();
     releases.push(startAuthorBrowserBridge(h.runtime));

@@ -1,4 +1,5 @@
 import { Button } from '@agimon-ai/doompi-web-components';
+import { AuthorGridOverlay, autonomousVoiceGridVisible } from './AuthorGridOverlay.tsx';
 import { AuthorMediaView } from './AuthorMediaView.tsx';
 import { AuthorTextView } from './AuthorTextView.tsx';
 import type { FileLinkSource, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
@@ -7,16 +8,19 @@ import { useEffect, useRef, useState } from 'react';
 import { focusAuthorViewport } from './authorBrowserBridge.ts';
 import { loadAuthorDocument, saveAuthorDocument } from './authorFiles.ts';
 import { authorProfilesForDocument } from './authorProfiles.ts';
+import type { AuthorDisplayedRegion } from './authorViewportTypes.ts';
 import {
   authorDocumentKey,
   authorWorkspace,
   completeAuthorSave,
+  failAuthorSave,
   focusAuthorDocument,
   normalizeAuthorPath,
   putAuthorDocument,
   releaseAuthorDocumentFocus,
   requestAuthorSave,
   syncAuthorDocumentFocus,
+  type AuthorSessionWorkspace,
 } from './authorWorkspaceStore.ts';
 import { AuthorStructuredView } from './AuthorStructuredView.tsx';
 interface AuthorDocumentPanelProps extends WebPluginSlotProps {
@@ -29,14 +33,39 @@ function tabId(path: string): string {
   return `author-file-${(hash >>> 0).toString(36)}`;
 }
 
-export function AuthorDocumentPanel({ path, sessionId }: AuthorDocumentPanelProps) {
+export function displayedAuthorRegions(
+  workspace: AuthorSessionWorkspace | undefined,
+): readonly AuthorDisplayedRegion[] {
+  const draftRegions = workspace?.regions ?? [];
+  if (draftRegions.length > 0) return draftRegions.map((region, index) => ({ ordinal: index + 1, region }));
+  const activeRequest = workspace?.requests.findLast(
+    (request) => request.status === 'REQUESTED' || request.status === 'CHANGING',
+  );
+  return (activeRequest?.pendingRegions ?? []).map((region) => ({
+    ordinal: Math.max(1, (activeRequest?.regions.findIndex((original) => original.id === region.id) ?? 0) + 1),
+    region,
+  }));
+}
+export function AuthorDocumentPanel(props: AuthorDocumentPanelProps) {
+  if (!props.activeMinorModes?.includes('author')) {
+    return (
+      <p data-testid="author-mode-inactive" className="p-4 text-[11px] text-doom-dim">
+        Enable Author minor mode to edit this document.
+      </p>
+    );
+  }
+  return <ActiveAuthorDocumentPanel {...props} />;
+}
+
+function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocumentPanelProps) {
   const document = useStore(authorWorkspace.store, (state) =>
     sessionId === null ? undefined : state.documents[authorDocumentKey(sessionId, path)],
   );
   const focusGeneration = useRef<number | undefined>(undefined);
-  const activeTool = useStore(authorWorkspace.store, (state) =>
-    sessionId === null ? 'select' : (state.sessions[sessionId]?.activeTool ?? 'select'),
+  const workspace = useStore(authorWorkspace.store, (state) =>
+    sessionId === null ? undefined : state.sessions[sessionId],
   );
+  const activeTool = workspace?.activeTool ?? 'select';
   const [markdownPreview, setMarkdownPreview] = useState(true);
   const [status, setStatus] = useState<string | undefined>();
   const kind = document?.kind;
@@ -94,15 +123,18 @@ export function AuthorDocumentPanel({ path, sessionId }: AuthorDocumentPanelProp
       completeAuthorSave(sessionId, path, sha256, savedVersion, savedFragments);
       setStatus('saved');
     } catch (error) {
+      failAuthorSave(sessionId, path, savedVersion);
       setStatus(error instanceof Error ? error.message : String(error));
     }
   };
-
+  const gridVisible = autonomousVoiceGridVisible(statuses);
+  const displayedRegions = displayedAuthorRegions(workspace);
   const textPanel = (
     <AuthorTextView
       sessionId={sessionId}
       document={document}
-      preview={document.kind === 'markdown' && markdownPreview && activeTool === 'select'}
+      preview={document.kind === 'markdown' && markdownPreview && activeTool === 'select' && !gridVisible}
+      displayedRegions={displayedRegions}
     />
   );
 
@@ -124,20 +156,29 @@ export function AuthorDocumentPanel({ path, sessionId }: AuthorDocumentPanelProp
           size="xs"
           variant="outline"
           data-testid="author-save"
-          disabled={document.revisions.length === 0}
+          disabled={document.revisions.length === 0 || document.savingVersion !== undefined}
           onClick={() => void save()}
         >
           Save
         </Button>
       </header>
       {status === undefined ? null : <output className="px-4 py-1 text-[10px] text-doom-faint">{status}</output>}
-      {document.kind === 'text' || document.kind === 'markdown' ? (
-        textPanel
-      ) : document.structuredFormat !== undefined ? (
-        <AuthorStructuredView sessionId={sessionId} document={document} />
-      ) : (
-        <AuthorMediaView key={document.path} sessionId={sessionId} document={document} activeTool={activeTool} />
-      )}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {document.kind === 'text' || document.kind === 'markdown' ? (
+          textPanel
+        ) : document.structuredFormat !== undefined ? (
+          <AuthorStructuredView sessionId={sessionId} document={document} displayedRegions={displayedRegions} />
+        ) : (
+          <AuthorMediaView
+            key={document.path}
+            sessionId={sessionId}
+            document={document}
+            activeTool={activeTool}
+            displayedRegions={displayedRegions}
+          />
+        )}
+        <AuthorGridOverlay sessionId={sessionId} document={document} visible={gridVisible} />
+      </div>
     </section>
   );
 }

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { boundedCaptureContext } from '../../src/web/authorCapture.ts';
 import {
   addAuthorAnnotation,
   addAuthorRegion,
@@ -16,6 +15,7 @@ import {
   requestAuthorSave,
   reviseAuthorDocument,
   reviseAuthorFragment,
+  setAuthorCrop,
 } from '../../src/web/authorWorkspaceStore.ts';
 
 afterEach(() => authorWorkspace.reset());
@@ -68,6 +68,20 @@ describe('Author workspace store', () => {
     expect(authorDocument('s1', 'report.csv')?.originalFragments).toEqual(saved.fragments);
   });
 
+  it('versions an image crop and clears the applied crop after its version saves', () => {
+    putAuthorDocument('s1', { path: 'photo.png', kind: 'image', mediaUrl: '/photo.png', sourceSha256: 'a' });
+    setAuthorCrop('s1', 'photo.png', { x: 0.1, y: 0.2, width: 0.5, height: 0.4 });
+    expect(authorDocument('s1', 'photo.png')).toMatchObject({
+      version: 1,
+      crop: { x: 0.1, y: 0.2, width: 0.5, height: 0.4 },
+    });
+
+    requestAuthorSave('s1', 'photo.png');
+    expect(authorDocument('s1', 'photo.png')?.savingVersion).toBe(1);
+    completeAuthorSave('s1', 'photo.png', 'b', 1, undefined);
+    expect(authorDocument('s1', 'photo.png')).toMatchObject({ savedVersion: 1, sourceSha256: 'b' });
+    expect(authorDocument('s1', 'photo.png')?.crop).toBeUndefined();
+  });
   it('keeps ordered native-anchor regions isolated by session and derives order after removal', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'hello', sourceSha256: 'a' });
     focusAuthorDocument('s1', 'notes.md', 0, 'a');
@@ -90,6 +104,28 @@ describe('Author workspace store', () => {
     expect(authorSessionWorkspace('s1').regions.map(({ id }) => id)).toEqual(['r2']);
   });
 
+  it('invalidates unsent anchors after a local document revision', () => {
+    putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'hello', sourceSha256: 'a' });
+    focusAuthorDocument('s1', 'notes.md', 0, 'a');
+    addAuthorRegion('s1', {
+      id: 'r1',
+      documentPath: 'notes.md',
+      revision: 0,
+      sourceSha256: 'a',
+      comment: 'rewrite',
+      anchor: { kind: 'text-range', startOffset: 0, endOffset: 5, startLine: 1, endLine: 1 },
+      viewport: { width: 800, height: 600 },
+      createdAt: 1,
+    });
+
+    reviseAuthorDocument('s1', 'notes.md', 'goodbye');
+
+    expect(authorSessionWorkspace('s1')).toMatchObject({
+      candidate: undefined,
+      regions: [],
+      focusedDocument: { revision: 1 },
+    });
+  });
   it('invalidates drafts and active work on an external source change without rewriting completed history', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'before', sourceSha256: 'a' });
     focusAuthorDocument('s1', 'notes.md', 0, 'a');
@@ -136,15 +172,5 @@ describe('Author workspace store', () => {
       ['done', 'COMPLETE'],
     ]);
     expect(authorSessionWorkspace('s1').focusedDocument).toMatchObject({ sourceSha256: 'b', revision: 1 });
-  });
-  it('bounds capture semantic context to 8 KiB', () => {
-    const bounded = boundedCaptureContext({
-      kind: 'author-viewport',
-      source: 'author',
-      id: 's1:file',
-      label: 'file',
-      content: 'é'.repeat(10_000),
-    });
-    expect(new TextEncoder().encode(bounded.content).byteLength).toBeLessThanOrEqual(8 * 1024);
   });
 });

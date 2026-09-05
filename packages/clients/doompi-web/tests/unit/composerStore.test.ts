@@ -133,6 +133,7 @@ describe('composer state', () => {
         content: 'Status: Todo\n\nFix repository authentication.',
         source: 'agiflow',
         contextId: 'task-1',
+        contextKind: 'work-item',
       },
     ]);
   });
@@ -193,6 +194,8 @@ describe('composer state', () => {
         content: 'Captured from https://example.com/docs',
         source: 'author',
         contextId: 'https://example.com/docs',
+        contextKind: 'browser-page',
+        url: 'https://example.com/docs',
       },
     ]);
   });
@@ -246,7 +249,7 @@ describe('composer state', () => {
   });
 
   it('rejects decodable but non-canonical base64', () => {
-    const canonical = base64([...atob(png(1, 1))].map((byte) => byte.charCodeAt(0)).concat(0));
+    const canonical = base64(Array.from(atob(png(1, 1)), (byte) => byte.charCodeAt(0)).concat(0));
     const nonCanonical = `${canonical.slice(0, -3)}B==`;
 
     attachComposerCapture('s1', {

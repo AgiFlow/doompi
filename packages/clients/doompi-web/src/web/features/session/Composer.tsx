@@ -14,6 +14,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { publishComposerSubmission } from '../../lib/composerSubmissions.ts';
 import { searchSessionFiles } from '../../lib/hubApi.ts';
 import type { QueuedEntry } from '../../lib/sessionModel.ts';
 import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
@@ -400,6 +401,22 @@ export function Composer() {
     [attachments, nextAttachmentId, sessionId],
   );
 
+  const submittedContextItems = () =>
+    attachments.flatMap((attachment) =>
+      attachment.kind === 'context'
+        ? [
+            {
+              kind: attachment.contextKind,
+              source: attachment.source,
+              id: attachment.contextId,
+              label: attachment.name,
+              content: attachment.content,
+              ...(attachment.url === undefined ? {} : { url: attachment.url }),
+            },
+          ]
+        : [],
+    );
+
   const clearAfterSend = (): void => {
     clearComposerState(sessionId);
     closeCompletion();
@@ -412,6 +429,14 @@ export function Composer() {
       .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
       .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
     submitMessage(message, images, sessionId);
+    if (sessionId !== null)
+      publishComposerSubmission({
+        sessionId,
+        message,
+        delivery: 'submit',
+        submittedAt: Date.now(),
+        contextItems: submittedContextItems(),
+      });
     clearAfterSend();
   };
 
@@ -422,6 +447,14 @@ export function Composer() {
       .filter((attachment): attachment is ComposerImageAttachment => attachment.kind === 'image')
       .map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
     queueFollowUp(message, images, sessionId);
+    if (sessionId !== null)
+      publishComposerSubmission({
+        sessionId,
+        message,
+        delivery: 'queue',
+        submittedAt: Date.now(),
+        contextItems: submittedContextItems(),
+      });
     clearAfterSend();
   };
 

@@ -28,6 +28,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-autocompact': 'packages/default/doompi-autocompact',
   '@agimon-ai/doompi-autostop': 'packages/core/doompi-autostop',
   '@agimon-ai/doompi-cache': 'packages/core/doompi-cache',
+  '@agimon-ai/doompi-computer-use': 'packages/minor/doompi-computer-use',
   '@agimon-ai/doompi-config': 'packages/core/doompi-config',
   '@agimon-ai/doompi-domain': 'packages/core/doompi-domain',
   '@agimon-ai/doompi-edit': 'packages/default/doompi-edit',
@@ -73,6 +74,7 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-autocompact',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-cache',
+  '@agimon-ai/doompi-computer-use',
   '@agimon-ai/doompi-config',
   '@agimon-ai/doompi-domain',
   '@agimon-ai/doompi-edit',
@@ -108,6 +110,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
     './src/prompts/doompi-author-extension/references/extension-contract.md',
   ],
   '@agimon-ai/doompi-cache': ['./llms.txt', './README.md', './src/prompts/doompi-use-cache/SKILL.md'],
+  '@agimon-ai/doompi-computer-use': ['./llms.txt', './README.md', './src/prompts/doompi-use-computer-use/SKILL.md'],
   '@agimon-ai/doompi-config': [
     './llms.txt',
     './README.md',

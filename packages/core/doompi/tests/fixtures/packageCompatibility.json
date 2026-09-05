@@ -1,4 +1,50 @@
 {
+  "@agimon-ai/doompi-computer-use": {
+    "exports": {
+      ".": "tir",
+      "./extensions/pi": "tir",
+      "./session-api": "tir",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": { "extensions": ["./dist/extensions/pi.mjs"] },
+    "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-computer-use/SKILL.md"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/types/computerUse.ts",
+      "src/types/computerUseApi.ts",
+      "src/exports/webClient.ts",
+      "src/prompts",
+      "llms.txt",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
+    "os": [],
+    "cpu": []
+  },
   "@agimon-ai/doompi-autocompact": {
     "exports": {
       ".": "tir",
@@ -340,6 +386,7 @@
     "exports": {
       ".": "tir",
       "./ask-user": "tir",
+      "./author-facade": "tir",
       "./background-work": "tir",
       "./child-process": "tir",
       "./cockpit-container": "tir",
@@ -365,6 +412,7 @@
       "./readiness": "tir",
       "./relaunch-handoff": "tir",
       "./sandbox-harness": "tir",
+      "./session-protocol": "tir",
       "./skills": "tir",
       "./subagent-policy": "tir",
       "./subagent-tool": "tir",
@@ -386,6 +434,11 @@
         "types": "./dist/askUser.d.mts",
         "import": "./dist/askUser.mjs",
         "require": "./dist/askUser.cjs"
+      },
+      "./author-facade": {
+        "types": "./dist/authorFacade.d.mts",
+        "import": "./dist/authorFacade.mjs",
+        "require": "./dist/authorFacade.cjs"
       },
       "./background-work": {
         "types": "./dist/backgroundWork.d.mts",
@@ -511,6 +564,11 @@
         "types": "./dist/sandboxHarness.d.mts",
         "import": "./dist/sandboxHarness.mjs",
         "require": "./dist/sandboxHarness.cjs"
+      },
+      "./session-protocol": {
+        "types": "./dist/sessionProtocol.d.mts",
+        "import": "./dist/sessionProtocol.mjs",
+        "require": "./dist/sessionProtocol.cjs"
       },
       "./skills": {
         "types": "./dist/skills.d.mts",

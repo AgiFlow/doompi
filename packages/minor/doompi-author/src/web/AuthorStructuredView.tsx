@@ -1,5 +1,8 @@
 import { Button } from '@agimon-ai/doompi-web-components';
+import { useEffect } from 'react';
 import type { DocumentFragment } from '../types/structuredDocuments.ts';
+import type { AuthorDisplayedRegion } from './authorViewportTypes.ts';
+import { registerAuthorGridResolver } from './authorGrid.ts';
 import {
   reviseAuthorFragment,
   setAuthorRegionCandidate,
@@ -9,10 +12,45 @@ import {
 export function AuthorStructuredView({
   sessionId,
   document,
+  displayedRegions,
 }: {
   sessionId: string;
   document: AuthorWorkspaceDocument;
+  displayedRegions: readonly AuthorDisplayedRegion[];
 }) {
+  useEffect(
+    () =>
+      registerAuthorGridResolver(sessionId, (cell, geometry) => {
+        const { originX = 0, originY = 0, width, height } = geometry.viewport;
+        const element = window.document.elementFromPoint(
+          originX + cell.center.x * width,
+          originY + cell.center.y * height,
+        );
+        const fragmentId = element?.closest<HTMLElement>('[data-author-fragment]')?.dataset.authorFragment;
+        const fragment = document.fragments?.find((candidate) => candidate.id === fragmentId);
+        if (fragment === undefined || fragment.readOnly === true) return undefined;
+        if (document.kind === 'csv' || document.kind === 'xlsx') {
+          return {
+            anchor: { kind: 'cell', fragmentId: fragment.id, location: fragment.location },
+            quote: fragment.text,
+          };
+        }
+        const slide = Number(fragment.location.match(/(?:slide\s*|slides\/slide)(\d+)/u)?.[1]);
+        if (!Number.isSafeInteger(slide)) return undefined;
+        return {
+          anchor: { kind: 'slide-element', fragmentId: fragment.id, location: fragment.location, slide },
+          quote: fragment.text,
+        };
+      }),
+    [document.fragments, document.kind, document.version, sessionId],
+  );
+  const displayedByFragment = new Map(
+    displayedRegions.flatMap(({ ordinal, region }) =>
+      region.anchor.kind === 'cell' || region.anchor.kind === 'slide-element'
+        ? [[region.anchor.fragmentId, ordinal] as const]
+        : [],
+    ),
+  );
   const cells = document.kind === 'csv' || document.kind === 'xlsx';
   const groups = new Map<string, DocumentFragment[]>();
   for (const fragment of document.fragments ?? []) {
@@ -33,7 +71,17 @@ export function AuthorStructuredView({
           <h3 className="text-[10px] text-doom-faint">{location}</h3>
           <div className={cells ? 'flex gap-1' : 'space-y-2'}>
             {fragments.map((fragment) => (
-              <div key={fragment.id} className={cells ? 'w-40 shrink-0' : ''}>
+              <div
+                key={fragment.id}
+                data-author-fragment={fragment.id}
+                data-author-region={displayedByFragment.get(fragment.id)}
+                className={`${cells ? 'w-40 shrink-0' : ''} relative rounded ${displayedByFragment.has(fragment.id) ? 'ring-1 ring-doom-yellow' : ''}`}
+              >
+                {displayedByFragment.has(fragment.id) ? (
+                  <span className="absolute -left-1 -top-1 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-doom-yellow px-1 text-[9px] font-bold text-doom-deep">
+                    {displayedByFragment.get(fragment.id)}
+                  </span>
+                ) : null}
                 <Button
                   size="xs"
                   variant="ghost"

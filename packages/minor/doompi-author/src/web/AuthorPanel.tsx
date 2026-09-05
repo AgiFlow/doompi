@@ -1,15 +1,22 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { authorFileTab } from './AuthorDocumentPanel.tsx';
-import { author } from './authorStore.ts';
+import { useState } from 'react';
+import {
+  attachAuthorCapture,
+  authorCaptureContext,
+  createAuthorCapturePacket,
+  multiRegionCaptureProvider,
+} from './authorCapture.ts';
+import { authorGrid } from './authorGrid.ts';
+import { autonomousVoiceGridVisible } from './AuthorGridOverlay.tsx';
 import { authorWorkspace } from './authorWorkspaceStore.ts';
 import { AuthorToolPalette } from './AuthorToolPalette.tsx';
 import { AuthorRegionDrafts } from './AuthorRegionDrafts.tsx';
 import { AuthorRequestLog } from './AuthorRequestLog.tsx';
 
-export function AuthorPanel({ sessionId, openTransientTab }: WebPluginSlotProps) {
-  const view = useStore(author.store, (state) => author.select(state, sessionId));
+export function AuthorPanel({ sessionId, activeMinorModes, attachComposerCapture, statuses }: WebPluginSlotProps) {
+  const [captureStatus, setCaptureStatus] = useState<string>();
   const documents = useStore(authorWorkspace.store, (state) => {
     if (sessionId === null) return [];
     const prefix = `${sessionId}\n`;
@@ -20,39 +27,55 @@ export function AuthorPanel({ sessionId, openTransientTab }: WebPluginSlotProps)
   const workspace = useStore(authorWorkspace.store, (state) =>
     sessionId === null ? undefined : state.sessions[sessionId],
   );
+  const grid = useStore(authorGrid.store, (state) => (sessionId === null ? undefined : state.sessions[sessionId]));
   const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
+  if (!activeMinorModes?.includes('author') || focused === undefined) return null;
   return (
-    <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-      <strong className="text-[11px] text-doom-text">Author {view.activation}</strong>
-      <span className="text-[10px] text-doom-faint">
-        {view.capabilityCount === 1 ? '1 viewport capability' : `${view.capabilityCount} viewport capabilities`}
-      </span>
-      {workspace?.focusedDocument === undefined ? null : (
-        <span data-testid="author-focused-document" className="text-[10px] text-doom-dim">
-          focused: {workspace.focusedDocument.path}
-        </span>
-      )}
+    <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
       {sessionId !== null && workspace !== undefined && focused !== undefined ? (
         <>
           <AuthorToolPalette sessionId={sessionId} kind={focused.kind} activeTool={workspace.activeTool} />
+          {autonomousVoiceGridVisible(statuses) && grid !== undefined ? (
+            <div
+              data-testid="author-grid-snapshot"
+              className="rounded border border-doom-red/40 bg-doom-red/5 p-2 text-[9px] text-doom-dim"
+            >
+              <strong className="text-doom-red">VOICE GRID A1–H8</strong>
+              <p className="mt-1 truncate">token {grid.geometryToken}</p>
+            </div>
+          ) : null}
           <AuthorRegionDrafts key={focused.path} sessionId={sessionId} workspace={workspace} />
+          {workspace.regions.length > 0 ? (
+            <div className="space-y-1.5 border-b border-doom-border-soft pb-3">
+              <Button
+                size="xs"
+                variant="outline"
+                data-testid="author-attach-capture"
+                onClick={() => {
+                  setCaptureStatus('capturing…');
+                  const captureId = crypto.randomUUID();
+                  try {
+                    const packet = createAuthorCapturePacket(captureId, Date.now(), focused, workspace.regions);
+                    void attachAuthorCapture(
+                      multiRegionCaptureProvider(workspace.regions),
+                      authorCaptureContext(packet),
+                      attachComposerCapture,
+                    ).then(
+                      () => setCaptureStatus('attached to composer'),
+                      (reason: unknown) => setCaptureStatus(reason instanceof Error ? reason.message : String(reason)),
+                    );
+                  } catch (reason) {
+                    setCaptureStatus(reason instanceof Error ? reason.message : String(reason));
+                  }
+                }}
+              >
+                attach {workspace.regions.length} region{workspace.regions.length === 1 ? '' : 's'}
+              </Button>
+              {captureStatus ? <output className="block text-[10px] text-doom-dim">{captureStatus}</output> : null}
+            </div>
+          ) : null}
         </>
       ) : null}
-      <div className="mt-2 flex flex-col gap-1">
-        {documents.length === 0 ? <span className="text-[10px] text-doom-faint">No open documents</span> : null}
-        {documents.map((document) => (
-          <Button
-            key={document.path}
-            size="card"
-            variant="ghost"
-            data-testid="author-open-document"
-            className="justify-start text-[11px]"
-            onClick={() => openTransientTab(authorFileTab(document.path))}
-          >
-            {document.title ?? document.path}
-          </Button>
-        ))}
-      </div>
       <AuthorRequestLog requests={workspace?.requests ?? []} />
     </section>
   );

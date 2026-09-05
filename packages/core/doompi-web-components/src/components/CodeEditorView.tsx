@@ -19,6 +19,7 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
+  WidgetType,
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
@@ -106,6 +107,59 @@ const closedDecorations = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+const setMarkedDecorations = StateEffect.define<DecorationSet>();
+const markedDecorations = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (decorations, transaction) => {
+    let next = decorations.map(transaction.changes);
+    for (const effect of transaction.effects) {
+      if (effect.is(setMarkedDecorations)) next = effect.value;
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+class MarkedRangeLabel extends WidgetType {
+  constructor(private readonly label: string) {
+    super();
+  }
+
+  eq(other: MarkedRangeLabel): boolean {
+    return other.label === this.label;
+  }
+
+  toDOM(): HTMLElement {
+    const label = document.createElement('span');
+    label.className = 'cm-marked-region-label';
+    label.dataset.authorRegionLabel = this.label;
+    label.textContent = this.label;
+    return label;
+  }
+}
+
+const MARKED_REGION_THEME = EditorView.baseTheme({
+  '.cm-marked-region': {
+    backgroundColor: 'var(--doom-tint-yellow)',
+    borderBottom: '1px solid var(--doom-edge-yellow)',
+  },
+  '.cm-marked-region-label': {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '16px',
+    height: '16px',
+    marginRight: '4px',
+    borderRadius: '999px',
+    backgroundColor: 'var(--doom-yellow)',
+    color: 'var(--doom-deep)',
+    fontSize: '9px',
+    fontWeight: '700',
+    lineHeight: '1',
+    verticalAlign: 'text-bottom',
+  },
+});
+
 /** Everything that never changes for the life of an editor. */
 const FIXED_EXTENSIONS = [
   lineNumbers(),
@@ -125,6 +179,8 @@ const FIXED_EXTENSIONS = [
   keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]),
   syntaxHighlighting(DOOM_HIGHLIGHT),
   closedDecorations,
+  markedDecorations,
+  MARKED_REGION_THEME,
   DOOM_THEME,
 ];
 
@@ -226,6 +282,22 @@ export function CodeEditorView({
               ),
         );
         editor.dispatch({ effects: setClosedDecorations.of(Decoration.set(decorations)) });
+      },
+      setMarkedRanges: (ranges) => {
+        const editor = view.current;
+        if (editor === null) return;
+        const decorations = ranges.flatMap((range) => {
+          const [bounded] = boundedEditorRanges(editor.state.doc.length, [range]);
+          if (bounded === undefined || bounded.from === bounded.to) return [];
+          return [
+            Decoration.widget({ widget: new MarkedRangeLabel(range.label), side: -1 }).range(bounded.from),
+            Decoration.mark({
+              class: 'cm-marked-region',
+              attributes: { 'data-author-region': range.label },
+            }).range(bounded.from, bounded.to),
+          ];
+        });
+        editor.dispatch({ effects: setMarkedDecorations.of(Decoration.set(decorations, true)) });
       },
       resolveViewportRegion: (rectangle) => {
         const editor = view.current;

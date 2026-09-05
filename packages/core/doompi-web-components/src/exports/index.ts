@@ -248,6 +248,7 @@ export {
   type CodeEditorController,
   type CodeEditorProps,
   type EditorEdit,
+  type EditorMarkedRange,
   type EditorSelectionRange,
   type EditorTextRange,
   type EditorViewportRectangle,

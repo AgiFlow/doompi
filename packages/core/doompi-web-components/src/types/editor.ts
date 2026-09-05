@@ -32,6 +32,10 @@ export interface EditorTextRange {
   to: number;
 }
 
+/** A persistent numbered annotation drawn over a mounted editor range. */
+export interface EditorMarkedRange extends EditorTextRange {
+  label: string;
+}
 /** One replacement applied with the other edits in a single editor transaction. */
 export interface EditorEdit extends EditorTextRange {
   insert: string;
@@ -51,6 +55,7 @@ export interface CodeEditorController {
   revealAndSelect: (range: EditorTextRange) => void;
   applyEdits: (edits: readonly EditorEdit[]) => void;
   setClosedRanges: (ranges: readonly EditorTextRange[]) => void;
+  setMarkedRanges: (ranges: readonly EditorMarkedRange[]) => void;
   /** Resolves visible geometry to a document-native range, or null when it misses the document. */
   resolveViewportRegion: (rectangle: EditorViewportRectangle) => EditorSelectionRange | null;
 }

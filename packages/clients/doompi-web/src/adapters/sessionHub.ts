@@ -192,6 +192,8 @@ export interface SessionHub {
 interface ManagedSession {
   record: SessionRecord;
   attachment?: SessionAttachment;
+  /** Reserves the attachment while asynchronous telemetry initializes. */
+  pendingAttachment?: symbol;
   ring: FrameRing;
   /** Latest status and widget frames for rebuilding only this session's browser store. */
   uiProjections: Map<string, SessionFrame>;
@@ -678,6 +680,8 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   };
 
   const startAttachment = (managed: ManagedSession): void => {
+    const reservation = Symbol(managed.record.id);
+    managed.pendingAttachment = reservation;
     let token: string;
     try {
       token = readTokenFile(managed.record);
@@ -685,6 +689,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       // The record beat the token file, or perms are off; the registry poll
       // re-runs reconcile, which retries this until it works.
       managed.attachment = undefined;
+      managed.pendingAttachment = undefined;
       managed.attach = 'closed';
       managed.attachReason = `The token file is unreadable: ${error instanceof Error ? error.message : String(error)}`;
       pushSummary(managed);
@@ -778,10 +783,15 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
           },
         },
       });
-    if (options.telemetry === undefined) managed.attachment = connect();
+    const finishAttachment = (trace?: DoomTraceContext): void => {
+      if (closed || sessions.get(managed.record.id) !== managed || managed.pendingAttachment !== reservation) return;
+      managed.attachment = connect(trace);
+      managed.pendingAttachment = undefined;
+    };
+    if (options.telemetry === undefined) finishAttachment();
     else {
       void options.telemetry.runInSpan('web.session_attach', { 'operation.name': 'web.session_attach' }, (trace) => {
-        managed.attachment = connect(trace);
+        finishAttachment(trace);
       });
     }
   };
@@ -834,7 +844,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
         // A new pid means a restarted server, possibly with a rotated token.
         managed.attachment?.close();
         startAttachment(managed);
-      } else if (!managed.attachment) {
+      } else if (!managed.attachment && !managed.pendingAttachment) {
         startAttachment(managed);
       }
       pushSummary(managed);

@@ -1,6 +1,6 @@
 import { Button, EmptyState, Kbd, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { PluginSurface } from '../../components/PluginSurface.tsx';
 import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition.ts';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry.ts';
@@ -31,15 +31,25 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
   const widgets = useActiveSession((state) => state.widgets);
   const slotProps = usePluginSlotProps(activeId, onOpenContent);
   const tab = useStore(uiStore, (state) => state.dockTab);
-  const dockFaces = useDockFaces();
+  const dockFaces = useDockFaces(activeId).filter(
+    (face) => face.requiredMinorMode === undefined || slotProps.activeMinorModes?.includes(face.requiredMinorMode),
+  );
   const selectedFace = dockFaces.find((face) => face.id === tab);
   const resolvedTab = tab === 'context' || tab === 'activity' || selectedFace !== undefined ? tab : 'activity';
   const DockPanel = selectedFace?.panel;
+  const automaticFace = dockFaces.find((face) => face.autoSelect === true);
+  const automaticFaceKey = `${activeId ?? ''}:${automaticFace?.id ?? ''}`;
+  const lastAutomaticFaceKey = useRef<string | undefined>(undefined);
   const groups = useActivityGroups(statuses, widgets, activeId);
   const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
   const pinnedGroups = groups.filter((group) => group.placement === 'bottom');
   const busy = groups.filter((group) => group.active).length;
 
+  useEffect(() => {
+    if (lastAutomaticFaceKey.current === automaticFaceKey) return;
+    lastAutomaticFaceKey.current = automaticFaceKey;
+    if (automaticFace !== undefined) setDockTab(automaticFace.id);
+  }, [automaticFace, automaticFaceKey]);
   useEffect(() => {
     if (resolvedTab !== tab) setDockTab(resolvedTab);
   }, [resolvedTab, tab]);
@@ -50,7 +60,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-doom-border px-4">
         <div className="flex items-center gap-2">
-          <DockTabs />
+          <DockTabs contributed={dockFaces} />
           {/* The count belongs to the activity face; on the context face it
               would be a number about a list the reader is not looking at. */}
           {busy > 0 && resolvedTab === 'activity' ? (

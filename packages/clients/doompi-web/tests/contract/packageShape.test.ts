@@ -81,6 +81,7 @@ describe('doompi-web package contract', () => {
       '@agimon-ai/doompi-web-security',
       '@codemirror/state',
       '@codemirror/view',
+      '@earendil-works/chord',
       '@earendil-works/pi-client',
       '@earendil-works/pi-coding-agent',
       '@earendil-works/pi-protocol',

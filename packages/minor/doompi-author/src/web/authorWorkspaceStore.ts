@@ -25,6 +25,7 @@ export interface AuthorWorkspaceDocument extends AuthorDocumentInput {
   saveRequest: number;
   version: number;
   savedVersion: number;
+  savingVersion?: number;
 }
 
 export interface AuthorSessionWorkspace {
@@ -116,7 +117,8 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
           regions: [],
           candidate: undefined,
           requests: session.requests.map((request) =>
-            request.documentPath === path && (request.status === 'REQUESTED' || request.status === 'CHANGING')
+            request.documentPath === path &&
+            (request.status === 'REQUESTED' || request.status === 'CHANGING' || request.status === 'CHANGED')
               ? {
                   ...request,
                   status: 'FAILED',
@@ -296,6 +298,7 @@ export function updateAuthorRequest(
 
 export function reviseAuthorDocument(sessionId: string, path: string, content: string): void {
   updateDocument(sessionId, path, (document) => {
+    if (document.content === content) return document;
     const version = document.version + 1;
     return {
       ...document,
@@ -308,6 +311,8 @@ export function reviseAuthorDocument(sessionId: string, path: string, content: s
 
 export function reviseAuthorFragment(sessionId: string, path: string, fragmentId: string, text: string): void {
   updateDocument(sessionId, path, (document) => {
+    const fragment = document.fragments?.find((candidate) => candidate.id === fragmentId);
+    if (fragment === undefined || fragment.text === text) return document;
     const version = document.version + 1;
     return {
       ...document,
@@ -323,14 +328,29 @@ export function addAuthorAnnotation(sessionId: string, path: string, annotation:
 }
 
 export function setAuthorCrop(sessionId: string, path: string, crop: AuthorCrop | undefined): void {
-  updateDocument(sessionId, path, (document) => ({
-    ...document,
-    ...(crop === undefined ? { crop: undefined } : { crop }),
-  }));
+  updateDocument(sessionId, path, (document) => {
+    const version = document.version + 1;
+    return {
+      ...document,
+      ...(crop === undefined ? { crop: undefined } : { crop }),
+      version,
+      revisions: [...document.revisions, { revision: version, content: JSON.stringify(crop ?? null) }],
+    };
+  });
 }
 
 export function requestAuthorSave(sessionId: string, path: string): void {
-  updateDocument(sessionId, path, (document) => ({ ...document, saveRequest: document.saveRequest + 1 }));
+  updateDocument(sessionId, path, (document) => ({
+    ...document,
+    saveRequest: document.saveRequest + 1,
+    savingVersion: document.version,
+  }));
+}
+
+export function failAuthorSave(sessionId: string, path: string, savingVersion: number): void {
+  updateDocument(sessionId, path, (document) =>
+    document.savingVersion === savingVersion ? { ...document, savingVersion: undefined } : document,
+  );
 }
 
 export function completeAuthorSave(
@@ -346,10 +366,25 @@ export function completeAuthorSave(
       ...document,
       sourceSha256,
       savedVersion,
+      savingVersion: document.savingVersion === savedVersion ? undefined : document.savingVersion,
       originalFragments: savedFragments?.map((fragment) => ({ ...fragment })),
+      ...(document.version === savedVersion ? { crop: undefined } : {}),
       revisions: document.revisions.filter((revision) => revision.revision > savedVersion),
     };
   });
+  const now = Date.now();
+  updateSession(sessionId, (session) => ({
+    ...session,
+    requests: boundHistory(
+      session.requests.map((request) =>
+        request.documentPath === normalizeAuthorPath(path) &&
+        request.status === 'CHANGED' &&
+        request.revision <= savedVersion
+          ? { ...request, status: 'COMPLETE', currentOperation: undefined, updatedAt: now }
+          : request,
+      ),
+    ),
+  }));
 }
 
 export function dropAuthorSession(sessionId: string): void {
@@ -375,21 +410,36 @@ function updateDocument(
   update: (document: AuthorWorkspaceDocument) => AuthorWorkspaceDocument,
 ): void {
   const key = authorDocumentKey(sessionId, path);
+  const staleThumbnails: string[] = [];
   authorWorkspace.update((state) => {
     const document = state.documents[key];
     if (document === undefined) return state;
     const next = update(document);
     const session = state.sessions[sessionId];
     const focused = session?.focusedDocument;
-    const sessions =
-      focused?.path === document.path && focused.revision !== next.version
-        ? {
-            ...state.sessions,
-            [sessionId]: { ...session, focusedDocument: { ...focused, revision: next.version } },
-          }
-        : state.sessions;
+    const identityChanged =
+      focused?.path === document.path &&
+      (focused.revision !== next.version || focused.sourceSha256 !== next.sourceSha256);
+    if (identityChanged) {
+      staleThumbnails.push(
+        ...(session.candidate?.thumbnailUrl === undefined ? [] : [session.candidate.thumbnailUrl]),
+        ...session.regions.flatMap((region) => (region.thumbnailUrl === undefined ? [] : [region.thumbnailUrl])),
+      );
+    }
+    const sessions = identityChanged
+      ? {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            focusedDocument: { ...focused, revision: next.version, sourceSha256: next.sourceSha256 },
+            candidate: undefined,
+            regions: [],
+          },
+        }
+      : state.sessions;
     return { documents: { ...state.documents, [key]: next }, sessions };
   });
+  staleThumbnails.forEach(revokeThumbnail);
 }
 
 function updateSession(sessionId: string, update: (session: AuthorSessionWorkspace) => AuthorSessionWorkspace): void {
@@ -410,8 +460,23 @@ function copyRegion(region: AuthorRegionDraft): AuthorRegionDraft {
   };
 }
 
+function boundedHistoryText(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const encoder = new TextEncoder();
+  if (encoder.encode(value).byteLength <= 16 * 1024) return value;
+  let end = value.length;
+  while (end > 0 && encoder.encode(value.slice(0, end)).byteLength > 16 * 1024) end -= 256;
+  return value.slice(0, end);
+}
+
 function copyRequest(record: AuthorRequestRecord): AuthorRequestRecord {
-  return { ...record, regions: record.regions.map(copyRegion) };
+  return {
+    ...record,
+    before: boundedHistoryText(record.before),
+    after: boundedHistoryText(record.after),
+    regions: record.regions.map(copyRegion),
+    pendingRegions: record.pendingRegions?.map(copyRegion),
+  };
 }
 
 function boundHistory(records: readonly AuthorRequestRecord[]): readonly AuthorRequestRecord[] {
@@ -419,7 +484,7 @@ function boundHistory(records: readonly AuthorRequestRecord[]): readonly AuthorR
   const bytes = (): number => new TextEncoder().encode(JSON.stringify(next)).byteLength;
   while (next.length > AUTHOR_HISTORY_RECORD_LIMIT || bytes() > AUTHOR_HISTORY_BYTE_LIMIT) {
     const terminal = next.findIndex((record) => TERMINAL_REQUEST_STATUSES.has(record.status));
-    if (terminal < 0) break;
+    if (terminal < 0) throw new Error('Author request history is full while active requests are still running.');
     next.splice(terminal, 1);
   }
   return next;

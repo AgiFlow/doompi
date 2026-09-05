@@ -8,7 +8,7 @@ import type {
   TranscriptItem,
   TranscriptProgress,
   UserTranscriptItem,
-} from '../types/protocol.ts';
+} from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { SessionFrame } from '../types/session.ts';
 
 const THINKING_LEVELS = new Set<string>(['off', 'minimal', 'low', 'medium', 'high']);

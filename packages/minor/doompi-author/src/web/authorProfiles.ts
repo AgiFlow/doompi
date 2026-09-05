@@ -1,12 +1,7 @@
 import type { AuthorJsonSchema } from '../types/author.ts';
 import type { AuthorDocumentKind, AuthorTrustedProfile } from './authorViewportTypes.ts';
-import {
-  addAuthorAnnotation,
-  authorDocument,
-  reviseAuthorDocument,
-  reviseAuthorFragment,
-  setAuthorCrop,
-} from './authorWorkspaceStore.ts';
+import { authorGridTools } from './authorGridTools.ts';
+import { addAuthorAnnotation } from './authorWorkspaceStore.ts';
 import { AUTHOR_RUNTIME_BINDING_IDS } from './AuthorRuntime.ts';
 
 function record(input: unknown): Record<string, unknown> {
@@ -32,23 +27,6 @@ const TARGET_PROPERTIES = {
 export const AUTHOR_TEXT_PROFILE: AuthorTrustedProfile = {
   id: AUTHOR_RUNTIME_BINDING_IDS.text,
   tools: [
-    {
-      name: 'author_replace_text',
-      label: 'Replace text',
-      description: 'Replace the local draft of one open Author text document.',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['sessionId', 'path', 'content'],
-        properties: { ...TARGET_PROPERTIES, content: { type: 'string' } },
-      },
-      execute: async (input) => {
-        const { sessionId, path, value } = target(input);
-        if (authorDocument(sessionId, path) === undefined) throw new Error('Author document is not open');
-        reviseAuthorDocument(sessionId, path, text(value.content, 'content'));
-        return { revision: authorDocument(sessionId, path)?.revisions.at(-1)?.revision ?? 0 };
-      },
-    },
     {
       name: 'author_add_comment',
       label: 'Add comment',
@@ -108,36 +86,7 @@ export const AUTHOR_TEXT_PROFILE: AuthorTrustedProfile = {
 
 export const AUTHOR_MEDIA_PROFILE: AuthorTrustedProfile = {
   id: AUTHOR_RUNTIME_BINDING_IDS.media,
-  tools: [
-    {
-      name: 'author_set_crop',
-      label: 'Set crop',
-      description: 'Set the local crop rectangle for one open Author image.',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['sessionId', 'path', 'x', 'y', 'width', 'height'],
-        properties: {
-          ...TARGET_PROPERTIES,
-          x: { type: 'number', minimum: 0 },
-          y: { type: 'number', minimum: 0 },
-          width: { type: 'number', exclusiveMinimum: 0 },
-          height: { type: 'number', exclusiveMinimum: 0 },
-        },
-      },
-      execute: async (input) => {
-        const { sessionId, path, value } = target(input);
-        const values = [value.x, value.y, value.width, value.height];
-        if (!values.every((entry) => typeof entry === 'number' && Number.isFinite(entry))) {
-          throw new Error('Crop values must be finite numbers');
-        }
-        const [x, y, width, height] = values as number[];
-        if (x! < 0 || y! < 0 || width! <= 0 || height! <= 0) throw new Error('Invalid crop rectangle');
-        setAuthorCrop(sessionId, path, { x: x!, y: y!, width: width!, height: height! });
-        return { updated: true };
-      },
-    },
-  ],
+  tools: [],
 };
 
 export const AUTHOR_TRUSTED_PROFILES = [AUTHOR_TEXT_PROFILE, AUTHOR_MEDIA_PROFILE] as const;
@@ -162,43 +111,20 @@ function bindProfile(profile: AuthorTrustedProfile, sessionId: string, path: str
   };
 }
 
-function structuredProfile(sessionId: string, path: string): AuthorTrustedProfile {
-  return {
-    id: AUTHOR_RUNTIME_BINDING_IDS.text,
-    tools: [
-      {
-        name: 'author_replace_fragment',
-        label: 'Replace fragment',
-        description: 'Replace one editable fragment in the focused structured document draft.',
-        inputSchema: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['fragmentId', 'replacement'],
-          properties: { fragmentId: { type: 'string' }, replacement: { type: 'string' } },
-        },
-        execute: async (input) => {
-          const value = record(input);
-          const fragmentId = text(value.fragmentId, 'fragmentId');
-          const replacement = text(value.replacement, 'replacement');
-          const document = authorDocument(sessionId, path);
-          const fragment = document?.fragments?.find((candidate) => candidate.id === fragmentId);
-          if (fragment === undefined || fragment.readOnly === true) throw new Error('Author fragment is not editable');
-          reviseAuthorFragment(sessionId, path, fragmentId, replacement);
-          return { updated: true };
-        },
-      },
-    ],
-  };
-}
-
 export function authorProfilesForDocument(
   sessionId: string,
   path: string,
   kind: AuthorDocumentKind,
 ): readonly AuthorTrustedProfile[] {
-  if (kind === 'image') return [bindProfile(AUTHOR_MEDIA_PROFILE, sessionId, path)];
-  if (kind === 'text' || kind === 'markdown') return [bindProfile(AUTHOR_TEXT_PROFILE, sessionId, path)];
-  if (kind === 'slides' || kind === 'csv' || kind === 'pptx' || kind === 'xlsx')
-    return [structuredProfile(sessionId, path)];
-  return [];
+  const profiles =
+    kind === 'image'
+      ? [bindProfile(AUTHOR_MEDIA_PROFILE, sessionId, path)]
+      : kind === 'text' || kind === 'markdown'
+        ? [bindProfile(AUTHOR_TEXT_PROFILE, sessionId, path)]
+        : [];
+  const tools = authorGridTools(sessionId, path, kind);
+  if (tools.length === 0) return profiles;
+  return profiles.length === 0
+    ? [{ id: AUTHOR_RUNTIME_BINDING_IDS.media, tools }]
+    : [{ ...profiles[0]!, tools: [...profiles[0]!.tools, ...tools] }];
 }

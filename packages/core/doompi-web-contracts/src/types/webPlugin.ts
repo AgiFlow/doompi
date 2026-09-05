@@ -126,6 +126,14 @@ export interface ComposerCapture {
   context: WebPluginContextItem;
 }
 
+/** One accepted composer delivery, published before its browser draft is cleared. */
+export interface ComposerSubmission {
+  sessionId: string;
+  message: string;
+  delivery: 'submit' | 'queue';
+  submittedAt: number;
+  contextItems: readonly WebPluginContextItem[];
+}
 /** One installed action another plugin may offer for a compatible context item. */
 export interface ContextAction {
   /** Namespaced at install as `<pluginId>.<id>`. */
@@ -177,6 +185,8 @@ export interface WebPluginSlotProps {
    * own surface needs the same facts the host folds into the selection bar.
    */
   statuses: Readonly<Record<string, string>>;
+  /** Names of minor modes currently active in the session catalog. */
+  activeMinorModes?: readonly string[];
 }
 /**
  * One contribution into a slot, keyed by (pluginId, id): independent plugins
@@ -327,7 +337,16 @@ export interface DockFaceContribution {
   label: string;
   /** Lower values appear first after the host faces, then id breaks ties. */
   order?: number;
+  /** Select this face when it becomes available for the focused session. */
+  autoSelect?: boolean;
+  /** Hide this face unless the session's named minor mode is active. */
+  requiredMinorMode?: string;
   panel: ComponentType<WebPluginSlotProps>;
+  /** Optional reactive visibility owned by the contributing plugin. */
+  visibility?: {
+    subscribe(listener: () => void): () => void;
+    isVisible(sessionId: string | null): boolean;
+  };
 }
 export interface PaletteCommandContext {
   sessionId: string | null;
@@ -647,6 +666,8 @@ export interface WebPluginRuntime {
   onHubConnected(listener: () => void): () => void;
   /** Acquires the browser's WebMCP surface, or the page-lifetime simulator when unavailable. */
   acquireModelContext?(): Promise<ModelContextBinding>;
+  /** Observes accepted composer submissions for page-lifetime plugin correlation. */
+  onComposerSubmitted?(listener: (submission: ComposerSubmission) => void): () => void;
 }
 export interface WebPluginDefinition {
   id: string;

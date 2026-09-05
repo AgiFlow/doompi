@@ -70,6 +70,47 @@ describe('Author browser file seams', () => {
       headers: { 'Content-Type': 'application/octet-stream', 'X-Expected-SHA256': SOURCE_SHA },
     });
   });
+
+  it('crops an image against intrinsic pixels before saving it with the expected digest', async () => {
+    const encoded = new Blob(['cropped'], { type: 'image/png' });
+    const drawImage = vi.fn();
+    const close = vi.fn();
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ({ drawImage })),
+      toBlob: vi.fn((resolve: (blob: Blob) => void) => resolve(encoded)),
+    };
+    vi.stubGlobal('window', { document: { createElement: vi.fn(() => canvas) } });
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => ({ width: 1000, height: 500, close })),
+    );
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(new Response(new Blob(['source'], { type: 'image/png' })))
+      .mockResolvedValueOnce(new Response(null, { status: 204, headers: { 'X-File-SHA256': SAVED_SHA } }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(
+      saveAuthorDocument('session', {
+        path: 'photo.png',
+        kind: 'image',
+        mediaUrl: '/api/sessions/session/file?path=photo.png',
+        sourceSha256: SOURCE_SHA,
+        crop: { x: 0.1, y: 0.2, width: 0.5, height: 0.4 },
+      }),
+    ).resolves.toBe(SAVED_SHA);
+
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 100, 100, 500, 200, 0, 0, 500, 200);
+    expect(canvas).toMatchObject({ width: 500, height: 200 });
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({
+      method: 'PUT',
+      body: encoded,
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Expected-SHA256': SOURCE_SHA },
+    });
+    expect(close).toHaveBeenCalledOnce();
+  });
   it('rejects a source change between the file response and structured parsing', async () => {
     vi.stubGlobal(
       'fetch',

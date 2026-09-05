@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import net from 'node:net';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
+import type { SessionRecord } from '../../src/types/registry.ts';
 import { watchRegistry } from '../../src/adapters/registryWatcher.ts';
 import type { HubChannelHost, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
@@ -89,7 +92,94 @@ const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 8000)
   }
 };
 
+function delayedTelemetry(): { telemetry: DoomTelemetry; release(): void; starts(): number } {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let starts = 0;
+  const telemetry: DoomTelemetry = {
+    recordDebug: async () => undefined,
+    recordEvent: async () => undefined,
+    recordWarning: async () => undefined,
+    recordError: async () => undefined,
+    flush: async () => undefined,
+    shutdown: async () => undefined,
+    status: () => {
+      throw new Error('Unused telemetry status');
+    },
+    async runInSpan(_name, _attributes, callback) {
+      starts += 1;
+      await gate;
+      return callback();
+    },
+  };
+  return { telemetry, release, starts: () => starts };
+}
+
 describe('the session hub over a registry', () => {
+  it('reserves one attachment while telemetry initialization is pending', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'delayed' });
+    const delayed = delayedTelemetry();
+    let reconcile!: (records: SessionRecord[]) => void;
+    const harness = startHub(registryDir, undefined, [], undefined, {
+      telemetry: delayed.telemetry,
+      source: {
+        subscribe: (listener) => {
+          reconcile = listener;
+        },
+        close: () => undefined,
+      },
+    });
+    const records = JSON.parse(
+      fs.readFileSync(path.join(registryDir, 'sessions', 'delayed.json'), 'utf8'),
+    ) as SessionRecord;
+    reconcile([records]);
+    reconcile([records]);
+    reconcile([records]);
+    try {
+      expect(delayed.starts()).toBe(1);
+    } finally {
+      delayed.release();
+    }
+    await session.waitForCommand('get_state');
+    await waitFor(() => harness.latest(session.id)?.attach === 'attached', 'delayed attachment');
+  });
+
+  it.each(['removed', 'closed', 'replaced'] as const)(
+    'cancels a pending attachment when the session is %s',
+    async (action) => {
+      const registryDir = freshRegistryDir();
+      await startRegisteredSession(registryDir, { id: 'cancelled' });
+      const delayed = delayedTelemetry();
+      let reconcile!: (records: SessionRecord[]) => void;
+      const harness = startHub(registryDir, undefined, [], undefined, {
+        telemetry: delayed.telemetry,
+        source: {
+          subscribe: (listener) => {
+            reconcile = listener;
+          },
+          close: () => undefined,
+        },
+      });
+      const record = JSON.parse(
+        fs.readFileSync(path.join(registryDir, 'sessions', 'cancelled.json'), 'utf8'),
+      ) as SessionRecord;
+      reconcile([record]);
+      if (action === 'removed') reconcile([]);
+      else if (action === 'replaced') reconcile([{ ...record, pid: record.pid + 1 }]);
+      else harness.hub.close();
+      const connect = vi.spyOn(net, 'connect');
+      try {
+        delayed.release();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(connect).toHaveBeenCalledTimes(action === 'replaced' ? 1 : 0);
+      } finally {
+        connect.mockRestore();
+      }
+    },
+  );
   it('discovers registered sessions and attaches to each', async () => {
     const registryDir = freshRegistryDir();
     const first = await startRegisteredSession(registryDir, { id: 'one', name: 'alpha' });
