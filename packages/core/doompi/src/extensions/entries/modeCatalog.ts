@@ -1,3 +1,4 @@
+import { DOOM_MCP_STATUS_SERVICE, readDoomMcpStatus } from '@agimon-ai/doompi-extension-contracts/mcp-status';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   DOOM_MINOR_MODE_ENTRY_TYPE,
@@ -104,11 +105,8 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
       void contextBinding.publisher?.publish();
     }, BOOT_PUBLISH_DELAY_MS);
   });
-  // MCP status is pull-only and servers connect long after startup, so the
-  // boot read above cannot see them. A turn is the moment the composition is
-  // actually sent, which makes it both the freshest and the most meaningful
-  // time to price. Identical compositions are skipped, so a quiet session
-  // journals nothing extra.
+  // Turns still refresh active-tool costs, including for older pull-only MCP providers.
+  // Identical compositions are skipped rather than journaled again.
   pi.on('turn_start', () => {
     void contextBinding.publisher?.publish();
   });
@@ -119,6 +117,13 @@ export async function modeCatalogExtension(pi: ExtensionAPI): Promise<void> {
       readSessionId: () => activeCatalog.sessionId,
       writeDetail: (sessionId, revision, items) => void writeContextDetail(sessionId, revision, items),
       removeDetail: removeContextDetail,
+    });
+    cordis.inject([DOOM_MCP_STATUS_SERVICE], (mcpContext) => {
+      const publish = () => void contextBinding.publisher?.publish();
+      const unsubscribe = readDoomMcpStatus(mcpContext)?.onChange?.(publish);
+      // Subscribe first, then read: discovery may already have finished before binding.
+      publish();
+      return unsubscribe;
     });
     modeCatalogPlugin(cordis, pi, activeCatalog, () => void contextBinding.publisher?.publish());
     return () => {

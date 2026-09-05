@@ -8,16 +8,54 @@ import {
 import { McpSessionAuthSection, requestMcpSessionAuthorization } from '../../src/web/McpSessionAuthSection.tsx';
 
 describe('MCP live-session authorization status', () => {
-  it('serializes only server names that need authorization', () => {
+  it('serializes connected completion and safe authorization URLs without diagnostics', () => {
+    const authorizationUrl = 'https://auth.example.test/authorize?state=waiting';
     const status = formatMcpSessionAuthStatus([
       { name: 'ready', state: 'connected', error: 'not part of the wire contract' },
-      { name: 'github', state: 'needs-auth', error: 'token=secret' },
+      { name: 'github', state: 'needs-auth', authorizationUrl, error: 'token=secret' },
     ]);
 
-    expect(status).toBe(JSON.stringify([{ name: 'github', state: 'needs-auth' }]));
+    expect(parseMcpSessionAuthStatus(status)).toEqual([
+      { name: 'ready', state: 'connected' },
+      { name: 'github', state: 'needs-auth', authorizationUrl },
+    ]);
     expect(status).not.toContain('secret');
-    expect(status).not.toContain('ready');
-    expect(formatMcpSessionAuthStatus([{ name: 'ready', state: 'connected' }])).toBeUndefined();
+    expect(formatMcpSessionAuthStatus([])).toBeUndefined();
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'file:///tmp/secret',
+    'https://user:password@auth.example.test/',
+    'https://user@auth.example.test/',
+    'https://auth.example.test/\nredirect',
+    `https://auth.example.test/${String.fromCharCode(127)}`,
+    `https://auth.example.test/${'a'.repeat(8192)}`,
+    '/relative',
+    123,
+    null,
+  ])('rejects unsafe authorization URL %s', (authorizationUrl) => {
+    const row = { name: 'github', state: 'needs-auth', authorizationUrl };
+    expect(parseMcpSessionAuthStatus(JSON.stringify([row]))).toBeUndefined();
+    expect(parseMcpSessionAuthStatus(formatMcpSessionAuthStatus([row]))).toEqual([
+      { name: 'github', state: 'needs-auth' },
+    ]);
+  });
+
+  it('accepts HTTP callback authorization pages', () => {
+    const rows = [{ name: 'local', state: 'connecting', authorizationUrl: 'http://localhost:8080/authorize' }];
+    expect(parseMcpSessionAuthStatus(formatMcpSessionAuthStatus(rows))).toEqual(rows);
+  });
+
+  it('keeps undiscovered and failed servers visible without exposing diagnostics', () => {
+    const servers = [
+      { name: 'agiflow-mcp', state: 'not-connected', tools: [] },
+      { name: 'boomlink-mcp', state: 'failed', tools: [], error: 'token=secret' },
+      { name: 'pending', state: 'connecting', tools: [] },
+    ];
+    const status = formatMcpSessionAuthStatus(servers);
+    expect(parseMcpSessionAuthStatus(status)).toEqual(servers.map(({ name, state }) => ({ name, state })));
+    expect(status).not.toContain('secret');
   });
 
   it('treats absent and browser-cleared statuses as absent and rejects malformed rows', () => {
@@ -25,7 +63,7 @@ describe('MCP live-session authorization status', () => {
     expect(parseMcpSessionAuthStatus('')).toBeUndefined();
     expect(parseMcpSessionAuthStatus('   ')).toBeUndefined();
     expect(parseMcpSessionAuthStatus('not json')).toBeUndefined();
-    expect(parseMcpSessionAuthStatus(JSON.stringify([{ name: 'github', state: 'connected' }]))).toBeUndefined();
+    expect(parseMcpSessionAuthStatus(JSON.stringify([{ name: 'github', state: 'unknown' }]))).toBeUndefined();
     expect(
       parseMcpSessionAuthStatus(JSON.stringify([{ name: 'github', state: 'needs-auth', error: 'secret' }])),
     ).toBeUndefined();
@@ -43,6 +81,24 @@ describe('MCP live-session authorization status', () => {
         JSON.stringify(Array.from({ length: 129 }, (_, index) => ({ name: `server-${index}`, state: 'needs-auth' }))),
       ),
     ).toBeUndefined();
+  });
+
+  it.each([{}, [], [null], [42], [[]], [{ state: 'connected' }], [{ name: ' ', state: 'connected' }]])(
+    'rejects malformed connected-server status %j',
+    (value) => {
+      expect(parseMcpSessionAuthStatus(JSON.stringify(value))).toBeUndefined();
+    },
+  );
+
+  it('retains connected servers when an unrecognized runtime state is omitted', () => {
+    expect(
+      parseMcpSessionAuthStatus(
+        formatMcpSessionAuthStatus([
+          { name: 'ready', state: 'connected' },
+          { name: 'unsupported', state: 'unknown' },
+        ]),
+      ),
+    ).toEqual([{ name: 'ready', state: 'connected' }]);
   });
 
   it('accepts terminal ANSI decoration around a valid status', () => {
@@ -67,12 +123,78 @@ describe('MCP session authorization Context section', () => {
     );
 
     expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('MCP authorization')).toBe(true);
-    expect(rendered.includes('Authorization links appear in the session transcript.')).toBe(true);
+    expect(rendered.includes('MCP servers')).toBe(true);
+    expect(rendered.includes('copy the link from the authorization dialog')).toBe(true);
     expect(rendered.includes('github')).toBe(true);
     expect(rendered.includes('linear')).toBe(true);
     expect(rendered.html.match(/>authorize<\/button>/gu)).toHaveLength(2);
     expect(rendered.html).toContain('aria-label="Authorize github"');
+  });
+
+  it('offers authorization before discovery and after a failed connection', () => {
+    const status = formatMcpSessionAuthStatus([
+      { name: 'agiflow-mcp', state: 'not-connected', tools: [] },
+      { name: 'boomlink-mcp', state: 'failed', tools: [] },
+    ]);
+    const rendered = renderPlugin(
+      McpSessionAuthSection,
+      slotPropsFixture({ statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status! } }).props,
+    );
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('aria-label="Authorize agiflow-mcp"');
+    expect(rendered.html).toContain('aria-label="Authorize boomlink-mcp"');
+    expect(rendered.includes('not connected')).toBe(true);
+    expect(rendered.includes('failed')).toBe(true);
+  });
+
+  it('nests each MCP tool beneath its owning server and reports empty discovery', () => {
+    const status = formatMcpSessionAuthStatus([
+      { name: 'pencil', state: 'connected' },
+      { name: 'agiflow-mcp', state: 'connected' },
+    ]);
+    const rendered = renderPlugin(
+      McpSessionAuthSection,
+      slotPropsFixture({
+        statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status! },
+        contextInventory: [
+          { name: 'pencil_execute', itemKind: 'tool', source: 'mcp', owner: 'pencil', tokens: 320, active: true },
+          { name: 'read', itemKind: 'tool', source: 'extension', owner: 'doompi-read', tokens: 100, active: true },
+        ],
+      }).props,
+    );
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('aria-label="pencil tools"');
+    expect(rendered.includes('pencil_execute')).toBe(true);
+    expect(rendered.includes('~320')).toBe(true);
+    expect(rendered.includes('read')).toBe(false);
+    expect(rendered.includes('no tools reported')).toBe(true);
+  });
+
+  it('keeps a connected zero-tool server visible and offers management', () => {
+    const status = formatMcpSessionAuthStatus([{ name: 'agiflow-mcp', state: 'connected', tools: [] }]);
+    const rendered = renderPlugin(
+      McpSessionAuthSection,
+      slotPropsFixture({ statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status! } }).props,
+    );
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('agiflow-mcp')).toBe(true);
+    expect(rendered.includes('connected')).toBe(true);
+    expect(rendered.html).toContain('aria-label="Manage agiflow-mcp"');
+    expect(rendered.html).not.toContain('aria-label="Authorize agiflow-mcp"');
+  });
+
+  it.each([
+    { sessionId: null, state: 'connected' },
+    { sessionId: 'session-1', state: 'disabled' },
+  ])('keeps the server visible but disables unsafe actions for %j', ({ sessionId, state }) => {
+    const status = formatMcpSessionAuthStatus([{ name: 'agiflow-mcp', state }]);
+    const rendered = renderPlugin(
+      McpSessionAuthSection,
+      slotPropsFixture({ sessionId, statuses: { [MCP_SESSION_AUTH_STATUS_KEY]: status! } }).props,
+    );
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('agiflow-mcp')).toBe(true);
+    expect(rendered.html).toMatch(/<button[^>]*disabled/);
   });
 
   it('renders nothing for an absent or browser-cleared status', () => {

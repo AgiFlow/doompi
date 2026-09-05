@@ -1,3 +1,5 @@
+import { DOOM_MCP_STATUS_SERVICE } from '@agimon-ai/doompi-extension-contracts/mcp-status';
+import * as contextCatalog from '../../src/services/contextCatalog.ts';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-extension-contracts/mode';
@@ -61,6 +63,45 @@ async function setup() {
 }
 
 describe('mode catalog extension', () => {
+  it('refreshes context on late MCP changes without a turn and unsubscribes on removal', async () => {
+    const publish = vi.fn(async () => undefined);
+    const spy = vi.spyOn(contextCatalog, 'createContextPublisher').mockReturnValue({ publish, dispose: vi.fn() });
+    const { binding, connection, dispatch } = await setup();
+    try {
+      await dispatch('session_start', { reason: 'startup' });
+      const listeners = new Set<() => void>();
+      const provider = connection.root.plugin((root) => {
+        root.provide(DOOM_MCP_STATUS_SERVICE, {
+          generation: 'mcp-test',
+          getSnapshot: () => ({ servers: [] }),
+          onChange: (listener: () => void) => {
+            listeners.add(listener);
+            return () => {
+              listeners.delete(listener);
+            };
+          },
+        });
+      });
+      await provider;
+      await connection.root.fiber.await();
+      expect(listeners.size).toBe(1);
+      expect(publish).toHaveBeenCalled();
+      publish.mockClear();
+      for (const listener of listeners) listener();
+      expect(publish).toHaveBeenCalledOnce();
+      await provider.dispose();
+      expect(listeners.size).toBe(0);
+      publish.mockClear();
+      for (const listener of listeners) listener();
+      expect(publish).not.toHaveBeenCalled();
+    } finally {
+      await dispatch('session_shutdown');
+      binding.dispose();
+      await connection.dispose();
+      spy.mockRestore();
+    }
+  });
+
   it('publishes the session service without registering a Pi tool', async () => {
     const { binding, connection, dispatch, registerTool } = await setup();
     await dispatch('session_start', { reason: 'startup' });

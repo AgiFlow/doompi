@@ -11,6 +11,8 @@ export interface McpCommandTarget {
   getDiagnostics(): readonly string[];
   /** Reconnects a server, running its OAuth flow when it demands one. */
   reauthorize(serverName: string): Promise<void>;
+  /** Closes this session's connection without deleting saved credentials. */
+  disconnect(serverName: string): Promise<void>;
   /** Rebuilds the runtime and reconnects everything. */
   start(): Promise<void>;
 }

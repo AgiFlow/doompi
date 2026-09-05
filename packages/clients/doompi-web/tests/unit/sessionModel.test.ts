@@ -61,6 +61,33 @@ describe('summariseArgs', () => {
 });
 
 describe('reduceSession', () => {
+  it.each([false, true])('shows journaled OAuth feedback once with protocol ownership %s', (transcriptFromProtocol) => {
+    const frame = {
+      type: 'entry_appended',
+      entry: {
+        type: 'custom',
+        id: 'mcp-authorization-notice',
+        customType: 'doom-notification',
+        data: {
+          version: 1,
+          title: 'Pi',
+          subtitle: 'doompi',
+          body: 'Could not authorize agiflow-mcp: Connection timeout after 30000ms',
+          level: 'warning',
+        },
+      },
+    };
+    const state = reduceSession(initialSessionState, frame, { transcriptFromProtocol });
+    expect(state.entries).toEqual([expect.objectContaining({ kind: 'notice', text: frame.entry.data.body })]);
+    expect(reduceSession(state, frame, { transcriptFromProtocol }).entries).toHaveLength(1);
+    expect(
+      reduceSession(initialSessionState, {
+        ...frame,
+        entry: { ...frame.entry, data: { ...frame.entry.data, body: '' } },
+      }).entries,
+    ).toEqual([]);
+  });
+
   it('ignores frames it does not model', () => {
     expect(reduceSession(initialSessionState, { type: 'something_new' })).toBe(initialSessionState);
   });

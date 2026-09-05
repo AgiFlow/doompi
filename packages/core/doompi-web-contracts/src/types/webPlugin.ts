@@ -143,6 +143,16 @@ export interface ContextAction {
   run(): void;
 }
 
+/** Compact live inventory row exposed to Context slot components. */
+export interface WebPluginContextInventoryItem {
+  name: string;
+  itemKind: 'tool' | 'skill';
+  source: 'extension' | 'mcp' | 'plugin' | 'core';
+  owner: string;
+  tokens: number | null;
+  active: boolean;
+}
+
 /** Every slot component receives the focused session; null while nothing is focused. */
 export interface WebPluginSlotProps {
   sessionId: string | null;
@@ -185,6 +195,8 @@ export interface WebPluginSlotProps {
    * own surface needs the same facts the host folds into the selection bar.
    */
   statuses: Readonly<Record<string, string>>;
+  /** Runtime inventory used by Context section owners to place their own rows. */
+  contextInventory?: readonly WebPluginContextInventoryItem[];
   /** Names of minor modes currently active in the session catalog. */
   activeMinorModes?: readonly string[];
 }

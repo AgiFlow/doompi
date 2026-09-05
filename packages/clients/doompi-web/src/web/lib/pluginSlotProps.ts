@@ -5,6 +5,7 @@ import type {
   TransientTab,
   WebPluginContextItem,
   WebPluginSlotProps,
+  WebPluginContextInventoryItem,
 } from '@agimon-ai/doompi-web-contracts';
 import { createElement, type ReactNode } from 'react';
 import { fileTabForPath } from './composition.ts';
@@ -31,6 +32,7 @@ export function pluginSlotProps(
   appendComposerDraft: (text: string) => void,
   attachComposerContext: (item: WebPluginContextItem) => void,
   attachComposerCapture: (capture: ComposerCapture) => void = () => undefined,
+  contextInventory: readonly WebPluginContextInventoryItem[] = [],
 ): WebPluginSlotProps {
   const props: WebPluginSlotProps = {
     sessionId,
@@ -66,6 +68,7 @@ export function pluginSlotProps(
     },
     sendSessionFrame: sendFrame,
     statuses,
+    contextInventory,
     renderThread(threadId, options): ReactNode {
       return sessionId === null ? null : renderThread(sessionId, threadId, options);
     },

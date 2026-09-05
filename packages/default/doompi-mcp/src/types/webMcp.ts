@@ -22,23 +22,48 @@ export const MCP_SESSION_AUTH_STATUS_KEY = 'doom-mcp-session-auth';
 
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'gu');
 const MAX_SESSION_AUTH_SERVERS = 128;
+const MAX_AUTHORIZATION_URL_LENGTH = 8192;
+const SESSION_AUTH_STATES = [
+  'not-connected',
+  'connecting',
+  'connected',
+  'degraded',
+  'needs-auth',
+  'failed',
+  'closed',
+  'disabled',
+] as const;
+export type McpSessionAuthState = (typeof SESSION_AUTH_STATES)[number];
+
+function isSessionAuthState(value: unknown): value is McpSessionAuthState {
+  return SESSION_AUTH_STATES.some((state) => state === value);
+}
 
 export interface McpSessionAuthStatusItem {
   readonly name: string;
-  readonly state: 'needs-auth';
+  readonly state: McpSessionAuthState;
+  readonly authorizationUrl?: string;
 }
 
 interface McpSessionServerStatusSource {
   readonly name: string;
   readonly state: string;
-  readonly [key: string]: unknown;
+  readonly authorizationUrl?: unknown;
 }
 
-/** Projects only the browser's compact authorization needs, excluding runtime diagnostics and credentials. */
-export function formatMcpSessionAuthStatus(servers: readonly McpSessionServerStatusSource[]): string | undefined {
-  const items: McpSessionAuthStatusItem[] = servers
-    .filter((server) => server.state === 'needs-auth')
-    .map((server) => ({ name: server.name, state: 'needs-auth' }));
+/** Keeps servers visible before discovery and after failures, without diagnostics or credentials. */
+export function formatMcpSessionAuthStatus<T extends McpSessionServerStatusSource>(
+  servers: readonly T[],
+): string | undefined {
+  const items: McpSessionAuthStatusItem[] = servers.flatMap((server) => {
+    if (!isSessionAuthState(server.state)) return [];
+    const item: McpSessionAuthStatusItem = {
+      name: server.name,
+      state: server.state,
+      ...(isAuthorizationUrl(server.authorizationUrl) ? { authorizationUrl: server.authorizationUrl } : {}),
+    };
+    return [item];
+  });
   return items.length === 0 ? undefined : JSON.stringify(items);
 }
 
@@ -63,20 +88,33 @@ export function parseMcpSessionAuthStatus(raw: string | undefined): McpSessionAu
 function hasControlCharacter(value: string): boolean {
   for (const character of value) {
     const codePoint = character.codePointAt(0);
-    if (codePoint !== undefined && (codePoint < 32 || codePoint === 127)) return true;
+    if (codePoint !== undefined && (codePoint < 32 || (codePoint >= 127 && codePoint <= 159))) return true;
   }
   return false;
+}
+
+function isAuthorizationUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > MAX_AUTHORIZATION_URL_LENGTH || hasControlCharacter(value)) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.username === '' && url.password === '';
+  } catch {
+    return false;
+  }
 }
 
 function isSessionAuthStatusItem(value: unknown): value is McpSessionAuthStatusItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    Object.keys(record).length === 2 &&
+    Object.keys(record).every((key) => key === 'name' || key === 'state' || key === 'authorizationUrl') &&
+    (!('authorizationUrl' in record) || isAuthorizationUrl(record.authorizationUrl)) &&
     typeof record.name === 'string' &&
     record.name.trim() !== '' &&
     !hasControlCharacter(record.name) &&
-    record.state === 'needs-auth'
+    isSessionAuthState(record.state)
   );
 }
 

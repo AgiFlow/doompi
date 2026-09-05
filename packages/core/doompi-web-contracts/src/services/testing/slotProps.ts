@@ -55,6 +55,7 @@ export interface SlotPropsFixture {
 export interface SlotPropsOptions {
   sessionId?: string | null;
   statuses?: Readonly<Record<string, string>>;
+  contextInventory?: WebPluginSlotProps['contextInventory'];
   /** Component fills this slot owner should see; keyed by slot name. */
   slotContent?: Readonly<Record<string, ReactNode>>;
   /** Data fills this slot owner should read back, keyed by slot name. */
@@ -74,6 +75,7 @@ export function slotPropsFixture(options: SlotPropsOptions = {}): SlotPropsFixtu
   const props: WebPluginSlotProps = {
     sessionId: options.sessionId === undefined ? DEFAULT_SESSION_ID : options.sessionId,
     statuses: options.statuses ?? {},
+    contextInventory: options.contextInventory ?? [],
     openTab: (tabId) => {
       actions.push({ action: 'openTab', target: tabId });
     },

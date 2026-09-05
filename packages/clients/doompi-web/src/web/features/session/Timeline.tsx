@@ -339,16 +339,15 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
       <p
         className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}
       >
-        {entry.text.split('\n').map((line, index) => {
-          const href = noticeHref(line);
+        {entry.text.split(/(\s+)/u).map((part, index) => {
+          const href = noticeHref(part);
           return (
             <Fragment key={index}>
-              {index > 0 ? '\n' : null}
               {href === null ? (
-                line
+                part
               ) : (
                 <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                  {line}
+                  {part}
                 </a>
               )}
             </Fragment>

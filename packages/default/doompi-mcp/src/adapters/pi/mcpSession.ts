@@ -37,8 +37,8 @@ export function mcpConfigurationFingerprint(configuration: McpSessionConfig): st
     pluginConfigPaths: configuration.pluginConfigPaths ?? [],
     sources: configuration.sources ?? [],
     allowlist: {
-      servers: [...(configuration.allowlist?.servers ?? [])].sort(),
-      proxy: [...(configuration.allowlist?.proxy ?? [])].sort(),
+      servers: [...(configuration.allowlist?.servers ?? [])].sort((left, right) => left.localeCompare(right)),
+      proxy: [...(configuration.allowlist?.proxy ?? [])].sort((left, right) => left.localeCompare(right)),
     },
   });
 }
@@ -87,6 +87,8 @@ export class McpSession {
   private readonly authorizationUrls = new Map<string, string>();
   /** Servers whose explicit auth action should launch the browser when its URL arrives. */
   private readonly browserAuthorizationRequests = new Set<string>();
+  /** Explicit session disconnects fence late discovery and stale tool invocations. */
+  private readonly disconnectedServers = new Set<string>();
   /** Invalidates deferred startup work when a session reloads or shuts down. */
   private lifecycleGeneration = 0;
   private configurationFingerprint: string | undefined;
@@ -156,6 +158,7 @@ export class McpSession {
   private bindConfiguration(configuration: McpSessionConfig): void {
     this.configurationFingerprint = mcpConfigurationFingerprint(configuration);
     this.groups = buildMcpConfigGroups(configuration);
+    this.disconnectedServers.clear();
     this.catalog = this.createCatalog();
     // Doom embeds the client runtime, so upstreams referenced by a proxy wrapper
     // remain individual servers in the catalog rather than collapsing into it.
@@ -192,7 +195,8 @@ export class McpSession {
   }
 
   private isToolAvailable(registeredTool: CatalogTool): boolean {
-    if (this.incompatibleNames.has(registeredTool.piName)) return false;
+    if (this.disconnectedServers.has(registeredTool.serverName) || this.incompatibleNames.has(registeredTool.piName))
+      return false;
     const current = this.catalog.findTool(registeredTool.piName);
     return (
       current !== undefined && toolRegistrationFingerprint(current) === toolRegistrationFingerprint(registeredTool)
@@ -200,7 +204,11 @@ export class McpSession {
   }
 
   private applyActiveTools(): void {
-    applyActiveTools(this.pi, this.catalog, this.historicallyOwnedNames, this.incompatibleNames);
+    const unavailable = new Set(this.incompatibleNames);
+    for (const tool of this.catalog.allTools()) {
+      if (this.disconnectedServers.has(tool.serverName)) unavailable.add(tool.piName);
+    }
+    applyActiveTools(this.pi, this.catalog, this.historicallyOwnedNames, unavailable);
   }
 
   private startDetached(): void {
@@ -220,6 +228,7 @@ export class McpSession {
    */
   async start(): Promise<void> {
     const generation = ++this.lifecycleGeneration;
+    this.disconnectedServers.clear();
     // Explicit disabled and empty Doom projections must not instantiate any
     // runtime collaborator, including the keyring-backed token store.
     if (this.configuredServerNames().length === 0) return;
@@ -255,7 +264,7 @@ export class McpSession {
    * callback; the overlay retains a clickable fallback and a retry action.
    */
   private onAuthorizationUrl(url: URL, serverName: string, generation: number): void {
-    if (generation !== this.lifecycleGeneration) return;
+    if (generation !== this.lifecycleGeneration || this.disconnectedServers.has(serverName)) return;
     this.authorizationUrls.set(serverName, url.toString());
     this.emitChange();
     const openBrowser = this.browserAuthorizationRequests.has(serverName);
@@ -278,6 +287,28 @@ export class McpSession {
     return [...new Set([...this.groups.sessionLocal.serverNames, ...this.groups.shared.serverNames])];
   }
 
+  /** Closes only this session's connection. Saved OAuth credentials are untouched. */
+  async disconnect(serverName: string): Promise<void> {
+    if (!this.configuredServerNames().includes(serverName)) throw new Error(`Unknown MCP server: ${serverName}`);
+    const clientManager = this.clientManager();
+    if (!clientManager) throw new Error(RUNTIME_NOT_STARTED);
+    const generation = this.lifecycleGeneration;
+    this.disconnectedServers.add(serverName);
+    try {
+      await clientManager.disconnectServer(serverName);
+    } catch (error) {
+      if (generation === this.lifecycleGeneration) this.disconnectedServers.delete(serverName);
+      throw error;
+    }
+    if (generation !== this.lifecycleGeneration) return;
+    this.resourceCache.delete(serverName);
+    this.authorizationUrls.delete(serverName);
+    this.browserAuthorizationRequests.delete(serverName);
+    this.catalog.applyStateChange({ serverName, state: 'closed' }, []);
+    this.applyActiveTools();
+    this.emitChange();
+  }
+
   /**
    * Reconnects one server, running its OAuth flow when it demands one.
    *
@@ -287,8 +318,10 @@ export class McpSession {
   async reauthorize(serverName: string): Promise<void> {
     const clientManager = this.clientManager();
     if (!clientManager) throw new Error(RUNTIME_NOT_STARTED);
+    this.disconnectedServers.delete(serverName);
     // What this server offers is exactly what the reconnect is about to settle.
     this.resourceCache.delete(serverName);
+    if (this.authorizationUrls.delete(serverName)) this.emitChange();
     this.browserAuthorizationRequests.add(serverName);
     try {
       await clientManager.disconnectServer(serverName);
@@ -349,6 +382,7 @@ export class McpSession {
    * the next request rather than remembered as empty.
    */
   async listResources(serverName: string, options: { refresh?: boolean } = {}): Promise<readonly McpResourceView[]> {
+    if (this.disconnectedServers.has(serverName)) throw new Error(`MCP server is disconnected: ${serverName}`);
     if (!options.refresh) {
       const cached = this.resourceCache.get(serverName);
       if (cached) return cached;
@@ -424,10 +458,12 @@ export class McpSession {
    * This handler runs detached from the connect, so awaiting it cannot deadlock.
    */
   private onServerStateChange(change: McpServerStateChange, generation: number): void {
-    if (generation !== this.lifecycleGeneration) return;
+    if (generation !== this.lifecycleGeneration || this.disconnectedServers.has(change.serverName)) return;
     // The flow this URL belonged to is over, one way or the other: a server that
     // reached a terminal state is not still waiting on a redirect.
-    if (change.state !== 'connecting') this.authorizationUrls.delete(change.serverName);
+    if (change.state !== 'connecting' && change.state !== 'needs-auth') {
+      this.authorizationUrls.delete(change.serverName);
+    }
     const runtime = this.runtime;
     const services = runtime?.getServices();
     const tools =
@@ -437,7 +473,12 @@ export class McpSession {
     void tools
       .catch(() => [])
       .then((tools) => {
-        if (generation !== this.lifecycleGeneration || !runtime?.isCurrent(services)) return;
+        if (
+          generation !== this.lifecycleGeneration ||
+          !runtime?.isCurrent(services) ||
+          this.disconnectedServers.has(change.serverName)
+        )
+          return;
         const added = this.catalog.applyStateChange(change, tools);
         this.registerTools(added);
         this.applyActiveTools();

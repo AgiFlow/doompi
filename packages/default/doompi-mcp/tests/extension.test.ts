@@ -465,6 +465,27 @@ describe('doom mcp extension', () => {
     expect(createProxyContainer).not.toHaveBeenCalled();
   });
 
+  it('disconnects through the command and reports closed status without clearing credentials', async () => {
+    const extension = registerExtension();
+    await extension.startSession();
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+    await extension.runCommand('disconnect pencil', false);
+    expect(disconnectServer).toHaveBeenCalledWith('pencil');
+    expect(setStatus).toHaveBeenCalledWith(
+      'doom-mcp-session-auth',
+      JSON.stringify([{ name: 'pencil', state: 'closed' }]),
+    );
+  });
+
+  it('does not disconnect an unnamed or unknown server', async () => {
+    const extension = registerExtension();
+    await extension.startSession();
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+    await extension.runCommand('disconnect', false);
+    await extension.runCommand('disconnect missing', false);
+    expect(disconnectServer).not.toHaveBeenCalled();
+  });
+
   // Reported before anything has connected, so the panel is never blank while the
   // session is still dialling out.
   it('publishes configured servers through the session status service', async () => {
@@ -481,6 +502,42 @@ describe('doom mcp extension', () => {
     });
   });
 
+  it('notifies status subscribers after changes and supports unsubscribe', async () => {
+    ensureConnected.mockResolvedValue({
+      listTools: async () => [{ name: 'get_screenshot', inputSchema: { type: 'object' } }],
+    });
+    const extension = registerExtension({
+      host: { service: projectionService(nativeProjection(path.join(repoRoot, '.mcp.json'))) },
+    });
+    await extension.startSession();
+    await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
+    const root = extension.hostRoot();
+    if (!root) throw new Error('Expected a composed Cordis test host.');
+    const status = readDoomMcpStatus(root);
+    const snapshots: unknown[] = [];
+    const unsubscribe = status?.onChange?.(() =>
+      snapshots.push({
+        status: status.getSnapshot(),
+        registered: [...extension.registeredTools],
+      }),
+    );
+    expect(unsubscribe).toBeTypeOf('function');
+    emitServerState?.({ serverName: 'pencil', state: 'connected' });
+    await vi.waitFor(() =>
+      expect(snapshots.at(-1)).toEqual({
+        status: {
+          servers: [expect.objectContaining({ name: 'pencil', state: 'connected', tools: ['pencil_get_screenshot'] })],
+        },
+        registered: ['pencil_get_screenshot'],
+      }),
+    );
+    unsubscribe?.();
+    const count = snapshots.length;
+    emitServerState?.({ serverName: 'pencil', state: 'failed' });
+    await vi.waitFor(() => expect(status?.getSnapshot().servers[0]?.state).toBe('failed'));
+    expect(snapshots).toHaveLength(count);
+  });
+
   // The cockpit recognises `<server>_<tool>` calls by these names, and a
   // browser session never sees the catalog any other way.
   it('publishes the server names as the doom-mcp footer status and clears it on shutdown', async () => {
@@ -494,7 +551,7 @@ describe('doom mcp extension', () => {
     expect(setStatus).toHaveBeenCalledWith('doom-mcp', undefined);
   });
 
-  it('publishes only compact needs-auth rows and clears that browser status on shutdown', async () => {
+  it('publishes live authorization URLs and connected completion, then clears on shutdown', async () => {
     const extension = registerExtension();
     await extension.startSession();
     await vi.waitFor(() => expect(createProxyContainer).toHaveBeenCalledOnce());
@@ -508,9 +565,28 @@ describe('doom mcp extension', () => {
     const authPayload = JSON.stringify([{ name: 'pencil', state: 'needs-auth' }]);
     await vi.waitFor(() => expect(setStatus).toHaveBeenCalledWith('doom-mcp-session-auth', authPayload));
     expect(setStatus.mock.calls.flatMap((call) => call.slice(1)).join('\n')).not.toContain('private');
+    const authorizationUrl = new URL('https://auth.example.test/authorize?state=waiting');
+    const onAuthorizationUrl = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl;
+    await onAuthorizationUrl(authorizationUrl, 'pencil');
+    expect(setStatus).toHaveBeenLastCalledWith(
+      'doom-mcp-session-auth',
+      JSON.stringify([{ name: 'pencil', state: 'needs-auth', authorizationUrl: authorizationUrl.toString() }]),
+    );
 
+    emitServerState?.({ serverName: 'pencil', state: 'failed' });
+    await vi.waitFor(() =>
+      expect(setStatus).toHaveBeenLastCalledWith(
+        'doom-mcp-session-auth',
+        JSON.stringify([{ name: 'pencil', state: 'failed' }]),
+      ),
+    );
     emitServerState?.({ serverName: 'pencil', state: 'connected' });
-    await vi.waitFor(() => expect(setStatus).toHaveBeenCalledWith('doom-mcp-session-auth', undefined));
+    await vi.waitFor(() =>
+      expect(setStatus).toHaveBeenLastCalledWith(
+        'doom-mcp-session-auth',
+        JSON.stringify([{ name: 'pencil', state: 'connected' }]),
+      ),
+    );
 
     await extension.shutdownSession();
     expect(setStatus).toHaveBeenLastCalledWith('doom-mcp-session-auth', undefined);

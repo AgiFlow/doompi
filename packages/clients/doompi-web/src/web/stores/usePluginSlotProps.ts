@@ -12,6 +12,10 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
   const statuses = useStore(sessionStoreFor(sessionId), (state) => state.statuses);
   const catalog = useStore(sessionStoreFor(sessionId), (state) => state.minorModes);
   const widgets = useStore(sessionStoreFor(sessionId), (state) => state.widgets);
+  const contextInventory = useStore(
+    sessionStoreFor(sessionId),
+    (state) => state.context?.groups.flatMap((group) => group.items) ?? [],
+  );
   const openTab = useOpenTab();
   const props = pluginSlotProps(
     sessionId,
@@ -34,6 +38,7 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
     (text) => appendComposerDraft(sessionId, text),
     (item) => attachComposerContext(sessionId, item),
     (capture) => attachComposerCapture(sessionId, capture),
+    contextInventory,
   );
   props.activeMinorModes = minorModes(statuses, widgets, catalog)
     .filter((mode) => mode.availability === 'on')

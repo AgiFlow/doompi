@@ -68,6 +68,7 @@ export type {
   ToolRendererContribution,
   ToolResultView,
   TransientTab,
+  WebPluginContextInventoryItem,
   WebPluginContextItem,
   WebPluginDefinition,
   WebPluginRuntime,

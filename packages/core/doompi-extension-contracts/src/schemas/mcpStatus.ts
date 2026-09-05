@@ -51,13 +51,10 @@ export const McpStatusSnapshotSchema = Type.Object(
 export type McpStatusSnapshot = Static<typeof McpStatusSnapshotSchema>;
 
 /**
- * The current MCP picture, on request.
+ * The current MCP picture, with optional live change notifications.
  *
- * Pulled rather than pushed. Servers connect long after install and a notification
- * only reaches subscribers that were already listening, so a surface would have to
- * win a race against the provider's own startup to see the first snapshot. Asking
- * when the answer is needed removes the ordering question, and every consumer so
- * far reads this when a panel opens rather than continuously.
+ * Consumers subscribe before reading the snapshot so startup ordering cannot
+ * lose a change. Older providers remain readable through getSnapshot alone.
  *
  * No provider means MCP is not loaded for this session (`--no-mcp`), which times
  * out and is not an error.
@@ -66,6 +63,8 @@ export interface DoomMcpStatusService {
   /** Fences consumers against a replaced MCP session. */
   readonly generation: string;
   getSnapshot(): McpStatusSnapshot;
+  /** Notifies after tool registration and status updates; returns listener cleanup. */
+  onChange?(listener: () => void): () => void;
 }
 
 declare module '@deepseek-ai/cordis' {

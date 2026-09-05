@@ -75,7 +75,7 @@ test.describe('with the synced MCP context contribution', () => {
     await expect(page.getByTestId('context-empty')).toBeVisible();
     const auth = page.getByTestId('context-mcp-auth');
     await expect(auth).toBeVisible();
-    const serverList = auth.getByRole('list', { name: 'MCP servers needing authorization' });
+    const serverList = auth.getByRole('list', { name: 'MCP servers', exact: true });
     const serverRow = serverList.getByRole('listitem').filter({ hasText: serverName });
     await expect(serverRow).toHaveCount(1);
 
@@ -91,12 +91,117 @@ test.describe('with the synced MCP context contribution', () => {
 
     cockpit.session.emit(status('doom-mcp-session-auth', ''));
     await expect(auth).toBeHidden();
-
+    await page.getByTestId('mcp-authorization-dialog').getByRole('button', { name: 'close', exact: true }).click();
     cockpit.session.emit(status('doom-mcp-session-auth', JSON.stringify([{ name: 'linear', state: 'needs-auth' }])));
     await expect(auth).toBeVisible();
     await expect(serverList.getByRole('listitem')).toHaveCount(1);
     await expect(serverList).toContainText('linear');
     await expect(serverList).not.toContainText(serverName);
+  });
+  test('opens OAuth in a new tab and keeps a copyable manual link in the dialog', async ({ page, cockpit }) => {
+    await page.context().route('https://auth.example.test/**', (route) => route.fulfill({ body: 'Provider sign-in' }));
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          writeText: async (value: string) => {
+            localStorage.setItem('copied-oauth-link', value);
+          },
+        },
+      });
+    });
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+    cockpit.session.emit(status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'failed' }])));
+    await page.getByTestId('dock-tab-context').click();
+    const popupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'Authorize agiflow-mcp', exact: true }).click();
+    const popup = await popupPromise;
+    const dialog = page.getByTestId('mcp-authorization-dialog');
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt'))
+      .toEqual([{ type: 'prompt', message: '/mcp auth agiflow-mcp' }]);
+    const authorizationUrl = 'https://auth.example.test/oauth?state=example&code_challenge=test';
+    cockpit.session.emit(
+      status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'needs-auth', authorizationUrl }])),
+    );
+    await expect(popup).toHaveURL(authorizationUrl);
+    expect(await popup.evaluate(() => window.opener)).toBeNull();
+    await expect(dialog.getByRole('textbox', { name: 'OAuth authorization URL' })).toHaveValue(authorizationUrl);
+    await expect(dialog.getByRole('link', { name: 'open authorization page' })).toHaveAttribute(
+      'href',
+      authorizationUrl,
+    );
+    await dialog.getByRole('button', { name: 'copy link' }).click();
+    await expect(dialog).toContainText('Link copied.');
+    expect(await page.evaluate(() => localStorage.getItem('copied-oauth-link'))).toBe(authorizationUrl);
+    cockpit.session.emit(
+      status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'connected' }])),
+    );
+    await expect(dialog).toContainText('Authorization complete.');
+    await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'close', exact: true }).click();
+    expect(popup.isClosed()).toBe(false);
+    const serverList = page.getByRole('list', { name: 'MCP servers', exact: true });
+    await expect(serverList).toContainText('agiflow-mcp');
+    await expect(serverList).toContainText('connected');
+    const pageCount = page.context().pages().length;
+    await serverList.getByRole('button', { name: 'Manage agiflow-mcp', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'reauthorize', exact: true })).toBeVisible();
+    expect(page.context().pages()).toHaveLength(pageCount);
+    expect(cockpit.session.received.filter((frame) => frame.type === 'prompt')).toHaveLength(1);
+    await dialog.getByRole('button', { name: 'disconnect', exact: true }).click();
+    await expect
+      .poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt'))
+      .toEqual([
+        { type: 'prompt', message: '/mcp auth agiflow-mcp' },
+        { type: 'prompt', message: '/mcp disconnect agiflow-mcp' },
+      ]);
+    expect(page.context().pages()).toHaveLength(pageCount);
+    cockpit.session.emit(status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'closed' }])));
+    await expect(dialog).toContainText('Disconnected from this session. Saved credentials were kept.');
+    await expect(dialog.getByRole('button', { name: 'disconnect', exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('context-mcp-auth')).toContainText('closed');
+    const retryPopupPromise = page.waitForEvent('popup');
+    await dialog.getByRole('button', { name: 'reauthorize', exact: true }).click();
+    const retryPopup = await retryPopupPromise;
+    await expect.poll(() => cockpit.session.received.filter((frame) => frame.type === 'prompt')).toHaveLength(3);
+    expect(cockpit.session.received.filter((frame) => frame.type === 'prompt').at(-1)).toEqual({
+      type: 'prompt',
+      message: '/mcp auth agiflow-mcp',
+    });
+    await dialog.getByRole('button', { name: 'close', exact: true }).click();
+    await expect.poll(() => retryPopup.isClosed()).toBe(true);
+    await popup.close();
+  });
+
+  test('keeps manual authorization usable when popups and clipboard are blocked', async ({ page, cockpit }) => {
+    await page.addInitScript(() => {
+      window.open = () => null;
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          writeText: async () => {
+            throw new Error('permission denied');
+          },
+        },
+      });
+    });
+    await page.goto(cockpit.url);
+    await cockpit.session.waitForAttach();
+    const authorizationUrl = 'https://auth.example.test/oauth?state=manual';
+    cockpit.session.emit(
+      status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'connecting', authorizationUrl }])),
+    );
+    await page.getByTestId('dock-tab-context').click();
+    await page.getByRole('button', { name: 'Authorize agiflow-mcp', exact: true }).click();
+    const dialog = page.getByTestId('mcp-authorization-dialog');
+    await expect(dialog).toContainText('browser blocked the new tab');
+    await expect(dialog.getByRole('link')).toHaveAttribute('href', authorizationUrl);
+    await dialog.getByRole('button', { name: 'copy link' }).click();
+    await expect(dialog).toContainText('copy it manually');
+    await expect(dialog.getByRole('textbox')).toHaveValue(authorizationUrl);
+    expect(cockpit.session.received.filter((frame) => frame.type === 'prompt')).toEqual([]);
   });
 });
 test('reports the estimate as an estimate', async ({ page, cockpit }) => {
