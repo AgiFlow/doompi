@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-computer-use",
-  "version": "0.0.1-alpha.0",
+  "version": "0.0.1-alpha.1",
   "description": "Session scoped semantic computer control through the DoomPi Desktop capability.",
   "keywords": [
     "ai",

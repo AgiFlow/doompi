@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-cache",
-  "version": "0.0.1-alpha.22",
+  "version": "0.0.1-alpha.23",
   "description": "Provider prompt cache policy and deterministic routing for DoomPi",
   "keywords": [
     "ai",

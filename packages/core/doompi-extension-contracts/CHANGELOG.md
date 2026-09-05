@@ -1,3 +1,13 @@
+## 0.0.1-alpha.56 (2026-09-05)
+
+### 🚀 Features
+
+- improve MCP session authorization ([f0959fc](https://github.com/AgiFlow/doompi/commit/f0959fc))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.55 (2026-09-05)
 
 ### 🚀 Features
