@@ -19,10 +19,10 @@ inline; long commands can be promoted to a background runner instead of blocking
 Linux native loading also depends on a compatible system loader and libc. The bundled binaries are
 glibc-linked, so a musl host such as Alpine cannot run them.
 
-RTK is optional. Where its binary is absent or cannot start, runner results carry the raw log with
-an "RTK is unavailable" note instead of processed output. That verdict is reached once per process
-rather than retried per command, so an unusable binary costs one failed start rather than one on
-every run.
+RTK is optional. Eligible commands return bounded raw output with an "RTK is unavailable" note
+when its binary is missing or cannot start. A synchronous spawn failure or an `ENOENT`, `EACCES`,
+or `ENOEXEC` spawn error disables further attempts for that `RtkProcessor` instance. Missing-path
+resolution and ordinary processing failures are not latched.
 
 Panes come from the first backend that answers: bundled RMUX, then `rmux` on PATH, then `tmux` on
 PATH. Only when none is available does a non-interactive command fall back to a supervised
@@ -32,8 +32,9 @@ host process as an RMUX one, so exit metadata and logs behave the same; its sess
 
 ## Install
 
-DoomPi includes Runner in every composition, so no layer declaration is required. For direct Pi
-installation:
+`doompi init` and `dpi init` include Runner in `default.packages` in `.doom/modes.yaml`. Remove
+it to keep Pi's `bash`, or move it to a named layer to enable it only in selected major modes.
+For direct Pi installation:
 
 ```bash
 pi install npm:@agimon-ai/doompi-runner

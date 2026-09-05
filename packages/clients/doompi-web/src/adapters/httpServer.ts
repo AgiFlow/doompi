@@ -542,17 +542,32 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const cockpitRoot = globalDoomConfigDirectory(os.homedir());
   const cockpitSyncGuard = createSyncGuard({ repoRoot: cockpitRoot, onNotice: notice });
   let registerRootHubApis = async (_root: string): Promise<void> => {};
+  const readyRegistration = (root: string): ReturnType<typeof readSyncRegistration> => {
+    try {
+      if (!readSyncDrift({ repoRoot: root, requireWebBundle: true }).fresh) return undefined;
+      return readSyncRegistration(root);
+    } catch {
+      return undefined;
+    }
+  };
+  const selectedRegistration = (root: string): ReturnType<typeof readSyncRegistration> =>
+    readyRegistration(root) ?? (root === cockpitRoot ? undefined : readyRegistration(cockpitRoot));
 
   const ensureRootSynced = async (root: string): Promise<void> => {
-    if (root === cockpitRoot) {
-      await cockpitSyncGuard.ensureSynced();
-    } else {
-      const guard = createSyncGuard({ repoRoot: root, onNotice: notice });
-      try {
-        await guard.ensureSynced();
-      } finally {
-        guard.close();
+    try {
+      if (root === cockpitRoot) {
+        await cockpitSyncGuard.ensureSynced();
+      } else {
+        const guard = createSyncGuard({ repoRoot: root, onNotice: notice });
+        try {
+          await guard.ensureSynced();
+        } finally {
+          guard.close();
+        }
       }
+    } catch (error) {
+      if (root === cockpitRoot || readyRegistration(cockpitRoot) === undefined) throw error;
+      notice(`sync failed for ${root}; using the global DoomPi bundle (${describeError(error)})`);
     }
     await registerRootHubApis(root);
   };
@@ -587,13 +602,15 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       loadChannels: async (record) => {
         const root = compositionRoot(record.cwd);
         await ensureRootSynced(root);
-        const registration = readSyncRegistration(root);
+        const registration = selectedRegistration(root);
         return registration?.webDirectory === null || registration?.webDirectory === undefined
           ? []
           : await loadHubChannels(registration.webDirectory, notice);
       },
       webComposition: (record, channels) => {
-        const artifacts = resolveSessionWebArtifacts(compositionRoot(record.cwd));
+        const registration = selectedRegistration(compositionRoot(record.cwd));
+        const artifacts =
+          registration === undefined ? undefined : resolveSessionWebArtifacts(registration.root, cockpitRoot);
         if (artifacts === undefined) return undefined;
         const published = pluginPublication.publish(artifacts.id, artifacts.pluginsDir);
         if (published === undefined) return undefined;
@@ -988,7 +1005,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       : await loadPackageApis('hub', { apiDirectory, onNotice: notice });
   const pluginApis = mountHubApis(app, hubApis, notice, resolveRepository, readRepositorySync);
   registerRootHubApis = async (root: string): Promise<void> => {
-    const registration = readSyncRegistration(root);
+    const registration = selectedRegistration(root);
     if (registration === undefined) return;
     const apis = await loadPackageApis('hub', {
       apiDirectory: registration.apiDirectory,

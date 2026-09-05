@@ -34,7 +34,7 @@ To run this repository's build with its composition pinned and watched:
 
 ```bash
 pnpm cockpit:build
-pnpm doompi-web --dir=<PWD>
+pnpm doompi-web --dir="$PWD"
 ```
 
 `--dir` accepts `--dir <path>` too. It synchronizes that repository before launch and watches it for development rebuilds.
@@ -56,28 +56,14 @@ Install [doompi-server](https://www.npmjs.com/package/@agimon-ai/doompi-server) 
 
 ## Security
 
-Attach tokens are read by this process from the token files the registry names and never reach the
-browser. The server binds loopback by default, so reaching the cockpit already means having an
-account on the machine. Remote access means tunnelling the port, for example over SSH; do not bind
-a public address and call it done.
+The hub reads session attach tokens from registry token files; browsers do not receive those tokens.
+It binds loopback by default and checks HTTP requests and WebSocket upgrades against an origin and
+host allowlist. `DOOMPI_WEB_ALLOW_ORIGIN` adds comma-separated origins for custom setups.
 
-Loopback binding is not on its own an authorization boundary, because two request shapes escape it
-and both reach code execution:
-
-- **WebSockets are exempt from CORS.** Any page in any browser on this machine can open a socket to
-  the cockpit's port, and `session_command` frames carry prompts straight to an agent holding a
-  `bash` tool.
-- **A cross-origin POST need not be preflighted.** Sent as `text/plain`, it still parses as JSON
-  server-side, so a page could spawn a session in any directory without ever reading a response.
-
-Both are refused. Every request and every socket upgrade is checked against an origin and host
-allowlist derived from the port actually bound, plus the vite dev server. A request carrying no
-`Origin` is allowed, because curl, the health probe, and the test harness send none and a browser
-always sends one where it matters; this defends against a hostile web page, not against a hostile
-local program, which can send whatever headers it likes. `DOOMPI_WEB_ALLOW_ORIGIN` takes a
-comma-separated list for setups this package cannot guess. The host check is also the DNS rebinding
-defence, and it is the only check a socket upgrade gets, since the upgrade path never reaches the
-server's own host parsing.
+These checks defend against hostile web pages and DNS rebinding, not hostile local programs.
+The local listener allows requests without an `Origin` header, and a local program can supply its own headers.
+Do not expose the local listener publicly. Use the paired remote-access listener described below
+or a trusted SSH tunnel.
 
 ## What the cockpit shows
 
@@ -130,7 +116,7 @@ perform the handshake itself: `attach` frames sent from the browser are refused.
 
 ## iPhone Home Screen app
 
-Use a stable named HTTPS tunnel such as `doompi.agimon.win`. Quick-tunnel hostnames rotate, so they cannot
+Use a stable named HTTPS tunnel on a hostname you control. Quick-tunnel hostnames rotate, so they cannot
 provide durable PWA identity, passkeys, or reliable Push subscriptions. Open `/pair` in Safari, add it to the
 Home Screen, then launch the installed app and scan the QR shown by the host.
 
@@ -188,9 +174,9 @@ With both off, a paired device keeps its session until it is revoked, remote acc
 the hub restarts. Switching remote access off always revokes every paired session, and that is not a
 toggle.
 
-Before reporting success, the tunnel is **self-tested through its own public URL**: the pairing page
-must answer 200 and `/api/health` must answer 401. Anything else means the agent is on the public
-internet unguarded, so the tunnel is killed immediately rather than warned about.
+Before reporting success, the tunnel is self-tested through its public URL: the pairing page must
+answer 200 and `/api/health` must answer 401. A failed probe stops the tunnel. This checks those
+routes, not every possible access path.
 
 Requires `cloudflared` on `PATH` (`brew install cloudflared`). A quick tunnel needs no account but gets a new
 hostname on every start. It does not provide a durable PWA, passkey, or Push identity, and Cloudflare does not
@@ -285,10 +271,10 @@ a failed move never leaves you with nothing listening. `Ctrl-C` stops the contai
 outright leaves the container running; the next start finds it through `~/.doompi/web/cockpit-container.json`
 and stops it.
 
-Two things carry across the boundary and nothing else does. Provider credentials go through the
-existing broker, which hands the container a per-session token rather than your keys. Git identity is
-passed as `GIT_AUTHOR_*` and `GIT_COMMITTER_*`, so an agent can commit but cannot push, because no
-key crosses.
+Provider credentials use the broker's per-session token rather than forwarding host API keys.
+Git identity is passed as `GIT_AUTHOR_*` and `GIT_COMMITTER_*`; host SSH keys are not mounted.
+This does not prevent pushes using credentials already present in a mounted workspace or obtained
+inside the container.
 
 What this does not defend against, stated plainly: anyone who can talk to the container daemon can
 escape any container it runs, so the engine is part of the trusted base. Sessions share one container
@@ -298,39 +284,22 @@ still destroy the repository you gave it. Network access is unrestricted, exactl
 
 Requires `@agimon-ai/doompi-sandbox` in the composition and a container engine on the host.
 
-## Planned: WebRTC transport
+## Transport limits
 
-Today the page reaches the hub over two WebSockets, and any remote access means putting a tunnel in
-front of them, which puts the tunnel provider in the path of everything. A WebRTC data channel would
-replace that, with the tunnel demoted to carrying signaling only. Two independent reasons want it,
-and the first is the stronger.
-
-**Realtime voice.** `@agimon-ai/doompi-voice` now captures on the selected browser client, sends
-mono PCM16 through its authenticated session media transport, keeps VAD and Whisper on the agent
-host, and plays narration with browser speech synthesis. Voice activation is when the page asks for
-microphone permission, never on load. A future WebRTC implementation can replace the HTTP media
-adapter with Opus tracks while preserving the same client device and transport contracts.
-
-**Confidentiality.** A QR shown on the host can carry the DTLS fingerprint, which authenticates the
-peer connection out-of-band. The data path is then peer-to-peer DTLS: the tunnel provider usually
-never carries the traffic and can never read it. That is close to VPN-grade confidentiality without
-asking anyone to install a VPN.
-
-The cost is real and worth stating: a WebRTC stack on the Node side (`node-datachannel` or
-`werift`), a second client transport alongside `wsClient.ts` and `piTransport.ts`, ICE and NAT
-traversal debugging, and a TURN relay fallback for the connections that cannot go direct. TURN
-reintroduces a relay, though still one that cannot decrypt. The WebSocket transport stays as the
-fallback for when a data channel cannot be established.
-
-No date. This is a design note, not a commitment.
+The cockpit uses WebSockets for session traffic. WebRTC is not implemented. Browser Voice uses
+its authenticated session media transport, with VAD and Whisper on the agent host and browser
+speech synthesis for narration.
 
 ## Public API
 
 ```ts
 import { serveWeb } from '@agimon-ai/doompi-web';
+import { bundleCockpitWeb } from '@agimon-ai/doompi-web/bundler';
 ```
 
 ## Development
+
+Run from this package directory in the workspace:
 
 ```bash
 pnpm build
@@ -375,8 +344,8 @@ and the host's own slot contributions) and an optional hub entry (`webHubChannel
 dist). This package's own bundle carries no plugins; the full set is assembled on your machine.
 `doompi sync` discovers the installed composition's manifests, generates the import entries, and builds
 the SPA through the `./bundler` subpath inside the repository/worktree's immutable sync generation.
-The shared server uses the validated registration for its startup repository. `--assets` and
-`DOOMPI_WEB_DIST` override registered assets, then packaged assets provide the fallback. Server-only
+By default, the shared server resolves the union of live-session registrations; `--dir` pins one
+repository. `--assets` and `DOOMPI_WEB_DIST` override registered assets, then packaged assets provide the fallback. Server-only
 `webPlugins.server.json` sits beside the public `web/` directory, never inside the signed or served
 bundle. It names each plugin's built hub entry, imported lazily. A missing plugin package logs a notice
 and its tab is omitted. Session package API routes use the session `cwd` registration, while

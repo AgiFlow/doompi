@@ -21,8 +21,10 @@ quietly reconciled.
 
 ## 1. What runs where
 
-Voice spans three execution contexts. Almost every surprising behaviour in the package traces back
-to something having to cross one of these boundaries.
+Standalone terminal Voice spans the three host execution contexts below. In a server-backed
+session, a connected media client adds a fourth context and replaces host microphone capture and
+playback where its capabilities allow. The first diagram shows the standalone fallback, not the
+browser topology.
 
 ```mermaid
 flowchart TB
@@ -71,21 +73,44 @@ Two consequences worth holding onto:
 - **`say` runs on the main thread while `ffmpeg` runs in the worker.** The two halves of the
   half-duplex problem are therefore in different threads, which is why playback gating is a
   protocol message (`playback-state`) rather than a local boolean.
-- **No audio crosses the protocol.** `assertNoRawAudio` (`voiceWorkerProtocol.ts`) rejects any
+- **No audio crosses the worker control protocol.** `assertNoRawAudio` (`voiceWorkerProtocol.ts`) rejects any
   `ArrayBuffer`, typed array, or key named `audio` / `pcm` / `wav` / `buffer` / `rawAudio` on any
-  message. PCM lives and dies in the worker and its private spool.
+  message. This restriction does not apply to the separate authenticated client media transport,
+  which carries microphone PCM to the host worker.
 
-The manual `SPC v v` dictation path is a separate controller
+For server-backed browser capture, the path is instead:
+
+```mermaid
+flowchart LR
+  browser["Browser: microphone, client VAD/endpointing, playback"]
+  media["Authenticated session media API and media lease"]
+  worker["Host worker: PCM validation, private spool, local Whisper"]
+  host["Pi extension host: lifecycle, policy, narration"]
+  browser -->|"original 16 kHz PCM and activity metadata"| media
+  media --> worker
+  worker -->|"bounded transcript candidate"| host
+  host -->|"narration request"| media
+  media -->|"playback request or streamed audio"| browser
+```
+
+The worker's `ClientPcmAudioRecorder` connects to the media host separately from the main-thread
+control protocol. Client-advertised capabilities determine whether VAD, endpointing, and capture
+orchestration run on the client or fall back to the host. Browser SpeechSynthesis has no exact PCM
+echo reference; server-streamed playback can supply one. These are distinct playback paths.
+
+The manual `SPC v m` dictation path is a separate controller
 (`adapters/process/voiceWorkerSessionController.ts`) that reuses the same worker but none of the
 lifecycle machine below.
 
-In the browser, `VoiceMediaRuntime.tsx` stores one media runtime in a page-global plugin store. Session routes may remount their plugin compositions, but those route disposers do not reset server-selected ownership or disconnect the media client. The runtime follows ownership changes reactively and closes its microphone, device, and lease only when the page itself is hidden for teardown. This keeps capture alive when cockpit focus moves away from and back to the owning session.
+In the browser, `VoiceMediaRuntime.tsx` stores one media runtime in a page-global plugin store. Session routes may remount their plugin compositions, but those route disposers do not reset server-selected ownership or disconnect the media client. The runtime follows ownership changes reactively and closes its microphone, device, and lease on the browser `pagehide` teardown event. Ownership removal also releases those resources. This keeps capture alive when cockpit focus moves away from and back to the owning session.
 
 ---
 
 ## 2. One autonomous turn
 
-The path a spoken sentence takes from microphone to Pi prompt.
+The host-owned capture path from microphone to Pi prompt. A capable media client supplies the
+activity and endpoint decisions instead of FFmpeg and host VAD; the frozen-revision, transcription,
+policy, and acknowledgement path remains host-owned.
 
 ```mermaid
 sequenceDiagram
@@ -176,6 +201,7 @@ stateDiagram-v2
   state active {
     [*] --> startingCapture
     startingCapture --> listening: CAPTURE_READY
+    muted --> startingNextTurn: MICROPHONE_UNMUTE_REQUESTED
 
     listening --> speech: SPEECH_CONFIRMED
     listening --> speech: BARGE_IN_EVIDENCE actionable
@@ -229,6 +255,10 @@ node, because mermaid cannot address a top-level state from inside a composite w
 duplicate. Their true origins are: `CAPTURE_START_FAILED` from `startingCapture`;
 `TRANSCRIPTION_FAILED` and `TRANSCRIPTION_TIMED_OUT` first move from `transcribing` to `acknowledging`, mark the frozen revision discarded, and enter `failed` only after an exact acknowledgement. `CANDIDATE_ACKNOWLEDGED` from `acknowledging` instead enters `stopping` when `stopRequested` is already set. XState writes the terminal targets as `#autonomousVoice.failed` and `#autonomousVoice.stopping`.
 
+`MICROPHONE_MUTE_REQUESTED` from the capture region cancels capture and enters `muted`, while
+playback remains independent. Unmute creates the next capture identity through `startingNextTurn`.
+These region-wide mute edges are omitted from the diagram for readability.
+
 A newer `PLAYBACK_STARTED` arriving during `playing` supersedes the current generation in place; it
 is omitted from the diagram as a self-loop only to keep the region readable.
 
@@ -241,6 +271,7 @@ is omitted from the diagram as a self-loop only to keep the region readable.
 | top      | `active`           | none                                         | Parallel; capture and playback both live         |
 | top      | `stopping`         | `requestStop`                                | Graceful or hard teardown in flight              |
 | top      | `failed`           | `reportFailure`, `requestHardStop`           | Terminal; auto-exits to `off` after 20 s         |
+| capture  | `muted`            | none                                         | Capture paused; narration may continue           |
 | capture  | `startingCapture`  | `requestCapture`                             | Waiting on the first valid PCM frame             |
 | capture  | `listening`        | none                                         | Live recorder, no confirmed speech               |
 | capture  | `speech`           | none                                         | Confirmed speech; endpoint timer armed           |
@@ -277,10 +308,29 @@ Identity and revision guards are why a slow ASR result, a restarted worker, or a
 ### What the UI shows
 
 `autonomousVoiceState()` (`autonomousVoiceMachine.ts`) collapses the tree into
-`off | starting | listening | speech | processing | stopping | failed`. Everything from
+`off | starting | muted | listening | speech | processing | stopping | failed`. Everything from
 `finalizing` onward, six distinct states, projects to the single value `processing`. The modeline
 is therefore deliberately coarser than the machine, and a user watching the indicator cannot tell
 transcription from delivery.
+
+`projectAutonomousVoiceUi()` then maps that projection and playback state to the modeline:
+
+| Condition            | Indicator                              | Status                                                       |
+| -------------------- | -------------------------------------- | ------------------------------------------------------------ |
+| Off                  | None                                   | Cleared                                                      |
+| Failed or stopping   | `draining`                             | Error or stopping                                            |
+| Playback active      | `narrating`                            | Narrating, including microphone-muted detail when applicable |
+| Microphone muted     | None                                   | Microphone muted                                             |
+| Modal blocked        | `waiting`                              | Waiting for keyboard input                                   |
+| Confirmation pending | `confirming`                           | Confirmation needed (currently unreachable)                  |
+| Composed submission  | `processing`                           | Sending composed prompt                                      |
+| Collecting a draft   | `listening`, `speech`, or `processing` | Composing plus capture phase                                 |
+| Starting             | `processing`                           | Starting                                                     |
+| Listening or speech  | `listening` or `speech`                | Listening or hearing speech                                  |
+| Other processing     | `processing`                           | Processing                                                   |
+
+These are source-level projections, not a rendered-browser verification. SPEC §4.12 retains its
+required UI states; this table does not relax that requirement.
 
 ---
 
@@ -362,8 +412,8 @@ pi.sendUserMessage(text, { deliverAs: 'steer' });
 
 **Delivery success is weaker than it looks.** `sendUserMessage` exposes no downstream receipt, so
 `DELIVERY_SUCCEEDED` means only that the call did not throw (`voiceDelivery.ts`). Voice must
-not claim confirmed host delivery, retry automatically, or clear a composed draft on the strength
-of it.
+not claim confirmed host delivery or retry automatically. A successful synchronous submission
+clears the composed draft; a synchronous failure must retain it for a later retry.
 
 Three tools are registered, and all three are removed from the active set unless autonomous voice
 is exactly `active` with a matching TUI session (`voice.ts`):
@@ -533,15 +583,17 @@ These DSP thresholds are provisional. A physical speaker-to-microphone qualifica
 ## Known divergences
 
 Places where the code and [SPEC.md](./SPEC.md) do not agree, or where the code contradicts itself.
-Recorded rather than fixed, because each is a design decision rather than a typo.
+Open requirements are recorded rather than silently relaxed. SPEC §3.2 now lists the same three
+playback states as the implementation (`silent`, `playing`, `echoTail`), so the former
+`narrationFailed` state divergence no longer applies. TTS failure isolation remains required by
+AV-TTS-003 and is handled in `narrationPlayback.ts`.
 
-| Divergence                                      | Detail                                                                                                                                                                                                                                                    |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACTIVITY_OBSERVED` and `SPEECH_ENDED` are dead | Declared in the event union, never sent, never handled. The worker publishes `activity` at 8 Hz carrying `levelDbfs` and `speechProbability`, and the session has no branch for it, so AV-USER-006's responsiveness clause is unobservable from the host. |
-| `recovered` events are dropped                  | The worker publishes them (`voiceWorkerPipeline.ts`), nothing consumes them, so AV-WORKER-002's requirement to surface recovered spools has no mechanism.                                                                                                 |
-| `narrationFailed` has no implementation         | SPEC lists it as a playback state. TTS failure is handled outside XState, in `narrationPlayback.ts`, by flipping a private flag. The playback region has exactly three nodes.                                                                             |
-| UI indicator list is wrong in SPEC §4.12        | It names `composing`, `sending`, `starting`, `stopping` and `error`, none of which exist in `AutoCaptureIndicatorState`, and omits `confirming` and `waiting`, which do. Composition appears only in the status string.                                   |
-| `confirming` is unreachable                     | `confirmationPending` is hard-coded `false` at its only call site (`autonomousVoiceSession.ts`).                                                                                                                                                          |
-| Guard `stopWasRequested` is unused              | Declared at `autonomousVoiceMachine.ts`; the equivalent check is written inline in `acknowledging` instead.                                                                                                                                               |
-| No `invoke:` anywhere                           | SPEC §3.5 permits "invoked actors or explicit effects". The machine uses only emitted effects, so the follow-on requirement that exiting a state cancels its invoked actor has no machine-level implementation; cancellation is manual in the session.    |
-| Duration limit arrives as a failure             | A recoverable lifecycle boundary is transported as `failure` with code `capture_duration_limit`.                                                                                                                                                          |
+| Divergence                                        | Detail                                                                                                                                                                                                                                                    |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACTIVITY_OBSERVED` and `SPEECH_ENDED` are dead   | Declared in the event union, never sent, never handled. The worker publishes `activity` at 8 Hz carrying `levelDbfs` and `speechProbability`, and the session has no branch for it, so AV-USER-006's responsiveness clause is unobservable from the host. |
+| `recovered` events are dropped                    | The worker publishes them (`voiceWorkerPipeline.ts`), nothing consumes them, so AV-WORKER-002's requirement to surface recovered spools has no mechanism.                                                                                                 |
+| Required UI states differ from current indicators | It names `composing`, `sending`, `starting`, `stopping` and `error`, none of which exist in `AutoCaptureIndicatorState`, and omits `confirming` and `waiting`, which do. Composition appears only in the status string.                                   |
+| `confirming` is unreachable                       | `confirmationPending` is hard-coded `false` at its only call site (`autonomousVoiceSession.ts`).                                                                                                                                                          |
+| Guard `stopWasRequested` is unused                | Declared at `autonomousVoiceMachine.ts`; the equivalent check is written inline in `acknowledging` instead.                                                                                                                                               |
+| No `invoke:` anywhere                             | SPEC §3.5 permits "invoked actors or explicit effects". The machine uses only emitted effects, so the follow-on requirement that exiting a state cancels its invoked actor has no machine-level implementation; cancellation is manual in the session.    |
+| Duration limit arrives as a failure               | A recoverable lifecycle boundary is transported as `failure` with code `capture_duration_limit`.                                                                                                                                                          |

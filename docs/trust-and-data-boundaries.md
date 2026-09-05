@@ -139,16 +139,21 @@ autonomous Voice can make additional model calls.
 
 ## Telemetry
 
-DoomPi ships no telemetry endpoint of its own. There is no vendor collector, and nothing is sent
-anywhere unless an OTLP endpoint is configured or discovered in your environment. With none present,
-telemetry initialization returns nothing and stays disabled.
+DoomPi configures no vendor collector. Export uses an endpoint configured or discovered in the
+launch environment, including a local Log Sink. Without an endpoint, exporter initialization skips
+export unless `LOG_SINK_PI_FILE_FALLBACK=1` enables local file fallback. This does not mean there
+are no metrics: DoomPi Log aggregates current-session activity in process without a sink.
 
-To turn it off outright, set either of these to a truthy value:
+Set either control before starting DoomPi to disable telemetry export:
 
 ```bash
-AGENT_TELEMETRY_DISABLED=1
-OTEL_SDK_DISABLED=1
+AGENT_TELEMETRY_DISABLED=1 doompi
+OTEL_SDK_DISABLED=1 doompi
 ```
 
-Values supplied by callers are not automatically scrubbed, so treat attribute payloads the way you
-would treat log output.
+Local sink records persist after the session ends. Operational metadata and caller-supplied values
+can still be sensitive, so treat them like command output. Browser error records can include bounded
+message and stack text. Do not assume that removing prompt content removes every sensitive value.
+
+See [Observability](observability.md) for collection controls, endpoint and file-fallback behavior,
+local retention, and browser telemetry boundaries.

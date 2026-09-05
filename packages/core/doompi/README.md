@@ -115,8 +115,8 @@ matter, and profiles choose a point of view.
 ### Major and minor modes
 
 A major mode is the base config. It names the extension layers for development, marketing,
-or whatever else you do. Define as many as you like; only one is active at a time, and you
-can switch it without leaving the session.
+or whatever else you do. Define as many as you like; only one is active at a time. Synchronized
+sessions can reload compatible changes; launcher-owned composition changes require a relaunch.
 
 Minor modes are batteries-included switches inside that base. They start off, stack freely,
 and keep their model tools and skills out of context until turned on. DoomPi ships six:
@@ -371,11 +371,11 @@ generated mode gets it. Short commands still return inline; commands that pass t
 threshold of 60 seconds by default move into the background with durable logs. Use
 `background: true` for an immediate detached run or `interactive: true` when the command needs
 terminal input. Runner IDs and complete raw logs remain available to the current session through
-Runner Space at `SPC r l` or the `doom-runner` CLI. Platform-specific RMUX binaries are selected
-automatically; non-interactive commands use a supervised subprocess fallback when RMUX is absent,
-while interactive commands require RMUX. Conservatively recognized single commands use the matching
-RTK stdin filter after completion. Compound commands, pipelines, incompatible formats, and
-unsupported commands keep bounded raw output. Remove Runner from `default.packages` to keep Pi's
+Runner Space at `SPC r l` or the `doom-runner` CLI. Runner tries bundled RMUX, then `rmux` on PATH,
+then `tmux` on PATH. If no pane backend accepts the run, non-interactive commands use a supervised
+subprocess; interactive commands require RMUX or tmux. Conservatively recognized single commands
+use the matching RTK stdin filter after completion. Compound commands, pipelines, incompatible
+formats, and unsupported commands keep bounded raw output. Remove Runner from `default.packages` to keep Pi's
 `bash`, or add it to a named layer when only selected modes should replace `bash`.
 
 #### Auto-compact
@@ -464,7 +464,7 @@ handoffs rather than one long conversation.
 
 [`@agimon-ai/doompi-voice`][pkg-doompi-voice] captures PCM audio through the local platform helper
 and can transcribe it locally. Transcript text, session state, and model requests may still cross
-process or provider boundaries according to the configured engines. `SPC v v` is one-shot manual
+process or provider boundaries according to the configured engines. `SPC v m` is one-shot manual
 dictation and never enables Voice tools. `SPC v e` enters autonomous capture and exits it again; only its exact-active
 TUI session receives the two Voice façades plus the standalone `narrate` tool.
 
@@ -706,8 +706,8 @@ its owning package's controls; values supplied by callers are not automatically 
 
 - Run `doompi sync --check` to detect drift or missing configured packages, and `doompi sync`
   to install them and rebuild synchronized state.
-- If RMUX is unavailable, non-interactive Runner calls report the supervised subprocess fallback.
-  Interactive calls require RMUX. Linux native artifacts require a compatible loader and libc.
+- If neither RMUX nor tmux is available, non-interactive Runner calls report the supervised subprocess
+  fallback. Interactive calls require RMUX or tmux. Linux native artifacts require a compatible loader and libc.
 - Leader menus and overlays require Pi's interactive TUI. Commands and tools remain the interface
   for JSON, RPC, and other headless sessions where the owning package supports them.
 - Install a directly loaded Pi subsystem with `pi install npm:@agimon-ai/<package>`. Library consumers

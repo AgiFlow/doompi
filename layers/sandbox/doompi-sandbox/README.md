@@ -16,7 +16,8 @@ Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doomp
 pi install npm:@agimon-ai/doompi-sandbox
 ```
 
-The package declares its Pi extension entry, so Pi loads it after installation. DoomPi users can include the package through their normal profile and domain composition instead.
+Pi loads the extension after installation. Container launches use the DoomPi launcher and require
+this package in the selected major mode's layers, as shown below.
 
 ## Enable the sandbox
 
@@ -45,9 +46,10 @@ disposable Linux container instead of running Pi on the host:
 
 1. The harness resolves this package's `./sandbox-harness` export and delegates the launch.
 2. The layer detects the first available engine in the order `docker`, `podman`, `nerdctl`,
-   `finch` (override with `DOOMPI_SANDBOX_ENGINE`), and builds the `doompi-sandbox:v<version>`
-   image on first use. The image installs the DoomPi distribution from the registry, so the
-   container never runs the host's platform-specific packages.
+   `finch` (override with `DOOMPI_SANDBOX_ENGINE`), and builds a
+   `doompi-sandbox:v<version>-<digest>` image when that tag is not cached. The digest covers the
+   image definition and bridge source. The image installs DoomPi from the registry rather than
+   copying the host's platform-specific packages.
 3. It starts `docker run --rm` with the repository bind-mounted at its host path, an isolated
    home volume, and a volume shadowing the repository's `.pi` package store. Inside, the
    `doompi` launcher replays the same major mode, domains, profile, and Pi arguments.
@@ -61,8 +63,8 @@ settings, and `DOOMPI_PRESET`. Everything else a shell accumulates stays on the 
 
 ## Engine and runtime selection
 
-Every supported engine takes docker's `run` syntax. On macOS any docker-compatible VM manager
-(Docker Desktop, OrbStack, colima, podman machine) works without configuration.
+The harness invokes each supported engine with Docker-compatible arguments. The engine and its
+VM, if any, must already be running on the host.
 
 `DOOMPI_SANDBOX_RUN_FLAGS` passes extra options straight to the engine, which is how you select a
 different isolation runtime without the layer having to know about it:
@@ -75,9 +77,8 @@ Options must be self-contained (`--flag` or `--flag=value`). A separated value s
 `--runtime runsc` is refused, because a bare word cannot be told apart from an image name and
 would silently launch a different container.
 
-A stronger runtime that boots a VM rather than sharing the host kernel, such as Kata or
-Firecracker, is untested here. Their filesystem passthrough is unlikely to carry the broker's
-bind-mounted unix socket, so expect to turn brokering off or move it to a port first.
+Alternative isolation runtimes such as Kata or Firecracker are not verified here. Check their
+mount and broker-transport support before relying on them.
 
 ## Workspace dev containers
 
@@ -86,10 +87,9 @@ container instead of the built-in image, because a workspace that describes its 
 describing the toolchain its agent needs. The Dev Containers CLI brings it up, so the file decides
 the image, features, mounts, run arguments and lifecycle hooks in full.
 
-**This mode is not an isolation boundary.** The configuration is author-controlled, and a
-devcontainer that mounts your home directory or the docker socket removes the containment this
-layer otherwise provides. The launch says so on every run. Set `DOOMPI_SANDBOX_DEVCONTAINER=0` to
-ignore the file and use the built-in image, which is a boundary.
+**Workspace devcontainer configuration is trusted executable input, not an isolation policy.**
+It can mount your home directory or the Docker socket and run lifecycle hooks. The launch warns
+about this mode. Set `DOOMPI_SANDBOX_DEVCONTAINER=0` to ignore the file and use the built-in image.
 
 What still applies: the environment allowlist and the credential broker. The container receives the
 session token rather than any real key, and reaches the broker over the host gateway.
@@ -125,10 +125,8 @@ published ahead of the flow and are not covered.
 
 ## Terminal behavior
 
-The session is Pi's own TUI running inside the container, attached straight to your terminal: the
-launch passes `-i`, adds `-t` when the host session has one, and inherits stdio. Nothing proxies or
-re-renders frames, so rendering, keybindings, mouse and every extension's custom panel behave
-exactly as they do unsandboxed.
+The container runs Pi's TUI directly with inherited stdio: `-i` is always passed and `-t` is added
+when the host has a terminal. The harness does not proxy or re-render terminal frames.
 
 Host integrations are the exception, because the process is not on your host:
 
@@ -145,8 +143,7 @@ falling back to the editor that is there.
 
 ## Provider credential broker
 
-The container never receives a provider API key. For each brokered provider the host holds a key
-for, the launch:
+For supported providers with a host API key, the credential broker:
 
 1. Starts a broker on the host and grants the container exactly one route to it.
 2. Replaces the credential variable with a random per-session token.
@@ -179,7 +176,7 @@ Reports whether the current session runs inside the sandbox container or directl
 ## Current limits
 
 - The broker carries a curated provider list. OAuth subscription logins are not brokered, so they
-  are performed inside the sandbox (see below) and stored in that container's home volume.
+  are performed inside the sandbox and stored in that container's home volume.
 - A host `*_BASE_URL` override is dropped rather than used as the broker's upstream.
 - Compositions that declare local workspace packages cannot load their platform-specific
   dependencies inside the Linux container; use registry-installed layers for sandboxed work.
@@ -187,6 +184,8 @@ Reports whether the current session runs inside the sandbox container or directl
   in-process against synchronized settings, and a fresh container has none to load, so the
   session is composed from the repository the way a first run is.
 - Container network access follows the engine's defaults and is not restricted yet.
+- Mounted repositories are writable. Containers do not protect those files from agent edits,
+  and the container engine remains part of the trusted base.
 
 ## Public API
 
@@ -201,9 +200,13 @@ The Pi host entry is also available at:
 @agimon-ai/doompi-sandbox/extensions/pi
 ```
 
-The service layer is host-neutral. The Pi entrypoint owns only command registration and its runtime-scoped installation guard, and the sandbox harness entry owns container provisioning for the DoomPi launcher.
+The service layer is host-neutral. `/extensions/pi` registers the in-session command;
+`/sandbox-harness` owns launcher provisioning. The separate `/cockpit-harness` export supports
+the web cockpit's container lifecycle and credential broker.
 
 ## Development
+
+Run from this package directory in the workspace:
 
 ```bash
 pnpm build

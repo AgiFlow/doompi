@@ -16,8 +16,9 @@ absent rather than merely hidden from the model.
 
 ## Install
 
-DoomPi includes the standard adapter in every composition; domain selection controls access. For
-plain Pi:
+`doompi init` and `dpi init` include this adapter in `default.packages` in `.doom/modes.yaml`.
+Remove it or move it to a named layer to change which major modes load it. When loaded in DoomPi,
+domain selection controls server access. For plain Pi:
 
 ```bash
 pi install npm:@agimon-ai/doompi-mcp
