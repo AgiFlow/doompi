@@ -1,3 +1,21 @@
+## 0.0.1-alpha.57 (2026-09-05)
+
+### 🚀 Features
+
+- improve MCP session authorization ([f0959fc](https://github.com/AgiFlow/doompi/commit/f0959fc))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.56
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.17
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.20
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.56 (2026-09-05)
 
 ### 🚀 Features

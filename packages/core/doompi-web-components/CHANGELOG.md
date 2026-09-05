@@ -1,3 +1,9 @@
+## 0.0.1-alpha.17 (2026-09-05)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.53
+
 ## 0.0.1-alpha.16 (2026-09-05)
 
 ### 🚀 Features
