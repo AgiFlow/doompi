@@ -57,6 +57,12 @@ describe('doompi-web package contract', () => {
     expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './bundler', './package.json']);
   });
 
+  it('builds computer-use before the browser fixture syncs the default composition', async () => {
+    const workspaceRoot = path.resolve(packageRoot, '../../..');
+    const workspace = JSON.parse(await readFile(path.join(workspaceRoot, 'package.json'), 'utf8')) as PackageManifest;
+    expect(workspace.scripts?.['cockpit:build']?.split(/\s+/u)).toContain('@agimon-ai/doompi-computer-use');
+  });
+
   it('ships the runtime the bridge and the sync-time bundler need', async () => {
     const manifest = await readManifest();
     const runtime = Object.keys(manifest.dependencies ?? {});
