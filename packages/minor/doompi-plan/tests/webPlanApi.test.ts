@@ -1,6 +1,9 @@
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { contentUrl, currentUrl } from '../src/types/planApi.ts';
 import { fetchPlan, savePlan } from '../src/web/planApi.ts';
+
+vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
 
 /**
  * The page's half of the session API.
@@ -12,20 +15,18 @@ import { fetchPlan, savePlan } from '../src/web/planApi.ts';
  * reported as an ordinary failure and the reader retries into a clobber.
  */
 
-const realFetch = globalThis.fetch;
+const transport = vi.mocked(sealedTransport.fetch);
 
 function answering(status: number, body?: unknown): void {
-  globalThis.fetch = vi.fn(async () =>
-    Promise.resolve(new Response(body === undefined ? '' : JSON.stringify(body), { status })),
-  ) as typeof globalThis.fetch;
+  transport.mockResolvedValue(new Response(body === undefined ? '' : JSON.stringify(body), { status }));
 }
 
 function refusing(): void {
-  globalThis.fetch = vi.fn(async () => Promise.reject(new Error('offline'))) as typeof globalThis.fetch;
+  transport.mockRejectedValue(new Error('offline'));
 }
 
 afterEach(() => {
-  globalThis.fetch = realFetch;
+  transport.mockReset();
 });
 
 describe('reading the plan from the page', () => {
@@ -34,7 +35,7 @@ describe('reading the plan from the page', () => {
 
     await fetchPlan('s1');
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(currentUrl('s1'));
+    expect(transport).toHaveBeenCalledWith(currentUrl('s1'));
   });
 
   it('answers the plan the session sent', async () => {
@@ -73,7 +74,7 @@ describe('saving the plan from the page', () => {
 
     const result = await savePlan('s1', 'held', '# edited');
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(
+    expect(transport).toHaveBeenCalledWith(
       contentUrl('s1'),
       expect.objectContaining({ method: 'PUT', body: JSON.stringify({ expectedHash: 'held', content: '# edited' }) }),
     );

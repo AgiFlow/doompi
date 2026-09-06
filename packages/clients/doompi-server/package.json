@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "llms.txt",
     "README.md",
     "LICENSE",

@@ -49,9 +49,8 @@ import { QueueSheet } from './QueueSheet.tsx';
 /** The input grows with the draft up to this many pixels, then scrolls. */
 const MAX_INPUT_HEIGHT_PX = 192;
 /**
- * The popup does not scroll, so this is also how tall it can get: high enough
- * that a bare `/` or `$` lists what the session actually has rather than the
- * first handful, low enough to stay on screen.
+ * Bound the result set so completion searches and their scrollable popup stay
+ * quick even in large workspaces.
  */
 const MAX_COMPLETION_ITEMS = 20;
 /** Pi names skill commands `skill:<name>`; the cockpit browses them under `$`. */
@@ -180,7 +179,6 @@ export function Composer() {
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -530,20 +528,6 @@ export function Composer() {
                   : 'border-doom-border'
             }`}
           >
-            {/* prefer-shared-primitive: ignore -- a hidden native file picker has no visual primitive. */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={FILE_INPUT_ACCEPT}
-              tabIndex={-1}
-              className="hidden"
-              data-testid="composer-file-input"
-              onChange={(event) => {
-                void addFiles(Array.from(event.currentTarget.files ?? []));
-                event.currentTarget.value = '';
-              }}
-            />
             {completion ? (
               <PopoverContent
                 side="top"
@@ -558,29 +542,31 @@ export function Composer() {
                 onInteractOutside={(event) => {
                   if (containerRef.current?.contains(event.target as Node) === true) event.preventDefault();
                 }}
-                className="w-[420px] max-w-[85vw] rounded-md p-0 shadow-xl"
+                className="max-h-[min(16rem,40dvh,var(--radix-popover-content-available-height))] w-[420px] max-w-[85vw] rounded-md p-0 shadow-xl sm:max-h-[min(20rem,50dvh,var(--radix-popover-content-available-height))]"
               >
-                {completion.items.map((item, index) => (
-                  <OptionRow
-                    key={item.label}
-                    density="compact"
-                    active={index === completion.selected}
-                    data-testid={`composer-completion-item-${String(index)}`}
-                    onMouseEnter={() => setCompletion({ ...completion, selected: index })}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      accept(completion, index);
-                    }}
-                    className="w-full items-baseline gap-2.5 rounded-none px-3 py-1.5"
-                  >
-                    <span className="shrink-0 text-[12px] font-bold text-doom-blue">{item.label}</span>
-                    {item.detail ? (
-                      <OptionLabel density="compact" className="text-[10px] text-doom-dim">
-                        {item.detail}
-                      </OptionLabel>
-                    ) : null}
-                  </OptionRow>
-                ))}
+                <div className="min-h-0 overflow-y-auto overscroll-contain" data-testid="composer-completion-options">
+                  {completion.items.map((item, index) => (
+                    <OptionRow
+                      key={item.label}
+                      density="compact"
+                      active={index === completion.selected}
+                      data-testid={`composer-completion-item-${String(index)}`}
+                      onMouseEnter={() => setCompletion({ ...completion, selected: index })}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        accept(completion, index);
+                      }}
+                      className="w-full items-baseline gap-2.5 rounded-none px-3 py-1.5"
+                    >
+                      <span className="shrink-0 text-[12px] font-bold text-doom-blue">{item.label}</span>
+                      {item.detail ? (
+                        <OptionLabel density="compact" className="text-[10px] text-doom-dim">
+                          {item.detail}
+                        </OptionLabel>
+                      ) : null}
+                    </OptionRow>
+                  ))}
+                </div>
                 <PopoverFooter className="py-1">
                   <span className="flex items-center gap-1.5">
                     <Kbd>tab</Kbd> or <Kbd>enter</Kbd> completes · <Kbd>esc</Kbd> closes
@@ -714,16 +700,32 @@ export function Composer() {
                   : 'enter sends · shift+enter for a new line · space opens leader'}
               </span>
               <Button
+                asChild
                 variant="ghost"
                 size="icon"
                 data-testid="composer-attach"
-                disabled={!attached}
                 title="attach images or text files"
-                aria-label="attach images or text files"
-                onClick={() => fileInputRef.current?.click()}
-                className="shrink-0 text-doom-dim"
+                className={`relative shrink-0 overflow-hidden text-doom-dim focus-within:ring-2 focus-within:ring-doom-blue/50 ${
+                  attached ? '' : 'pointer-events-none opacity-40'
+                }`}
               >
-                <PlusIcon className="h-3 w-3" />
+                <label aria-disabled={!attached}>
+                  <PlusIcon className="h-3 w-3" />
+                  {/* prefer-shared-primitive: ignore -- iOS needs the native file input itself to cover the visible tap target. */}
+                  <input
+                    type="file"
+                    multiple
+                    accept={FILE_INPUT_ACCEPT}
+                    disabled={!attached}
+                    aria-label="attach images or text files"
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    data-testid="composer-file-input"
+                    onChange={(event) => {
+                      void addFiles(Array.from(event.currentTarget.files ?? []));
+                      event.currentTarget.value = '';
+                    }}
+                  />
+                </label>
               </Button>
               <span className="min-w-0 flex-1" />
               {streaming ? abortAction : null}

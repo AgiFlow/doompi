@@ -1,42 +1,64 @@
-# DoomPi bundle resolution
+# Bundle resolution
 
-DoomPi Web resolves one complete bundle for each session. A bundle is an immutable sync generation containing:
+DoomPi Web treats synchronized output as immutable generations. A usable web registration contains a complete set of artifacts for one configuration root:
 
-- the precompiled DoomPi runtime and sync state
-- the cockpit web assets
-- the generated web plugin composition and manifest
-- the generated package API route directory
+- synchronized DoomPi runtime and state
+- the host web asset directory
+- a generated plugin composition entry and Vite manifest
+- a server registry for built hub channel entries
+- generated `hub.routes.mjs` and `session.routes.mjs` package API modules
 
-A registration is usable by DoomPi Web only when all required artifacts exist. A registration with no web directory is a CLI-only generation, not a web bundle.
+A registration with no web directory is a CLI-only generation and is not a web bundle. A registration is usable only when its web entry, plugin composition entry, plugin manifest, and API directory are present. The hub does not serve a partially published generation.
 
-## Resolution order
+## Per-session resolution
 
-Bundle resolution is session-scoped:
+The selected web composition is resolved for each session:
 
 1. Resolve the session working directory to its Doom configuration root.
-2. Try the synchronized bundle registered for that repository or worktree.
-3. If the repository bundle is missing, incomplete, invalid, or fails to synchronize, use the synchronized global bundle from `~/.pi/.doom`.
-4. If neither bundle is usable, report the synchronization failure. Never select a partially published generation.
+2. Read the synchronized registration for that repository or worktree.
+3. Use it when the web and API artifacts are complete.
+4. Otherwise use the complete global registration from `~/.pi/.doom`.
+5. If no complete registration is available, report the synchronization failure and continue with the packaged host shell when it can be served.
 
-This order applies consistently to the DoomPi runtime, web plugins, hub channels, and package APIs. Repository artifacts must not be mixed with global artifacts inside one selected bundle. The global bundle is the fallback, not an additional repository layer.
+The repository registration wins over the global registration even when it is the result of an explicit `--dir` selection. Repository artifacts are never combined with global artifacts inside one session. The global registration is a fallback, not an additional plugin layer.
 
-Session-associated hub API requests carry a separate `hubSession` selector. The hub resolves that session through the same repository-first/global-fallback registration used by its web plugins, then dispatches only within that registration's API directory. It does not borrow an API missing from the selected bundle. The existing `session` selector remains reserved for proxying session-scoped APIs.
+This selection applies together to the session's plugin client composition, hub channels, and package API bundle. A request with `hubSession=<session-id>` resolves the same registration and dispatches only within its API directory. It cannot borrow an API that is missing from that selected bundle. The `session` query remains the selector for forwarding to the session server's own APIs.
 
-Hub APIs used outside a session, including machine and repository settings surfaces, use the process's deterministic default API bundle: an explicit API directory override when configured, otherwise the selected global registration.
+## Synchronization and publication
 
-## Optional package contributions
+`doompi sync` stages the runtime, web assets, generated plugin files, hub registry, and API routes in a new generation. It publishes the registration only after the generation is complete. Readers continue using the previous complete registration while the replacement is built.
 
-A package is not required to provide a web plugin or a package API.
+The hub ensures the global configuration is synchronized at startup and watches only the global synchronization guard. A repository configuration selected by `--dir` is synchronized before launch and before a new or restarted session, but it is not watched. A running session server reads its composition at startup, so restart it after changing synchronized server or API entries.
 
-- Missing `doompiWeb` means the package contributes no browser plugin or hub channel.
-- Missing package API metadata means the package contributes no hub or session API.
-- An empty composition still produces valid plugin composition and manifest files.
-- An empty API composition still produces valid `hub.routes.mjs` and `session.routes.mjs` files.
+Optional plugin and API contributions do not make the whole generation invalid:
 
-Malformed optional metadata or a declared entry that is unavailable is reported with the owning package and skipped when it is safe to isolate. It must not prevent unrelated package contributions or the base cockpit from being bundled. A failure in the DoomPi Web host package itself remains fatal because the base cockpit would not be valid.
+- no `doompiWeb` field means no web plugin or hub channel
+- no `doompiApi` field means no package API
+- malformed metadata or an unavailable optional entry is reported and skipped when it can be isolated
+- empty plugin and API compositions still have valid generated output
+- a failure in the DoomPi Web host package or an incomplete base shell remains a host failure
 
-## Publication invariant
+## Host shell and plugin routes
 
-Synchronization stages every artifact in a new generation before publishing its registration. Publication is atomic. Readers continue using the previous complete generation until the replacement is ready.
+The packaged host shell is selected separately from the per-session plugin composition. Asset selection is:
 
-DoomPi Web asks drift detection to require a web bundle. This prevents the sync pipeline from treating a CLI-only generation as current. If repository synchronization still cannot produce a complete bundle, session launch continues with the complete global bundle.
+1. `--assets <path>`
+2. `DOOMPI_WEB_DIST`
+3. a synchronized host asset directory when available
+4. the package's own built assets
+
+The host signs the active shell publication for the PWA. It exposes its signed manifest at `/bundle-manifest.json`. Raw shell assets are served at `/bundle-assets/<revision>/<asset-path>` and are accepted only for the current signed revision.
+
+Each selected session plugin composition is copied into an immutable publication and signed with a composition ID and revision. Its routes are distinct from raw host assets:
+
+- `/api/web-plugins/<composition-id>/<revision>/manifest` returns the signed plugin manifest
+- `/api/web-plugins/<composition-id>/<revision>/assets/...` returns raw plugin assets listed by that manifest
+- `/verified-plugins/<composition-id>/<revision>/...` is the service worker's local verified-cache path, not a raw server asset route
+
+Signed manifests include an increasing revision and a SHA-256 digest, byte length, and content type for every asset. The service worker verifies the manifest, then fetches and verifies every raw asset before committing the composition to its cache. Failed updates keep the last verified revision. See [remote security](security.md) for what this proves and what it does not prove.
+
+## Overrides
+
+`DOOMPI_API_DIR` overrides the generated API directory used for the default hub API bundle. The standard generated location is `~/.doompi/api/current`. A session-associated hub API request still uses the selected session registration, unless its registration is replaced by the normal repository-first/global-fallback resolution.
+
+`DOOMPI_WEB_PACKAGE_ROOT` is available to bundled launchers whose built assets do not retain the normal npm package layout. It points the launcher at a package root containing `dist/web` and `dist/pwa`.

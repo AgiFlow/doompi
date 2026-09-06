@@ -106,6 +106,7 @@
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "hono": "4.13.5"
   },

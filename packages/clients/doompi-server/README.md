@@ -1,18 +1,27 @@
 # @agimon-ai/doompi-server
 
-Headless DoomPi session server. It supervises a Pi RPC agent behind an authenticated Unix socket so clients can attach and reattach.
+**A headless server for one DoomPi session.**
 
-Part of [DoomPi](https://www.npmjs.com/package/@agimon-ai/doompi). Web and desktop clients use
-this server through the cockpit hub. It registers no Pi extension.
+`doompi-server` owns a Pi RPC agent and exposes it through an authenticated Unix socket. A client can
+attach, disconnect, and reattach while the agent keeps running. The server also publishes Pi's routed
+session protocol, optional session package APIs, and a registry record for the web cockpit.
 
-## How it runs
+This is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`; `doompi init`
+does not configure it.
 
-`doompi-server` is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`. `doompi init` does not configure it.
+## Contents
+
+| Guide                          | What it covers                                                      |
+| ------------------------------ | ------------------------------------------------------------------- |
+| [Lifecycle](docs/lifecycle.md) | Startup, agent selection, relaunches, registry, and shutdown        |
+| [IPC](docs/ipc.md)             | Unix sockets, framing, attach and replay, and the Pi protocol       |
+| [API](docs/api.md)             | Session package APIs and the TypeScript export surface              |
+| [Security](docs/security.md)   | Filesystem permissions, tokens, trust boundaries, and remote access |
 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- A runnable DoomPi agent. The server checks the working directory's installation, `DOOMPI_AGENT_COMMAND`, then `doompi` on `PATH`.
+- A DoomPi installation in the session repository, `DOOMPI_AGENT_COMMAND`, or the installed DoomPi package
 
 ## Install
 
@@ -20,104 +29,116 @@ this server through the cockpit hub. It registers no Pi extension.
 npm install -g @agimon-ai/doompi-server
 ```
 
-## Run
+## Quick start
+
+Create a private runtime directory and token, then pass the agent arguments after `--`:
 
 ```bash
 runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/doompi-session.XXXXXX")"
 (umask 077; openssl rand -base64 32 > "$runtime_dir/token")
 
-doompi-server --listen "$runtime_dir/session.sock" --auth-token-file "$runtime_dir/token" -- --major-mode copilot
+doompi-server \
+  --listen "$runtime_dir/session.sock" \
+  --auth-token-file "$runtime_dir/token" \
+  -- --major-mode copilot
 ```
 
-The server starts `doompi --mode rpc` with the arguments after `--`, then publishes the session on the socket. It creates the socket with owner-only access under a restrictive umask.
+The token is read from the file, not from the command line. Keep the runtime directory private. The
+server appends `--mode rpc` to the agent invocation and waits for the agent to exit.
 
-The session gets an identity at spawn: the server mints a session id (or takes `--session-id`) and
-passes it to Pi together with the `--name` you gave it, so the cockpit knows the session before its
-first frame.
-
-The agent command resolves for each working directory. A repository-local `@agimon-ai/doompi` takes precedence, `DOOMPI_AGENT_COMMAND` can name a binary or `.mjs` file, and `doompi` on `PATH` is the fallback.
-
-## Major-mode relaunches
-
-A launcher-class session cannot recompose its extension closure in place, so switching to a major
-mode with a different layer set normally stays pending until someone reruns the launcher. This
-server performs that relaunch itself: the runtime journals the switch, writes a relaunch file the
-server points it at, and the server ends the agent's input for a graceful exit, then respawns it
-with the new `--major-mode` under the same session id and socket. Clients stay attached; the
-replacement resumes the same Pi session and acknowledges the journaled transition. An agent that
-ignores the request is killed after a grace period, and an exit without the file ends the session
-as before.
-
-## The session registry
-
-Every server announces itself by writing one JSON record to
-`~/.doompi/run/sessions/<session id>.json` (override the directory with `--registry-dir` or
-`DOOMPI_RUNTIME_DIR`). The record names the socket, the working directory, the token file, and the
-server pid; writing it is the whole act of registration, and the server withdraws it on exit. The
-web cockpit watches this directory to find every running session, and deletes records whose pid is
-gone, so a crashed server does not haunt the rail.
-
-## Serving the web cockpit
-
-Add `--web` to make sure a browser cockpit is reachable:
+To serve the browser cockpit from the same process, install the optional web package and add `--web`:
 
 ```bash
-doompi-server --listen "$runtime_dir/session.sock" --auth-token-file "$runtime_dir/token" --name doompi-web --web 7433 -- --major-mode copilot
+npm install -g @agimon-ai/doompi-web
+doompi-server \
+  --listen "$runtime_dir/session.sock" \
+  --auth-token-file "$runtime_dir/token" \
+  --name doompi-web \
+  --web \
+  -- --major-mode copilot
 ```
 
-The port is optional and defaults to 7433. The cockpit is a multi-session hub: if one already
-answers on the port, this server just logs its URL and appears there through the registry; only
-otherwise does it start the hub in-process. An embedded hub dies with its server, so for several
-sessions the durable topology is a standalone `doompi-web`. The cockpit binds loopback and reads
-tokens from token files, so the browser never holds a session credential. `--web` requires
-[@agimon-ai/doompi-web](https://www.npmjs.com/package/@agimon-ai/doompi-web), which is an optional
-peer: without it the flag reports what to install rather than failing obscurely.
+`--web` uses port `7433` by default. If a DoomPi cockpit already answers there, this server registers
+its session with that hub instead of starting another one. A standalone `doompi-web` process is the
+durable choice for several sessions.
 
-## Protocol
+## How it works
 
-Newline-delimited JSON in both directions, carrying Pi's own RPC frames untouched. The server adds
-only a handshake:
+The server resolves the session identity, composes or delegates the configured DoomPi installation,
+and starts one agent in RPC mode. It binds the session socket at `--listen`, the Pi protocol socket at
+`<listen>.pi`, and a package API socket at `api.sock` beside the session socket when session APIs are
+available. Only after these services are ready does it write the session record.
 
-| Frame                                          | Direction        | Meaning                                        |
-| ---------------------------------------------- | ---------------- | ---------------------------------------------- |
-| `{"type":"attach","token":"..."}`              | client to server | Must be the first frame                        |
-| `{"type":"attached","replayed":N,"dropped":M}` | server to client | Accepted, with what the client missed          |
-| `{"type":"attach_error","reason":"..."}`       | server to client | Refused, and the connection closes             |
-| `{"type":"replay","frame":{...}}`              | server to client | One frame emitted while no client was attached |
+A session has one supervised agent and one client on the framed session socket. Frames pass through
+unchanged after the attach handshake. If the client disconnects, the agent continues and a bounded
+backlog is replayed on the next attach. The [IPC guide](docs/ipc.md) describes the wire contracts.
 
-Everything else passes through: client frames go to the agent, agent frames go to the client.
+A major-mode change that needs a new extension composition is handled as a relaunch. The server keeps
+the session id, sockets, and registry record while it asks the current agent to exit cleanly and starts
+the replacement. See the [lifecycle guide](docs/lifecycle.md) for the state transitions.
 
-## Attach and reattach
+## Command line
 
-One client holds a session at a time; a second attach is refused rather than allowed to fight over
-the same agent. When the web cockpit runs, the hub is that one client and browser tabs multiplex
-behind it. Losing the client does not end the run. Frames buffer while nobody is attached and
-replay on the next attach, so a dropped connection or a reloaded page recovers instead of losing
-the session. The buffer is bounded and reports how many frames it had to drop.
+| Option                     | Default               | Meaning                                           |
+| -------------------------- | --------------------- | ------------------------------------------------- |
+| `--listen <path>`          | required              | Unix socket for the framed session transport      |
+| `--auth-token-file <path>` | required              | File containing the attach token                  |
+| `--name <name>`            | `untitled`            | Name shown by clients and written to the registry |
+| `--session-id <id>`        | generated UUID        | Session id; it must not contain `/`               |
+| `--registry-dir <path>`    | `~/.doompi/run`       | Parent of the session registry                    |
+| `--web [port]`             | no cockpit, or `7433` | Start or join the browser cockpit                 |
+| `-- <agent arguments>`     | none                  | Arguments passed to the DoomPi agent              |
 
-## Current limits
+Options before `--` belong to `doompi-server`. Everything after it belongs to the agent. If agent
+arguments already contain `--session-id` or `--name`, those values are used for the session identity.
 
-- The executable itself is not covered end to end. Tests cover the supervisor, socket, handshake, and replay paths.
-- Transport uses a Unix socket only. Tunnel it, for example over SSH, for remote access.
-- Each server process runs one agent. Run several servers for several sessions; the registry and cockpit hub present them as one set.
+The registry directory can also be set with `DOOMPI_RUNTIME_DIR`. Agent selection uses
+`DOOMPI_AGENT_COMMAND` when the repository does not pin a different DoomPi launcher. `DOOMPI_API_DIR`
+can point the server at a generated session API directory. `DOOMPI_WEB_MODULE` selects the web module
+used by `--web`.
+
+## Registry
+
+Each running server writes one owner-only JSON record at
+`<registry-dir>/sessions/<session id>.json`. It contains the session id and name, working directory,
+socket paths, server pid, and creation time. It stores the token file path, never the token itself.
+The web cockpit watches these records and treats a dead pid as stale. The [security guide](docs/security.md)
+explains why the directory and its paths must remain private.
 
 ## Public API
 
+The package exports the socket servers, agent process adapter, Pi session service, transcript projection,
+and framing helpers:
+
 ```ts
-import { serveSessionSocket, spawnAgentProcess } from '@agimon-ai/doompi-server';
+import {
+  createAgentServerService,
+  serveProtocolSocket,
+  serveSessionSocket,
+  spawnAgentProcess,
+} from '@agimon-ai/doompi-server';
 ```
+
+Use the [API guide](docs/api.md) for the session package API and the complete export roles.
+
+## Limits
+
+- One `doompi-server` process supervises one agent.
+- The framed Unix socket allows one attached client at a time.
+- The server's transports are Unix sockets, not network listeners. Use a trusted tunnel or the web
+  cockpit for remote access.
+- The executable path is covered by component and integration tests, but not by an end-to-end test of
+  every installed-package combination.
 
 ## Development
 
-Run from this package directory in the workspace:
+Run from this package directory:
 
 ```bash
 pnpm build
 pnpm typecheck
 pnpm test
 pnpm lint
-pnpm exec vibe-lint check .
-npm pack --dry-run
 ```
 
 Maintained by [Agimon](https://agimon.ai/about).
