@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  active: vi.fn(() => true),
   fetch: vi.fn(),
 }));
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
-  sealedTransport: { fetch: mocks.fetch },
+  sealedTransport: { active: mocks.active, fetch: mocks.fetch },
 }));
 
 import { activateVerifiedPluginComposition } from '../../src/pwa/workerClient.ts';
@@ -33,7 +34,8 @@ describe('the trusted worker client', () => {
       new Response('{"signed":true}', { status: 200, headers: { 'content-type': 'application/json' } }),
     );
     const worker = {
-      postMessage: vi.fn((_: unknown, ports: MessagePort[]) => {
+      postMessage: vi.fn((message: unknown, ports: MessagePort[]) => {
+        expect(message).toMatchObject({ relayThroughClient: true });
         const port = ports[0];
         port.addEventListener('message', (event: MessageEvent<unknown>) => {
           const result = event.data as { type?: string; requestId?: number; status?: number };
@@ -78,6 +80,23 @@ describe('the trusted worker client', () => {
       code: 'manifest-fetch',
       message: 'refused',
     });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps loopback plugin downloads inside the service worker', async () => {
+    mocks.active.mockReturnValueOnce(false);
+    const worker = {
+      postMessage: vi.fn((message: unknown, ports: MessagePort[]) => {
+        expect(message).toMatchObject({ relayThroughClient: false });
+        const port = ports[0];
+        port.start();
+        port.postMessage({ ok: true, revision: 1 });
+      }),
+    };
+    vi.stubGlobal('window', globalThis);
+    vi.stubGlobal('navigator', { serviceWorker: { ready: Promise.resolve({ active: worker }) } });
+
+    await expect(activateVerifiedPluginComposition(composition)).resolves.toEqual({ ok: true, revision: 1 });
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

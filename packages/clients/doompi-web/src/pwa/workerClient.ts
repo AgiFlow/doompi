@@ -126,6 +126,7 @@ export async function activateVerifiedPluginComposition(composition: SessionWebC
     manifestUrl: composition.manifestUrl,
     rawAssetBaseUrl: composition.rawAssetBaseUrl,
     verifiedAssetBaseUrl: composition.verifiedAssetBaseUrl,
+    relayThroughClient: sealedTransport.active(),
   });
 }
 

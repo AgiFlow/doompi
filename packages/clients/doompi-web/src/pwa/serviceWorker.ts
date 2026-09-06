@@ -51,6 +51,7 @@ interface ActivatePluginCompositionMessage {
   manifestUrl: string;
   rawAssetBaseUrl: string;
   verifiedAssetBaseUrl: string;
+  relayThroughClient: boolean;
 }
 
 interface ResetBundleMessage {
@@ -95,6 +96,18 @@ function parsePluginFetchResult(value: unknown, requestId: number): PluginFetchR
   return value as PluginFetchResult;
 }
 
+async function fetchPluginDirect(path: string): Promise<Response> {
+  const response = await fetch(path, {
+    credentials: 'include',
+    cache: 'no-store',
+    redirect: 'error',
+  });
+  if (response.redirected || new URL(response.url).origin !== worker.location.origin) {
+    throw new Error('The plugin asset request left the trusted origin.');
+  }
+  return response;
+}
+
 async function fetchThroughClient(port: MessagePort, path: string): Promise<Response> {
   const requestId = ++pluginFetchRequestId;
   return await new Promise((resolve, reject) => {
@@ -133,7 +146,8 @@ function parseWorkerRequest(value: unknown): WorkerRequest | undefined {
       Number(value.revision) < 1 ||
       typeof value.manifestUrl !== 'string' ||
       typeof value.rawAssetBaseUrl !== 'string' ||
-      typeof value.verifiedAssetBaseUrl !== 'string'
+      typeof value.verifiedAssetBaseUrl !== 'string' ||
+      typeof value.relayThroughClient !== 'boolean'
     ) {
       return undefined;
     }
@@ -154,6 +168,7 @@ function parseWorkerRequest(value: unknown): WorkerRequest | undefined {
       manifestUrl: value.manifestUrl,
       rawAssetBaseUrl: value.rawAssetBaseUrl,
       verifiedAssetBaseUrl: value.verifiedAssetBaseUrl,
+      relayThroughClient: value.relayThroughClient,
     };
   }
   if (
@@ -443,7 +458,10 @@ async function handleMessage(request: WorkerRequest, port: MessagePort): Promise
     return await activateBundle(request.publicKey, request.minimumRevision);
   }
   if (request.type === ACTIVATE_PLUGIN_MESSAGE) {
-    return await queuePluginActivation(request, (path) => fetchThroughClient(port, path));
+    const fetchPlugin = request.relayThroughClient
+      ? (path: string) => fetchThroughClient(port, path)
+      : fetchPluginDirect;
+    return await queuePluginActivation(request, fetchPlugin);
   }
   const current = await readActiveBundle();
   if (current === undefined) return { ok: false, code: 'no-pin', message: 'No host signing key is pinned.' };
