@@ -1,3 +1,17 @@
+## 0.0.1-alpha.19 (2026-09-06)
+
+### 🩹 Fixes
+
+- **doompi-web-components:** close dialogs from nested select backdrops ([97373ec0](https://github.com/AgiFlow/doompi/commit/97373ec0))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.55
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.18 (2026-09-06)
 
 ### 🧱 Updated Dependencies

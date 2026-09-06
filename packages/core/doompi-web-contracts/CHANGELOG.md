@@ -1,3 +1,17 @@
+## 0.0.1-alpha.22 (2026-09-06)
+
+### 🚀 Features
+
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🩹 Fixes
+
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.21 (2026-09-06)
 
 ### 🚀 Features
