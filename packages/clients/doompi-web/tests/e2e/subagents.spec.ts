@@ -80,6 +80,12 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
   await expect(page.getByTestId('sheet-agent')).toHaveText('reviewer');
   await expect(page.getByTestId('sheet-task')).toContainText('Review the diff before the cut.');
   await expect(page.getByTestId('run-sheet').getByTestId('thread-timeline')).toHaveCount(0);
+  await page.locator('[data-slot="sheet-overlay"]').click({ position: { x: 8, y: 8 } });
+  await expect(page.getByTestId('run-sheet')).toBeHidden();
+
+  await page.getByTestId('run-menu-run-a').click();
+  await page.getByTestId('run-detail-run-a').click();
+  await expect(page.getByTestId('run-sheet')).toBeVisible();
   await page.getByTestId('run-sheet').getByLabel('close the run detail').click();
   await expect(page.getByTestId('run-sheet')).toBeHidden();
 
@@ -288,6 +294,33 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
   await page.getByTestId('tab-subagents-run-run-dock-close').click();
   await expect(page).toHaveURL(/\/session\/s1$/);
   await expect(chip).toHaveCount(0);
+});
+
+test('a dialog with an open select dismisses and reopens with working controls', async ({ page, cockpit }) => {
+  writeAgentDefinition(cockpit.agentDir, 'nested-overlay-e2e', 'Exercises a nested overlay lifecycle.');
+
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  await page.getByTestId('activity-open-agents').click();
+  await page.getByTestId('subagents-launch').click();
+  await page.getByTestId('catalog-filter').fill('nested-overlay-e2e');
+  await page.getByTestId('catalog-agent-nested-overlay-e2e').click();
+  await page.getByTestId('catalog-launch-nested-overlay-e2e').click();
+
+  const launchDialog = page.getByTestId('launch-dialog');
+  await expect(launchDialog).toBeVisible();
+  await page.getByTestId('launch-model').click();
+  await expect(page.locator('[data-slot="select-content"]')).toBeVisible();
+
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 8, y: 8 } });
+  await expect(page.locator('[data-slot="select-content"]')).toHaveCount(0);
+  await expect(launchDialog).toBeHidden();
+
+  await page.getByTestId('catalog-launch-nested-overlay-e2e').click();
+  await expect(launchDialog).toBeVisible();
+  await page.getByTestId('launch-task').fill('Still interactive.');
+  await page.getByTestId('launch-fork').click();
+  await expect(page.getByTestId('launch-command')).toHaveText('/run nested-overlay-e2e Still interactive. --fork');
 });
 
 test('the catalog lists the agents the session can launch and launches one through /run', async ({ page, cockpit }) => {

@@ -44,6 +44,20 @@ test('picks a model from the chip popup and asks the session to switch', async (
   await expect(popup.getByTestId('model-openai-gpt-5.6-sol')).toHaveAttribute('data-current', 'true');
   await expect(popup.getByTestId('thinking-max')).toHaveAttribute('data-current', 'true');
 
+  await page.getByTestId('model-filter').fill('dismiss before reopening');
+  await page.getByTestId('top-bar').click({ position: { x: 8, y: 8 } });
+  await expect(popup).toBeHidden();
+
+  const modelRequests = () => cockpit.session.received.filter((frame) => frame.type === 'get_available_models').length;
+  const levelRequests = () =>
+    cockpit.session.received.filter((frame) => frame.type === 'get_available_thinking_levels').length;
+  await page.getByTestId('axis-model').click();
+  await expect.poll(modelRequests).toBe(2);
+  await expect.poll(levelRequests).toBe(2);
+  cockpit.session.emit(MODELS);
+  cockpit.session.emit(LEVELS);
+  await expect(popup).toBeVisible();
+
   await page.getByTestId('model-filter').fill('opus');
   await expect(popup.getByTestId('model-anthropic-claude-haiku-4-5')).toBeHidden();
   await popup.getByTestId('model-anthropic-claude-opus-5').click();

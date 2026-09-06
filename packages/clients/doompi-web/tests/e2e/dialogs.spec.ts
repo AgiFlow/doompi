@@ -114,6 +114,48 @@ test('cancelling tells the agent instead of stranding it', async ({ page, cockpi
   await expect(page.getByTestId('dialog')).toBeHidden();
 });
 
+test('answers a reopened dialog after outside dismissal', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'outside-first',
+    method: 'select',
+    title: 'dismiss this request',
+    options: ['a', 'b'],
+  });
+  await expect(page.getByTestId('dialog')).toBeVisible();
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 8, y: 8 } });
+  await expect(page.getByTestId('dialog')).toBeHidden();
+  await expect
+    .poll(() =>
+      cockpit.session.received.some(
+        (frame) => frame.type === 'extension_ui_response' && frame.id === 'outside-first' && frame.cancelled === true,
+      ),
+    )
+    .toBe(true);
+
+  cockpit.session.emit({
+    type: 'extension_ui_request',
+    id: 'outside-second',
+    method: 'select',
+    title: 'answer after reopening',
+    options: ['reopened', 'cancel'],
+  });
+  await expect(page.getByTestId('dialog-title')).toHaveText('answer after reopening');
+  await page.getByTestId('dialog-option-0').click();
+
+  await expect
+    .poll(() =>
+      cockpit.session.received.some(
+        (frame) =>
+          frame.type === 'extension_ui_response' && frame.id === 'outside-second' && frame.value === 'reopened',
+      ),
+    )
+    .toBe(true);
+});
+
 test('a long option list is reachable from the keyboard past the ninth', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
