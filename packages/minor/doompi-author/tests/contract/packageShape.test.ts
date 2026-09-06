@@ -9,8 +9,11 @@ interface PackageManifest {
   name: string;
   version: string;
   private?: boolean;
+  type?: string;
   files?: string[];
+  keywords?: string[];
   exports?: Record<string, unknown>;
+  publishConfig?: { access?: string };
   doompiApi?: { basePath?: string; session?: { entry?: string } };
   doompiWeb?: { pluginId?: string; channels?: string[]; client?: string; hub?: { entry?: string } };
   pi?: { extensions?: string[] };
@@ -21,9 +24,24 @@ async function manifest(): Promise<PackageManifest> {
 }
 
 describe('doompi-author package contract', () => {
-  it('is a private foundation package with closed entries', async () => {
+  it('is a public ESM package with closed entries', async () => {
     const value = await manifest();
-    expect(value).toMatchObject({ name: '@agimon-ai/doompi-author', version: '0.0.0', private: true });
+    expect(value.name).toBe('@agimon-ai/doompi-author');
+    expect(value.version).toBe('0.0.1-alpha.0');
+    expect(value.private).toBeUndefined();
+    expect(value.type).toBe('module');
+    expect(value.publishConfig).toEqual({ access: 'public' });
+    expect(value.keywords).toEqual(
+      expect.arrayContaining([
+        'authoring',
+        'coding-agent',
+        'doompi',
+        'pi-coding-agent',
+        'pi-extension',
+        'pi-package',
+        'typescript',
+      ]),
+    );
     expect(Object.keys(value.exports ?? {})).toEqual([
       '.',
       './extensions/pi',
