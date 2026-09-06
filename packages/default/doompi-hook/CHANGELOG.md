@@ -1,3 +1,12 @@
+## 0.0.1-alpha.37 (2026-09-06)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.58
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.56
+
 ## 0.0.1-alpha.36 (2026-09-06)
 
 ### 🧱 Updated Dependencies

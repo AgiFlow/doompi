@@ -1,3 +1,22 @@
+## 0.0.1-alpha.60 (2026-09-06)
+
+### 🩹 Fixes
+
+- update web client behavior and documentation ([fa613547](https://github.com/AgiFlow/doompi/commit/fa613547))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.19
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.21
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.59 (2026-09-06)
 
 ### 🩹 Fixes
