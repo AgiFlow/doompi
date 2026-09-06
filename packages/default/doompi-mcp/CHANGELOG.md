@@ -1,3 +1,19 @@
+## 0.0.1-alpha.58 (2026-09-05)
+
+### 🩹 Fixes
+
+- resolve repository bundles with global fallback ([59b7a57](https://github.com/AgiFlow/doompi/commit/59b7a57))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.58
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.57 (2026-09-05)
 
 ### 🚀 Features

@@ -1,3 +1,22 @@
+## 0.0.1-alpha.20 (2026-09-05)
+
+### 🩹 Fixes
+
+- isolate hub APIs by session bundle ([91fc21d](https://github.com/AgiFlow/doompi/commit/91fc21d))
+- resolve repository bundles with global fallback ([59b7a57](https://github.com/AgiFlow/doompi/commit/59b7a57))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.59
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.19
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.19 (2026-09-05)
 
 ### 🚀 Features

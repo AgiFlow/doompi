@@ -1,3 +1,13 @@
+## 0.0.1-alpha.57 (2026-09-05)
+
+### 🩹 Fixes
+
+- isolate hub APIs by session bundle ([91fc21d](https://github.com/AgiFlow/doompi/commit/91fc21d))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.56 (2026-09-05)
 
 ### 🚀 Features
