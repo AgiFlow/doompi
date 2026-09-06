@@ -33,6 +33,26 @@ test('keeps the workflow launcher available before any package reports work', as
   await expect(page.getByTestId('activity-empty')).toBeHidden();
 });
 
+test('keeps the prompts dialog interactive after outside dismissal and reopening', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  const dialog = page.getByTestId('prompts-dialog');
+  await page.getByTestId('activity-prompts-open').click();
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('prompts-filter').fill('dismiss before reopening');
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 8, y: 8 } });
+  await expect(dialog).toBeHidden();
+
+  await page.getByTestId('activity-prompts-open').click();
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('prompts-filter').fill('interactive after reopening');
+  await expect(page.getByTestId('prompts-filter')).toHaveValue('interactive after reopening');
+  await page.getByTestId('prompts-new').click();
+  await expect(page.getByTestId('prompts-name')).toBeVisible();
+  await expect(page.getByTestId('prompts-text')).toBeVisible();
+});
+
 test('lists the groups whose packages report in, each rendered by its own plugin', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

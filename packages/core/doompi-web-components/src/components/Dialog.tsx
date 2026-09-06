@@ -1,16 +1,22 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import type { ComponentProps } from 'react';
+import { createContext, type ComponentProps, useContext } from 'react';
 import { CloseIcon } from '../icons/icons.ts';
 import { cn } from '../lib/cn.ts';
 import { Button } from './Button.tsx';
 
+const DialogOpenChangeContext = createContext<((open: boolean) => void) | undefined>(undefined);
 /**
  * shadcn's Dialog on Radix: focus trap, Escape, outside click, scroll lock,
  * and focus restored to the trigger on close. The frame is the Doom panel.
  */
 export function Dialog(props: ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+  const onOpenChange = props.onOpenChange === undefined ? undefined : (open: boolean) => props.onOpenChange?.(open);
+  return (
+    <DialogOpenChangeContext.Provider value={onOpenChange}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} onOpenChange={onOpenChange} />
+    </DialogOpenChangeContext.Provider>
+  );
 }
 
 export function DialogTrigger(props: ComponentProps<typeof DialogPrimitive.Trigger>) {
@@ -25,11 +31,28 @@ export function DialogClose(props: ComponentProps<typeof DialogPrimitive.Close>)
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-export function DialogOverlay({ className, ...props }: ComponentProps<typeof DialogPrimitive.Overlay>) {
+export function DialogOverlay({
+  className,
+  onPointerDownCapture,
+  ...props
+}: ComponentProps<typeof DialogPrimitive.Overlay>) {
+  const onOpenChange = useContext(DialogOpenChangeContext);
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn('fixed inset-0 z-40 bg-doom-deep/70 data-[state=open]:animate-doom-fade', className)}
+      onPointerDownCapture={(event) => {
+        onPointerDownCapture?.(event);
+        if (event.defaultPrevented || onOpenChange === undefined) return;
+        const dialogContent = event.currentTarget.nextElementSibling;
+        const openSelectTrigger = dialogContent?.querySelector('[data-slot="select-trigger"][data-state="open"]');
+        if (openSelectTrigger === null || openSelectTrigger === undefined) return;
+
+        // Radix's parent outside listener can lag one render behind a nested
+        // modal Select. Own this backdrop press so the complete stack closes.
+        event.stopPropagation();
+        onOpenChange(false);
+      }}
       {...props}
     />
   );
