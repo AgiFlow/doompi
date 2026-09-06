@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { activityGroups, fileLinkFor, minorModes, selectionAxes } from '../../src/web/lib/composition.ts';
+import {
+  activityGroups,
+  bindFileLinkModes,
+  fileLinkFor,
+  fileTabForPath,
+  minorModes,
+  selectionAxes,
+} from '../../src/web/lib/composition.ts';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
 
@@ -466,6 +473,49 @@ describe('fileLinkFor', () => {
       expect(fileLinkFor('s1', 'docs/README.md')?.id).toBe('second-readme');
       expect(fileLinkFor('s1', 'flex gap-3')).toBeUndefined();
     } finally {
+      resetWebPlugins();
+    }
+  });
+  it('uses normal Files links when Author is off, including explicit untracked paths', () => {
+    let active = false;
+    const release = bindFileLinkModes({
+      active: (sessionId) => (sessionId === 's1' && active ? ['author'] : []),
+      subscribe: () => () => undefined,
+    });
+    try {
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'author',
+          fileLinks: {
+            requiredMinorMode: 'author',
+            subscribe: () => () => undefined,
+            fingerprint: () => '',
+            resolve: () => tabFor('author-file'),
+            openPath: () => tabFor('author-file'),
+          },
+        }),
+        defineWebPlugin({
+          id: 'files',
+          fileLinks: {
+            subscribe: () => () => undefined,
+            fingerprint: () => '',
+            resolve: (_sessionId, path) => (path === 'tracked.ts' ? tabFor('files-preview') : undefined),
+            openPath: () => tabFor('files-preview'),
+          },
+        }),
+      ]);
+      expect(fileLinkFor('s1', 'tracked.ts')?.id).toBe('files-preview');
+      expect(fileTabForPath('s1', 'untracked.ts')?.id).toBe('files-preview');
+      active = true;
+      expect(fileTabForPath('s1', 'untracked.ts')?.id).toBe('author-file');
+      expect(fileLinkFor('s1', 'tracked.ts')?.id).toBe('author-file');
+      expect(fileTabForPath('s2', 'untracked.ts')?.id).toBe('files-preview');
+      active = false;
+      expect(fileTabForPath('s1', 'tracked.ts')?.id).toBe('files-preview');
+      release();
+      expect(fileLinkFor('s1', 'tracked.ts')?.id).toBe('files-preview');
+    } finally {
+      release();
       resetWebPlugins();
     }
   });

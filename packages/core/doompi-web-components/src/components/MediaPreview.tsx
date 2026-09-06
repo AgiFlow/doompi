@@ -45,6 +45,7 @@ export interface MediaPreviewController {
   pause: () => void;
   seek: (seconds: number) => void;
   getState: () => MediaPlaybackState;
+  isFrameReady: () => boolean;
   getIntrinsicSize: () => MediaIntrinsicSize | null;
   captureFrame: (type?: 'image/png' | 'image/jpeg', quality?: number) => Promise<MediaFrameCapture | null>;
 }
@@ -57,6 +58,7 @@ export interface MediaPreviewProps {
   /** Overrides the kind inferred from the path, for a server that knows better. */
   kind?: MediaKind;
   className?: string;
+  videoControls?: boolean;
   'data-testid'?: string;
   /** Video-only controller. It is assigned while the video element is mounted. */
   controllerRef?: import('react').Ref<MediaPreviewController>;
@@ -72,6 +74,7 @@ interface VideoPreviewProps {
   src: string;
   className?: string;
   testId?: string;
+  videoControls?: boolean;
   controllerRef?: import('react').Ref<MediaPreviewController>;
   onPlaybackStateChange?: (state: MediaPlaybackState) => void;
 }
@@ -102,6 +105,15 @@ export function mediaPreviewController(
       const video = videoRef.current;
       return video === null ? { playing: false, currentTime: 0, duration: 0 } : mediaPlaybackState(video);
     },
+    isFrameReady: () => {
+      const video = videoRef.current;
+      return (
+        video !== null &&
+        !video.seeking &&
+        video.readyState >= 2 &&
+        (video.requestVideoFrameCallback === undefined || frameMetadataRef.current !== undefined)
+      );
+    },
     getIntrinsicSize: () => {
       const video = videoRef.current;
       return video === null || video.videoWidth <= 0 || video.videoHeight <= 0
@@ -110,7 +122,9 @@ export function mediaPreviewController(
     },
     captureFrame: async (type = 'image/png', quality) => {
       const video = videoRef.current;
-      if (video === null || video.videoWidth <= 0 || video.videoHeight <= 0) return null;
+      if (video === null || video.videoWidth <= 0 || video.videoHeight <= 0 || video.seeking) return null;
+      const metadata = frameMetadataRef.current === undefined ? undefined : { ...frameMetadataRef.current };
+      const timeSeconds = metadata?.mediaTime ?? video.currentTime;
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -123,21 +137,31 @@ export function mediaPreviewController(
         blob,
         width: canvas.width,
         height: canvas.height,
-        timeSeconds: video.currentTime,
-        ...(frameMetadataRef.current === undefined ? {} : { metadata: { ...frameMetadataRef.current } }),
+        timeSeconds,
+        ...(metadata === undefined ? {} : { metadata }),
       };
     },
   };
 }
 
-function VideoPreview({ src, className, testId, controllerRef, onPlaybackStateChange }: VideoPreviewProps) {
+function VideoPreview({
+  src,
+  className,
+  testId,
+  controllerRef,
+  onPlaybackStateChange,
+  videoControls = true,
+}: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameMetadataRef = useRef<MediaFrameMetadata | undefined>(undefined);
   const reportState = () => {
     const video = videoRef.current;
     if (video !== null) onPlaybackStateChange?.(mediaPlaybackState(video));
   };
-
+  const reportStateRef = useRef(reportState);
+  useEffect(() => {
+    reportStateRef.current = reportState;
+  });
   useImperativeHandle(controllerRef, () => mediaPreviewController(videoRef, frameMetadataRef), []);
   useEffect(() => {
     const video = videoRef.current;
@@ -148,6 +172,7 @@ function VideoPreview({ src, className, testId, controllerRef, onPlaybackStateCh
         mediaTime: metadata.mediaTime,
         ...(Number.isFinite(metadata.presentedFrames) ? { presentedFrames: metadata.presentedFrames } : {}),
       };
+      reportStateRef.current();
       request = video.requestVideoFrameCallback(report);
     };
     request = video.requestVideoFrameCallback(report);
@@ -157,7 +182,8 @@ function VideoPreview({ src, className, testId, controllerRef, onPlaybackStateCh
     <video
       ref={videoRef}
       src={src}
-      controls
+      controls={videoControls}
+      playsInline
       preload="metadata"
       data-testid={testId}
       data-kind="video"
@@ -167,6 +193,13 @@ function VideoPreview({ src, className, testId, controllerRef, onPlaybackStateCh
       onTimeUpdate={reportState}
       onDurationChange={reportState}
       onEnded={reportState}
+      onLoadedMetadata={reportState}
+      onLoadedData={reportState}
+      onSeeking={() => {
+        frameMetadataRef.current = undefined;
+        reportState();
+      }}
+      onSeeked={reportState}
     >
       <track kind="captions" />
     </video>
@@ -181,6 +214,7 @@ export function MediaPreview({
   controllerRef,
   pdfControllerRef,
   onPlaybackStateChange,
+  videoControls,
   'data-testid': testId,
 }: MediaPreviewProps) {
   const resolved = kind ?? mediaKindOf(path);
@@ -201,6 +235,7 @@ export function MediaPreview({
         controllerRef={controllerRef}
         onPlaybackStateChange={onPlaybackStateChange}
         testId={testId}
+        videoControls={videoControls}
       />
     );
   }

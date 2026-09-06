@@ -5,6 +5,7 @@
 export {
   Activity as ActivityIcon,
   AudioLines as AudioLinesIcon,
+  BookmarkPlus as BookmarkPlusIcon,
   Check as CheckIcon,
   ChevronDown as ChevronDownIcon,
   ChevronRight as ChevronRightIcon,

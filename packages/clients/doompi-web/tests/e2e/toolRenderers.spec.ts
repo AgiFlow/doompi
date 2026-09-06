@@ -473,9 +473,8 @@ test('a run of calls to one tool shares a frame, and a lone call keeps its card'
 /**
  * The path in a call header is the shortest way to the file itself.
  *
- * A read must open its document even without a file-edit timeline. Author now
- * owns document tabs. This fixture does not activate its minor mode, so the
- * click must select the file tab and explain why its editor is unavailable.
+ * A read must open its document even without a file-edit timeline. This fixture
+ * does not activate Author mode, so the click must use the normal Files route.
  */
 test('a read call opens its file from the path in the header', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
@@ -489,6 +488,7 @@ test('a read call opens its file from the path in the header', async ({ page, co
 
   await page.getByTestId('tool-call-read').getByTestId('tool-path').click();
   await expect(page.getByRole('link', { name: 'Unchanged.ts', exact: true })).toBeVisible();
-  await expect(page.getByTestId('author-mode-inactive')).toHaveText('Enable Author minor mode to edit this document.');
-  await expect(page).toHaveURL(/\/author-file-[^/]+$/u);
+  await expect(page.getByTestId('files-preview-panel')).toBeVisible();
+  await expect(page.getByTestId('files-preview-breadcrumb')).toContainText('src/Unchanged.ts');
+  await expect(page).toHaveURL(/\/files-file-[^/]+$/u);
 });

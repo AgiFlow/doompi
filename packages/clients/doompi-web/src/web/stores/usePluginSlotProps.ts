@@ -6,7 +6,7 @@ import { appendComposerDraft, attachComposerCapture, attachComposerContext } fro
 import { sessionStoreFor } from './sessionStore.ts';
 import { closeTransientTab, openTransientTab } from './transientTabsStore.ts';
 import { useOpenTab } from './useOpenTab.ts';
-
+import { submitCapture } from './captureStore.ts';
 /** The props a plugin component receives for a session, with the host's navigation and facts bound in. */
 export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void): WebPluginSlotProps {
   const statuses = useStore(sessionStoreFor(sessionId), (state) => state.statuses);
@@ -39,6 +39,7 @@ export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void
     (item) => attachComposerContext(sessionId, item),
     (capture) => attachComposerCapture(sessionId, capture),
     contextInventory,
+    (capture) => submitCapture(sessionId, capture),
   );
   props.activeMinorModes = minorModes(statuses, widgets, catalog)
     .filter((mode) => mode.availability === 'on')

@@ -2,9 +2,9 @@ import type { AuthorNativeAnchor, AuthorRequestRecord } from '../lib/authorViewp
 
 const STATUS_LABELS: Record<AuthorRequestRecord['status'], string> = {
   REQUESTED: 'Request queued',
-  CHANGING: 'Applying change',
+  CHANGING: 'Agent working',
   CHANGED: 'Change ready',
-  COMPLETE: 'Change saved',
+  COMPLETE: 'Request completed',
   FAILED: 'Request failed',
   CANCELLED: 'Request cancelled',
 };
@@ -19,8 +19,11 @@ const STATUS_STYLES: Record<AuthorRequestRecord['status'], string> = {
 };
 
 function requestInstruction(requestText: string): string {
-  const referencedContext = requestText.search(/\s+Referenced context "/u);
-  return requestText.slice(0, referencedContext < 0 ? undefined : referencedContext).trim();
+  const referencedContext = requestText.search(/(?:^|\s+)Referenced context "/u);
+  return requestText
+    .slice(0, referencedContext < 0 ? undefined : referencedContext)
+    .replace(/^Please address the attached feedback\.\s*Request ID: \S+\s*/u, '')
+    .trim();
 }
 
 function documentName(path: string): string {
@@ -54,9 +57,11 @@ function anchorLabel(anchor: AuthorNativeAnchor): string {
 function progressLabel(request: AuthorRequestRecord): string {
   const total = request.regions.length;
   const pending = request.pendingRegions?.length;
+  if (request.status === 'CHANGING' && request.currentOperation === 'Agent is working on this request')
+    return 'Processing request';
   if (request.status === 'CHANGING' && pending !== undefined) return `${total - pending} of ${total} regions applied`;
   if (request.status === 'CHANGED') return 'Changes applied · awaiting save';
-  if (request.status === 'COMPLETE') return 'Saved to document';
+  if (request.status === 'COMPLETE') return 'Agent finished processing this request';
   if (request.status === 'FAILED') return 'Stopped with an error';
   if (request.status === 'CANCELLED') return 'Stopped before completion';
   return `${total} region${total === 1 ? '' : 's'} queued`;
@@ -99,7 +104,16 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
         data-testid={prominent ? 'author-operation-card' : undefined}
         className={`rounded border p-3 ${STATUS_STYLES[request.status]}`}
       >
-        <p className="font-mono text-[10px] font-bold tracking-[0.14em]">● {request.status}</p>
+        <p className="font-mono text-[10px] font-bold tracking-[0.14em]">
+          ●{' '}
+          {request.status === 'CHANGING'
+            ? 'WORKING'
+            : request.status === 'COMPLETE'
+              ? 'COMPLETED'
+              : request.status === 'FAILED'
+                ? 'ERROR'
+                : request.status}
+        </p>
         <p className="mt-2 text-[12px] leading-relaxed text-doom-hi">
           {request.currentOperation || STATUS_LABELS[request.status]}
         </p>
@@ -130,9 +144,7 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
         </div>
       </section>
 
-      <footer className="font-mono text-[9px] text-doom-dim">
-        {progressLabel(request)} · changes are visible in the center
-      </footer>
+      <footer className="font-mono text-[9px] text-doom-dim">{progressLabel(request)}</footer>
     </article>
   );
 }

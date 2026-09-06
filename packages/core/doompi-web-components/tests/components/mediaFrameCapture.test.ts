@@ -28,7 +28,7 @@ describe('video frame capture', () => {
     expect(canvas.height).toBe(1080);
     expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 1920, 1080);
     expect(toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.8);
-    expect(result).toEqual({ blob, width: 1920, height: 1080, timeSeconds: 2.5, metadata });
+    expect(result).toEqual({ blob, width: 1920, height: 1080, timeSeconds: 2.4, metadata });
     metadata.mediaTime = 3;
     expect(result?.metadata?.mediaTime).toBe(2.4);
   });
@@ -63,5 +63,23 @@ describe('video frame capture', () => {
   it('returns null when the browser cannot encode a frame', async () => {
     const { video } = fixture({ blob: null });
     expect(await mediaPreviewController({ current: video }).captureFrame()).toBeNull();
+  });
+  it('rejects frame capture during an unfinished seek', async () => {
+    const { video } = fixture();
+    Object.assign(video, { seeking: true, readyState: 2 });
+    const controller = mediaPreviewController({ current: video });
+    expect(controller.isFrameReady()).toBe(false);
+    expect(await controller.captureFrame()).toBeNull();
+    expect(document.createElement).not.toHaveBeenCalled();
+  });
+  it('waits for a decoded frame callback when supported', () => {
+    const { video } = fixture();
+    Object.assign(video, { seeking: false, readyState: 2, requestVideoFrameCallback: vi.fn() });
+    const metadata = { current: undefined as undefined | { mediaTime: number } };
+    const controller = mediaPreviewController({ current: video }, metadata);
+    expect(controller.isFrameReady()).toBe(false);
+    metadata.current = { mediaTime: 2.4 };
+    expect(controller.isFrameReady()).toBe(true);
+    expect(mediaPreviewController({ current: null }).isFrameReady()).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ import {
 import type { AuthorDisplayedRegion } from '../../src/web/lib/authorViewportTypes.ts';
 const hooks = vi.hoisted(() => ({
   refs: [] as unknown[],
+  states: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],
   cleanups: [] as (() => void)[],
 }));
@@ -20,7 +21,7 @@ vi.mock('react', async (importOriginal) => ({
   useState: (initial: unknown) => {
     const setter = vi.fn();
     hooks.setters.push(setter);
-    return [initial, setter];
+    return [hooks.states.length ? hooks.states.shift() : initial, setter];
   },
   useRef: (current: unknown) => ({ current: hooks.refs.length ? hooks.refs.shift() : current }),
   useEffect: (effect: () => void | (() => void)) => {
@@ -43,6 +44,7 @@ type Props = {
   'data-testid'?: string;
   onChange?: (value: string) => void;
   onSelect?: (range: Range) => void;
+  onPointerMove?: (event: Pointer) => void;
   onPointerDownCapture?: (event: Pointer) => void;
   onPointerUp?: (event: Pointer) => void;
   onPointerCancel?: () => void;
@@ -222,6 +224,31 @@ function mediaFixture(
   return { root, image, cell, document, pointer, drag, drawImage };
 }
 describe('Author media selection integration', () => {
+  it.each(['image', 'video'] as const)('renders the selected rectangle over %s', (kind) => {
+    hooks.states = [
+      { playing: false, currentTime: 0, duration: 3 },
+      true,
+      { path: 'doc', rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 } },
+      undefined,
+      { source: undefined, url: 'blob:media' },
+    ];
+    const { root } = mediaFixture(kind);
+    expect(nodes(root).some((node) => node.props['data-testid'] === 'author-media-selection')).toBe(true);
+  });
+  it('shows normalized drag feedback, pauses video, and clears cancelled selections', () => {
+    const pause = vi.fn();
+    const { root, pointer } = mediaFixture('video', { video: { pause } });
+    const element = new VideoElement();
+    root.props.onPointerDownCapture!(pointer(element, 0, 0));
+    root.props.onPointerMove!(pointer(element, 400, 200));
+    expect(pause).toHaveBeenCalledOnce();
+    expect(hooks.setters.at(-3)).toHaveBeenLastCalledWith({
+      path: 'doc',
+      rect: { x: 0, y: 0, width: 0.5, height: 0.5 },
+    });
+    root.props.onPointerCancel!();
+    expect(hooks.setters.at(-3)).toHaveBeenLastCalledWith(undefined);
+  });
   it('resolves image cells and captures source-normalized rectangles', async () => {
     const fixture = mediaFixture();
     expect(resolveAuthorGridNativeAnchor('s', fixture.cell)).toMatchObject({
@@ -281,7 +308,7 @@ describe('Author media selection integration', () => {
     ]) {
       const fixture = mediaFixture('image', options);
       await fixture.drag();
-      expect(hooks.setters.at(-1)).toHaveBeenCalledWith(
+      expect(hooks.setters.at(-2)).toHaveBeenCalledWith(
         expect.stringMatching(/not ready|unavailable|Unable to capture/),
       );
     }
@@ -289,7 +316,10 @@ describe('Author media selection integration', () => {
   });
   it('captures native video timestamps and PDF page numbers', async () => {
     const video = mediaFixture('video', {
-      video: { captureFrame: async () => ({ timeSeconds: 12, width: 1920, height: 1080, blob: new Blob(['frame']) }) },
+      video: {
+        pause: vi.fn(),
+        captureFrame: async () => ({ timeSeconds: 12, width: 1920, height: 1080, blob: new Blob(['frame']) }),
+      },
     });
     await video.drag(new VideoElement());
     expect(workspace.authorSessionWorkspace('s').candidate?.anchor).toMatchObject({
@@ -307,10 +337,10 @@ describe('Author media selection integration', () => {
   it('rejects unavailable native PDF/video controllers', async () => {
     const video = mediaFixture('video');
     await video.drag(new VideoElement());
-    expect(hooks.setters.at(-1)).toHaveBeenCalledWith('Video frame is not ready.');
+    expect(hooks.setters.at(-2)).toHaveBeenCalledWith('Video frame is not ready.');
     const pdf = mediaFixture('pdf');
     await pdf.drag(new CanvasElement());
-    expect(hooks.setters.at(-1)).toHaveBeenCalledWith('PDF page is not ready.');
+    expect(hooks.setters.at(-2)).toHaveBeenCalledWith('PDF page is not ready.');
     mediaFixture('opaque');
   });
   it('discards captures when focus moves before or during asynchronous capture', async () => {

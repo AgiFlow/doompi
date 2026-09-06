@@ -48,9 +48,13 @@ export function displayedAuthorRegions(
 }
 export function AuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   if (!props.activeMinorModes?.includes('author')) {
+    const fallback = props.fileTabFor(props.path);
+    if (fallback !== undefined && fallback.id !== tabId(props.path)) {
+      return <fallback.panel {...props} />;
+    }
     return (
-      <p data-testid="author-mode-inactive" className="p-4 text-[11px] text-doom-dim">
-        Enable Author minor mode to edit this document.
+      <p data-testid="author-mode-inactive" className="p-3 text-xs text-doom-dim">
+        No file viewer is available for this path.
       </p>
     );
   }
@@ -141,7 +145,7 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
   return (
     <section data-testid="author-document" className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b border-doom-border px-4 py-2">
-        <strong className="min-w-0 flex-1 truncate text-[11px] text-doom-hi">{document.title ?? document.path}</strong>
+        <strong className="min-w-0 flex-1 truncate text-sm text-doom-hi">{document.title ?? document.path}</strong>
         {document.kind === 'markdown' ? (
           <Button
             size="xs"
@@ -152,15 +156,19 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
             {markdownPreview ? 'edit' : 'preview'}
           </Button>
         ) : null}
-        <Button
-          size="xs"
-          variant="outline"
-          data-testid="author-save"
-          disabled={document.revisions.length === 0 || document.savingVersion !== undefined}
-          onClick={() => void save()}
-        >
-          Save
-        </Button>
+        {document.kind === 'video' ? (
+          <span className="text-sm text-doom-dim">Video feedback</span>
+        ) : (
+          <Button
+            className="min-h-11 px-4 text-sm"
+            variant="outline"
+            data-testid="author-save"
+            disabled={document.revisions.length === 0 || document.savingVersion !== undefined}
+            onClick={() => void save()}
+          >
+            Save
+          </Button>
+        )}
       </header>
       {status === undefined ? null : <output className="px-4 py-1 text-[10px] text-doom-faint">{status}</output>}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -175,6 +183,8 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
             document={document}
             activeTool={activeTool}
             displayedRegions={displayedRegions}
+            pendingCandidate={workspace?.candidate !== undefined}
+            seekRequest={workspace?.videoSeekRequest}
           />
         )}
         <AuthorGridOverlay sessionId={sessionId} document={document} visible={gridVisible} />
@@ -194,6 +204,7 @@ export function authorFileTab(path: string): TransientTab {
 }
 
 export const authorFileLinks: FileLinkSource = {
+  requiredMinorMode: 'author',
   subscribe(listener) {
     const subscription = authorWorkspace.store.subscribe(listener);
     return () => subscription.unsubscribe();

@@ -107,7 +107,7 @@ describe('the file tab body', () => {
     expect(rendered.html).toContain('data-mode="code"');
   });
 
-  it('shows a file the editor cannot hold as its bytes: a picture stays a picture', () => {
+  it('waits for authenticated media bytes instead of exposing a raw API source', () => {
     const detail = detailOf({
       relPath: 'docs/shot.png',
       working: { content: '', hash: '', unavailable: true, reason: 'the file is binary' },
@@ -116,8 +116,8 @@ describe('the file tab body', () => {
     const fixture = slotPropsFixture({ sessionId: SESSION });
     const rendered = renderPlugin(FilePanel, { ...fixture.props, filePath: PATH, relPath: 'docs/shot.png' });
     expect(rendered.html).toContain('data-mode="media"');
-    expect(rendered.html).toContain('files-preview-media');
-    expect(rendered.html).toContain('/api/sessions/s1/file?path=docs%2Fshot.png');
+    expect(rendered.html).toContain('Loading media...');
+    expect(rendered.html).not.toContain('/api/sessions/s1/file?path=docs%2Fshot.png');
   });
 
   it('says why a file it cannot read has nothing to show', () => {

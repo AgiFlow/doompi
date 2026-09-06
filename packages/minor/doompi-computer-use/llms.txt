@@ -9,3 +9,4 @@ Session-scoped semantic computer control through DoomPi Desktop.
 ## Resources
 
 - [Package README](./README.md): Installation, activation workflow, tools, API boundaries, and development commands.
+- [Author computer scripts](./docs/computer-scripts.md): Trusted script authorization, runtime contract, limits, and example.

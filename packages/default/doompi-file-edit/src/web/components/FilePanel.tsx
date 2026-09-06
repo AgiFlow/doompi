@@ -10,12 +10,12 @@ import {
   type EditorSelectionRange,
   KebabIcon,
   Markdown,
-  MediaPreview,
 } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 import type { FileEditsVersionView } from '../../types/fileEditsApi.ts';
+import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview.tsx';
 import { CommentDraft } from './CommentDraft.tsx';
 import { DeleteFileDialog } from './DeleteFileDialog.tsx';
 import { DiffView } from './DiffView.tsx';

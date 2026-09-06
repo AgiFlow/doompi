@@ -14,7 +14,7 @@ const CODE_CLASS = 'rounded bg-doom-deep px-1 py-px font-mono text-[12px] text-d
  * command. The caller decides what counts, because only it knows which files
  * the session has.
  */
-export type FileLinkHandler = (text: string) => (() => void) | undefined;
+export type FileLinkHandler = (text: string, explicit?: boolean) => (() => void) | undefined;
 
 /**
  * Passed by context rather than as a component prop so the component map stays
@@ -53,16 +53,41 @@ function Code({ className, children, ...rest }: ComponentProps<'code'>) {
   );
 }
 
+function Link({ href, children }: ComponentProps<'a'>) {
+  const onFileLink = useContext(FileLinkContext);
+  let path = href;
+  try {
+    path = href === undefined ? undefined : decodeURIComponent(href);
+  } catch {
+    path = undefined;
+  }
+  const isFile = path !== undefined && path !== '' && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#|\?)/i.test(path);
+  const open = isFile ? onFileLink?.(path!, true) : undefined;
+  if (open !== undefined)
+    return (
+      <button
+        type="button"
+        data-testid="markdown-file-link"
+        title={`open ${path}`}
+        onClick={open}
+        className="text-doom-blue underline decoration-doom-blue/50"
+      >
+        {children}
+      </button>
+    );
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="text-doom-blue underline decoration-doom-blue/50">
+      {children}
+    </a>
+  );
+}
+
 const COMPONENTS: Components = {
   p: ({ children }) => <p className="whitespace-pre-wrap break-words">{children}</p>,
   strong: ({ children }) => <strong className="font-bold text-doom-hi">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
   del: ({ children }) => <del className="text-doom-dim line-through">{children}</del>,
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noreferrer" className="text-doom-blue underline decoration-doom-blue/50">
-      {children}
-    </a>
-  ),
+  a: Link,
   code: Code,
   pre: ({ children }) => (
     <pre className="overflow-x-auto rounded border border-doom-border bg-doom-deep p-2.5 text-[12px] leading-relaxed">

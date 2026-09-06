@@ -66,9 +66,11 @@ On macOS, native files and the enclosing application are code-signed, then the r
 
 Desktop contains a bounded host protocol for macOS computer-use operations. Its policy is designed around semantic actions rather than arbitrary shell input, with session-bound grants, expiry, sequencing, and emergency-stop handling. Local and remote approval paths are distinct, and the server remains responsible for remote step-up policy.
 
-The current macOS backend reports Accessibility and Screen Recording permission state but identifies its native adapter as unavailable. Target discovery and activation fail closed because the signed packaged adapter has not passed its capability probe. The existence of IPC handlers or native resources must not be documented as an enabled computer-use feature.
+The signed arm64 macOS helper performs a capability probe before Desktop use is reported as available. It discovers only visible application windows through Accessibility and Core Graphics, exposes a bounded semantic Accessibility snapshot, and accepts only `press`, `focus`, `set_value`, and semantic `scroll` actions tied to that snapshot. It has no coordinate, keyboard-event, shell, microphone, or system-audio fallback.
 
-If the adapter is enabled later, operating-system Accessibility and Screen Recording grants will enlarge the application's authority substantially. Renderer isolation alone would not constrain those native privileges. The capability probe, explicit grants, server policy, and audit trail must all remain in the path.
+An active grant configures ScreenCaptureKit with the verified window filter, audio capture enabled, and microphone capture explicitly disabled. Stop returns a typed MP4 artifact which the local server copies into its restricted recording store. Target-application audio behavior must still be verified in a signed packaged build before release. Temporary helper staging files are sensitive and are cleaned by the helper's retention policy.
+
+DoomPi checks Accessibility and Screen Recording authorization without prompting. Before activating Desktop, grant DoomPi access manually in **System Settings > Privacy & Security > Accessibility** and **System Settings > Privacy & Security > Screen & System Audio Recording**. Do not grant Microphone access. If either required permission is missing, discovery and activation fail closed.
 
 ## Data locations
 
@@ -85,7 +87,7 @@ The BrowserWindow session partition is in memory, so Electron does not intention
 - Keep remote access disabled unless it is required.
 - Treat quick-tunnel mode according to the web security guide's documented limitations.
 - Review plugins and layers before enabling them.
-- Do not grant macOS Accessibility or Screen Recording permissions based only on the presence of the desktop application. The current adapter remains unavailable.
+- Grant macOS Accessibility and Screen Recording only when computer use is required. DoomPi does not need Microphone access.
 - Use a dedicated operating-system account when agent access must be separated from personal files or credentials.
 
 ## Related guides

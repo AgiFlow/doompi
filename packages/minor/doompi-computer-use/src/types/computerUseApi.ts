@@ -37,6 +37,7 @@ export interface ComputerUseArtifactView {
   readonly previewUrl?: string;
   readonly actionCount?: number;
   readonly completedAt?: string;
+  readonly failure?: { readonly code: string; readonly message: string };
 }
 
 export interface ComputerUseSessionView {

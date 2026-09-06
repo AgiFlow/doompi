@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { authorCaptureContext, createAuthorCapturePacket } from '../../src/web/stores/authorCapture.ts';
 import { authorProfilesForDocument } from '../../src/web/stores/authorProfiles.ts';
-import { recordAuthorComposerSubmission } from '../../src/web/stores/authorRequestLifecycle.ts';
+import {
+  recordAuthorCaptureStatus,
+  recordAuthorComposerSubmission,
+} from '../../src/web/stores/authorRequestLifecycle.ts';
 import {
   addAuthorRegion,
   authorDocument,
@@ -174,4 +177,69 @@ describe('Author request lifecycle', () => {
     expect(authorSessionWorkspace('s1').requests[0]?.status).toBe('COMPLETE');
     expect(authorDocument('s1', 'notes.md')?.sourceSha256).toBe('new');
   });
+  it('settles only the correlated capture and ignores stale events after completion', () => {
+    const region: AuthorRegionDraft = {
+      id: 'r1',
+      documentPath: 'clip.mp4',
+      revision: 0,
+      comment: 'inspect',
+      anchor: { kind: 'video-time-rect', timeSeconds: 1, rect: { x: 0, y: 0, width: 1, height: 1 } },
+      viewport: { width: 100, height: 100 },
+      createdAt: 1,
+    };
+    putAuthorRequest('s1', {
+      id: 'request',
+      captureId: 'capture',
+      documentPath: 'clip.mp4',
+      requestText: 'inspect',
+      regions: [region],
+      pendingRegions: [region],
+      status: 'REQUESTED',
+      revision: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    recordAuthorCaptureStatus({ sessionId: 'other', captureId: 'capture', status: 'completed' });
+    recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'other', status: 'completed' });
+    recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'capture', status: 'queued' });
+    expect(authorSessionWorkspace('s1').requests[0]?.status).toBe('REQUESTED');
+    recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'capture', status: 'working' });
+    expect(authorSessionWorkspace('s1').requests[0]?.status).toBe('CHANGING');
+    recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'capture', status: 'completed' });
+    expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({ status: 'COMPLETE', pendingRegions: [] });
+    recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'capture', status: 'working' });
+    recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'capture', status: 'error', error: 'late error' });
+    expect(authorSessionWorkspace('s1').requests[0]?.status).toBe('COMPLETE');
+  });
+
+  it.each([undefined, 'Connection lost'])(
+    'records execution failure without claiming the video was saved (%s)',
+    (error) => {
+      const region: AuthorRegionDraft = {
+        id: 'r',
+        documentPath: 'clip.mp4',
+        revision: 0,
+        comment: 'inspect',
+        anchor: { kind: 'video-time-rect', timeSeconds: 1, rect: { x: 0, y: 0, width: 1, height: 1 } },
+        viewport: { width: 100, height: 100 },
+        createdAt: 1,
+      };
+      putAuthorRequest('s1', {
+        id: 'request',
+        captureId: 'capture',
+        documentPath: 'clip.mp4',
+        requestText: 'inspect',
+        regions: [region],
+        status: 'REQUESTED',
+        revision: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      recordAuthorCaptureStatus({ sessionId: 's1', captureId: 'capture', status: 'error', error });
+      expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({
+        status: 'FAILED',
+        error: error || 'Request execution failed.',
+      });
+    },
+  );
 });

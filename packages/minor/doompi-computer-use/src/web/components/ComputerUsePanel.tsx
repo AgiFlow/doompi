@@ -122,13 +122,22 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
       ) : null}
       {artifact ? (
         <div data-testid="computer-use-artifact" className="rounded bg-doom-panel p-2">
-          <strong>Completed artifact</strong>
+          <strong>{artifact.status === 'ready' ? 'Completed recording' : 'Recording unavailable'}</strong>
           <p>ID: {artifact.artifactId}</p>
           <p>Status: {artifact.status}</p>
+          {artifact.failure ? <p className="text-doom-error">{artifact.failure.message}</p> : null}
           {artifact.completedAt ? <p>Completed: {artifact.completedAt}</p> : null}
           {artifact.actionCount !== undefined ? <p>Actions: {artifact.actionCount}</p> : null}
-          {artifact.previewUrl ? <a href={artifact.previewUrl}>Preview</a> : null}
-          {artifact.downloadUrl ? <a href={artifact.downloadUrl}>Download</a> : null}
+          {artifact.status === 'ready' && artifact.previewUrl ? (
+            <video className="mt-2 w-full" controls preload="metadata" src={artifact.previewUrl}>
+              <track kind="captions" />
+            </video>
+          ) : null}
+          {artifact.status === 'ready' && artifact.downloadUrl ? (
+            <a className="mt-2 inline-block text-doom-accent" href={artifact.downloadUrl} download>
+              Download recording
+            </a>
+          ) : null}
         </div>
       ) : null}
     </div>

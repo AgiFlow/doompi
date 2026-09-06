@@ -1,7 +1,12 @@
-import type { ComposerSubmission } from '@agimon-ai/doompi-web-contracts';
+import type { CaptureStatusEvent, ComposerSubmission } from '@agimon-ai/doompi-web-contracts';
 import type { AuthorCapturePacket } from './authorCapture.ts';
 import type { AuthorRegionDraft } from '../lib/authorViewportTypes.ts';
-import { authorSessionWorkspace, putAuthorRequest, removeAuthorRegion } from './authorWorkspaceStore.ts';
+import {
+  authorSessionWorkspace,
+  putAuthorRequest,
+  removeAuthorRegion,
+  updateAuthorRequest,
+} from './authorWorkspaceStore.ts';
 
 function capturePacket(content: string): AuthorCapturePacket | undefined {
   try {
@@ -26,7 +31,7 @@ function capturePacket(content: string): AuthorCapturePacket | undefined {
 export function recordAuthorComposerSubmission(submission: ComposerSubmission): void {
   for (const item of submission.contextItems) {
     if (item.source !== 'author' || item.kind !== 'author-capture') continue;
-    const packet = capturePacket(item.content);
+    const packet = capturePacket(item.metadata ?? item.content);
     if (packet === undefined || packet.captureId !== item.id) continue;
     if (authorSessionWorkspace(submission.sessionId).requests.some((request) => request.captureId === packet.captureId))
       continue;
@@ -57,4 +62,21 @@ export function recordAuthorComposerSubmission(submission: ComposerSubmission): 
     });
     for (const region of packet.regions) removeAuthorRegion(submission.sessionId, region.id);
   }
+}
+
+/** Only the host's correlated execution events may settle a submitted capture. */
+export function recordAuthorCaptureStatus(event: CaptureStatusEvent): void {
+  const request = authorSessionWorkspace(event.sessionId).requests.find(
+    (record) => record.captureId === event.captureId,
+  );
+  if (request === undefined || ['COMPLETE', 'FAILED', 'CANCELLED'].includes(request.status)) return;
+  if (event.status === 'queued') return;
+  updateAuthorRequest(event.sessionId, request.id, (record) => ({
+    ...record,
+    status: event.status === 'working' ? 'CHANGING' : event.status === 'completed' ? 'COMPLETE' : 'FAILED',
+    currentOperation: event.status === 'working' ? 'Agent is working on this request' : undefined,
+    pendingRegions: event.status === 'completed' ? [] : record.pendingRegions,
+    error: event.status === 'error' ? event.error || 'Request execution failed.' : undefined,
+    updatedAt: Date.now(),
+  }));
 }

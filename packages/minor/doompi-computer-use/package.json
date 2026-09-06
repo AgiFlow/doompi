@@ -26,6 +26,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "src/web",
     "src/types/computerUse.ts",
     "src/types/computerUseApi.ts",

@@ -132,21 +132,24 @@ function MessageActions({
       className="pointer-events-none absolute right-1 bottom-0 z-10 flex max-w-[calc(100%-0.5rem)] translate-y-1/2 flex-wrap justify-end gap-1 rounded-md border border-doom-border-soft bg-doom-panel p-0.5 opacity-0 shadow-sm transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
     >
       {userMessage
-        ? pluginUserMessageActions().map((action) => (
-            <Button
-              key={`${action.pluginId}.${action.id}`}
-              variant="subtle"
-              size="sm"
-              data-testid="entry-plugin-action"
-              aria-label={action.label}
-              title={action.label}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => action.run(userMessage)}
-              className="h-6 border-0 px-2 text-[10px] shadow-none"
-            >
-              {action.label}
-            </Button>
-          ))
+        ? pluginUserMessageActions().map((action) => {
+            const ActionIcon = action.icon;
+            return (
+              <Button
+                key={`${action.pluginId}.${action.id}`}
+                variant="subtle"
+                size={ActionIcon ? 'icon' : 'sm'}
+                data-testid="entry-plugin-action"
+                aria-label={action.label}
+                title={action.label}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => action.run(userMessage)}
+                className={ActionIcon ? 'border-0 shadow-none' : 'h-6 border-0 px-2 text-[10px] shadow-none'}
+              >
+                {ActionIcon ? <ActionIcon aria-hidden={true} className="h-3 w-3" /> : action.label}
+              </Button>
+            );
+          })
         : null}
       <Button
         variant="subtle"

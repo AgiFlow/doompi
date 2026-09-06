@@ -72,6 +72,8 @@ export interface TransientTab {
  * from becoming a dead link.
  */
 export interface FileLinkSource {
+  /** This source only claims paths while the named minor mode is active. */
+  requiredMinorMode?: string;
   /** Notifies while a message is on screen and the linkable set changes. */
   subscribe(listener: () => void): () => void;
   /** Changes only when the session's linkable set does; the host re-reads on a change. */
@@ -111,8 +113,10 @@ export interface WebPluginContextItem {
   id: string;
   /** Compact human label shown on a composer chip. */
   label: string;
-  /** Model-facing context carried by the chip and handed to context actions. */
+  /** Concise model-facing context carried by the chip and handed to context actions. */
   content: string;
+  /** Optional browser-only structured payload for the source plugin. It is not added to the model prompt. */
+  metadata?: string;
   /** Optional browser-safe destination for actions that need the source record. */
   url?: string;
 }
@@ -124,6 +128,13 @@ export interface ComposerCapture {
   mimeType: 'image/png' | 'image/jpeg';
   /** The model-facing context attached beside the screenshot. */
   context: WebPluginContextItem;
+}
+
+export interface CaptureStatusEvent {
+  sessionId: string;
+  captureId: string;
+  status: 'queued' | 'working' | 'completed' | 'error';
+  error?: string;
 }
 
 /** One accepted composer delivery, published before its browser draft is cleared. */
@@ -157,6 +168,8 @@ export interface UserMessageActionContribution {
   /** Unique inside this plugin. */
   id: string;
   label: string;
+  /** Optional compact visual. The label remains the accessible name and tooltip. */
+  icon?: ComponentType<{ 'aria-hidden'?: boolean; className?: string }>;
   /** Lower values appear first, then plugin id and action id. */
   order?: number;
   run(context: UserMessageActionRunContext): void;
@@ -199,6 +212,8 @@ export interface WebPluginSlotProps {
   attachComposerContext: (item: WebPluginContextItem) => void;
   /** Atomically stages a validated PNG or JPEG capture and its structured context for explicit submission. */
   attachComposerCapture: (capture: ComposerCapture) => void;
+  /** Delivers without changing the composer. Resolves on acceptance, not completion. */
+  submitCapture?: (capture: ComposerCapture) => Promise<void>;
   /** Actions installed independent plugins offer for this context item, in display order. */
   contextActionsFor: (item: WebPluginContextItem) => readonly ContextAction[];
   /** The same sender palette commands and `start` receive; components act through it. */
@@ -701,6 +716,8 @@ export interface WebPluginRuntime {
   acquireModelContext?(): Promise<ModelContextBinding>;
   /** Observes accepted composer submissions for page-lifetime plugin correlation. */
   onComposerSubmitted?(listener: (submission: ComposerSubmission) => void): () => void;
+  /** Execution events follow accepted submission and use context.id as captureId. */
+  onCaptureStatus?(listener: (event: CaptureStatusEvent) => void): () => void;
 }
 export interface WebPluginDefinition {
   id: string;

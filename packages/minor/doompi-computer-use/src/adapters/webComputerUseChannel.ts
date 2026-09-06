@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
 import {
   API_BASE_PATH,
@@ -129,9 +130,13 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
               payload: { grantId: authorization.grantId },
             });
           } catch (error) {
-            host.onNotice(
-              `computer-use Desktop stop was already unavailable (${error instanceof Error ? error.message : String(error)})`,
-            );
+            const message = error instanceof Error ? error.message : String(error);
+            artifact = {
+              artifactId: randomUUID(),
+              status: 'failed',
+              failure: { code: 'recording_failed', message: message.slice(0, 512) },
+            };
+            host.onNotice(`computer-use Desktop stop was already unavailable (${message})`);
           }
         }
         await responseJson(await sessionRequest(scope, COMPUTER_USE_ROUTES.hubStop, 'POST', { artifact }));
@@ -156,9 +161,7 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
               }
             }
             if (expired || !owned) {
-              await responseJson(await sessionRequest(scope, COMPUTER_USE_ROUTES.hubStop, 'POST'));
-              grants.delete(scope.sessionId);
-              if (activeSessionId === scope.sessionId) activeSessionId = undefined;
+              await stopSession(scope);
               await refresh(scope);
               return;
             }

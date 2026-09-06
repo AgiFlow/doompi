@@ -64,6 +64,7 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.1",
     "csv-parse": "7.0.2",
     "hono": "4.13.5",

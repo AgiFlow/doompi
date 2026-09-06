@@ -30,6 +30,7 @@ export type {
   ActivityGroupContribution,
   ComposerCapture,
   ComposerSubmission,
+  CaptureStatusEvent,
   ContextAction,
   ContextActionContribution,
   ContextActionRunContext,

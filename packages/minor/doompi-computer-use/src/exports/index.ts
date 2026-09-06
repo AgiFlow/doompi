@@ -6,10 +6,12 @@ export {
 } from '../adapters/pi/extension.ts';
 export { createComputerUseSessionClient, UnixComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
 export type { ComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
-export { createComputerUseContainer } from '../container/index.ts';
+export { COMPUTER_USE_SCRIPT_PATHS_ENV, createComputerUseContainer } from '../container/index.ts';
+export { ComputerScriptRunner } from '../adapters/pi/computerScriptRunner.ts';
 export { DefaultComputerUseExtensionService } from '../services/extensionService.ts';
 export { initialComputerUseState, reduceComputerUseState } from '../services/sessionController.ts';
 export { redactComputerUseTrace } from '../services/traceRedaction.ts';
+export type * from '../types/computerScript.ts';
 export type * from '../types/computerUse.ts';
 export type * from '../types/computerUseApi.ts';
 export type * from '../types/extension.ts';

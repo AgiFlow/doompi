@@ -32,6 +32,7 @@
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-computer-use/SKILL.md"],
     "files": [
       "dist",
+      "docs",
       "src/web",
       "src/types/computerUse.ts",
       "src/types/computerUseApi.ts",

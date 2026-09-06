@@ -26,7 +26,7 @@ function backendFixture() {
     }),
     observe: vi.fn(async () => ({})),
     act: vi.fn(async () => ({})),
-    stop: vi.fn(async () => undefined),
+    stop: vi.fn(async () => ({ stopped: true })),
   };
   const host = new ComputerUseHost({
     backend,

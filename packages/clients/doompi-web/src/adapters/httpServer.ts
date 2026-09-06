@@ -67,6 +67,7 @@ import { readRegistryRecords, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub, type SessionHubOptions } from './sessionHub.ts';
 import { allowedOriginsFromEnv } from '../services/remoteGuardPolicy.ts';
+import { createRecordingArtifactStore } from '../services/recordingArtifacts.ts';
 import { describeStranded, planSessionMigration } from '../services/sessionMigration.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
 import { registerSettingsRoutes } from './settingsRoutes.ts';
@@ -634,8 +635,14 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     apiDirectory: undefined,
   };
   const pluginPublication = createPluginBundlePublication(store.directory, notice);
+  const recordingArtifacts = createRecordingArtifactStore(
+    options.computerUse,
+    Date.now,
+    randomUUID,
+    path.join(options.registryDir, 'computer-use', 'recordings'),
+  );
   const hub = buildHub(
-    options,
+    { ...options, ...(recordingArtifacts.binding === undefined ? {} : { computerUse: recordingArtifacts.binding }) },
     notice,
     {
       loadChannels: async (record) => {
@@ -1251,6 +1258,26 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ directories });
   });
 
+  app.on(['GET', 'HEAD'], '/api/sessions/:sessionId/computer-use/artifacts/:artifactId', (context) => {
+    if (
+      guard.listenerOf(context) !== 'local' ||
+      (context.env as SealedRequestBindings | undefined)?.sealedDeviceId !== undefined
+    ) {
+      return context.json({ error: 'Recording playback is available only on this machine.' }, 403);
+    }
+    const sessionId = context.req.param('sessionId');
+    if (!hub.snapshot().some((candidate) => candidate.id === sessionId)) {
+      return context.json({ error: 'Unknown session.' }, 404);
+    }
+    return recordingArtifacts.response(
+      sessionId,
+      context.req.param('artifactId'),
+      context.req.header('range'),
+      context.req.query('download') === '1',
+      context.req.method === 'HEAD',
+    );
+  });
+
   // The timeline's @file previews and guarded host saves: one cwd-contained file, capped in size.
   app.get(SESSION_FILE_ROUTE, async (context) => {
     const sessionId = context.req.param('sessionId');
@@ -1698,6 +1725,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           disconnectLivePush();
           livePush?.close();
           hub.close();
+          recordingArtifacts.close();
           providerAuth.close();
           for (const handler of pluginApis.handlers) handler.close();
           pluginPublication.close();
@@ -1724,6 +1752,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       disconnectLivePush();
       livePush?.close();
       hub.close();
+      recordingArtifacts.close();
       providerAuth.close();
       void remote.close();
       for (const handler of pluginApis.handlers) handler.close();

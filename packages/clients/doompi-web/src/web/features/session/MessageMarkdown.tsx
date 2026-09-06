@@ -1,6 +1,6 @@
 import { Markdown } from '@agimon-ai/doompi-web-components';
 import { useCallback } from 'react';
-import { useFileLinks } from '../../lib/composition.ts';
+import { fileTabForPath, useFileLinks } from '../../lib/composition.ts';
 import { openTransientTab } from '../../stores/transientTabsStore.ts';
 import { useOpenTab } from '../../stores/useOpenTab.ts';
 
@@ -16,9 +16,9 @@ export function MessageMarkdown({ sessionId, text }: { sessionId: string | null;
   const resolve = useFileLinks(sessionId);
   const openTab = useOpenTab();
   const onFileLink = useCallback(
-    (label: string) => {
+    (label: string, explicit = false) => {
       if (sessionId === null) return undefined;
-      const tab = resolve(label);
+      const tab = explicit ? fileTabForPath(sessionId, label) : resolve(label);
       if (tab === undefined) return undefined;
       return () => {
         openTransientTab(sessionId, tab);

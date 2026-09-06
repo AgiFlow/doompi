@@ -1,3 +1,4 @@
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import type {
   CsvDialect,
   DocumentFragment,
@@ -42,7 +43,7 @@ function authorDocumentApiUrl(sessionId: string, operation: 'open' | 'preflight'
 }
 
 async function jsonRequest<T>(url: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, {
+  const response = await sealedTransport.fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -61,7 +62,7 @@ export async function loadAuthorDocument(
 ): Promise<AuthorDocumentInput> {
   const kind = authorKindForPath(path);
   const url = authorSessionFileUrl(sessionId, path);
-  const response = await fetch(url, { signal });
+  const response = await sealedTransport.fetch(url, { signal });
   if (!response.ok) throw new Error(`Author could not open ${path} (${response.status})`);
   const sourceSha256 = response.headers.get('X-File-SHA256') ?? undefined;
   const format = structuredFormat(path);
@@ -126,7 +127,7 @@ async function croppedImageBytes(documentInput: AuthorDocumentInput, signal?: Ab
   if (crop === undefined || mediaUrl === undefined) throw new Error('This Author image has no crop source.');
   const mimeType = imageMimeType(documentInput.path);
   if (mimeType === undefined) throw new Error('This image format cannot preserve its encoding after crop.');
-  const response = await fetch(mediaUrl, { signal, cache: 'no-store' });
+  const response = await sealedTransport.fetch(mediaUrl, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error(`Author could not read the image before saving (${response.status})`);
   const bitmap = await createImageBitmap(await response.blob());
   try {
@@ -186,7 +187,7 @@ export async function saveAuthorDocument(
   signal?: AbortSignal,
 ): Promise<string> {
   if (document.sourceSha256 === undefined) throw new Error('This Author view has no source digest.');
-  const response = await fetch(authorSessionFileUrl(sessionId, document.path), {
+  const response = await sealedTransport.fetch(authorSessionFileUrl(sessionId, document.path), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/octet-stream', 'X-Expected-SHA256': document.sourceSha256 },
     body: await bytesToSave(sessionId, document, signal),

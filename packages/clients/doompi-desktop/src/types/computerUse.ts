@@ -40,6 +40,18 @@ export interface ComputerUseBackendGrant {
   readonly expiresAt: number;
 }
 
+export interface ComputerUseStopArtifact {
+  readonly kind: 'screen_recording';
+  readonly path: string;
+  readonly contentType: 'video/mp4';
+  readonly audioScope: 'target_application';
+}
+
+export interface ComputerUseStopResult {
+  readonly stopped: boolean;
+  readonly artifact?: ComputerUseStopArtifact;
+}
+
 export interface ComputerUseBackend {
   status(): Promise<unknown>;
   targets(): Promise<unknown>;
@@ -59,5 +71,5 @@ export interface ComputerUseBackend {
     payload: unknown;
     signal?: AbortSignal;
   }): Promise<unknown>;
-  stop(input: { sessionId: string; grantId: string; reason: string }): Promise<void>;
+  stop(input: { sessionId: string; grantId: string; reason: string }): Promise<ComputerUseStopResult>;
 }

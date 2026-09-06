@@ -84,7 +84,7 @@ Confirm both processes use the same `DOOMPI_RUNTIME_DIR`. With no override, both
 
 ### Computer use reports unavailable
 
-The current macOS backend reports permission state but intentionally refuses activation because its signed native adapter has not passed the packaged capability probe. This is the expected current behavior, not a prompt to bypass the check.
+Computer use requires an arm64 Mac running macOS 15 or newer, the packaged native helper, and manually granted Accessibility and Screen Recording permissions. Run the Computer Use Doctor action to inspect the capability probe without requesting permissions. If the helper or either permission is unavailable, target discovery and activation fail closed.
 
 ## Next steps
 

@@ -35,7 +35,7 @@ describe('Author request presentation boundaries', () => {
     ['REQUESTED', '1 region queued'],
     ['CHANGING', '1 region queued'],
     ['CHANGED', 'Changes applied'],
-    ['COMPLETE', 'Saved to document'],
+    ['COMPLETE', 'Agent finished processing this request'],
     ['FAILED', 'Stopped with an error'],
     ['CANCELLED', 'Stopped before completion'],
   ] as const)('describes %s progress', (status, text) => expect(render({ ...request, status })).toContain(text));
@@ -72,5 +72,25 @@ describe('Author request presentation boundaries', () => {
     expect(markup).toContain('Change it');
     expect(markup).not.toContain('Referenced context');
     expect(markup).toContain('“text”');
+  });
+  it('does not print raw capture JSON when context is the whole request', () => {
+    const markup = render({ ...request, requestText: 'Referenced context "capture": {"captureId":"hidden"}' });
+    expect(markup).not.toContain('captureId');
+    expect(markup).toContain('No additional instruction.');
+  });
+  it('describes agent processing without claiming regions were edited or saved', () => {
+    const markup = render({
+      ...request,
+      status: 'CHANGING',
+      currentOperation: 'Agent is working on this request',
+      pendingRegions: [region],
+    });
+    expect(markup).toContain('WORKING');
+    expect(markup).toContain('Processing request');
+    expect(markup).not.toContain('regions applied');
+    const completed = render({ ...request, status: 'COMPLETE' });
+    expect(completed).toContain('COMPLETED');
+    expect(completed).not.toContain('Saved');
+    expect(completed).not.toContain('Change saved');
   });
 });

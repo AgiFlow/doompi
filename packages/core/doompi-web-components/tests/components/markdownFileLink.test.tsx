@@ -28,4 +28,38 @@ describe('Markdown file links', () => {
     const out = html(<Markdown text={['```', 'src/app.ts', '```'].join('\n')} onFileLink={() => () => undefined} />);
     expect(out).not.toContain('markdown-file-link');
   });
+  it('opens a labelled file href through the explicit session resolver', () => {
+    const calls: unknown[] = [];
+    const out = html(
+      <Markdown
+        text="[the MP4](packages/review%20video.mp4)"
+        onFileLink={(path, explicit) => {
+          calls.push([path, explicit]);
+          return () => undefined;
+        }}
+      />,
+    );
+    expect(calls).toEqual([['packages/review video.mp4', true]]);
+    expect(out).toContain('data-testid="markdown-file-link"');
+    expect(out).toContain('the MP4</button>');
+    expect(out).not.toContain('target="_blank"');
+  });
+
+  it.each(['https://example.com/video.mp4', '//example.com/video.mp4', '#section', 'mailto:a@example.com'])(
+    'keeps %s out of the file resolver',
+    (href) => {
+      const calls: string[] = [];
+      const out = html(
+        <Markdown
+          text={`[link](${href})`}
+          onFileLink={(path) => {
+            calls.push(path);
+            return () => undefined;
+          }}
+        />,
+      );
+      expect(calls).toEqual([]);
+      expect(out).toContain('<a ');
+    },
+  );
 });
