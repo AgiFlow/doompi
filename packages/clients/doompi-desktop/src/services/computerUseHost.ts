@@ -34,6 +34,7 @@ export interface ComputerUseHostOptions {
   readonly hostGeneration: string;
   readonly now: () => number;
   readonly newId: () => string;
+  readonly enabled: () => boolean;
   readonly confirmLocalActivation?: (confirmation: LocalActivationConfirmation) => Promise<boolean>;
 }
 
@@ -160,6 +161,7 @@ export class ComputerUseHost {
   readonly #hostGeneration: string;
   readonly #now: () => number;
   readonly #newId: () => string;
+  readonly #enabled: () => boolean;
   readonly #confirmLocalActivation: ((confirmation: LocalActivationConfirmation) => Promise<boolean>) | undefined;
   #active: ActiveGrant | undefined;
   #queue: Promise<void> = Promise.resolve();
@@ -174,6 +176,7 @@ export class ComputerUseHost {
     this.#hostGeneration = options.hostGeneration;
     this.#now = options.now;
     this.#newId = options.newId;
+    this.#enabled = options.enabled;
     this.#confirmLocalActivation = options.confirmLocalActivation;
   }
 
@@ -212,6 +215,19 @@ export class ComputerUseHost {
       if (this.#revoked) return this.#failure(request, 'desktop_unavailable', 'The Desktop capability is unavailable.');
       if (signal?.aborted === true) return this.#failure(request, 'request_cancelled', 'The request was cancelled.');
       await this.#expireIfNeeded();
+      if (!this.#enabled()) {
+        const active = this.#active;
+        if (active !== undefined) {
+          this.#clearExpiryTimer();
+          this.#active = undefined;
+          await this.#backend.stop({ ...active, reason: 'global_setting_disabled' });
+        }
+        if (request.operation === 'status') {
+          return this.#success(request, { available: false, busy: false, ownedBySession: false });
+        }
+        if (request.operation === 'stop') return this.#success(request, { stopped: active !== undefined });
+        return this.#failure(request, 'desktop_unavailable', 'Enable computer use in global settings first.');
+      }
       switch (request.operation) {
         case 'status':
           return this.#success(request, {
@@ -253,6 +269,8 @@ export class ComputerUseHost {
       if (!(await this.#confirmLocalActivation(activation.confirmation)))
         return this.#failure(request, 'confirmation_denied', 'Native Desktop confirmation was denied.');
     }
+    if (!this.#enabled())
+      return this.#failure(request, 'desktop_unavailable', 'Computer use was disabled during confirmation.');
     const durationSeconds = activation.confirmation.durationSeconds;
     const grant: ActiveGrant = {
       sessionId: request.sessionId,
@@ -262,7 +280,12 @@ export class ComputerUseHost {
       nextSequence: 1,
     };
     const result = await this.#backend.activate({ ...grant, payload: request.payload, signal });
-    if (signal?.aborted === true || this.#revoked || revocationGeneration !== this.#revocationGeneration) {
+    if (
+      signal?.aborted === true ||
+      this.#revoked ||
+      !this.#enabled() ||
+      revocationGeneration !== this.#revocationGeneration
+    ) {
       await this.#backend.stop({ ...grant, reason: 'request_cancelled' });
       return this.#failure(request, 'request_cancelled', 'The activation request was cancelled.');
     }

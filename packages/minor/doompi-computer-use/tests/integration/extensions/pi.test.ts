@@ -37,7 +37,7 @@ describe('doompi-computer-use Pi extension', () => {
     const service: ComputerUseExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
-    await activateComputerUseExtension(host.pi, { service });
+    await activateComputerUseExtension(host.pi, { service, enabled: () => true });
     await host.runCommand(COMMAND_NAME);
     expect(service.execute).toHaveBeenCalledOnce();
     expect(host.notifications).toEqual([{ sessionId: 'test-session', message: 'ready', level: 'info' }]);
@@ -48,6 +48,7 @@ describe('doompi-computer-use Pi extension', () => {
     const host = createPiTestHost();
     host.pi.setActiveTools(['read']);
     let phase: 'active' | 'inactive' | 'awaiting_confirmation' = 'inactive';
+    let globallyEnabled = true;
     const client: ComputerUseSessionClient = {
       state: vi.fn(async (): Promise<ComputerUseSessionView> => ({
         sessionId: 'test-session',
@@ -66,6 +67,7 @@ describe('doompi-computer-use Pi extension', () => {
     };
     const dependencies: ComputerUseExtensionDependencies = {
       client,
+      enabled: () => globallyEnabled,
       service: { execute: vi.fn(async () => ({ message: 'active', level: 'info' as const })) },
     };
     await activateComputerUseExtension(host.pi, dependencies);
@@ -117,6 +119,16 @@ describe('doompi-computer-use Pi extension', () => {
     ).resolves.toMatchObject({ details: { applied: true } });
     const prompts = await host.emit('before_agent_start', { systemPrompt: 'base' });
     expect(prompts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ systemPrompt: expect.stringContaining('COMPUTER USE ACTIVE') }),
+      ]),
+    );
+
+    globallyEnabled = false;
+    await host.emit('session_start', {});
+    await vi.waitFor(() => expect(client.stop).toHaveBeenCalledOnce());
+    expect(host.activeTools()).toEqual(['read']);
+    expect(await host.emit('before_agent_start', { systemPrompt: 'base' })).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ systemPrompt: expect.stringContaining('COMPUTER USE ACTIVE') }),
       ]),

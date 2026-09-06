@@ -44,7 +44,18 @@ describe('computer-use panel', () => {
   it('registers as a default-off minor mode and Activity section without a permanent tab', () => {
     expect(webPlugin.tabs).toBeUndefined();
     expect(webPlugin.minorModes).toEqual([
-      expect.objectContaining({ name: 'computer use', modeId: 'computer-use', statusKey: 'doom-computer-use-mode' }),
+      expect.objectContaining({
+        name: 'computer use',
+        modeId: 'computer-use',
+        statusKey: 'doom-computer-use-mode',
+        hideWhenMissing: true,
+      }),
+    ]);
+    expect(webPlugin.settingsSections).toEqual([
+      expect.objectContaining({
+        id: 'computer-use',
+        fields: [expect.objectContaining({ kind: 'toggle', keyPath: ['computerUse', 'enabled'] })],
+      }),
     ]);
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'computer-use', statusKey: 'doom-computer-use', hideWhenEmpty: true }),

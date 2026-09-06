@@ -80,6 +80,7 @@ export interface MinorModeSource {
   keys: string;
   statusKey?: string;
   widgetKey?: string;
+  hideWhenMissing?: boolean;
 }
 
 /**
@@ -101,7 +102,13 @@ export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress' },
   // `v e` drives autonomous capture, which the runtime registers as 'voice-auto'.
   { name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice' },
-  { name: 'computer use', modeId: 'computer-use', keys: 'c e', statusKey: 'doom-computer-use-mode' },
+  {
+    name: 'computer use',
+    modeId: 'computer-use',
+    keys: 'c e',
+    statusKey: 'doom-computer-use-mode',
+    hideWhenMissing: true,
+  },
 ];
 
 /** The declared source a catalog mode corresponds to, by id, id stem, or label. */
@@ -138,6 +145,7 @@ function catalogMinorModes(sources: readonly MinorModeSource[], projection: Mino
   });
   const seen = new Set(rows.map((row) => row.name));
   for (const source of sources) {
+    if (source.hideWhenMissing === true) continue;
     if (!seen.has(source.name)) {
       rows.push({
         name: source.name,
@@ -160,18 +168,21 @@ export function minorModes(
   const declared = pluginMinorModes();
   const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : PACKAGED_MINOR_MODES;
   if (projection) return catalogMinorModes(sources, projection);
-  return sources.map((source) => {
+  return sources.flatMap((source) => {
     if (source.statusKey !== undefined) {
       const raw = statuses[source.statusKey];
       if (raw === undefined) {
-        return {
-          name: source.name,
-          id: source.modeId ?? source.name,
-          keys: source.keys,
-          availability: 'unavailable' as const,
-          detail: '',
-          unavailableReason: 'This session has not reported the mode.',
-        };
+        if (source.hideWhenMissing === true) return [];
+        return [
+          {
+            name: source.name,
+            id: source.modeId ?? source.name,
+            keys: source.keys,
+            availability: 'unavailable' as const,
+            detail: '',
+            unavailableReason: 'This session has not reported the mode.',
+          },
+        ];
       }
       const detail = stripAnsi(raw).trim();
       return {

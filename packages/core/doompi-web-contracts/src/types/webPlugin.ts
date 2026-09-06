@@ -446,6 +446,8 @@ export interface MinorModeContribution {
   statusKey?: string;
   /** Widget key whose presence reports the mode as installed but off. */
   widgetKey?: string;
+  /** Omit the row when the active session does not register this opt-in mode. */
+  hideWhenMissing?: boolean;
   /** Sort position in the selection bar list; lower first, name breaks ties. */
   order?: number;
 }

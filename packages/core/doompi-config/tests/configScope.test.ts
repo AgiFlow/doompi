@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadDoomConfigLayers } from '../src/adapters/config.ts';
 import { setDoomConfigValue, unsetDoomConfigValue } from '../src/adapters/configWriter.ts';
-import { configLeafKeys, configScopeOf, mergeDoomConfigs } from '../src/services/configPolicy.ts';
+import { configLeafKeys, configScopeOf, mergeDoomConfigs, parseDoomConfig } from '../src/services/configPolicy.ts';
 
 /**
  * Scope, made answerable.
@@ -66,11 +66,29 @@ describe('which file a key may be written to', () => {
     expect(configScopeOf(['voice', 'autoCapture', 'tts', 'rate'])).toBe('global');
   });
 
+  it('keeps the computer-use opt-in global only', () => {
+    expect(
+      mergeDoomConfigs({ projectTrust: 'ask', computerUse: { enabled: true } }, { projectTrust: 'ask' }).computerUse
+        ?.enabled,
+    ).toBe(true);
+    expect(configScopeOf(['computerUse', 'enabled'])).toBe('global');
+    expect(() =>
+      mergeDoomConfigs({ projectTrust: 'ask' }, { projectTrust: 'ask', computerUse: { enabled: true } }),
+    ).toThrow('global-only');
+  });
   it('lets a repository override the keys the merge merges', () => {
     expect(configScopeOf(['modes', 'planning', 'main', 'model'])).toBe('both');
     expect(configScopeOf(['modes', 'planning', 'subagents', 'model'])).toBe('both');
     expect(configScopeOf(['selection', 'profile'])).toBe('both');
     expect(configScopeOf(['voice', 'language'])).toBe('both');
+  });
+
+  it('parses computer use as an explicit opt-in', () => {
+    expect(parseDoomConfig('', '/config.yaml').computerUse?.enabled).toBeUndefined();
+    expect(parseDoomConfig('computerUse:\n  enabled: true\n', '/config.yaml').computerUse?.enabled).toBe(true);
+    expect(() => parseDoomConfig('computerUse:\n  typo: true\n', '/config.yaml')).toThrow(
+      'unsupported computerUse field(s): typo',
+    );
   });
 
   it('answers for a key it has never heard of, leaving rejection to the parser', () => {

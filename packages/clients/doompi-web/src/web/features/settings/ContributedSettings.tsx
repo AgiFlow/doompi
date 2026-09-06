@@ -9,6 +9,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
+  Switch,
 } from '@agimon-ai/doompi-web-components';
 import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -124,6 +125,13 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
 
       {kind === 'info' ? (
         <span className="text-[11px] text-doom-text">{value || '—'}</span>
+      ) : kind === 'toggle' ? (
+        <Switch
+          data-testid={`settings-toggle-${field.id}`}
+          checked={value === 'true'}
+          disabled={busy || locked !== undefined}
+          onCheckedChange={(checked) => onDraft(field, String(checked))}
+        />
       ) : kind === 'select' ? (
         <Select
           value={value === '' ? INHERIT_VALUE : value}

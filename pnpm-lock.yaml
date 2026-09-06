@@ -336,6 +336,9 @@ importers:
       '@agimon-ai/doompi':
         specifier: workspace:*
         version: link:../../core/doompi
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../core/doompi-config
       '@agimon-ai/doompi-server':
         specifier: workspace:*
         version: link:../doompi-server
@@ -1987,6 +1990,9 @@ importers:
 
   packages/minor/doompi-computer-use:
     dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../core/doompi-config
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-extension-contracts

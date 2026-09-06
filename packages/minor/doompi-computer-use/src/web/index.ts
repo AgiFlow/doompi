@@ -10,6 +10,7 @@ import { ComputerStateToolCard } from './ComputerStateToolCard.tsx';
 import { computerStateToolName } from './computerStateToolRender.ts';
 import { ComputerUsePanel } from './ComputerUsePanel.tsx';
 import { computerUseChannel } from './computerUseStore.ts';
+import { computerUseSettingsSection } from './computerUseSettings.ts';
 
 export const webPlugin = defineWebPlugin({
   id: 'computer-use',
@@ -19,6 +20,7 @@ export const webPlugin = defineWebPlugin({
       modeId: COMPUTER_USE_MODE_ID,
       keys: 'c e',
       statusKey: COMPUTER_USE_MODE_STATUS_KEY,
+      hideWhenMissing: true,
       order: 70,
     },
   ],
@@ -32,6 +34,7 @@ export const webPlugin = defineWebPlugin({
       marksBackgroundWork: false,
     },
   ],
+  settingsSections: [computerUseSettingsSection],
   activitySections: [{ id: 'computer-use', component: ComputerUsePanel }],
   channels: [computerUseChannel],
   toolRenderers: [

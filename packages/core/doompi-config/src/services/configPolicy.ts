@@ -1,6 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import type {
   AutocompactModeConfig,
+  ComputerUseConfig,
   AutocompactThresholdConfig,
   DoomConfig,
   DoomSelectionConfig,
@@ -23,13 +24,14 @@ const DEFAULT_PROJECT_TRUST: ProjectTrust = 'ask';
 const DEFAULT_VOICE_ENGINE: VoiceEngine = 'auto';
 const DEFAULT_VOICE_LANGUAGE = 'auto';
 const DEFAULT_RECORDER_DEVICE = 'none:default';
-const ROOT_KEYS = ['modes', 'projectTrust', 'editor', 'voice', 'selection'] as const;
+const ROOT_KEYS = ['modes', 'computerUse', 'projectTrust', 'editor', 'voice', 'selection'] as const;
 const SELECTION_KEYS = ['majorMode', 'domains', 'profile'] as const;
 const MODE_KEYS = ['planning', 'autocompact'] as const;
 const PLANNING_KEYS = ['main', 'subagents', 'plansDirectory'] as const;
 const AGENT_KEYS = ['model', 'thinking'] as const;
 const AUTOCOMPACT_KEYS = ['enabled', 'model', 'thinking', 'thresholds'] as const;
 const AUTOCOMPACT_THRESHOLD_KEYS = ['pass1', 'pass2', 'pass3'] as const;
+const COMPUTER_USE_KEYS = ['enabled'] as const;
 /** A pass that fires below this is noise; one above it never fires before Pi compacts natively. */
 const MIN_AUTOCOMPACT_RATIO = 0.05;
 const MAX_AUTOCOMPACT_RATIO = 0.99;
@@ -525,6 +527,14 @@ function parseEditor(value: unknown, filePath: string): EditorConfig | undefined
   assertKeys(value, EDITOR_KEYS, 'editor', filePath);
   return { command: optionalString(value.command, 'editor.command', filePath) };
 }
+
+function parseComputerUse(value: unknown, filePath: string): ComputerUseConfig | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires computerUse to be an object`);
+  assertKeys(value, COMPUTER_USE_KEYS, 'computerUse', filePath);
+  const enabled = parseFlexibleBoolean(value.enabled, 'computerUse.enabled', filePath);
+  return enabled === undefined ? {} : { enabled };
+}
 export function parseDoomConfig(content: string, filePath: string): DoomConfig {
   let parsed: unknown;
   try {
@@ -552,6 +562,7 @@ export function parseDoomConfig(content: string, filePath: string): DoomConfig {
     throw new Error(`Doom config at ${filePath} projectTrust must be ask, always, or never`);
   return {
     modes,
+    computerUse: parseComputerUse(parsed.computerUse, filePath),
     projectTrust: trust as ProjectTrust,
     editor: parseEditor(parsed.editor, filePath),
     voice: parseVoice(parsed.voice, filePath),
@@ -567,6 +578,8 @@ function mergeAgent(
 export function mergeDoomConfigs(globalConfig: DoomConfig, repositoryConfig: DoomConfig): DoomConfig {
   if (repositoryConfig.voice?.autoCapture)
     throw new Error('Repository Doom config voice.autoCapture is global-only; configure it in ~/.pi/.doom/config.yaml');
+  if (repositoryConfig.computerUse)
+    throw new Error('Repository Doom config computerUse is global-only; configure it in ~/.pi/.doom/config.yaml');
   const globalPlanning = globalConfig.modes?.planning;
   const repositoryPlanning = repositoryConfig.modes?.planning;
   const planning =
@@ -597,6 +610,7 @@ export function mergeDoomConfigs(globalConfig: DoomConfig, repositoryConfig: Doo
       planning || autocompact
         ? { ...(planning ? { planning } : {}), ...(autocompact ? { autocompact } : {}) }
         : undefined,
+    computerUse: globalConfig.computerUse,
     projectTrust: repositoryConfig.projectTrust,
     editor: globalConfig.editor,
     voice,
@@ -687,7 +701,7 @@ export function resolveVoiceConfig(config: VoiceConfig): ResolvedVoiceConfig {
 export type ConfigKeyScope = 'global' | 'repository' | 'both';
 
 /** Root keys the merge reads from one side only. */
-const GLOBAL_ONLY_ROOTS: readonly string[] = ['editor'];
+const GLOBAL_ONLY_ROOTS: readonly string[] = ['computerUse', 'editor'];
 const REPOSITORY_ONLY_ROOTS: readonly string[] = ['projectTrust'];
 /** The one nested exception; a repository declaration of it throws in the merge. */
 const GLOBAL_ONLY_PATHS: readonly (readonly string[])[] = [['voice', 'autoCapture']];
