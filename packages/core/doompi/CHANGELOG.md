@@ -1,3 +1,28 @@
+## 0.0.1-alpha.64 (2026-09-06)
+
+### 🚀 Features
+
+- **doompi-author:** enable npm publishing ([c22b3835](https://github.com/AgiFlow/doompi/commit/c22b3835))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.40
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.61
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.63
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.63 (2026-09-06)
 
 ### 🧱 Updated Dependencies

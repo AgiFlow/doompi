@@ -1,3 +1,23 @@
+## 0.0.1-alpha.63 (2026-09-06)
+
+### 🚀 Features
+
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.61
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.24
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.62 (2026-09-06)
 
 ### 🚀 Features

@@ -1,3 +1,34 @@
+## 0.0.1-alpha.26 (2026-09-06)
+
+### 🚀 Features
+
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🩹 Fixes
+
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+- **doompi-web-components:** close dialogs from nested select backdrops ([97373ec0](https://github.com/AgiFlow/doompi/commit/97373ec0))
+- update web client behavior and documentation ([fa613547](https://github.com/AgiFlow/doompi/commit/fa613547))
+- **doompi-web:** keep loopback plugin loading direct ([55d26db0](https://github.com/AgiFlow/doompi/commit/55d26db0))
+- **doompi-web:** load remote activity plugins securely ([669472a5](https://github.com/AgiFlow/doompi/commit/669472a5))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.61
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.24
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.58
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.25 (2026-09-06)
 
 ### 🚀 Features
