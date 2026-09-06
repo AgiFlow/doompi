@@ -1,3 +1,13 @@
+## 0.0.1-alpha.21 (2026-09-06)
+
+### 🚀 Features
+
+- **doompi-desktop:** gate computer use behind global setting ([ef20d52](https://github.com/AgiFlow/doompi/commit/ef20d52))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.20 (2026-09-05)
 
 ### 🚀 Features
