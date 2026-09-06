@@ -291,6 +291,7 @@ describe('the tunnel listener refuses everything unpaired', () => {
     ['GET', '/api/sessions/remote/files'],
     ['GET', '/api/auth/providers'],
     ['GET', '/api/plugin/anything'],
+    ['GET', `/api/web-plugins/${'a'.repeat(64)}/1/manifest`],
     ['GET', '/index.html'],
     ['GET', '/favicon.ico'],
     ['GET', '/api/remote'],

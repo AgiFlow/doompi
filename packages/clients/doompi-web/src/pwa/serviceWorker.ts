@@ -30,6 +30,9 @@ const ACTIVATE_MESSAGE = 'doompi:activate-bundle';
 const ACTIVATE_PLUGIN_MESSAGE = 'doompi:activate-plugin-composition';
 const REFRESH_MESSAGE = 'doompi:refresh-bundle';
 const RESET_MESSAGE = 'doompi:reset-bundle-trust';
+const PLUGIN_FETCH_MESSAGE = 'doompi:plugin-fetch';
+const PLUGIN_FETCH_RESULT_MESSAGE = 'doompi:plugin-fetch-result';
+const PLUGIN_FETCH_TIMEOUT_MS = 120_000;
 
 interface ActivateBundleMessage {
   type: typeof ACTIVATE_MESSAGE;
@@ -48,6 +51,7 @@ interface ActivatePluginCompositionMessage {
   manifestUrl: string;
   rawAssetBaseUrl: string;
   verifiedAssetBaseUrl: string;
+  relayThroughClient: boolean;
 }
 
 interface ResetBundleMessage {
@@ -62,6 +66,71 @@ type WorkerRequest =
 
 type WorkerReply = { ok: true; revision?: number } | { ok: false; code: string; message: string };
 
+type PluginFetchResult =
+  | {
+      type: typeof PLUGIN_FETCH_RESULT_MESSAGE;
+      requestId: number;
+      ok: true;
+      status: number;
+      headers: Array<[string, string]>;
+      body: ArrayBuffer;
+    }
+  | { type: typeof PLUGIN_FETCH_RESULT_MESSAGE; requestId: number; ok: false; message: string };
+
+let pluginFetchRequestId = 0;
+
+function parsePluginFetchResult(value: unknown, requestId: number): PluginFetchResult | undefined {
+  if (!isRecord(value) || value.type !== PLUGIN_FETCH_RESULT_MESSAGE || value.requestId !== requestId) return undefined;
+  if (value.ok === false && typeof value.message === 'string') return value as PluginFetchResult;
+  if (
+    value.ok !== true ||
+    typeof value.status !== 'number' ||
+    !Array.isArray(value.headers) ||
+    !value.headers.every(
+      (header) => Array.isArray(header) && header.length === 2 && header.every((part) => typeof part === 'string'),
+    ) ||
+    !(value.body instanceof ArrayBuffer)
+  ) {
+    return undefined;
+  }
+  return value as PluginFetchResult;
+}
+
+async function fetchPluginDirect(path: string): Promise<Response> {
+  const response = await fetch(path, {
+    credentials: 'include',
+    cache: 'no-store',
+    redirect: 'error',
+  });
+  if (response.redirected || new URL(response.url).origin !== worker.location.origin) {
+    throw new Error('The plugin asset request left the trusted origin.');
+  }
+  return response;
+}
+
+async function fetchThroughClient(port: MessagePort, path: string): Promise<Response> {
+  const requestId = ++pluginFetchRequestId;
+  return await new Promise((resolve, reject) => {
+    const timeout = worker.setTimeout(() => {
+      port.removeEventListener('message', onMessage);
+      reject(new Error('The cockpit page did not answer the plugin asset request.'));
+    }, PLUGIN_FETCH_TIMEOUT_MS);
+    const onMessage = (event: MessageEvent<unknown>): void => {
+      const result = parsePluginFetchResult(event.data, requestId);
+      if (result === undefined) return;
+      worker.clearTimeout(timeout);
+      port.removeEventListener('message', onMessage);
+      if (!result.ok) {
+        reject(new Error(result.message));
+        return;
+      }
+      resolve(new Response(result.body, { status: result.status, headers: result.headers }));
+    };
+    port.addEventListener('message', onMessage);
+    port.start();
+    port.postMessage({ type: PLUGIN_FETCH_MESSAGE, requestId, path });
+  });
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -77,7 +146,8 @@ function parseWorkerRequest(value: unknown): WorkerRequest | undefined {
       Number(value.revision) < 1 ||
       typeof value.manifestUrl !== 'string' ||
       typeof value.rawAssetBaseUrl !== 'string' ||
-      typeof value.verifiedAssetBaseUrl !== 'string'
+      typeof value.verifiedAssetBaseUrl !== 'string' ||
+      typeof value.relayThroughClient !== 'boolean'
     ) {
       return undefined;
     }
@@ -98,6 +168,7 @@ function parseWorkerRequest(value: unknown): WorkerRequest | undefined {
       manifestUrl: value.manifestUrl,
       rawAssetBaseUrl: value.rawAssetBaseUrl,
       verifiedAssetBaseUrl: value.verifiedAssetBaseUrl,
+      relayThroughClient: value.relayThroughClient,
     };
   }
   if (
@@ -149,15 +220,12 @@ async function fetchManifest(): Promise<unknown> {
   return await response.json();
 }
 
-async function fetchPluginManifest(manifestUrl: string): Promise<unknown> {
-  const response = await fetch(manifestUrl, {
-    credentials: 'include',
-    cache: 'no-store',
-    redirect: 'error',
-  });
-  if (!response.ok || response.redirected || new URL(response.url).origin !== worker.location.origin) {
-    throw new Error(`The signed plugin manifest request failed (${String(response.status)}).`);
-  }
+async function fetchPluginManifest(
+  manifestUrl: string,
+  fetchPlugin: (path: string) => Promise<Response>,
+): Promise<unknown> {
+  const response = await fetchPlugin(manifestUrl);
+  if (!response.ok) throw new Error(`The signed plugin manifest request failed (${String(response.status)}).`);
   return await response.json();
 }
 
@@ -173,7 +241,10 @@ async function prunePluginCompositions(): Promise<void> {
   }
 }
 
-async function activatePluginComposition(request: ActivatePluginCompositionMessage): Promise<WorkerReply> {
+async function activatePluginComposition(
+  request: ActivatePluginCompositionMessage,
+  fetchPlugin: (path: string) => Promise<Response>,
+): Promise<WorkerReply> {
   const host = await readActiveBundle();
   if (host === undefined) {
     return { ok: false, code: 'no-pin', message: 'No trusted cockpit signing key is pinned.' };
@@ -185,7 +256,7 @@ async function activatePluginComposition(request: ActivatePluginCompositionMessa
 
   let envelope: unknown;
   try {
-    envelope = await fetchPluginManifest(request.manifestUrl);
+    envelope = await fetchPluginManifest(request.manifestUrl, fetchPlugin);
   } catch (error) {
     return { ok: false, code: 'manifest-fetch', message: error instanceof Error ? error.message : String(error) };
   }
@@ -210,14 +281,8 @@ async function activatePluginComposition(request: ActivatePluginCompositionMessa
   try {
     for (const asset of verified.manifest.assets) {
       const source = `${request.rawAssetBaseUrl}${asset.path}`;
-      const response = await fetch(source, {
-        credentials: 'include',
-        cache: 'no-store',
-        redirect: 'error',
-      });
-      if (!response.ok || response.redirected || new URL(response.url).origin !== worker.location.origin) {
-        throw new Error(`The raw plugin asset ${asset.path} was unavailable.`);
-      }
+      const response = await fetchPlugin(source);
+      if (!response.ok) throw new Error(`The raw plugin asset ${asset.path} was unavailable.`);
       const bytes = await response.arrayBuffer();
       const assetResult = await verifyBundleAsset(verified.manifest, asset.path, bytes);
       if (!assetResult.ok) throw new Error(`The raw plugin asset ${asset.path} failed ${assetResult.failure.code}.`);
@@ -259,11 +324,14 @@ async function activatePluginComposition(request: ActivatePluginCompositionMessa
 
 const pluginActivations = new Map<string, Promise<WorkerReply>>();
 
-function queuePluginActivation(request: ActivatePluginCompositionMessage): Promise<WorkerReply> {
+function queuePluginActivation(
+  request: ActivatePluginCompositionMessage,
+  fetchPlugin: (path: string) => Promise<Response>,
+): Promise<WorkerReply> {
   const previous = pluginActivations.get(request.compositionId) ?? Promise.resolve({ ok: true } as WorkerReply);
   const activation = previous.then(
-    async () => await activatePluginComposition(request),
-    async () => await activatePluginComposition(request),
+    async () => await activatePluginComposition(request, fetchPlugin),
+    async () => await activatePluginComposition(request, fetchPlugin),
   );
   pluginActivations.set(request.compositionId, activation);
   void activation.then(
@@ -375,7 +443,7 @@ async function activateBundle(publicKey: string, minimumRevision: number): Promi
   }
 }
 
-async function handleMessage(request: WorkerRequest): Promise<WorkerReply> {
+async function handleMessage(request: WorkerRequest, port: MessagePort): Promise<WorkerReply> {
   if (request.type === RESET_MESSAGE) {
     for (const held of await caches.keys()) {
       if (held.startsWith(CACHE_PREFIX) || held.startsWith(PLUGIN_CACHE_PREFIX)) await caches.delete(held);
@@ -389,7 +457,12 @@ async function handleMessage(request: WorkerRequest): Promise<WorkerReply> {
   if (request.type === ACTIVATE_MESSAGE) {
     return await activateBundle(request.publicKey, request.minimumRevision);
   }
-  if (request.type === ACTIVATE_PLUGIN_MESSAGE) return await queuePluginActivation(request);
+  if (request.type === ACTIVATE_PLUGIN_MESSAGE) {
+    const fetchPlugin = request.relayThroughClient
+      ? (path: string) => fetchThroughClient(port, path)
+      : fetchPluginDirect;
+    return await queuePluginActivation(request, fetchPlugin);
+  }
   const current = await readActiveBundle();
   if (current === undefined) return { ok: false, code: 'no-pin', message: 'No host signing key is pinned.' };
   return await activateBundle(current.signerPublicKey, current.revision);
@@ -416,7 +489,7 @@ worker.addEventListener('message', (event) => {
     return;
   }
   event.waitUntil(
-    handleMessage(request)
+    handleMessage(request, port)
       .then((reply) => port.postMessage(reply))
       .catch((error: unknown) =>
         port.postMessage({
