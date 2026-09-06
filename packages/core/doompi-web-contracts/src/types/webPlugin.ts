@@ -143,6 +143,25 @@ export interface ContextAction {
   run(): void;
 }
 
+/** The text-bearing user timeline message handed to a plugin action. */
+export interface UserMessageActionRunContext {
+  sessionId: string;
+  /** Stable identity of the user message inside the session timeline. */
+  messageId: string;
+  /** The complete plain text carried by the user message. */
+  text: string;
+}
+
+/** An action a plugin contributes for every text-bearing user timeline message. */
+export interface UserMessageActionContribution {
+  /** Unique inside this plugin. */
+  id: string;
+  label: string;
+  /** Lower values appear first, then plugin id and action id. */
+  order?: number;
+  run(context: UserMessageActionRunContext): void;
+}
+
 /** Compact live inventory row exposed to Context slot components. */
 export interface WebPluginContextInventoryItem {
   name: string;
@@ -696,6 +715,8 @@ export interface WebPluginDefinition {
   paletteCommands?: PaletteCommandContribution[];
   /** Actions this plugin offers when another plugin presents compatible structured context. */
   contextActions?: ContextActionContribution[];
+  /** Actions this plugin offers on text-bearing user timeline messages. */
+  userMessageActions?: UserMessageActionContribution[];
   leaderBindings?: LeaderBindingContribution[];
   railSections?: SurfaceContribution[];
   /** Sections placed before the host's built-in Context composition groups. */

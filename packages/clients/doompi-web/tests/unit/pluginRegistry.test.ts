@@ -14,6 +14,7 @@ import {
   pluginContextActions,
   pluginDockFaces,
   pluginLeaderBindings,
+  pluginUserMessageActions,
   pluginMinorModes,
   pluginRepositorySettingsPanels,
   pluginSelectionAxes,
@@ -157,6 +158,55 @@ describe('the web plugin registry', () => {
     expect(webPluginDiagnostics()).toEqual([]);
 
     expect(() => installWebPlugins([])).toThrow(/already installed/);
+  });
+
+  it('collects user-message actions in stable display order and keeps plugin ids', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'zeta',
+        userMessageActions: [
+          { id: 'later', label: 'Later', order: 20, run: () => undefined },
+          { id: 'same-order', label: 'Same order', run: () => undefined },
+        ],
+      }),
+      defineWebPlugin({
+        id: 'alpha',
+        userMessageActions: [{ id: 'first', label: 'First', order: 10, run: () => undefined }],
+      }),
+    ]);
+
+    expect(pluginUserMessageActions().map(({ pluginId, id }) => [pluginId, id])).toEqual([
+      ['alpha', 'first'],
+      ['zeta', 'later'],
+      ['zeta', 'same-order'],
+    ]);
+  });
+
+  it('separates user-message action ids by plugin and rejects duplicates inside one plugin', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'one',
+        userMessageActions: [{ id: 'capture', label: 'Capture', run: () => undefined }],
+      }),
+      defineWebPlugin({
+        id: 'two',
+        userMessageActions: [{ id: 'capture', label: 'Capture again', run: () => undefined }],
+      }),
+    ]);
+    expect(pluginUserMessageActions()).toHaveLength(2);
+
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'one',
+          userMessageActions: [
+            { id: 'capture', label: 'Capture', run: () => undefined },
+            { id: 'capture', label: 'Again', run: () => undefined },
+          ],
+        }),
+      ]),
+    ).toThrow(/user message action 'capture' twice/);
   });
 
   it('orders repository management panels without sharing repository ownership with plugins', () => {

@@ -16,6 +16,7 @@ import type {
   SurfaceContribution,
   TabContribution,
   ToolRendererContribution,
+  UserMessageActionContribution,
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,
@@ -78,6 +79,9 @@ export interface InstalledContextAction extends ContextActionContribution {
   pluginId: string;
 }
 
+export interface InstalledUserMessageAction extends UserMessageActionContribution {
+  pluginId: string;
+}
 /** The slots the host itself declares; a plugin's own slots are namespaced by its id instead. */
 export const HOST_SLOTS = {
   overlay: 'overlay',
@@ -104,6 +108,7 @@ interface RegistryState {
   channels: Map<string, SessionChannelContribution>;
   commands: PaletteCommandContribution[];
   contextActions: InstalledContextAction[];
+  userMessageActions: InstalledUserMessageAction[];
   leaderBindings: LeaderBindingContribution[];
   selectionAxes: SelectionAxisContribution[];
   minorModes: MinorModeContribution[];
@@ -126,6 +131,7 @@ function emptyState(): RegistryState {
     channels: new Map(),
     commands: [],
     contextActions: [],
+    userMessageActions: [],
     leaderBindings: [],
     selectionAxes: [],
     minorModes: [],
@@ -274,6 +280,15 @@ function checkContextAction(pluginId: string, seen: Set<string>, action: Context
   seen.add(action.id);
 }
 
+function checkUserMessageAction(pluginId: string, seen: Set<string>, action: UserMessageActionContribution): void {
+  if (action.id.trim() === '') throw new Error(`Web plugin '${pluginId}' has a user message action with an empty id.`);
+  if (seen.has(action.id))
+    throw new Error(`Web plugin '${pluginId}' declares user message action '${action.id}' twice.`);
+  if (action.label.trim() === '')
+    throw new Error(`Web plugin '${pluginId}' user message action '${action.id}' has an empty label.`);
+  seen.add(action.id);
+}
+
 const byFillOrder = (left: ResolvedFill, right: ResolvedFill): number =>
   left.order - right.order || left.pluginId.localeCompare(right.pluginId) || left.id.localeCompare(right.id);
 
@@ -415,6 +430,11 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
         checkContextAction(plugin.id, contextActions, action);
         installingState.contextActions.push({ pluginId: plugin.id, ...action });
       }
+      const userMessageActions = new Set<string>();
+      for (const action of plugin.userMessageActions ?? []) {
+        checkUserMessageAction(plugin.id, userMessageActions, action);
+        installingState.userMessageActions.push({ pluginId: plugin.id, ...action });
+      }
       for (const binding of plugin.leaderBindings ?? []) {
         checkLeaderBinding(plugin.id, binding);
         pendingBindings.push({ pluginId: plugin.id, binding });
@@ -484,6 +504,12 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
     resolveLeaderConflicts(pendingBindings);
     installingState.leaderBindings.push(...pendingBindings.map((entry) => entry.binding));
     installingState.contextActions.sort(
+      (left, right) =>
+        (left.order ?? DEFAULT_FILL_ORDER) - (right.order ?? DEFAULT_FILL_ORDER) ||
+        left.pluginId.localeCompare(right.pluginId) ||
+        left.id.localeCompare(right.id),
+    );
+    installingState.userMessageActions.sort(
       (left, right) =>
         (left.order ?? DEFAULT_FILL_ORDER) - (right.order ?? DEFAULT_FILL_ORDER) ||
         left.pluginId.localeCompare(right.pluginId) ||
@@ -623,6 +649,11 @@ export function paletteCommands(): readonly PaletteCommandContribution[] {
 /** Context actions from every installed plugin, in stable display order. */
 export function pluginContextActions(): readonly InstalledContextAction[] {
   return activeState().contextActions;
+}
+
+/** User-message actions from every installed plugin, in stable display order. */
+export function pluginUserMessageActions(): readonly InstalledUserMessageAction[] {
+  return activeState().userMessageActions;
 }
 
 /** Leader Space bindings from every installed plugin, in install order: a later binding on a bound leaf wins. */
