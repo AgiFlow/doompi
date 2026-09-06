@@ -15,7 +15,7 @@ import type {
   Skill,
 } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHarnessState, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
+import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
 import skillsExtension from '../../src/adapters/pi/extension.ts';
 import { skillInvocation } from '../../src/services/skillText.ts';
 import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills.ts';
@@ -73,12 +73,14 @@ describe('skills pi extension', () => {
   let activeHandlers: Map<string, (event: unknown, ctx: ExtensionContext) => unknown> | undefined;
   const previousRoot = process.env.DOOMPI_ROOT;
   const previousSkillDirs = process.env.DOOMPI_SKILL_DIRS;
-
+  const previousHarnessState = process.env[HARNESS_STATE_POINTER];
   beforeEach(() => {
     vi.clearAllMocks();
     helpState.skills = [];
     helpState.diagnostics = [];
     helpState.revision = 0;
+    delete process.env[HARNESS_STATE_POINTER];
+    resetHarnessStore();
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'skills-entry-'));
     fs.mkdirSync(path.join(root, '.doom'), { recursive: true });
     fs.writeFileSync(path.join(root, '.doom', 'domains.yaml'), 'domains:\n  default:\n    plugins: []\n');
@@ -93,6 +95,9 @@ describe('skills pi extension', () => {
     activeHandlers = undefined;
     process.env.DOOMPI_ROOT = previousRoot;
     process.env.DOOMPI_SKILL_DIRS = previousSkillDirs;
+    if (previousHarnessState === undefined) delete process.env[HARNESS_STATE_POINTER];
+    else process.env[HARNESS_STATE_POINTER] = previousHarnessState;
+    resetHarnessStore();
     fs.rmSync(root, { recursive: true, force: true });
   });
 
