@@ -1,3 +1,14 @@
+## 0.0.1-alpha.21 (2026-09-06)
+
+### 🩹 Fixes
+
+- **doompi-web:** keep loopback plugin loading direct ([55d26db](https://github.com/AgiFlow/doompi/commit/55d26db))
+- **doompi-web:** load remote activity plugins securely ([669472a](https://github.com/AgiFlow/doompi/commit/669472a))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.20 (2026-09-05)
 
 ### 🩹 Fixes
