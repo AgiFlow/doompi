@@ -1,103 +1,131 @@
 # Getting started
 
-DoomPi Web is a standalone cockpit process. It is not loaded by Pi and must not be added to `.doom/modes.yaml`.
+DoomPi Web is a long-lived cockpit hub. It is not loaded into Pi and must not be added to `.doom/modes.yaml`.
+
+Before starting it, choose the topology you want:
+
+| Topology                 | Use it when                                        |
+| ------------------------ | -------------------------------------------------- |
+| Standalone `doompi-web`  | Several sessions should share one durable cockpit  |
+| `doompi-server --web`    | One session should start a cockpit with itself     |
+| Hub plus Vite dev server | You are developing browser plugins with hot reload |
+| Tunnel listener          | A paired phone or remote browser needs access      |
+
+In every case, session agents remain in `doompi-server` processes. The hub discovers those processes through a local registry and keeps their attach tokens out of the browser.
 
 ## Requirements
 
 - Node.js 22.19.0 or newer
 - A DoomPi installation with a synchronized global or repository configuration
-- `cloudflared` only when remote access is enabled
+- `cloudflared` only for remote access
 
-The cockpit can start `doompi-server` itself. You do not need a `doompi-server` executable on `PATH` for sessions created from the page when the bundled server is available.
+The cockpit can start its bundled `doompi-server`. The executable does not need to be on `PATH` unless `--spawn-command` selects it explicitly.
 
-## Install
-
-For a published install:
+## Install and start
 
 ```bash
 npm install -g @agimon-ai/doompi-web
-```
-
-For a workspace checkout, install dependencies at the repository root and build the package:
-
-```bash
-pnpm install
-pnpm --filter @agimon-ai/doompi-web build
-```
-
-## Start a local cockpit
-
-```bash
 doompi-web
 ```
 
-Open <http://127.0.0.1:7433>. Startup runs the bundled `doompi init` when the personal DoomPi directory is missing. A second process using the same package version reports the existing URL and exits. A different version replaces an idle loopback hub, but does not interrupt a hub with live sessions.
+Open <http://127.0.0.1:7433>. The loopback bind is deliberate: the local listener has browser-origin defenses but no device authentication. Do not replace it with `0.0.0.0` for remote use.
 
-The hub watches the default session registry at `~/.doompi/run`. Set `DOOMPI_RUNTIME_DIR` or pass `--registry-dir <path>` to use another registry. Existing `doompi-server` records in that registry appear in the sessions rail. New sessions created in the cockpit are launched through the bundled server unless `--spawn-command` is set.
+On first start, the command runs its bundled `doompi init` when the personal DoomPi directory is missing. It then synchronizes the global cockpit root, watches the session registry, and attaches to live server records.
 
-## Select a repository composition
+A second process using the same package version reports the existing URL and exits. A different version may replace an idle loopback hub, but it does not interrupt a hub with live sessions.
 
-A session's web plugin composition is selected from its working directory. The repository's synchronized registration is tried first. If it is missing, incomplete, invalid, or cannot be synchronized, the global synchronized registration is used. The selected repository and global artifacts are never combined.
+## How sessions appear
 
-Use `--dir` to pin and synchronize one repository for a development cockpit:
+The default registry is `~/.doompi/run`. Each `doompi-server` record names its process, working directory, socket, and token file. The hub reads the token and occupies the server's authenticated client slot, then multiplexes browser pages behind that connection.
+
+Existing live records appear automatically. Creating a session in the cockpit starts the bundled server unless `--spawn-command` changes the launcher.
+
+Use `--registry-dir <path>` or `DOOMPI_RUNTIME_DIR` when the servers use another registry. The directory and token paths are a trust boundary, so keep a custom registry owner-only.
+
+## Choose the web composition
+
+A session's working directory selects its repository configuration. The hub tries that repository's complete synchronized web generation first, then the complete global generation. It never combines repository client code with global hub channels or APIs.
+
+Use `--dir` when the cockpit should be anchored to one repository during development:
 
 ```bash
 doompi-web --dir "$PWD"
 ```
 
-The path must be inside a repository. This synchronization happens before launch and before a new or restarted session. `--dir` does not watch the repository. Run `doompi sync` after changing its configuration, then create or restart the relevant session. The global synchronization guard is the only bundle watcher.
+The path must be inside a repository. The hub synchronizes it before launch and before creating or restarting a session. `--dir` is not a file watcher. After changing repository configuration or built plugin code, run `doompi sync` and create or restart the affected session.
 
-The current working directory does not select the bundle when `--dir` is absent. Use the repository containing the session, or use `--dir`, when testing repository-specific web plugins.
+Without `--dir`, the directory used to start the command does not choose every session's plugin set. Each session still resolves from its own working directory. Only the global synchronization guard remains watched after startup.
 
-## Useful options and environment variables
-
-| Option or variable          | Default                         | Effect                                                              |
-| --------------------------- | ------------------------------- | ------------------------------------------------------------------- |
-| `--dir <path>`              | none                            | Pin one repository composition and synchronize it on demand         |
-| `--registry-dir <path>`     | `~/.doompi/run`                 | Change the session registry                                         |
-| `DOOMPI_RUNTIME_DIR`        | unset                           | Environment equivalent of the registry default override             |
-| `--spawn-command <command>` | bundled server                  | Choose the command used for cockpit-created sessions                |
-| `--port <number>`           | `7433`                          | Choose the HTTP port                                                |
-| `--host <address>`          | `127.0.0.1`                     | Choose the bind address; non-loopback addresses are unauthenticated |
-| `--assets <path>`           | synced or packaged              | Override the host shell asset directory                             |
-| `DOOMPI_WEB_DIST`           | unset                           | Environment override for host shell assets                          |
-| `DOOMPI_API_DIR`            | generated current API directory | Override generated package API routes                               |
-| `--state-dir <path>`        | `~/.doompi/web`                 | Store remote-access state and cockpit cache                         |
-| `--cloudflared <path>`      | `PATH`                          | Choose the tunnel binary                                            |
-| `DOOMPI_WEB_ALLOW_ORIGIN`   | unset                           | Comma-separated additional local origins for development            |
-
-`doompi-web --help` prints the command's current option text. The `DOOMPI_WEB_ALLOW_ORIGIN` setting changes the local origin allowlist only. It does not make a public listener safe.
+See [Web bundling and serving](bundle.md) for why the package shell and per-session plugins are separate.
 
 ## Start remote access
 
-Remote access is configured from the cockpit settings page. Install `cloudflared` first, then choose a quick tunnel or a stable named tunnel. A quick tunnel is suitable for a temporary connection. Its hostname changes on every start and cannot provide a stable passkey or PWA identity. Use a named tunnel for a Home Screen PWA, passkeys, or reliable Web Push subscriptions.
+Remote access is configured in the cockpit settings page rather than by rebinding the local listener.
 
-Enabling remote access creates a second loopback listener on an ephemeral port for the tunnel. The local listener remains on its normal port. The hub self-tests the public URL before reporting success. Pair a device by opening `/pair`, scanning the host-generated QR, and approving the request on the host. See [remote security](security.md) for the threat model and limits.
+1. Install `cloudflared`.
+2. Choose a quick tunnel for temporary access or a stable named tunnel for durable identity.
+3. Enable remote access in Settings.
+4. Open `/pair` on the device, scan the QR, and approve the request on the host.
 
-## Run from the workspace
+The hub creates a second loopback listener for the tunnel and leaves port 7433 local. It probes the public pairing page and confirms that the public health route rejects an unauthenticated request before reporting success.
 
-From the repository root, build the cockpit composition and run the package with that repository selected:
+A quick tunnel gets a new hostname when restarted. It cannot provide durable passkeys, passkey step-up, installed-PWA identity, or reliable Push identity. Use a named tunnel for those controls.
+
+Remote access reaches an agent that may hold shell tools. Read [Remote security](security.md) before enabling it. Pairing authenticates a device; it does not contain the agent or make plugins untrusted-safe.
+
+## Command and environment reference
+
+| Option or variable          | Default           | Effect                                                     |
+| --------------------------- | ----------------- | ---------------------------------------------------------- |
+| `--dir <path>`              | none              | Anchor one repository and synchronize it on demand         |
+| `--registry-dir <path>`     | `~/.doompi/run`   | Select the session registry                                |
+| `DOOMPI_RUNTIME_DIR`        | unset             | Override the default registry directory                    |
+| `--spawn-command <command>` | bundled server    | Select the command used for cockpit-created sessions       |
+| `--port <number>`           | `7433`            | Select the local HTTP port                                 |
+| `--host <address>`          | `127.0.0.1`       | Select the local bind; a non-loopback bind is not paired   |
+| `--assets <path>`           | packaged shell    | Override host shell assets explicitly                      |
+| `DOOMPI_WEB_DIST`           | unset             | Environment equivalent of the shell asset override         |
+| `DOOMPI_API_DIR`            | generated default | Override the default hub package API directory             |
+| `--state-dir <path>`        | `~/.doompi/web`   | Store signing material, remote settings, and cockpit state |
+| `--cloudflared <path>`      | `PATH`            | Select the tunnel binary                                   |
+| `DOOMPI_CLOUDFLARED`        | unset             | Environment equivalent of the tunnel binary override       |
+| `DOOMPI_WEB_ALLOW_ORIGIN`   | unset             | Add comma-separated local development origins              |
+
+`doompi-web --help` prints the current command syntax. `DOOMPI_WEB_ALLOW_ORIGIN` changes browser-origin policy for known development setups. It does not authenticate a public listener.
+
+## Run from this workspace
+
+From the repository root:
 
 ```bash
+pnpm install
 pnpm cockpit:build
 pnpm doompi-web --dir="$PWD"
 ```
 
-For plugin client development, run the hub and Vite dev server in separate terminals from the package directory:
+`cockpit:build` builds the hub, shell, session server, and packages used by the repository composition. The `--dir` launch synchronizes that repository before serving it.
+
+## Develop a browser plugin
+
+Use two terminals:
 
 ```bash
-# repository root
+# repository root: build and run the real hub on 7433
 pnpm cockpit
 
-# packages/clients/doompi-web
+# packages/clients/doompi-web: run Vite on 7434
 pnpm dev
 ```
 
-The dev server uses port `7434` and proxies `/api` to the hub on `7433`. Set `DOOMPI_WEB_PLUGIN_ROOTS` to a path-delimited list of plugin package roots when testing a plugin that is not in the last synchronized composition. Client changes hot reload. Hub channel changes require rebuilding the plugin and restarting the hub.
+The Vite server proxies `/api`, including the browser socket, to the hub. Set `DOOMPI_WEB_PLUGIN_ROOTS` to a path-delimited list of package roots when the plugin is not in the last synchronized composition.
 
-## Verify a change
+Client entries hot reload because Vite compiles their source. Hub channel entries and package APIs are built Node.js modules. Rebuild the owning package and restart the hub or session after changing them.
 
-Run these commands from `packages/clients/doompi-web`:
+The production bundler deduplicates shared browser runtimes and signs immutable plugin publications. The dev server optimizes iteration and should not be used as evidence for the production remote-security boundary.
+
+## Verify a package change
+
+Run from `packages/clients/doompi-web`:
 
 ```bash
 pnpm build
@@ -107,4 +135,4 @@ pnpm test:e2e
 pnpm lint
 ```
 
-Build before `pnpm test:e2e`; the end-to-end suite drives the built executable in a real browser.
+Build before `pnpm test:e2e`; the browser suite drives the built executable. See [Web plugins](plugins.md) for contribution contracts and [Architecture](architecture.md) for process ownership.

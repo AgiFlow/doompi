@@ -2,10 +2,21 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi is a distribution, not one giant extension. Each package owns one job; shared TUI,
-Cordis services, and session contracts make them behave like one. Use the generated
-`default.packages` list together, remove packages you do not want, or replace its entries one
-at a time. Selectable packages are not runtime dependencies of the root package or of one another.
+DoomPi is a distribution of small Pi extensions, not one extension with every feature inside it. Package boundaries are capability boundaries: each package owns its state, UI, tools, and cleanup; neutral Cordis contracts let packages collaborate without importing one another's implementations.
+
+```text
+fixed host
+  configuration, lifecycle, selection, contracts, shared UI
+        |
+        +-- default packages     ordinary distribution capabilities
+        +-- named layers        selectable composition changes
+        +-- minor-mode packages behavior activated inside a composition
+        +-- client packages     standalone server and browser processes
+```
+
+Selectable packages are not runtime dependencies of the root package or of one another. This lets a repository remove or replace one feature without rebuilding the host's private dependency graph. Use the generated `default.packages` list as the supported distribution, then remove entries or move them into named layers when a smaller composition is more useful.
+
+The catalog below is grouped by architectural role rather than npm location. See [Composition and runtime bundling](bundling.md) for how selected packages become a Pi runtime, and [Architecture](architecture.md) for their service lifecycle.
 
 ## Foundation and interface
 

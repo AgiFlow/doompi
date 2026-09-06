@@ -2,7 +2,20 @@
 
 [Back to DoomPi](../README.md)
 
-This document inventories what DoomPi does with executable configuration, credentials, commands, model traffic, native binaries, voice data, and telemetry. The [Security model](securities.md) explains the threat model and the boundaries around a cockpit reachable from another device.
+DoomPi crosses several trust boundaries because it composes executable plugins, launches tools, and can move a session into another process or container. The useful question is not whether an input is called configuration. It is **where its code runs, which credentials cross with it, and where its output is retained**.
+
+```text
+configured code and commands
+          |
+          v
+host Pi process --------------------> model providers
+          |
+          +-- optional sandbox -----> brokered credentials and network
+          +-- Runner ---------------> native multiplexer and log tools
+          +-- telemetry ------------> local sink or configured OTLP endpoint
+```
+
+This guide follows those crossings. It distinguishes containment from convenience, credential brokering from process isolation, and collection from export. The [Security model](securities.md) applies the same method to a cockpit reachable from another device.
 
 ## Executable inputs
 

@@ -9,7 +9,7 @@ Package-owned guidance for the DoomPi Web cockpit.
 - [Architecture](./docs/architecture.md): hub, session servers, browser sockets, and lifecycle ownership.
 - [Web plugins](./docs/plugins.md): `doompiWeb` manifests, `webPlugin`, `webHubChannels`, and UI contributions.
 - [Package APIs](./docs/package-apis.md): `doompiApi`, route scopes, selectors, and request context.
-- [Bundle resolution](./docs/bundle.md): immutable sync generations, repository fallback, and publication.
+- [Web bundling and serving](./docs/bundle.md): relationship to the TUI composition, design choices, build outputs, per-session selection, and signed serving.
 - [Remote security](./docs/security.md): pairing, device cookies, passkeys, step-up actions, sealing, signed assets, and containment limits.
 
 ## Facts to preserve

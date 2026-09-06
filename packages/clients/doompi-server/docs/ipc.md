@@ -1,123 +1,122 @@
 # IPC and wire protocols
 
-For a session, the server uses local Unix sockets for every client-facing transport. It does not open
-a TCP listener for a session. The optional `--web` cockpit is a separate loopback HTTP listener. The
-agent itself is a child process connected through newline-delimited JSON on stdin and stdout.
+`doompi-server` exposes one agent through three local interfaces. They are separate because they serve different clients and consistency models. The low-level session bridge carries Pi RPC frames, the routed protocol exposes replicated application state, and the package API socket serves HTTP handlers.
 
-## Endpoints
+## The transport design
 
-| Endpoint                     | Transport                               | Role                                        |
-| ---------------------------- | --------------------------------------- | ------------------------------------------- |
-| `--listen <path>`            | newline-delimited JSON over Unix socket | Authenticated framed session attachment     |
-| `<listen>.pi`                | Pi 0.85 routed Unix protocol            | Chord services and replicated session state |
-| `dirname(<listen>)/api.sock` | HTTP over Unix socket                   | Session package APIs, when APIs are mounted |
-| agent stdin and stdout       | newline-delimited JSON pipes            | Server to Pi RPC and Pi RPC to server       |
+```text
+                         doompi-server
+                               |
+         +---------------------+---------------------+
+         |                     |                     |
+         v                     v                     v
+ framed session socket   Pi routed socket      package API socket
+ raw Pi RPC stream       state and commands    HTTP package routes
+ token + mode 0600       mode 0600             local filesystem boundary
+         |
+         v
+ supervised Pi RPC child over stdin/stdout
+```
 
-The registry record contains the absolute session, protocol, and optional package API socket paths. The
-relaunch and composition files sit beside the session socket and are server-agent handoff files, not
-client endpoints.
+All session transports are Unix sockets. The server does not open a TCP listener for them. This keeps discovery and authorization on the local filesystem and lets the browser hub hold session credentials without sending them to a page. The optional `--web` listener is a separate loopback HTTP service owned by DoomPi Web.
+
+## Why there are three sockets
+
+| Endpoint                     | Consumer                            | Contract                                                             |
+| ---------------------------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `--listen <path>`            | DoomPi Web and legacy frame clients | Authenticated, newline-delimited Pi RPC frames with reconnect replay |
+| `<listen>.pi`                | Pi 0.85 protocol clients            | Routed Chord services and replicated session state                   |
+| `dirname(<listen>)/api.sock` | Web hub and trusted local callers   | HTTP routes contributed by session packages                          |
+
+The framed socket is intentionally narrow. It forwards the agent's protocol without inventing a second schema. The routed socket is the higher-level interface for clients that need authoritative state rather than a best-effort frame window. Package APIs remain HTTP because package features often already model requests, responses, streaming, and status codes that way.
+
+The registry record publishes the absolute paths and protocol server ID needed to locate these interfaces. Relaunch and composition handoff files may sit beside them, but they are private server-agent state, not client endpoints.
 
 ## Agent pipe
 
-The server starts the resolved command with the caller's working directory and environment, then adds
-`--mode rpc` to its arguments. Standard input and output are pipes. Standard error is inherited by the
-process that started `doompi-server`, so agent diagnostics do not depend on an attached client.
+The server starts the selected command in the session working directory, preserves the caller's environment, and adds `--mode rpc`. Agent stdin and stdout are newline-delimited JSON pipes. Agent stderr is inherited by the process that launched the server, so diagnostics remain visible even when no client is attached.
 
-The server decodes complete JSON objects separated by `\n`. A read can end in the middle of a frame;
-the decoder retains that fragment until the next read. Empty lines are ignored. Frames are kept as
-opaque objects (`Record<string, unknown>`) so Pi can evolve its RPC vocabulary without a second server
-schema. Malformed client frames are rejected as described below.
+The frame decoder accepts complete JSON objects separated by `\n`. It retains a partial trailing frame until another read completes it and ignores empty lines. Decoded frames remain opaque `Record<string, unknown>` values. This allows Pi to evolve its RPC vocabulary without requiring the bridge to duplicate every message type.
 
 ## Framed session socket
 
+### Why the server owns the attachment
+
+Only one client can hold the framed socket at a time. Serial ownership prevents two clients from interleaving commands on one agent stdin stream. Multi-browser support belongs in DoomPi Web: the hub holds the single server attachment and multiplexes browser tabs above it.
+
+The connection is authenticated because knowing a local socket path is not treated as sufficient authority for this low-level control channel.
+
 ### Attach handshake
 
-The first frame on a new connection must be an `attach` frame with the token from the configured token
-file:
+The first frame must contain the token from `--auth-token-file`:
 
 ```json
 { "type": "attach", "token": "..." }
 ```
 
-An optional W3C `traceparent` field is accepted for server telemetry. A successful attach receives an
-acknowledgement before any replay frames:
+An optional W3C `traceparent` is accepted for telemetry. After validating the token and exclusive attachment, the server acknowledges before sending any replay:
 
 ```json
 { "type": "attached", "replayed": 0, "dropped": 0 }
 ```
 
-The server rejects the connection when:
-
-- the first frame is not `attach`;
-- `token` is not a string or does not match the configured token;
-- another client already holds the session; or
-- the stream contains malformed JSON.
-
-Rejection uses this shape and then closes the connection:
+The server rejects and closes the connection when the first frame is not `attach`, the token is missing or wrong, another client already owns the session, or the stream contains malformed JSON. Errors use an `attach_error` frame:
 
 ```json
 { "type": "attach_error", "reason": "The attach token was rejected." }
 ```
 
-Token comparison checks the lengths and compares equal-length bytes with a timing-safe comparison.
-After the handshake, frames from the client go to the agent and frames from the agent go to the client
-unchanged. The server does not reinterpret ordinary Pi RPC frames on this transport.
+Token comparison checks lengths first and uses a timing-safe comparison for equal-length bytes. After attachment, ordinary frames pass between client and agent unchanged.
 
-### One client and reconnects
+### Reconnect window
 
-Only one client can hold the framed session socket. A second connection is refused rather than sharing
-writes with the first client. Closing the client connection does not stop the agent or the server.
+A client disconnect does not stop the agent. While detached, the server retains up to 512 frames in memory. When the limit is exceeded, the oldest frames are dropped.
 
-While no client is attached, the server keeps a bounded backlog of up to 512 frames. The oldest frames
-are dropped when the limit is exceeded. On the next attach, the server sends the `attached` acknowledgement
-with the replay counts, then wraps each replayed frame:
+The next successful attachment receives the replay and drop counts, followed by wrapped frames:
 
 ```json
 { "type": "replay", "frame": { "type": "message_end" } }
 ```
 
-`dropped` is the number of backlog frames discarded since the previous drain. The server also retains
-the latest `extension_ui_request` projection for `setStatus` and `setWidget`, so a reconnect receives the
-current status and widget state even when those frames were emitted while attached. A replay count can
-therefore include both projections and backlog frames.
+The `dropped` count reports frames discarded since the previous drain. The server also keeps the latest `extension_ui_request` projections for status and widget updates, so the replay count can include those snapshots as well as backlog frames.
 
-Frames are never added to the backlog while a client is attached. The backlog is an in-memory recovery
-window, not durable session storage. The Pi routed protocol and its transcript snapshot provide the
-authoritative state for clients that need more than that window.
+Frames are not added to the backlog while a client is attached. The backlog is a short recovery window, not durable history. A client that needs authoritative state after a long absence should use the routed protocol snapshot.
 
 ## Pi routed protocol
 
-The `<listen>.pi` endpoint is a Pi 0.85 `ServerHost` served by `@earendil-works/pi-server`. Its server
-identity is generated at startup and recorded as `protocolServerId`. A Pi client should read both values
-from the session registry and connect with the matching Unix transport and server id.
+The `<listen>.pi` socket hosts a Pi 0.85 `ServerHost` through `@earendil-works/pi-server`. Its generated identity is stored in the registry as `protocolServerId`; clients must use that ID with the recorded socket path.
 
 The host publishes two Chord services:
 
-- `doompi.session-management.v1`: `attach(sessionId)` selects this server's one session, and
-  `detach()` releases that attachment.
-- `doompi.session.v1`: `state` is replicated session state; `prompt(text)`, `steer(text)`, `abort()`,
-  `setModel({ provider, id })`, and `setThinking(level)` control the supervised agent.
+- `doompi.session-management.v1` attaches or detaches this server's one session.
+- `doompi.session.v1` replicates state and accepts `prompt`, `steer`, `abort`, `setModel`, and `setThinking` commands.
 
-The session service projects Pi RPC events into a snapshot plus transient progress. The snapshot carries
-the session identity, working directory, phase (`idle`, `turn`, `compaction`, or `retry`), model,
-thinking level, attachment and lock flags, revision, transcript, and queued steering messages.
-Progress carries item start, update, and finish events while a turn is running. A prompt waits for
-`agent_settled`; steering and abort require an active turn, and a second prompt while a turn is running
-is rejected without dropping the protocol connection.
+The session service projects Pi RPC events into a stable snapshot plus transient progress. The snapshot includes identity, working directory, phase, model, thinking level, attachment and lock state, revision, transcript, and queued steering messages. Progress reports item start, update, and finish while a turn runs.
 
-The protocol socket uses owner-only Unix-socket access. It has no `attach` token frame because filesystem
-permissions are its local access boundary. It is a different protocol from the framed session socket;
-clients should not send raw `attach` frames to `<listen>.pi`.
+A prompt waits for `agent_settled`. Steering and abort require an active turn. A second prompt during a turn is rejected without dropping the protocol connection.
+
+This socket has no `attach` token frame. Owner-only filesystem access is its authorization boundary, and its wire protocol is not the framed session protocol. Sending a raw `attach` frame to `<listen>.pi` is a protocol error.
 
 ## Package API socket
 
-When session package APIs are loaded, `api.sock` serves HTTP requests under
-`/api/plugin/<basePath>/...`. The host strips that prefix before invoking a package handler. For example,
-`/api/plugin/runner/runs/r1/log` reaches the `runner` API as `/runs/r1/log`. See [API](api.md) for the
-mount and handler contract.
+When at least one session API starts, `api.sock` serves HTTP below:
+
+```text
+/api/plugin/<basePath>/...
+```
+
+The server removes `/api/plugin/<basePath>` before invoking the package handler. For example, `/api/plugin/runner/runs/r1/log` reaches the `runner` handler as `/runs/r1/log`.
+
+The socket is absent when no API starts successfully. See [Session APIs](api.md) for discovery, context, failure isolation, and handler lifetime.
+
+## Security boundary
+
+Unix sockets replace network reachability with filesystem reachability; they do not make callers harmless. The framed socket adds a token, while the routed and package API sockets rely on private paths and permissions. A process running as the owner or root remains trusted.
+
+Do not expose these sockets through an unauthenticated TCP forwarder. DoomPi Web provides the separate browser and remote-access boundary described in [Security](security.md).
 
 ## Related guides
 
-- [Lifecycle](lifecycle.md) explains startup order, relaunches, and cleanup.
-- [API](api.md) documents package API routes and TypeScript exports.
-- [Security](security.md) explains which Unix permissions and tokens protect these transports.
+- [Lifecycle](lifecycle.md) explains why the sockets outlive client attachments and agent generations.
+- [Session APIs](api.md) defines the package handler contract.
+- [Security](security.md) explains credentials, permissions, and trusted processes.

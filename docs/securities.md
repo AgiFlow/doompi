@@ -2,11 +2,18 @@
 
 [Back to DoomPi](../README.md)
 
-This document explains DoomPi's threat model, remote-access controls, containment boundary, and known limits. [Trust and data boundaries](trust-and-data-boundaries.md) inventories what happens to credentials, commands, model traffic, and telemetry.
+A DoomPi agent may have shell access. The security architecture therefore separates four questions:
 
-## The premise
+```text
+Who can reach the listener?  -> listener, Host, and Origin policy
+Which device may act?        -> host-approved pairing and device session
+What can the relay read?     -> signed assets and sealed application traffic
+What can the agent reach?    -> optional container and mounted workspaces
+```
 
-A DoomPi agent has a shell. Security controls therefore answer two separate questions: who may ask the agent to act, and what the agent can reach. Authentication controls the first. Containment controls the second. Enabling either one does not enable the other.
+These controls compose, but none substitutes for another. Authentication decides who may ask the agent to act. Sealing limits what a tunnel provider can read or change after bootstrap. Containment limits which host resources the agent can reach. A paired and encrypted session is still dangerous when it controls an uncontained shell.
+
+This guide starts with the threat model, then follows a remote request from listener classification through device proof, transport protection, and containment. [Trust and data boundaries](trust-and-data-boundaries.md) inventories executable inputs, credentials, model calls, voice, native binaries, and telemetry.
 
 ## Threat model
 
@@ -41,14 +48,14 @@ These checks address browser-driven requests; they do not authenticate a hostile
 ## The listener is the boundary
 
 One Hono app runs behind two sockets. The loopback listener is open to whoever already has an
-account on this machine. The tunnel listener faces the public internet, and everything arriving
-there must prove it holds a paired session.
+account on this machine. The tunnel listener faces the public internet. Except for the exact bootstrap
+allowlist below, every request arriving there must prove it holds a paired session.
 
 The discriminator is the socket a request arrived on, read from the connection's own local port. It
 cannot be a header: `cloudflared` connects from `127.0.0.1` exactly like every local client, and
 there is no header a remote caller cannot set. It is phrased as allow-only-if-provably-local, so a
-missing value, an unreadable port, or a socket torn down mid-request all resolve to `tunnel` and
-therefore require a credential. The mirror-image phrasing fails open on every one of those.
+missing value, an unreadable port, or a socket torn down mid-request all resolve to `tunnel` and are
+subjected to tunnel policy. The mirror-image phrasing fails open on every one of those.
 
 The guard is the first middleware on the app. Hono composes matching handlers in registration order,
 so a guard added after a terminating handler never runs for that path.
@@ -101,10 +108,9 @@ escape hatch, not part of the boundary.
 The host mints a 256-bit code and shows it as a QR. It is good for two minutes, is consumed by the
 first claim, and is retired the moment a new one is minted.
 
-Scanning does not pair anything. It raises a request the host must approve, on the host's own screen,
-within three minutes. An approved request stays collectable for twice that window, so a host
-approving in the last second still reaches the phone's next poll, and it can be collected exactly
-once.
+Scanning does not pair anything. It raises a request the host must approve on the host's own screen within three minutes. An approved request stays collectable for twice that window, so an approval in the last second still reaches the phone's next poll. It can be collected once.
+
+The status poll carries its request ID in the query string. That ID can redeem an approved request, so it is a short-lived credential and may appear in proxy or edge logs. Keep those logs inside the same trust boundary.
 
 Guessing is not the threat at 256 bits; a scripted attempt being quiet is. Ten wrong codes a minute
 is the limit, so the eleventh is refused, and fifty failures across the life of a tunnel close the
@@ -115,11 +121,9 @@ Any local process can reach the tunnel listener directly and set that header to 
 
 ### Sessions
 
-Redeeming an approved request mints a 256-bit token. Only its SHA-256 is retained, so the store is
-useless to anyone who reads it. It travels as `__Host-doompi_device`, and the prefix is the point:
-the browser refuses the cookie unless it is `Secure`, `Path=/`, and `Domain`-less, so no sibling
-subdomain can read or overwrite it. `Secure` is a constant in the code rather than derived, because
-`cloudflared` forwards plaintext and `x-forwarded-proto` is attacker-controllable.
+Redeeming an approved request mints a 256-bit token. Only its SHA-256 is retained. The browser receives the token in `__Host-doompi_device`, an `HttpOnly`, `Secure`, `SameSite=Lax` cookie with `Path=/` and no `Domain`. The prefix makes the browser enforce the Secure, Path, and Domain constraints. `Secure` is constant rather than derived because `cloudflared` forwards plaintext and `x-forwarded-proto` is attacker-controlled.
+
+The cookie is a bearer credential. `HttpOnly` prevents browser JavaScript from reading it, but same-origin code can still send requests with it. Origin checks, signed code delivery, and device revocation therefore remain part of the boundary.
 
 Session expiry is off by default. While it is off, the server accepts a paired session until the device is revoked or remote access is disabled; the browser cookie still has a thirty-day ceiling. When expiry is enabled, the configured idle and absolute limits both apply. Disabling remote access revokes every device, closes remote sockets, and clears pending pairing state.
 
@@ -137,9 +141,15 @@ detectable.
 
 ### Step-up
 
-Three actions ask for a fresh gesture on top of a live session, because each one widens what the
-session can reach: `provider.login`, `provider.logout`, and `session.create`. The assertion travels
-in `x-doompi-assertion` and its challenge is good for sixty seconds.
+A fresh passkey gesture is required for actions that widen machine access even when the device cookie is valid:
+
+- `provider.login` and `provider.logout`
+- `session.create`
+- `settings.write`
+- `mcp.discover` and `mcp.authorize`
+- `computer-use.activate`
+
+The assertion travels in `x-doompi-assertion`; its challenge is valid for sixty seconds. Ordinary prompting and tool approval remain on the device-session boundary. Quick tunnels cannot supply a stable relying-party ID, so passkey enrollment and step-up are unavailable there.
 
 ## Keeping the relay out of it
 
@@ -170,10 +180,9 @@ URLs, not Cache Storage, IndexedDB, signatures, or Push payloads.
 
 ### The payload is sealed
 
-The QR carries an ephemeral P-256 public key alongside the pairing code, in the URL fragment, which
-no browser sends to any server. The device completes an ECDH against it and both sides derive
-AES-256-GCM keys through HKDF-SHA256, separately per direction. Socket frames and API bodies then
-travel as ciphertext.
+The QR carries an ephemeral P-256 public key alongside the pairing code, in the URL fragment, which no browser sends to a server. The device completes ECDH against it and both sides derive AES-256-GCM keys through HKDF-SHA256, separately per direction.
+
+After channel establishment, session and protocol socket frames travel as ciphertext. Ordinary remote HTTP calls use the sealed HTTP gateway, which encrypts the request and response payloads. Pairing, passkey ceremonies, PWA bootstrap assets, and channel establishment are intentionally unsealed because they are needed before a sealed channel exists.
 
 Nonces are twelve bytes: a four byte random prefix and an eight byte counter. At 2^32 messages the
 channel refuses to seal any more rather than reusing a nonce, which for AES-GCM is the failure that

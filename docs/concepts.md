@@ -2,36 +2,46 @@
 
 [Back to DoomPi](../README.md)
 
-## Philosophy
+DoomPi separates two decisions that agent setups often mix together:
 
-An agent does not need every tool for every job. DoomPi separates the base session from
-the things you switch on for a while: modes choose behavior, domains choose subject
-matter, and profiles choose a point of view.
+1. **Composition** decides which executable extensions form the session.
+2. **Context selection** decides which subject matter and point of view are active within that composition.
 
-### Major and minor modes
+```text
+major mode -> extension layers -> executable session shape
+minor modes ------------------> temporary behavior inside the session
+domains ----------------------> skills, agents, hooks, and MCP access
+profile ----------------------> persona text and environment defaults
+```
 
-A major mode is the base config. It names the extension layers for development, marketing,
-or whatever else you do. Define as many as you like; only one is active at a time, and you
-can switch it without leaving the session.
+This separation keeps the base predictable and lets temporary capabilities leave context when the job no longer needs them.
 
-Minor modes are batteries-included switches inside that base. They start off, stack freely,
-and keep their model tools and skills out of context until turned on. DoomPi ships six:
+## Major modes define the base
 
-- **Help mode:** expose package-owned guidance only while you need it.
-- **Plan mode:** remove Pi's file-editing tools while you agree on an approach.
-- **Loop mode:** run a prompt now, then run it again on a schedule.
-- **Goal mode:** keep one objective in view until it is done or dismissed.
-- **Workflow mode:** run jobs with dependencies, timeouts, and artifacts.
-- **Voice mode:** replace typing with local speech.
+A major mode names an ordered list of extension layers. Only one is active at a time. A development mode may include editing and delegation layers; a writing mode may choose a different package graph.
 
-### Domains
+Changing a major mode first resolves the candidate composition. DoomPi then decides whether Pi can reload it or whether the launcher must start a replacement process. In a synchronized session, the candidate must already have a prepared runtime bundle. See [Composition and runtime bundling](bundling.md).
 
-A domain is a named group of agent plugins. It carries the skills and MCP servers for one
-kind of work, and `/domains` switches it while the session is running.
+Major modes answer: **what kind of session is this?**
 
-Plugins are cataloged once and domains refer to their names. A configured root may be a
-Codex-compatible marketplace or a folder whose direct children are plugins, so a repository
-with many plugins does not need one entry per directory:
+## Minor modes change temporary behavior
+
+Minor modes are switches within the current base. They do not define the package graph. The owning packages are already in the composition, but their instructions, tools, or behavior stay inactive until selected.
+
+DoomPi ships these minor modes:
+
+- **Help:** expose package-owned guidance while it is needed.
+- **Plan:** remove Pi's file-editing tools while an approach is agreed.
+- **Loop:** run a prompt now and repeat it on a schedule.
+- **Goal:** keep one objective active until it is completed or dismissed.
+- **Workflow:** run jobs with dependencies, timeouts, and artifacts.
+- **Voice:** use local capture and speech for a hands-free session.
+
+Minor modes answer: **what should this session do for the next part of the work?**
+
+## Domains scope subject-matter capabilities
+
+A domain selects agent plugins for one kind of work. Plugins can contribute skills, agents, hooks, and MCP configuration. The plugin is cataloged once; domains refer to that catalog entry and may enable all or only part of it.
 
 ```yaml
 plugins:
@@ -48,23 +58,17 @@ domains:
     plugins: [pi-development, remote-review]
 ```
 
-DoomPi also checks personal and repository Codex marketplace layouts. Marketplace IDs use
-`plugin@marketplace`. Remote Git and npm sources are downloaded once into the persistent
-`~/.pi/.doom/plugin-cache` directory. Cache entries are reused until their source descriptor
-changes; use a Git SHA or exact npm version for reproducible installs. Home and repository
-catalogs merge, and repository names replace matching home names.
+A root may be a Codex-compatible marketplace, one plugin, or a directory whose direct children are plugins. Discovery is deliberately nonrecursive. A deeply nested tool does not become executable by accident.
 
-A blog is not one task. Research it, draft it, make the assets, then review it. Turn on the
-`visual` domain while making assets; the other three steps have no reason to carry it.
+Home and repository catalogs merge, with repository entries replacing names from home configuration. Remote Git and npm plugins are cached under `~/.pi/.doom/plugin-cache`. Pin a Git SHA or exact npm version when reproducibility matters.
 
-### Profile
+Use `--domains development,review`, an alias configured in `domains.yaml`, or `/domains` in a running session. `--no-domains` gives the session no domain plugin context.
 
-An LLM has no house style until you give it one. A profile can supply a narrative, brand
-rules, or a different voice. It is optional; no profile is a perfectly good profile.
+Domains answer: **which knowledge and external systems belong to this job?**
 
-Profile roots remove the need to list every persona folder. A root may itself contain the
-persona files, or its direct-child folders become profiles named after those folders. DoomPi
-recognizes `profile.md`, `SOUL.md`, and `AGENTS.md` and never searches deeper directories.
+## Profiles supply a point of view
+
+A profile supplies persona files and string environment defaults. It can hold editorial rules, a company narrative, or a review posture. No profile is a valid selection.
 
 ```yaml
 profiles:
@@ -76,17 +80,22 @@ profiles:
         EDITOR_MODE: strict
 ```
 
-Roots from the home and repository files accumulate relative to their declaring config.
-Repository discoveries replace same-named home discoveries. Explicit entries override
-discovery and can add string environment defaults; repository entries replace matching home
-entries. Select one at launch with `--profile editor` or switch with `/profile`.
+A profile root may contain persona files itself or contain direct-child profile directories. DoomPi recognizes `profile.md`, `SOUL.md`, and `AGENTS.md` and concatenates them in that order. Discovery does not recurse.
 
-## Why scope the session
+Explicit entries override discovered profiles. Environment values already exported by the caller win over profile defaults. Select a profile with `--profile editor` or `/profile`.
 
-Every tool schema and skill name consumes context and gives the model another possible choice. A smaller composition uses fewer tokens before work starts and reduces the number of irrelevant tools the model can select. Workflow jobs can choose their own composition instead of inheriting the previous job's toolbox.
+Profiles answer: **from what perspective should the session work?**
 
-### Copilot
+## Why context is scoped
 
-Press `SPC` on an empty draft to open the Leader map. A space typed inside a prompt remains a space. The map shows only commands contributed by the active composition.
+Every tool schema, skill name, and instruction consumes context and creates another action the model might choose. A smaller selection reduces the tokens spent before work starts and removes irrelevant choices. Workflow steps can select their own composition and domains instead of inheriting everything from the dispatching session.
 
-Autonomous Voice mode keeps the session available when typing is impractical. The primary agent can narrate its opening, meaningful milestones, and final answer, subject to the configured capture, transcription, model, and speech engines.
+This is not a security boundary. Removing a capability from model context is different from sandboxing a process or requiring approval. See [Trust and data boundaries](trust-and-data-boundaries.md).
+
+## The interface follows the active composition
+
+Press `SPC` on an empty draft to open the Leader map. It shows commands contributed by the packages active in the current composition. A space inside a nonempty prompt remains ordinary text.
+
+Autonomous Voice mode applies only to its exact active TUI session. It can narrate openings, milestones, and final answers according to the configured capture, transcription, model, and speech engines.
+
+See [Configuration](configuration.md) for definitions and merge behavior, and [Features](features.md) for the packages that implement these concepts.

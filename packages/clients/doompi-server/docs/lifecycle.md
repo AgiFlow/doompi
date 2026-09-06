@@ -1,100 +1,132 @@
 # Session lifecycle
 
-`doompi-server` owns the lifetime of one agent process and the local services that expose it. The
-session record exists only while the server is responsible for those services.
+`doompi-server` separates the lifetime of an agent from the lifetime of any client. One server owns one agent, one session identity, and the local services used to reach it. A browser tab or socket client can disappear without taking the session with it.
 
-## Startup
+## The ownership model
 
-The executable starts in this order:
+```text
+doompi-server process
+  |
+  +-- agent supervisor
+  |     +-- one Pi RPC child at a time
+  |
+  +-- framed session socket
+  +-- Pi routed protocol socket
+  +-- optional package API socket
+  +-- session registry record
+  +-- optional embedded web hub
+```
 
-1. It parses server options before `--` and keeps the remaining arguments for the agent. `--listen`
-   and `--auth-token-file` are required.
-2. It reads and trims the token file. An empty file stops startup. The token is not accepted as a
-   server option, so it does not appear in the server's argument vector.
-3. It resolves the registry directory, then resolves the session identity. The server generates a
-   UUID unless `--session-id` is supplied. `--name` defaults to `untitled`. An agent-side
-   `--session-id` or `--name` takes precedence, and missing identity flags are appended to the agent
-   arguments.
-4. It creates the agent launcher. A repository-local `@agimon-ai/doompi` installation is used when
-   present. Otherwise `DOOMPI_AGENT_COMMAND` can select a binary or JavaScript module. With neither,
-   the server composes the installed DoomPi package in process. Composition errors fail startup before
-   an agent is spawned.
-5. It starts the supervisor and the first agent. The server appends `--mode rpc` to the resolved agent
-   arguments. The supervisor clears a leftover relaunch handoff, watches for a new one, and retains
-   early agent frames until a server consumer subscribes.
-6. It removes a socket left by a dead process, without taking a live socket path, and binds the framed
-   session socket. It then mounts session package APIs when a generated API directory is available and
-   starts the Pi routed protocol socket.
-7. It writes the registry record atomically. A reader sees either the previous complete record or the
-   new complete record, never a temporary JSON document.
-8. If `--web` was requested, it probes the configured port after registration. An existing DoomPi hub
-   is reused; otherwise the optional web package starts a loopback hub in this process.
+The server, not a client, is the lifecycle owner. This choice gives reconnects and agent relaunches a stable boundary: sockets, session identity, and discovery can remain available while a client disconnects or the child process changes.
 
-The server reports startup failures to stderr with a `[doompi-server]` prefix and exits non-zero. A
-successful startup waits on the supervised agent, not on a client connection.
+The registry record exists only while the server claims responsibility for those services. It is discovery state, not the source of session lifetime.
 
-## Agent selection and composition
+## Why one agent per server
 
-The server keeps the repository's composition with the agent that it launches:
+A server process supervises one agent instead of multiplexing several agents internally. This keeps failure and identity boundaries simple:
 
-- A parent directory containing a different repository-local `@agimon-ai/doompi` package wins over
-  the server's own installation. The server delegates to that package's `dist/bin/cli.mjs`.
-- If no repository-local package is found, `DOOMPI_AGENT_COMMAND` is the global fallback. A `.mjs` or
-  `.js` command runs under the current Node executable; another value is spawned as a command.
-- If neither fallback applies, the server calls DoomPi's published preparation directly, ensures the
-  selected layer packages, and launches the resulting Pi command.
+- one exit status belongs to one session
+- one relaunch handoff can replace one composition
+- one working directory and session ID describe every service
+- a client never has to select an agent after reaching a session socket
 
-The initial argument list is retained for a relaunch. The target major mode replaces any previous
-`--major-mode` pair rather than accumulating another flag. This keeps a script path at the front of a
-Node-based command and puts the new selection at the end.
+DoomPi Web provides multi-session aggregation above this layer. It watches multiple server records and gives the browser one cockpit connection.
+
+## Startup is readiness-ordered
+
+The server publishes itself only after the agent and local transports are ready:
+
+```text
+parse options and identity
+          |
+          v
+read attach token and resolve agent
+          |
+          v
+start supervisor and Pi RPC child
+          |
+          v
+bind session, API, and protocol sockets
+          |
+          v
+publish registry record
+          |
+          v
+start or join optional web hub
+```
+
+The executable performs these steps:
+
+1. Parse server options before `--`; preserve everything after it for the agent. `--listen` and `--auth-token-file` are required.
+2. Read and trim the token file. An empty token stops startup. The token is not a command option, so it does not appear in the server argument vector.
+3. Resolve the registry directory and session identity. The server generates a UUID unless `--session-id` is supplied. `--name` defaults to `untitled`. Agent-side identity flags take precedence, and missing flags are appended to the agent arguments.
+4. Resolve the agent launcher. Repository-local DoomPi wins, `DOOMPI_AGENT_COMMAND` is the next fallback, and the installed DoomPi package can compose the session in process.
+5. Start the supervisor and first agent with `--mode rpc`. The supervisor clears an old relaunch handoff, watches for a new one, and retains early frames until a server consumer subscribes.
+6. Probe and remove a stale session socket, then bind the framed socket. Mount package APIs when a generated API directory is available and start the Pi routed protocol socket.
+7. Write the registry record atomically. Readers see a complete old record or a complete new record, never a temporary document.
+8. When `--web` is enabled, probe the requested port after registration. Reuse an existing DoomPi hub or start the optional web package on loopback.
+
+A startup error is written to stderr with a `[doompi-server]` prefix and exits non-zero. Successful startup waits for the supervised agent, not for a client to connect.
+
+## Keeping composition with the repository
+
+A headless session should run the DoomPi installation selected by its repository, not whichever package happens to be nearest to the server executable. Agent resolution follows that rule:
+
+1. A repository-local `@agimon-ai/doompi` installation wins. The server delegates to its `dist/bin/cli.mjs`.
+2. Without a repository-local installation, `DOOMPI_AGENT_COMMAND` can select a JavaScript module or executable. `.js` and `.mjs` values run under the current Node executable.
+3. With neither, the server calls the installed DoomPi preparation API, ensures selected layer packages, and launches the resulting Pi command.
+
+Composition errors stop startup before an agent is spawned. The server does not publish a record for a session it could not construct.
+
+The initial agent arguments are retained for relaunch. A requested major mode replaces the existing `--major-mode` pair instead of adding another one. Script position and all unrelated arguments remain stable.
 
 ## Steady state
 
-The process owns these services:
+Once ready, the server holds a stable session boundary:
 
-- `--listen`, the authenticated framed session socket.
-- `<listen>.pi`, the Pi 0.85 routed protocol socket.
-- `api.sock` beside the session socket, only when one or more session package APIs start successfully.
-- A registry record under `<registry-dir>/sessions/`.
+| Owned resource                      | Lifetime                                    |
+| ----------------------------------- | ------------------------------------------- |
+| Session ID and name                 | Whole server process                        |
+| Framed socket at `--listen`         | Whole server process                        |
+| Pi protocol socket at `<listen>.pi` | Whole server process                        |
+| `api.sock`                          | While one or more session APIs are mounted  |
+| Registry record                     | While the server owns the session           |
+| Agent child                         | One generation; replaceable during relaunch |
 
-The sockets and the registry keep the same session id for the whole server lifetime. Agent frames feed
-the framed client, the routed session service, and the transcript projection independently. A client
-connection is not the agent's lifetime: a disconnect only removes that client from the framed socket.
+Agent frames feed the framed client, routed session service, and transcript projection independently. Losing one consumer does not end the agent. In particular, closing the framed client only begins the bounded reconnect window described in [IPC](ipc.md).
 
 ## Major-mode relaunch
 
-A launcher-class session cannot replace its extension closure in place. When the DoomPi runtime is idle
-and requests a relaunch, it writes a JSON handoff to the path in `DOOMPI_RELAUNCH_FILE`. The handoff
-contains version `1`, a non-empty `majorMode`, and an `operationId`.
+Some major-mode changes replace the extension closure and cannot be applied safely inside the current Pi process. The server treats that as an agent-generation change, not a session change.
 
-The supervisor then:
+When the agent is idle, DoomPi writes a version `1` handoff to `DOOMPI_RELAUNCH_FILE`. It contains a non-empty `majorMode` and an `operationId`. The supervisor then:
 
-1. notices the handoff file and ends the current agent's input;
-2. waits up to 15 seconds for Pi RPC to flush and exit;
-3. kills the agent if it ignores the graceful-exit request;
-4. validates and consumes the handoff file;
-5. resolves the requested major mode and spawns the replacement;
-6. keeps the same session id, sockets, registry record, and client-facing services.
+1. ends the current agent's input
+2. waits up to 15 seconds for Pi RPC to flush and exit
+3. kills the child if it ignores the graceful exit
+4. validates and consumes the handoff
+5. resolves the requested composition and starts a replacement agent
+6. keeps the session ID, sockets, registry record, and client-facing services
 
-A malformed handoff is ignored. An exit without a valid handoff is a real session exit. If the target
-composition cannot be built, the old exit code is returned and the server does not start a partial
-composition. While the replacement starts, clients stay attached to the server and receive frames from
-the new agent generation when it is ready.
+Clients remain attached to the server and receive frames from the replacement generation when it is ready.
 
-## Shutdown and cleanup
+A malformed handoff is ignored. An agent exit without a valid handoff is a real session exit. If the next composition cannot be built, the server returns the previous agent's exit code and does not publish or start a partial replacement.
 
-`SIGINT` and `SIGTERM` stop the supervised agent and disable relaunch handling. When the agent exits,
-the server closes the optional cockpit, package API server, Pi protocol socket, and framed session
-socket. It cleans staged composition resources, removes the session record, removes socket files, and
-flushes telemetry with a bounded shutdown wait.
+## Shutdown and failures
 
-An agent exit without a relaunch handoff returns its exit code to the executable. A crash can leave a
-registry record behind because no cleanup code ran. The web cockpit checks the recorded pid and removes
-stale records. On the next server start, a stale session socket is removed only after its probe fails;
-a live socket is left in place so `listen` fails rather than silently stealing another session.
+`SIGINT` and `SIGTERM` disable relaunches and stop the current agent. After the agent exits, the server closes the optional web hub, package API server, Pi protocol socket, and framed socket. It then releases staged composition resources, removes the registry record and socket files, and flushes telemetry with a bounded wait.
+
+An ordinary agent exit is returned as the executable's exit code. A hard process crash can leave registry and socket files because cleanup never ran. Recovery is defensive:
+
+- DoomPi Web checks the recorded process ID and removes dead records.
+- A later server probes a leftover session socket before removing it.
+- A live socket is never stolen. The new server lets `listen` fail instead.
+
+This favors refusing an ambiguous live path over silently attaching a new process to another session's identity.
 
 ## Related guides
 
-- [IPC](ipc.md) describes each socket and the attach and replay sequence.
-- [API](api.md) describes mounted package APIs and the exported TypeScript services.
-- [Security](security.md) describes the filesystem capabilities used during this lifecycle.
+- [Getting started](getting-started.md) covers launch options and web integration.
+- [IPC](ipc.md) explains the transports that remain stable across reconnects and relaunches.
+- [Session APIs](api.md) explains when API modules load and close.
+- [Security](security.md) describes the filesystem and credential boundaries used throughout the lifecycle.

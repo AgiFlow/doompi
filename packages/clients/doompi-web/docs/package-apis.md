@@ -1,8 +1,65 @@
 # Package APIs
 
-A DoomPi package can expose HTTP handlers through `doompiApi` in `package.json`. The generated route modules are part of the synchronized composition. The package entry exports one named `api` value implementing the `DoomApi` contract.
+A package API is server code contributed by a package in the active DoomPi composition. It gives a web plugin an HTTP-shaped boundary without putting filesystem access, process control, credentials, or long-running server resources in browser code.
 
-## Manifest
+The first design choice is placement. Run the handler in the process that owns the data.
+
+## Two execution scopes
+
+```text
+Browser plugin
+      |
+      | /api/plugin/<basePath>
+      v
+DoomPi Web hub
+      |
+      +-- hub API --------------------> hub-owned machine or repository state
+      |
+      +-- session proxy over api.sock -> session API beside one agent
+```
+
+| Scope     | Runs in                 | Use it for                                                                        |
+| --------- | ----------------------- | --------------------------------------------------------------------------------- |
+| `hub`     | DoomPi Web process      | Repository discovery, machine settings, provider state, or work spanning sessions |
+| `session` | `doompi-server` process | State and operations owned by one agent session or its working directory          |
+
+A session API remains beside the agent even though the browser reaches it through the hub. The hub authenticates the browser, selects the session, and proxies the request over a Unix socket. Moving the handler into the hub would blur lifecycle and filesystem ownership.
+
+Hub APIs have the opposite problem: a session ID alone is not authority to read an arbitrary repository. They use host-issued repository identities and resolvers instead of accepting browser filesystem paths.
+
+## Routing model
+
+All package APIs share one public prefix:
+
+```text
+/api/plugin/<basePath>/<package route>
+```
+
+The query selector chooses the execution scope and composition:
+
+| Selector          | Destination                      | Composition used                                     |
+| ----------------- | -------------------------------- | ---------------------------------------------------- |
+| `session=<id>`    | That session server's API socket | Session APIs loaded when the server started          |
+| `hubSession=<id>` | Hub process                      | Hub APIs from that session's selected web generation |
+| none              | Hub process                      | Deterministic default hub API generation             |
+
+The hub removes `session` or `hubSession` before calling the package handler. A request cannot contain both. That returns `400`. An unknown session, unavailable API, or missing selected generation returns `404`. A handler exception returns a generic `500` without stopping other APIs or the cockpit.
+
+`hubSession` selects a composition. It does not make a hub handler session-scoped and does not add a `sessionId` to its context.
+
+## Why APIs follow the composition
+
+`doompi sync` discovers `doompiApi` declarations from the same package roots used for the TUI and web plugins. It generates `hub.routes.mjs` and `session.routes.mjs` inside the immutable synchronized generation.
+
+This keeps UI and server capabilities aligned. A plugin from repository A cannot silently borrow an API that exists only in repository B or in the global fallback. A session-associated hub request selects the complete generation already assigned to that session.
+
+An empty API composition is valid and still produces both route modules. Missing metadata means a package contributes no API. Invalid optional declarations can be reported and skipped without removing unrelated packages.
+
+See [Web bundling and serving](bundle.md) for generation selection and publication.
+
+## Declare an API
+
+Add `doompiApi` to the package manifest:
 
 ```json
 {
@@ -20,13 +77,13 @@ A DoomPi package can expose HTTP handlers through `doompiApi` in `package.json`.
 }
 ```
 
-The field may contain one object or an array of objects. `basePath` is kebab-case and globally unique among loaded APIs. Each declared entry has a package-relative source `entry` and a built `dist` path. The host imports the built entry, not source code.
+The field accepts one declaration or an array. `basePath` is kebab-case and must be unique among loaded APIs. A package may declare only `hub`, only `session`, or both.
 
-A package can declare only `session`, only `hub`, or both. Missing metadata means that the package has no package API. Malformed metadata or an unavailable entry is reported and skipped when it can be isolated.
+Each scope names a package-relative source `entry` and built `dist` file. Paths cannot traverse outside the package. Sync uses the source entry to understand the build and the host imports the built module at runtime.
 
-## API implementation
+## Implement the handler
 
-The entry exports `api` with a mount name and a `start` factory:
+The built entry exports one `api` value:
 
 ```ts
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
@@ -36,9 +93,7 @@ export const api: DoomApi = {
   start(context: DoomApiContext): DoomApiHandler {
     return {
       async fetch(request) {
-        return new Response(JSON.stringify({ scope: context.scope }), {
-          headers: { 'content-type': 'application/json' },
-        });
+        return Response.json({ scope: context.scope });
       },
       close() {},
     };
@@ -46,46 +101,61 @@ export const api: DoomApi = {
 };
 ```
 
-Routes are relative to the API mount. For a Hono application, return `fetch: (request) => app.fetch(request)`. `close()` must release any timers, watchers, streams, or other resources created by `start`.
+`start(context)` runs once when the host mounts that API. It returns a Fetch-compatible handler and `close()`. A Hono application can return `fetch: (request) => app.fetch(request)`. `close()` releases everything created by `start`, including timers, file watchers, streams, and child resources.
 
-`DoomApiContext` includes the API scope, and session APIs receive the session ID, working directory, and session-only internal credentials as applicable. Hub APIs can receive an opaque repository resolver and synchronized repository view. Use the resolver with a hub-issued `repositoryId`; do not accept a browser filesystem path as authority.
+The host strips `/api/plugin/<basePath>` before calling `fetch`. A request to:
 
-## Request routing
+```text
+/api/plugin/runner/runners/run-1/log
+```
 
-The public prefix is `/api/plugin/<basePath>`. The hub strips that prefix before invoking the handler.
+arrives at the `runner` handler as `/runners/run-1/log` with the original method, body, and ordinary headers.
 
-### Session APIs
+## Host context
 
-A session API is mounted in the session server and reached through the hub's Unix-socket proxy:
+`DoomApiContext` identifies the execution scope and provides only host-owned capabilities relevant to that placement.
+
+A session context may include the session ID, working directory, internal session credential, hub credential, and notice callback. These credentials are process capabilities for trusted package code. They are not automatically applied as route authorization and are never sent to the browser.
+
+A hub context may include an opaque repository resolver and synchronized repository view. Use the resolver with a `repositoryId` issued by the hub. Do not reinterpret a path or repository ID from the request as authority.
+
+## Caller identity and step-up
+
+Before forwarding a browser request, the hub discards incoming copies of its trusted caller headers. It then stamps locality, paired-device identity when remote, and the result of any required passkey step-up.
+
+A handler can read that context with `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-extension-contracts/package-api`.
+
+This metadata answers who reached the handler and through which boundary. It does not replace operation-specific authorization. A package that writes credentials, starts processes, or opens new paths must still validate the request and enforce its own scope.
+
+## Session request example
 
 ```text
 GET /api/plugin/runner/runners/run-1/log?session=<session-id>
 ```
 
-The hub removes `session` before forwarding the request, so the handler receives a relative path and no session selector. The session server owns session data and its package API socket. The browser does not receive the session attach token.
+The hub classifies the caller as local or remote and authenticates a remote device. A local caller has passed the listener's Host and Origin policy but has no device identity. The hub removes `session`, stamps this trusted caller context, and forwards the request to that server's `api.sock`. The session server selects the `runner` handler and passes `/runners/run-1/log` to it. The browser never receives the session attach token.
 
-The hub stamps the proxy request with the caller locality, paired device ID when remote, and step-up result. A session API that needs this identity can use `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-extension-contracts/package-api`. Incoming copies of those headers are discarded before the hub writes the trusted values.
+A session server loads its API registry at startup. Build and run `doompi sync`, then restart the session when a session API changes.
 
-### Hub APIs
-
-A hub API runs in the cockpit hub. Add `hubSession=<session-id>` when the request must use the hub API bundle selected for a session:
+## Hub request example
 
 ```text
 GET /api/plugin/mcp/repository?repositoryId=<repository-id>&hubSession=<session-id>
 ```
 
-`hubSession` selects the session-associated bundle. It does not turn the API into a session-scoped handler or supply `sessionId` in its `DoomApiContext`. The hub removes the selector before calling the handler.
+The hub uses `hubSession` only to select the matching hub API generation. It removes the selector, then invokes the MCP handler in the hub process. Without `hubSession`, `DOOMPI_API_DIR` takes precedence, followed by the generated global API directory.
 
-Without `hubSession`, the hub uses its deterministic default API bundle. `DOOMPI_API_DIR` takes precedence when set. Otherwise the default is the generated global API directory, normally `~/.doompi/api/current`.
+A hub module is built server code. Build and sync it before restarting or reloading the hub composition.
 
-A request cannot include both `session` and `hubSession`; the hub returns `400`. An unknown session bundle or missing API returns `404`. An API exception is isolated to that API and returns `500` rather than stopping the cockpit.
+## Failure and trust boundaries
 
-## Composition and synchronization
+Package APIs are trusted executable code, not remote sandboxes. Keep the failure boundary narrow:
 
-`doompi sync` discovers `doompiApi` declarations from the resolved package roots and writes `hub.routes.mjs` and `session.routes.mjs` in the generated API directory. An empty API composition still produces both modules. The hub loads hub entries for the selected composition and session servers load session entries when they start.
+- validate bodies, methods, identifiers, and content types before side effects
+- bound file reads, response bodies, logs, and streams
+- resolve paths against host-provided roots, never raw browser authority
+- do not accept caller identity or authorization headers supplied by the browser
+- make `close()` safe after partial startup
+- report a package-scoped notice instead of taking down unrelated APIs
 
-Session composition follows the repository-first, global-fallback rule in [bundle resolution](bundle.md). A session's `hubSession` request cannot borrow an API from a different registration. Restart a session after synchronization when its server-side API entry changed.
-
-## Security requirements for handlers
-
-A package API is executable server code. Validate request bodies, bound reads and streams, and keep file paths inside the intended scope. Use opaque repository IDs and host-provided context instead of trusting paths or authorization headers from the browser. Remote requests pass through the host guard and, except for direct pairing and socket routes, the sealed HTTP gateway. See [remote security](security.md).
+Remote requests still pass through the web guard and sealed transport, but those layers do not make a handler correct. A direct browser `fetch` from a plugin may expose its payload to the tunnel relay unless it uses the sealed transport helper. See [Remote security](security.md).

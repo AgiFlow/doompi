@@ -2,14 +2,30 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi reads four configuration files:
+DoomPi splits configuration by responsibility so package composition, content access, and persona do not become one unreviewable file:
 
-- `config.yaml` defines runtime settings such as trust, editor, planning, and voice behavior.
-- `modes.yaml` defines default packages, extension layers, and major modes.
-- `domains.yaml` catalogs plugins and sets session access.
-- `profiles.yaml` supplies persona files and environment defaults.
+| File            | Architectural role                    | Main question                                                     |
+| --------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| `config.yaml`   | Runtime policy and default selections | How should the host behave?                                       |
+| `modes.yaml`    | Package graph and major modes         | Which extensions form the session?                                |
+| `domains.yaml`  | Plugin catalog and access projection  | Which skills, agents, hooks, and MCP servers belong to this work? |
+| `profiles.yaml` | Persona and environment defaults      | From what point of view should the session work?                  |
 
-DoomPi reads personal defaults from `~/.pi/.doom/` and repository settings from `<repository>/.doom/`. Relative personal paths resolve from `~/.pi/.doom/`; relative repository paths resolve from the repository root. Merge behavior depends on the file and field, so the sections below state it explicitly.
+```text
+~/.pi/.doom/* personal defaults
+           +
+<repository>/.doom/* local policy
+           |
+           v
+validated resolved configuration
+           |
+           +-- composition -> runtime bundle
+           +-- selections  -> session context and access
+```
+
+Personal configuration is read first; the nearest repository configuration is applied second. Repository values are not an unrestricted deep merge. Some records replace by name, some fields merge, and some values are personal-only. Those rules keep local policy explicit and prevent a repository from silently inheriting or replacing sensitive personal settings.
+
+Relative personal paths resolve from `~/.pi/.doom/`. Relative repository paths resolve from the repository root. Invalid values and unknown keys fail during configuration loading rather than being ignored. See [Composition and runtime bundling](bundling.md) for what happens after configuration resolves.
 
 ## `config.yaml`: set runtime policy
 
