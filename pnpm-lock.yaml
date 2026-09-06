@@ -336,6 +336,9 @@ importers:
       '@agimon-ai/doompi':
         specifier: workspace:*
         version: link:../../core/doompi
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../core/doompi-config
       '@agimon-ai/doompi-server':
         specifier: workspace:*
         version: link:../doompi-server
@@ -1987,6 +1990,9 @@ importers:
 
   packages/minor/doompi-computer-use:
     dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../core/doompi-config
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-extension-contracts
@@ -2195,6 +2201,9 @@ importers:
       '@agimon-ai/doompi-web-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1

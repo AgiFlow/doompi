@@ -33,6 +33,7 @@ function backendFixture() {
     hostGeneration: 'host-1',
     now: Date.now,
     newId: () => crypto.randomUUID(),
+    enabled: () => true,
     confirmLocalActivation: async () => true,
   });
   return { host, activationSignal: () => activationSignal };

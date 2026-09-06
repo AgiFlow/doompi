@@ -235,7 +235,10 @@ test('attaches image payloads and inlines removable text files', async ({ page, 
 
   await picker.setInputFiles({ name: 'huge.txt', mimeType: 'text/plain', buffer: Buffer.alloc(100 * 1024 + 1) });
   await expect(page.getByTestId('composer-attachment-error')).toContainText('exceeds the 100 KB text file limit');
-  await picker.setInputFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from('image bytes') });
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByTestId('composer-attach').click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from('image bytes') });
   await expect(page.getByTestId('composer-attachments')).toContainText('screen.png');
 
   await picker.setInputFiles({

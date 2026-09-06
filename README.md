@@ -41,6 +41,7 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 | [Automation](docs/automation.md)                               | Workflows, native plugin examples, and loops                                       |
 | [Features](docs/features.md)                                   | Fixed host packages, selectable features, and capability contracts                 |
 | [Configuration](docs/configuration.md)                         | The four YAML files, field-specific merge rules, examples, and matrix checks       |
+| [Composition and bundling](docs/bundling.md)                   | How configuration becomes TUI runtime bundles and synchronized generations         |
 | [Security model](docs/securities.md)                           | Threat model, remote-access boundaries, containment, and known limits              |
 | [Trust and data boundaries](docs/trust-and-data-boundaries.md) | Executable inputs, credentials, model calls, voice, native binaries, and telemetry |
 | [Observability](docs/observability.md)                         | Session metrics, local log storage, trace lookup, and telemetry controls           |

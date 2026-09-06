@@ -1,13 +1,24 @@
 # @agimon-ai/doompi-web
 
-Package-owned guidance for the DoomPi web cockpit.
+Package-owned guidance for the DoomPi Web cockpit.
 
-## Resources
+## Start here
 
-- [Package README](./README.md): Running the cockpit, the bridge's security stance, what each
-  surface renders, and the limits of what Pi RPC exposes. Its Notifications guidance covers
-  all-session live fanout, user-click browser permission, and the absence of service workers, Web Push,
-  replay, or durable delivery. Its Security section states why loopback binding is not on its own an
-  authorization boundary and what the origin and host guard refuses; its Planned section records why
-  a WebRTC transport is wanted, for realtime voice as much as for keeping a tunnel provider out of the
-  data path.
+- [README](./README.md): installation, command options, runtime behavior, extensions, and security summary.
+- [Getting started](./docs/getting-started.md): setup, synchronization, session discovery, and local development.
+- [Architecture](./docs/architecture.md): hub, session servers, browser sockets, and lifecycle ownership.
+- [Web plugins](./docs/plugins.md): `doompiWeb` manifests, `webPlugin`, `webHubChannels`, and UI contributions.
+- [Package APIs](./docs/package-apis.md): `doompiApi`, route scopes, selectors, and request context.
+- [Web bundling and serving](./docs/bundle.md): relationship to the TUI composition, design choices, build outputs, per-session selection, and signed serving.
+- [Remote security](./docs/security.md): pairing, device cookies, passkeys, step-up actions, sealing, signed assets, and containment limits.
+
+## Facts to preserve
+
+- DoomPi Web is a standalone process, not a Pi extension and not a `.doom/modes.yaml` entry.
+- The default URL is `http://127.0.0.1:7433`. The default session registry is `~/.doompi/run`; `DOOMPI_RUNTIME_DIR` and `--registry-dir` override it.
+- Web compositions resolve per session: a usable repository registration wins, otherwise the usable global registration is selected. Artifacts are never merged across those registrations.
+- `--dir` synchronizes a selected repository on demand. Only the global synchronization guard watches for later changes.
+- The cockpit owns session attach tokens. Browser traffic is multiplexed over one hub WebSocket, and browser attach frames are refused.
+- The PWA has a package-owned service worker that verifies signed host and plugin assets before caching them. Optional closed-app Web Push is generic, zero-TTL, in-memory delivery, not a durable queue.
+- Remote access is not a sandbox. Pairing requires host approval, remote sockets and API bodies use sealed channels, and a paired device can drive an agent with shell access. Loopback origin and host checks do not defend against hostile local programs.
+- Bundle signatures provide delivery integrity only after the signer key and the initial executable bootstrap are trusted separately. A tunnel provider can observe bootstrap traffic, timing, sizes, and connection metadata.

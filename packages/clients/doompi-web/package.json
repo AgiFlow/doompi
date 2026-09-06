@@ -29,6 +29,7 @@
     "src",
     "llms.txt",
     "README.md",
+    "docs",
     "LICENSE",
     "package.json"
   ],

@@ -14,4 +14,5 @@ export interface ComputerUseExtensionService {
 export interface ComputerUseExtensionDependencies {
   service: ComputerUseExtensionService;
   client?: ComputerUseSessionClient;
+  enabled?: () => boolean | Promise<boolean>;
 }

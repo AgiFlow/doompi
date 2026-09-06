@@ -80,13 +80,14 @@ export function installComputerUseRuntime(
   const client = dependencies.client;
   let state: ComputerUseSessionView | undefined;
   let enabled = false;
+  let globallyEnabled = false;
   let mode: MinorModeOwnerHandle | undefined;
+  let syncModeOwner = (): void => undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
   let activeContext: ExtensionContext | undefined;
   let publishedMode = '';
   let publishedModeStatus: string | undefined;
   let publishedActivityStatus: string | undefined;
-
   const publish = (): void => {
     const phase = state?.phase ?? 'inactive';
     const projection = `${enabled}:${phase}:${state?.revision ?? 'none'}`;
@@ -106,7 +107,29 @@ export function installComputerUseRuntime(
     }
   };
   const refresh = async (): Promise<void> => {
-    if (client === undefined) {
+    let nextGloballyEnabled = false;
+    try {
+      nextGloballyEnabled = (await dependencies.enabled?.()) === true;
+    } catch {
+      nextGloballyEnabled = false;
+    }
+    if (nextGloballyEnabled !== globallyEnabled) {
+      globallyEnabled = nextGloballyEnabled;
+      if (!globallyEnabled) {
+        if (client !== undefined && state !== undefined && state.phase !== 'inactive' && state.phase !== 'failed') {
+          try {
+            await client.stop();
+          } catch {
+            // The global opt-in is still authoritative even when remote cleanup fails.
+          }
+        }
+        enabled = false;
+        state = undefined;
+        reconcileTools(pi, false);
+      }
+      syncModeOwner();
+    }
+    if (!globallyEnabled || client === undefined) {
       state = undefined;
       reconcileTools(pi, false);
       publish();
@@ -130,7 +153,7 @@ export function installComputerUseRuntime(
     promptSnippet: 'Observe the authorized application before choosing a semantic action',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
     async execute(_toolCallId, _params, signal) {
-      if (client === undefined || state?.phase !== 'active')
+      if (!globallyEnabled || client === undefined || state?.phase !== 'active')
         throw new Error('Computer use is not active for this session.');
       const observation = await client.observe(signal);
       return { content: [{ type: 'text', text: JSON.stringify(observation, null, 2) }], details: observation };
@@ -155,7 +178,7 @@ export function installComputerUseRuntime(
       additionalProperties: false,
     },
     async execute(_toolCallId, params, signal) {
-      if (client === undefined || state?.phase !== 'active')
+      if (!globallyEnabled || client === undefined || state?.phase !== 'active')
         throw new Error('Computer use is not active for this session.');
       const result = await client.act(params as unknown as ComputerUseAction, signal);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
@@ -163,77 +186,96 @@ export function installComputerUseRuntime(
   });
 
   cordis.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (context) => {
-    const owner = registerMinorModeOwner<ExtensionContext>(requireMinorModeCatalog(context), {
-      descriptor: {
-        source: PACKAGE_SOURCE,
-        id: COMPUTER_USE_MODE_ID,
-        label: 'Computer Use',
-        description: 'Session-scoped semantic control through DoomPi Desktop.',
-        order: 450,
-        actions: [
-          {
-            id: 'activate',
-            label: 'Activate',
-            description: 'Open the cockpit activation workflow and native confirmation.',
-            contexts: ['tui', 'headless'],
-            parameters: [],
-          },
-          {
-            id: 'deactivate',
-            label: 'Deactivate',
-            description: 'Stop this session computer-use run.',
-            contexts: ['tui', 'headless'],
-            parameters: [],
-          },
-          {
-            id: 'doctor',
-            label: 'Doctor',
-            description: 'Report Desktop availability and session state.',
-            contexts: ['tui', 'headless'],
-            parameters: [],
-          },
-        ],
-      },
-      initialState: modeState(state, enabled),
-      async handleAction(actionId, _argumentsValue, execution) {
-        activeContext = execution.context;
-        if (actionId === 'activate') {
-          if (client === undefined) throw new Error('DoomPi Desktop computer use is unavailable.');
-          enabled = true;
-          await refresh();
-          publish();
-          return { message: 'Computer use is ready to configure in Activity.' };
-        }
-        if (actionId === 'doctor') {
-          await refresh();
-          return {
-            message:
-              client === undefined
-                ? 'DoomPi Desktop session API is unavailable.'
-                : `Computer use is ${state?.phase.replaceAll('_', ' ') ?? 'unavailable'}.`,
-          };
-        }
-        if (actionId === 'deactivate') {
-          if (client === undefined) throw new Error('DoomPi Desktop computer use is unavailable.');
-          if (state !== undefined && state.phase !== 'inactive' && state.phase !== 'failed')
-            await client.stop(execution.signal);
-          enabled = false;
-          await refresh();
-          publish();
-          return { message: 'Computer use is off.' };
-        }
-        throw new Error(`Unknown computer-use action: ${actionId}`);
-      },
-    });
-    mode = owner;
+    const catalog = requireMinorModeCatalog(context);
+    const registerOwner = (): MinorModeOwnerHandle =>
+      registerMinorModeOwner<ExtensionContext>(catalog, {
+        descriptor: {
+          source: PACKAGE_SOURCE,
+          id: COMPUTER_USE_MODE_ID,
+          label: 'Computer Use',
+          description: 'Session-scoped semantic control through DoomPi Desktop.',
+          order: 450,
+          actions: [
+            {
+              id: 'activate',
+              label: 'Activate',
+              description: 'Open the cockpit activation workflow and native confirmation.',
+              contexts: ['tui', 'headless'],
+              parameters: [],
+            },
+            {
+              id: 'deactivate',
+              label: 'Deactivate',
+              description: 'Stop this session computer-use run.',
+              contexts: ['tui', 'headless'],
+              parameters: [],
+            },
+            {
+              id: 'doctor',
+              label: 'Doctor',
+              description: 'Report Desktop availability and session state.',
+              contexts: ['tui', 'headless'],
+              parameters: [],
+            },
+          ],
+        },
+        initialState: modeState(state, enabled),
+        async handleAction(actionId, _argumentsValue, execution) {
+          activeContext = execution.context;
+          if (actionId === 'activate') {
+            if ((await dependencies.enabled?.()) !== true) {
+              await refresh();
+              throw new Error('Enable computer use in global settings first.');
+            }
+            if (client === undefined) throw new Error('DoomPi Desktop computer use is unavailable.');
+            enabled = true;
+            await refresh();
+            publish();
+            return { message: 'Computer use is ready to configure in Activity.' };
+          }
+          if (actionId === 'doctor') {
+            await refresh();
+            return {
+              message:
+                client === undefined
+                  ? 'DoomPi Desktop session API is unavailable.'
+                  : `Computer use is ${state?.phase.replaceAll('_', ' ') ?? 'unavailable'}.`,
+            };
+          }
+          if (actionId === 'deactivate') {
+            if (client === undefined) throw new Error('DoomPi Desktop computer use is unavailable.');
+            if (state !== undefined && state.phase !== 'inactive' && state.phase !== 'failed')
+              await client.stop(execution.signal);
+            enabled = false;
+            await refresh();
+            publish();
+            return { message: 'Computer use is off.' };
+          }
+          throw new Error(`Unknown computer-use action: ${actionId}`);
+        },
+      });
+    syncModeOwner = (): void => {
+      if (globallyEnabled && mode === undefined) {
+        publishedMode = '';
+        mode = registerOwner();
+      } else if (!globallyEnabled && mode !== undefined) {
+        mode.dispose();
+        mode = undefined;
+        publishedMode = '';
+      }
+    };
+    syncModeOwner();
     return () => {
-      owner.dispose();
-      if (mode === owner) mode = undefined;
+      syncModeOwner = () => undefined;
+      mode?.dispose();
+      mode = undefined;
     };
   });
 
   pi.on('before_agent_start', (event) =>
-    state?.phase === 'active' ? { systemPrompt: `${event.systemPrompt}\n\n${COMPUTER_USE_GUIDANCE}` } : undefined,
+    globallyEnabled && state?.phase === 'active'
+      ? { systemPrompt: `${event.systemPrompt}\n\n${COMPUTER_USE_GUIDANCE}` }
+      : undefined,
   );
   pi.on('session_start', (_event, context) => {
     activeContext = context;

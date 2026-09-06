@@ -147,7 +147,7 @@ describe('minorModes', () => {
     expect(modes.find((mode) => mode.name === 'goal')?.detail).toBe('held');
   });
 
-  it('always reports every mode DoomPi ships', () => {
+  it('hides opt-in modes until the session reports them', () => {
     expect(minorModes({}, []).map((mode) => mode.name)).toEqual([
       'help',
       'plan',
@@ -156,8 +156,12 @@ describe('minorModes', () => {
       'author',
       'workflow',
       'voice',
-      'computer use',
     ]);
+    expect(minorModes({ 'doom-computer-use-mode': '' }, []).find((mode) => mode.name === 'computer use')).toMatchObject(
+      {
+        availability: 'off',
+      },
+    );
   });
 
   it('prefers plugin-declared modes over the packaged fallback, in declared order', () => {

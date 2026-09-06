@@ -36,6 +36,7 @@ function activation(durationSeconds = 60, requestId = 'confirmation-1') {
 function fixture(confirmLocalActivation = vi.fn(async () => true)) {
   let now = 1000;
   let ids = 0;
+  let enabled = true;
   const backend: ComputerUseBackend = {
     status: vi.fn(async () => ({ ready: true })),
     targets: vi.fn(async () => ({ targets: [] })),
@@ -49,9 +50,15 @@ function fixture(confirmLocalActivation = vi.fn(async () => true)) {
     hostGeneration: 'host-1',
     now: () => now,
     newId: () => `id-${String(++ids)}`,
+    enabled: () => enabled,
     confirmLocalActivation,
   });
-  return { backend, host, advance: (milliseconds: number) => (now += milliseconds) };
+  return {
+    backend,
+    host,
+    advance: (milliseconds: number) => (now += milliseconds),
+    setEnabled: (value: boolean) => (enabled = value),
+  };
 }
 
 describe('ComputerUseHost', () => {
@@ -64,6 +71,22 @@ describe('ComputerUseHost', () => {
     expect(busy).toMatchObject({ ok: false, code: 'busy_in_another_session' });
   });
 
+  it('fails closed and stops an active grant when the global setting is disabled', async () => {
+    const { backend, host, setEnabled } = fixture();
+    expect(await host.handle(request('session-a', 'activate', activation()))).toMatchObject({ ok: true });
+
+    setEnabled(false);
+
+    expect(await host.handle(request('session-a', 'status'))).toMatchObject({
+      ok: true,
+      result: { available: false, busy: false },
+    });
+    expect(backend.stop).toHaveBeenCalledWith(expect.objectContaining({ reason: 'global_setting_disabled' }));
+    expect(await host.handle(request('session-a', 'targets'))).toMatchObject({
+      ok: false,
+      code: 'desktop_unavailable',
+    });
+  });
   it('rejects stale and replayed activation confirmations', async () => {
     const { host } = fixture();
     const expired = { ...activation(), confirmationExpiresAt: 999 };

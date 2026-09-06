@@ -2,69 +2,92 @@
 
 [Back to DoomPi](../README.md)
 
-## Install
+DoomPi can run beside an existing Pi setup or become the extension configuration used by the regular `pi` command. Start with the side-by-side path. It gives you the same composition and synchronized runtime without changing Pi's persisted settings.
 
-```bash
-npm install -g @agimon-ai/doompi
+## What installation adds
+
+```text
+@agimon-ai/doompi
+        |
+        +-- pinned Pi used by dpi
+        +-- fixed DoomPi host
+        +-- configuration and sync commands
+
+repository .doom files
+        |
+        +-- selectable feature packages installed when needed
 ```
 
-The package pins and installs the upstream Pi version used by `dpi`.
+The root package contains the fixed host foundation. Features named in `.doom/modes.yaml` remain separate packages and resolve from the consumer repository. This keeps the host stable while each repository chooses its own composition.
 
-The root package contains the fixed host foundation only. Feature packages are selected by
-`.doom/modes.yaml` and installed into the consumer repository when they are first needed.
-
-## Status and requirements
-
-DoomPi is alpha software. Configuration and package boundaries may still change between alpha
-releases.
+## Requirements
 
 - Node.js 22.19.0 or newer for the published package
 - Node.js 22.22.1 or newer when contributing from this workspace
 - macOS or Linux on arm64 or x64 for the bundled Runner backend
 - Pi 0.85.0 and Pi TUI 0.85.0 for packages that declare them as peer requirements
 
-## Try DoomPi without replacing your Pi setup
+DoomPi is alpha software. Configuration and package boundaries may change between alpha releases.
 
-`dpi` is the comparison runner. Use it to try DoomPi beside your current `pi` customization
-before registering anything in Pi's settings:
+## Install
 
 ```bash
-dpi init    # create missing .doom files in this repository
-dpi sync    # install required packages and build synchronized state
-dpi         # run the pinned Pi version with an in-memory settings overlay
+npm install -g @agimon-ai/doompi
+```
+
+The package pins the Pi version used by `dpi`.
+
+## Try it without replacing Pi
+
+Run these commands inside a repository:
+
+```bash
+dpi init    # create missing repository .doom files
+dpi sync    # install configured packages and publish synchronized state
+dpi         # run pinned Pi with an in-memory DoomPi settings overlay
 pi          # run your existing Pi setup for comparison
 ```
 
-`dpi init` creates `.doom/config.yaml`, `.doom/modes.yaml`, `.doom/domains.yaml`, and
-`.doom/profiles.yaml` in the current repository. It preserves existing files unless you pass
-`--force` and does not create or change `.pi/settings.json`.
+`dpi init` creates `.doom/config.yaml`, `.doom/modes.yaml`, `.doom/domains.yaml`, and `.doom/profiles.yaml`. It preserves existing files unless `--force` is present and does not change `.pi/settings.json`.
 
-`dpi sync` installs missing required feature packages and publishes generated state for the in-memory settings overlay. It does not rewrite Pi user settings, the global extension alias, or the user theme. Sync provisions every declared layer, so switching to a prepared mode does not depend on the root package's private dependencies.
+`dpi sync` resolves the repository composition, installs required feature packages, and publishes an immutable runtime generation. It provisions every declared layer so a prepared mode switch does not depend on the root package's private dependencies. See [Composition and runtime bundling](bundling.md) for the build and publication model.
 
-### Sync storage and worktrees
+`dpi` keeps Pi's existing global and repository settings, then applies the DoomPi extension and theme overlay in memory. It does not persist that overlay.
 
-DoomPi stores generated sync state under `~/.pi/.doom/sync`, outside the repository. Each
-Git worktree gets isolated runtime state while immutable build artifacts may be shared.
+## Where synchronized state lives
 
-`dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension
-and theme settings in memory. It never writes those values to `.pi/settings.json`.
+Generated state lives under `~/.pi/.doom/sync`, outside the repository. Registrations are scoped by repository and Git worktree. Two worktrees can select different compositions without sharing mutable runtime state, while immutable compiler output may still be reused.
 
-Use `dpi sync --check` to detect stale state during the side-by-side experiment, and `dpi sync`
-to rebuild it. After permanent registration, use `doompi sync --check` and `doompi sync`.
-
-When you are comfortable with DoomPi and no longer need the side-by-side experiment, register
-it for normal Pi:
+Check state without writing:
 
 ```bash
-doompi init    # seed ~/.pi/.doom and register the extension alias and theme
-doompi sync    # publish synchronized state using the registered integration
-pi             # start DoomPi through the regular Pi command
+dpi sync --check
 ```
 
-`doompi` remains available as an explicit harness when you want per-run matrix flags:
+Run `dpi sync` again when the check reports drift.
+
+## Register DoomPi with Pi
+
+Once the comparison setup behaves as expected:
+
+```bash
+doompi init    # seed personal config and register the extension alias and theme
+doompi sync    # publish synchronized state for the registered integration
+pi             # start DoomPi through regular Pi
+```
+
+`doompi init` owns the personal configuration and Pi integration. `doompi sync` updates generated runtime state but does not rewrite that integration. After registration, use `doompi sync --check` and `doompi sync` instead of their `dpi` forms.
+
+## Inspect a composition before launch
+
+The explicit `doompi` harness accepts per-run selections:
 
 ```bash
 doompi --major-mode copilot --no-domains
 doompi --major-mode minimal --no-domains
 doompi --major-mode copilot --no-domains --explain
 ```
+
+`--explain` prints the resolved mode, domains, profile, plugins, skills, agents, MCP boundary, and estimated prompt cost. MCP schema inspection can start configured stdio servers. Add `--no-mcp` when inspection must not execute them.
+
+Next, read [Concepts](concepts.md) for the selection model and [Configuration](configuration.md) for the four files and their merge rules.

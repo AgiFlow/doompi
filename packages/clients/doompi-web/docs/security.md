@@ -1,0 +1,211 @@
+# Remote security
+
+A DoomPi Web session is not a dashboard. It can prompt an agent that may hold `bash`, filesystem, provider, MCP, and computer-use capabilities. Giving a phone access to the cockpit can therefore approach giving it a shell as the account running DoomPi.
+
+The security design answers four different questions:
+
+1. Which network path did the request use?
+2. Which device is making it?
+3. Can the tunnel provider read or replace the payload and code?
+4. What can the agent reach after the request is accepted?
+
+No single control answers all four. Authentication does not contain the agent. Encryption does not authenticate the first page. A container does not make a mounted repository read-only.
+
+## Boundaries in one picture
+
+```text
+Local browser or process
+        |
+        | loopback listener
+        v
+DoomPi Web hub --------------------> session server ----> agent
+        ^                                  Unix sockets
+        |
+        | tunnel listener
+        |
+cloudflared / tunnel provider
+        |
+        | TLS to device
+        v
+Paired remote browser
+  +-- device cookie identifies the device
+  +-- sealed channels protect post-pairing payloads
+  +-- verified bundles protect later code delivery
+```
+
+An optional container can move the hub, session servers, agents, and `cloudflared` behind a mount boundary. It changes what the accepted agent can reach. It does not change who may authenticate.
+
+## Threats, controls, and limits
+
+| Threat                                          | Primary control                           | Limit                                                                        |
+| ----------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| A hostile page drives a local cockpit           | Host and Origin checks                    | A hostile local process can send its own headers                             |
+| An internet caller reaches the tunnel           | Host-approved pairing and device sessions | A paired device has broad cockpit authority                                  |
+| A stolen device cookie performs sensitive setup | Passkey step-up on named tunnels          | Quick tunnels skip step-up; ordinary prompts remain cookie-authorized        |
+| The tunnel provider reads prompts and responses | Sealed WebSocket and HTTP payloads        | Bootstrap assets, traffic shape, timing, and sizes remain visible            |
+| The provider alters cockpit JavaScript          | Signed, verified, atomic publications     | The initial verifier page is still trust-on-first-use from the tunnel origin |
+| A remote user enumerates the host               | Remote directory picker is pinned         | A caller may still request a known absolute path without containment         |
+| An accepted agent reads the rest of the host    | Optional container and explicit mounts    | Mounted workspaces are writable; engine and network remain trusted           |
+
+The controls target remote and browser-driven access. They do not defend against root, a compromised owner account, a hostile process already running as that account, a compromised container engine, or a model misusing capabilities it was deliberately given.
+
+## Listener separation
+
+DoomPi Web runs one application behind two sockets:
+
+- the normal listener binds `127.0.0.1:7433` by default
+- enabling remote access creates a second loopback listener on an ephemeral port for `cloudflared`
+
+The accepted socket identifies whether a request is local or tunneled. This cannot safely come from a header because `cloudflared` itself connects from loopback and remote callers can forge forwarded headers.
+
+### Local listener
+
+The first middleware checks the `Host` header and any supplied `Origin` before HTTP routes or WebSocket upgrades. This blocks common DNS-rebinding and hostile-page paths.
+
+A missing `Origin` is accepted locally so command-line clients and health probes work. That is the limit: a local program can omit or forge those headers. Loopback is a reachability default, not authorization against code running as the same user.
+
+`DOOMPI_WEB_ALLOW_ORIGIN` adds explicit origins for development. It does not authenticate callers. A non-loopback `--host` only emits a warning and does not turn on pairing, so do not publish `0.0.0.0` as a remote-access shortcut.
+
+### Tunnel listener
+
+The tunnel listener serves nothing until its public origin is known. It then requires the expected Host and Origin where the browser should supply one. Before reporting readiness, the hub checks the public pairing page and expects `/api/health` to return `401`. That proves those probes behaved correctly, not that every possible route or provider behavior was inspected.
+
+The unauthenticated allowlist contains only exact package-owned pairing, PWA bootstrap, and passkey ceremony routes. There is no open static prefix. Some allowlisted handlers add their own authorization, such as the paired-device requirement for passkey registration.
+
+Remote session and Pi protocol sockets need both a valid device session and a purpose-specific sealed channel. Other remote HTTP operations pass through the sealed gateway. Channel establishment has its own authenticated bootstrap route.
+
+## Device identity
+
+### Pairing is code plus host approval
+
+The host presents a URL like:
+
+```text
+https://tunnel.example/pair#c=<code>&k=<channel-key>&s=<signing-key>&r=<revision>
+```
+
+The fragment carries the pairing code, ephemeral channel public key, signing public key, and minimum bundle revision. Browsers do not send URL fragments in HTTP requests, so the tunnel does not receive those values as part of ordinary navigation.
+
+The code is claimable for 120 seconds. Claiming it creates a pending request, not a device session. A person at the host must approve that request within 180 seconds. An approved request can be redeemed once, and invalid claims are rate limited.
+
+Host approval exists because a QR code may be visible over a shoulder or in a screen share. Its limit is equally important: a compromised host can approve anything, and manual pairing is only as strong as the fingerprint comparison performed by the operator.
+
+The status poll carries its request ID in a URL query. That ID can redeem an approved request, so treat it as a temporary credential. Proxy and edge logs containing it are sensitive.
+
+### The device cookie
+
+After approval, the browser receives `__Host-doompi_device`. It is:
+
+- `HttpOnly`
+- `Secure`
+- `SameSite=Lax`
+- `Path=/`
+- written without a `Domain` attribute
+
+The `__Host-` prefix makes the browser enforce Secure, root path, and no Domain. The hub stores a hash of the token rather than its bearer value. The cookie has a browser ceiling of 30 days. Optional idle and absolute expiry can shorten the accepted server session.
+
+This cookie is not a `doompi-server` attach token. The hub retains the Unix attach token and acts as the one server client.
+
+`HttpOnly` prevents JavaScript from reading the cookie. It does not stop compromised same-origin code from issuing requests with it. `SameSite=Lax` reduces cross-site cookie attachment but does not replace Host and Origin checks. Token hashes exist only in the hub's in-memory device registry, so the hub does not retain reusable bearer values there. Hashing does not protect against a process controlling the live hub or browser.
+
+Device sessions and pairing state are process-local. Restarting the hub, disabling remote access, or revoking a device removes active remote access. Revocation also removes the device's sealed channels and closes its tracked sockets.
+
+## Passkeys and step-up
+
+A stable named tunnel may register a discoverable passkey. The relying-party ID comes from the configured public hostname, never a request header. Quick-tunnel hostnames, IP addresses, and hostnames without a dot are refused because they cannot provide a durable WebAuthn scope.
+
+A passkey serves two roles:
+
+- a returning device can establish a new session without another QR
+- a live remote session must make a fresh gesture before selected escalation actions
+
+Registration and authentication ceremonies expire after 120 seconds. Step-up challenges expire after 60 seconds. The protected action classes are:
+
+- `provider.login`
+- `provider.logout`
+- `session.create`
+- `settings.write`
+- `mcp.discover`
+- `mcp.authorize`
+- `computer-use.activate`
+
+These actions can redirect credentials, change future configuration, start work in another directory, contact MCP servers, or activate control of another interface.
+
+Ordinary prompts and tool approvals do not require a biometric gesture. Requiring one for every turn would encourage automatic approval and make the control less meaningful. The tradeoff is that a stolen valid device cookie can still drive the ordinary agent loop.
+
+Quick tunnels skip passkey step-up because their hostname rotates. On a quick tunnel, the device session remains the remote authorization check for those actions. Use a named tunnel when step-up is part of the required boundary.
+
+## Payload privacy
+
+After pairing or passkey sign-in, browser and hub establish separate channels for session traffic, Pi protocol traffic, and HTTP requests. They use ephemeral P-256 ECDH, derive directional keys with HKDF-SHA-256, and seal messages with AES-256-GCM.
+
+Each direction uses monotonic counters. Replayed, altered, or unauthenticated envelopes are rejected. Separate channels keep one protocol from reusing another protocol's nonce sequence or authority.
+
+The session and protocol WebSockets carry sealed envelopes. The sealed HTTP gateway carries method, root-relative target, headers, body, status, and response body inside the encrypted exchange.
+
+The bootstrap cannot be sealed before keys exist. Pairing, passkey ceremonies, channel setup, `/pair`, `/sw.js`, and other PWA bootstrap assets are intentionally visible to the tunnel provider. Sealing also leaves timing, sizes, connection patterns, and tunnel metadata visible.
+
+A browser plugin that calls `fetch` directly sends plaintext through the relay. Plugin HTTP code must use `sealedTransport.fetch` from `@agimon-ai/doompi-web-security/browser`. The host cannot enforce that choice for arbitrary plugin code, so plugin packages remain trusted inputs.
+
+## Code-delivery integrity
+
+Payload encryption is insufficient if the provider can replace the JavaScript that performs encryption. DoomPi Web therefore signs the shell and each session plugin publication.
+
+The QR pins the host ECDSA public key and a minimum revision. A signed manifest records the revision, path, content type, byte length, and SHA-256 digest for every asset. The service worker downloads assets into a staging cache, verifies every byte, and commits the complete revision only after all checks pass. A failed update leaves the previous verified revision active.
+
+The public routes are revision-specific:
+
+- `/bundle-manifest.json` and `/bundle-assets/<revision>/...` publish the shell
+- `/api/web-plugins/<composition-id>/<revision>/manifest` and `/assets/...` publish a plugin composition
+- `/verified-plugins/<composition-id>/<revision>/...` is the service worker's verified cache path
+
+This prevents the relay from modifying a later bundle without detection and prevents code from two revisions being mixed.
+
+It does not authenticate the first executable bootstrap. The pairing page and initial `/sw.js` are served by the same tunnel origin before a worker can verify anything. A malicious edge can replace that first page, omit verification, or steal fragment values. Confirm the signing-key fingerprint out of band when the tunnel origin is not already trusted.
+
+Session file previews do not enter the application cache or signed bundle. They are bounded, sealed where remote, served `no-store`, and exposed through ephemeral Blob URLs. They are not placed in Push payloads.
+
+## Push notifications
+
+An installed paired PWA may subscribe to Web Push. The hub keeps subscriptions in process memory and sends only fixed generic copy with `TTL: 0` when that device has no connected cockpit socket.
+
+No prompt, response, session ID, or file content is included. There is no durable subscription database, outbox, replay, or historical delivery. After a hub restart, an open page must register the browser's existing subscription again.
+
+This reduces stored notification data but accepts best-effort delivery. Disabling Push, revoking or expiring the device, turning off remote access, or rotating process credentials removes the subscription.
+
+## Reachability and containment
+
+### Directory picker scope
+
+While a tunnel is active, the new-session picker lists only the subtree where `doompi-web` started. This avoids handing a paired device a casual inventory of projects and checkouts.
+
+It is not path containment. A session-creation request may still name an absolute path the caller already knows. The picker limits discovery, not authority.
+
+### Optional container boundary
+
+When the sandbox layer is installed, remote access can hand the whole cockpit to one container: hub, spawned session servers, agents, and `cloudflared`. Only configured absolute workspace paths are mounted. The host home directory, SSH keys, Git configuration, container socket, and unlisted repositories are omitted. Provider credentials use the broker's per-session token rather than copying host API keys.
+
+Putting the hub inside the same boundary matters. It makes an unmounted path unavailable by construction when the hub creates a session, rather than relying only on a validation check in a host process.
+
+The boundary has explicit limits:
+
+- the container engine and anyone controlling its daemon are trusted
+- all contained sessions share the mounted workspaces
+- mounted workspaces are writable and may be damaged or deleted
+- network access is unrestricted
+- credentials already present in a mount remain available
+- plugin tabs use the built-in set until a composition is synchronized inside the container
+
+Choose mounts as if every contained agent receives full write access to them.
+
+## Before enabling remote access
+
+1. Keep the main listener on loopback.
+2. Prefer a named tunnel when passkeys, step-up, or an installed PWA matter.
+3. Protect the tunnel account with a passkey or hardware MFA.
+4. Approve pairings at the host and revoke devices no longer in use.
+5. Enable idle and absolute expiry for unattended access.
+6. Treat every installed plugin and package API as trusted code.
+7. Use the container boundary when remote agents must not see the rest of the host, while retaining its stated limits.
+
+See [Architecture](architecture.md) for listener and process ownership and [Web bundling and serving](bundle.md) for signed publication mechanics.

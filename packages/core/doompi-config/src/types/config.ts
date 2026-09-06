@@ -35,6 +35,10 @@ export interface AutocompactModeConfig {
   thinking?: PlanningThinkingLevel;
   thresholds?: AutocompactThresholdConfig;
 }
+export interface ComputerUseConfig {
+  enabled?: boolean;
+}
+
 export interface EditorConfig {
   command?: string;
 }
@@ -135,6 +139,7 @@ export type DoomConfigPendingSelection = DoomConfigTransitionRecord & { readonly
 
 export interface DoomConfig {
   modes?: { planning?: PlanningModeConfig; autocompact?: AutocompactModeConfig };
+  computerUse?: ComputerUseConfig;
   projectTrust: ProjectTrust;
   editor?: EditorConfig;
   voice?: VoiceConfig;

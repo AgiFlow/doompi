@@ -2,9 +2,16 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi resolves configuration into an ordered set of standard Pi extension factories. Pi owns the extension runner, registration API, reload, and module replacement. DoomPi owns configuration resolution, composed factory loading, runtime artifacts, composition identity, and transition coordination.
+DoomPi adds composition and lifecycle policy around Pi without replacing Pi's runtime. Pi still owns extension registration, the runner, reload, and module replacement. DoomPi owns the decisions Pi should not have to infer: which factories belong together, how their services find one another, which prepared artifact matches a selection, and whether a change is live, reloadable, or requires another process.
 
-This document defines the current boundaries and contributor invariants.
+The architecture follows four boundaries:
+
+1. **One canonical composition:** launcher, synchronized startup, and detached children use the same resolver and fingerprint.
+2. **Pi owns module execution:** DoomPi plans and coordinates; Pi performs factory loading and replacement.
+3. **Cordis owns live collaboration:** packages publish versioned services instead of importing selectable implementations.
+4. **Repository identity owns generated state:** synchronized artifacts are immutable and selected through a validated repository or worktree registration.
+
+This guide explains those runtime boundaries and the contributor invariants they create. [Composition and runtime bundling](bundling.md) explains the artifact pipeline in reader-facing terms.
 
 ## System model
 
@@ -117,7 +124,7 @@ doompi could not read its synchronized state. Run doompi sync.
 existing repository Pi settings and removes a legacy repository alias. `dpi` supplies its overlay
 in memory and uses the same repository-isolated publication without requiring persisted settings.
 
-The shared hub pins web assets and package APIs to its startup repository. Session API requests resolve through the session `cwd`, so concurrent sessions can use different repositories without changing the hub registration. Outside a synchronized repository, the server uses packaged web assets and inherits the package APIs of the installation running it, so a session in an unsynchronized checkout still mounts the cockpit's own APIs instead of none. Explicit `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` overrides retain precedence.
+The web hub serves the package-owned browser shell unless an explicit asset override is configured. For each session, it resolves a complete web generation from that session's repository, then uses the global generation as a web-only fallback. That selection keeps the client plugin composition, hub channels, and session-associated hub APIs together. A `session` selector proxies to the API socket owned by the session server; `hubSession` selects hub APIs from the session's web generation; no selector uses the deterministic default hub API generation. `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` remain explicit operator overrides. See [Web bundling and serving](../packages/clients/doompi-web/docs/bundle.md).
 
 Configuration drift and missing synchronization are diagnosed separately. `doompi sync --check` is read-only: it re-resolves configuration and package paths, compares the active fingerprint, and validates the registration, bootstrap, and full bundle map.
 

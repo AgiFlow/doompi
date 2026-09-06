@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
+import { loadDoomConfig } from '@agimon-ai/doompi-config';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
 import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend.ts';
 import { freePort, portIsFree, startHub } from '../adapters/hubProcess.ts';
@@ -91,6 +92,7 @@ async function start(): Promise<void> {
           hostGeneration: randomUUID(),
           now: Date.now,
           newId: randomUUID,
+          enabled: () => loadDoomConfig(os.homedir(), os.homedir()).computerUse?.enabled === true,
           confirmLocalActivation: async ({ applicationName, windowTitle, durationSeconds }) => {
             const result = await dialog.showMessageBox(window, {
               type: 'warning',

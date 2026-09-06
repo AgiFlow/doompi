@@ -1,3 +1,4 @@
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { contentUrl, currentUrl, type PlanDetailView, type PlanSaveView } from '../types/planApi.ts';
 
 /**
@@ -34,7 +35,7 @@ export type FetchPlanResult = { ok: true; detail: PlanDetailView } | { ok: false
 export async function fetchPlan(sessionId: string): Promise<FetchPlanResult> {
   let response: Response;
   try {
-    response = await fetch(currentUrl(sessionId));
+    response = await sealedTransport.fetch(currentUrl(sessionId));
   } catch {
     return { ok: false, error: UNREACHABLE };
   }
@@ -54,7 +55,7 @@ export type SavePlanResult =
 export async function savePlan(sessionId: string, expectedHash: string, content: string): Promise<SavePlanResult> {
   let response: Response;
   try {
-    response = await fetch(contentUrl(sessionId), {
+    response = await sealedTransport.fetch(contentUrl(sessionId), {
       method: 'PUT',
       headers: JSON_HEADERS,
       body: JSON.stringify({ expectedHash, content }),

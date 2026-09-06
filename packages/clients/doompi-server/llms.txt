@@ -4,4 +4,9 @@ Package-owned guidance for the headless DoomPi session server.
 
 ## Resources
 
-- [Package README](./README.md): Running the server, socket transport, authentication, and client attachment.
+- [Package README](./README.md): Purpose, quick start, how the process works, and security summary.
+- [Getting started](./docs/getting-started.md): Installation, command options, agent selection, registry, and web integration.
+- [Session lifecycle](./docs/lifecycle.md): Startup, major-mode relaunches, registry, and shutdown.
+- [IPC and wire protocols](./docs/ipc.md): Unix sockets, framing, attach and replay, and Pi's routed protocol.
+- [Session APIs](./docs/api.md): Mounted package APIs and the TypeScript export surface.
+- [Security](./docs/security.md): Filesystem permissions, token handling, trust boundaries, and remote access.

@@ -1,91 +1,48 @@
-# @agimon-ai/doompi-desktop
+# DoomPi Desktop
 
-Run DoomPi in an Electron window backed by the web cockpit and session server. The packaged app
-includes its Node runtime and agent, so users do not need Node.js, pnpm, or a source checkout.
+DoomPi Desktop packages the DoomPi cockpit as an Electron application. It is a desktop shell over the same hub, session-server, web, and agent architecture used by the command-line cockpit. Electron owns application startup and the native window. It does not replace the hub or introduce a separate session model.
 
-This workspace-private package builds desktop release artifacts, not an npm package. It declares
-no public package exports and is not a Pi extension.
+The package is workspace-private. It produces macOS arm64 and Linux x64 release artifacts rather than a published npm library.
 
-## How it works
+## Run from the workspace
 
-The app is a thin shell around the cockpit that already exists.
-
-```
-Electron main
-  |- spawns the staged cockpit with ELECTRON_RUN_AS_NODE=1
-  |    |- spawns doompi-server per session
-  |         |- spawns the agent
-  '- BrowserWindow -> http://127.0.0.1:7433
-```
-
-The shell owns process startup, the window, and runtime staging:
-
-**The runtime is this app's own binary.** Electron is Node when `ELECTRON_RUN_AS_NODE`
-is set, and the variable is inherited, so one assignment on the cockpit's
-environment reaches the session server and the agent below it. No second Node
-ships, and no code in `doompi-web`, `doompi-server` or `doompi` core knows it is
-running inside a desktop app.
-
-**The window loads loopback HTTP, not bundled files.** The cockpit builds every
-socket URL from `location`, so a `file://` or custom-scheme origin would break
-its transport, and the service worker would not register. `http://127.0.0.1` is
-a trustworthy origin to Chromium, so everything keeps working unchanged, and the
-same bundle is still served to a remote paired browser.
-
-**The runtime is a build artifact, not a deployed package tree.** Vite bundles
-the cockpit, server, agent, and workspace JavaScript into `build/runtime`. Its
-runtime plugin copies the built web assets, RMUX and RTK payloads, platform-native
-addons, and the scoped browser package graph needed to compose user plugins. The
-runtime build also downloads a pinned, checksum-verified `cloudflared` binary so
-remote access works without a separate system install. It never walks or ships
-the general workspace `node_modules` tree.
-
-## Layout
-
-| Path                              | Purpose                                              |
-| --------------------------------- | ---------------------------------------------------- |
-| `src/bin/main.ts`                 | Electron entry: lifecycle, single-instance lock, IPC |
-| `src/bin/preload.ts`              | The whole renderer bridge, deliberately two members  |
-| `src/adapters/hubProcess.ts`      | Starts, health-checks and stops the cockpit          |
-| `src/adapters/mainWindow.ts`      | Window creation and navigation confinement           |
-| `src/services/hubLaunch.ts`       | Pure path, environment and socket-budget logic       |
-| `vite.runtime.config.ts`          | Bundles the child-process runtime artifact           |
-| `scripts/desktopRuntimePlugin.ts` | Copies composition assets and native payloads        |
-| `scripts/downloadCloudflared.mjs` | Stages the pinned remote-access tunnel binary        |
-| `scripts/signHubBinaries.cjs`     | Signs native binaries before the app is signed       |
-
-## Commands
-
-Run from the repository root after installing workspace dependencies:
+From the repository root:
 
 ```bash
-pnpm nx run @agimon-ai/doompi-desktop:build     # compile main and preload
-pnpm --filter @agimon-ai/doompi-desktop build:runtime # bundle the child runtime
-pnpm --filter @agimon-ai/doompi-desktop start   # build the artifact and run locally
-pnpm nx run @agimon-ai/doompi-desktop:package   # produce installers
-pnpm --filter @agimon-ai/doompi-desktop test
+pnpm install
+pnpm cockpit:build
+pnpm --filter @agimon-ai/doompi-desktop start
 ```
 
-## State
+The desktop process starts a cockpit on loopback, waits for its health endpoint, and loads that HTTP origin in the application window. It prefers port `7433` and selects a free ephemeral port when that port is unavailable.
 
-The app shares `~/.doompi/run` with the CLI rather than using
-`app.getPath('userData')`, so a session started here is visible to `doompi` in a
-terminal and the other way round. `DOOMPI_RUNTIME_DIR` overrides it. Startup
-checks that the registry path leaves room for session sockets and refuses paths that exceed its
-socket-path budget before starting a session.
+For development, tests, and release packaging, see [Getting started](./docs/getting-started.md).
 
-## Limits
+## Architecture
 
-The staged runtime does not make agents isolated from the host. Sessions retain the filesystem
-and command access of the user running the app. Remote access uses the cockpit's pairing and
-transport controls; see [the cockpit README](../doompi-web/README.md#remote-access).
+```text
+Electron main process
+  ├─ BrowserWindow + minimal preload API
+  └─ packaged cockpit process
+       └─ hub
+          └─ session server
+             └─ agent process
+```
 
-Local installer builds do not verify release signing, notarization, or every target platform.
+The application stages the existing web client, server, DoomPi runtime, native helpers, and package resources into a release runtime. The cockpit child runs with Electron's executable in Node mode, so the release does not carry another Node executable.
 
-## Signing
+Sessions use the normal DoomPi runtime directory, `~/.doompi/run` by default or `DOOMPI_RUNTIME_DIR` when configured. Desktop and command-line clients therefore discover the same session registry.
 
-macOS builds are Developer ID signed and notarized in CI from
-`APPLE_CERTIFICATE_P12_BASE64`, `APPLE_CERTIFICATE_PASSWORD`,
-`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and
-`APPLE_TEAM_ID`. Without an identity, electron-builder still produces unsigned
-artifacts, so local builds work with no credentials. Linux ships unsigned.
+Read [Architecture](./docs/architecture.md) for process ownership and lifecycle details. Read [Runtime and packaging](./docs/runtime-and-packaging.md) for the staged runtime, signing, and artifact model.
+
+## Security boundary
+
+The renderer is sandboxed, has no Node integration, and receives only the desktop platform marker and application version through preload. Navigation remains on the cockpit origin, while approved external HTTPS links open in the system browser.
+
+These controls reduce renderer privilege. They do not sandbox the cockpit or its agents. The local hub and agent processes run with the user's operating-system authority, and other local processes can reach the loopback service. Remote access inherits the web cockpit's authentication and transport model.
+
+Read [Security](./docs/security.md) for the complete boundary and its limitations.
+
+## License
+
+Source is available under the [DoomPi Desktop License](./LICENSE). Use is free for production and commercial purposes, but redistribution and offering the software as a hosted or managed service are not permitted.
