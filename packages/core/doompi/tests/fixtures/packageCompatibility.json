@@ -1,4 +1,57 @@
 {
+  "@agimon-ai/doompi-author": {
+    "exports": {
+      ".": "tir",
+      "./extensions/pi": "tir",
+      "./session-api": "tir",
+      "./web-hub": "tir",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./session-api": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
+      },
+      "./web-hub": {
+        "types": "./dist/webHub.d.mts",
+        "import": "./dist/webHub.mjs",
+        "require": "./dist/webHub.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": { "extensions": ["./dist/extensions/pi.mjs"] },
+    "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-author/SKILL.md"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/types/author.ts",
+      "src/types/webAuthor.ts",
+      "src/types/structuredDocuments.ts",
+      "src/exports/webClient.ts",
+      "src/prompts",
+      "llms.txt",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
+    "os": [],
+    "cpu": []
+  },
   "@agimon-ai/doompi-computer-use": {
     "exports": {
       ".": "tir",

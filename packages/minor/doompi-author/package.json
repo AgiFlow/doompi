@@ -1,8 +1,19 @@
 {
   "name": "@agimon-ai/doompi-author",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1-alpha.0",
   "description": "Visual steering workspace for focused document review and bounded authoring",
+  "keywords": [
+    "ai",
+    "authoring",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "pi-coding-agent",
+    "pi-extension",
+    "pi-package",
+    "typescript"
+  ],
+  "homepage": "https://agimon.ai",
   "bugs": {
     "url": "https://github.com/AgiFlow/doompi/issues"
   },
@@ -52,6 +63,9 @@
       "require": "./dist/webHub.cjs"
     },
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsdown",
