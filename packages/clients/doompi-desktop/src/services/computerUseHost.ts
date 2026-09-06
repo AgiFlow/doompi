@@ -2,6 +2,7 @@ import type {
   ComputerUseBackend,
   ComputerUseDesktopRequest,
   ComputerUseDesktopResponse,
+  ComputerUseStopResult,
 } from '../types/computerUse.ts';
 import { COMPUTER_USE_IPC_RESPONSE, COMPUTER_USE_IPC_VERSION } from '../types/computerUse.ts';
 
@@ -81,7 +82,7 @@ function actionOf(payload: unknown): Record<string, unknown> {
   const kind = action.kind;
   boundedString(action.snapshotId, 'snapshotId', 256);
   boundedString(action.elementRef, 'elementRef', 256);
-  if (kind === 'press') {
+  if (kind === 'press' || kind === 'focus') {
     exactKeys(action, ['kind', 'snapshotId', 'elementRef']);
     return action;
   }
@@ -98,7 +99,7 @@ function actionOf(payload: unknown): Record<string, unknown> {
       throw new Error('A supported semantic scroll amount is required.');
     return action;
   }
-  throw new Error('Only press, set_value, and scroll actions are supported.');
+  throw new Error('Only press, focus, set_value, and scroll actions are supported.');
 }
 function activationRequest(payload: unknown, now: number): ValidatedActivation {
   const activation = record(payload);
@@ -164,6 +165,7 @@ export class ComputerUseHost {
   readonly #enabled: () => boolean;
   readonly #confirmLocalActivation: ((confirmation: LocalActivationConfirmation) => Promise<boolean>) | undefined;
   #active: ActiveGrant | undefined;
+  readonly #finalizations = new Map<string, Promise<ComputerUseStopResult>>();
   #queue: Promise<void> = Promise.resolve();
   #expiryTimer: ReturnType<typeof setTimeout> | undefined;
   readonly #usedConfirmations = new Set<string>();
@@ -187,18 +189,12 @@ export class ComputerUseHost {
   }
 
   async stopActive(reason = 'desktop_emergency_stop'): Promise<boolean> {
-    const operation = this.#queue.then(async () => {
-      this.#clearExpiryTimer();
-      const active = this.#active;
-      this.#active = undefined;
-      if (active !== undefined) await this.#backend.stop({ ...active, reason });
-      return active !== undefined;
-    });
-    this.#queue = operation.then(
-      () => undefined,
-      () => undefined,
-    );
-    return await operation;
+    this.#revocationGeneration += 1;
+    this.#clearExpiryTimer();
+    const active = this.#active;
+    this.#active = undefined;
+    if (active !== undefined) await this.#backend.stop({ ...active, reason });
+    return active !== undefined;
   }
 
   async revoke(reason: string): Promise<void> {
@@ -303,15 +299,15 @@ export class ComputerUseHost {
   }
   async #observe(request: ComputerUseDesktopRequest, signal?: AbortSignal): Promise<ComputerUseDesktopResponse> {
     const active = this.#authorized(request);
-    return this.#success(
-      request,
-      await this.#backend.observe({
-        sessionId: active.sessionId,
-        grantId: active.grantId,
-        payload: request.payload,
-        signal,
-      }),
-    );
+    const result = await this.#backend.observe({
+      sessionId: active.sessionId,
+      grantId: active.grantId,
+      payload: request.payload,
+      signal,
+    });
+    if (this.#active !== active || signal?.aborted === true)
+      return this.#failure(request, 'request_cancelled', 'The observation request was cancelled.');
+    return this.#success(request, result);
   }
 
   async #act(request: ComputerUseDesktopRequest, signal?: AbortSignal): Promise<ComputerUseDesktopResponse> {
@@ -322,24 +318,56 @@ export class ComputerUseHost {
     }
     const action = actionOf(request.payload);
     active.nextSequence += 1;
-    return this.#success(
-      request,
-      await this.#backend.act({
-        sessionId: active.sessionId,
-        grantId: active.grantId,
-        sequence,
-        payload: action,
-        signal,
-      }),
-    );
+    const result = await this.#backend.act({
+      sessionId: active.sessionId,
+      grantId: active.grantId,
+      sequence,
+      payload: action,
+      signal,
+    });
+    if (this.#active !== active || signal?.aborted === true)
+      return this.#failure(request, 'request_cancelled', 'The action request was cancelled.');
+    return this.#success(request, result);
   }
 
   async #stop(request: ComputerUseDesktopRequest): Promise<ComputerUseDesktopResponse> {
+    const requestedGrantId = grantIdOf(request.payload);
+    const finalizationKey =
+      requestedGrantId === undefined ? undefined : this.#finalizationKey(request.sessionId, requestedGrantId);
+    const finalization = finalizationKey === undefined ? undefined : this.#finalizations.get(finalizationKey);
+    if (finalization !== undefined && finalizationKey !== undefined) {
+      try {
+        return this.#success(request, await finalization);
+      } finally {
+        this.#finalizations.delete(finalizationKey);
+      }
+    }
     const active = this.#authorized(request);
     this.#clearExpiryTimer();
     this.#active = undefined;
-    await this.#backend.stop({ sessionId: active.sessionId, grantId: active.grantId, reason: 'requested' });
-    return this.#success(request, { stopped: true });
+    const result = await this.#backend.stop({
+      sessionId: active.sessionId,
+      grantId: active.grantId,
+      reason: 'requested',
+    });
+    return this.#success(request, result);
+  }
+
+  #finalizationKey(sessionId: string, grantId: string): string {
+    return `${sessionId}\0${grantId}`;
+  }
+
+  #rememberFinalization(active: ActiveGrant, reason: string): Promise<ComputerUseStopResult> {
+    const key = this.#finalizationKey(active.sessionId, active.grantId);
+    const finalization = this.#backend.stop({ sessionId: active.sessionId, grantId: active.grantId, reason });
+    this.#finalizations.set(key, finalization);
+    void finalization.catch(() => undefined);
+    while (this.#finalizations.size > 16) {
+      const oldest = this.#finalizations.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.#finalizations.delete(oldest);
+    }
+    return finalization;
   }
 
   #authorized(request: ComputerUseDesktopRequest): ActiveGrant {
@@ -359,14 +387,17 @@ export class ComputerUseHost {
     if (active === undefined || active.expiresAt > this.#now()) return;
     this.#clearExpiryTimer();
     this.#active = undefined;
-    await this.#backend.stop({ sessionId: active.sessionId, grantId: active.grantId, reason: 'expired' });
+    await this.#rememberFinalization(active, 'expired');
   }
 
   #scheduleExpiry(grant: ActiveGrant): void {
     this.#clearExpiryTimer();
     const delay = Math.max(0, grant.expiresAt - this.#now());
     this.#expiryTimer = setTimeout(() => {
-      this.#queue = this.#queue.then(async () => this.#expireIfNeeded()).catch(() => undefined);
+      if (this.#active !== grant) return;
+      this.#clearExpiryTimer();
+      this.#active = undefined;
+      void this.#rememberFinalization(grant, 'expired');
     }, delay);
     this.#expiryTimer.unref?.();
   }

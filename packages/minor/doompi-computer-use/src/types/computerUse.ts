@@ -36,6 +36,7 @@ export interface ComputerUseElement {
   readonly ref: string;
   readonly role: string;
   readonly label?: string;
+  readonly value?: string;
   readonly enabled: boolean;
   readonly secure: boolean;
   readonly actions: readonly ComputerUseActionKind[];
@@ -55,11 +56,11 @@ export interface ComputerUseObservation {
   };
 }
 
-export type ComputerUseActionKind = 'press' | 'set_value' | 'scroll';
+export type ComputerUseActionKind = 'press' | 'focus' | 'set_value' | 'scroll';
 
 export type ComputerUseAction =
   | {
-      readonly kind: 'press';
+      readonly kind: 'press' | 'focus';
       readonly snapshotId: string;
       readonly elementRef: string;
     }

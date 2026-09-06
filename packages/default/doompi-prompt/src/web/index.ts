@@ -1,3 +1,4 @@
+import { BookmarkPlusIcon } from '@agimon-ai/doompi-web-components';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { PromptsActivitySection } from './components/PromptsActivitySection.tsx';
 import { requestMessagePromptDraft } from './lib/messagePromptDraft.ts';
@@ -30,5 +31,13 @@ export const webPlugin = defineWebPlugin({
     },
   ],
   activitySections: [{ id: 'prompts', component: PromptsActivitySection }],
-  userMessageActions: [{ id: 'save', label: 'save as prompt', order: 40, run: requestMessagePromptDraft }],
+  userMessageActions: [
+    {
+      id: 'save',
+      label: 'Save as prompt',
+      icon: BookmarkPlusIcon,
+      order: 40,
+      run: requestMessagePromptDraft,
+    },
+  ],
 });

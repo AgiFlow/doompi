@@ -1,11 +1,20 @@
-import { MediaPreview, type MediaPreviewController, type PdfPreviewController } from '@agimon-ai/doompi-web-components';
+import {
+  MediaPreview,
+  type MediaPlaybackState,
+  type MediaPreviewController,
+  type PdfPreviewController,
+} from '@agimon-ai/doompi-web-components';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { AuthorVideoControls } from './AuthorVideoControls.tsx';
+import { loadAuthorMedia } from '../api/authorMedia.ts';
 import { registerAuthorGridResolver } from '../lib/authorGrid.ts';
 import { normalizedAuthorRectangle } from '../lib/authorRegions.ts';
 import type { AuthorDisplayedRegion, AuthorNativeAnchor, AuthorToolMode } from '../lib/authorViewportTypes.ts';
 import {
   authorSessionWorkspace,
   setAuthorRegionCandidate,
+  setAuthorToolMode,
+  type AuthorSessionWorkspace,
   type AuthorWorkspaceDocument,
 } from '../stores/authorWorkspaceStore.ts';
 
@@ -15,11 +24,15 @@ export function AuthorMediaView({
   document: source,
   activeTool,
   displayedRegions,
+  pendingCandidate = false,
+  seekRequest,
 }: {
   sessionId: string;
   document: AuthorWorkspaceDocument;
   activeTool: AuthorToolMode;
   displayedRegions: readonly AuthorDisplayedRegion[];
+  pendingCandidate?: boolean;
+  seekRequest?: AuthorSessionWorkspace['videoSeekRequest'];
 }) {
   const host = useRef<HTMLDivElement>(null);
   const image = useRef<HTMLImageElement>(null);
@@ -28,7 +41,60 @@ export function AuthorMediaView({
   const start = useRef<
     { x: number; y: number; element: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement } | undefined
   >(undefined);
+  const [playback, setPlayback] = useState<MediaPlaybackState>({ playing: false, currentTime: 0, duration: 0 });
+  const [frameReady, setFrameReady] = useState(false);
+  const [selection, setSelection] = useState<{
+    path: string;
+    rect: NonNullable<ReturnType<typeof normalizedAuthorRectangle>>;
+  }>();
   const [error, setError] = useState<string>();
+  const [media, setMedia] = useState<{ source: string; url: string }>();
+  const mediaUrl = media?.source === source.mediaUrl ? media?.url : undefined;
+  useEffect(() => {
+    if (source.mediaUrl === undefined) return;
+    const input = source.mediaUrl;
+    const controller = new AbortController();
+    let dispose: (() => void) | undefined;
+    setError(undefined);
+    void loadAuthorMedia(input, controller.signal)
+      .then((asset) => {
+        if (controller.signal.aborted) {
+          asset.dispose();
+          return;
+        }
+        dispose = () => asset.dispose();
+        setMedia({ source: input, url: asset.url });
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      controller.abort();
+      dispose?.();
+    };
+  }, [source.mediaUrl]);
+  const seek = (seconds: number) => {
+    if (authorSessionWorkspace(sessionId).candidate || !Number.isFinite(seconds)) return;
+    const player = video.current;
+    if (!player) return;
+    player.pause();
+    setAuthorToolMode(sessionId, 'select');
+    setSelection(undefined);
+    if (player.getState().currentTime === seconds) return;
+    setFrameReady(false);
+    player.seek(seconds);
+  };
+  useEffect(() => {
+    if (
+      seekRequest?.path === source.path &&
+      seekRequest.generation === authorSessionWorkspace(sessionId).focusedDocument?.generation
+    ) {
+      seek(seekRequest.timeSeconds);
+    }
+  }, [seekRequest]);
+  useEffect(() => {
+    if (!pendingCandidate && start.current === undefined) setSelection(undefined);
+  }, [pendingCandidate]);
   useEffect(
     () =>
       registerAuthorGridResolver(sessionId, (cell, geometry) => {
@@ -76,6 +142,7 @@ export function AuthorMediaView({
       bottom: event.clientY,
     });
     if (!rect) return;
+    setSelection({ path: source.path, rect });
     const focused = authorSessionWorkspace(sessionId).focusedDocument;
     if (!focused || focused.path !== source.path) return;
     let anchor: AuthorNativeAnchor;
@@ -129,12 +196,41 @@ export function AuthorMediaView({
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   };
+  const selected = selection?.path === source.path ? selection.rect : undefined;
+  const selectionOverlay =
+    selected === undefined ? null : (
+      <div
+        data-testid="author-media-selection"
+        className="pointer-events-none absolute border-2 border-doom-red bg-doom-red/10"
+        style={{
+          left: `${selected.x * 100}%`,
+          top: `${selected.y * 100}%`,
+          width: `${selected.width * 100}%`,
+          height: `${selected.height * 100}%`,
+        }}
+      />
+    );
   return (
     <div
       ref={host}
       className="min-h-0 flex-1 overflow-auto p-4"
+      style={{
+        touchAction: activeTool === 'select' ? 'auto' : 'none',
+        cursor: activeTool === 'select' ? undefined : 'crosshair',
+      }}
+      onPointerMove={(event) => {
+        const drag = start.current;
+        if (drag === undefined) return;
+        const rect = normalizedAuthorRectangle(drag.element.getBoundingClientRect(), {
+          left: drag.x,
+          top: drag.y,
+          right: event.clientX,
+          bottom: event.clientY,
+        });
+        setSelection(rect === null ? undefined : { path: source.path, rect });
+      }}
       onPointerDownCapture={(event) => {
-        if (activeTool === 'select' || event.button !== 0) return;
+        if (activeTool === 'select' || event.button !== 0 || pendingCandidate) return;
         const element = event.target;
         if (
           !(
@@ -145,17 +241,29 @@ export function AuthorMediaView({
         )
           return;
         event.preventDefault();
+        setSelection(undefined);
+        if (element instanceof HTMLVideoElement) {
+          if (video.current?.isFrameReady?.() === false) {
+            setError('Wait for the selected frame to finish loading.');
+            return;
+          }
+          video.current?.pause();
+        }
         start.current = { x: event.clientX, y: event.clientY, element };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerUp={(event) => void mark(event)}
       onPointerCancel={() => {
         start.current = undefined;
+        setSelection(undefined);
       }}
     >
-      {source.kind === 'image' ? (
+      {mediaUrl === undefined ? (
+        <p className="text-doom-dim">{error === undefined ? 'Loading media...' : 'Media unavailable.'}</p>
+      ) : source.kind === 'image' ? (
         <div className="relative inline-block max-w-full">
-          <img ref={image} src={source.mediaUrl} alt={source.path} draggable={false} className="block max-w-full" />
+          <img ref={image} src={mediaUrl} alt={source.path} draggable={false} className="block max-w-full" />
+          {selectionOverlay}
           {displayedRegions.flatMap(({ ordinal, region }) => {
             if (region.anchor.kind !== 'image-rect') return [];
             const { rect } = region.anchor;
@@ -179,16 +287,70 @@ export function AuthorMediaView({
           })}
         </div>
       ) : (
-        <MediaPreview
-          src={source.mediaUrl ?? ''}
-          path={source.path}
-          kind={source.kind === 'pdf' ? 'pdf' : source.kind === 'video' ? 'video' : 'download'}
-          controllerRef={video}
-          pdfControllerRef={pdf}
-          data-testid="author-media"
-        />
+        <div className="relative w-fit max-w-full">
+          <MediaPreview
+            src={mediaUrl}
+            path={source.path}
+            kind={source.kind === 'pdf' ? 'pdf' : source.kind === 'video' ? 'video' : 'download'}
+            controllerRef={video}
+            pdfControllerRef={pdf}
+            data-testid="author-media"
+            videoControls={false}
+            onPlaybackStateChange={(state) => {
+              setPlayback(state);
+              setFrameReady(video.current?.isFrameReady() ?? false);
+              if (state.playing) setSelection(undefined);
+            }}
+          />
+          {source.kind === 'video' ? selectionOverlay : null}
+          {source.kind === 'video'
+            ? displayedRegions.map(({ ordinal, region }) => {
+                if (
+                  region.anchor.kind !== 'video-time-rect' ||
+                  playback.playing ||
+                  Math.abs(region.anchor.timeSeconds - playback.currentTime) > 0.1
+                )
+                  return null;
+                const { rect } = region.anchor;
+                return (
+                  <div
+                    key={region.id}
+                    data-author-region={ordinal}
+                    className="pointer-events-none absolute border border-doom-yellow bg-doom-yellow/10"
+                    style={{
+                      left: `${rect.x * 100}%`,
+                      top: `${rect.y * 100}%`,
+                      width: `${rect.width * 100}%`,
+                      height: `${rect.height * 100}%`,
+                    }}
+                  >
+                    <span className="bg-doom-yellow text-doom-deep">{ordinal}</span>
+                  </div>
+                );
+              })
+            : null}
+        </div>
       )}
-      {error ? <output className="text-[10px] text-doom-red">{error}</output> : null}
+      {source.kind === 'video' ? (
+        <AuthorVideoControls
+          playback={playback}
+          ready={frameReady}
+          locked={pendingCandidate}
+          marking={activeTool === 'mark'}
+          onSeek={seek}
+          onToggle={() => {
+            setAuthorToolMode(sessionId, 'select');
+            setSelection(undefined);
+            if (playback.playing) video.current?.pause();
+            else void video.current?.play().catch((reason: unknown) => setError(String(reason)));
+          }}
+          onAnnotate={() => {
+            video.current?.pause();
+            setAuthorToolMode(sessionId, 'mark');
+          }}
+        />
+      ) : null}
+      {error ? <output className="text-sm text-doom-red">{error}</output> : null}
     </div>
   );
 }

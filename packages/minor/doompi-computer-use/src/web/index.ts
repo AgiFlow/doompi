@@ -5,12 +5,14 @@ import {
   COMPUTER_USE_STATUS_KEY,
 } from '../types/computerUseApi.ts';
 import { ComputerActionToolCard } from './components/ComputerActionToolCard.tsx';
-import { computerActionToolName } from './lib/computerActionToolRender.ts';
+import { ComputerExecToolCard } from './components/ComputerExecToolCard.tsx';
 import { ComputerStateToolCard } from './components/ComputerStateToolCard.tsx';
-import { computerStateToolName } from './lib/computerStateToolRender.ts';
 import { ComputerUsePanel } from './components/ComputerUsePanel.tsx';
-import { computerUseChannel } from './stores/computerUseStore.ts';
+import { computerActionToolName } from './lib/computerActionToolRender.ts';
+import { computerExecToolName } from './lib/computerExecToolRender.ts';
+import { computerStateToolName } from './lib/computerStateToolRender.ts';
 import { computerUseSettingsSection } from './lib/computerUseSettings.ts';
+import { computerUseChannel } from './stores/computerUseStore.ts';
 
 export const webPlugin = defineWebPlugin({
   id: 'computer-use',
@@ -40,5 +42,6 @@ export const webPlugin = defineWebPlugin({
   toolRenderers: [
     { tools: [computerStateToolName], message: ComputerStateToolCard },
     { tools: [computerActionToolName], message: ComputerActionToolCard },
+    { tools: [computerExecToolName], message: ComputerExecToolCard },
   ],
 });

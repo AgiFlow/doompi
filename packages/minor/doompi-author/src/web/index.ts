@@ -6,7 +6,7 @@ import { authorChannel } from './stores/authorStore.ts';
 import { DescribeAuthorToolsToolCard } from './components/DescribeAuthorToolsToolCard.tsx';
 import { OpenAuthoringFileToolCard } from './components/OpenAuthoringFileToolCard.tsx';
 import { UseAuthorToolsToolCard } from './components/UseAuthorToolsToolCard.tsx';
-import { recordAuthorComposerSubmission } from './stores/authorRequestLifecycle.ts';
+import { recordAuthorCaptureStatus, recordAuthorComposerSubmission } from './stores/authorRequestLifecycle.ts';
 import { authorWorkspace } from './stores/authorWorkspaceStore.ts';
 
 /**
@@ -17,8 +17,10 @@ import { authorWorkspace } from './stores/authorWorkspaceStore.ts';
 function startAuthor(runtime: WebPluginRuntime): () => void {
   const stopBridge = startAuthorBrowserBridge(runtime);
   const stopSubmissions = runtime.onComposerSubmitted?.(recordAuthorComposerSubmission) ?? (() => undefined);
+  const stopCaptureStatus = runtime.onCaptureStatus?.(recordAuthorCaptureStatus) ?? (() => undefined);
   return () => {
     stopSubmissions();
+    stopCaptureStatus();
     stopBridge();
   };
 }

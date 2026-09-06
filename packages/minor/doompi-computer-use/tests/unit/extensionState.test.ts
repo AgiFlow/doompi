@@ -41,6 +41,6 @@ describe('computer-use Pi runtime projection', () => {
     reconcileTools(pi, false);
     expect(setActiveTools).toHaveBeenCalledTimes(1);
     reconcileTools(pi, true);
-    expect(activeTools).toEqual(['read', 'computer_state', 'computer_action']);
+    expect(activeTools).toEqual(['read', 'computer_state', 'computer_action', 'computer_exec']);
   });
 });

@@ -12,7 +12,6 @@ import { fileTabForPath } from './composition.ts';
 import { pluginContextActions, slotFills } from './pluginRegistry.ts';
 import { renderThread } from './threadRenderer.ts';
 import { sendFrame } from './transport.ts';
-
 /** The host's hold on the focused session's runtime tabs, bound in by the caller that owns the store. */
 export interface TransientTabActions {
   open: (tab: TransientTab) => void;
@@ -33,6 +32,7 @@ export function pluginSlotProps(
   attachComposerContext: (item: WebPluginContextItem) => void,
   attachComposerCapture: (capture: ComposerCapture) => void = () => undefined,
   contextInventory: readonly WebPluginContextInventoryItem[] = [],
+  submitCapture?: (capture: ComposerCapture) => Promise<void>,
 ): WebPluginSlotProps {
   const props: WebPluginSlotProps = {
     sessionId,
@@ -45,6 +45,7 @@ export function pluginSlotProps(
     appendComposerDraft,
     attachComposerContext,
     attachComposerCapture,
+    ...(submitCapture === undefined ? {} : { submitCapture }),
     contextActionsFor(item) {
       return pluginContextActions().flatMap((action) =>
         action.kinds.includes(item.kind)

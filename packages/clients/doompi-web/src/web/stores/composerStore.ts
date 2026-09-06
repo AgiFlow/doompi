@@ -238,6 +238,26 @@ export function attachComposerContext(sessionId: string | null, item: WebPluginC
   });
 }
 
+/** Validates a standalone capture without reading or changing the composer. */
+export function validateComposerCapture(capture: ComposerCapture): void {
+  if (!isCaptureShape(capture) || !contextFields(capture.context).valid) {
+    throw new Error('Capture needs a base64 PNG or JPEG image and valid context.');
+  }
+  if (capture.data.length > Math.ceil(MAX_COMPOSER_IMAGE_BYTES / 3) * 4) {
+    throw new Error('Capture exceeds the 10 MB image limit.');
+  }
+  const image = decodeCanonicalBase64(capture.data);
+  if (image === null || !validCaptureDimensions(image, capture.mimeType)) {
+    throw new Error('Capture needs a valid PNG or JPEG image.');
+  }
+  if (
+    image.length > MAX_COMPOSER_IMAGE_BYTES ||
+    new TextEncoder().encode(capture.context.content).byteLength > MAX_COMPOSER_TEXT_BYTES
+  ) {
+    throw new Error('Capture exceeds the attachment budget.');
+  }
+}
+
 /**
  * Stages a capture as one image and one context chip in a single store update.
  * Nothing is transported until the reader explicitly submits or queues it.

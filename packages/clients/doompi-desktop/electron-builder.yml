@@ -17,6 +17,10 @@ files:
 extraResources:
   - from: ../doompi-web/src/web/public/icon-512.png
     to: startup-icon.png
+  - from: build/native
+    to: native
+    filter:
+      - "doompi-computer-use-helper"
   - from: build/runtime
     to: runtime
     filter:
@@ -52,6 +56,8 @@ mac:
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
   extendInfo:
+    NSAccessibilityUsageDescription: DoomPi uses Accessibility only for explicitly approved semantic actions in the selected application window.
+    NSScreenCaptureUsageDescription: DoomPi records only the explicitly approved application window and that application's audio.
     NSAppleEventsUsageDescription: DoomPi uses Apple Events to open links and files you choose.
 
 linux:

@@ -3,7 +3,6 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
 import {
-  attachAuthorCapture,
   authorCaptureContext,
   createAuthorCapturePacket,
   multiRegionCaptureProvider,
@@ -15,8 +14,9 @@ import { AuthorToolPalette } from './AuthorToolPalette.tsx';
 import { AuthorRegionDrafts } from './AuthorRegionDrafts.tsx';
 import { AuthorRequestLog } from './AuthorRequestLog.tsx';
 
-export function AuthorPanel({ sessionId, activeMinorModes, attachComposerCapture, statuses }: WebPluginSlotProps) {
+export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, statuses }: WebPluginSlotProps) {
   const [captureStatus, setCaptureStatus] = useState<string>();
+  const [capturing, setCapturing] = useState(false);
   const documents = useStore(authorWorkspace.store, (state) => {
     if (sessionId === null) return [];
     const prefix = `${sessionId}\n`;
@@ -31,14 +31,23 @@ export function AuthorPanel({ sessionId, activeMinorModes, attachComposerCapture
   const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
   if (!activeMinorModes?.includes('author') || focused === undefined) return null;
   return (
-    <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3.5">
+    <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
       {sessionId !== null && workspace !== undefined && focused !== undefined ? (
         <>
+          <h2 className="text-sm font-semibold text-doom-text">Annotations</h2>
+          <p className="text-sm leading-normal text-doom-dim sm:text-xs">
+            Select a region, add a comment, then submit here. Requests queue while the agent is working.
+          </p>
+          {focused.kind === 'video' ? (
+            <p className="text-sm text-doom-dim sm:text-xs">
+              Annotations reference video frames. They do not save changes to the source video.
+            </p>
+          ) : null}
           <AuthorToolPalette sessionId={sessionId} kind={focused.kind} activeTool={workspace.activeTool} />
           {autonomousVoiceGridVisible(statuses) && grid !== undefined ? (
             <div
               data-testid="author-grid-snapshot"
-              className="rounded border border-doom-red/40 bg-doom-red/5 p-2 text-[9px] text-doom-dim"
+              className="rounded border border-doom-red/40 bg-doom-red/5 p-2 text-sm text-doom-dim"
             >
               <strong className="text-doom-red">VOICE GRID A1–H8</strong>
               <p className="mt-1 truncate">token {grid.geometryToken}</p>
@@ -48,32 +57,46 @@ export function AuthorPanel({ sessionId, activeMinorModes, attachComposerCapture
           {workspace.regions.length > 0 ? (
             <div className="space-y-1.5 border-b border-doom-border-soft pb-3">
               <Button
-                size="xs"
+                className="min-h-11 min-w-11 w-full text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs"
                 variant="outline"
                 data-testid="author-attach-capture"
-                onClick={() => {
-                  setCaptureStatus('capturing…');
-                  const captureId = crypto.randomUUID();
+                disabled={capturing || workspace.candidate !== undefined || submitCapture === undefined}
+                onClick={async () => {
+                  if (capturing || workspace.candidate || submitCapture === undefined) return;
+                  setCapturing(true);
+                  setCaptureStatus('Submitting annotations…');
                   try {
-                    const packet = createAuthorCapturePacket(captureId, Date.now(), focused, workspace.regions);
-                    void attachAuthorCapture(
-                      multiRegionCaptureProvider(workspace.regions),
-                      authorCaptureContext(packet),
-                      attachComposerCapture,
-                    ).then(
-                      () => setCaptureStatus('attached to composer'),
-                      (reason: unknown) => setCaptureStatus(reason instanceof Error ? reason.message : String(reason)),
+                    const packet = createAuthorCapturePacket(
+                      crypto.randomUUID(),
+                      Date.now(),
+                      focused,
+                      workspace.regions,
                     );
+                    const image = await multiRegionCaptureProvider(workspace.regions).capture();
+                    await submitCapture({ ...image, context: authorCaptureContext(packet) });
+                    setCaptureStatus('Request submitted. You can keep annotating here.');
                   } catch (reason) {
                     setCaptureStatus(reason instanceof Error ? reason.message : String(reason));
+                  } finally {
+                    setCapturing(false);
                   }
                 }}
               >
-                attach {workspace.regions.length} region{workspace.regions.length === 1 ? '' : 's'}
+                {capturing
+                  ? 'Submitting…'
+                  : `Submit ${workspace.regions.length} annotation${workspace.regions.length === 1 ? '' : 's'}`}
               </Button>
-              {captureStatus ? <output className="block text-[10px] text-doom-dim">{captureStatus}</output> : null}
+              {workspace.candidate ? (
+                <p className="text-sm text-doom-dim sm:text-xs">
+                  Add or discard the current selection before submitting.
+                </p>
+              ) : null}
             </div>
           ) : null}
+          {submitCapture === undefined ? (
+            <output className="text-xs text-doom-red">Submission unavailable. Reload to update the app.</output>
+          ) : null}
+          {captureStatus ? <output className="block text-xs text-doom-dim">{captureStatus}</output> : null}
         </>
       ) : null}
       <AuthorRequestLog requests={workspace?.requests ?? []} />

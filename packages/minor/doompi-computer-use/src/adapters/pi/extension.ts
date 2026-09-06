@@ -21,9 +21,9 @@ import type { ComputerUseExtensionDependencies } from '../../types/extension.ts'
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-computer-use';
 export { COMPUTER_USE_MODE_ID };
-export const COMPUTER_USE_TOOL_NAMES = ['computer_state', 'computer_action'] as const;
+export const COMPUTER_USE_TOOL_NAMES = ['computer_state', 'computer_action', 'computer_exec'] as const;
 export const COMPUTER_USE_GUIDANCE = `[COMPUTER USE ACTIVE]
-Use computer_state before acting and after any action that may change the interface. Use only element refs and snapshot ids returned by computer_state. Use computer_action for one semantic press, set_value, or scroll at a time. Never infer coordinates, inspect another application, bypass secure elements, or retry an uncertain outcome. Stop computer use when the task is complete.`;
+Use computer_state before acting and after any action that may change the interface. Use only element refs and snapshot ids returned by computer_state. Use computer_action for one semantic press, focus, set_value, or scroll at a time. Use computer_exec only for a trusted, explicitly allowed local TypeScript script. Never infer coordinates, inspect another application, bypass secure elements, or retry an uncertain outcome. Stop computer use when the task is complete.`;
 
 export function modeState(state?: ComputerUseSessionView, enabled = false): MinorModeState {
   const phase = state?.phase ?? 'inactive';
@@ -167,7 +167,7 @@ export function installComputerUseRuntime(
     parameters: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['press', 'set_value', 'scroll'] },
+        kind: { type: 'string', enum: ['press', 'focus', 'set_value', 'scroll'] },
         snapshotId: { type: 'string' },
         elementRef: { type: 'string' },
         value: { type: 'string' },
@@ -184,7 +184,30 @@ export function installComputerUseRuntime(
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
     },
   });
-
+  pi.registerTool({
+    name: 'computer_exec',
+    label: 'Computer Script',
+    description:
+      'Run a trusted, explicitly allowed local TypeScript script against the authorized application session.',
+    promptSnippet: 'Run a trusted reusable computer script by its explicitly allowed path and JSON input',
+    parameters: {
+      type: 'object',
+      properties: {
+        scriptPath: { type: 'string' },
+        input: {},
+      },
+      required: ['scriptPath', 'input'],
+      additionalProperties: false,
+    },
+    async execute(_toolCallId, params, signal) {
+      if (!globallyEnabled || client === undefined || state?.phase !== 'active')
+        throw new Error('Computer use is not active for this session.');
+      if (dependencies.scriptRunner === undefined) throw new Error('Computer script execution is unavailable.');
+      const input = params as { scriptPath: string; input: unknown };
+      const result = await dependencies.scriptRunner.execute(input.scriptPath, input.input, signal);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], details: result };
+    },
+  });
   cordis.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (context) => {
     const catalog = requireMinorModeCatalog(context);
     const registerOwner = (): MinorModeOwnerHandle =>

@@ -11,7 +11,7 @@ This guidance applies only while the session's Computer Use minor mode is active
 
 - Call `computer_state` before acting and after an action that may change the interface.
 - Use only snapshot ids and element refs returned by the latest `computer_state` result.
-- Call `computer_action` for one semantic `press`, `set_value`, or `scroll` at a time.
+- Call `computer_action` for one semantic `press`, `focus`, `set_value`, or `scroll` at a time.
 - Never infer screen coordinates, inspect another application, or bypass secure elements.
 - Treat stale snapshots, lost targets, and uncertain outcomes as terminal until a fresh observation clarifies them.
 - Do not automatically retry an uncertain action.

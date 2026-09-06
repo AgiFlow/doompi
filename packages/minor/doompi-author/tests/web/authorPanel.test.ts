@@ -46,11 +46,21 @@ describe('the Author web plugin', () => {
   it.each([undefined, [], ['voice']])(
     'withholds document editing without Author activation: %j',
     (activeMinorModes) => {
-      const props = { sessionId: 'gating', path: 'doc.md', activeMinorModes } as unknown as WebPluginSlotProps & {
+      const props = {
+        sessionId: 'gating',
+        path: 'doc.md',
+        activeMinorModes,
+        fileTabFor: () => ({
+          id: 'file-doc',
+          label: 'doc.md',
+          panel: () => createElement('div', { 'data-testid': 'normal-files-view' }, 'Normal file preview'),
+        }),
+      } as unknown as WebPluginSlotProps & {
         path: string;
       };
       const markup = renderToStaticMarkup(createElement(AuthorDocumentPanel, props));
-      expect(markup).toContain('author-mode-inactive');
+      expect(markup).toContain('normal-files-view');
+      expect(markup).not.toContain('Enable Author');
       expect(markup).not.toContain('author-save');
       expect(markup).not.toContain('author-document');
     },
@@ -208,7 +218,7 @@ describe('the Author web plugin', () => {
     expect(markup).toContain('report.md');
     expect(markup).toContain('Lines 2–3');
     expect(markup).toContain('A long introduction');
-    expect(markup).toContain('● CHANGING');
+    expect(markup).toContain('● WORKING');
     expect(markup).toContain('Replacing selected introduction');
     expect(markup).toContain('Make the opening direct.');
     expect(markup).toContain('0 of 1 regions applied');

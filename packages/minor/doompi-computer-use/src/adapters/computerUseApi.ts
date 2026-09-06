@@ -19,6 +19,7 @@ import {
 
 interface PendingRequest {
   readonly request: ComputerUseBrokerRequest;
+  readonly dispose: () => void;
   resolve(value: unknown): void;
   reject(error: Error): void;
 }
@@ -49,7 +50,7 @@ function semanticAction(value: Record<string, unknown>): boolean {
     value.elementRef.length > 0;
   if (!base) return false;
   const allowed = (keys: readonly string[]) => Object.keys(value).every((key) => keys.includes(key));
-  if (value.kind === 'press') return allowed(['kind', 'snapshotId', 'elementRef']);
+  if (value.kind === 'press' || value.kind === 'focus') return allowed(['kind', 'snapshotId', 'elementRef']);
   if (value.kind === 'set_value')
     return typeof value.value === 'string' && allowed(['kind', 'snapshotId', 'elementRef', 'value']);
   if (value.kind === 'scroll')
@@ -68,6 +69,11 @@ function artifactView(value: unknown): ComputerUseArtifactView | undefined {
     typeof candidate === 'string' && candidate.startsWith('/api/') ? candidate : undefined;
   const downloadUrl = safeUrl(input.downloadUrl);
   const previewUrl = safeUrl(input.previewUrl);
+  const artifactFailure = record(input.failure);
+  const safeFailure =
+    typeof artifactFailure?.code === 'string' && typeof artifactFailure.message === 'string'
+      ? { code: artifactFailure.code.slice(0, 128), message: artifactFailure.message.slice(0, 512) }
+      : undefined;
   return {
     artifactId: input.artifactId,
     status: input.status,
@@ -75,6 +81,7 @@ function artifactView(value: unknown): ComputerUseArtifactView | undefined {
     ...(previewUrl === undefined ? {} : { previewUrl }),
     ...(typeof input.actionCount === 'number' ? { actionCount: input.actionCount } : {}),
     ...(typeof input.completedAt === 'string' ? { completedAt: input.completedAt } : {}),
+    ...(safeFailure === undefined ? {} : { failure: safeFailure }),
   };
 }
 
@@ -82,12 +89,14 @@ export interface ComputerUseApiOptions {
   readonly sessionId?: string;
   readonly internalToken?: string;
   readonly hubToken?: string;
+  readonly requestTimeoutMs?: number;
 }
 
 export class ComputerUseRequestBroker implements DoomApiHandler {
   private readonly sessionId: string;
   private readonly internalToken?: string;
   private readonly hubToken?: string;
+  private readonly requestTimeoutMs: number;
   private revision = 0;
   private wake = 0;
   private phase: ComputerUseSessionView['phase'] = 'inactive';
@@ -100,10 +109,12 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   private pending?: PendingRequest;
   private closed = false;
 
+  private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
   public constructor(options: ComputerUseApiOptions) {
     this.sessionId = options.sessionId ?? 'unknown';
     this.internalToken = options.internalToken;
     this.hubToken = options.hubToken;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? ComputerUseRequestBroker.DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   public state(): ComputerUseSessionView {
@@ -167,9 +178,30 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
     return Response.json(this.state(), { status: 202 });
   }
 
-  private async enqueue(operation: ComputerUseBrokerRequest['operation'], payload?: unknown): Promise<Response> {
+  private rejectPending(message: string): void {
+    const pending = this.pending;
+    if (pending === undefined) return;
+    this.pending = undefined;
+    pending.dispose();
+    pending.reject(new Error(message));
+  }
+
+  private stopAfterUncertainRequest(message: string): void {
+    if (this.phase === 'active') {
+      this.phase = 'stopping';
+      this.changed();
+    }
+    this.rejectPending(message);
+  }
+
+  private async enqueue(
+    operation: ComputerUseBrokerRequest['operation'],
+    payload?: unknown,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     if (this.phase !== 'active' || this.grantId === undefined) return jsonError('Computer use is not active.', 409);
     if (this.pending !== undefined) return jsonError('Another computer-use request is live.', 409);
+    if (signal?.aborted === true) return jsonError('The computer-use request was cancelled.', 499);
     const sequence = operation === 'act' ? ++this.actionSequence : undefined;
     const request: ComputerUseBrokerRequest = {
       id: randomUUID(),
@@ -179,7 +211,22 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
       ...(payload === undefined ? {} : { payload }),
     };
     const completion = new Promise<unknown>((resolve, reject) => {
-      this.pending = { request, resolve, reject };
+      const onAbort = () => this.stopAfterUncertainRequest('The computer-use request was cancelled.');
+      const timer = setTimeout(
+        () => this.stopAfterUncertainRequest('The computer-use request timed out.'),
+        this.requestTimeoutMs,
+      );
+      timer.unref?.();
+      signal?.addEventListener('abort', onAbort, { once: true });
+      this.pending = {
+        request,
+        resolve,
+        reject,
+        dispose: () => {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
+        },
+      };
     });
     this.changed();
     try {
@@ -200,15 +247,17 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
 
     if (request.method === 'GET' && (path === COMPUTER_USE_ROUTES.agentState || path === COMPUTER_USE_ROUTES.hubState))
       return Response.json(this.state());
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentObserve) return this.enqueue('observe');
+    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentObserve)
+      return this.enqueue('observe', undefined, request.signal);
     if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentAction) {
       const action = await body(request);
       if (!semanticAction(action)) return jsonError('A valid semantic action is required.', 400);
-      return this.enqueue('act', action);
+      return this.enqueue('act', action, request.signal);
     }
     if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentStop) {
       if (this.phase !== 'active') return jsonError('Computer use is not active.', 409);
       this.phase = 'stopping';
+      this.rejectPending('The computer-use request was stopped.');
       this.changed();
       return Response.json(this.state(), { status: 202 });
     }
@@ -228,6 +277,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
       if (this.pending === undefined || this.pending.request.id !== id) return jsonError('The request is stale.', 409);
       const pending = this.pending;
       this.pending = undefined;
+      pending.dispose();
       this.changed();
       if (typeof input.error === 'string') pending.reject(new Error(input.error));
       else pending.resolve(input.result);
@@ -250,6 +300,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
           this.phase = 'active';
         }
       } else {
+        this.rejectPending('The computer-use session stopped.');
         this.phase = 'inactive';
         this.grantId = undefined;
         this.expiresAt = undefined;
@@ -264,8 +315,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
 
   public close(): void {
     this.closed = true;
-    this.pending?.reject(new Error('Computer-use broker closed.'));
-    this.pending = undefined;
+    this.rejectPending('Computer-use broker closed.');
     this.grantId = undefined;
     this.expiresAt = undefined;
   }

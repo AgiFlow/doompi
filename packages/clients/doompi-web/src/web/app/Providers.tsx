@@ -5,6 +5,7 @@ import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
 import { ThreadView } from '../features/session/ThreadView.tsx';
 import { onComposerSubmitted } from '../lib/composerSubmissions.ts';
+import { onCaptureStatus } from '../stores/captureStore.ts';
 import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelContextAdapter.ts';
 import { installWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
@@ -54,6 +55,7 @@ export function Providers() {
         onHubConnected,
         acquireModelContext,
         onComposerSubmitted,
+        onCaptureStatus,
       });
       stopRuntime = startSessionRuntime();
       // One read at start; after that the hub pushes state, so nothing polls.

@@ -24,7 +24,8 @@
   "type": "module",
   "main": "./dist/bin/main.cjs",
   "scripts": {
-    "build": "tsdown",
+    "build": "pnpm run build:native && tsdown",
+    "build:native": "node scripts/buildMacComputerUseHelper.mjs",
     "build:runtime": "vite build --config vite.runtime.config.ts && node scripts/downloadCloudflared.mjs",
     "package": "pnpm run build && pnpm run build:runtime && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
     "start": "pnpm run build && pnpm run build:runtime && electron dist/bin/main.cjs",

@@ -65,8 +65,25 @@ describe('doompi-computer-use Pi extension', () => {
         phase: 'stopping',
       })),
     };
+    const scriptRunner = {
+      execute: vi.fn(async () => ({
+        result: { applied: true },
+        observation: {
+          runId: 'run-1',
+          snapshotId: 'snapshot-2',
+          targetGeneration: 'target-1',
+          applicationName: 'Test',
+          bundleId: 'test.app',
+          windowTitle: 'Test',
+          elements: [],
+          screenshot: { mimeType: 'image/png' as const, data: '' },
+        },
+        logs: [],
+      })),
+    };
     const dependencies: ComputerUseExtensionDependencies = {
       client,
+      scriptRunner,
       enabled: () => globallyEnabled,
       service: { execute: vi.fn(async () => ({ message: 'active', level: 'info' as const })) },
     };
@@ -117,6 +134,10 @@ describe('doompi-computer-use Pi extension', () => {
     await expect(
       host.callTool('computer_action', { kind: 'press', snapshotId: 'snapshot-1', elementRef: 'button-1' }),
     ).resolves.toMatchObject({ details: { applied: true } });
+    await expect(
+      host.callTool('computer_exec', { scriptPath: '/trusted/fill-form.ts', input: { name: 'Ada' } }),
+    ).resolves.toMatchObject({ details: { observation: { snapshotId: 'snapshot-2' } } });
+    expect(scriptRunner.execute).toHaveBeenCalledWith('/trusted/fill-form.ts', { name: 'Ada' }, undefined);
     const prompts = await host.emit('before_agent_start', { systemPrompt: 'base' });
     expect(prompts).toEqual(
       expect.arrayContaining([

@@ -1,4 +1,5 @@
-import { Breadcrumb, Button, CodeEditor, Markdown, MediaPreview } from '@agimon-ai/doompi-web-components';
+import { Breadcrumb, Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
+import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview.tsx';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useState } from 'react';
 import type { FileEditsPreviewView } from '../../types/fileEditsApi.ts';

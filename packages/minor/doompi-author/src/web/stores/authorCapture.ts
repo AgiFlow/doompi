@@ -7,6 +7,31 @@ export const AUTHOR_CAPTURE_MAX_BYTES = 2 * 1024 * 1024;
 export const AUTHOR_PACKET_MAX_BYTES = 64 * 1024;
 export const AUTHOR_COMMENT_MAX_BYTES = 2 * 1024;
 export const AUTHOR_QUOTE_MAX_BYTES = 4 * 1024;
+export const AUTHOR_REGION_COLORS = [
+  '#ff5f57',
+  '#00c2ff',
+  '#ffd166',
+  '#b388ff',
+  '#4ade80',
+  '#ff8c42',
+  '#f472b6',
+  '#2dd4bf',
+  '#a3e635',
+  '#60a5fa',
+  '#e879f9',
+  '#facc15',
+  '#34d399',
+  '#fb7185',
+  '#818cf8',
+  '#22d3ee',
+] as const;
+
+function annotationForeground(color: string): '#101216' | '#ffffff' {
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  return red * 299 + green * 587 + blue * 114 >= 150_000 ? '#101216' : '#ffffff';
+}
 
 export interface AuthorCapturePacketRegion {
   id: string;
@@ -88,15 +113,45 @@ export function createAuthorCapturePacket(
   return packet;
 }
 
+function rectLocation(rect: AuthorCrop): string {
+  const percent = (value: number) => `${String(Math.round(value * 1_000) / 10)}%`;
+  return `x ${percent(rect.x)}, y ${percent(rect.y)}, w ${percent(rect.width)}, h ${percent(rect.height)}`;
+}
+
+function anchorLocation(anchor: AuthorNativeAnchor): string {
+  switch (anchor.kind) {
+    case 'text-range':
+      return anchor.startLine === anchor.endLine
+        ? `line ${String(anchor.startLine)}`
+        : `lines ${String(anchor.startLine)}-${String(anchor.endLine)}`;
+    case 'cell':
+      return `${anchor.sheet === undefined ? '' : `${anchor.sheet}!`}${anchor.location}`;
+    case 'slide-element':
+      return `slide ${String(anchor.slide)}: ${anchor.location}`;
+    case 'image-rect':
+      return `image ${rectLocation(anchor.rect)}`;
+    case 'pdf-page-rect':
+      return `page ${String(anchor.page)}, ${rectLocation(anchor.rect)}`;
+    case 'video-time-rect':
+      return `time ${anchor.timeSeconds.toFixed(3)}s${anchor.frame === undefined ? '' : `, frame ${String(anchor.frame)}`}, ${rectLocation(anchor.rect)}`;
+  }
+}
 export function authorCaptureContext(packet: AuthorCapturePacket): WebPluginContextItem {
-  const content = JSON.stringify(packet);
-  if (bytes(content) > AUTHOR_PACKET_MAX_BYTES) throw new Error('Author capture packet exceeds 64 KiB.');
+  const metadata = JSON.stringify(packet);
+  if (bytes(metadata) > AUTHOR_PACKET_MAX_BYTES) throw new Error('Author capture packet exceeds 64 KiB.');
+  const content = packet.regions
+    .map(
+      (region) =>
+        `(${String(region.ordinal)}) ${region.comment} [${anchorLocation(region.anchor)}]${region.quote ? `\nQuoted text: ${region.quote}` : ''}`,
+    )
+    .join('\n\n');
   return {
     kind: 'author-capture',
     source: 'author',
     id: packet.captureId,
     label: `${packet.regions.length} region${packet.regions.length === 1 ? '' : 's'} · ${packet.document.path}`,
     content,
+    metadata,
   };
 }
 
@@ -172,39 +227,24 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-function drawWrapped(
-  context: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  width: number,
-  lineHeight: number,
-  maxLines: number,
-): void {
-  const words = text.split(/\s+/u);
-  let line = '';
-  let lineIndex = 0;
-  for (const word of words) {
-    const next = line === '' ? word : `${line} ${word}`;
-    if (context.measureText(next).width <= width) {
-      line = next;
-      continue;
-    }
-    context.fillText(line, x, y + lineIndex * lineHeight);
-    lineIndex += 1;
-    if (lineIndex >= maxLines) return;
-    line = word;
-  }
-  if (lineIndex < maxLines && line !== '') context.fillText(line, x, y + lineIndex * lineHeight);
-}
-
 export function multiRegionCaptureProvider(regions: readonly AuthorRegionDraft[]): AuthorCaptureProvider {
   return {
     async capture(signal) {
       throwIfAborted(signal);
-      const width = 960;
-      const tileHeight = 420;
-      const naturalHeight = tileHeight * regions.length;
+      if (regions.length === 0 || regions.length > 16) throw new Error('Capture requires between 1 and 16 regions.');
+      const tiles = [];
+      for (const region of regions) {
+        const image = region.thumbnailUrl === undefined ? undefined : await loadImage(region.thumbnailUrl);
+        throwIfAborted(signal);
+        const width = image?.naturalWidth ?? region.viewport.width;
+        const height = image?.naturalHeight ?? region.viewport.height;
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+          throw new Error('Image is not ready to capture');
+        }
+        tiles.push({ region, image, width, height });
+      }
+      const width = Math.min(AUTHOR_CAPTURE_MAX_DIMENSION, Math.max(...tiles.map((tile) => tile.width)));
+      const naturalHeight = tiles.reduce((height, tile) => height + (tile.height * width) / tile.width, 0);
       const scale = Math.min(1, AUTHOR_CAPTURE_MAX_DIMENSION / Math.max(width, naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(width * scale));
@@ -214,20 +254,18 @@ export function multiRegionCaptureProvider(regions: readonly AuthorRegionDraft[]
       context.scale(scale, scale);
       context.fillStyle = '#101216';
       context.fillRect(0, 0, width, naturalHeight);
-      for (const [index, region] of regions.entries()) {
+      let y = 0;
+      for (const [index, { region, image, width: sourceWidth, height: sourceHeight }] of tiles.entries()) {
+        const annotationColor = AUTHOR_REGION_COLORS[index % AUTHOR_REGION_COLORS.length]!;
         throwIfAborted(signal);
-        const y = index * tileHeight;
-        context.fillStyle = '#23272e';
-        context.fillRect(12, y + 12, width - 24, tileHeight - 24);
-        const mediaWidth = 600;
-        const mediaHeight = tileHeight - 48;
-        if (region.thumbnailUrl !== undefined) {
-          const image = await loadImage(region.thumbnailUrl);
-          const imageScale = Math.min(mediaWidth / image.naturalWidth, mediaHeight / image.naturalHeight);
-          const drawWidth = image.naturalWidth * imageScale;
-          const drawHeight = image.naturalHeight * imageScale;
-          const drawX = 24 + (mediaWidth - drawWidth) / 2;
-          const drawY = y + 24 + (mediaHeight - drawHeight) / 2;
+        const tileHeight = (sourceHeight * width) / sourceWidth;
+        const drawWidth = width;
+        const drawHeight = tileHeight;
+        const drawX = 0;
+        const drawY = y;
+        let labelX = drawX;
+        let labelY = drawY;
+        if (image !== undefined) {
           context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
           if ('rect' in region.anchor) {
             const rect = region.anchor.rect;
@@ -240,21 +278,31 @@ export function multiRegionCaptureProvider(regions: readonly AuthorRegionDraft[]
             context.fillRect(drawX, ry + rh, drawWidth, Math.max(0, drawY + drawHeight - ry - rh));
             context.fillRect(drawX, ry, Math.max(0, rx - drawX), rh);
             context.fillRect(rx + rw, ry, Math.max(0, drawX + drawWidth - rx - rw), rh);
-            context.strokeStyle = '#ff6c6b';
+            context.strokeStyle = annotationColor;
             context.lineWidth = 3;
             context.strokeRect(rx, ry, rw, rh);
+            labelX = rx;
+            labelY = ry;
           }
-        } else {
-          context.fillStyle = '#9ca0a4';
-          context.font = '16px monospace';
-          drawWrapped(context, region.quote ?? 'Selected document region', 36, y + 54, mediaWidth - 36, 24, 11);
         }
-        context.fillStyle = '#ff6c6b';
-        context.font = 'bold 24px monospace';
-        context.fillText(`(${String(index + 1)})`, 650, y + 58);
-        context.fillStyle = '#f2f3f5';
-        context.font = '15px monospace';
-        drawWrapped(context, region.comment, 650, y + 94, 280, 23, 11);
+        // Keep ordinals readable after downscaling, but never larger than their image.
+        const ordinal = String(index + 1);
+        let badgeScale = Math.min(1 / scale, drawHeight / 36);
+        context.font = `bold ${String(24 * badgeScale)}px monospace`;
+        const measuredWidth = context.measureText(ordinal).width + 12 * badgeScale;
+        if (measuredWidth > drawWidth) badgeScale *= drawWidth / measuredWidth;
+        context.font = `bold ${String(24 * badgeScale)}px monospace`;
+        context.textBaseline = 'top';
+        const padding = 6 * badgeScale;
+        const labelWidth = Math.min(drawWidth, context.measureText(ordinal).width + padding * 2);
+        const labelHeight = 36 * badgeScale;
+        labelX = Math.max(drawX, Math.min(labelX, drawX + drawWidth - labelWidth));
+        labelY = Math.max(drawY, Math.min(labelY, drawY + drawHeight - labelHeight));
+        context.fillStyle = annotationColor;
+        context.fillRect(labelX, labelY, labelWidth, labelHeight);
+        context.fillStyle = annotationForeground(annotationColor);
+        context.fillText(ordinal, labelX + padding, labelY + padding);
+        y += tileHeight;
       }
       throwIfAborted(signal);
       return boundedCanvasCapture(canvas);

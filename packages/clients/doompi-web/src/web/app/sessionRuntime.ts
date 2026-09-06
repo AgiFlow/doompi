@@ -23,6 +23,8 @@ import { dispatchChannelFrame } from '../lib/pluginRegistry.ts';
 import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
 import { startProtocolRuntime } from './protocolRuntime.ts';
 import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport.ts';
+import { applyCaptureFrame, disconnectCaptures } from '../stores/captureStore.ts';
+import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore.ts';
 import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
 import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
@@ -142,6 +144,7 @@ export function startSessionRuntime(): () => void {
   // back before anything can render an empty composer over it.
   restoreComposerDrafts();
   const stopBundleWatch = watchVerifiedBundleUpdates();
+  const stopFileLinkModes = bindSessionFileLinkModes();
   // The hub-side subscription this page currently holds; it dies with the
   // socket, which is why the snapshot handler re-subscribes.
   let subscribed: string | null = null;
@@ -171,7 +174,10 @@ export function startSessionRuntime(): () => void {
       });
     }
     if (!force && target === subscribed) return;
-    if (subscribed !== null && subscribed !== target) sendHubFrame(unsubscribeFrame(subscribed));
+    if (subscribed !== null && subscribed !== target) {
+      disconnectCaptures(subscribed);
+      sendHubFrame(unsubscribeFrame(subscribed));
+    }
     subscribed = target;
     if (target !== null) sendHubFrame(subscribeFrame(target));
   };
@@ -214,6 +220,7 @@ export function startSessionRuntime(): () => void {
           return;
         case SESSION_REMOVED_TYPE: {
           if (typeof frame.sessionId !== 'string') return;
+          disconnectCaptures(frame.sessionId);
           applySessionRemoved(frame);
           dropComposerState(frame.sessionId);
           dropSessionStore(frame.sessionId);
@@ -253,6 +260,7 @@ export function startSessionRuntime(): () => void {
           if (notification !== undefined) {
             void deliverBrowserNotification(frame.sessionId, notification.entryId, notification.data);
           }
+          applyCaptureFrame(frame.sessionId, frame.frame);
           applySessionFrame(frame.sessionId, frame.frame);
           // A select the bar asked for becomes the bar's popover; the claim is
           // settled here, at frame time, so no surface renders it twice.
@@ -332,6 +340,7 @@ export function startSessionRuntime(): () => void {
     },
     onClose() {
       subscribed = null;
+      disconnectCaptures();
       markSocketClosed();
     },
   });
@@ -343,9 +352,11 @@ export function startSessionRuntime(): () => void {
 
   return () => {
     stopBundleWatch();
+    stopFileLinkModes();
     subscription.unsubscribe();
     void focusSessionWebPlugins(null, undefined);
     protocol.stop();
+    disconnectCaptures();
     releaseTransport();
     socket.close();
   };

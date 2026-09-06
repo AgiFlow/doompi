@@ -43,7 +43,7 @@ function fixture(confirmLocalActivation = vi.fn(async () => true)) {
     activate: vi.fn(async () => ({ recording: true })),
     observe: vi.fn(async () => ({ snapshotId: 'snapshot-1' })),
     act: vi.fn(async () => ({ applied: true })),
-    stop: vi.fn(async () => undefined),
+    stop: vi.fn(async () => ({ stopped: true })),
   };
   const host = new ComputerUseHost({
     backend,
@@ -168,10 +168,11 @@ describe('ComputerUseHost', () => {
     await host.handle(request('session-a', 'activate', activation()));
     const actions = [
       { kind: 'press', snapshotId: 'snapshot-1', elementRef: 'button-1' },
-      { kind: 'set_value', snapshotId: 'snapshot-2', elementRef: 'field-1', value: '' },
+      { kind: 'focus', snapshotId: 'snapshot-2', elementRef: 'field-1' },
+      { kind: 'set_value', snapshotId: 'snapshot-3', elementRef: 'field-1', value: '' },
       {
         kind: 'scroll',
-        snapshotId: 'snapshot-3',
+        snapshotId: 'snapshot-4',
         elementRef: 'list-1',
         direction: 'down',
         amount: 'page',
@@ -182,7 +183,7 @@ describe('ComputerUseHost', () => {
         await host.handle(request('session-a', 'act', { grantId: 'id-1', sequence: index + 1, action })),
       ).toMatchObject({ ok: true });
     }
-    expect(backend.act).toHaveBeenCalledTimes(3);
+    expect(backend.act).toHaveBeenCalledTimes(4);
   });
 
   it('reports native status and target enumeration', async () => {
@@ -225,6 +226,10 @@ describe('ComputerUseHost', () => {
     const status = await host.handle(request('session-a', 'status'));
     expect(status).toMatchObject({ ok: true, result: { busy: false } });
     expect(backend.stop).toHaveBeenCalledWith(expect.objectContaining({ reason: 'expired' }));
+    expect(await host.handle(request('session-a', 'stop', { grantId: 'id-1' }))).toMatchObject({
+      ok: true,
+      result: { stopped: true },
+    });
   });
 
   it('revokes an expired grant without waiting for another request', async () => {
@@ -285,6 +290,30 @@ describe('ComputerUseHost', () => {
     });
   });
 
+  it('preempts an in-flight action during Desktop emergency stop', async () => {
+    const { backend, host } = fixture();
+    await host.handle(request('session-a', 'activate', activation()));
+    let finishAction: (() => void) | undefined;
+    vi.mocked(backend.act).mockImplementation(
+      async () =>
+        await new Promise<{ applied: boolean }>((resolve) => {
+          finishAction = () => resolve({ applied: true });
+        }),
+    );
+    const action = host.handle(
+      request('session-a', 'act', {
+        grantId: 'id-1',
+        sequence: 1,
+        action: { kind: 'press', snapshotId: 'snapshot-1', elementRef: 'button-1' },
+      }),
+    );
+    await vi.waitFor(() => expect(finishAction).toBeTypeOf('function'));
+
+    expect(await host.stopActive()).toBe(true);
+    expect(backend.stop).toHaveBeenCalledWith(expect.objectContaining({ reason: 'desktop_emergency_stop' }));
+    finishAction?.();
+    expect(await action).toMatchObject({ ok: false, code: 'request_cancelled' });
+  });
   it('keeps the host usable after emergency stop finalization fails', async () => {
     const { backend, host } = fixture();
     await host.handle(request('session-a', 'activate', activation()));

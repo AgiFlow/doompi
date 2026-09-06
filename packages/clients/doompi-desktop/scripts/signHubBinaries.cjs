@@ -50,29 +50,34 @@ exports.default = async function signHubBinaries(context) {
     return;
   }
 
-  const runtimeDirectory = path.join(
+  const resourcesDirectory = path.join(
     context.appOutDir,
     `${context.packager.appInfo.productFilename}.app`,
     'Contents',
     'Resources',
-    'runtime',
   );
-  if (!fs.existsSync(runtimeDirectory)) {
-    throw new Error(`The desktop runtime is missing at ${runtimeDirectory}`);
-  }
+  const runtimeDirectory = path.join(resourcesDirectory, 'runtime');
+  const helperPath = path.join(resourcesDirectory, 'native', 'doompi-computer-use-helper');
+  if (!fs.existsSync(runtimeDirectory)) throw new Error(`The desktop runtime is missing at ${runtimeDirectory}`);
+  if (!fs.existsSync(helperPath) || !isMachO(helperPath))
+    throw new Error(`The macOS computer-use helper is missing or invalid at ${helperPath}`);
 
-  const entitlements = path.join(__dirname, '..', 'resources', 'entitlements.mac.plist');
-  const binaries = collect(runtimeDirectory).sort((left, right) => depth(right) - depth(left));
-  if (binaries.length === 0) throw new Error(`The desktop runtime has no Mach-O binaries at ${runtimeDirectory}`);
+  const runtimeEntitlements = path.join(__dirname, '..', 'resources', 'entitlements.mac.plist');
+  const helperEntitlements = path.join(__dirname, '..', 'resources', 'entitlements.helper.mac.plist');
+  const binaries = [...collect(runtimeDirectory), helperPath].sort((left, right) => depth(right) - depth(left));
+  if (binaries.length < 2) throw new Error(`The packaged app has no signable native payload at ${resourcesDirectory}`);
 
   for (const binary of binaries) {
+    const entitlements = binary === helperPath ? helperEntitlements : runtimeEntitlements;
     const result = spawnSync(
       'codesign',
       ['--sign', identity, '--force', '--timestamp', '--options', 'runtime', '--entitlements', entitlements, binary],
       { stdio: 'inherit' },
     );
     if (result.status !== 0) throw new Error(`codesign failed for ${binary}`);
+    const verification = spawnSync('codesign', ['--verify', '--strict', '--verbose=2', binary], { stdio: 'inherit' });
+    if (verification.status !== 0) throw new Error(`Developer ID signature validation failed for ${binary}`);
   }
 
-  console.log(`[sign-hub] signed ${String(binaries.length)} binaries in the desktop runtime`);
+  console.log(`[sign-hub] signed ${String(binaries.length)} binaries in the desktop native payload`);
 };

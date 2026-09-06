@@ -22,7 +22,14 @@ describe('Timeline user-message actions', () => {
     installWebPlugins([
       defineWebPlugin({
         id: 'capture',
-        userMessageActions: [{ id: 'save', label: 'Save prompt', run: () => undefined }],
+        userMessageActions: [
+          {
+            id: 'save',
+            label: 'Save prompt',
+            icon: () => createElement('svg', { 'data-testid': 'save-prompt-icon' }),
+            run: () => undefined,
+          },
+        ],
       }),
     ]);
     const store = new Store({
@@ -44,7 +51,10 @@ describe('Timeline user-message actions', () => {
     );
 
     expect(markup.match(/data-testid="entry-plugin-action"/g)).toHaveLength(1);
-    expect(markup).toContain('Save prompt');
+    expect(markup).toContain('aria-label="Save prompt"');
+    expect(markup).toContain('title="Save prompt"');
+    expect(markup).toContain('data-testid="save-prompt-icon"');
+    expect(markup).not.toContain('>Save prompt<');
     expect(markup.match(/data-testid="entry-rewind"/g)).toHaveLength(4);
     expect(markup.match(/data-testid="entry-quote"/g)).toHaveLength(4);
   });

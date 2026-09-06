@@ -40,17 +40,44 @@ describe('Author multi-region capture packet', () => {
       region('r2', 'second', 'é'.repeat(5_000)),
     ]);
     const context = authorCaptureContext(packet);
-    const decoded = JSON.parse(context.content) as typeof packet;
+    const decoded = JSON.parse(context.metadata!) as typeof packet;
 
-    expect(context).toMatchObject({ source: 'author', kind: 'author-capture', id: 'capture-1' });
+    expect(context).toMatchObject({
+      source: 'author',
+      kind: 'author-capture',
+      id: 'capture-1',
+      content: expect.stringContaining('(1) change this [line 1]'),
+    });
+    expect(context.content).toContain('(2) second');
+    expect(context.content).not.toContain('captureId');
     expect(decoded.regions.map(({ id, ordinal }) => [id, ordinal])).toEqual([
       ['r1', 1],
       ['r2', 2],
     ]);
+    expect(decoded.regions.map(({ ordinal, comment }) => ({ ordinal, comment }))).toEqual([
+      { ordinal: 1, comment: 'change this' },
+      { ordinal: 2, comment: 'second' },
+    ]);
+    expect(decoded.regions[0]!.quote).toBe('hello');
     expect(new TextEncoder().encode(decoded.regions[1]!.quote).byteLength).toBeLessThanOrEqual(4 * 1024);
-    expect(new TextEncoder().encode(context.content).byteLength).toBeLessThanOrEqual(AUTHOR_PACKET_MAX_BYTES);
+    expect(new TextEncoder().encode(context.metadata!).byteLength).toBeLessThanOrEqual(AUTHOR_PACKET_MAX_BYTES);
   });
 
+  it('includes concise video timestamps and spatial anchors in model-visible text', () => {
+    const video = {
+      ...region('video'),
+      anchor: {
+        kind: 'video-time-rect' as const,
+        timeSeconds: 12.3456,
+        frame: 370,
+        rect: { x: 0.25, y: 0.5, width: 0.125, height: 0.2 },
+      },
+    };
+    const context = authorCaptureContext(createAuthorCapturePacket('capture-video', 10, document, [video]));
+
+    expect(context.content).toContain('(1) change this [time 12.346s, frame 370, x 25%, y 50%, w 12.5%, h 20%]');
+    expect(context.content).not.toContain('"timeSeconds"');
+  });
   it('rejects stale, missing, excess, and oversized comments without mutating drafts', () => {
     const drafts = [region('r1')];
     expect(() => createAuthorCapturePacket('capture', 1, document, [])).toThrow('between 1 and 16');

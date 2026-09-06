@@ -33,12 +33,20 @@ describe('computer-use panel', () => {
         revision: 3,
         wake: 3,
         phase: 'inactive',
-        artifact: { artifactId: 'artifact-1', status: 'ready', actionCount: 4 },
+        artifact: {
+          artifactId: 'artifact-1',
+          status: 'ready',
+          actionCount: 4,
+          previewUrl: '/api/sessions/s1/computer-use/artifacts/artifact-1',
+          downloadUrl: '/api/sessions/s1/computer-use/artifacts/artifact-1?download=1',
+        },
       },
       targets: [],
     });
-    expect(render().html).toContain('Completed artifact');
+    expect(render().html).toContain('Completed recording');
     expect(render().html).toContain('Actions:');
+    expect(render().html).toContain('<video');
+    expect(render().html).toContain('Download recording');
   });
 
   it('registers as a default-off minor mode and Activity section without a permanent tab', () => {
@@ -64,6 +72,7 @@ describe('computer-use panel', () => {
     expect(webPlugin.toolRenderers?.flatMap((renderer) => renderer.tools ?? [])).toEqual([
       'computer_state',
       'computer_action',
+      'computer_exec',
     ]);
   });
 });

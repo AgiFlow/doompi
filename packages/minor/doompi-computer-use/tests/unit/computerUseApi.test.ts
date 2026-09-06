@@ -91,12 +91,13 @@ describe('computer-use request broker', () => {
     expect(await (await action).json()).toEqual({ ok: true });
 
     for (const [sequence, semantic] of [
-      [2, { kind: 'set_value', snapshotId: 'snapshot-2', elementRef: 'field-1', value: 'value' }],
+      [2, { kind: 'focus', snapshotId: 'snapshot-2', elementRef: 'field-1' }],
+      [3, { kind: 'set_value', snapshotId: 'snapshot-3', elementRef: 'field-1', value: 'value' }],
       [
-        3,
+        4,
         {
           kind: 'scroll',
-          snapshotId: 'snapshot-3',
+          snapshotId: 'snapshot-4',
           elementRef: 'list-1',
           direction: 'down',
           amount: 'page',
@@ -223,6 +224,48 @@ describe('computer-use request broker', () => {
     expect((await action).status).toBe(502);
   });
 
+  it('settles an in-flight request when the agent stops and permits a later activation', async () => {
+    const broker = createComputerUseApi({ internalToken: 'internal', hubToken: 'hub' });
+    const value = { target: { windowId: 'w1', bundleId: 'app.fixture' }, durationMs: 60_000 };
+    await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', local, value));
+    await broker.fetch(request(COMPUTER_USE_ROUTES.hubActivation, 'GET', hub));
+    await broker.fetch(
+      request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub, {
+        host: { grantId: 'grant-1', expiresAt: Date.now() + 60_000 },
+      }),
+    );
+
+    const observation = broker.fetch(request(COMPUTER_USE_ROUTES.agentObserve, 'POST', internal, {}));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect((await broker.fetch(request(COMPUTER_USE_ROUTES.agentStop, 'POST', internal))).status).toBe(202);
+    expect((await observation).status).toBe(502);
+    expect(await (await broker.fetch(request(COMPUTER_USE_ROUTES.hubNext, 'GET', hub))).json()).toBeNull();
+
+    await broker.fetch(request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub));
+    expect((await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', local, value))).status).toBe(202);
+  });
+
+  it('stops a session when an uncertain request exceeds its deadline', async () => {
+    const broker = createComputerUseApi({
+      internalToken: 'internal',
+      hubToken: 'hub',
+      requestTimeoutMs: 5,
+    });
+    const value = { target: { windowId: 'w1', bundleId: 'app.fixture' }, durationMs: 60_000 };
+    await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', local, value));
+    await broker.fetch(request(COMPUTER_USE_ROUTES.hubActivation, 'GET', hub));
+    await broker.fetch(
+      request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub, {
+        host: { grantId: 'grant-1', expiresAt: Date.now() + 60_000 },
+      }),
+    );
+
+    const response = await broker.fetch(request(COMPUTER_USE_ROUTES.agentObserve, 'POST', internal, {}));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'The computer-use request timed out.' });
+    expect(broker.state().phase).toBe('stopping');
+    expect(await (await broker.fetch(request(COMPUTER_USE_ROUTES.hubNext, 'GET', hub))).json()).toBeNull();
+  });
   it('treats malformed JSON and invalid artifact metadata as untrusted input', async () => {
     const broker = createComputerUseApi({ hubToken: 'hub' });
     const malformed = new Request(`http://host${COMPUTER_USE_ROUTES.activate}`, {
@@ -238,6 +281,19 @@ describe('computer-use request broker', () => {
     await broker.fetch(request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub, { error: 'unavailable' }));
     await broker.fetch(request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub, { artifact: { artifactId: 'bad' } }));
     expect(broker.state().artifact).toBeUndefined();
+    await broker.fetch(
+      request(COMPUTER_USE_ROUTES.hubStop, 'POST', hub, {
+        artifact: {
+          artifactId: 'failed-recording',
+          status: 'failed',
+          failure: { code: 'recording_failed', message: 'Screen recording did not complete.' },
+        },
+      }),
+    );
+    expect(broker.state().artifact?.failure).toEqual({
+      code: 'recording_failed',
+      message: 'Screen recording did not complete.',
+    });
   });
 });
 describe('computer-use package API declaration', () => {

@@ -33,6 +33,7 @@ export interface AuthorSessionWorkspace {
   focusedDocument?: AuthorFocusedDocument;
   activeTool: AuthorToolMode;
   candidate?: AuthorRegionCandidate;
+  videoSeekRequest?: { path: string; generation: number; timeSeconds: number; sequence: number };
   regions: readonly AuthorRegionDraft[];
   requests: readonly AuthorRequestRecord[];
 }
@@ -201,6 +202,30 @@ export function releaseAuthorDocumentFocus(sessionId: string, generation: number
     return { ...session, focusedDocument: undefined, candidate: undefined, regions: [] };
   });
   staleThumbnails.forEach(revokeThumbnail);
+}
+
+export function seekAuthorVideo(sessionId: string, timeSeconds: number): boolean {
+  const workspace = authorSessionWorkspace(sessionId);
+  const focused = workspace.focusedDocument;
+  if (
+    !focused ||
+    workspace.candidate ||
+    !Number.isFinite(timeSeconds) ||
+    timeSeconds < 0 ||
+    authorDocument(sessionId, focused.path)?.kind !== 'video'
+  )
+    return false;
+  updateSession(sessionId, (session) => ({
+    ...session,
+    activeTool: 'select',
+    videoSeekRequest: {
+      path: focused.path,
+      generation: focused.generation,
+      timeSeconds,
+      sequence: (session.videoSeekRequest?.sequence ?? 0) + 1,
+    },
+  }));
+  return true;
 }
 
 export function setAuthorToolMode(sessionId: string, activeTool: AuthorToolMode): void {

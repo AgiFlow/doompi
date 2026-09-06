@@ -342,7 +342,31 @@ export function useActivityGroups(
 /** The tab one path opens, or undefined when no installed plugin recognises it. */
 export type FileLinkResolver = (path: string) => TransientTab | undefined;
 
-function subscribeFileLinks(listener: () => void): () => void {
+interface FileLinkModes {
+  active(sessionId: string | null): readonly string[];
+  subscribe(sessionId: string | null, listener: () => void): () => void;
+}
+let fileLinkModes: FileLinkModes | undefined;
+const modeBindings = new Set<() => void>();
+
+/** Binds host session facts without making the composition library own session state. */
+export function bindFileLinkModes(source: FileLinkModes): () => void {
+  fileLinkModes = source;
+  modeBindings.forEach((listener) => listener());
+  return () => {
+    if (fileLinkModes !== source) return;
+    fileLinkModes = undefined;
+    modeBindings.forEach((listener) => listener());
+  };
+}
+function subscribeFileLinks(sessionId: string | null, listener: () => void): () => void {
+  let unsubscribeModes = fileLinkModes?.subscribe(sessionId, listener);
+  const rebindModes = () => {
+    unsubscribeModes?.();
+    unsubscribeModes = fileLinkModes?.subscribe(sessionId, listener);
+    listener();
+  };
+  modeBindings.add(rebindModes);
   let subscriptions: (() => void)[] = [];
   const unsubscribeSources = (): void => {
     subscriptions.forEach((unsubscribe) => unsubscribe());
@@ -358,14 +382,23 @@ function subscribeFileLinks(listener: () => void): () => void {
     listener();
   });
   return () => {
+    modeBindings.delete(rebindModes);
+    unsubscribeModes?.();
     unsubscribeRegistry();
     unsubscribeSources();
   };
 }
 
+function activeFileLinkSources(sessionId: string | null) {
+  const enabled = new Set(fileLinkModes?.active(sessionId) ?? []);
+  return pluginFileLinks().filter(
+    (source) => source.requiredMinorMode === undefined || enabled.has(source.requiredMinorMode),
+  );
+}
+
 function fileLinkFingerprint(sessionId: string | null): string {
-  const sourceFingerprints = pluginFileLinks()
-    .map((source) => source.fingerprint(sessionId))
+  const sourceFingerprints = activeFileLinkSources(sessionId)
+    .map((source) => `${source.requiredMinorMode ?? ''}:${source.fingerprint(sessionId)}`)
     .join('\n');
   return `${webPluginRegistryRevision()}:${sourceFingerprints}`;
 }
@@ -378,7 +411,7 @@ function fileLinkFingerprint(sessionId: string | null): string {
  * decision belongs there rather than in a heuristic here.
  */
 export function fileLinkFor(sessionId: string | null, path: string): TransientTab | undefined {
-  for (const source of pluginFileLinks()) {
+  for (const source of activeFileLinkSources(sessionId)) {
     const tab = source.resolve(sessionId, path);
     if (tab !== undefined) return tab;
   }
@@ -394,7 +427,7 @@ export function fileLinkFor(sessionId: string | null, path: string): TransientTa
  * without it fall back to the same guess prose gets.
  */
 export function fileTabForPath(sessionId: string | null, path: string): TransientTab | undefined {
-  for (const source of pluginFileLinks()) {
+  for (const source of activeFileLinkSources(sessionId)) {
     const tab = source.openPath?.(sessionId, path) ?? source.resolve(sessionId, path);
     if (tab !== undefined) return tab;
   }
@@ -409,7 +442,7 @@ export function fileTabForPath(sessionId: string | null, path: string): Transien
  */
 export function useFileLinks(sessionId: string | null): FileLinkResolver {
   const fingerprint = useSyncExternalStore(
-    subscribeFileLinks,
+    useCallback((listener: () => void) => subscribeFileLinks(sessionId, listener), [sessionId]),
     () => fileLinkFingerprint(sessionId),
     () => fileLinkFingerprint(sessionId),
   );
