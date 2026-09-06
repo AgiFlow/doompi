@@ -58,7 +58,7 @@ export function PromptsDialog({
   onSend,
 }: PromptsDialogProps) {
   const [filter, setFilter] = useState('');
-  const [draft, setDraft] = useState<DraftState | undefined>(undefined);
+  const [draft, setDraft] = useState<DraftState | undefined>(initialDraft);
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>(undefined);
   const [error, setError] = useState('');
 
