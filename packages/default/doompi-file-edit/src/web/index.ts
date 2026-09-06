@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { fileLinks } from './fileLinks.ts';
-import { FilesActivitySection } from './FilesActivitySection.tsx';
-import { filesChannel } from './filesStore.ts';
+import { fileLinks } from './components/fileLinks.ts';
+import { FilesActivitySection } from './components/FilesActivitySection.tsx';
+import { filesChannel } from './stores/filesStore.ts';
 import { filesStatusKey } from '../types/webFiles.ts';
 
 /**

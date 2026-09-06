@@ -1,6 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { LOOP_VIEW_STATUS_KEY } from '../types/loopView.ts';
-import { LoopsActivitySection } from './LoopsActivitySection.tsx';
+import { LoopsActivitySection } from './components/LoopsActivitySection.tsx';
 
 /**
  * This package's cockpit presence. The selection bar carries the minor mode,

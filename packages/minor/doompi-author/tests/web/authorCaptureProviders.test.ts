@@ -4,8 +4,8 @@ import {
   imageCaptureProvider,
   multiRegionCaptureProvider,
   AUTHOR_CAPTURE_MAX_BYTES,
-} from '../../src/web/authorCapture.ts';
-import type { AuthorRegionDraft } from '../../src/web/authorViewportTypes.ts';
+} from '../../src/web/stores/authorCapture.ts';
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes.ts';
 
 function canvasFixture(blobs: (Blob | null)[] = [new Blob(['png'])]) {
   const context = {

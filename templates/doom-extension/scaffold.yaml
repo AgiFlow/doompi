@@ -360,8 +360,8 @@ features:
       additionalProperties: false
     includes:
       - src/web/index.ts
-      - src/web/topicStore.ts->src/web/{{ topic | camelCase }}Store.ts
-      - src/web/TopicPanel.tsx->src/web/{{ topic | pascalCase }}Panel.tsx
+      - src/web/topicStore.ts->src/web/stores/{{ topic | camelCase }}Store.ts
+      - src/web/TopicPanel.tsx->src/web/components/{{ topic | pascalCase }}Panel.tsx
       - src/web/tsconfig.json
       - src/exports/webClient.ts
       - src/types/webTopic.ts->src/types/web{{ topic | pascalCase }}.ts
@@ -370,7 +370,9 @@ features:
       - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
       - tests/web/topicPanel.test.ts->tests/web/{{ topic | camelCase }}Panel.test.ts
     instruction: |-
-      Generate the package's cockpit plugin: src/web/index.ts exporting webPlugin through defineWebPlugin, src/web/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its channel, src/web/{{ topic | pascalCase }}Panel.tsx as the tab, src/exports/webClient.ts re-exporting the entry as the package's public browser surface, src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types both halves share, src/adapters/web{{ topic | pascalCase }}Channel.ts as the hub's data source, and src/exports/webHub.ts as the built hub entry.
+      Generate the package's cockpit plugin: src/web/index.ts exporting webPlugin through defineWebPlugin, src/web/stores/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its channel, src/web/components/{{ topic | pascalCase }}Panel.tsx as the tab, src/exports/webClient.ts re-exporting the entry as the package's public browser surface, src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types both halves share, src/adapters/web{{ topic | pascalCase }}Channel.ts as the hub's data source, and src/exports/webHub.ts as the built hub entry.
+
+      The browser vocabulary is fixed: components for rendering, stores for reactive state and channel reducers, hooks for React subscriptions and effects, api for browser HTTP or streaming clients, and lib for stateless formatting and view calculations. Dependencies point inward in that order: lib, api, stores, hooks, components. Keep only index.ts and tsconfig.json at src/web root; index.ts is the composition root.
 
       The rules: the store record is the whole per-session state (the hub's last payload plus this page's ephemeral state), components read it with useStore over the store's select and act through props.sendSessionFrame, tool cards receive the session statuses as props, and no src/web module keeps a top-level let. src/web may import only react, @tanstack/store, @tanstack/react-store, @agimon-ai/doompi-web-contracts, @agimon-ai/doompi-web-components, its own src/web/** and src/types/**; plugins never import each other. Plugins are independent: open a slot with slots: [defineSlot({ slot: '{{ pluginId }}.<name>' })] and render it with props.renderSlot; fill another plugin's or the host's slot with fills; every relation resolves by name after install, so never depend on order, and a collision is an install diagnostic, not a failure.
 
@@ -414,11 +416,11 @@ features:
         - toolSummary
       additionalProperties: false
     includes:
-      - src/web/ToolCard.tsx->src/web/{{ toolName | pascalCase }}ToolCard.tsx
-      - src/web/toolRender.ts->src/web/{{ toolName | camelCase }}ToolRender.ts
+      - src/web/ToolCard.tsx->src/web/components/{{ toolName | pascalCase }}ToolCard.tsx
+      - src/web/toolRender.ts->src/web/lib/{{ toolName | camelCase }}ToolRender.ts
       - tests/unit/webToolRender.test.ts->tests/unit/web{{ toolName | pascalCase }}ToolRender.test.ts
     instruction: |-
-      Generate the timeline item for the {{ toolName }} tool: src/web/{{ toolName | pascalCase }}ToolCard.tsx, a message renderer receiving ToolMessageRenderProps and composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines; src/web/{{ toolName | camelCase }}ToolRender.ts, the pure view logic (the tool name constant, the call summary, the result lines) a unit test pins without a DOM.
+      Generate the timeline item for the {{ toolName }} tool: src/web/components/{{ toolName | pascalCase }}ToolCard.tsx, a message renderer receiving ToolMessageRenderProps and composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines; src/web/lib/{{ toolName | camelCase }}ToolRender.ts, the pure view logic (the tool name constant, the call summary, the result lines) a unit test pins without a DOM.
 
       The shell owns the frame, the outcome tone, the status badge, and the expand toggle; the card supplies the header summary and the body lines and sets `expandable` only when it hides something. The card may act through props.sendSessionFrame and props.openTab, and it may open its own slots with props.renderSlot.
 

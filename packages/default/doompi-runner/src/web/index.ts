@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { BashToolMessage } from './BashToolMessage.tsx';
-import { RunnersActivitySection } from './RunnersActivitySection.tsx';
-import { runnerActivitySource, runnerRunsChannel } from './runnersStore.ts';
+import { BashToolMessage } from './components/BashToolMessage.tsx';
+import { RunnersActivitySection } from './components/RunnersActivitySection.tsx';
+import { runnerActivitySource, runnerRunsChannel } from './stores/runnersStore.ts';
 
 /**
  * This package's cockpit presence. The runner channel is authoritative for the

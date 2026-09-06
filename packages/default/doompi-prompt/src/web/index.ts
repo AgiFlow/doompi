@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { PromptsActivitySection } from './PromptsActivitySection.tsx';
+import { PromptsActivitySection } from './components/PromptsActivitySection.tsx';
 
 /**
  * This package's cockpit presence: one activity group.

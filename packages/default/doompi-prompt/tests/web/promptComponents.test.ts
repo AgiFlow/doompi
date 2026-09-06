@@ -1,9 +1,9 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { SavedPromptView } from '../../src/types/webPrompts.ts';
-import { PromptEditor } from '../../src/web/PromptEditor.tsx';
-import { PromptsActivitySection } from '../../src/web/PromptsActivitySection.tsx';
-import { PromptPickerList } from '../../src/web/PromptPickerList.tsx';
+import { PromptEditor } from '../../src/web/components/PromptEditor.tsx';
+import { PromptsActivitySection } from '../../src/web/components/PromptsActivitySection.tsx';
+import { PromptPickerList } from '../../src/web/components/PromptPickerList.tsx';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
 

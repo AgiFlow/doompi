@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { GrepToolMessage } from './GrepToolMessage.tsx';
+import { GrepToolMessage } from './components/GrepToolMessage.tsx';
 
 /**
  * This package's cockpit presence: the grep tool's timeline card, the web

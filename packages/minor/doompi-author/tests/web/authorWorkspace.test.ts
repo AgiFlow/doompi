@@ -16,7 +16,7 @@ import {
   reviseAuthorDocument,
   reviseAuthorFragment,
   setAuthorCrop,
-} from '../../src/web/authorWorkspaceStore.ts';
+} from '../../src/web/stores/authorWorkspaceStore.ts';
 
 afterEach(() => authorWorkspace.reset());
 

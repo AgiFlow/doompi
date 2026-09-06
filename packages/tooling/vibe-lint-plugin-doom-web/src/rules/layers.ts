@@ -3,12 +3,16 @@ import { type WebLocation, collectSpecifiers, locate, readSource, relativeTarget
 
 const CLIENT_LAYER_ORDER: Readonly<Record<string, number | undefined>> = {
   types: 0,
+  styles: 0,
   lib: 1,
   stores: 2,
   components: 3,
   features: 4,
   routes: 5,
   app: 6,
+  // Browser entry and ambient declarations live directly under src/web.
+  'main.tsx': 7,
+  'vite-env.d.ts': 7,
 };
 const SERVER_LAYER_ORDER: Readonly<Record<string, number | undefined>> = {
   types: 0,
@@ -62,6 +66,9 @@ export const doomWebLayerBoundary: RuleDefinition = {
   check(filePath, configRoot) {
     const source = locate(filePath, configRoot);
     if (!source) return null;
+    if (source.side === 'client' && source.layer !== undefined && CLIENT_LAYER_ORDER[source.layer] === undefined) {
+      return `${label(source)} is not a recognized client layer. Use ${CLIENT_ORDER_LABEL}.`;
+    }
     const sourceFile = readSource(filePath);
     if (!sourceFile) return null;
 
@@ -69,6 +76,10 @@ export const doomWebLayerBoundary: RuleDefinition = {
     for (const specifier of collectSpecifiers(sourceFile)) {
       const target = relativeTarget(filePath, specifier, configRoot);
       if (!target) continue;
+      if (target.side === 'client' && target.layer !== undefined && CLIENT_LAYER_ORDER[target.layer] === undefined) {
+        messages.add(`${label(source)} may not import unknown client layer src/web/${target.layer} ('${specifier}').`);
+        continue;
+      }
       const message = violation(source, target, specifier);
       if (message) messages.add(message);
     }

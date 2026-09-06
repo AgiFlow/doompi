@@ -1,10 +1,10 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { VoiceActivitySection } from './VoiceActivitySection.tsx';
-import { VoiceComposerAction } from './VoiceComposerAction.tsx';
-import { startVoiceMediaRuntime } from './VoiceMediaRuntime.tsx';
-import { VoiceToolMessage } from './VoiceToolMessage.tsx';
-import { VOICE_DESCRIBE_TOOL, VOICE_NARRATE_TOOL, VOICE_TRANSFER_TOOL, VOICE_USE_TOOL } from './voiceToolRender.ts';
-import { voiceMediaWakeChannel, voiceOwnershipChannel } from './voiceMediaWakeStore.ts';
+import { VoiceActivitySection } from './components/VoiceActivitySection.tsx';
+import { VoiceComposerAction } from './components/VoiceComposerAction.tsx';
+import { startVoiceMediaRuntime } from './components/VoiceMediaRuntime.tsx';
+import { VoiceToolMessage } from './components/VoiceToolMessage.tsx';
+import { VOICE_DESCRIBE_TOOL, VOICE_NARRATE_TOOL, VOICE_TRANSFER_TOOL, VOICE_USE_TOOL } from './lib/voiceToolRender.ts';
+import { voiceMediaWakeChannel, voiceOwnershipChannel } from './stores/voiceMediaWakeStore.ts';
 
 /**
  * This package's cockpit presence: pure metadata. The selection bar renders

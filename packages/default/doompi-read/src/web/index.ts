@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { ReadToolMessage } from './ReadToolMessage.tsx';
+import { ReadToolMessage } from './components/ReadToolMessage.tsx';
 
 /**
  * This package's cockpit presence: the read tool's timeline card, the web

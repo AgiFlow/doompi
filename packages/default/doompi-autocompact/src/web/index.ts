@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { autocompactSettingsSection } from './autocompactSettings.ts';
+import { autocompactSettingsSection } from './lib/autocompactSettings.ts';
 
 /**
  * This package's cockpit presence: one settings page.

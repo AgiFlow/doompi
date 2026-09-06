@@ -1,7 +1,7 @@
 import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
 import { describe, expect, it, vi } from 'vitest';
-import { AuthorClientBroker } from '../../src/web/authorBroker.ts';
-import { AuthorRuntime } from '../../src/web/AuthorRuntime.ts';
+import { AuthorClientBroker } from '../../src/web/api/authorBroker.ts';
+import { AuthorRuntime } from '../../src/web/api/authorRuntime.ts';
 
 function fixture() {
   const tools = new Map<string, ModelContextTool>();

@@ -1,7 +1,7 @@
-export { AuthorClientBroker } from '../web/authorBroker.ts';
-export { authorFileTab } from '../web/AuthorDocumentPanel.tsx';
-export { AuthorRuntime, AUTHOR_RUNTIME_BINDING_IDS } from '../web/AuthorRuntime.ts';
-export { AUTHOR_TRUSTED_PROFILES } from '../web/authorProfiles.ts';
+export { AuthorClientBroker } from '../web/api/authorBroker.ts';
+export { authorFileTab } from '../web/components/AuthorDocumentPanel.tsx';
+export { AuthorRuntime, AUTHOR_RUNTIME_BINDING_IDS } from '../web/api/authorRuntime.ts';
+export { AUTHOR_TRUSTED_PROFILES } from '../web/stores/authorProfiles.ts';
 export {
   AUTHOR_CAPTURE_MAX_BYTES,
   AUTHOR_CAPTURE_MAX_DIMENSION,
@@ -13,8 +13,12 @@ export {
   createAuthorCapturePacket,
   imageCaptureProvider,
   multiRegionCaptureProvider,
-} from '../web/authorCapture.ts';
-export type { AuthorCapturePacket, AuthorCapturePacketRegion, AuthorCaptureProvider } from '../web/authorCapture.ts';
+} from '../web/stores/authorCapture.ts';
+export type {
+  AuthorCapturePacket,
+  AuthorCapturePacketRegion,
+  AuthorCaptureProvider,
+} from '../web/stores/authorCapture.ts';
 export {
   AUTHOR_GRID_COLUMNS,
   AUTHOR_GRID_SIZE,
@@ -24,8 +28,8 @@ export {
   parseAuthorGridCell,
   resolveAuthorGridCell,
   updateAuthorGridGeometry,
-} from '../web/authorGrid.ts';
-export type { AuthorGridCellResolution, AuthorGridGeometry } from '../web/authorGrid.ts';
+} from '../web/lib/authorGrid.ts';
+export type { AuthorGridCellResolution, AuthorGridGeometry } from '../web/lib/authorGrid.ts';
 export {
   addAuthorAnnotation,
   addAuthorRegion,
@@ -45,7 +49,7 @@ export {
   syncAuthorDocumentFocus,
   updateAuthorRegionComment,
   updateAuthorRequest,
-} from '../web/authorWorkspaceStore.ts';
+} from '../web/stores/authorWorkspaceStore.ts';
 export { webPlugin } from '../web/index.ts';
 export type {
   AuthorAnnotation,
@@ -69,4 +73,4 @@ export type {
   AuthorVideoTimeRectAnchor,
   AuthorViewportSnapshot,
   AuthorVoiceGridEvidence,
-} from '../web/authorViewportTypes.ts';
+} from '../web/lib/authorViewportTypes.ts';

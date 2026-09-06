@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computerUse, computerUseChannel } from '../../src/web/computerUseStore.ts';
+import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore.ts';
 
 const payload = (sessionId: string, phase: 'inactive' | 'active') => ({
   state: { sessionId, revision: 1, wake: 1, phase },

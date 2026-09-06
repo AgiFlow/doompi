@@ -12,7 +12,7 @@ import type {
   VoiceMediaPlaybackResult,
   VoiceMediaTransport,
 } from '../src/types/clientMedia.ts';
-import { VoiceMediaClient } from '../src/web/voiceMediaClient.ts';
+import { VoiceMediaClient } from '../src/web/api/voiceMediaClient.ts';
 
 const capabilities: VoiceMediaCapabilities = {
   capture: true,

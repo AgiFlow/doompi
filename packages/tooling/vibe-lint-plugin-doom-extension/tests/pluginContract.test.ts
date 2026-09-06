@@ -41,6 +41,7 @@ const EXPECTED_RULE_IDS = [
   'thin-pi-adapter',
   'web-plugin-entry',
   'web-plugin-import-allowlist',
+  'web-plugin-layer-boundary',
   'web-plugin-manifest',
   'web-plugin-no-module-state',
   'web-plugin-tool-renderers',
@@ -84,6 +85,7 @@ describe('Doom extension plugin contract', () => {
       'no-same-runner-protocol',
       'prefer-cordis-container',
       'doom-clean-architecture-boundary',
+      'web-plugin-layer-boundary',
     ]) {
       expect(recommended.rules[ruleId], ruleId).toBe('error');
     }

@@ -35,7 +35,13 @@ import {
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
 import { doomPromptShape } from './prompts.js';
 import { packageApiEntry, packageApiManifest } from './packageApi.js';
-import { webPluginEntry, webPluginImportAllowlist, webPluginManifest, webPluginNoModuleState } from './webPlugin.js';
+import {
+  webPluginEntry,
+  webPluginImportAllowlist,
+  webPluginLayerBoundary,
+  webPluginManifest,
+  webPluginNoModuleState,
+} from './webPlugin.js';
 import { webPluginToolRenderers } from './webPluginTools.js';
 
 export const rules: Record<string, RuleDefinition> = {
@@ -74,6 +80,7 @@ export const rules: Record<string, RuleDefinition> = {
   'package-api-manifest': packageApiManifest,
   'web-plugin-entry': webPluginEntry,
   'web-plugin-import-allowlist': webPluginImportAllowlist,
+  'web-plugin-layer-boundary': webPluginLayerBoundary,
   'web-plugin-manifest': webPluginManifest,
   'web-plugin-no-module-state': webPluginNoModuleState,
   'web-plugin-tool-renderers': webPluginToolRenderers,

@@ -78,6 +78,10 @@ skills that Pi discovers and executes directly.
 
 Selectable packages resolve from the consumer repository through normal `node_modules` lookup or Pi's project-local `.pi/npm` store. Fixed host entries may fall back to the root package dependency closure. When a required bare package is missing, DoomPi asks Pi to resolve `npm:<package-name>` and reuses the installed result. Optional packages and local paths are not installed automatically.
 
+### Cockpit plugin source
+
+A package's browser plugin keeps `src/web/index.ts` as its composition entry and groups implementation by responsibility: `lib/` for pure calculations, `api/` for browser transports, `stores/` for reactive state and channel reducers, `hooks/` for React subscriptions and effects, and `components/` for rendering. Imports point inward in that order. Shared wire contracts stay in `src/types/`, while server adapters stay outside the browser tree. Omit empty folders and keep state-specific types beside the store that owns them.
+
 ## Canonical composition
 
 `resolveExtensionComposition()` is the authority for the runtime graph. One call returns:

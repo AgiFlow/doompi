@@ -1,10 +1,10 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { PLAN_STATUS_KEY } from '../types/planApi.ts';
-import { PlanActivitySection } from './PlanActivitySection.tsx';
-import { planSettingsSection } from './planSettings.ts';
-import { claimsPlanReviewPrompt, PlanReviewPrompt } from './PlanReviewPrompt.tsx';
-import { PlanToolMessage } from './PlanToolMessage.tsx';
-import { PLAN_TOOL_NAMES } from './planToolRender.ts';
+import { PlanActivitySection } from './components/PlanActivitySection.tsx';
+import { planSettingsSection } from './lib/planSettings.ts';
+import { claimsPlanReviewPrompt, PlanReviewPrompt } from './components/PlanReviewPrompt.tsx';
+import { PlanToolMessage } from './components/PlanToolMessage.tsx';
+import { PLAN_TOOL_NAMES } from './lib/planToolRender.ts';
 
 /**
  * This package's cockpit presence. The selection bar renders the minor-mode

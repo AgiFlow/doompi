@@ -4,13 +4,13 @@ import {
   COMPUTER_USE_MODE_STATUS_KEY,
   COMPUTER_USE_STATUS_KEY,
 } from '../types/computerUseApi.ts';
-import { ComputerActionToolCard } from './ComputerActionToolCard.tsx';
-import { computerActionToolName } from './computerActionToolRender.ts';
-import { ComputerStateToolCard } from './ComputerStateToolCard.tsx';
-import { computerStateToolName } from './computerStateToolRender.ts';
-import { ComputerUsePanel } from './ComputerUsePanel.tsx';
-import { computerUseChannel } from './computerUseStore.ts';
-import { computerUseSettingsSection } from './computerUseSettings.ts';
+import { ComputerActionToolCard } from './components/ComputerActionToolCard.tsx';
+import { computerActionToolName } from './lib/computerActionToolRender.ts';
+import { ComputerStateToolCard } from './components/ComputerStateToolCard.tsx';
+import { computerStateToolName } from './lib/computerStateToolRender.ts';
+import { ComputerUsePanel } from './components/ComputerUsePanel.tsx';
+import { computerUseChannel } from './stores/computerUseStore.ts';
+import { computerUseSettingsSection } from './lib/computerUseSettings.ts';
 
 export const webPlugin = defineWebPlugin({
   id: 'computer-use',

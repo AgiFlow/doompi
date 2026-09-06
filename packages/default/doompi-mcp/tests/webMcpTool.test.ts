@@ -9,7 +9,7 @@ import {
   mcpResultBlocks,
   mcpResultView,
   mcpServers,
-} from '../src/web/mcpToolMatch.ts';
+} from '../src/web/lib/mcpToolMatch.ts';
 
 describe('the mcp web tool matcher', () => {
   it('reads the same status key the session publishes', () => {

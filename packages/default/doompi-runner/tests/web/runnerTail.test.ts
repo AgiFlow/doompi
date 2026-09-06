@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { plainTailLine } from '../../src/web/runnerTail.ts';
+import { plainTailLine } from '../../src/web/hooks/runnerTail.ts';
 
 const ESC = '\u001B[';
 

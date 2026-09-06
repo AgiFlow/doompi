@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FileEditsDetailView } from '../../src/types/fileEditsApi.ts';
-import type { FilesPayload } from '../../src/web/filesStore.ts';
+import type { FilesPayload } from '../../src/web/stores/filesStore.ts';
 import {
   addComment,
   clearComments,
@@ -10,7 +10,7 @@ import {
   removeComment,
   storeDetail,
   storeError,
-} from '../../src/web/filesStore.ts';
+} from '../../src/web/stores/filesStore.ts';
 
 const item = (relPath: string, count = 1) => ({
   path: `/repo/${relPath}`,

@@ -1,8 +1,8 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { GOAL_VIEW_STATUS_KEY } from '../types/goalView.ts';
-import { GoalActivitySection } from './GoalActivitySection.tsx';
-import { GoalToolMessage } from './GoalToolMessage.tsx';
-import { GOAL_TOOL_NAMES } from './goalToolRender.ts';
+import { GoalActivitySection } from './components/GoalActivitySection.tsx';
+import { GoalToolMessage } from './components/GoalToolMessage.tsx';
+import { GOAL_TOOL_NAMES } from './lib/goalToolRender.ts';
 
 const GOAL_GROUP = { key: 'g', label: 'goal', detail: 'session objective' };
 

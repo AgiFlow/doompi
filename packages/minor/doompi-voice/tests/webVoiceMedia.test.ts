@@ -2,17 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership.ts';
-import { browserVoiceMediaClientId } from '../src/web/browserMediaIdentity.ts';
-import { VoiceActivitySection } from '../src/web/VoiceActivitySection.tsx';
-import { VoiceComposerAction } from '../src/web/VoiceComposerAction.tsx';
-import { VoiceToolMessage } from '../src/web/VoiceToolMessage.tsx';
+import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity.ts';
+import { VoiceActivitySection } from '../src/web/components/VoiceActivitySection.tsx';
+import { VoiceComposerAction } from '../src/web/components/VoiceComposerAction.tsx';
+import { VoiceToolMessage } from '../src/web/components/VoiceToolMessage.tsx';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
   voiceMediaWakes,
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
-} from '../src/web/voiceMediaWakeStore.ts';
+} from '../src/web/stores/voiceMediaWakeStore.ts';
 
 afterEach(() => {
   activeVoiceSession.reset();
@@ -32,7 +32,10 @@ describe('browser voice media', () => {
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
-    const runtimeSource = await readFile(new URL('../src/web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    const runtimeSource = await readFile(
+      new URL('../src/web/components/VoiceMediaRuntime.tsx', import.meta.url),
+      'utf8',
+    );
     expect(runtimeSource).toContain('this.device.armUserGesture()');
   });
 
@@ -156,23 +159,23 @@ describe('browser voice media', () => {
   });
 
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
-    const source = await readFile(new URL('../src/web/clientMediaTransport.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/stores/clientMediaTransport.ts', import.meta.url), 'utf8');
 
     expect(source).toContain("const controlLocation = sealedTransport.active() ? 'remote' : 'local'");
     expect(source).toContain('this.controlLocation = controlLocation');
   });
 
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
-    const source = await readFile(new URL('../src/web/browserMediaDevice.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/api/browserMediaDevice.ts', import.meta.url), 'utf8');
 
-    expect(source).toContain("import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url'");
+    expect(source).toContain("import browserCaptureWorkletUrl from '../lib/browserCaptureWorklet.js?url'");
     expect(source).toContain('audioWorklet.addModule(browserCaptureWorkletUrl)');
     expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
 
   it('fills the composer action with manual recording and blocks it during autonomous voice', async () => {
-    const source = await readFile(new URL('../src/web/VoiceComposerAction.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/components/VoiceComposerAction.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).not.toContain('data-testid="composer-voice-error"');
@@ -208,7 +211,7 @@ describe('browser voice media', () => {
   });
 
   it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
-    const source = await readFile(new URL('../src/web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/components/VoiceActivitySection.tsx', import.meta.url), 'utf8');
 
     expect(source).not.toContain("sendCommand('/voice')");
     expect(source).not.toContain('voice-recording-stop');
@@ -236,7 +239,7 @@ describe('browser voice media', () => {
     );
     expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
 
-    const source = await readFile(new URL('../src/web/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/components/VoiceActivitySection.tsx', import.meta.url), 'utf8');
     expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
@@ -257,7 +260,7 @@ describe('browser voice media', () => {
     expect(composer.html).toContain('manual voice is unavailable while autonomous voice is active');
   });
   it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
-    const source = await readFile(new URL('../src/web/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/web/components/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
     expect(source).toContain('defineGlobalStore<PageVoiceMediaRuntime | undefined>');

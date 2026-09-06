@@ -392,7 +392,7 @@ Browser autonomous capture ownership MUST be page-global, not scoped to the focu
 
 - `src/services/playbackGate.ts`
 - `src/services/narrationBargeIn.ts`
-- `src/web/browserNarrationEchoDiscriminator.ts`
+- `src/web/lib/browserNarrationEchoDiscriminator.ts`
 
 Responsibilities:
 

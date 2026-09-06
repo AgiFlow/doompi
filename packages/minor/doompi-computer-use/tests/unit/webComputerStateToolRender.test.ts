@@ -4,7 +4,7 @@ import {
   computerStateCallSummary,
   computerStateResultLines,
   computerStateToolName,
-} from '../../src/web/computerStateToolRender.ts';
+} from '../../src/web/lib/computerStateToolRender.ts';
 
 describe('the computer_state tool view', () => {
   it('names the tool the package registers', () => {

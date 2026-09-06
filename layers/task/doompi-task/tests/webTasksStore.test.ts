@@ -9,7 +9,7 @@ import {
   taskMessageInstruction,
   tasks,
   tasksChannel,
-} from '../src/web/tasksStore.ts';
+} from '../src/web/stores/tasksStore.ts';
 
 describe('task cockpit store', () => {
   it('parses task payloads and rejects invalid envelopes', () => {

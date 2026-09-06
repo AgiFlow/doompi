@@ -7,7 +7,7 @@ import {
   PLAN_REVIEW_OPTIONS,
   PLAN_REVIEW_TITLE,
 } from '../../src/types/planApi.ts';
-import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../../src/web/PlanReviewPrompt.tsx';
+import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../../src/web/components/PlanReviewPrompt.tsx';
 import { webPlugin } from '../../src/web/index.ts';
 
 function dialog(patch: Partial<ToolPromptDialog> = {}): ToolPromptDialog {

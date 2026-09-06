@@ -1,10 +1,10 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { AgentsActivitySection } from './AgentsActivitySection.tsx';
-import { subagentsTab } from './SubagentsPanel.tsx';
-import { openAgentCatalogForContext, openCatalog, subagentCatalogChannel } from './catalogStore.ts';
-import { RUN_ACTIONS_SLOT } from './runActionsSlot.ts';
-import { activityRuns, isTerminalRun, subagentRunsChannel, subagents } from './subagentsStore.ts';
-import { teamToolRenderers } from './toolRenderers.ts';
+import { RUN_ACTIONS_SLOT } from './api/runActionsSlot.ts';
+import { AgentsActivitySection } from './components/AgentsActivitySection.tsx';
+import { subagentsTab } from './components/SubagentsPanel.tsx';
+import { teamToolRenderers } from './components/toolRenderers.ts';
+import { openAgentCatalogForContext, openCatalog, subagentCatalogChannel } from './stores/catalogStore.ts';
+import { activityRuns, isTerminalRun, subagentRunsChannel, subagents } from './stores/subagentsStore.ts';
 
 const AGENTS_GROUP = { key: 'a', label: 'agents', detail: 'subagent resources and runs' };
 

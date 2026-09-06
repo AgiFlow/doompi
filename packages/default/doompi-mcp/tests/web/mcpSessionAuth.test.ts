@@ -5,7 +5,10 @@ import {
   MCP_SESSION_AUTH_STATUS_KEY,
   parseMcpSessionAuthStatus,
 } from '../../src/types/webMcp.ts';
-import { McpSessionAuthSection, requestMcpSessionAuthorization } from '../../src/web/McpSessionAuthSection.tsx';
+import {
+  McpSessionAuthSection,
+  requestMcpSessionAuthorization,
+} from '../../src/web/components/McpSessionAuthSection.tsx';
 
 describe('MCP live-session authorization status', () => {
   it('serializes connected completion and safe authorization URLs without diagnostics', () => {

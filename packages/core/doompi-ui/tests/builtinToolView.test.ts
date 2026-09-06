@@ -8,7 +8,7 @@ import {
   lsCallView,
   resultText,
   writeCallView,
-} from '../src/web/builtinToolView.ts';
+} from '../src/web/lib/builtinToolView.ts';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });
 
