@@ -1,3 +1,7 @@
+## 0.0.1-alpha.58 (2026-09-06)
+
+This was a version bump only for @agimon-ai/doompi-extension-contracts to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.57 (2026-09-05)
 
 ### 🩹 Fixes

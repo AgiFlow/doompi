@@ -1,3 +1,21 @@
+## 0.0.1-alpha.3 (2026-09-06)
+
+### 🚀 Features
+
+- **doompi-desktop:** gate computer use behind global setting ([ef20d52](https://github.com/AgiFlow/doompi/commit/ef20d52))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.21
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.55
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.2 (2026-09-05)
 
 ### 🧱 Updated Dependencies

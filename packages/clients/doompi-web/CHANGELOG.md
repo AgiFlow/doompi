@@ -1,3 +1,31 @@
+## 0.0.1-alpha.22 (2026-09-06)
+
+### 🚀 Features
+
+- **doompi-desktop:** gate computer use behind global setting ([ef20d52](https://github.com/AgiFlow/doompi/commit/ef20d52))
+
+### 🩹 Fixes
+
+- update web client behavior and documentation ([fa61354](https://github.com/AgiFlow/doompi/commit/fa61354))
+- **doompi-web:** keep loopback plugin loading direct ([55d26db](https://github.com/AgiFlow/doompi/commit/55d26db))
+- **doompi-web:** load remote activity plugins securely ([669472a](https://github.com/AgiFlow/doompi/commit/669472a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.58
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.23
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.57
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.18
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.21
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.20
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.54
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.21 (2026-09-06)
 
 ### 🩹 Fixes
