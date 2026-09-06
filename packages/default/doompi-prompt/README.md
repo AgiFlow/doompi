@@ -61,8 +61,10 @@ cursor position, bind `tui.editor.historyPrevious` and `tui.editor.historyNext` 
 
 The package contributes a `prompts` group to the cockpit's activity dock, next to agents, runners
 and workflows, backed by a hub-scoped API at `/api/plugin/prompts`. The group reports how many
-prompts are saved and offers `send a prompt`, which opens a dialog over the conversation. Picking
-one sends it to the focused session; the same dialog creates, edits, renames and deletes entries.
+prompts are saved and offers `send a prompt`, which opens a list-first dialog over the conversation.
+Picking one sends it immediately to the focused session. The same dialog creates and edits entries,
+confirms replacements and removals, and refreshes the list after writes. Every text-bearing user
+message also offers `save as prompt`, opening the editor with that message text ready to name or edit.
 
 | Route                   | Purpose                                                             |
 | ----------------------- | ------------------------------------------------------------------- |

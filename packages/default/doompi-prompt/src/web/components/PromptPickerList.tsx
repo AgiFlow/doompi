@@ -1,34 +1,30 @@
 import { Button, Input } from '@agimon-ai/doompi-web-components';
 import type { SavedPromptView } from '../../types/webPrompts.ts';
-import { PromptEditor } from './PromptEditor.tsx';
-import type { DraftState } from '../lib/promptsActions.ts';
 import { filterPrompts } from '../lib/promptsActions.ts';
 
 /**
- * The body of the prompt dialog: filter, rows, and the editor when one is open.
+ * The list-first body of the prompt dialog.
  *
  * DESIGN PATTERNS:
- * - Presentational and outside the dialog chrome, so it renders without a DOM
- *   portal and the tests can see it.
- * - Sending is the row's primary action; managing sits to its right.
+ * - Sending is the row's large primary target; management actions stay visible.
+ * - Loading, failure and empty states occupy the list instead of looking like a
+ *   successfully loaded empty library.
  *
  * AVOID:
- * - Fetching here. The dialog owns the calls, this owns the markup.
+ * - Fetching or mutating here. The dialog owns behavior, this owns markup.
  */
 
 export interface PromptPickerListProps {
   prompts: readonly SavedPromptView[];
   filter: string;
-  draft: DraftState | undefined;
+  loading: boolean;
   busy: boolean;
   error: string;
   onFilterChange: (filter: string) => void;
   onSend: (prompt: SavedPromptView) => void;
   onEdit: (prompt: SavedPromptView) => void;
-  onDelete: (name: string) => void;
-  onDraftChange: (draft: DraftState) => void;
-  onSave: () => void;
-  onCancelDraft: () => void;
+  onDelete: (prompt: SavedPromptView) => void;
+  onRetry: () => void;
 }
 
 export function PromptPickerList(props: PromptPickerListProps) {
@@ -43,66 +39,65 @@ export function PromptPickerList(props: PromptPickerListProps) {
         onChange={(event) => props.onFilterChange(event.target.value)}
       />
 
-      {props.error === '' ? null : (
-        <span className="text-[10px] text-doom-red" data-testid="prompts-error">
-          {props.error}
-        </span>
-      )}
-
-      {visible.length === 0 ? (
-        <p data-testid="prompts-empty" className="text-[11px] text-doom-faint">
-          {props.prompts.length === 0 ? 'no saved prompts yet' : 'nothing matches that filter'}
+      {props.loading ? (
+        <p data-testid="prompts-loading" className="py-4 text-center text-[11px] text-doom-faint">
+          loading prompts…
+        </p>
+      ) : props.error !== '' ? (
+        <div className="flex items-center justify-between gap-3 rounded-[5px] border border-doom-red/40 p-3">
+          <span className="text-[11px] text-doom-red" data-testid="prompts-error">
+            {props.error}
+          </span>
+          <Button variant="outline" size="sm" data-testid="prompts-retry" onClick={props.onRetry}>
+            retry
+          </Button>
+        </div>
+      ) : visible.length === 0 ? (
+        <p data-testid="prompts-empty" className="py-4 text-center text-[11px] text-doom-faint">
+          {props.prompts.length === 0 ? 'no saved prompts yet. create one below.' : 'nothing matches that filter'}
         </p>
       ) : null}
 
-      {visible.map((prompt) => (
-        <div
-          key={prompt.name}
-          data-testid={`prompts-item-${prompt.name}`}
-          className="flex items-center gap-2 rounded-[5px] px-2 py-1 text-[11px] text-doom-text hover:bg-doom-panel"
-        >
-          <Button
-            variant="ghost"
-            size="xs"
-            className="min-w-0 flex-1 justify-start text-left text-[11px]"
-            data-testid={`prompts-send-${prompt.name}`}
-            title="send this prompt to the focused session"
-            onClick={() => props.onSend(prompt)}
-          >
-            <span className="min-w-0 flex-1 truncate font-bold">/{prompt.name}</span>
-            <span className="min-w-0 flex-1 truncate text-[9px] text-doom-faint">{prompt.description}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-[9px]"
-            data-testid={`prompts-edit-${prompt.name}`}
-            onClick={() => props.onEdit(prompt)}
-          >
-            edit
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-[9px]"
-            data-testid={`prompts-delete-${prompt.name}`}
-            disabled={props.busy}
-            onClick={() => props.onDelete(prompt.name)}
-          >
-            delete
-          </Button>
-        </div>
-      ))}
-
-      {props.draft === undefined ? null : (
-        <PromptEditor
-          draft={props.draft}
-          busy={props.busy}
-          onChange={props.onDraftChange}
-          onSave={props.onSave}
-          onCancel={props.onCancelDraft}
-        />
-      )}
+      {props.loading || props.error !== ''
+        ? null
+        : visible.map((prompt) => (
+            <div
+              key={prompt.name}
+              data-testid={`prompts-item-${prompt.name}`}
+              className="flex min-h-11 items-center gap-1 rounded-[5px] border border-doom-border-soft px-2 py-1.5 text-doom-text hover:bg-doom-deep"
+            >
+              <Button
+                variant="ghost"
+                size="md"
+                className="min-w-0 flex-1 flex-col items-start justify-center gap-0 px-2 text-left"
+                data-testid={`prompts-send-${prompt.name}`}
+                title="send this prompt to the focused session"
+                onClick={() => props.onSend(prompt)}
+              >
+                <span className="w-full truncate text-[11px] font-bold">/{prompt.name}</span>
+                <span className="w-full truncate text-[10px] font-normal text-doom-faint">{prompt.description}</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid={`prompts-edit-${prompt.name}`}
+                aria-label={`edit /${prompt.name}`}
+                onClick={() => props.onEdit(prompt)}
+              >
+                edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid={`prompts-delete-${prompt.name}`}
+                aria-label={`remove /${prompt.name}`}
+                disabled={props.busy}
+                onClick={() => props.onDelete(prompt)}
+              >
+                remove
+              </Button>
+            </div>
+          ))}
     </div>
   );
 }

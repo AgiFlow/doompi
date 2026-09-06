@@ -1,5 +1,6 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { PromptsActivitySection } from './components/PromptsActivitySection.tsx';
+import { requestMessagePromptDraft } from './lib/messagePromptDraft.ts';
 
 /**
  * This package's cockpit presence: one activity group.
@@ -29,4 +30,5 @@ export const webPlugin = defineWebPlugin({
     },
   ],
   activitySections: [{ id: 'prompts', component: PromptsActivitySection }],
+  userMessageActions: [{ id: 'save', label: 'save as prompt', order: 40, run: requestMessagePromptDraft }],
 });

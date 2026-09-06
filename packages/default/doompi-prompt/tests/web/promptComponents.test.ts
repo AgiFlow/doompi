@@ -10,14 +10,14 @@ vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fe
 const PROMPT: SavedPromptView = { name: 'review', description: 'Review the diff', text: 'Review the diff\nnow' };
 
 describe('the prompts activity group', () => {
-  it('reports idle with the action that fills the library', () => {
+  it('reports loading with the action that opens the library', () => {
     const { props } = slotPropsFixture();
 
     const rendered = renderPlugin(PromptsActivitySection, props);
 
     expect(rendered.error).toBeUndefined();
     expect(rendered.html).toContain('activity-summary-prompts');
-    expect(rendered.includes('idle')).toBe(true);
+    expect(rendered.includes('loading')).toBe(true);
     expect(rendered.includes('send a prompt')).toBe(true);
   });
 
@@ -40,16 +40,14 @@ describe('the prompt picker list', () => {
   const listProps = (overrides: Partial<Parameters<typeof PromptPickerList>[0]> = {}) => ({
     prompts: [PROMPT],
     filter: '',
-    draft: undefined,
+    loading: false,
     busy: false,
     error: '',
     onFilterChange: vi.fn(),
     onSend: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
-    onDraftChange: vi.fn(),
-    onSave: vi.fn(),
-    onCancelDraft: vi.fn(),
+    onRetry: vi.fn(),
     ...overrides,
   });
 
@@ -61,12 +59,13 @@ describe('the prompt picker list', () => {
     expect(rendered.includes('Review the diff')).toBe(true);
   });
 
-  it('offers sending, editing and deleting each entry', () => {
+  it('offers sending, editing and removing each entry', () => {
     const rendered = renderPlugin(PromptPickerList, listProps());
 
     expect(rendered.html).toContain('prompts-send-review');
     expect(rendered.html).toContain('prompts-edit-review');
     expect(rendered.html).toContain('prompts-delete-review');
+    expect(rendered.includes('remove')).toBe(true);
   });
 
   it('says so when the library is empty', () => {
@@ -93,11 +92,11 @@ describe('the prompt picker list', () => {
     expect(rendered.includes('now')).toBe(false);
   });
 
-  it('opens the editor only when a draft is open', () => {
-    expect(renderPlugin(PromptPickerList, listProps()).html).not.toContain('prompts-editor');
-    expect(renderPlugin(PromptPickerList, listProps({ draft: { name: 'n', text: 't', original: '' } })).html).toContain(
-      'prompts-editor',
-    );
+  it('shows loading separately from an empty library', () => {
+    const rendered = renderPlugin(PromptPickerList, listProps({ prompts: [], loading: true }));
+
+    expect(rendered.html).toContain('prompts-loading');
+    expect(rendered.html).not.toContain('prompts-empty');
   });
 });
 

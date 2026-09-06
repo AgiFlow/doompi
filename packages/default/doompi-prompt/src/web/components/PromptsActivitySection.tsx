@@ -1,9 +1,11 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { SavedPromptView } from '../../types/webPrompts.ts';
 import { PromptsDialog } from './PromptsDialog.tsx';
 import { fetchSavedPrompts } from '../api/promptsApi.ts';
+import { subscribeMessagePromptDraft } from '../lib/messagePromptDraft.ts';
+import type { DraftState } from '../lib/promptsActions.ts';
 
 /**
  * The prompts group's body in the activity dock.
@@ -12,8 +14,8 @@ import { fetchSavedPrompts } from '../api/promptsApi.ts';
  * - One line and one action, like the agents and workflows groups: the dock is
  *   a status surface, so the library itself opens in a dialog over the
  *   conversation rather than pushing the reader into another page.
- * - The count is read once on mount and again whenever the dialog closes,
- *   because a write inside it is the only thing that changes the number.
+ * - The library loads on mount, again on open, and after every mutation so the
+ *   visible list is never an aborted or stale snapshot.
  *
  * AVOID:
  * - Rendering the library here. A dock group is a summary.
@@ -22,23 +24,47 @@ import { fetchSavedPrompts } from '../api/promptsApi.ts';
 export function PromptsActivitySection({ sessionId, sendSessionFrame }: WebPluginSlotProps) {
   const [prompts, setPrompts] = useState<readonly SavedPromptView[]>([]);
   const [open, setOpen] = useState(false);
+  const [initialDraft, setInitialDraft] = useState<DraftState | undefined>(undefined);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (open) return undefined;
-    const controller = new AbortController();
-    void fetchSavedPrompts(controller.signal, sessionId).then((result) => {
-      if (controller.signal.aborted) return;
+  const loadPrompts = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      setLoading(true);
+      const result = await fetchSavedPrompts(signal, sessionId);
+      if (signal?.aborted) return;
       if ('error' in result) setError(result.error);
       else {
         setError('');
         setPrompts(result.prompts);
       }
-    });
-    return () => controller.abort();
-  }, [open, sessionId]);
+      setLoading(false);
+    },
+    [sessionId],
+  );
 
-  const summary = error !== '' ? error : prompts.length === 0 ? 'idle' : `${String(prompts.length)} saved`;
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadPrompts(controller.signal);
+    return () => controller.abort();
+  }, [loadPrompts, open]);
+
+  useEffect(
+    () =>
+      subscribeMessagePromptDraft((draft) => {
+        setInitialDraft(draft);
+        setOpen(true);
+      }),
+    [],
+  );
+
+  const changeOpen = (next: boolean): void => {
+    if (!next) setInitialDraft(undefined);
+    setOpen(next);
+  };
+
+  const summary =
+    error !== '' ? error : loading ? 'loading' : prompts.length === 0 ? 'idle' : `${String(prompts.length)} saved`;
 
   return (
     <div data-testid="activity-section-prompts" className="flex flex-col gap-0.5">
@@ -51,7 +77,10 @@ export function PromptsActivitySection({ sessionId, sendSessionFrame }: WebPlugi
           size="xs"
           data-testid="activity-prompts-open"
           className="px-0"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setInitialDraft(undefined);
+            setOpen(true);
+          }}
         >
           send a prompt
         </Button>
@@ -60,8 +89,12 @@ export function PromptsActivitySection({ sessionId, sendSessionFrame }: WebPlugi
       <PromptsDialog
         open={open}
         prompts={prompts}
+        loading={loading}
+        loadError={error}
+        initialDraft={initialDraft}
         sessionId={sessionId}
-        onOpenChange={setOpen}
+        onOpenChange={changeOpen}
+        onReload={loadPrompts}
         onSend={sendSessionFrame}
       />
     </div>

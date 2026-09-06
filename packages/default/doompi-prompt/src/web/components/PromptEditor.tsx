@@ -23,33 +23,42 @@ export interface PromptEditorProps {
 }
 
 export function PromptEditor({ draft, busy, onChange, onSave, onCancel }: PromptEditorProps) {
+  const editing = draft.original !== '';
   return (
-    <div data-testid="prompts-editor" className="flex flex-col gap-2 rounded-[5px] border border-doom-border p-2">
-      <Input
-        data-testid="prompts-name"
-        value={draft.name}
-        placeholder="name, lowercase letters, digits and dashes"
-        onChange={(event) => onChange({ ...draft, name: event.target.value })}
-      />
-      <Textarea
-        data-testid="prompts-text"
-        rows={8}
-        value={draft.text}
-        placeholder="the prompt text"
-        onChange={(event) => onChange({ ...draft, text: event.target.value })}
-      />
-      <div className="flex items-center gap-2">
-        <Button
-          size="xs"
-          className="text-[9px]"
-          data-testid="prompts-save"
-          disabled={busy || !canSaveDraft(draft)}
-          onClick={onSave}
-        >
-          save
-        </Button>
-        <Button variant="ghost" size="xs" className="text-[9px]" data-testid="prompts-cancel" onClick={onCancel}>
+    <div data-testid="prompts-editor" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="prompts-name" className="text-[10px] font-bold text-doom-dim">
+          prompt name
+        </label>
+        <Input
+          id="prompts-name"
+          data-testid="prompts-name"
+          value={draft.name}
+          placeholder="lowercase letters, digits and dashes"
+          autoComplete="off"
+          autoFocus
+          onChange={(event) => onChange({ ...draft, name: event.target.value })}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="prompts-text" className="text-[10px] font-bold text-doom-dim">
+          prompt text
+        </label>
+        <Textarea
+          id="prompts-text"
+          data-testid="prompts-text"
+          rows={10}
+          value={draft.text}
+          placeholder="the prompt text"
+          onChange={(event) => onChange({ ...draft, text: event.target.value })}
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="md" data-testid="prompts-cancel" disabled={busy} onClick={onCancel}>
           cancel
+        </Button>
+        <Button size="md" data-testid="prompts-save" disabled={busy || !canSaveDraft(draft)} onClick={onSave}>
+          {busy ? 'saving…' : editing ? 'save changes' : 'save prompt'}
         </Button>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import type { UserMessageActionRunContext } from '@agimon-ai/doompi-web-contracts';
 import {
   Avatar,
   AvatarFallback,
@@ -18,8 +19,9 @@ import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
 import { useActivityGroups } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
-import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
+import { pluginToolRenderer, pluginUserMessageActions } from '../../lib/pluginRegistry.ts';
 import { focusPrompt } from '../../lib/promptFocus.ts';
+import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
 import {
   isSupportedImageMimeType,
   type SessionState,
@@ -117,16 +119,35 @@ function MessageActions({
   disabled,
   onQuote,
   onRewind,
+  userMessage,
 }: {
   disabled: boolean;
   onQuote: () => void;
   onRewind: () => void;
+  userMessage?: UserMessageActionRunContext;
 }) {
   return (
     <div
       data-testid="entry-actions"
-      className="pointer-events-none absolute right-1 bottom-0 z-10 flex translate-y-1/2 gap-1 rounded-md border border-doom-border-soft bg-doom-panel p-0.5 opacity-0 shadow-sm transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
+      className="pointer-events-none absolute right-1 bottom-0 z-10 flex max-w-[calc(100%-0.5rem)] translate-y-1/2 flex-wrap justify-end gap-1 rounded-md border border-doom-border-soft bg-doom-panel p-0.5 opacity-0 shadow-sm transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
     >
+      {userMessage
+        ? pluginUserMessageActions().map((action) => (
+            <Button
+              key={`${action.pluginId}.${action.id}`}
+              variant="subtle"
+              size="sm"
+              data-testid="entry-plugin-action"
+              aria-label={action.label}
+              title={action.label}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => action.run(userMessage)}
+              className="h-6 border-0 px-2 text-[10px] shadow-none"
+            >
+              {action.label}
+            </Button>
+          ))
+        : null}
       <Button
         variant="subtle"
         size="icon"
@@ -216,6 +237,7 @@ function ToolGroupRow({
   );
 }
 const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
+  useWebPluginRegistry();
   const sessionStreaming = useActiveSession((state) => state.streaming);
   const quoteSource = useRef<HTMLDivElement>(null);
   const quoteMessage = (text: string): void => {
@@ -268,6 +290,11 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
             disabled={sessionStreaming}
             onQuote={() => quoteMessage(entry.text)}
             onRewind={() => rewindToMessage(entry.id, sessionId)}
+            userMessage={
+              sessionId !== null && entry.text.trim().length > 0
+                ? { sessionId, messageId: entry.id, text: entry.text }
+                : undefined
+            }
           />
         </div>
         <SpeakerAvatar speaker="user" />

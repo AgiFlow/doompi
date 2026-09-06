@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defineSessionChannel, defineWebPlugin } from '../src/services/define.ts';
-import type { SessionChannelContribution, WebPluginRuntime } from '../src/types/webPlugin.ts';
+import { defineSessionChannel, defineWebPlugin } from '../src/exports/index.ts';
+import type {
+  SessionChannelContribution,
+  UserMessageActionContribution,
+  UserMessageActionRunContext,
+  WebPluginRuntime,
+} from '../src/exports/index.ts';
 
 interface DemoPayload {
   items: string[];
@@ -34,6 +39,21 @@ describe('contract identity helpers', () => {
     const plugin = defineWebPlugin({ id: 'demo', channels: [channel] });
     expect(plugin.id).toBe('demo');
     expect(plugin.channels).toHaveLength(1);
+  });
+
+  it('exposes the user-message action context through an optional plugin contribution', () => {
+    const received: UserMessageActionRunContext[] = [];
+    const action: UserMessageActionContribution = {
+      id: 'capture',
+      label: 'Capture',
+      run: (context) => received.push(context),
+    };
+    const plugin = defineWebPlugin({ id: 'demo', userMessageActions: [action] });
+    const context = { sessionId: 's1', messageId: 'm1', text: 'hello' };
+
+    plugin.userMessageActions?.[0]?.run(context);
+
+    expect(received).toEqual([context]);
   });
 
   it('requires a page hub connection subscription on plugin runtimes', () => {
