@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { MetricsPanel } from './MetricsPanel.tsx';
+import { MetricsPanel } from './components/MetricsPanel.tsx';
 
 /**
  * This package's cockpit presence: one settings page.

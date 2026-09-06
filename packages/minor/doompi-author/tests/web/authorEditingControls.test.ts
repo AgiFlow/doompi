@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
-import { AuthorToolPalette } from '../../src/web/AuthorToolPalette.tsx';
-import { AuthorRegionDrafts } from '../../src/web/AuthorRegionDrafts.tsx';
-import { AuthorStructuredView } from '../../src/web/AuthorStructuredView.tsx';
-import * as workspace from '../../src/web/authorWorkspaceStore.ts';
+import { AuthorToolPalette } from '../../src/web/components/AuthorToolPalette.tsx';
+import { AuthorRegionDrafts } from '../../src/web/components/AuthorRegionDrafts.tsx';
+import { AuthorStructuredView } from '../../src/web/components/AuthorStructuredView.tsx';
+import * as workspace from '../../src/web/stores/authorWorkspaceStore.ts';
 import {
   authorGrid,
   resolveAuthorGridCell,
   resolveAuthorGridNativeAnchor,
   updateAuthorGridGeometry,
-} from '../../src/web/authorGrid.ts';
-import type { AuthorRegionDraft } from '../../src/web/authorViewportTypes.ts';
+} from '../../src/web/lib/authorGrid.ts';
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes.ts';
 
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],

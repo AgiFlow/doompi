@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { {{ topic | pascalCase }}Panel } from './{{ topic | pascalCase }}Panel.tsx';
-import { {{ topic | camelCase }}, {{ topic | camelCase }}Channel } from './{{ topic | camelCase }}Store.ts';
+import { {{ topic | pascalCase }}Panel } from './components/{{ topic | pascalCase }}Panel.tsx';
+import { {{ topic | camelCase }}, {{ topic | camelCase }}Channel } from './stores/{{ topic | camelCase }}Store.ts';
 
 /** The tab badge: how many items the session currently reports; 0 hides it. */
 export function use{{ topic | pascalCase }}Badge(sessionId: string | null): number {

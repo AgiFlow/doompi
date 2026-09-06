@@ -1,8 +1,8 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { McpRepositorySettingsPanel } from './McpRepositorySettingsPanel.tsx';
-import { McpSessionAuthSection } from './McpSessionAuthSection.tsx';
-import { McpToolMessage } from './McpToolMessage.tsx';
-import { matchMcpTool } from './mcpToolMatch.ts';
+import { McpRepositorySettingsPanel } from './components/McpRepositorySettingsPanel.tsx';
+import { McpSessionAuthSection } from './components/McpSessionAuthSection.tsx';
+import { McpToolMessage } from './components/McpToolMessage.tsx';
+import { matchMcpTool } from './lib/mcpToolMatch.ts';
 
 /**
  * This package's cockpit presence: timeline cards for MCP tool calls, the web

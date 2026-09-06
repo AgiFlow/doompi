@@ -32,7 +32,7 @@ overrides:
   # This module runs only inside a dedicated Web Worker. ONNX Runtime is the
   # selected processor, and worker-local recurrent state cannot leak into the UI.
   - files:
-      - src/web/sileroVadWorker.ts
+      - src/web/api/sileroVadWorker.ts
     rules:
       web-plugin-import-allowlist: off
       web-plugin-no-module-state: off

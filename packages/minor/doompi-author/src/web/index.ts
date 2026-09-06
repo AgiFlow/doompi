@@ -1,13 +1,13 @@
 import { defineWebPlugin, type WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
-import { authorFileLinks } from './AuthorDocumentPanel.tsx';
-import { AuthorPanel } from './AuthorPanel.tsx';
-import { startAuthorBrowserBridge } from './authorBrowserBridge.ts';
-import { authorChannel } from './authorStore.ts';
-import { DescribeAuthorToolsToolCard } from './DescribeAuthorToolsToolCard.tsx';
-import { OpenAuthoringFileToolCard } from './OpenAuthoringFileToolCard.tsx';
-import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard.tsx';
-import { recordAuthorComposerSubmission } from './authorRequestLifecycle.ts';
-import { authorWorkspace } from './authorWorkspaceStore.ts';
+import { authorFileLinks } from './components/AuthorDocumentPanel.tsx';
+import { AuthorPanel } from './components/AuthorPanel.tsx';
+import { startAuthorBrowserBridge } from './api/authorBrowserBridge.ts';
+import { authorChannel } from './stores/authorStore.ts';
+import { DescribeAuthorToolsToolCard } from './components/DescribeAuthorToolsToolCard.tsx';
+import { OpenAuthoringFileToolCard } from './components/OpenAuthoringFileToolCard.tsx';
+import { UseAuthorToolsToolCard } from './components/UseAuthorToolsToolCard.tsx';
+import { recordAuthorComposerSubmission } from './stores/authorRequestLifecycle.ts';
+import { authorWorkspace } from './stores/authorWorkspaceStore.ts';
 
 /**
  * This package's cockpit presence: the named export the generated plugin

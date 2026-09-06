@@ -11,7 +11,7 @@ import {
   readPromptQuestions,
   setCustom,
   setNotes,
-} from '../../src/web/questionnaireDraft.ts';
+} from '../../src/web/lib/questionnaireDraft.ts';
 
 const args = {
   questions: [

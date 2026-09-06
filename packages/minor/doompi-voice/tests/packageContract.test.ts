@@ -171,9 +171,9 @@ describe('doom voice package boundary', () => {
 
   it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {
     const manualFiles = [
-      'src/web/manualBrowserRecorder.ts',
-      'src/web/manualComposerRecorder.ts',
-      'src/web/manualTranscriptionClient.ts',
+      'src/web/api/manualBrowserRecorder.ts',
+      'src/web/api/manualComposerRecorder.ts',
+      'src/web/api/manualTranscriptionClient.ts',
     ];
     const forbidden =
       /CaptureSession|VoiceMediaClient|VoiceWorkerPipeline|voiceMediaWakeStore|voiceOwnership|sessionVoiceOwnership|playback/u;

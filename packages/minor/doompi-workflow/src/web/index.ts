@@ -1,9 +1,9 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from './catalogStore.ts';
-import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
-import { workflowsTab } from './WorkflowsPanel.tsx';
-import { WorkflowToolMessage } from './WorkflowToolMessage.tsx';
-import { workflowRunsChannel, workflows } from './workflowsStore.ts';
+import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from './stores/catalogStore.ts';
+import { WorkflowsActivitySection } from './components/WorkflowsActivitySection.tsx';
+import { workflowsTab } from './components/WorkflowsPanel.tsx';
+import { WorkflowToolMessage } from './components/WorkflowToolMessage.tsx';
+import { workflowRunsChannel, workflows } from './stores/workflowsStore.ts';
 
 const WORKFLOWS_GROUP = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { authorCaptureContext, createAuthorCapturePacket } from '../../src/web/authorCapture.ts';
-import { authorProfilesForDocument } from '../../src/web/authorProfiles.ts';
-import { recordAuthorComposerSubmission } from '../../src/web/authorRequestLifecycle.ts';
+import { authorCaptureContext, createAuthorCapturePacket } from '../../src/web/stores/authorCapture.ts';
+import { authorProfilesForDocument } from '../../src/web/stores/authorProfiles.ts';
+import { recordAuthorComposerSubmission } from '../../src/web/stores/authorRequestLifecycle.ts';
 import {
   addAuthorRegion,
   authorDocument,
@@ -13,8 +13,8 @@ import {
   putAuthorRequest,
   reviseAuthorDocument,
   updateAuthorRequest,
-} from '../../src/web/authorWorkspaceStore.ts';
-import type { AuthorRegionDraft } from '../../src/web/authorViewportTypes.ts';
+} from '../../src/web/stores/authorWorkspaceStore.ts';
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes.ts';
 
 afterEach(() => authorWorkspace.reset());
 

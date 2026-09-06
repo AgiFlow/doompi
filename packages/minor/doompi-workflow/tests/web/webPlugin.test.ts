@@ -5,7 +5,7 @@ import {
   toolMessagePropsFixture,
 } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { workflows } from '../../src/web/workflowsStore.ts';
+import { workflows } from '../../src/web/stores/workflowsStore.ts';
 import { webPlugin } from '../../src/web/index.ts';
 
 /**

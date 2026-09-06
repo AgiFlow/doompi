@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { FindToolMessage } from './FindToolMessage.tsx';
-import { LsToolMessage } from './LsToolMessage.tsx';
-import { WriteToolMessage } from './WriteToolMessage.tsx';
+import { FindToolMessage } from './components/FindToolMessage.tsx';
+import { LsToolMessage } from './components/LsToolMessage.tsx';
+import { WriteToolMessage } from './components/WriteToolMessage.tsx';
 
 /**
  * This package's cockpit presence: timeline cards for the Pi builtins whose

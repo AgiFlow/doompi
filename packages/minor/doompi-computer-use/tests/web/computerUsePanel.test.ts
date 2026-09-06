@@ -1,6 +1,6 @@
 import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { computerUse, computerUseChannel } from '../../src/web/computerUseStore.ts';
+import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore.ts';
 import { webPlugin } from '../../src/web/index.ts';
 
 afterEach(() => computerUse.reset());

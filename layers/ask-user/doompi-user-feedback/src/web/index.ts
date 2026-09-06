@@ -1,7 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { AskUserQuestionToolMessage } from './AskUserQuestionToolMessage.tsx';
-import { QuestionnairePrompt } from './QuestionnairePrompt.tsx';
-import { readPromptQuestions } from './questionnaireDraft.ts';
+import { AskUserQuestionToolMessage } from './components/AskUserQuestionToolMessage.tsx';
+import { QuestionnairePrompt } from './components/QuestionnairePrompt.tsx';
+import { readPromptQuestions } from './lib/questionnaireDraft.ts';
 
 /**
  * This package's cockpit presence: the timeline card for ask_user_question,

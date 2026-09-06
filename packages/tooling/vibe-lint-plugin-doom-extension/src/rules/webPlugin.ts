@@ -38,6 +38,14 @@ const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
 const STORE_HELPERS = 'defineGlobalStore/defineSessionStore';
+const WEB_LAYER_ORDER: Readonly<Record<string, number | undefined>> = {
+  lib: 0,
+  api: 1,
+  stores: 2,
+  hooks: 3,
+  components: 4,
+};
+const WEB_LAYER_LABEL = 'lib, api, stores, hooks, components';
 
 export interface WebPluginBlock {
   pluginId?: unknown;
@@ -173,6 +181,53 @@ function webImports(configRoot: string): { typeFiles: Set<string>; packages: Set
   }
   return { typeFiles, packages };
 }
+
+function webLayer(relativePath: string): string | undefined {
+  const segments = relativePath.split('/');
+  return segments.length > 3 ? segments[2] : undefined;
+}
+
+/** Keeps extension browser code in a small, directional vocabulary while migration remains incremental. */
+export const webPluginLayerBoundary: RuleDefinition = {
+  preflight: true,
+  rule: 'Web plugin modules use the canonical folders and import only inward',
+  rationale:
+    'Flat browser roots mix rendering, reactive state, effects, transport, and pure calculations. A fixed inward order makes ownership visible without introducing framework abstractions, while src/web/index.ts remains the composition root.',
+  check(filePath, configRoot) {
+    const manifest = readManifest(configRoot);
+    if (Array.isArray(manifest?.doompiWeb) && manifest.doompiWeb.length === 0) return null;
+    const relativePath = webSourcePath(filePath, configRoot);
+    if (relativePath === null) return null;
+    const sourceFile = readSource(filePath);
+    if (!sourceFile) return null;
+    const sourceLayer = webLayer(relativePath);
+    if (sourceLayer === undefined) {
+      const basename = path.posix.basename(relativePath);
+      return basename === 'index.ts' || basename.endsWith('.d.ts')
+        ? null
+        : `Only src/web/index.ts and declarations may be executable at the web root. Move '${relativePath}' into ${WEB_LAYER_LABEL}.`;
+    }
+    const sourceOrder = WEB_LAYER_ORDER[sourceLayer];
+    if (sourceOrder === undefined) {
+      return `Unknown web plugin folder '${sourceLayer}'. Use ${WEB_LAYER_LABEL}.`;
+    }
+    const messages = new Set<string>();
+    for (const specifier of moduleSpecifiers(sourceFile)) {
+      if (!specifier.startsWith('.')) continue;
+      const target = relativeTarget(filePath, specifier, configRoot);
+      if (target === null || !isWebPath(target)) continue;
+      const targetLayer = webLayer(target);
+      if (targetLayer === undefined || targetLayer === sourceLayer) continue;
+      const targetOrder = WEB_LAYER_ORDER[targetLayer];
+      if (targetOrder !== undefined && targetOrder > sourceOrder) {
+        messages.add(
+          `src/web/${sourceLayer} may not import src/web/${targetLayer} ('${specifier}'). The web plugin layer order is ${WEB_LAYER_LABEL}.`,
+        );
+      }
+    }
+    return messages.size > 0 ? [...messages].join(' ') : null;
+  },
+};
 
 export const webPluginImportAllowlist: RuleDefinition = {
   preflight: true,

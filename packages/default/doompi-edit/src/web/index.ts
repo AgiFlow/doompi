@@ -1,5 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { EditToolMessage } from './EditToolMessage.tsx';
+import { EditToolMessage } from './components/EditToolMessage.tsx';
 
 /**
  * This package's cockpit presence: the edit tool's timeline card, the web

@@ -12,7 +12,7 @@ describe('the catalog store', () => {
       setCatalogFilter,
       subagentCatalogChannel,
       toggleInspect,
-    } = await import('../../src/web/catalogStore.ts');
+    } = await import('../../src/web/stores/catalogStore.ts');
     const session = (sessionId: string) => catalog.select(catalog.store.state, sessionId);
     catalog.reset();
 
@@ -71,7 +71,7 @@ describe('the catalog store', () => {
   });
 
   it('opens the reviewed Agent launcher from an independent work-item action', async () => {
-    const { catalog, openAgentCatalogForContext } = await import('../../src/web/catalogStore.ts');
+    const { catalog, openAgentCatalogForContext } = await import('../../src/web/stores/catalogStore.ts');
     const opened: string[] = [];
     catalog.reset();
 

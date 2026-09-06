@@ -121,6 +121,14 @@ describe('Doom web layer boundary rule', () => {
     ).toBeNull();
   });
 
+  it('rejects unknown client layers as sources and import targets', () => {
+    expect(check('src/web/utils/format.ts', 'export const format = String;')).toContain(
+      'src/web/utils is not a recognized client layer',
+    );
+    expect(check('src/web/components/Card.tsx', "import { format } from '../utils/format';")).toContain(
+      "may not import unknown client layer src/web/utils ('../utils/format')",
+    );
+  });
   it('ignores files outside a recognized source root', () => {
     expect(check('tests/smoke.test.ts', "import { chatStore } from '../src/web/stores/chatStore';\n")).toBeNull();
     expect(check('src/index.ts', "import { chatService } from './services/chat';\n")).toBeNull();

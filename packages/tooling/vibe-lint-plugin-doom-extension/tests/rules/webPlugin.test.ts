@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   webPluginEntry,
   webPluginImportAllowlist,
+  webPluginLayerBoundary,
   webPluginManifest,
   webPluginNoModuleState,
 } from '../../src/rules/webPlugin.js';
@@ -81,6 +82,37 @@ describe('Doom web plugin rules', () => {
     });
   });
 
+  describe('web-plugin-layer-boundary', () => {
+    it('accepts the canonical folders and inward imports', () => {
+      write('src/web/lib/format.ts', 'export const format = String;');
+      write(
+        'src/web/stores/itemsStore.ts',
+        "import { format } from '../lib/format.ts'; export const item = format(1);",
+      );
+      const component = write(
+        'src/web/components/ItemsPanel.tsx',
+        "import { item } from '../stores/itemsStore.ts'; export const ItemsPanel = () => <p>{item}</p>;",
+      );
+      expect(webPluginLayerBoundary.check?.(component, root)).toBeNull();
+      expect(webPluginLayerBoundary.check?.(write('src/web/index.ts', entry), root)).toBeNull();
+      expect(webPluginLayerBoundary.check?.(path.join(root, 'src/web/DeletedPanel.tsx'), root)).toBeNull();
+    });
+
+    it('rejects flat files, unknown folders, and outward imports', () => {
+      const flat = write('src/web/ItemsPanel.tsx', 'export const ItemsPanel = () => null;');
+      expect(webPluginLayerBoundary.check?.(flat, root)).toContain('Only src/web/index.ts');
+
+      const unknown = write('src/web/utils/format.ts', 'export const format = String;');
+      expect(webPluginLayerBoundary.check?.(unknown, root)).toContain("Unknown web plugin folder 'utils'");
+
+      write('src/web/components/ItemsPanel.tsx', 'export const ItemsPanel = () => null;');
+      const store = write(
+        'src/web/stores/itemsStore.ts',
+        "import { ItemsPanel } from '../components/ItemsPanel.tsx'; export const item = ItemsPanel;",
+      );
+      expect(webPluginLayerBoundary.check?.(store, root)).toContain('src/web/stores may not import src/web/components');
+    });
+  });
   describe('web-plugin-no-module-state', () => {
     it('flags top-level let and var and accepts const stores and function-local let', () => {
       const flagged = write(

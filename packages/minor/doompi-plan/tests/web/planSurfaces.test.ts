@@ -2,8 +2,8 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/
 import { describe, expect, it } from 'vitest';
 import { formatPlanStatus, PLAN_STATUS_KEY } from '../../src/types/planApi.ts';
 import { webPlugin } from '../../src/web/index.ts';
-import { PlanActivitySection } from '../../src/web/PlanActivitySection.tsx';
-import { PLAN_TAB_ID, PlanPanel, planTab } from '../../src/web/PlanPanel.tsx';
+import { PlanActivitySection } from '../../src/web/components/PlanActivitySection.tsx';
+import { PLAN_TAB_ID, PlanPanel, planTab } from '../../src/web/components/PlanPanel.tsx';
 
 /**
  * The two surfaces this package adds to the cockpit, mounted.

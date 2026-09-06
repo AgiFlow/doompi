@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fileLinks } from '../../src/web/fileLinks.ts';
-import { files, filesChannel } from '../../src/web/filesStore.ts';
+import { fileLinks } from '../../src/web/components/fileLinks.ts';
+import { files, filesChannel } from '../../src/web/stores/filesStore.ts';
 
 /**
  * What a message may link to.

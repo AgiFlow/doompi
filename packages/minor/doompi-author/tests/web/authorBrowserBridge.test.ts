@@ -7,7 +7,7 @@ import {
   dropAuthorViewportSession,
   focusAuthorViewport,
   startAuthorBrowserBridge,
-} from '../../src/web/authorBrowserBridge.ts';
+} from '../../src/web/api/authorBrowserBridge.ts';
 
 const releases: Array<() => void> = [];
 

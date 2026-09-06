@@ -5,9 +5,9 @@ import {
   authorCaptureContext,
   createAuthorCapturePacket,
   type AuthorCaptureProvider,
-} from '../../src/web/authorCapture.ts';
-import type { AuthorRegionDraft } from '../../src/web/authorViewportTypes.ts';
-import type { AuthorWorkspaceDocument } from '../../src/web/authorWorkspaceStore.ts';
+} from '../../src/web/stores/authorCapture.ts';
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes.ts';
+import type { AuthorWorkspaceDocument } from '../../src/web/stores/authorWorkspaceStore.ts';
 
 const document: AuthorWorkspaceDocument = {
   path: 'notes.md',

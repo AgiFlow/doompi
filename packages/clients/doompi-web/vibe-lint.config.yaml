@@ -23,3 +23,10 @@ boundaries:
     pattern: scripts/webPlugins/**
     allowedImports:
       - scripts/webPlugins/**
+  # The installable PWA and its service worker form a separate browser program.
+  - name: pwa
+    pattern: src/pwa/**
+    allowedImports:
+      - src/pwa/**
+      - src/types
+      - src/types/**

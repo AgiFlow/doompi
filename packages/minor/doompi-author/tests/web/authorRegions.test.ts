@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizedAuthorRectangle } from '../../src/web/authorRegions.ts';
+import { normalizedAuthorRectangle } from '../../src/web/lib/authorRegions.ts';
 
 describe('source-normalized Author rectangles', () => {
   const bounds = { left: 100, top: 50, right: 500, bottom: 250 };

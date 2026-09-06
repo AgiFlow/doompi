@@ -4,8 +4,8 @@ import {
   editableStructuredFragments,
   loadAuthorDocument,
   saveAuthorDocument,
-} from '../../src/web/authorFiles.ts';
-import type { AuthorDocumentInput } from '../../src/web/authorViewportTypes.ts';
+} from '../../src/web/api/authorFiles.ts';
+import type { AuthorDocumentInput } from '../../src/web/lib/authorViewportTypes.ts';
 
 const sha = 'a'.repeat(64);
 const document: AuthorDocumentInput = { path: 'a.csv', kind: 'csv', structuredFormat: 'csv', sourceSha256: sha };

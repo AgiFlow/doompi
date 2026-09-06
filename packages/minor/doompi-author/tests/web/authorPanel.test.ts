@@ -2,15 +2,22 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AuthorDocumentPanel, authorFileTab, displayedAuthorRegions } from '../../src/web/AuthorDocumentPanel.tsx';
-import { AuthorRequestLog } from '../../src/web/AuthorRequestLog.tsx';
-import type { AuthorRequestRecord } from '../../src/web/authorViewportTypes.ts';
+import {
+  AuthorDocumentPanel,
+  authorFileTab,
+  displayedAuthorRegions,
+} from '../../src/web/components/AuthorDocumentPanel.tsx';
+import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog.tsx';
+import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes.ts';
 import {
   focusAuthorDocument,
   releaseAuthorDocumentFocus,
   dropAuthorSession,
-} from '../../src/web/authorWorkspaceStore.ts';
-import { OpenAuthoringFileToolCard, openAuthoringFileTab } from '../../src/web/OpenAuthoringFileToolCard.tsx';
+} from '../../src/web/stores/authorWorkspaceStore.ts';
+import {
+  OpenAuthoringFileToolCard,
+  openAuthoringFileTab,
+} from '../../src/web/components/OpenAuthoringFileToolCard.tsx';
 import { webPlugin } from '../../src/web/index.ts';
 
 describe('the Author web plugin', () => {

@@ -3,7 +3,7 @@ import {
   describeAuthorToolsCallSummary,
   describeAuthorToolsResultLines,
   describeAuthorToolsToolName,
-} from '../../src/web/describeAuthorToolsToolRender.ts';
+} from '../../src/web/lib/describeAuthorToolsToolRender.ts';
 
 describe('the describe_author_tools tool view', () => {
   it('names the tool the package registers', () => {

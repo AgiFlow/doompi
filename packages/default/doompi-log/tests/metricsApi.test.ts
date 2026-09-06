@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { sealedFetch } = vi.hoisted(() => ({ sealedFetch: vi.fn() }));
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: sealedFetch } }));
 
-const { fetchIssues, fetchMetrics } = await import('../src/web/metricsApi.ts');
+const { fetchIssues, fetchMetrics } = await import('../src/web/api/metricsApi.ts');
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
