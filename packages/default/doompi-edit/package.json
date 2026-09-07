@@ -75,7 +75,7 @@
     "react": "19.2.8",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",

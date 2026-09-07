@@ -53,7 +53,7 @@
     "@types/node": "26.4.0",
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   },
   "peerDependencies": {
     "@agimon-ai/vibe-lint": "0.0.1-alpha.29"
