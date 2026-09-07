@@ -24,6 +24,7 @@ import {
   HISTORY_PAGE_SIZE,
   HISTORY_PAGE_TYPE,
   type HistoryPageFrame,
+  AGENT_MODEL_ENTRY_TYPE,
   CONTEXT_ENTRY_TYPE,
   MINOR_MODE_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
@@ -93,12 +94,23 @@ function uiProjectionKey(frame: SessionFrame): string | undefined {
   return undefined;
 }
 
+/**
+ * The custom entries that are projections rather than transcript: the latest
+ * one replaces the last, so the hub keeps one per type and replays that
+ * instead of letting the ring age them out.
+ */
+const PROJECTION_ENTRY_TYPES: ReadonlySet<unknown> = new Set([
+  MINOR_MODE_ENTRY_TYPE,
+  CONTEXT_ENTRY_TYPE,
+  AGENT_MODEL_ENTRY_TYPE,
+]);
+
 /** The projection key for a custom composition entry, or undefined for any other entry. */
 function compositionEntryKey(entry: unknown): string | undefined {
   if (typeof entry !== 'object' || entry === null) return undefined;
   const candidate = entry as Record<string, unknown>;
   if (candidate.type !== 'custom') return undefined;
-  if (candidate.customType !== MINOR_MODE_ENTRY_TYPE && candidate.customType !== CONTEXT_ENTRY_TYPE) return undefined;
+  if (!PROJECTION_ENTRY_TYPES.has(candidate.customType)) return undefined;
   return `entry:${String(candidate.customType)}`;
 }
 
@@ -337,7 +349,7 @@ function resolvedCommand(managed: ManagedSession, frame: SessionFrame): SessionF
  */
 function isUnreportedEntry(entry: Record<string, unknown>): boolean {
   if (entry.type === 'custom') {
-    return entry.customType === MINOR_MODE_ENTRY_TYPE || entry.customType === CONTEXT_ENTRY_TYPE;
+    return PROJECTION_ENTRY_TYPES.has(entry.customType);
   }
   const message = entry.message;
   if (typeof message !== 'object' || message === null) return false;

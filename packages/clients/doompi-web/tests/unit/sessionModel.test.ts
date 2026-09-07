@@ -393,6 +393,75 @@ describe('reduceSession', () => {
     expect(state).toBe(initialSessionState);
   });
 
+  it('follows a thinking level the agent switched on its own behalf', () => {
+    const state = fold([
+      {
+        type: 'response',
+        command: 'get_state',
+        data: { model: { id: 'a', provider: 'p' }, thinkingLevel: 'medium' },
+      },
+      { type: 'thinking_level_changed', level: 'max' },
+    ]);
+
+    expect(state.agent).toMatchObject({ model: 'a', provider: 'p', thinkingLevel: 'max' });
+  });
+
+  it('ignores a thinking level change before the agent facts exist', () => {
+    const state = reduceSession(initialSessionState, { type: 'thinking_level_changed', level: 'max' });
+    expect(state).toBe(initialSessionState);
+  });
+
+  it('keeps the level it has when a thinking level change carries none', () => {
+    const state = fold([
+      {
+        type: 'response',
+        command: 'get_state',
+        data: { model: { id: 'a', provider: 'p' }, thinkingLevel: 'medium' },
+      },
+      { type: 'thinking_level_changed' },
+    ]);
+
+    expect(state.agent?.thinkingLevel).toBe('medium');
+  });
+
+  it('follows a model the runtime journalled, because Pi reports none on the wire', () => {
+    const state = fold([
+      {
+        type: 'response',
+        command: 'get_state',
+        data: { model: { id: 'a', provider: 'p' }, thinkingLevel: 'medium' },
+      },
+      {
+        type: 'entry_appended',
+        entry: { type: 'custom', customType: 'doom-agent-model', data: { provider: 'anthropic', id: 'opus' } },
+      },
+    ]);
+
+    expect(state.agent).toMatchObject({ model: 'opus', provider: 'anthropic', thinkingLevel: 'medium' });
+  });
+
+  it('ignores a journalled model before the agent facts exist', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'doom-agent-model', data: { provider: 'anthropic', id: 'opus' } },
+    });
+
+    expect(state.agent).toBeNull();
+  });
+
+  it('keeps the model it has when a journalled model names no provider', () => {
+    const state = fold([
+      {
+        type: 'response',
+        command: 'get_state',
+        data: { model: { id: 'a', provider: 'p' }, thinkingLevel: 'medium' },
+      },
+      { type: 'entry_appended', entry: { type: 'custom', customType: 'doom-agent-model', data: { id: 'opus' } } },
+    ]);
+
+    expect(state.agent).toMatchObject({ model: 'a', provider: 'p' });
+  });
+
   it('surfaces a refused pick as an error notice, and stays quiet for other refusals', () => {
     const refused = reduceSession(initialSessionState, {
       type: 'response',

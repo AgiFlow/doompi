@@ -39,6 +39,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./agent-model": {
+      "types": "./dist/agentModel.d.mts",
+      "import": "./dist/agentModel.mjs",
+      "require": "./dist/agentModel.cjs"
+    },
     "./ask-user": {
       "types": "./dist/askUser.d.mts",
       "import": "./dist/askUser.mjs",

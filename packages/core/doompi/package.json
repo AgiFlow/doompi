@@ -163,6 +163,11 @@
       "import": "./dist/entries/domains.mjs",
       "require": "./dist/entries/domains.cjs"
     },
+    "./entries/agentModel": {
+      "types": "./dist/entries/agentModel.d.mts",
+      "import": "./dist/entries/agentModel.mjs",
+      "require": "./dist/entries/agentModel.cjs"
+    },
     "./entries/cordisFinalizer": {
       "types": "./dist/entries/cordisFinalizer.d.mts",
       "import": "./dist/entries/cordisFinalizer.mjs",

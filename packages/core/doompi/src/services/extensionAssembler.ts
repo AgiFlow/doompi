@@ -145,6 +145,7 @@ const FIXED_CORE_PACKAGES = new Set([
 ]);
 
 const OWN_ENTRIES = {
+  agentModel: 'agentModel',
   cordisFinalizer: 'cordisFinalizer',
   cordisHost: 'cordisHost',
   effort: 'effort',
@@ -469,6 +470,10 @@ function parentActivation(
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.skill),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.domain),
     resolve.ownEntry(OWN_ENTRIES.effort),
+    // Child sessions are deliberately left out: a subagent thread has no model
+    // chip to keep current, so journaling its switches would cost entries no
+    // surface reads.
+    resolve.ownEntry(OWN_ENTRIES.agentModel),
   );
   if (context.preset === OLLAMA_PRESET) activation.push(resolve.ownEntry(OWN_ENTRIES.ollamaProvider));
   activation.push(...distributionPaths, ...featurePaths);

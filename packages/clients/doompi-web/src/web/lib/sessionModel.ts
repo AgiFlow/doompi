@@ -1,5 +1,6 @@
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 import {
+  AGENT_MODEL_ENTRY_TYPE,
   CONTEXT_ENTRY_TYPE,
   type ContextProjection,
   DIALOG_ANSWERED_TYPE,
@@ -783,6 +784,16 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
     case DIALOG_ANSWERED_TYPE:
       return state.dialog && state.dialog.id === asString(frame.id) ? { ...state, dialog: null } : state;
 
+    // Pi announces a thinking level it switched on its own behalf: plan mode
+    // applying its configured effort, or the /effort command. state.agent is
+    // otherwise written only by a get_state this page asked for, so without
+    // this the chip keeps whatever the last request reported.
+    case 'thinking_level_changed': {
+      if (state.agent === null) return state;
+      const level = asString(frame.level, state.agent.thinkingLevel);
+      return { ...state, agent: { ...state.agent, thinkingLevel: level } };
+    }
+
     // Journaled composition and notifications apply independently of protocol-owned messages.
     case 'entry_appended': {
       const entry = isRecord(frame.entry) ? frame.entry : undefined;
@@ -807,6 +818,17 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
         const data = isRecord(entry.data) ? entry.data : undefined;
         if (!data || !Array.isArray(data.groups)) return state;
         return { ...state, context: data as unknown as ContextProjection };
+      }
+      // Pi has no wire event for a model an extension chose, so the runtime
+      // journals one. Guarded on agent because a get_state has to have named
+      // the rest of the facts before a model can be swapped into them.
+      if (entry.type === 'custom' && entry.customType === AGENT_MODEL_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        if (!data || state.agent === null) return state;
+        const id = asString(data.id, '');
+        const provider = asString(data.provider, '');
+        if (id === '' || provider === '') return state;
+        return { ...state, agent: { ...state.agent, model: id, provider } };
       }
       // A journalled user message is a transcript entry the protocol already
       // publishes; the catalog above is DoomPi's own and always applies.

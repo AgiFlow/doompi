@@ -135,6 +135,17 @@ export const HUB_RESYNCED_TYPE = 'hub_resynced';
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
 /**
+ * The custom session entry the DoomPi runtime journals when the agent's model
+ * changes without a client having asked for it. The shape mirrors
+ * AgentModelProjection in doompi-extension-contracts.
+ *
+ * Pi reports a thinking-level switch on the wire, so that field follows from
+ * the frame alone. It has no wire event for the model, so plan mode applying
+ * its configured planning model would otherwise leave the chip naming the
+ * model the session left behind.
+ */
+export const AGENT_MODEL_ENTRY_TYPE = 'doom-agent-model';
+/**
  * The custom session entry DoomPi journals describing what the session is
  * composed of: which mode admitted each tool and skill, and what each costs.
  *

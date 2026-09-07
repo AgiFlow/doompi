@@ -90,3 +90,38 @@ test('picks a thinking level and shows a refused pick', async ({ page, cockpit }
   cockpit.session.emit({ type: 'response', command: 'set_thinking_level', success: false, error: 'level unsupported' });
   await expect(page.getByText('level unsupported')).toBeVisible();
 });
+
+// Plan mode applies its configured planning model and effort as it activates,
+// and /effort changes the effort on its own. Nothing on this page asked for
+// either, so the pushed frames are all the chip has to follow. Pi has a wire
+// event for the level but none for the model, which the runtime journals.
+test('follows a model and a thinking level the session switched on its own behalf', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForCommand('get_state');
+  cockpit.session.emit(state({ id: 'claude-opus-5', provider: 'anthropic' }, 'medium'));
+  await expect(page.getByTestId('agent-thinking')).toHaveText('medium');
+
+  const stateRequests = () => cockpit.session.received.filter((frame) => frame.type === 'get_state').length;
+  const asked = stateRequests();
+  cockpit.session.emit({ type: 'thinking_level_changed', level: 'max' });
+
+  await expect(page.getByTestId('agent-thinking')).toHaveText('max');
+  // The model the same get_state reported is left alone.
+  await expect(page.getByTestId('agent-model')).toHaveText('claude-opus-5');
+  expect(stateRequests()).toBe(asked);
+
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      id: 'e-model-1',
+      type: 'custom',
+      customType: 'doom-agent-model',
+      data: { provider: 'openai', id: 'gpt-5.6-sol' },
+    },
+  });
+
+  await expect(page.getByTestId('agent-model')).toHaveText('gpt-5.6-sol');
+  // The level the pushed frame set survives the model landing after it.
+  await expect(page.getByTestId('agent-thinking')).toHaveText('max');
+  expect(stateRequests()).toBe(asked);
+});
