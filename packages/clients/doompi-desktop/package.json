@@ -41,10 +41,10 @@
     "@agimon-ai/doompi-server": "workspace:*",
     "@agimon-ai/doompi-web": "workspace:*",
     "@playwright/test": "1.62.1",
-    "@types/node": "26.4.0",
-    "electron": "44.0.0",
+    "@types/node": "26.4.1",
+    "electron": "44.2.0",
     "npm": "11.16.0",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "4.1.11"

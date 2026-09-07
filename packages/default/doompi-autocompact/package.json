@@ -68,7 +68,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",
-    "@types/node": "26.4.0",
+    "@types/node": "26.4.1",
     "@vitest/coverage-v8": "4.1.11",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
