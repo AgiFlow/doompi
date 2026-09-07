@@ -1,3 +1,14 @@
+## 0.0.1-alpha.37 (2026-09-07)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.35
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.24
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.27
+
 ## 0.0.1-alpha.36 (2026-09-07)
 
 ### 🧱 Updated Dependencies

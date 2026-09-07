@@ -1,3 +1,21 @@
+## 0.0.1-alpha.27 (2026-09-07)
+
+### 🚀 Features
+
+- **doompi-web-components:** render fenced code with syntax colour, mermaid and copy ([b3c4d8c7](https://github.com/AgiFlow/doompi/commit/b3c4d8c7))
+- **doompi-web-contracts:** add composerMenuItems for the composer menu ([616373f7](https://github.com/AgiFlow/doompi/commit/616373f7))
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🩹 Fixes
+
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.26 (2026-09-07)
 
 ### 🚀 Features
