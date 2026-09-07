@@ -4,11 +4,13 @@ import {
   Kbd,
   OptionLabel,
   OptionRow,
+  optionRowVariants,
   PlusIcon,
   Popover,
   PopoverAnchor,
   PopoverContent,
   PopoverFooter,
+  PopoverTrigger,
   StopIcon,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
@@ -178,6 +180,7 @@ export function Composer() {
   const { draft, caret, dismissedToken, attachments, attachmentError, nextAttachmentId } = useComposerState(sessionId);
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -194,7 +197,15 @@ export function Composer() {
     setShownSession(sessionId);
     setCompletion(null);
     setDraggingFiles(false);
+    setMenuOpen(false);
   }
+
+  // The completion popup and the '+' menu are two popovers over one composer,
+  // and the completion one exempts its own anchor from outside clicks. Keeping
+  // them mutually exclusive means that guard never has to reason about the
+  // other's portalled content. Adjusted during render, like the session reset
+  // above, so the menu is already gone in the frame the popup appears in.
+  if (menuOpen && completion !== null) setMenuOpen(false);
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
   }, [sessionId]);
@@ -699,34 +710,76 @@ export function Composer() {
                   ? 'enter steers the run · esc aborts'
                   : 'enter sends · shift+enter for a new line · space opens leader'}
               </span>
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                data-testid="composer-attach"
-                title="attach images or text files"
-                className={`relative shrink-0 overflow-hidden text-doom-dim focus-within:ring-2 focus-within:ring-doom-blue/50 ${
-                  attached ? '' : 'pointer-events-none opacity-40'
-                }`}
+              <Popover
+                open={menuOpen}
+                onOpenChange={(next) => {
+                  setMenuOpen(next);
+                  if (next) dismissCompletion();
+                }}
               >
-                <label aria-disabled={!attached}>
-                  <PlusIcon className="h-3 w-3" />
-                  {/* prefer-shared-primitive: ignore -- iOS needs the native file input itself to cover the visible tap target. */}
-                  <input
-                    type="file"
-                    multiple
-                    accept={FILE_INPUT_ACCEPT}
-                    disabled={!attached}
-                    aria-label="attach images or text files"
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                    data-testid="composer-file-input"
-                    onChange={(event) => {
-                      void addFiles(Array.from(event.currentTarget.files ?? []));
-                      event.currentTarget.value = '';
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    data-testid="composer-attach"
+                    title="add to this message"
+                    aria-label="add to this message"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    className="shrink-0 text-doom-dim"
+                  >
+                    <PlusIcon className="h-3 w-3" />
+                  </Button>
+                </PopoverTrigger>
+                {menuOpen ? (
+                  <PopoverContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    data-testid="composer-menu"
+                    className="w-56 rounded-md p-1.5 shadow-xl"
+                    // A menu entry is a way out of the menu: whatever a plugin
+                    // opens, the menu has done its part. The upload row is the
+                    // exception, because its click opens the file chooser and
+                    // unmounting the input under it would strand the pick.
+                    onClick={(event) => {
+                      const clicked = event.target as Element | null;
+                      if (clicked?.closest('[data-testid="composer-attach-row"]')) return;
+                      setMenuOpen(false);
                     }}
-                  />
-                </label>
-              </Button>
+                  >
+                    {/* prefer-shared-primitive: ignore -- OptionRow is a button, and a file input may not nest inside one. */}
+                    <label
+                      aria-disabled={!attached}
+                      data-testid="composer-attach-row"
+                      className={`relative overflow-hidden text-[12px] text-doom-text hover:bg-doom-tint-blue ${optionRowVariants(
+                        { density: 'compact' },
+                      )} ${attached ? '' : 'pointer-events-none opacity-40'}`}
+                    >
+                      <PlusIcon className="h-3 w-3 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">File Upload</span>
+                      {/* prefer-shared-primitive: ignore -- iOS needs the native file input itself to cover the visible tap target. */}
+                      <input
+                        type="file"
+                        multiple
+                        accept={FILE_INPUT_ACCEPT}
+                        disabled={!attached}
+                        aria-label="attach images or text files"
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                        data-testid="composer-file-input"
+                        onChange={(event) => {
+                          void addFiles(Array.from(event.currentTarget.files ?? []));
+                          event.currentTarget.value = '';
+                          setMenuOpen(false);
+                        }}
+                      />
+                    </label>
+                    <span className="contents" data-testid="composer-menu-items">
+                      <PluginSurface slot={HOST_SLOTS.composerMenu} sessionId={sessionId} />
+                    </span>
+                  </PopoverContent>
+                ) : null}
+              </Popover>
               <span className="min-w-0 flex-1" />
               {streaming ? abortAction : null}
               <span className="contents" data-testid="composer-actions">

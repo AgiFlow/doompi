@@ -33,18 +33,26 @@ test('keeps the workflow launcher available before any package reports work', as
   await expect(page.getByTestId('activity-empty')).toBeHidden();
 });
 
+// The prompt library is no longer a dock group; it is reached from the
+// composer's '+' menu. The test stays in this suite because it needs the same
+// synced bundle the dock groups do.
 test('keeps the prompts dialog interactive after outside dismissal and reopening', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
   const dialog = page.getByTestId('prompts-dialog');
-  await page.getByTestId('activity-prompts-open').click();
+  const openLibrary = async (): Promise<void> => {
+    await page.getByTestId('composer-attach').click();
+    await page.getByTestId('composer-menu-prompts').click();
+  };
+
+  await openLibrary();
   await expect(dialog).toBeVisible();
   await page.getByTestId('prompts-filter').fill('dismiss before reopening');
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 8, y: 8 } });
   await expect(dialog).toBeHidden();
 
-  await page.getByTestId('activity-prompts-open').click();
+  await openLibrary();
   await expect(dialog).toBeVisible();
   await page.getByTestId('prompts-filter').fill('interactive after reopening');
   await expect(page.getByTestId('prompts-filter')).toHaveValue('interactive after reopening');

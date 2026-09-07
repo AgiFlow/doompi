@@ -151,6 +151,7 @@ describe('the workspace web plugin composition', () => {
       for (const group of [
         'activitySections',
         'composerActions',
+        'composerMenuItems',
         'contextSections',
         'overlays',
         'railSections',

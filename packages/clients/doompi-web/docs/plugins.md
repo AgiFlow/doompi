@@ -100,7 +100,9 @@ A session channel validates every payload before applying it. Unknown frame type
 
 ### Slots instead of plugin dependencies
 
-A plugin opens a slot named `<pluginId>.<name>`. The host also exposes common slots such as overlays, rail regions, composer actions, and activity groups. Any installed plugin may contribute a fill by name without importing the slot owner.
+A plugin opens a slot named `<pluginId>.<name>`. The host also exposes common slots such as overlays, rail regions, composer actions, composer menu entries, and activity groups. Any installed plugin may contribute a fill by name without importing the slot owner.
+
+The composer menu slot is transient: the host mounts its fills only while the `+` popover is open, so an entry owns its click and nothing more. State that has to outlive the menu belongs in a surface the host keeps mounted, such as an overlay.
 
 Resolution happens after all definitions load. A fill whose slot is absent becomes an install diagnostic, not a page failure. This lets optional packages compose without making their install order a runtime dependency.
 
