@@ -1,3 +1,31 @@
+## 0.0.1-alpha.65 (2026-09-07)
+
+### 🚀 Features
+
+- **doompi-runner:** attach a real terminal to an interactive runner ([062ae7ed](https://github.com/AgiFlow/doompi/commit/062ae7ed))
+- **doompi-web:** react to server-initiated model and effort changes ([5f2a9433](https://github.com/AgiFlow/doompi/commit/5f2a9433))
+- **doompi-author:** enable npm publishing ([c22b3835](https://github.com/AgiFlow/doompi/commit/c22b3835))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.41
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.64
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.64 (2026-09-07)
 
 ### 🚀 Features

@@ -1,3 +1,21 @@
+## 0.0.1-alpha.64 (2026-09-07)
+
+### 🚀 Features
+
+- **doompi-web:** complete OAuth sign-in from a remote browser ([703e1532](https://github.com/AgiFlow/doompi/commit/703e1532))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.23
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.26
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.63 (2026-09-07)
 
 ### 🧱 Updated Dependencies

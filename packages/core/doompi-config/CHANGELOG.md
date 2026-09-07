@@ -1,3 +1,20 @@
+## 0.0.1-alpha.63 (2026-09-07)
+
+### 🚀 Features
+
+- **autocompact:** per-model absolute token compaction checkpoints ([85c43e56](https://github.com/AgiFlow/doompi/commit/85c43e56))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.62
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.62 (2026-09-07)
 
 ### 🚀 Features
