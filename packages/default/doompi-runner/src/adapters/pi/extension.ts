@@ -34,6 +34,7 @@ const LEADER_GROUP_ORDER = 67;
 const COMMAND_NAME = 'runners';
 const ERR_REQUIRES_INTERACTIVE = '/runners requires interactive mode';
 const ERR_STOP_USAGE = 'Usage: /runners stop <runner-id> [reason]';
+const ERR_START_USAGE = 'Usage: /runners start [name=x] [cwd=y] [interactive=true] -- <command>';
 
 import { RUNNER_SETTINGS_FILE, RunnerSettingsLoader } from '../RunnerSettings/RunnerSettingsLoader';
 import { setRunnerSettings } from '../../types/config.ts';
@@ -516,7 +517,8 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
   };
 
   pi.registerCommand(COMMAND_NAME, {
-    description: 'Open Runner Space: background processes started by bash. `/runners stop <id> [reason]` stops one.',
+    description:
+      'Open Runner Space: background processes started by bash. `/runners stop <id> [reason]` stops one, `/runners start [name=x] [cwd=y] [interactive=true] -- <command>` starts one.',
     handler: async (args, ctx) => {
       if (!active) return;
       const generation = sessionGeneration;
@@ -537,6 +539,30 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
         if (!isCurrent(generation, activeSessionId)) return;
         if (stopped) ctx.ui.notify(`Stopped runner ${request.id}.`, 'info');
         else ctx.ui.notify(`No active runner ${request.id} in this session.`, 'error');
+        return;
+      }
+      // Starting headlessly is how a client without the bash tool (the web
+      // cockpit) puts a command up. It is background by construction: a
+      // foreground wait has nobody here to wait for it.
+      if (request.kind === 'start') {
+        if (!request.command) {
+          ctx.ui.notify(ERR_START_USAGE, 'error');
+          return;
+        }
+        await waitForSessionReadiness();
+        if (!isCurrent(generation, activeSessionId)) return;
+        const started = await trackedBashRunService.run({
+          command: request.command,
+          sessionId: activeSessionId,
+          background: true,
+          ...(request.cwd ? { cwd: request.cwd } : {}),
+          ...(request.name ? { name: request.name } : {}),
+          ...(request.interactive ? { interactive: true } : {}),
+        });
+        if (!isCurrent(generation, activeSessionId)) return;
+        await refresh();
+        if (started.kind === 'failed') ctx.ui.notify(`Could not start a runner: ${started.error}`, 'error');
+        else ctx.ui.notify(`Started runner ${started.name}.`, 'info');
         return;
       }
       if (!ctx.hasUI) {

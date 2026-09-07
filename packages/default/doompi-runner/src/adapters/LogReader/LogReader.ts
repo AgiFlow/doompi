@@ -14,6 +14,8 @@ interface ScannedLog {
   readonly text: string;
   readonly lineCount: number;
   readonly totalLines: number;
+  readonly completeBytes: number;
+  readonly lineNumbers?: number[];
 }
 
 export class LogReader implements ILogReader {
@@ -30,7 +32,15 @@ export class LogReader implements ILogReader {
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      return { text: '', lineCount: 0, totalLines: 0, fileSize: 0, path: logPath, exists: false };
+      return {
+        text: '',
+        lineCount: 0,
+        totalLines: 0,
+        fileSize: 0,
+        completeBytes: 0,
+        path: logPath,
+        exists: false,
+      };
     } finally {
       if (handle !== undefined) fs.closeSync(handle);
     }
@@ -44,14 +54,16 @@ function scanLog(handle: number, query: LogQuery): ScannedLog {
   const decoder = new StringDecoder('utf8');
   const buffer = Buffer.alloc(READ_CHUNK_BYTES);
   const before: IndexedLine[] = [];
-  const output: string[] = [];
+  const output: IndexedLine[] = [];
   let pending = '';
   let totalLines = 0;
   let afterThrough = -1;
   let lastEmitted = -1;
   let lastByte: number | undefined;
+  let bytesSeen = 0;
+  let completeBytes = 0;
 
-  const retain = (line: string): void => {
+  const retain = (line: IndexedLine): void => {
     if (limit === 0) return;
     output.push(line);
     if (output.length > limit) output.shift();
@@ -59,13 +71,13 @@ function scanLog(handle: number, query: LogQuery): ScannedLog {
   const emit = (line: IndexedLine): void => {
     if (line.index <= lastEmitted) return;
     lastEmitted = line.index;
-    retain(line.text);
+    retain(line);
   };
   const consume = (text: string): void => {
     const line = { index: totalLines, text };
     totalLines += 1;
     if (!needle) {
-      retain(text);
+      retain(line);
       return;
     }
 
@@ -85,6 +97,11 @@ function scanLog(handle: number, query: LogQuery): ScannedLog {
     const bytesRead = fs.readSync(handle, buffer, 0, buffer.byteLength, null);
     if (bytesRead === 0) break;
     lastByte = buffer[bytesRead - 1];
+    // A newline is a single byte in UTF-8 and never a continuation byte, so the
+    // last one in this chunk ends the last complete line seen so far.
+    const lastNewline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a);
+    if (lastNewline >= 0) completeBytes = bytesSeen + lastNewline + 1;
+    bytesSeen += bytesRead;
     pending += decoder.write(buffer.subarray(0, bytesRead));
     let newline = pending.indexOf('\n');
     while (newline >= 0) {
@@ -97,8 +114,11 @@ function scanLog(handle: number, query: LogQuery): ScannedLog {
   if (pending.length > 0) consume(pending);
 
   const trailingNewline = lastByte === 0x0a;
-  const text = `${output.join('\n')}${!needle && trailingNewline && output.length > 0 ? '\n' : ''}`;
-  return { text, lineCount: output.length, totalLines };
+  const body = output.map((line) => line.text).join('\n');
+  const text = `${body}${!needle && trailingNewline && output.length > 0 ? '\n' : ''}`;
+  const scanned: ScannedLog = { text, lineCount: output.length, totalLines, completeBytes };
+  if (!needle) return scanned;
+  return { ...scanned, lineNumbers: output.map((line) => line.index + 1) };
 }
 
 /**

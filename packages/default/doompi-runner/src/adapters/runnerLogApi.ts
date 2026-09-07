@@ -10,6 +10,7 @@ import type { RunnerRecord } from '../types/runnerRegistry';
 import {
   RUNNER_API_BASE_PATH,
   RUNNER_LOG_PARAMS,
+  RUNNER_LOG_PING_EVENT,
   RUNNER_LOG_STREAM_EVENT,
   type RunnerLogResponse,
   type RunnerLogStreamEvent,
@@ -24,6 +25,11 @@ const STATE_EXTENSION = '.json';
 const RUNNING_STATE = 'running';
 /** How often a follow re-reads the record to notice the runner exiting. */
 const STATE_POLL_MS = 1000;
+/**
+ * How often a silent but living stream proves it is still there. Short enough
+ * that an idle proxy does not reap the socket, long enough to cost nothing.
+ */
+const HEARTBEAT_MS = 15_000;
 /** Kept in step with LogQuery's own default, so an unasked-for tail is the same size everywhere. */
 const DEFAULT_LINES = 200;
 /** A page that asks for more than this gets this; the whole point of the route is a bounded read. */
@@ -143,7 +149,7 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
       });
       const handle = logTail.follow(record.logPath, {
         from,
-        onLines: (lines) => queue({ lines }),
+        onLines: (lines, completeThrough) => queue({ lines, offset: completeThrough }),
         onError: () => finish(),
       });
       // A finished runner writes nothing more, so the page is told once and
@@ -154,10 +160,16 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
         queue({ lines: [], ended: true });
         finish();
       }, STATE_POLL_MS);
+      // A runner can be alive and produce nothing for minutes. Without this the
+      // page cannot tell that from a stream that quietly died.
+      const heartbeat = setInterval(() => {
+        pump = pump.then(() => stream.writeSSE({ event: RUNNER_LOG_PING_EVENT, data: '' })).catch(() => undefined);
+      }, HEARTBEAT_MS);
 
       stream.onAbort(() => finish());
       await done;
       clearInterval(poll);
+      clearInterval(heartbeat);
       handle.close();
       await pump;
     });

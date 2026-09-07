@@ -166,7 +166,7 @@ describe('the runner log API', () => {
   it('streams appended lines and ends when the runner does', async () => {
     const store = freshStore();
     writeRun(store, {}, 'already read\n');
-    let emit: ((lines: string[]) => void) | undefined;
+    let emit: ((lines: string[], completeThrough: number) => void) | undefined;
     const logTail: ILogTail = {
       follow(_logPath: string, options: LogTailOptions): LogTailHandle {
         emit = options.onLines;
@@ -179,7 +179,7 @@ describe('the runner log API', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
 
-    emit?.(['fresh line']);
+    emit?.(['fresh line'], 24);
     // The runner exiting is what ends the stream; the poll notices the record.
     writeRun(store, {
       state: 'completed',
@@ -201,6 +201,9 @@ describe('the runner log API', () => {
     }
 
     expect(events.some((event) => event.lines.includes('fresh line'))).toBe(true);
+    // The offset travels with the lines so a reconnect resumes past them
+    // rather than replaying from the slice the page first read.
+    expect(events.find((event) => event.lines.includes('fresh line'))?.offset).toBe(24);
     expect(events.at(-1)?.ended).toBe(true);
   }, 15_000);
 });

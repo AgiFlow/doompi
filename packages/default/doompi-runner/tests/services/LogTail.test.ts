@@ -101,4 +101,21 @@ describe('LogTail', () => {
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(seen).toEqual(['before']);
   }, 15_000);
+
+  it('reports the offset through the lines it handed over, not the file size', async () => {
+    // The withheld fragment is already on disk, so resuming from the file size
+    // would skip it and lose the line it becomes.
+    const logPath = freshLog('');
+    const offsets: number[] = [];
+    const handle = new LogTail().follow(logPath, {
+      from: 0,
+      onLines: (_lines, completeThrough) => offsets.push(completeThrough),
+      onError: () => undefined,
+    });
+    cleanups.push(() => handle.close());
+
+    fs.appendFileSync(logPath, 'one\ntwo\nthr');
+    await waitFor(() => offsets.length >= 1, 'the first delivery');
+    expect(offsets.at(-1)).toBe(8);
+  }, 15_000);
 });

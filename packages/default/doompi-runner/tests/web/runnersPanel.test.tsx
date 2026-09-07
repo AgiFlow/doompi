@@ -1,0 +1,118 @@
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { afterEach, describe, expect, it } from 'vitest';
+import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog.tsx';
+import { RunnersPanel } from '../../src/web/components/RunnersPanel.tsx';
+import { webPlugin } from '../../src/web/index.ts';
+import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
+import type { RunnerRunView } from '../../src/types/webRunners.ts';
+
+const run = (id: string, state: 'running' | 'completed'): RunnerRunView =>
+  ({
+    id,
+    name: id,
+    command: `pnpm ${id}`,
+    cwd: '/workspace/repo',
+    state,
+    pid: 900,
+    backend: 'rmux',
+    interactive: false,
+    startedAt: new Date(0).toISOString(),
+    logPath: `/logs/${id}.log`,
+  }) as unknown as RunnerRunView;
+
+afterEach(() => runners.reset());
+
+describe('the runners group tab', () => {
+  it('is opened from the group name, which is what gives the dock its hover underline', () => {
+    // The host renders a group carrying a transientTab as a button; without
+    // one the name is a plain label and there is nothing to click.
+    const group = webPlugin.activityGroups?.find((entry) => entry.name === 'runners');
+
+    expect(group?.transientTab).toBeDefined();
+    expect(group?.transientTab?.().id).toBe('runner-runs');
+  });
+
+  it('keeps the section under the same name, so the dock still renders it inside the group', () => {
+    const group = webPlugin.activityGroups?.find((entry) => entry.name === 'runners');
+
+    expect(webPlugin.activitySections?.map((section) => section.id)).toContain(group?.name);
+  });
+});
+
+describe('the runners panel', () => {
+  it('says nothing is running rather than showing an empty grid', () => {
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('nothing running')).toBe(true);
+  });
+
+  it('gives each running runner a card with its command and where it runs', () => {
+    runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [run('build', 'running')] })!);
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.includes('build')).toBe(true);
+    expect(rendered.includes('pnpm build')).toBe(true);
+    expect(rendered.includes('/workspace/repo')).toBe(true);
+    expect(rendered.includes('1 running')).toBe(true);
+  });
+
+  it('leaves out a finished runner, because the panel answers what is happening', () => {
+    runnerRunsChannel.apply(
+      's1',
+      runnerRunsChannel.parse({ runs: [run('build', 'running'), run('lint', 'completed')] })!,
+    );
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.includes('pnpm build')).toBe(true);
+    expect(rendered.includes('pnpm lint')).toBe(false);
+  });
+
+  it('offers a way to launch one, both in the header and from the empty state', () => {
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.html).toContain('runners-panel-launch');
+    expect(rendered.includes('launch a runner')).toBe(true);
+  });
+
+  it('offers no launch control with nothing focused, because there is no session to send to', () => {
+    const { props } = slotPropsFixture({ sessionId: null });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).not.toContain('runners-panel-launch');
+  });
+
+  it('renders with nothing focused, the state an empty cockpit opens in', () => {
+    const { props } = slotPropsFixture({ sessionId: null });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.error).toBeUndefined();
+  });
+});
+
+describe('the launch dialog', () => {
+  it('constructs without throwing', () => {
+    // Radix portals its content, so a static render produces no markup to read.
+    // What the line actually says is pinned by the round-trip test instead.
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(LaunchRunnerDialog, {
+      sessionId: 's1',
+      sendSessionFrame: props.sendSessionFrame,
+      onClose: () => undefined,
+    });
+
+    expect(rendered.error).toBeUndefined();
+  });
+});

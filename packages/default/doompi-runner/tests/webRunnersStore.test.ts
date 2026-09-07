@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isFollowingLive, logViewLines } from '../src/web/lib/format.ts';
+import { isFollowingLive, logViewLines, tailLineNumbers } from '../src/web/lib/format.ts';
 import { requestRunnerStop, runnerActivitySource, runnerRunsChannel, runners } from '../src/web/stores/runnersStore.ts';
 
 const run = (id: string, state: 'running' | 'completed') => ({ id, name: id, command: 'sleep 60', state });
@@ -58,23 +58,49 @@ describe('the lines a log view shows', () => {
     // LogReader hands back the file's trailing newline, so a naive split would
     // report one blank line more than the file has and the count under the
     // search bar would disagree with the server's own totalLines.
-    expect(logViewLines('one\ntwo\nthree\n', [], 100)).toEqual(['one', 'two', 'three']);
+    expect(logViewLines('one\ntwo\nthree\n', [], 100).lines).toEqual(['one', 'two', 'three']);
   });
 
   it('keeps a blank line that is genuinely inside the log', () => {
-    expect(logViewLines('one\n\nthree\n', [], 100)).toEqual(['one', '', 'three']);
+    expect(logViewLines('one\n\nthree\n', [], 100).lines).toEqual(['one', '', 'three']);
   });
 
   it('shows nothing for an empty log rather than one blank line', () => {
-    expect(logViewLines('', [], 100)).toEqual([]);
+    expect(logViewLines('', [], 100).lines).toEqual([]);
   });
 
   it('appends what the follow stream delivered, after the slice', () => {
-    expect(logViewLines('one\ntwo\n', ['three'], 100)).toEqual(['one', 'two', 'three']);
+    expect(logViewLines('one\ntwo\n', ['three'], 100).lines).toEqual(['one', 'two', 'three']);
   });
 
   it('keeps only the newest lines, so a long follow cannot grow without bound', () => {
-    expect(logViewLines('one\ntwo\nthree\n', ['four'], 2)).toEqual(['three', 'four']);
+    expect(logViewLines('one\ntwo\nthree\n', ['four'], 2).lines).toEqual(['three', 'four']);
+  });
+
+  it('reports how many older lines the bound left out', () => {
+    expect(logViewLines('one\ntwo\nthree\n', ['four'], 2).hidden).toBe(2);
+  });
+
+  it('drops the fragment a mid-line read left, because the stream resends it whole', () => {
+    // The slice ended inside 'thr'; following from completeBytes means the
+    // stream delivers 'three' complete, so keeping the fragment would render
+    // the one line twice, split in two.
+    expect(logViewLines('one\ntwo\nthr', [], 100, { dropPartialTail: true }).lines).toEqual(['one', 'two']);
+  });
+
+  it('keeps a newline-less last line when it is not following', () => {
+    // A finished run whose final line never got a newline still wrote it.
+    expect(logViewLines('one\ntwo\nthr', [], 100).lines).toEqual(['one', 'two', 'thr']);
+  });
+});
+
+describe('the numbers beside a tail', () => {
+  it('counts back from the last line, so the newest line carries the total', () => {
+    expect(tailLineNumbers(120, 3)).toEqual([118, 119, 120]);
+  });
+
+  it('never numbers a line below one, however short the file', () => {
+    expect(tailLineNumbers(2, 5)).toEqual([1, 2, 3, 4, 5]);
   });
 });
 

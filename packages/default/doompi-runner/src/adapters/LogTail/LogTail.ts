@@ -45,7 +45,7 @@ export class LogTail implements ILogTail {
       pending += buffer.subarray(0, bytesRead).toString('utf8');
       const lines = pending.split('\n');
       pending = lines.pop() ?? '';
-      if (lines.length > 0) options.onLines(lines);
+      if (lines.length > 0) options.onLines(lines, offset - Buffer.byteLength(pending, 'utf8'));
     };
 
     const tick = (): void => {

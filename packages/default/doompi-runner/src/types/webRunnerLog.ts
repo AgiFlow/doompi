@@ -78,12 +78,30 @@ export interface RunnerLogResponse extends LogSlice {
 export interface RunnerLogStreamEvent {
   /** Appended lines, in order; empty when the event only reports the runner ending. */
   lines: string[];
+  /**
+   * Byte offset just past the last line in this event.
+   *
+   * A follower that loses the stream resumes here. Without it the page could
+   * only fall back to the offset its last slice reported, which every line
+   * delivered since has already moved past, so a reconnect would replay them.
+   */
+  offset?: number;
   /** Set once the runner exits, so the page can stop following without polling the run list. */
   ended?: boolean;
 }
 
 /** The named SSE event carrying a RunnerLogStreamEvent payload. */
 export const RUNNER_LOG_STREAM_EVENT = 'append';
+
+/**
+ * The named SSE event that carries nothing.
+ *
+ * A runner can be alive and silent for minutes, which on the wire is
+ * indistinguishable from a connection that died. This is sent on a timer so
+ * the socket keeps proving itself. Readers that only listen for `append`
+ * ignore it, which is what makes it safe to add.
+ */
+export const RUNNER_LOG_PING_EVENT = 'ping';
 
 /** Query parameter names, shared so the page and the route cannot drift apart. */
 export const RUNNER_LOG_PARAMS = {

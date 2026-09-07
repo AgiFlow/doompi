@@ -1,6 +1,7 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { BashToolMessage } from './components/BashToolMessage.tsx';
 import { RunnersActivitySection } from './components/RunnersActivitySection.tsx';
+import { runnersTab } from './components/RunnersPanel.tsx';
 import { runnerActivitySource, runnerRunsChannel } from './stores/runnersStore.ts';
 
 /**
@@ -17,6 +18,9 @@ export const webPlugin = defineWebPlugin({
       keys: 'r l',
       statusKey: 'doom-runner-runners',
       activeSource: runnerActivitySource,
+      // The group's own name opens the fleet. The rail gives a runner one
+      // line, which is enough to notice it and not enough to work with it.
+      transientTab: runnersTab,
       order: 20,
     },
   ],

@@ -133,6 +133,51 @@ describe('LogReader', () => {
     expect(slice.totalLines).toBe(10);
   });
 
+  it('reports the whole file as complete when it ends on a newline', () => {
+    const file = write('whole.log', 'one\ntwo\n');
+    expect(reader.read(file).completeBytes).toBe(8);
+  });
+
+  it('stops completeBytes at the last newline when the runner is caught mid-line', () => {
+    // A follower resumes here, so the fragment arrives as part of its whole
+    // line rather than split across the slice and the first appended chunk.
+    const file = write('partial.log', 'one\ntwo\nthr');
+    const slice = reader.read(file);
+
+    expect(slice.fileSize).toBe(11);
+    expect(slice.completeBytes).toBe(8);
+    // The fragment is still returned: a finished run whose last line never got
+    // a newline would otherwise lose it entirely.
+    expect(slice.text).toBe('one\ntwo\nthr');
+  });
+
+  it('counts completeBytes in bytes, not characters', () => {
+    // A multi-byte line would put the resume offset in the wrong place if the
+    // scan counted decoded characters.
+    const file = write('utf8.log', 'héllo\n');
+    expect(reader.read(file).completeBytes).toBe(7);
+  });
+
+  it('reports no line numbers for a plain tail, whose numbers run unbroken', () => {
+    const file = write('plain.log', 'one\ntwo\n');
+    expect(reader.read(file).lineNumbers).toBeUndefined();
+  });
+
+  it('numbers grep results, so a reader can tell where the gaps are', () => {
+    const file = write('grep.log', 'alpha\nbeta\ngamma\nalpha\n');
+    const slice = reader.read(file, { grep: 'alpha' });
+
+    expect(slice.text).toBe('alpha\nalpha');
+    expect(slice.lineNumbers).toEqual([1, 4]);
+  });
+
+  it('numbers context lines too, so a gap is a real gap and not a dropped context line', () => {
+    const file = write('context.log', 'one\ntwo\nmatch\nfour\nfive\nsix\nmatch\n');
+    const slice = reader.read(file, { grep: 'match', contextLines: 1 });
+
+    expect(slice.lineNumbers).toEqual([2, 3, 4, 6, 7]);
+  });
+
   it('scans a large append-only log without loading the complete file into memory', () => {
     const contents = `${Array.from({ length: 20_000 }, (_, index) => `line-${index}`).join('\n')}\n`;
     const file = write('large.log', contents);
