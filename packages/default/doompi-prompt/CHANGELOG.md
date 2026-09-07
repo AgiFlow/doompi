@@ -1,3 +1,34 @@
+## 0.0.1-alpha.14 (2026-09-07)
+
+### 🚀 Features
+
+- ⚠️  **doompi-prompt:** move the prompt library into the composer menu ([1d2bcc55](https://github.com/AgiFlow/doompi/commit/1d2bcc55))
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+
+### 🩹 Fixes
+
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+
+### ⚠️  Breaking Changes
+
+- **doompi-prompt:** move the prompt library into the composer menu  ([1d2bcc55](https://github.com/AgiFlow/doompi/commit/1d2bcc55))
+  the prompts activity group and its activity-prompts-open
+  control are gone; the library opens from the composer '+' menu instead.
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.23
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.25
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.60
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.13 (2026-09-07)
 
 ### 🚀 Features

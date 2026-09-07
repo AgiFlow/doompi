@@ -1,3 +1,33 @@
+## 0.0.1-alpha.64 (2026-09-07)
+
+### 🚀 Features
+
+- **doompi-runner:** add direct shell launch ([523c8735](https://github.com/AgiFlow/doompi/commit/523c8735))
+- **doompi-runner:** attach a real terminal to an interactive runner ([062ae7ed](https://github.com/AgiFlow/doompi/commit/062ae7ed))
+- **doompi-runner:** fix log streaming and add a runners tab with launch ([4c5df0a4](https://github.com/AgiFlow/doompi/commit/4c5df0a4))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.60
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.23
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.25
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.63 (2026-09-07)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,14 @@
+## 0.0.1-alpha.63 (2026-09-07)
+
+### 🚀 Features
+
+- **doompi-web:** complete OAuth sign-in from a remote browser ([703e1532](https://github.com/AgiFlow/doompi/commit/703e1532))
+- **doompi-web:** react to server-initiated model and effort changes ([5f2a9433](https://github.com/AgiFlow/doompi/commit/5f2a9433))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.62 (2026-09-07)
 
 This was a version bump only for @agimon-ai/doompi-extension-contracts to align it with other projects, there were no code changes.
