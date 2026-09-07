@@ -22,7 +22,7 @@ import { worktreesTab } from './WorktreesPanel.tsx';
 export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const session = useStore(worktreeActivity.store, (state) => worktreeActivity.select(state, sessionId));
 
-  if (session.worktrees.length === 0) {
+  if (session.worktrees.length === 0 && session.pending === undefined) {
     return (
       <div className="flex items-center gap-2 px-1">
         <p data-testid="activity-summary-git" className="px-1 text-[10px] text-doom-faint">
@@ -45,6 +45,7 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
 
   return (
     <div data-testid="activity-git-worktrees" className="flex flex-col gap-0.5">
+      {session.pending === undefined ? null : <p className="px-1 text-[10px] text-doom-dim">{session.pending}</p>}
       {session.worktrees.map((worktree: WorktreeView) => (
         <button
           key={worktree.id}
@@ -55,6 +56,7 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
         >
           <span className="truncate">{worktree.branch}</span>
           {worktree.orphaned ? <span className="text-[10px] text-doom-faint">orphaned</span> : null}
+          {worktree.unowned ? <span className="text-[10px] text-doom-faint">unowned</span> : null}
         </button>
       ))}
     </div>

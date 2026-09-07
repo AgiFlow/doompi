@@ -24,8 +24,32 @@ export interface WorktreeView {
   sessionId: string | null;
   /** True once the directory the record names has gone missing. */
   orphaned: boolean;
+  /**
+   * True when the session that asked for this worktree is gone.
+   *
+   * An owned worktree is only ever shown to its own session. This flag marks
+   * the exception: once the parent is dead nobody would see the worktree at
+   * all, so every session in the repository does, and may close it.
+   */
+  unowned: boolean;
 }
+
+/**
+ * What the panel asks the hub channel to do.
+ *
+ * The dock acts through its own channel rather than through the agent: a
+ * worktree made from the panel and one made by the tool take the same
+ * `worktreeOperations` path, but the panel no longer has to spend a turn of
+ * the conversation to get there.
+ */
+export type GitWorktreesCommand =
+  | { action: 'create'; branch: string; baseRef?: string }
+  | { action: 'close'; id: string; force?: boolean };
 
 export interface GitWorktreesPayload {
   worktrees: WorktreeView[];
+  /** Label of the operation in flight, absent when the session is idle. */
+  pending?: string;
+  /** The last failure, cleared when the next command starts. */
+  error?: string;
 }

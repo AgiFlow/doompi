@@ -97,6 +97,27 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
     return record;
   };
 
+  /**
+   * Refuses to destroy or merge a worktree another live session is using.
+   *
+   * `parentSessionId` records who asked for the worktree. Two sessions in one
+   * checkout share this registry, so without the check either could close the
+   * other's work in progress by id.
+   *
+   * Once that session is gone there is no owner left to protect, and refusing
+   * would strand the worktree: nothing else could ever close it.
+   */
+  const requireOwner = (context: WorktreeContext, record: WorktreeRecord, action: string): void => {
+    if (record.parentSessionId === context.sessionId) return;
+    if (!isSessionLive(registryDir, record.parentSessionId)) return;
+    throw new DoomGitExpectedError(
+      'worktree_not_owned',
+      `Worktree ${record.id} belongs to another session.`,
+      false,
+      `Ask the session that created it to ${action} it, or close that session first.`,
+    );
+  };
+
   return {
     async spawn(context, request) {
       const { root, store, records } = await resolve(context);
@@ -170,6 +191,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
     async close(context, id, force) {
       const { root, store, records } = await resolve(context);
       const record = require(records, id);
+      requireOwner(context, record, 'close');
       const dirtyFiles = fs.existsSync(record.path) ? await git.dirtyFiles(record.path) : [];
       const refusal = refuseClose({ record, dirtyFiles, force });
       if (refusal !== undefined) {
@@ -201,6 +223,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
     async merge(context, id, message) {
       const { root, records } = await resolve(context);
       const record = require(records, id);
+      requireOwner(context, record, 'merge');
       // The merge lands in the parent, so the parent is what must be clean. A
       // dirty parent would mix the person's in-flight edits into a merge commit
       // they did not intend to make.

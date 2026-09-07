@@ -13,6 +13,7 @@ export type DoomGitErrorCode =
   | 'not_a_repository'
   | 'worktree_exists'
   | 'worktree_not_found'
+  | 'worktree_not_owned'
   | 'worktree_dirty'
   | 'hub_unavailable'
   | 'install_failed'
