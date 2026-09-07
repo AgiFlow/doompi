@@ -1,6 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import type {
   AutocompactModeConfig,
+  AutocompactOverrideConfig,
   ComputerUseConfig,
   AutocompactThresholdConfig,
   DoomConfig,
@@ -29,12 +30,19 @@ const SELECTION_KEYS = ['majorMode', 'domains', 'profile'] as const;
 const MODE_KEYS = ['planning', 'autocompact'] as const;
 const PLANNING_KEYS = ['main', 'subagents', 'plansDirectory'] as const;
 const AGENT_KEYS = ['model', 'thinking'] as const;
-const AUTOCOMPACT_KEYS = ['enabled', 'model', 'thinking', 'thresholds'] as const;
+const AUTOCOMPACT_KEYS = ['enabled', 'model', 'thinking', 'thresholds', 'overrides'] as const;
 const AUTOCOMPACT_THRESHOLD_KEYS = ['pass1', 'pass2', 'pass3'] as const;
+const AUTOCOMPACT_OVERRIDE_KEYS = ['model', 'tokens'] as const;
 const COMPUTER_USE_KEYS = ['enabled'] as const;
 /** A pass that fires below this is noise; one above it never fires before Pi compacts natively. */
 const MIN_AUTOCOMPACT_RATIO = 0.05;
 const MAX_AUTOCOMPACT_RATIO = 0.99;
+/**
+ * A checkpoint at zero tokens fires before the session has said anything. There is
+ * deliberately no ceiling: the package takes the lower of the ratio and the token
+ * value, so one larger than the window is inert rather than dangerous.
+ */
+const MIN_AUTOCOMPACT_TOKENS = 1;
 const EDITOR_KEYS = ['command'] as const;
 const VOICE_KEYS = ['engine', 'language', 'recorder', 'adapters', 'autoCapture'] as const;
 const RECORDER_KEYS = ['binary', 'device'] as const;
@@ -400,6 +408,48 @@ function parseAutocompactThresholds(
     ...(pass3 === undefined ? {} : { pass3 }),
   };
 }
+/** Absolute token counts, unlike the ratios, are only ever written by hand, so no string form is accepted. */
+function parseAutocompactTokenCount(value: unknown, location: string, filePath: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < MIN_AUTOCOMPACT_TOKENS)
+    throw new Error(
+      `Doom config at ${filePath} requires ${location} to be an integer of at least ${MIN_AUTOCOMPACT_TOKENS}`,
+    );
+  return value;
+}
+function parseAutocompactOverrideEntry(value: unknown, location: string, filePath: string): AutocompactOverrideConfig {
+  if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires ${location} to be an object`);
+  assertKeys(value, AUTOCOMPACT_OVERRIDE_KEYS, location, filePath);
+  const model = optionalString(value.model, `${location}.model`, filePath);
+  if (!model) throw new Error(`Doom config at ${filePath} requires ${location}.model`);
+  if (!isObject(value.tokens))
+    throw new Error(`Doom config at ${filePath} requires ${location}.tokens to be an object`);
+  assertKeys(value.tokens, AUTOCOMPACT_THRESHOLD_KEYS, `${location}.tokens`, filePath);
+  const pass1 = parseAutocompactTokenCount(value.tokens.pass1, `${location}.tokens.pass1`, filePath);
+  const pass2 = parseAutocompactTokenCount(value.tokens.pass2, `${location}.tokens.pass2`, filePath);
+  const pass3 = parseAutocompactTokenCount(value.tokens.pass3, `${location}.tokens.pass3`, filePath);
+  // An entry that pins nothing is a typo rather than a way to say "leave this model alone":
+  // omitting the entry already does that, and a silent no-op reads like the override worked.
+  if (pass1 === undefined && pass2 === undefined && pass3 === undefined)
+    throw new Error(`Doom config at ${filePath} requires one of ${location}.tokens.pass1, pass2, or pass3`);
+  return {
+    model,
+    tokens: {
+      ...(pass1 === undefined ? {} : { pass1 }),
+      ...(pass2 === undefined ? {} : { pass2 }),
+      ...(pass3 === undefined ? {} : { pass3 }),
+    },
+  };
+}
+function parseAutocompactOverrides(
+  value: unknown,
+  location: string,
+  filePath: string,
+): AutocompactOverrideConfig[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(`Doom config at ${filePath} requires ${location} to be a list`);
+  return value.map((entry, index) => parseAutocompactOverrideEntry(entry, `${location}[${index}]`, filePath));
+}
 export function parseAutocompactModeConfig(
   value: unknown,
   filePath: string,
@@ -411,11 +461,13 @@ export function parseAutocompactModeConfig(
   const model = optionalString(value.model, `${location}.model`, filePath);
   const thinking = parseThinking(value.thinking, location, filePath);
   const thresholds = parseAutocompactThresholds(value.thresholds, `${location}.thresholds`, filePath);
+  const overrides = parseAutocompactOverrides(value.overrides, `${location}.overrides`, filePath);
   return {
     ...(enabled === undefined ? {} : { enabled }),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(thresholds ? { thresholds } : {}),
+    ...(overrides ? { overrides } : {}),
   };
 }
 export function parsePlanningModeConfig(
@@ -593,7 +645,10 @@ export function mergeDoomConfigs(globalConfig: DoomConfig, repositoryConfig: Doo
   const globalAutocompact = globalConfig.modes?.autocompact;
   const repositoryAutocompact = repositoryConfig.modes?.autocompact;
   // Per key, so a repository can pin the model and inherit the ladder, or the
-  // other way round.
+  // other way round. `overrides` is deliberately not merged that way: the spread
+  // below lets a repository list replace the global one whole, because the rules
+  // are first-match-wins and interleaving two files a reader cannot see together
+  // would decide precedence somewhere neither of them says.
   const autocompact =
     globalAutocompact || repositoryAutocompact
       ? {

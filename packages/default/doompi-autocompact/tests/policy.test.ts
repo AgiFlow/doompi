@@ -4,6 +4,7 @@ import {
   baselineUsageIsSettled,
   checkpointSummaryFromEntry,
   compactionRatios,
+  effectiveThresholds,
   contextDetailsFromUnknown,
   createInitialState,
   fileDetailsFromUnknown,
@@ -103,6 +104,55 @@ describe('autocompact policy', () => {
     expect(thresholdTokens(1, 1_000_000, 0, { 1: 0.1 })).toBe(100_000);
   });
 
+  it('brings a pass forward when a model pins it to fewer tokens than the ratio', () => {
+    // Half of a one-million-token window is 500_000; the whole point of the override.
+    expect(effectiveThresholds(1_000_000, 0, {}, { 1: 75_000, 2: 150_000, 3: 200_000 })).toEqual({
+      1: 75_000,
+      2: 150_000,
+      3: 200_000,
+    });
+  });
+
+  it('ignores a token checkpoint that would fire later than the ratio already does', () => {
+    const ratioOnly = effectiveThresholds(200_000);
+    expect(ratioOnly).toEqual({ 1: 100_000, 2: 150_000, 3: 183_616 });
+    // Lower of the two wins, so a value above the ratio is inert rather than a delay.
+    expect(effectiveThresholds(200_000, 0, {}, { 1: 500_000 })).toEqual(ratioOnly);
+  });
+
+  it('keeps a token checkpoint below the point where Pi compacts natively', () => {
+    // The ratio value is already clamped to 183_616, and the override may only lower it.
+    expect(effectiveThresholds(200_000, 0, {}, { 3: 199_999 })[3]).toBe(183_616);
+  });
+
+  it('drops a token checkpoint the cycle baseline has already passed', () => {
+    // A compaction landing at 90_000 would otherwise satisfy a 75_000 pass immediately and
+    // re-fire it every turn, so the pass falls back to its ratio for the rest of the cycle.
+    // Pass 2's 150_000 survives the baseline but is then raised to pass 1's rung, because a
+    // pass that fires before the one ahead of it locks that one out.
+    expect(effectiveThresholds(1_000_000, 90_000, {}, { 1: 75_000, 2: 150_000 })).toEqual({
+      1: 290_000,
+      2: 290_000,
+      3: 890_000,
+    });
+    // Equal to the baseline is also spent, not a checkpoint that fires at once.
+    expect(effectiveThresholds(1_000_000, 75_000, {}, { 1: 75_000 })[1]).toBe(275_000);
+  });
+
+  it('keeps the token ladder climbing when a file lists a later pass lower', () => {
+    // evaluateUsage skips any pass below the one already reached, so a pass 2 that fired
+    // first would lock pass 1 out of the cycle rather than merely reorder the ladder.
+    expect(effectiveThresholds(1_000_000, 0, {}, { 1: 200_000, 2: 75_000 })).toEqual({
+      1: 200_000,
+      2: 200_000,
+      3: 800_000,
+    });
+  });
+
+  it('leaves the ratio ladder untouched when no model override applies', () => {
+    expect(effectiveThresholds(128_000)).toEqual({ 1: 64_000, 2: 96_000, 3: 111_616 });
+    expect(effectiveThresholds(200_000, 30_000)).toEqual({ 1: 115_000, 2: 157_500, 3: 183_616 });
+  });
   it('extracts the agent-owned pass 2 decision from the checkpoint', () => {
     expect(parseCheckpointDecision(`<shouldCompact>true</shouldCompact>\n${STRUCTURED_CHECKPOINT}`)).toEqual({
       shouldCompact: true,

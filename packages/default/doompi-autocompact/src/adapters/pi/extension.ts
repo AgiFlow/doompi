@@ -1,4 +1,9 @@
-import { getHarnessState, loadDoomConfig, type PlanningAgentConfig } from '@agimon-ai/doompi-config';
+import {
+  getHarnessState,
+  loadDoomConfig,
+  type AutocompactOverrideConfig,
+  type PlanningAgentConfig,
+} from '@agimon-ai/doompi-config';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
@@ -33,9 +38,10 @@ import {
   parseState,
   projectContextMessages,
   retainedMessagesAfterSnapshot,
-  thresholdTokens,
+  effectiveThresholds,
   withCanonicalFileSections,
 } from '../../adapters/compaction/policy';
+import { resolveModelTokenOverrides } from '../../adapters/compaction/modelOverrides.ts';
 import { parseModelReference, type SummarizationModel } from '../../services/summarizationModel.ts';
 import {
   CHECKPOINT_MESSAGE_TYPE,
@@ -292,9 +298,11 @@ interface AutocompactRuntimeConfig {
   /** The agent that writes the summaries, from autocompact's own keys or planning's. */
   agent?: PlanningAgentConfig;
   ratios: AutocompactRatioOverrides;
+  /** Per-model absolute token checkpoints, tried in file order. */
+  overrides: AutocompactOverrideConfig[];
 }
 
-const DEFAULT_RUNTIME_CONFIG: AutocompactRuntimeConfig = { enabled: true, ratios: {} };
+const DEFAULT_RUNTIME_CONFIG: AutocompactRuntimeConfig = { enabled: true, ratios: {}, overrides: [] };
 
 /**
  * What the Doom config says about this package.
@@ -333,6 +341,7 @@ export function autocompactRuntimeConfig(
       ...(thresholds?.pass2 === undefined ? {} : { 2: thresholds.pass2 }),
       ...(thresholds?.pass3 === undefined ? {} : { 3: thresholds.pass3 }),
     },
+    overrides: configured?.overrides ?? [],
   };
 }
 
@@ -781,9 +790,18 @@ export function installAutocompactRuntime(
     const leafId = workingLeafId(ctx);
     if (state.lastAttemptLeafId === leafId) return false;
 
+    // The baseline branch above always returns, so by here it is settled for this cycle and the
+    // token overrides can be compared against it without re-checking `baselinePending`.
+    const tokenOverrides = resolveModelTokenOverrides(ctx.model, configured.overrides);
+    const thresholds = effectiveThresholds(
+      usage.contextWindow,
+      state.baselineTokens,
+      configured.ratios,
+      tokenOverrides,
+    );
     for (const pass of [1, 2, 3] as const) {
       if (pass < state.pass || state.checkpointQueue.includes(pass) || state.exhaustedPasses.includes(pass)) continue;
-      if (usage.tokens >= thresholdTokens(pass, usage.contextWindow, state.baselineTokens, configured.ratios)) {
+      if (usage.tokens >= thresholds[pass]) {
         state.checkpointQueue.push(pass);
       }
     }

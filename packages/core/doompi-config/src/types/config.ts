@@ -29,11 +29,35 @@ export interface AutocompactThresholdConfig {
   pass2?: number;
   pass3?: number;
 }
+/**
+ * Absolute token checkpoints one matching model pins, replacing the ratio for
+ * that pass when it would fire earlier.
+ *
+ * A pass left unset keeps its ratio value, so an entry may pin one rung of the
+ * ladder without restating the rest.
+ */
+export interface AutocompactTokenConfig {
+  pass1?: number;
+  pass2?: number;
+  pass3?: number;
+}
+/**
+ * One per-model override rule.
+ *
+ * `model` is a glob. A pattern containing `/` is matched against `provider/id`,
+ * anything else against the bare model id, because the wildcard does not cross
+ * the separator. Entries are tried in file order and the first match wins.
+ */
+export interface AutocompactOverrideConfig {
+  model: string;
+  tokens: AutocompactTokenConfig;
+}
 export interface AutocompactModeConfig {
   enabled?: boolean;
   model?: string;
   thinking?: PlanningThinkingLevel;
   thresholds?: AutocompactThresholdConfig;
+  overrides?: AutocompactOverrideConfig[];
 }
 export interface ComputerUseConfig {
   enabled?: boolean;

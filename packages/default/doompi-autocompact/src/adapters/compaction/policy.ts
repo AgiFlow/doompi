@@ -15,6 +15,7 @@ import type {
   AutocompactContextDetails,
   AutocompactFileDetails,
   AutocompactRatioOverrides,
+  AutocompactTokenOverrides,
   AutocompactMessage,
   AutocompactPass,
   AutocompactState,
@@ -133,6 +134,38 @@ export function thresholdTokens(
   return nativeTrigger > baseline ? Math.min(staged, nativeTrigger) : staged;
 }
 
+/**
+ * Where every pass fires, with a matching model's absolute token checkpoints folded in.
+ *
+ * A configured token count replaces the ratio only when it fires earlier, so an
+ * override can bring a checkpoint forward on a very large window without ever
+ * pushing one past the point Pi compacts natively.
+ *
+ * Two rules keep the ladder usable. A token count at or below the baseline is
+ * ignored, because a compaction that lands above it would otherwise satisfy that
+ * pass the moment the next cycle opens and re-fire it every turn. And a pass never
+ * sits below the one before it, for the same reason {@link compactionRatios}
+ * climbs: `evaluateUsage` skips any pass below the one already reached, so a later
+ * pass that fires first does not merely reorder the ladder, it locks the earlier
+ * passes out of the cycle and forces compaction with no summary ever written.
+ */
+export function effectiveThresholds(
+  contextWindow: number,
+  baselineTokens = 0,
+  configured: AutocompactRatioOverrides = {},
+  tokenOverrides: AutocompactTokenOverrides = {},
+): Record<AutocompactPass, number> {
+  let previous = 0;
+  const thresholds = {} as Record<AutocompactPass, number>;
+  for (const pass of [1, 2, 3] as const) {
+    const ratioTokens = thresholdTokens(pass, contextWindow, baselineTokens, configured);
+    const absolute = tokenOverrides[pass];
+    const staged = absolute !== undefined && absolute > baselineTokens ? Math.min(ratioTokens, absolute) : ratioTokens;
+    thresholds[pass] = Math.max(staged, previous);
+    previous = thresholds[pass];
+  }
+  return thresholds;
+}
 export function latestCheckpointArtifactEntry(branchEntries: SessionEntry[]): SessionEntry | undefined {
   return branchEntries.findLast(
     (entry) =>

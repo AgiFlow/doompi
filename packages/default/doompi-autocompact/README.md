@@ -36,9 +36,42 @@ subject to token caps and Pi's native-compaction clamp:
 2. combine it with later messages and allow the model to decide whether compaction is ready;
 3. combine again and force compaction on the final pass.
 
-Summarization runs asynchronously in the background, on the session's own provider, so a model
-registered by a Pi provider extension summarizes through that extension. Checkpoints are
-persisted as hidden session entries and used for later steering.
+## Per-model token checkpoints
+
+Ratios scale with the window, which is usually what you want. On a very large window they can
+also mean the first checkpoint waits far longer than you would like: half of a one-million-token
+window is 500,000 tokens. `modes.autocompact.overrides` pins individual passes to an absolute
+token count for the models you name, and leaves every other model on the ratio ladder.
+
+```yaml
+modes:
+  autocompact:
+    overrides:
+      - model: 'claude-opus-4-[6-9]'
+        tokens:
+          pass1: 75000
+          pass2: 150000
+          pass3: 200000
+```
+
+- Entries are tried in file order and the first match wins. A model matching nothing behaves
+  exactly as it does without this key.
+- `model` is a glob supporting `*` and character classes such as `[6-9]`. A pattern containing
+  `/` is matched against `provider/id`, anything else against the bare model id, because the
+  wildcard does not cross the separator. Matching ignores case.
+- The lower of the ratio and the token count wins, so an override can only bring a checkpoint
+  forward, never push one past the point Pi compacts natively.
+- Counts are compared against total context usage, not against growth since the last compaction.
+- A count at or below the current cycle's baseline is ignored and the pass falls back to its
+  ratio. Without that, a compaction landing above the count would satisfy the pass as soon as
+  the next cycle opened and re-fire it every turn.
+- A pass never fires before the one before it. A list that puts a later pass lower is raised to
+  match, the same way a ratio below the previous pass is.
+- A repository config replaces the global list whole rather than merging entry by entry.
+- These keys are not on the cockpit settings page; edit `.doom/config.yaml` directly.
+  Summarization runs asynchronously in the background, on the session's own provider, so a model
+  registered by a Pi provider extension summarizes through that extension. Checkpoints are
+  persisted as hidden session entries and used for later steering.
 
 DoomPi uses the configured planning subagent model and thinking level when available, then falls
 back to the active Pi model. Standalone Pi without DoomPi planning configuration uses the active

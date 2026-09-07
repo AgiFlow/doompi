@@ -7,6 +7,9 @@ export type AutocompactPhase = 'waiting' | 'checkpoint_pending' | 'checkpoint_re
 /** Configured pass ratios, keyed by pass; an absent pass keeps its default. */
 export type AutocompactRatioOverrides = Partial<Record<AutocompactPass, number>>;
 
+/** Absolute token checkpoints a matching model pins, keyed by pass; an absent pass keeps its ratio. */
+export type AutocompactTokenOverrides = Partial<Record<AutocompactPass, number>>;
+
 export interface AutocompactFileDetails {
   readFiles: string[];
   modifiedFiles: string[];
