@@ -92,43 +92,65 @@ jobs:
           test -n "$NODE_AUTH_TOKEN"
           pnpm nx release publish --projects "${PUBLISH_PROJECTS}" --tag alpha
 
-      - name: Wait for every release version to be published under alpha
+      - name: Reconcile every release version with the alpha tag
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          readonly VERIFY_ATTEMPTS=30
-          readonly VERIFY_DELAY_SECONDS=10
+          test -n "$NODE_AUTH_TOKEN"
+          readonly RECONCILE_ATTEMPTS=5
+          readonly RECONCILE_DELAY_SECONDS=10
           readonly PENDING_FILE="${RUNNER_TEMP}/doompi-release-pending.tsv"
           readonly ROUND_FILE="${RUNNER_TEMP}/doompi-release-pending-round.tsv"
 
           node scripts/list-packages.mjs > "${PENDING_FILE}"
 
-          for ((attempt = 1; attempt <= VERIFY_ATTEMPTS; attempt += 1)); do
+          # nx release publish reports success for a project it silently skipped, so every release
+          # version is verified here. The first and last rounds only observe, to let the registry
+          # catch up; the rounds between them publish or retag whatever is still unresolved.
+          for ((attempt = 1; attempt <= RECONCILE_ATTEMPTS; attempt += 1)); do
             : > "${ROUND_FILE}"
             while IFS=$'\t' read -r name version; do
-              alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
-              if [[ "$alpha" != "$version" ]]; then
+              if ! npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
                 printf '%s\t%s\n' "$name" "$version" >> "${ROUND_FILE}"
-                echo "Waiting for $name@$version on alpha, observed ${alpha:-unavailable} (attempt $attempt/$VERIFY_ATTEMPTS)"
+                echo "$name@$version is absent from the registry (attempt $attempt/$RECONCILE_ATTEMPTS)"
+                if ((attempt > 1 && attempt < RECONCILE_ATTEMPTS)); then
+                  echo "Publishing $name@$version on its own."
+                  pnpm nx release publish --projects "$name" --tag alpha
+                fi
+                continue
+              fi
+
+              alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
+              if [[ "$alpha" == "$version" ]]; then
+                continue
+              fi
+
+              printf '%s\t%s\n' "$name" "$version" >> "${ROUND_FILE}"
+              echo "$name@$version is on the registry but alpha points at ${alpha:-unavailable} (attempt $attempt/$RECONCILE_ATTEMPTS)"
+              if ((attempt > 1 && attempt < RECONCILE_ATTEMPTS)); then
+                echo "Moving the alpha tag of $name to $version."
+                npm dist-tag add "$name@$version" alpha || true
               fi
             done < "${PENDING_FILE}"
             mv "${ROUND_FILE}" "${PENDING_FILE}"
 
             if [[ ! -s "${PENDING_FILE}" ]]; then
-              echo "Every package is published under the alpha tag."
+              echo "Every release version is on the registry under the alpha tag."
               exit 0
             fi
-            if (( attempt < VERIFY_ATTEMPTS )); then
-              sleep "$VERIFY_DELAY_SECONDS"
+            if ((attempt < RECONCILE_ATTEMPTS)); then
+              sleep "$RECONCILE_DELAY_SECONDS"
             fi
           done
 
-          echo "::error::$(wc -l < "${PENDING_FILE}" | tr -d ' ') package(s) missing from the alpha tag after $VERIFY_ATTEMPTS attempts"
+          echo "::error::$(wc -l < "${PENDING_FILE}" | tr -d ' ') package(s) missing from the alpha tag after $RECONCILE_ATTEMPTS attempts"
           while IFS=$'\t' read -r name version; do
             alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
             if npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
-              echo "  $name@$version is on the registry but alpha points at ${alpha:-unavailable}; retag it with: npm dist-tag add $name@$version alpha"
+              echo "  $name@$version is on the registry but alpha still points at ${alpha:-unavailable}"
             else
-              echo "  $name@$version is absent from the registry and alpha points at ${alpha:-unavailable}; re-run this workflow to publish it again"
+              echo "  $name@$version never reached the registry and alpha points at ${alpha:-unavailable}"
             fi
           done < "${PENDING_FILE}"
           exit 1

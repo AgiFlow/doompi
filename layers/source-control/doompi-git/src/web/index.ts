@@ -2,12 +2,15 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { gitToolRenderers } from './components/toolRenderers.ts';
 import { WorktreesActivitySection } from './components/WorktreesActivitySection.tsx';
 import { worktreesTab } from './components/WorktreesPanel.tsx';
-import { worktreeActivitySource, worktreesChannel } from './stores/worktreesActivityStore.ts';
+import { startWorktreeRuntime, worktreeActivitySource, worktreesChannel } from './stores/worktreesActivityStore.ts';
 
 /** The named export the generated plugin registry imports. */
 export const webPlugin = defineWebPlugin({
   id: 'git',
   channels: [worktreesChannel],
+  // The panel commands the hub over its own channel, which needs the page's
+  // hub socket rather than the per-session frame sender the slots carry.
+  start: startWorktreeRuntime,
   activityGroups: [
     {
       name: 'git',

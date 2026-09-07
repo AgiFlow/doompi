@@ -4,7 +4,6 @@ import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
 import { useActivityGroups } from '../../lib/composition.ts';
-import { abbreviateCwd } from '../../lib/sessionSummary.ts';
 import { webTabs } from '../../lib/pluginRegistry.ts';
 import { renameSession, useActiveSession } from '../../stores/sessionStore.ts';
 import { sessionsStore, useActiveSessionMeta, useNoSessions } from '../../stores/sessionsStore.ts';
@@ -148,14 +147,6 @@ export function TopBar({
             {title}
           </Button>
         )}
-        {meta ? (
-          <>
-            <span className="text-[12px] text-doom-faint max-sm:hidden">·</span>
-            <span data-testid="top-cwd" className="truncate text-[11px] text-doom-dim max-sm:hidden">
-              {abbreviateCwd(meta.summary.cwd)}
-            </span>
-          </>
-        ) : null}
         {activeId !== null ? (
           // Tabs never shrink; past the width the badges leave them, the strip
           // scrolls sideways (scrollbar hidden) instead of running under them.

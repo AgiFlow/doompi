@@ -7,8 +7,11 @@
  *   agents, runners and workflows rather than in a settings screen.
  * - Local form state is never reset by a data refresh. The hub republishes this
  *   list on a timer, and a half-typed branch name must survive that.
- * - Acts by asking the agent, so a worktree made here and one made by the tool
- *   take exactly the same path.
+ * - Acts through the plugin's own hub channel, so a worktree made here and one
+ *   made by the tool take exactly the same path.
+ * - Creating takes minutes, so the hub reports progress and failure on that
+ *   channel and this panel renders both. A button that looks idle for two
+ *   minutes reads as broken.
  *
  * AVOID:
  * - Deriving form state from props or store data. That is what wiped the
@@ -27,16 +30,17 @@ export function worktreesTab(): TransientTab {
   return { id: WORKTREES_TAB_ID, label: 'worktrees', panel: WorktreesPanel };
 }
 
-export function WorktreesPanel({ sessionId, sendSessionFrame }: WebPluginSlotProps) {
+export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
   const session = useStore(worktreeActivity.store, (state) => worktreeActivity.select(state, sessionId));
   const [branch, setBranch] = useState('');
   const [baseRef, setBaseRef] = useState('');
 
-  const canCreate = sessionId !== null && branch.trim() !== '';
+  const busy = session.pending !== undefined;
+  const canCreate = sessionId !== null && branch.trim() !== '' && !busy;
 
   const create = (): void => {
     if (sessionId === null || !canCreate) return;
-    requestWorktreeCreate(sendSessionFrame, sessionId, branch, baseRef);
+    requestWorktreeCreate(sessionId, branch, baseRef);
     setBranch('');
     setBaseRef('');
   };
@@ -71,6 +75,16 @@ export function WorktreesPanel({ sessionId, sendSessionFrame }: WebPluginSlotPro
           Creates the worktree outside the repository, installs its dependencies, then starts a session nested under
           this one. The install is what makes the wait; a warm store is under a minute.
         </p>
+        {session.pending === undefined ? null : (
+          <p data-testid="git-worktree-pending" className="text-[10px] text-doom-dim">
+            {session.pending}
+          </p>
+        )}
+        {session.error === undefined ? null : (
+          <p data-testid="git-worktree-error" className="text-[10px] text-doom-error">
+            {session.error}
+          </p>
+        )}
       </div>
 
       {session.worktrees.length === 0 ? (
@@ -89,12 +103,14 @@ export function WorktreesPanel({ sessionId, sendSessionFrame }: WebPluginSlotPro
               </div>
               <div className="flex items-center gap-2">
                 {worktree.orphaned ? <span className="text-[10px] text-doom-faint">orphaned</span> : null}
+                {worktree.unowned ? <span className="text-[10px] text-doom-faint">unowned</span> : null}
                 {sessionId === null ? null : (
                   <Button
                     variant="link"
                     size="xs"
+                    disabled={busy}
                     data-testid={`git-worktree-close-${worktree.id}`}
-                    onClick={() => requestWorktreeClose(sendSessionFrame, sessionId, worktree.id)}
+                    onClick={() => requestWorktreeClose(sessionId, worktree.id)}
                   >
                     close
                   </Button>

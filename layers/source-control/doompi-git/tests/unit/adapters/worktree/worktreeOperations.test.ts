@@ -347,3 +347,67 @@ describe('spawn when the install fails', () => {
     expect(git.removeWorktree).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * Two sessions in one checkout share this registry. Without an owner check
+ * either could close the other's work in progress by id, so the guard is what
+ * makes `parentSessionId` mean something rather than being decoration.
+ */
+describe('the owner guard', () => {
+  const OTHER = { cwd: '/repo', sessionId: 'parent-2' };
+
+  function withLiveParents(live: readonly string[], git: WorktreeGit) {
+    return createWorktreeOperations({
+      git,
+      createSession: vi.fn().mockResolvedValue('session-9'),
+      homeDir: home,
+      registryDir: path.join(home, 'run'),
+      isSessionLive: (_dir, sessionId) => live.includes(sessionId),
+    });
+  }
+
+  it('refuses to close a worktree another live session owns', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const git = fakeGit();
+    const guarded = withLiveParents(['parent-1'], git);
+
+    await expect(guarded.close(OTHER, record.id, false)).rejects.toMatchObject({ code: 'worktree_not_owned' });
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+  });
+
+  it('refuses to merge a worktree another live session owns', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const git = fakeGit();
+    const guarded = withLiveParents(['parent-1'], git);
+
+    await expect(guarded.merge(OTHER, record.id, 'merge it')).rejects.toMatchObject({ code: 'worktree_not_owned' });
+    expect(git.mergeBranch).not.toHaveBeenCalled();
+  });
+
+  it('lets the owning session close its own worktree', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const git = fakeGit();
+    const guarded = withLiveParents(['parent-1'], git);
+
+    await guarded.close(CONTEXT, record.id, false);
+    expect(git.removeWorktree).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The exception that keeps the fallback usable: an unowned worktree must
+   * stay closable, or it would sit in the registry forever with nobody
+   * entitled to remove it.
+   */
+  it('lets any session close a worktree whose parent is gone', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const git = fakeGit();
+    const guarded = withLiveParents([], git);
+
+    await guarded.close(OTHER, record.id, false);
+    expect(git.removeWorktree).toHaveBeenCalledOnce();
+  });
+});
