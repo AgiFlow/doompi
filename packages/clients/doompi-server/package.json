@@ -59,7 +59,7 @@
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/chord": "0.85.1",
     "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-protocol": "0.85.1",

@@ -88,7 +88,7 @@
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/log-sink-mcp": "0.29.19",
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "hono": "4.13.5"
   },
   "devDependencies": {

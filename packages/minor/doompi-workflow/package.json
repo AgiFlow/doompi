@@ -77,10 +77,10 @@
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/workflow-mcp": "0.23.19",
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "@modelcontextprotocol/sdk": "1.30.0",
     "hono": "4.13.5",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",

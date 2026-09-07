@@ -61,8 +61,8 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.1",
-    "typebox": "1.3.19"
+    "@deepseek-ai/cordis": "4.0.2",
+    "typebox": "1.3.25"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",
