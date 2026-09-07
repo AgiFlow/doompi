@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseRunnersCommand } from '../../src/services/runs/runnersCommand.ts';
-import { launchProblems, runnerLaunchLine } from '../../src/web/lib/launchLine.ts';
+import { launchProblems, RUNNER_SHELL_REQUEST, runnerLaunchLine } from '../../src/web/lib/launchLine.ts';
 
 /**
  * The cockpit writes the launch line and the session parses it, in different
@@ -57,6 +57,16 @@ describe('the launch line the cockpit sends', () => {
     });
   });
 
+  it('starts a login shell without asking for a command', () => {
+    const line = runnerLaunchLine(RUNNER_SHELL_REQUEST);
+
+    expect(parseRunnersCommand(line.replace('/runners ', ''))).toEqual({
+      kind: 'start',
+      command: 'exec "${SHELL:-/bin/bash}" -l',
+      name: 'shell',
+      interactive: true,
+    });
+  });
   it('refuses to send a runner with no command', () => {
     expect(launchProblems({ command: '   ' })).toHaveLength(1);
     expect(launchProblems({ command: 'pnpm test' })).toEqual([]);

@@ -1,16 +1,27 @@
-import { Button, Dot, EmptyState, PlusIcon } from '@agimon-ai/doompi-web-components';
+import {
+  Button,
+  Dot,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  EmptyState,
+  PlusIcon,
+} from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RunnerRunView } from '../../types/webRunners.ts';
 import { formatRunnerUptime } from '../lib/format.ts';
+import { RUNNER_SHELL_REQUEST } from '../lib/launchLine.ts';
 import { useRunnerTail } from '../hooks/runnerTail.ts';
-import { requestRunnerStop, runners } from '../stores/runnersStore.ts';
+import { requestRunnerStart, requestRunnerStop, runners } from '../stores/runnersStore.ts';
 import { LaunchRunnerDialog } from './LaunchRunnerDialog.tsx';
 import { runnerLogTab } from './RunnerLogPanel.tsx';
 import { runnerShellTab } from './RunnerShellPanel.tsx';
 
 const TICK_MS = 10_000;
+const SHELL_LAUNCH_TIMEOUT_MS = 30_000;
 const RUNNERS_TAB_ID = 'runner-runs';
 
 /** The temporary tab the dock's runners group opens from its own name. */
@@ -34,13 +45,37 @@ export function RunnersPanel({ sessionId, sendSessionFrame, openTransientTab }: 
   const running = session.runs.filter((run) => run.state === 'running');
   const [now, setNow] = useState(() => Date.now());
   const [launching, setLaunching] = useState(false);
+  const shellBaseline = useRef<ReadonlySet<string> | null>(null);
+  const shellLaunchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Somewhere to start from, borrowed from whatever is already up.
   const defaultCwd = running[0]?.cwd;
+
+  const startShell = (): void => {
+    if (sessionId === null) return;
+    shellBaseline.current = new Set(session.runs.map((run) => run.id));
+    clearTimeout(shellLaunchTimeout.current);
+    shellLaunchTimeout.current = setTimeout(() => {
+      shellBaseline.current = null;
+    }, SHELL_LAUNCH_TIMEOUT_MS);
+    requestRunnerStart(sendSessionFrame, sessionId, RUNNER_SHELL_REQUEST);
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const baseline = shellBaseline.current;
+    if (baseline === null) return;
+    const shell = session.runs.find((run) => run.state === 'running' && run.interactive && !baseline.has(run.id));
+    if (!shell) return;
+    shellBaseline.current = null;
+    clearTimeout(shellLaunchTimeout.current);
+    openTransientTab(runnerShellTab(shell));
+  }, [openTransientTab, session.runs]);
+
+  useEffect(() => () => clearTimeout(shellLaunchTimeout.current), []);
 
   return (
     <div data-testid="runners-panel" className="flex min-h-0 flex-1 flex-col overflow-auto">
@@ -51,17 +86,28 @@ export function RunnersPanel({ sessionId, sendSessionFrame, openTransientTab }: 
         </span>
         <span className="min-w-0 flex-1" />
         {sessionId === null ? null : (
-          <Button
-            variant="ghost"
-            size="icon"
-            data-testid="runners-panel-launch"
-            title="launch a runner"
-            aria-label="launch a runner"
-            onClick={() => setLaunching(true)}
-            className="text-doom-faint hover:text-doom-hi"
-          >
-            <PlusIcon className="h-3 w-3" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-testid="runners-panel-launch"
+                title="launch a runner"
+                aria-label="launch a runner"
+                className="text-doom-faint hover:text-doom-hi"
+              >
+                <PlusIcon className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" data-testid="runners-panel-launch-menu">
+              <DropdownMenuItem data-testid="runners-panel-start-shell" onSelect={startShell}>
+                start shell
+              </DropdownMenuItem>
+              <DropdownMenuItem data-testid="runners-panel-run-command" onSelect={() => setLaunching(true)}>
+                run command
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 

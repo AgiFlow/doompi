@@ -10,6 +10,8 @@
  */
 
 export const RUNNERS_START_LINE = '/runners start';
+/** A persistent login shell for the direct shell action in Runner Space. */
+export const RUNNER_SHELL_COMMAND = 'exec "${SHELL:-/bin/bash}" -l';
 /** Ends the options and begins the command; the command may hold `=` and flags of its own. */
 export const RUNNERS_COMMAND_SEPARATOR = '--';
 
@@ -19,6 +21,13 @@ export interface RunnerLaunchRequest {
   name?: string;
   interactive?: boolean;
 }
+
+/** The no-form launch used when a reader asks for a shell rather than a command. */
+export const RUNNER_SHELL_REQUEST: RunnerLaunchRequest = {
+  command: RUNNER_SHELL_COMMAND,
+  name: 'shell',
+  interactive: true,
+};
 
 /** Quotes a value that carries whitespace, which is how a value survives tokenizing. */
 function quote(value: string): string {
