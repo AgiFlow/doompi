@@ -19,10 +19,12 @@ export const vitestConfig = defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
         '**/coverage/**',
-        // CodeMirror mounts onto a real element and measures it, so neither
-        // the editor nor the boundary that lazily loads it can be reached by
-        // server rendering. The two modules under them that do hold logic, the
-        // grammar lookup and the palette, are plain data and stay counted.
+        // CodeMirror and xterm mount onto a real element and measure it, so
+        // neither editor can be reached by server rendering. The modules under
+        // them that do hold presentation logic stay counted.
+        'src/components/CodeEditor.tsx',
+        'src/components/CodeEditorView.tsx',
+        'src/components/TerminalView.tsx',
         // The clipboard and mermaid both need a browser: one asks the user's
         // permission, the other measures text in the document. Neither is
         // reachable from server rendering, which is all this suite can do, and
@@ -31,8 +33,6 @@ export const vitestConfig = defineConfig({
         'src/components/CopyButton.tsx',
         'src/components/MermaidDiagram.tsx',
         'src/lib/mermaidDiagram.ts',
-        'src/components/CodeEditor.tsx',
-        'src/components/CodeEditorView.tsx',
         // Radix mounts an overlay's content through a portal, which server
         // rendering never runs, and these modules hold no logic of their own:
         // they forward props and name token classes. Their behaviour is the

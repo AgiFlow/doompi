@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDoomVoiceToolsService } from '../src/schemas/voiceTools.ts';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import {
   createVoiceReloadHandoffStore,
   VOICE_RELOAD_HANDOFF_REGISTRY_KEY,

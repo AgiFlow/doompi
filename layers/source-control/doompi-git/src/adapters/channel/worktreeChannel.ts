@@ -38,6 +38,9 @@ const CLAIM_PREFIX = '.claim-';
 const MAX_MESSAGE_BYTES = 64 * 1024;
 /** A claim older than this belonged to a reader that is not coming back. */
 const CLAIM_STALE_MS = 60_000;
+const MESSAGE_SEQUENCE_WIDTH = 6;
+let lastMessageTimestamp = -1;
+let messageSequence = 0;
 
 /** Which side of the pair a message is for. */
 export type ChannelParty = 'parent' | 'child';
@@ -78,6 +81,17 @@ function parse(raw: string): ChannelMessage | undefined {
   return { version: CHANNEL_MESSAGE_VERSION, from: record.from, text: record.text, sentAt: record.sentAt };
 }
 
+function nextMessageName(): string {
+  const timestamp = Date.now();
+  if (timestamp === lastMessageTimestamp) {
+    messageSequence += 1;
+  } else {
+    lastMessageTimestamp = timestamp;
+    messageSequence = 0;
+  }
+  return `${String(timestamp).padStart(14, '0')}-${String(messageSequence).padStart(MESSAGE_SEQUENCE_WIDTH, '0')}-${randomBytes(6).toString('hex')}`;
+}
+
 /** The channel rooted at a directory, created on demand. */
 export function createWorktreeChannel(root: string): WorktreeChannel {
   return {
@@ -93,10 +107,9 @@ export function createWorktreeChannel(root: string): WorktreeChannel {
         text,
         sentAt: new Date().toISOString(),
       };
-      // The random suffix, not just the timestamp: two messages sent in the
-      // same millisecond would otherwise be one file, and the first would be
-      // silently overwritten by the second.
-      const name = `${String(Date.now()).padStart(14, '0')}-${randomBytes(6).toString('hex')}`;
+      // A process-local sequence preserves send order when several messages share
+      // a millisecond. The random suffix still prevents cross-process collisions.
+      const name = nextMessageName();
       const temporary = path.join(directory, `.tmp-${name}`);
       fs.writeFileSync(temporary, JSON.stringify(message), { mode: PRIVATE_FILE_MODE });
       fs.renameSync(temporary, path.join(directory, `${name}${MESSAGE_SUFFIX}`));

@@ -10,13 +10,15 @@ import {
   VOICE_MODE_TOOL_NAMES,
   VOICE_NARRATE_TOOL_NAME,
   VOICE_TOOL_MAX_BATCH_ITEMS,
+  VOICE_TOOL_MAX_INPUT_BYTES,
+  VOICE_TOOL_MAX_JSON_DEPTH,
   VOICE_TOOL_MAX_SCHEMA_BYTES,
   VoiceToolError,
   type DoomVoiceToolsService,
   type VoiceToolDefinition,
   type VoiceToolSessionHandle,
-} from '../src/schemas/voiceTools.ts';
-
+} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import './voiceReloadHandoff.cases.ts';
 const emptySchema = Type.Object({}, { additionalProperties: false });
 
 function definition(
@@ -206,6 +208,89 @@ describe('Doom voice-tools Cordis service', () => {
       }),
     ).toThrow(/Only JSON objects/u);
     service.dispose();
+  });
+
+  it('accepts every JSON value and rejects values that cannot cross the tool boundary', async () => {
+    const service = createDoomVoiceToolsService('voice-generation');
+    service.register({
+      descriptor: {
+        ...definition('json').descriptor,
+        inputSchema: Type.Any(),
+        resultSchema: Type.Any(),
+      },
+      execute: async (input) => input,
+    });
+    const session = service.bindSession('voice-session');
+    session.setActive(true);
+    for (const input of [null, 'text', true, false, 1, [1, 'two'], { nested: { ok: true } }]) {
+      const result = await session.executeBatch(
+        { catalogToken: session.describe().catalogToken, calls: [{ name: 'json', input }] },
+        undefined,
+      );
+      expect(result.results[0]?.status).toBe('completed');
+    }
+
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    let deeplyNested: unknown = 'leaf';
+    for (let depth = 0; depth <= VOICE_TOOL_MAX_JSON_DEPTH; depth += 1) deeplyNested = { value: deeplyNested };
+    for (const input of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      undefined,
+      1n,
+      Symbol('value'),
+      () => undefined,
+      new Date(),
+      cyclic,
+      deeplyNested,
+      'x'.repeat(VOICE_TOOL_MAX_INPUT_BYTES + 1),
+    ]) {
+      const result = await session.executeBatch(
+        { catalogToken: session.describe().catalogToken, calls: [{ name: 'json', input }] },
+        undefined,
+      );
+      expect(['VOICE_TOOL_INVALID_INPUT', 'VOICE_TOOL_INVALID_REQUEST']).toContain(result.results[0]?.error?.code);
+    }
+    service.dispose();
+  });
+
+  it('rejects malformed descriptor text and non-object schemas', () => {
+    const service = createDoomVoiceToolsService('voice-generation');
+    for (const descriptor of [
+      { ...definition('bad_label').descriptor, label: 'bad\nlabel' },
+      { ...definition('bad_description').descriptor, description: 'bad\u007fdescription' },
+      { ...definition('null_schema').descriptor, inputSchema: null },
+      { ...definition('array_schema').descriptor, resultSchema: [] },
+    ]) {
+      expect(() => service.register({ descriptor: descriptor as never, execute: async () => ({}) })).toThrow();
+    }
+    service.dispose();
+  });
+
+  it('returns a stable shutdown result and ignores operations after disposal', async () => {
+    const service = createDoomVoiceToolsService('voice-generation');
+    const registration = service.register(definition('disposed'));
+    const session = service.bindSession('voice-session');
+    const token = session.describe().catalogToken;
+    session.dispose();
+    session.dispose();
+    session.setActive(true);
+    expect(session.subscribe(vi.fn())).toBeTypeOf('function');
+    await expect(
+      session.executeBatch({ catalogToken: token, calls: [{ name: 'disposed', input: {} }] }, undefined),
+    ).resolves.toMatchObject({ status: 'rejected', errors: [{ code: 'VOICE_TOOL_SESSION_SHUTDOWN' }] });
+    registration.dispose();
+    registration.dispose();
+    service.dispose();
+    service.dispose();
+    expect(() => service.register(definition('late'))).toThrowError(
+      expect.objectContaining({ code: 'VOICE_TOOL_HOST_UNAVAILABLE' }),
+    );
+    expect(() => service.bindSession('late')).toThrowError(
+      expect.objectContaining({ code: 'VOICE_TOOL_HOST_UNAVAILABLE' }),
+    );
+    expect(service.subscribeSession('late', vi.fn())).toBeTypeOf('function');
   });
 
   it('filters, orders, and scopes catalog entries by session', () => {

@@ -1,6 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog.tsx';
+import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection.tsx';
 import { RunnersPanel } from '../../src/web/components/RunnersPanel.tsx';
 import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel.tsx';
 import { webPlugin } from '../../src/web/index.ts';
@@ -40,6 +41,41 @@ describe('the runners group tab', () => {
   });
 });
 
+describe('the runners activity section', () => {
+  it('offers a launch from an idle focused session, but not with nothing focused', () => {
+    const focused = slotPropsFixture({ sessionId: 's1' });
+    const idle = renderPlugin(RunnersActivitySection, focused.props);
+    expect(idle.includes('idle')).toBe(true);
+    expect(idle.includes('launch a runner')).toBe(true);
+
+    const unfocused = slotPropsFixture({ sessionId: null });
+    const empty = renderPlugin(RunnersActivitySection, unfocused.props);
+    expect(empty.error).toBeUndefined();
+    expect(empty.includes('launch a runner')).toBe(false);
+  });
+
+  it('lists only live runners with tty and pending-stop state', () => {
+    runnerRunsChannel.apply(
+      's1',
+      runnerRunsChannel.parse({
+        runs: [{ ...run('tty', 'running'), interactive: true }, run('plain', 'running'), run('finished', 'completed')],
+      })!,
+    );
+    runners.update('s1', (current) => ({ ...current, stopRequested: ['tty'] }));
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnersActivitySection, props);
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('tty')).toBe(true);
+    expect(rendered.includes('stopping…')).toBe(true);
+    expect(rendered.includes('pnpm tty')).toBe(true);
+    expect(rendered.includes('pnpm plain')).toBe(true);
+    expect(rendered.html).toContain('data-stopping="false"');
+    expect(rendered.includes('finished')).toBe(false);
+    expect(rendered.html).toContain('data-stopping="true"');
+  });
+});
 describe('the runners panel', () => {
   it('says nothing is running rather than showing an empty grid', () => {
     const { props } = slotPropsFixture({ sessionId: 's1' });

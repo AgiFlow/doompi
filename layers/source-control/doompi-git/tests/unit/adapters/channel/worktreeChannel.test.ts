@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorktreeChannel } from '../../../../src/adapters/channel/worktreeChannel.ts';
 
 let root: string;
@@ -11,6 +11,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -54,6 +55,7 @@ describe('send and receive', () => {
   });
 
   it('keeps order and delivers every message when several are sent at once', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
     const channel = createWorktreeChannel(root);
     for (const text of ['one', 'two', 'three']) channel.send('child', text);
 

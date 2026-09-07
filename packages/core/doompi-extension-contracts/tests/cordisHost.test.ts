@@ -86,6 +86,7 @@ describe('Doom Cordis host contract', () => {
     });
 
     await connection.dispose();
+    await connection.dispose();
     expect(connection.root.reflect.get(DOOM_CORDIS_RUNTIME_SERVICE)).toEqual(connection.runtime);
     await controller.shutdown();
     expect(connection.root.get(DOOM_TOOL_OVERRIDES_SERVICE)).toBeUndefined();
@@ -163,6 +164,126 @@ describe('Doom Cordis host contract', () => {
       'not a Cordis Context',
     );
     release();
+  });
+
+  it('ignores malformed discovery queries without disturbing the installed host', async () => {
+    const bus = new TestBus();
+    const host = testPi(bus);
+    const controller = await installDoomCordisHost(host.pi, { mode: 'composed' });
+    const accept = () => undefined;
+    for (const query of [
+      undefined,
+      null,
+      'query',
+      {},
+      { protocol: 'wrong', abiVersion: 1, kind: 'query', requestId: 'id', source: 'test', accept },
+      { protocol: 'doom.cordis.host', abiVersion: 2, kind: 'query', requestId: 'id', source: 'test', accept },
+      { protocol: 'doom.cordis.host', abiVersion: 1, kind: 'reply', requestId: 'id', source: 'test', accept },
+      { protocol: 'doom.cordis.host', abiVersion: 1, kind: 'query', requestId: 1, source: 'test', accept },
+      { protocol: 'doom.cordis.host', abiVersion: 1, kind: 'query', requestId: '', source: 'test', accept },
+      { protocol: 'doom.cordis.host', abiVersion: 1, kind: 'query', requestId: 'id', source: 1, accept },
+      { protocol: 'doom.cordis.host', abiVersion: 1, kind: 'query', requestId: 'id', source: '', accept },
+      { protocol: 'doom.cordis.host', abiVersion: 1, kind: 'query', requestId: 'id', source: 'test', accept: true },
+    ]) {
+      expect(() => bus.emit(DOOM_CORDIS_HOST_QUERY_CHANNEL, query)).not.toThrow();
+    }
+    const connection = await connectDoomCordisHost(testPi(bus).pi, '@test/valid', { allowStandalone: false });
+    expect(connection.root).toBe(controller.root);
+    await connection.dispose();
+    await controller.shutdown();
+  });
+
+  it('rejects each malformed host response with a specific discovery error', async () => {
+    const root = new Context();
+    const runtime = { abiVersion: 1, hostId: 'host', generation: 'generation', mode: 'composed' };
+    const valid = {
+      protocol: 'doom.cordis.host',
+      abiVersion: 1,
+      hostId: 'host',
+      root,
+      runtime,
+      ready: Promise.resolve(),
+      acquire: () => ({ root, runtime, dispose: async () => undefined }),
+      shutdown: async () => undefined,
+    };
+    const cases: Array<[unknown, RegExp]> = [
+      [null, /invalid discovery response/u],
+      [{ ...valid, protocol: 'wrong' }, /invalid protocol identifier/u],
+      [{ ...valid, abiVersion: 2 }, /ABI is incompatible/u],
+      [{ ...valid, hostId: 1 }, /invalid host identifier/u],
+      [{ ...valid, hostId: '' }, /invalid host identifier/u],
+      [{ ...valid, root: {} }, /not a Cordis Context/u],
+      [{ ...valid, runtime: null }, /incomplete runtime metadata/u],
+      [{ ...valid, runtime: { ...runtime, abiVersion: 2 } }, /incomplete runtime metadata/u],
+      [{ ...valid, runtime: { ...runtime, hostId: 'other' } }, /incomplete runtime metadata/u],
+      [{ ...valid, acquire: true }, /incomplete runtime metadata/u],
+      [{ ...valid, shutdown: true }, /incomplete runtime metadata/u],
+      [{ ...valid, ready: null }, /incomplete runtime metadata/u],
+      [{ ...valid, ready: {} }, /incomplete runtime metadata/u],
+    ];
+    for (const [response, message] of cases) {
+      const bus = new TestBus();
+      const release = bus.on(DOOM_CORDIS_HOST_QUERY_CHANNEL, (value) => {
+        (value as { accept: (candidate: unknown) => void }).accept(response);
+      });
+      await expect(connectDoomCordisHost(testPi(bus).pi, '@test/invalid', { allowStandalone: false })).rejects.toThrow(
+        message,
+      );
+      release();
+    }
+    await root.fiber.dispose();
+  });
+
+  it('rejects new leases after shutdown begins', async () => {
+    const bus = new TestBus();
+    const host = testPi(bus);
+    const controller = await installDoomCordisHost(host.pi, { mode: 'composed', source: '@test/host' });
+    let responder: unknown;
+    bus.emit(DOOM_CORDIS_HOST_QUERY_CHANNEL, {
+      protocol: 'doom.cordis.host',
+      abiVersion: 1,
+      kind: 'query',
+      requestId: 'manual-query',
+      source: '@test/manual',
+      accept(value: unknown) {
+        responder = value;
+      },
+    });
+    await controller.shutdown();
+    expect(() => (responder as { acquire(): unknown }).acquire()).toThrow('host is shutting down');
+    await controller.shutdown();
+  });
+
+  it('recovers the serialized session queue after a failed session start', async () => {
+    const bus = new TestBus();
+    const host = testPi(bus);
+    const controller = await installDoomCordisHost(host.pi, { mode: 'composed' });
+    await expect(
+      host.dispatch(
+        { type: 'session_start', reason: 'startup' },
+        testContext({
+          getSessionId: () => {
+            throw new Error('session unavailable');
+          },
+        }),
+      ),
+    ).rejects.toThrow('session unavailable');
+    await expect(host.dispatch({ type: 'session_start', reason: 'reload' }, testContext())).resolves.toBeUndefined();
+    expect(controller.root.get(DOOM_CORDIS_SESSION_SERVICE)).toMatchObject({
+      sessionId: 'session-1',
+      reason: 'reload',
+    });
+    await controller.shutdown();
+  });
+
+  it('removes standalone discovery during Pi session shutdown', async () => {
+    const bus = new TestBus();
+    const host = testPi(bus);
+    const controller = await installDoomCordisHost(host.pi, { mode: 'standalone' });
+    expect(bus.listenerCount(DOOM_CORDIS_HOST_QUERY_CHANNEL)).toBe(1);
+    await host.dispatch({ type: 'session_shutdown', reason: 'quit' });
+    expect(bus.listenerCount(DOOM_CORDIS_HOST_QUERY_CHANNEL)).toBe(0);
+    await controller.shutdown();
   });
 
   it('fails closed when a composed host is required', async () => {

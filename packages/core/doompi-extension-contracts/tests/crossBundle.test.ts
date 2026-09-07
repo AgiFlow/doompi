@@ -307,6 +307,62 @@ describe('separately built voice contract bundles', () => {
     await root.fiber.dispose();
   });
 
+  it('preserves validation and lifecycle behavior in both published voice formats', async () => {
+    const runtimes = await loadBuiltVoiceRuntimes();
+    for (const [format, voice] of Object.entries(runtimes)) {
+      expect(() => voice.createDoomVoiceToolsService('')).toThrow(/Invalid voice service generation/u);
+      const service = voice.createDoomVoiceToolsService(`${format}-provider`);
+      const descriptor = {
+        source: `@cross-bundle/${format}`,
+        id: 'tool-id',
+        name: 'published_tool',
+        label: 'Published tool',
+        description: 'Published format behavior',
+        order: 1,
+        inputSchema: Type.Object({ value: Type.Integer() }, { additionalProperties: false }),
+        resultSchema: Type.Object({ ok: Type.Boolean() }, { additionalProperties: false }),
+      };
+      const registration = service.register({ descriptor, execute: async () => ({ ok: true }) });
+      const session = service.bindSession(`${format}-session`);
+      const inactive = (await session.executeBatch(
+        { catalogToken: 'stale', calls: [{ name: 'published_tool', input: { value: 1 } }] },
+        undefined,
+      )) as { status: string; errors: Array<{ code: string }> };
+      expect(inactive.errors.map(({ code }) => code)).toEqual(['VOICE_TOOL_STALE_CATALOG', 'VOICE_TOOL_INACTIVE']);
+
+      session.setActive(true);
+      const catalog = session.describe();
+      const missing = (await session.executeBatch(
+        { catalogToken: catalog.catalogToken, calls: [{ name: 'missing', input: {} }] },
+        undefined,
+      )) as { status: string };
+      expect(missing.status).toBe('rejected');
+      await expect(
+        session.executeBatch(
+          { catalogToken: session.describe().catalogToken, calls: [{ name: 'published_tool', input: { value: 1 } }] },
+          undefined,
+        ),
+      ).resolves.toMatchObject({ status: 'completed' });
+      const invalid = (await session.executeBatch(
+        { catalogToken: session.describe().catalogToken, calls: [{ name: 'published_tool', input: { value: 'bad' } }] },
+        undefined,
+      )) as { status: string };
+      expect(invalid.status).toBe('rejected');
+
+      registration.dispose();
+      registration.dispose();
+      session.dispose();
+      const shutdown = (await session.executeBatch(
+        { catalogToken: catalog.catalogToken, calls: [{ name: 'published_tool', input: { value: 1 } }] },
+        undefined,
+      )) as { status: string };
+      expect(shutdown.status).toBe('rejected');
+      service.dispose();
+      service.dispose();
+      expect(() => service.bindSession('late')).toThrow(/disposed/u);
+    }
+  });
+
   it('shares only the explicit reload handoff across ESM and CJS copies', async () => {
     const voice = await loadBuiltVoiceRuntimes();
     const handoff = await loadBuiltVoiceReloadHandoffRuntimes();

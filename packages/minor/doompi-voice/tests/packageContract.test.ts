@@ -81,7 +81,7 @@ describe('doom voice package boundary', () => {
     expect(manifest.publishConfig?.access).toBe('public');
     expect(manifest.peerDependencies?.[piPackage]).toBe('0.85.1');
     expect(manifest.devDependencies?.[piPackage]).toBe('0.85.1');
-    expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.6');
+    expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.7');
   });
 
   it('declares every browser media channel exported by its hub entry', async () => {

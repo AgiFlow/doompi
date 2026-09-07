@@ -62,6 +62,24 @@ describe('the runner log panel', () => {
     expect(rendered.includes('/workspace')).toBe(true);
   });
 
+  it.each([
+    [{ state: 'completed' }, 'stopped'],
+    [{ state: 'completed', exit: { reason: 'stopped', code: null, finishedAt: new Date(1).toISOString() } }, 'stopped'],
+    [{ state: 'completed', exit: { reason: 'completed', code: 0, finishedAt: new Date(1).toISOString() } }, 'done'],
+    [
+      { state: 'completed', exit: { reason: 'spawn_error', code: 1, finishedAt: new Date(1).toISOString() } },
+      'spawn error',
+    ],
+  ])('shows the reported outcome for a finished runner', (changes, label) => {
+    runnerRunsChannel.apply('s1', runnerRunsChannel.parse({ runs: [{ ...run('build'), ...changes }] })!);
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnerLogPanel, { ...props, runId: 'build' });
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes(label)).toBe(true);
+    expect(rendered.html).not.toContain('runner-log-stop');
+  });
   it('renders a runner the session no longer lists, because its log outlives it', () => {
     const { props } = slotPropsFixture({ sessionId: 's1' });
 

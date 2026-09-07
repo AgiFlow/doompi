@@ -84,7 +84,7 @@ describe('doom runner package boundary', () => {
     expect(manifest['jsnext:main']).toBe('./dist/index.mjs');
     expect(project.sourceRoot).toBe('packages/default/doompi-runner/src');
     expect(project.sourceTemplate).toBe('doom-extension');
-    expect(manifest.dependencies?.['@deepseek-ai/cordis']).toBe('4.0.1');
+    expect(manifest.dependencies?.['@deepseek-ai/cordis']).toBe('4.0.2');
     expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.1');
     expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.85.1');
     expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.1');

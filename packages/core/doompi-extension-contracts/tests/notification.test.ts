@@ -12,8 +12,8 @@ import {
   normalizeDoomNotificationRequest,
   readDoomNotificationService,
   requireDoomNotificationService,
-} from '../src/schemas/notification.ts';
-
+} from '@agimon-ai/doompi-extension-contracts/notification';
+import * as internalNotification from '../src/schemas/notification.ts';
 describe('Doom notification Cordis contract', () => {
   it('normalizes a bounded request into complete versioned entry data', () => {
     const request = normalizeDoomNotificationRequest({
@@ -84,6 +84,47 @@ describe('Doom notification Cordis contract', () => {
 
     await fiber.dispose();
     expect(readDoomNotificationService(root)).toBeUndefined();
+    await root.fiber.dispose();
+  });
+
+  it('keeps the internal schema implementation aligned with the public notification export', async () => {
+    const complete = internalNotification.normalizeDoomNotificationRequest({
+      title: ' Title ',
+      subtitle: ' Subtitle ',
+      body: ` ${'x'.repeat(MAX_DOOM_NOTIFICATION_BODY_CHARACTERS + 1)} `,
+      level: 'error',
+    });
+    expect(complete).toMatchObject({ title: 'Title', subtitle: 'Subtitle', level: 'error' });
+    expect(complete?.body).toHaveLength(MAX_DOOM_NOTIFICATION_BODY_CHARACTERS);
+    expect(internalNotification.normalizeDoomNotificationRequest({ body: '\u0000\u007f' })).toBeUndefined();
+    expect(internalNotification.normalizeDoomNotificationRequest(null)).toBeUndefined();
+    expect(internalNotification.createDoomNotificationEntryData({ body: 'Saved.' })).toEqual({
+      version: 1,
+      title: '',
+      subtitle: '',
+      body: 'Saved.',
+      level: 'info',
+    });
+    expect(internalNotification.createDoomNotificationEntryData({ body: 1 })).toBeUndefined();
+    expect(internalNotification.isDoomNotificationRequest({ body: 'Saved.' })).toBe(true);
+    expect(internalNotification.isDoomNotificationRequest({ body: '' })).toBe(false);
+    expect(
+      internalNotification.isDoomNotificationEntryData({
+        version: 1,
+        title: '',
+        subtitle: '',
+        body: 'Saved.',
+        level: 'info',
+      }),
+    ).toBe(true);
+
+    const root = new Context();
+    expect(internalNotification.readDoomNotificationService(root)).toBeUndefined();
+    expect(() => internalNotification.requireDoomNotificationService(root)).toThrow('unavailable');
+    const service: DoomNotificationService = { generation: 'internal', request: vi.fn() };
+    const fiber = root.plugin((context) => context.provide(DOOM_NOTIFICATION_SERVICE, service));
+    await fiber.await();
+    expect(internalNotification.requireDoomNotificationService(root)).toBe(service);
     await root.fiber.dispose();
   });
 });
