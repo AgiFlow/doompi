@@ -111,6 +111,9 @@ describe('doompi-web package contract', () => {
       'tailwindcss',
       'vite',
       'web-push',
+      // The dev proxy's hot-reload relay dials the dev server itself, so the
+      // client half of `ws` ships rather than staying a test-only dependency.
+      'ws',
     ]);
     expect(manifest.dependencies?.['@agimon-ai/doompi']).toBe('workspace:*');
     expect(manifest.dependencies?.['@agimon-ai/doompi-server']).toBe('workspace:*');

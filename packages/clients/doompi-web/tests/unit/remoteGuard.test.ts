@@ -145,6 +145,64 @@ describe('the guard on the tunnel listener', () => {
     });
     expect(passed).toBe(true);
   });
+
+  it('allows a proxied dev site the methods a browser issues for it', async () => {
+    for (const method of ['GET', 'POST', 'PUT', 'DELETE']) {
+      const { passed } = await run(guardWith(), {
+        method,
+        port: 65_000,
+        path: '/devproxy/storefront/submit',
+        headers: { origin: TUNNEL_ORIGIN },
+      });
+      expect(passed).toBe(true);
+    }
+  });
+
+  it('allows the hot-reload socket to upgrade on a proxied path', async () => {
+    const { passed } = await run(guardWith(), {
+      port: 65_000,
+      path: '/devproxy/storefront/',
+      headers: { origin: TUNNEL_ORIGIN, upgrade: 'websocket' },
+    });
+    expect(passed).toBe(true);
+  });
+
+  it('still demands a paired device on a proxied path', async () => {
+    const { passed, answer } = await run(guardWith({ authorize: () => undefined }), {
+      port: 65_000,
+      path: '/devproxy/storefront/',
+      headers: { origin: TUNNEL_ORIGIN },
+    });
+    expect(passed).toBe(false);
+    expect(answer?.status).toBe(401);
+  });
+
+  /**
+   * The router hands this guard a raw slice of the request line while other
+   * code resolves `..` first, so a prefix-only test would hand an `/api/`
+   * request the direct, unsealed treatment reserved for dev-site assets.
+   */
+  it('refuses a proxied path that could resolve into the API', async () => {
+    const { passed, answer } = await run(guardWith(), {
+      method: 'POST',
+      port: 65_000,
+      path: '/devproxy/storefront/../../api/health',
+      headers: { origin: TUNNEL_ORIGIN },
+    });
+    expect(passed).toBe(false);
+    expect(answer?.body).toMatchObject({ error: 'Remote HTTP requests must use the sealed gateway.' });
+  });
+
+  it('refuses a lookalike prefix the proxy would not claim', async () => {
+    const { passed, answer } = await run(guardWith(), {
+      method: 'POST',
+      port: 65_000,
+      path: '/devproxyevil/steal',
+      headers: { origin: TUNNEL_ORIGIN },
+    });
+    expect(passed).toBe(false);
+    expect(answer?.status).toBe(401);
+  });
 });
 
 describe('the step-up gate', () => {

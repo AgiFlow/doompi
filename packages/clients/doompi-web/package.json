@@ -96,7 +96,8 @@
     "remark-gfm": "4.0.1",
     "tailwindcss": "4.3.3",
     "vite": "8.2.2",
-    "web-push": "3.6.7"
+    "web-push": "3.6.7",
+    "ws": "8.21.3"
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
@@ -109,8 +110,7 @@
     "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.22.14",
     "typescript": "7.0.2",
-    "vitest": "4.1.11",
-    "ws": "8.21.3"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=22.19.0"

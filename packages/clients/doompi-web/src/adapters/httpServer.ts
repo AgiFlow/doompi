@@ -66,6 +66,8 @@ import {
 import { parseDoomNotificationEntry } from '../types/notification.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
+import { advertiseHub } from './hubAdvertisement.ts';
+import { readSessionLineage } from './sessionLineage.ts';
 import { readRegistryRecords, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub, type SessionHubOptions } from './sessionHub.ts';
@@ -82,6 +84,8 @@ import { createBundlePublication, createPluginBundlePublication } from './bundle
 import { createLiveWebPush, type LiveWebPush } from './webPush.ts';
 import { createRemoteAccessStore } from './remoteAccessStore.ts';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
+import { registerDevProxyRoutes } from './devProxyRoutes.ts';
+import { createDevProxyStore } from './devProxyStore.ts';
 import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
 import {
   DEVICE_COOKIE,
@@ -355,6 +359,7 @@ function buildHub(
       onNotice: notice,
     }),
     readGit: readGitStatus,
+    readLineage: (sessionId) => readSessionLineage(options.registryDir, sessionId),
     ...plugins,
     ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     telemetry,
@@ -558,6 +563,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const notice = options.onNotice ?? ((): void => {});
   const telemetry = createWebTelemetry();
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
+  const devProxy = createDevProxyStore({ stateDir: store.directory, onNotice: notice });
   const repositoryRoot = (directory: string): string | undefined => {
     try {
       return fs.realpathSync(findRepositoryRoot(directory));
@@ -869,6 +875,16 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return next();
   });
   registerRemoteRoutes(app, { remote, listenerOf: (context) => guard.listenerOf(context) });
+  registerDevProxyRoutes(app, {
+    store: devProxy,
+    listenerOf: (context) => guard.listenerOf(context),
+    // Read at call time rather than captured: the tunnel port only exists while
+    // remote access is on, and a target validated against a stale list could
+    // end up aimed at the cockpit itself.
+    reservedPorts: () => [loopbackPort, remote.tunnelPort(), options.port],
+    upgradeWebSocket: nodeWs.upgradeWebSocket,
+    onNotice: notice,
+  });
   const tunnelBodyLimit = bodyLimit({
     maxSize: TUNNEL_BODY_BYTES,
     onError: (context) => context.json({ error: 'The tunnel request body is too large.' }, 413),
@@ -1169,8 +1185,20 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       );
     }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
+    // Lineage is accepted from the caller but never invented here. A parent id
+    // naming a session that has since gone is harmless: the rail falls back to
+    // drawing the child at the top level.
+    const parentSessionId =
+      typeof body.parentSessionId === 'string' && body.parentSessionId !== '' ? body.parentSessionId : undefined;
+    const provenance = typeof body.provenance === 'string' && body.provenance !== '' ? body.provenance : undefined;
     await ensureSessionSynced(body.cwd);
-    const outcome = await hub.create({ cwd: body.cwd, name, trace: readTraceContext(context.req.raw.headers) });
+    const outcome = await hub.create({
+      cwd: body.cwd,
+      name,
+      ...(parentSessionId === undefined ? {} : { parentSessionId }),
+      ...(provenance === undefined ? {} : { provenance }),
+      trace: readTraceContext(context.req.raw.headers),
+    });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
   });
@@ -1736,10 +1764,18 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       nodeWs.injectWebSocket(server);
       const url = `http://${host}:${info.port}`;
       notice(`cockpit on ${url}`);
+      // Loopback rather than `host`, which may be 0.0.0.0 and is not an address
+      // anything can connect to.
+      const withdrawAdvertisement = advertiseHub({
+        registryDir: options.registryDir,
+        url: `http://127.0.0.1:${String(info.port)}`,
+        onNotice: notice,
+      });
       let closePromise: Promise<void> | undefined;
       const close = async (): Promise<void> => {
         // Remote access first, so the tunnel is down and every paired socket
         // is closed before the rest of the hub starts letting go.
+        withdrawAdvertisement();
         await remote.close();
         await new Promise<void>((done) => {
           threads.close();

@@ -1,5 +1,6 @@
 import type { DoomApiCaller } from '@agimon-ai/doompi-extension-contracts/package-api';
 import type { Context, MiddlewareHandler } from 'hono';
+import { isDevProxyPath } from '../services/devProxyPolicy.ts';
 import { stepUpActionFor, type StepUpAction } from '../services/webauthnPolicy.ts';
 import {
   PROTOCOL_SOCKET_ROUTE,
@@ -95,6 +96,17 @@ function socketChannelScope(path: string, isUpgrade: boolean): RemoteChannelScop
 }
 
 function isDirectTunnelRoute(method: string, path: string, isUpgrade: boolean): boolean {
+  // The dev proxy carries a whole third-party application: form posts, uploads
+  // and the hot-reload socket, none of which a browser can route through the
+  // sealed gateway because it issues them itself. Scoped to this one prefix
+  // rather than relaxing the rule for every non-`/api/` path, and the paired
+  // device check below still runs, so this widens which methods a paired
+  // device may use rather than who may call.
+  //
+  // `isDevProxyPath` and not a bare prefix test: it is the same predicate the
+  // proxy handler uses, and it refuses dot segments, so a path this grants
+  // cannot resolve into `/api/` by the time anything else looks at it.
+  if (isDevProxyPath(path)) return true;
   if (isUpgrade) return path === SESSION_SOCKET_ROUTE || path === PROTOCOL_SOCKET_ROUTE;
   const normalizedMethod = method.toUpperCase();
   if ((normalizedMethod === 'GET' || normalizedMethod === 'HEAD') && !path.startsWith('/api/')) return true;
