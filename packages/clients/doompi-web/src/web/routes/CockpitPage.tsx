@@ -14,7 +14,7 @@ import { SessionRail } from '../features/sessions/SessionRail.tsx';
 import { WelcomePanel } from '../features/sessions/WelcomePanel.tsx';
 import { Timeline } from '../features/session/Timeline.tsx';
 import { TopBar } from '../features/status/TopBar.tsx';
-import { HOST_SLOTS, webTabs } from '../lib/pluginRegistry.ts';
+import { HOST_SLOTS, pluginActivityGroups, webTabs } from '../lib/pluginRegistry.ts';
 import { useActiveSession } from '../stores/sessionStore.ts';
 import { sessionsStore, setActiveSession, useNoSessions } from '../stores/sessionsStore.ts';
 import { useWebPluginRegistry } from '../stores/useWebPluginRegistry.ts';
@@ -38,7 +38,16 @@ export function CockpitPage() {
   const noSessions = useNoSessions();
   const dialogId = useActiveSession((state) => state.dialog?.id ?? null);
   // A declared tab first, then one a plugin opened at runtime for this session.
-  const transientTab = useStore(transientTabsStore, (state) => findTransientTab(state, sessionId, tabId));
+  // Session plugin compositions replace the builtin plugin module after verification.
+  // Refresh activity-owned tabs from the active registry so a tab opened during that
+  // handoff does not keep rendering the retired module's disconnected stores.
+  const storedTransientTab = useStore(transientTabsStore, (state) => findTransientTab(state, sessionId, tabId));
+  const transientTab =
+    storedTransientTab === undefined
+      ? undefined
+      : (pluginActivityGroups()
+          .map((group) => group.transientTab?.())
+          .find((candidate) => candidate?.id === storedTransientTab.id) ?? storedTransientTab);
   const tab = (tabId === undefined ? undefined : webTabs().find((entry) => entry.id === tabId)) ?? transientTab;
 
   // Both side panels are temporary drawers on mobile. Route changes can also
