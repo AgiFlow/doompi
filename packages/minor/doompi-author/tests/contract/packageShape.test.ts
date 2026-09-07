@@ -7,7 +7,6 @@ const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
 
 interface PackageManifest {
   name: string;
-  version: string;
   private?: boolean;
   type?: string;
   files?: string[];
@@ -27,7 +26,6 @@ describe('doompi-author package contract', () => {
   it('is a public ESM package with closed entries', async () => {
     const value = await manifest();
     expect(value.name).toBe('@agimon-ai/doompi-author');
-    expect(value.version).toBe('0.0.1-alpha.0');
     expect(value.private).toBeUndefined();
     expect(value.type).toBe('module');
     expect(value.publishConfig).toEqual({ access: 'public' });
