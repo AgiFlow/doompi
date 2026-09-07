@@ -3,6 +3,7 @@ import {
   appendRunJournal,
   journalEntry,
   removeRunsScope,
+  setTeamRunsTempRoot,
   writeAgentDefinition,
   writeRunJournal,
   writeRunStatus,
@@ -16,7 +17,10 @@ import {
 // synced-style bundle the Playwright global setup built.
 test.use({ assets: 'synced' });
 test.describe.configure({ mode: 'serial' });
-test.beforeEach(() => removeRunsScope('s1'));
+test.beforeEach(({ cockpit }) => {
+  setTeamRunsTempRoot(cockpit.teamTemp);
+  removeRunsScope('s1');
+});
 test.afterEach(() => removeRunsScope('s1'));
 
 test('shows the session fleet in the subagents tab', async ({ page, cockpit }) => {
