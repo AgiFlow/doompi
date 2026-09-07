@@ -1,0 +1,11 @@
+# @agimon-ai/doompi-git
+
+Package-owned guidance for Git worktree sessions for DoomPi: spawn an isolated worktree with its own session and manage it from the parent
+
+## How to use
+
+- [Use Git](./src/prompts/doompi-use-git/SKILL.md): Run the package command and follow its package-specific usage guidance.
+
+## Resources
+
+- [Package README](./README.md): Installation, development commands, Pi entrypoint, and extension-specific usage.

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
@@ -6,10 +8,34 @@ import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telem
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { createFileEditContainer } from '../../container/index.ts';
+import { sweepSessionState } from '../node/sessionStateSweep.ts';
+import { createDoomIgnoreMatcher } from '../../services/doomIgnore.ts';
 import { filesStatusKey } from '../../types/webFiles.ts';
 
 const FILES_COMMAND = 'file-edits';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-file-edit';
+const DOOM_IGNORE_FILE = '.doomignore';
+
+/**
+ * The project's ignore rules as a test over absolute paths, or nothing when the
+ * file is absent, empty, or unreadable.
+ *
+ * Read once per session, like the exclude list it is passed beside. The web
+ * reader re-reads the same file per request, so a mid-session edit reaches the
+ * list before it reaches the recorder; that is a pre-existing difference and
+ * not one this read introduces.
+ */
+function readDoomIgnore(cwd: string): ((filePath: string) => boolean) | undefined {
+  let content: string;
+  try {
+    content = fs.readFileSync(path.join(cwd, DOOM_IGNORE_FILE), 'utf8');
+  } catch {
+    return undefined;
+  }
+  const matcher = createDoomIgnoreMatcher(content);
+  if (matcher === undefined) return undefined;
+  return (filePath: string): boolean => matcher(path.relative(cwd, filePath));
+}
 
 export const FILE_EDIT_LEADER_CONTRIBUTION = {
   source: PACKAGE_SOURCE,
@@ -88,6 +114,23 @@ export function installFileEditRuntime(cordis: Context, pi: ExtensionAPI): void 
       },
     });
 
+    /**
+     * Clears state no session will claim again. Never awaited and never allowed
+     * to throw: a sweep that cannot run is not a reason to fail a session.
+     */
+    const sweepAbandonedState = async (cwd: string, keep: string): Promise<void> => {
+      try {
+        await sweepSessionState({ directory: paths.stateDirectory(), keep });
+        const legacy = paths.legacyStateDirectory(cwd);
+        if (legacy === undefined || legacy === paths.stateDirectory()) return;
+        // Same age rule, so a build still running against the old location is
+        // not robbed of the session it is in the middle of.
+        await sweepSessionState({ directory: legacy, removeDirectory: true });
+      } catch {
+        // Nothing here is worth interrupting a session that is starting.
+      }
+    };
+
     pi.on('session_start', (_event, ctx) => {
       if (!active) return;
       sessionGeneration += 1;
@@ -101,7 +144,14 @@ export function installFileEditRuntime(cordis: Context, pi: ExtensionAPI): void 
       // Inside a git worktree these land under the repository's own git
       // directory, which can sit inside the tree the tracker walks. Naming them
       // here is what stops the package's bookkeeping reading as session edits.
-      tracker.reset({ exclude: [timelinePath, `${timelinePath}.lock`, snapshotsPath] });
+      // Whatever earlier sessions were killed before they could clean up, plus
+      // anything an older build left in the repository's own git directory.
+      void sweepAbandonedState(ctx.cwd, timelinePath);
+      const isIgnored = readDoomIgnore(ctx.cwd);
+      tracker.reset({
+        exclude: [timelinePath, `${timelinePath}.lock`, snapshotsPath],
+        ...(isIgnored === undefined ? {} : { isIgnored }),
+      });
       // A resumed session already has a timeline, so the group must show its
       // count from the first paint rather than waiting for the next edit.
       void publishStatus();

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { Hono } from 'hono';
 import { baselineOf } from '../services/fileChanges.ts';
-import { lineDiff } from '../services/lineDiff.ts';
+import { lineDiff, lineDiffFromEmpty } from '../services/lineDiff.ts';
 import type { FileEditVersion } from '../types/domain.ts';
 import {
   API_BASE_PATH,
@@ -52,6 +52,8 @@ const NO_BASELINE_NOTE = 'changed by a command, so no baseline was captured; sho
  * in the record.
  */
 const NO_SNAPSHOT_NOTE = 'recorded before this session began capturing content, so there is no diff for it';
+const NO_AFTER_NOTE = 'the new content could not be captured: the file is binary or past the size cap';
+const NO_BEFORE_NOTE = 'the previous content could not be captured: it was binary or past the size cap';
 const APPROXIMATE_NOTE = 'the changed region was too large to match line by line';
 
 export interface FileEditsApiOptions {
@@ -118,6 +120,10 @@ async function isRealPathInside(root: string, candidate: string): Promise<boolea
 /**
  * One recorded change as the page renders it. A change with both sides captured
  * carries its own diff; one without says why, rather than showing nothing.
+ *
+ * A file this session created counts as captured on both sides. Its baseline is
+ * empty rather than missing, so the whole file reads as arriving at once, which
+ * is exactly what happened.
  */
 async function toVersionView(version: FileEditVersion, snapshots: SnapshotStorePort): Promise<FileEditsVersionView> {
   const view: FileEditsVersionView = {
@@ -128,17 +134,32 @@ async function toVersionView(version: FileEditVersion, snapshots: SnapshotStoreP
     additions: version.additions ?? 0,
     removals: version.removals ?? 0,
   };
-  if (version.before === undefined || version.after === undefined) {
+  const createdHere = version.before === undefined && version.created === true;
+  if (version.after === undefined || (version.before === undefined && !createdHere)) {
     // A scan found the path only after it changed, so no baseline exists. A
-    // tool named the path but the content was not stored: either it did not
-    // fit, or the record predates content capture, which the tool tells apart.
+    // tool named the path but content was not stored: either it did not fit, or
+    // the record predates content capture, which the tool tells apart.
     if (version.origin === 'tool') {
-      return { ...view, note: 'this change could not be captured: the file is binary or past the size cap' };
+      return { ...view, note: version.after === undefined ? NO_AFTER_NOTE : NO_BEFORE_NOTE };
     }
     return { ...view, note: version.tool === 'bash' ? NO_BASELINE_NOTE : NO_SNAPSHOT_NOTE };
   }
-  const [before, after] = await Promise.all([snapshots.read(version.before), snapshots.read(version.after)]);
-  if (before === undefined || after === undefined) {
+  const after = await snapshots.read(version.after);
+  if (after === undefined) {
+    return { ...view, note: 'the content behind this change is no longer held' };
+  }
+  if (version.before === undefined) {
+    const fresh = lineDiffFromEmpty(after);
+    return {
+      ...view,
+      additions: fresh.additions,
+      removals: fresh.removals,
+      hunks: fresh.hunks,
+      ...(fresh.approximate ? { note: APPROXIMATE_NOTE } : {}),
+    };
+  }
+  const before = await snapshots.read(version.before);
+  if (before === undefined) {
     return { ...view, note: 'the content behind this change is no longer held' };
   }
   const diff = lineDiff(before, after);
@@ -157,10 +178,28 @@ async function toCumulativeView(
   working: FileEditsWorkingView,
   snapshots: SnapshotStorePort,
 ): Promise<FileEditsCumulativeView> {
+  // A file this session created starts from nothing, and nothing is a baseline
+  // the snapshot store never has to hold.
+  const createdHere = versions[0]?.created === true;
   const baseline = baselineOf(versions);
-  if (baseline === undefined) return { additions: 0, removals: 0, note: NO_BASELINE_NOTE };
+  if (!createdHere && baseline === undefined) {
+    return {
+      additions: 0,
+      removals: 0,
+      note: versions[0]?.origin === 'tool' ? NO_BEFORE_NOTE : NO_BASELINE_NOTE,
+    };
+  }
   if (working.unavailable) {
     return { additions: 0, removals: 0, note: working.reason ?? 'the file cannot be read' };
+  }
+  if (createdHere || baseline === undefined) {
+    const fresh = lineDiffFromEmpty(working.content);
+    return {
+      additions: fresh.additions,
+      removals: fresh.removals,
+      hunks: fresh.hunks,
+      ...(fresh.approximate ? { note: APPROXIMATE_NOTE } : {}),
+    };
   }
   const before = await snapshots.read(baseline);
   if (before === undefined) {

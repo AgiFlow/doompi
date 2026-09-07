@@ -41,7 +41,9 @@ export class TimelineStore implements ITimelineStore {
   }
 
   async versions(filePath: string): Promise<FileEditVersion[]> {
-    return foldVersions(await this.events(), filePath);
+    // Same bar as the listing above: a file's history must not reintroduce the
+    // touches the list already left out.
+    return foldVersions(confirmedChanges(await this.events()), filePath);
   }
 
   async clear(): Promise<void> {

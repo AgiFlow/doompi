@@ -1,7 +1,18 @@
 export { defineSessionChannel, defineSlot, defineWebPlugin } from '../services/define.ts';
 export { defineGlobalStore } from '../services/globalStore.ts';
 export { defineSessionStore } from '../services/sessionStore.ts';
+export {
+  HUB_ADVERTISEMENT_VERSION,
+  hubAdvertisementPath,
+  parseHubAdvertisement,
+  parseSessionLineage,
+  REGISTRY_DIR_ENV,
+  resolveRegistryDir,
+  SESSION_LINEAGE_RECORD_VERSION,
+  sessionLineagePath,
+} from '../services/sessionRegistry.ts';
 export { toolResultText, toolResultTextLines } from '../services/toolResult.ts';
+export type { HubAdvertisement, RegistryDirInput, SessionLineageRecord } from '../types/sessionRegistry.ts';
 export type {
   ModelContext,
   ModelContextAbortSignal,

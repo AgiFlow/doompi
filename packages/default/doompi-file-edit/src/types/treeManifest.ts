@@ -51,4 +51,18 @@ export interface TreeManifestPort {
   modifiedAt(filePath: string): Promise<number | undefined>;
   /** Every path added, removed, or modified between two manifests, sorted. */
   changed(before: TreeManifest, after: TreeManifest): string[];
+  /**
+   * Whether two fingerprints disagree about the file's size.
+   *
+   * A fingerprint is opaque to everything outside the adapter that wrote it, so
+   * the size question is asked here rather than by parsing the string at the
+   * call site. Size is the cheap half of the answer to "did the bytes move": a
+   * different size proves they did, while an equal size proves nothing either
+   * way and leaves the caller to compare content.
+   *
+   * Answers false when either side is absent. A path that appeared or vanished
+   * is a creation or a deletion, which the caller already knows from the
+   * manifests themselves and must not route through here.
+   */
+  sizeChanged(before: string | undefined, after: string | undefined): boolean;
 }

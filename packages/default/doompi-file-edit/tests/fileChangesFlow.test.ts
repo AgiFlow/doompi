@@ -9,6 +9,7 @@ import { NodeSnapshotStoreAdapter } from '../src/adapters/node/snapshotStore.ts'
 import { NodeTreeManifestAdapter } from '../src/adapters/node/treeManifest.ts';
 import { readSessionFiles } from '../src/adapters/webFilesChannel.ts';
 import { TimelineStore } from '../src/adapters/TimelineStore/TimelineStore.ts';
+import { createDoomIgnoreMatcher } from '../src/services/doomIgnore.ts';
 import type { FileEditsDetailView } from '../src/types/fileEditsApi.ts';
 import { detailUrl } from '../src/types/fileEditsApi.ts';
 import type { GitStatusPort } from '../src/types/gitStatus.ts';
@@ -45,7 +46,7 @@ afterEach(() => {
 });
 
 /** The extension half: what the Pi adapter wires up at session_start. */
-function startExtension(options: { git?: GitStatusPort } = {}) {
+function startExtension(options: { git?: GitStatusPort; isIgnored?: (filePath: string) => boolean } = {}) {
   const sessionKey = paths.sessionKey(SESSION_ID);
   const timelinePath = paths.timelinePath(cwd, sessionKey);
   const snapshotsPath = paths.snapshotsPath(cwd, sessionKey);
@@ -53,9 +54,34 @@ function startExtension(options: { git?: GitStatusPort } = {}) {
   timeline.initialize(timelinePath);
   const snapshots = new NodeSnapshotStoreAdapter();
   snapshots.initialize(snapshotsPath);
-  const tracker = new EditTracker(timeline, snapshots, new NodeTreeManifestAdapter(), options);
-  tracker.reset({ exclude: [timelinePath, `${timelinePath}.lock`, snapshotsPath] });
-  return { timeline, snapshots, tracker, timelinePath };
+  const tracker = new EditTracker(
+    timeline,
+    snapshots,
+    new NodeTreeManifestAdapter(),
+    options.git === undefined ? {} : { git: options.git },
+  );
+  tracker.reset({
+    exclude: [timelinePath, `${timelinePath}.lock`, snapshotsPath],
+    ...(options.isIgnored === undefined ? {} : { isIgnored: options.isIgnored }),
+  });
+  return { timeline, snapshots, tracker, timelinePath, snapshotsPath };
+}
+
+/** Every line the tracker actually appended, including the ones no surface shows. */
+function readRawTimeline(timelinePath: string): Record<string, unknown>[] {
+  return fs
+    .readFileSync(timelinePath, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '')
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+/** Moves a file's modification time without touching a byte of it. */
+function touch(filePath: string): void {
+  // Ahead of now, so the write always lands inside the call being closed rather
+  // than depending on how coarsely the filesystem stores a timestamp.
+  const when = new Date(Date.now() + 1_000);
+  fs.utimesSync(filePath, when, when);
 }
 
 /** The hub half: it is handed only a session id and a working directory. */
@@ -253,5 +279,131 @@ describe('a session’s file changes, end to end', () => {
   it('reports nothing before the session has changed anything', () => {
     startExtension();
     expect(readHubRows()).toEqual([]);
+  });
+
+  it('leaves out a touched file git cannot vouch for, and still records the evidence', async () => {
+    // The case nothing caught before: a path git has no opinion on, because it
+    // is untracked or ignored, whose modification time moved while its bytes
+    // did not, and which this session had never captured to compare against.
+    const git: GitStatusPort = { unchanged: async () => new Set() };
+    const { tracker, timelinePath } = startExtension({ git });
+    const filePath = path.join(cwd, 'artifact.log');
+    fs.writeFileSync(filePath, 'same bytes throughout');
+
+    await tracker.start('call-1', 'bash', { command: 'pnpm test' }, cwd);
+    touch(filePath);
+    await tracker.end('call-1', false, cwd);
+
+    // Nothing proved the content moved, so no surface claims it did.
+    expect(readHubRows()).toEqual([]);
+    // The row is still on disk: the timeline is the evidence, and hiding a
+    // thing from a reader is not the same as never having seen it.
+    const recorded = readRawTimeline(timelinePath);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.path).toBe(filePath);
+    expect(recorded[0]?.origin).toBe('scan');
+    expect(recorded[0]?.verified).toBeUndefined();
+  });
+
+  it('lists a file a command created, because appearing is proof enough', async () => {
+    const { tracker } = startExtension();
+    const filePath = path.join(cwd, 'built.txt');
+
+    await tracker.start('call-1', 'bash', { command: 'node scripts/build.mjs' }, cwd);
+    fs.writeFileSync(filePath, 'produced by the script\n');
+    await tracker.end('call-1', false, cwd);
+
+    expect(readHubRows().map((row) => row.relPath)).toEqual(['built.txt']);
+  });
+
+  it('lists a file a command rewrote to a different length without asking git', async () => {
+    // Size alone settles it, so a git answer is never needed and a git failure
+    // cannot turn this into a false negative.
+    const git: GitStatusPort = { unchanged: async () => new Set() };
+    const { tracker } = startExtension({ git });
+    const filePath = path.join(cwd, 'grown.txt');
+    fs.writeFileSync(filePath, 'short');
+
+    await tracker.start('call-1', 'bash', { command: 'node scripts/append.mjs' }, cwd);
+    fs.writeFileSync(filePath, 'much longer than it was before');
+    await tracker.end('call-1', false, cwd);
+
+    expect(readHubRows().map((row) => row.relPath)).toEqual(['grown.txt']);
+  });
+
+  it('never records or stores a path the project disowns', async () => {
+    const ignored = createDoomIgnoreMatcher('build-output/\n');
+    if (ignored === undefined) throw new Error('a rule line must produce a matcher');
+    const { tracker, timelinePath, snapshotsPath } = startExtension({
+      isIgnored: (filePath: string) => ignored(path.relative(cwd, filePath)),
+    });
+    const disowned = path.join(cwd, 'build-output', 'bundle.js');
+    const kept = path.join(cwd, 'src.js');
+    fs.mkdirSync(path.dirname(disowned), { recursive: true });
+
+    await tracker.start('call-1', 'bash', { command: 'pnpm build' }, cwd);
+    fs.writeFileSync(disowned, 'a bundle nobody edited');
+    fs.writeFileSync(kept, 'source the script also rewrote');
+    await tracker.end('call-1', false, cwd);
+
+    expect(readHubRows().map((row) => row.relPath)).toEqual(['src.js']);
+    // Dropped before it cost a read, so its content was never copied either.
+    expect(readRawTimeline(timelinePath).map((row) => row.path)).toEqual([kept]);
+    const stored = fs.existsSync(snapshotsPath) ? fs.readdirSync(snapshotsPath) : [];
+    expect(stored).toHaveLength(1);
+  });
+
+  it('does not copy the content of a file git proves untouched', async () => {
+    const filePath = path.join(cwd, 'clean.txt');
+    const git: GitStatusPort = { unchanged: async () => new Set([filePath]) };
+    const { tracker, snapshotsPath } = startExtension({ git });
+    fs.writeFileSync(filePath, 'identical to what git holds');
+
+    await tracker.start('call-1', 'bash', { command: 'git checkout .' }, cwd);
+    touch(filePath);
+    await tracker.end('call-1', false, cwd);
+
+    expect(readHubRows()).toEqual([]);
+    // Asking git first is what keeps this file out of the blob store entirely.
+    const stored = fs.existsSync(snapshotsPath) ? fs.readdirSync(snapshotsPath) : [];
+    expect(stored).toEqual([]);
+  });
+
+  it('still records what a failed command wrote before it failed', async () => {
+    const { tracker } = startExtension();
+    const filePath = path.join(cwd, 'half-written.txt');
+
+    await tracker.start('call-1', 'bash', { command: 'node scripts/flaky.mjs' }, cwd);
+    fs.writeFileSync(filePath, 'written before the command gave up\n');
+    await tracker.end('call-1', true, cwd);
+
+    // A command that failed can still have written, and skipping the walk would
+    // also leave the baseline stale for whichever call closes next.
+    expect(readHubRows().map((row) => row.relPath)).toEqual(['half-written.txt']);
+  });
+
+  it('lists the source a test run changed and none of the artifacts it produced', async () => {
+    // The reported bug, in miniature. A single command writes one source file
+    // and a pile of run output; only the source file is an edit.
+    const { tracker } = startExtension();
+    const source = path.join(cwd, 'src', 'app.spec.ts');
+    fs.mkdirSync(path.dirname(source), { recursive: true });
+    fs.writeFileSync(source, 'the original expectation\n');
+
+    await tracker.start('call-1', 'bash', { command: 'pnpm exec playwright test' }, cwd);
+    fs.writeFileSync(source, 'the expectation, now corrected\n');
+    for (const relative of [
+      'test-results/.playwright-artifacts-0/trace.jsonl',
+      'test-results/.playwright-artifacts-0/screenshot.png',
+      'playwright-report/index.html',
+      'logs/telemetry/doom-file-edit.jsonl',
+    ]) {
+      const artifact = path.join(cwd, relative);
+      fs.mkdirSync(path.dirname(artifact), { recursive: true });
+      fs.writeFileSync(artifact, 'run output');
+    }
+    await tracker.end('call-1', false, cwd);
+
+    expect(readHubRows().map((row) => row.relPath)).toEqual([path.join('src', 'app.spec.ts')]);
   });
 });

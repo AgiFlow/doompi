@@ -135,4 +135,22 @@ describe('foldVersions', () => {
     expect(isDiffable(scanOnly)).toBe(false);
     expect(baselineOf(scanOnly)).toBeUndefined();
   });
+
+  it('finds a created file diffable, because nothing is a baseline too', () => {
+    const created = parseTimelineEvent({
+      version: 2,
+      path: '/fresh.ts',
+      tool: 'write',
+      at: 1,
+      origin: 'tool',
+      created: true,
+      after: 'a1',
+    });
+    if (created === null) throw new Error('a created event must parse');
+    const versions = foldVersions([created], '/fresh.ts');
+    expect(versions[0]?.created).toBe(true);
+    // No captured baseline, but the file arriving is still a diff worth showing.
+    expect(baselineOf(versions)).toBeUndefined();
+    expect(isDiffable(versions)).toBe(true);
+  });
 });

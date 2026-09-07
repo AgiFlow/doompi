@@ -158,6 +158,19 @@ function toHunks(steps: readonly DiffStep[]): FileEditsDiffHunk[] {
 }
 
 /**
+ * The difference between a file that did not exist and the one that now does.
+ *
+ * Kept separate from a two-sided diff because an empty baseline is the one case
+ * where the trailing newline matters. `splitLines` reads "a\n" as a line and
+ * then an empty one, which is invisible in a normal diff because both sides
+ * carry it and it cancels, but against nothing it would report a file of three
+ * lines as four. A creation is counted on the lines the file actually holds.
+ */
+export function lineDiffFromEmpty(after: string): LineDiffResult {
+  return lineDiff('', after.endsWith('\n') ? after.slice(0, -1) : after);
+}
+
+/**
  * The difference between two versions of a file.
  *
  * Line numbers are the new file's for context and additions, and the old

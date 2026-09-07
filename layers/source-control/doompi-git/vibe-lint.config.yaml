@@ -1,0 +1,16 @@
+# The layer graph, design patterns, and Pi-entry overrides come from the
+# doom-extension plugin preset. Declare only what is specific to this package.
+plugins:
+  - core
+  - doom-extension
+
+extends:
+  - core/recommended
+  - doom-extension/recommended
+
+rules:
+  boundary-import-allowlist: error
+  file-naming-convention: error
+  public-export-boundary: error
+  no-internal-public-import: error
+  doom-layer-boundary: error

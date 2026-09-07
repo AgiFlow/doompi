@@ -114,4 +114,37 @@ describe('NodeTreeManifestAdapter', () => {
     expect(manifest.entries.size).toBe(0);
     expect(manifest.truncated).toBe(false);
   });
+
+  it('never walks into the directories tooling fills while a session runs', async () => {
+    const manifests = new NodeTreeManifestAdapter();
+    const kept = write('src/app.ts', 'source');
+    write('test-results/.playwright-artifacts-0/trace.jsonl', 'artifact');
+    write('logs/telemetry/doom-file-edit.jsonl', 'telemetry');
+    write('playwright-report/index.html', 'report');
+    write('tmp/scratch.txt', 'scratch');
+    write('.pi/agent/state.json', 'state');
+    const manifest = await manifests.take(root);
+    // The agent's own output must never read back to it as a session edit.
+    expect([...manifest.entries.keys()]).toEqual([kept]);
+  });
+
+  it('answers whether two fingerprints disagree about size, and nothing else', async () => {
+    const manifests = new NodeTreeManifestAdapter();
+    const filePath = write('a.txt', 'content');
+    const first = await manifests.fingerprint(filePath);
+    // A pure touch moves the modification time and leaves the size alone.
+    fs.utimesSync(filePath, new Date(1_700_000_000_000), new Date(1_700_000_000_000));
+    const touched = await manifests.fingerprint(filePath);
+    expect(touched).not.toBe(first);
+    expect(manifests.sizeChanged(first, touched)).toBe(false);
+
+    fs.writeFileSync(filePath, 'content, now longer');
+    const rewritten = await manifests.fingerprint(filePath);
+    expect(manifests.sizeChanged(touched, rewritten)).toBe(true);
+
+    // A path that appeared or vanished is a creation or a deletion, which the
+    // caller reads off the manifests rather than asking about here.
+    expect(manifests.sizeChanged(undefined, rewritten)).toBe(false);
+    expect(manifests.sizeChanged(first, undefined)).toBe(false);
+  });
 });

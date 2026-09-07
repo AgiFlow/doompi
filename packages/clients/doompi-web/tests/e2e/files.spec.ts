@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -46,17 +45,9 @@ function writeChangedFiles(registryDir: string, agentDir: string): void {
   const hiddenPath = path.join(record.cwd, 'src/HiddenTarget.ts');
   events.push({ version: 2, path: hiddenPath, tool: 'write', at: 1, origin: 'scan', verified: true });
 
-  let timelineDir = path.join(agentDir, 'doom-file-edit');
-  try {
-    const gitCommonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
-      cwd: record.cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    if (gitCommonDir !== '') timelineDir = path.join(gitCommonDir, 'doom-file-edit');
-  } catch {
-    // A non-git fixture uses the same agent-directory fallback as FileEditPaths.
-  }
+  // One location, whether or not the fixture happens to be a git repository,
+  // which is the whole point of FileEditPaths no longer asking git.
+  const timelineDir = path.join(agentDir, 'doom-file-edit');
   fs.mkdirSync(timelineDir, { recursive: true });
   const timelinePath = path.join(timelineDir, `${hash(fs.realpathSync(record.cwd))}-${hash('s1')}.jsonl`);
   fs.writeFileSync(timelinePath, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);

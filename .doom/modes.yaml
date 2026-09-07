@@ -38,6 +38,9 @@ layers:
   llm:
     packages:
       - "./layers/llm/doompi-model-guidance"
+  source-control:
+    packages:
+      - "./layers/source-control/doompi-git"
 
 defaultMajorMode: copilot
 
@@ -47,7 +50,7 @@ majorMode:
     layers: [team, task, llm]
   copilot:
     description: General-purpose coding mode with delegation, persistent tasks, supervised commands, and structured user feedback.
-    layers: [team, ask-user, task, sandbox, llm]
+    layers: [team, ask-user, task, sandbox, llm, source-control]
   examples:
     description: Layer-free base mode for the repository's plugin and workflow examples.
     layers: []

@@ -63,6 +63,7 @@
           "@agimon-ai/doompi-edit",
           "@agimon-ai/doompi-extension-contracts",
           "@agimon-ai/doompi-file-edit",
+          "@agimon-ai/doompi-git",
           "@agimon-ai/doompi-goal",
           "@agimon-ai/doompi-grep",
           "@agimon-ai/doompi-hashline",

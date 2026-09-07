@@ -3,13 +3,16 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
+import { SESSION_LINEAGE_RECORD_VERSION } from '@agimon-ai/doompi-web-contracts';
 import {
   isRecordFileName,
   parseSessionRecord,
+  REGISTRY_DIR_ENV,
   sessionRecordPath,
   sessionRecordsDir,
 } from '../services/registryStore.ts';
 import { type BundledServerLaunch, defaultServerLaunch } from './bundledServer.ts';
+import { writeSessionLineage } from './sessionLineage.ts';
 
 /** Names the server in messages; the resolved command is a node path nobody would recognise. */
 const SERVER_LABEL = 'doompi-server';
@@ -47,6 +50,13 @@ export interface SpawnSessionInput {
    * room. The previous server has exited, so its socket is gone.
    */
   sessionDir?: string;
+  /**
+   * The session this one was created from, when a package asked for it rather
+   * than a person. Recorded so the rail can nest the two.
+   */
+  parentSessionId?: string;
+  /** The asking package's own word for why, such as "worktree". */
+  provenance?: string;
   trace?: DoomTraceContext;
 }
 
@@ -147,6 +157,17 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
       const command = options.command ?? SERVER_LABEL;
 
       const sessionId = input.sessionId ?? crypto.randomUUID();
+      // Written before the child starts, not after. The hub reads a session's
+      // lineage once, when its record first appears, so a sidecar written after
+      // the spawn races that registration and loses: the session would sit at
+      // the top level of the rail for the rest of its life.
+      if (input.parentSessionId !== undefined && input.parentSessionId !== '') {
+        writeSessionLineage(options.registryDir, sessionId, {
+          version: SESSION_LINEAGE_RECORD_VERSION,
+          parentSessionId: input.parentSessionId,
+          provenance: input.provenance ?? '',
+        });
+      }
       // The directory borrows only a prefix of the id: sun_path is capped
       // around 104 bytes and every byte of the session dir counts against it.
       const spawnedRoot = path.join(options.registryDir, SPAWNED_SEGMENT);
@@ -188,6 +209,12 @@ export function createServerSpawner(options: ServerSpawnerOptions): SessionSpawn
         options.registryDir,
       ];
       const environment = { ...launch.environment };
+      // The flag tells the session server where the registry is; the variable
+      // tells everything the session goes on to run. A package inside the
+      // session resolves the registry from the environment, so without this a
+      // second cockpit on a non-default registry directory would have its
+      // sessions discover the default hub and act on the wrong one.
+      environment[REGISTRY_DIR_ENV] = options.registryDir;
       delete environment.DOOMPI_TRACEPARENT;
       if (/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/.test(input.trace?.traceparent ?? '')) {
         environment.DOOMPI_TRACEPARENT = input.trace?.traceparent;

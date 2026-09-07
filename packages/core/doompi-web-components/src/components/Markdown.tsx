@@ -1,6 +1,7 @@
-import { createContext, type ComponentProps, useContext } from 'react';
+import { createContext, type ComponentProps, isValidElement, type ReactNode, useContext } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CodeBlock } from './CodeBlock.tsx';
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -82,6 +83,33 @@ function Link({ href, children }: ComponentProps<'a'>) {
   );
 }
 
+/** The text inside a fence, which react-markdown hands over as nested strings. */
+function textOf(children: ReactNode): string {
+  if (typeof children === 'string') return children;
+  if (Array.isArray(children)) return children.map((child) => textOf(child as ReactNode)).join('');
+  return '';
+}
+
+/**
+ * A fenced block, read off the <code> child that carries its language.
+ *
+ * The block is handed to `CodeBlock` whole rather than rendered as a styled
+ * <pre> around inline code, because a fence is content with its own
+ * presentation: it is coloured, it can be copied, and a mermaid fence is a
+ * picture. A <pre> that came from raw HTML has no such child and keeps the
+ * plain box.
+ */
+function Pre({ children }: ComponentProps<'pre'>) {
+  const code = isValidElement<{ className?: string; children?: ReactNode }>(children) ? children : undefined;
+  if (code === undefined)
+    return (
+      <pre className="overflow-x-auto rounded border border-doom-border bg-doom-deep p-2.5 text-[12px] leading-relaxed">
+        {children}
+      </pre>
+    );
+  // Markdown ends every fence with a newline the author did not type.
+  return <CodeBlock text={textOf(code.props.children).replace(/\n$/, '')} className={code.props.className} />;
+}
 const COMPONENTS: Components = {
   p: ({ children }) => <p className="whitespace-pre-wrap break-words">{children}</p>,
   strong: ({ children }) => <strong className="font-bold text-doom-hi">{children}</strong>,
@@ -89,11 +117,7 @@ const COMPONENTS: Components = {
   del: ({ children }) => <del className="text-doom-dim line-through">{children}</del>,
   a: Link,
   code: Code,
-  pre: ({ children }) => (
-    <pre className="overflow-x-auto rounded border border-doom-border bg-doom-deep p-2.5 text-[12px] leading-relaxed">
-      {children}
-    </pre>
-  ),
+  pre: Pre,
   ul: ({ children }) => <ul className="list-disc pl-5">{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal pl-5">{children}</ol>,
   li: ({ children }) => <li className="whitespace-pre-wrap break-words">{children}</li>,

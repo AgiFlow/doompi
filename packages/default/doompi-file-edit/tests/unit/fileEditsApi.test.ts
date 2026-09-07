@@ -77,6 +77,7 @@ describe('the file-edits session API', () => {
       tool: 'bash',
       at: 10,
       origin: 'scan',
+      verified: true,
       after: await snapshots.put('written by a script'),
     });
 
@@ -88,6 +89,72 @@ describe('the file-edits session API', () => {
     expect(body.cumulative.hunks).toBeUndefined();
     // The file is still readable and editable, which is the point of listing it.
     expect(body.working.content).toBe('written by a script');
+  });
+
+  it('leaves a scan nothing confirmed out of the file’s history', async () => {
+    const filePath = path.join(cwd, 'touched.txt');
+    fs.writeFileSync(filePath, 'untouched content');
+    await timeline.append({
+      version: 2,
+      path: filePath,
+      tool: 'bash',
+      at: 10,
+      origin: 'scan',
+      after: await snapshots.put('untouched content'),
+    });
+
+    const response = await app.fetch(new Request(mounted(detailUrl('s1', filePath))));
+    // The list already hides this row, so its history must not reintroduce it.
+    // The same lookup is what authorizes these routes, so an unconfirmed touch
+    // stops being a file this session will serve as one of its own changes.
+    expect(response.status).toBe(404);
+  });
+
+  it('shows a written file’s whole content as the diff when it did not exist before', async () => {
+    const filePath = path.join(cwd, 'fresh.ts');
+    fs.writeFileSync(filePath, 'one\ntwo\nthree\n');
+    await timeline.append({
+      version: 2,
+      path: filePath,
+      tool: 'write',
+      at: 10,
+      origin: 'tool',
+      created: true,
+      after: await snapshots.put('one\ntwo\nthree\n'),
+      additions: 3,
+      removals: 0,
+    });
+
+    const body = (await (
+      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+    ).json()) as FileEditsDetailView;
+    // A creation has an empty baseline, not a missing one, so every line arrives.
+    expect(body.versions[0]?.note).toBeUndefined();
+    expect(body.versions[0]?.additions).toBe(3);
+    expect(body.versions[0]?.removals).toBe(0);
+    expect(body.versions[0]?.hunks?.[0]?.rows.filter((row) => row.marker === '+')).toHaveLength(3);
+    expect(body.cumulative.additions).toBe(3);
+    expect(body.cumulative.hunks?.[0]?.rows.filter((row) => row.marker === '+')).toHaveLength(3);
+  });
+
+  it('says the previous content was missed when a tool change captured only its result', async () => {
+    const filePath = path.join(cwd, 'replaced.bin');
+    fs.writeFileSync(filePath, 'now readable\n');
+    await timeline.append({
+      version: 2,
+      path: filePath,
+      tool: 'write',
+      at: 10,
+      origin: 'tool',
+      after: await snapshots.put('now readable\n'),
+    });
+
+    const body = (await (
+      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+    ).json()) as FileEditsDetailView;
+    // Not a creation, so the honest answer names the side that went uncaptured.
+    expect(body.versions[0]?.note).toContain('previous content');
+    expect(body.versions[0]?.hunks).toBeUndefined();
   });
 
   it('reports a file the session deleted rather than pretending it is empty', async () => {

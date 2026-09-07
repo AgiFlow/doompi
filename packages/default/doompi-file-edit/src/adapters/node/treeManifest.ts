@@ -17,7 +17,16 @@ import type { TreeManifest, TreeManifestPort } from '../../types/treeManifest.ts
  * how large the checkout grew. Hitting a cap is reported, never hidden.
  */
 
-/** Directories a working tree fills with output nobody wants listed as an edit. */
+/**
+ * Directories a working tree fills with output nobody wants listed as an edit.
+ *
+ * Two kinds live here. Most are the build and dependency trees every checkout
+ * grows. The rest are where tooling, including this agent's own, writes while a
+ * session runs: a telemetry log under `logs`, a test run's artifacts under
+ * `test-results` and `playwright-report`, scratch space under `tmp`, and agent
+ * state under `.pi`. Those are skipped by construction rather than judged file
+ * by file, because a walk that enters them reports the session watching itself.
+ */
 export const IGNORED_DIRECTORIES: ReadonlySet<string> = new Set([
   '.git',
   '.hg',
@@ -27,6 +36,7 @@ export const IGNORED_DIRECTORIES: ReadonlySet<string> = new Set([
   '.next',
   '.nuxt',
   '.nx',
+  '.pi',
   '.pnpm-store',
   '.turbo',
   '.venv',
@@ -34,9 +44,13 @@ export const IGNORED_DIRECTORIES: ReadonlySet<string> = new Set([
   'build',
   'coverage',
   'dist',
+  'logs',
   'node_modules',
   'out',
+  'playwright-report',
   'target',
+  'test-results',
+  'tmp',
   'vendor',
   'venv',
 ]);
@@ -51,6 +65,12 @@ export const MAX_DEPTH = 12;
  */
 function fingerprintOf(size: number, modifiedMs: number): string {
   return `${size}:${modifiedMs}`;
+}
+
+/** The size half of a fingerprint, which only the adapter that wrote it can read. */
+function sizeOf(fingerprint: string): string {
+  const separator = fingerprint.indexOf(':');
+  return separator === -1 ? fingerprint : fingerprint.slice(0, separator);
 }
 
 export interface NodeTreeManifestOptions {
@@ -106,6 +126,10 @@ export class NodeTreeManifestAdapter implements TreeManifestPort {
     return [...moved].sort();
   }
 
+  sizeChanged(before: string | undefined, after: string | undefined): boolean {
+    if (before === undefined || after === undefined) return false;
+    return sizeOf(before) !== sizeOf(after);
+  }
   /** Fills `entries` depth-first and answers whether a cap cut the walk short. */
   private async walk(
     directory: string,

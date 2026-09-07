@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterDoomIgnoredFiles } from '../../../src/services/doomIgnore.ts';
+import { createDoomIgnoreMatcher, filterDoomIgnoredFiles } from '../../../src/services/doomIgnore.ts';
 import type { FilesItemView } from '../../../src/types/webFiles.ts';
 
 function item(relPath: string): FilesItemView {
@@ -39,5 +39,31 @@ describe('filterDoomIgnoredFiles', () => {
   it('returns the original list when matcher setup fails unexpectedly', () => {
     const items = [item('generated.log')];
     expect(filterDoomIgnoredFiles(items, null as unknown as string)).toBe(items);
+  });
+});
+
+describe('createDoomIgnoreMatcher', () => {
+  it('answers nothing when there are no rules to apply', () => {
+    // Two callers share this, so "no rules" has to be one answer, not two.
+    expect(createDoomIgnoreMatcher('')).toBeUndefined();
+    expect(createDoomIgnoreMatcher('  \n\t')).toBeUndefined();
+    expect(createDoomIgnoreMatcher(null as unknown as string)).toBeUndefined();
+  });
+
+  it('matches the same rules the list filter applies', () => {
+    const ignored = createDoomIgnoreMatcher('*.log\n!keep.log\ndist/\n');
+    expect(ignored).toBeDefined();
+    expect(ignored?.('generated.log')).toBe(true);
+    expect(ignored?.('dist/nested/a.ts')).toBe(true);
+    expect(ignored?.('keep.log')).toBe(false);
+    expect(ignored?.('src/a.ts')).toBe(false);
+  });
+
+  it('keeps a path it cannot safely match', () => {
+    const ignored = createDoomIgnoreMatcher('*.log\n');
+    // Escaping the project is a reason to stay visible, not to disappear.
+    expect(ignored?.('../outside.log')).toBe(false);
+    expect(ignored?.('/absolute.log')).toBe(false);
+    expect(ignored?.('bad\0name.log')).toBe(false);
   });
 });
