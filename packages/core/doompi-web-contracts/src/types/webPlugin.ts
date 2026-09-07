@@ -741,6 +741,21 @@ export interface WebPluginDefinition {
   selectionBarItems?: SurfaceContribution[];
   /** Compact controls placed in the mobile composer's action row, immediately before queue. */
   composerActions?: SurfaceContribution[];
+  /**
+   * Entries in the composer's '+' popover menu, after the host's own File
+   * Upload row.
+   *
+   * A composer action is a control the reader sees without asking; a menu
+   * entry is one they went looking for. A package whose surface is a whole
+   * library, not a single toggle, belongs behind the menu, where an entry
+   * costs a row rather than a permanent seat in the action row.
+   *
+   * The menu is transient: an entry's component unmounts every time the
+   * popover closes, so it may own the click and nothing else. State that has
+   * to outlive the menu, a dialog and its subscriptions included, belongs in
+   * a surface the host keeps mounted, such as `overlays`.
+   */
+  composerMenuItems?: SurfaceContribution[];
   toolRenderers?: ToolRendererContribution[];
   /**
    * A section whose id names an activity group any plugin declares renders
@@ -766,7 +781,6 @@ export interface WebPluginDefinition {
   repositorySettingsPanel?: RepositorySettingsPanelContribution;
   /** The slots this plugin opens for others, each named '<this plugin id>.<name>'. */
   slots?: SlotDeclaration[];
-  /** This plugin's contributions into slots other plugins (or the host) declare. */
   /** This plugin's contributions into slots other plugins (or the host) declare. */
   fills?: SlotFillContribution[];
   /** Makes the paths this plugin tracks clickable where the host renders a message. */
