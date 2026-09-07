@@ -24,11 +24,13 @@ import {
   HISTORY_PAGE_SIZE,
   HISTORY_PAGE_TYPE,
   type HistoryPageFrame,
+  AGENT_MODEL_ENTRY_TYPE,
   CONTEXT_ENTRY_TYPE,
   MINOR_MODE_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
   type SessionBacklogFrame,
   type SessionGitStatus,
+  type SessionLineage,
   type SessionSummary,
   type SessionWebComposition,
 } from '../types/hub.ts';
@@ -93,12 +95,23 @@ function uiProjectionKey(frame: SessionFrame): string | undefined {
   return undefined;
 }
 
+/**
+ * The custom entries that are projections rather than transcript: the latest
+ * one replaces the last, so the hub keeps one per type and replays that
+ * instead of letting the ring age them out.
+ */
+const PROJECTION_ENTRY_TYPES: ReadonlySet<unknown> = new Set([
+  MINOR_MODE_ENTRY_TYPE,
+  CONTEXT_ENTRY_TYPE,
+  AGENT_MODEL_ENTRY_TYPE,
+]);
+
 /** The projection key for a custom composition entry, or undefined for any other entry. */
 function compositionEntryKey(entry: unknown): string | undefined {
   if (typeof entry !== 'object' || entry === null) return undefined;
   const candidate = entry as Record<string, unknown>;
   if (candidate.type !== 'custom') return undefined;
-  if (candidate.customType !== MINOR_MODE_ENTRY_TYPE && candidate.customType !== CONTEXT_ENTRY_TYPE) return undefined;
+  if (!PROJECTION_ENTRY_TYPES.has(candidate.customType)) return undefined;
   return `entry:${String(candidate.customType)}`;
 }
 
@@ -114,6 +127,13 @@ export interface SessionHubOptions {
   spawner?: SessionSpawner;
   /** Injectable for tests; defaults to asking git about the session cwd. */
   readGit?: (cwd: string) => Promise<SessionGitStatus | undefined>;
+  /**
+   * Injectable for tests; defaults to reading the session's lineage sidecar.
+   *
+   * Synchronous and read once, unlike readGit: a session's parent is fixed when
+   * it is spawned, so there is nothing to refresh on a timer.
+   */
+  readLineage?: (sessionId: string) => SessionLineage | undefined;
   /** Base channels installed into every session-local channel registry. */
   channels?: readonly WebHubChannel[];
   /** Dynamically loads the channel composition resolved for one session. */
@@ -201,6 +221,7 @@ interface ManagedSession {
   attach: BridgeState;
   attachReason?: string;
   git?: SessionGitStatus;
+  lineage?: SessionLineage;
   lastSummaryJson?: string;
   /**
    * Journal entry ids this hub has already published. Pi reports a message
@@ -337,7 +358,7 @@ function resolvedCommand(managed: ManagedSession, frame: SessionFrame): SessionF
  */
 function isUnreportedEntry(entry: Record<string, unknown>): boolean {
   if (entry.type === 'custom') {
-    return entry.customType === MINOR_MODE_ENTRY_TYPE || entry.customType === CONTEXT_ENTRY_TYPE;
+    return PROJECTION_ENTRY_TYPES.has(entry.customType);
   }
   const message = entry.message;
   if (typeof message !== 'object' || message === null) return false;
@@ -494,6 +515,12 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       ...(managed.record.apiSocketPath === undefined ? {} : { apiSocketPath: managed.record.apiSocketPath }),
       ...(managed.git === undefined ? {} : { git: managed.git }),
       ...(webComposition === undefined ? {} : { webComposition }),
+      ...(managed.lineage === undefined
+        ? {}
+        : {
+            parentSessionId: managed.lineage.parentSessionId,
+            sessionProvenance: managed.lineage.provenance,
+          }),
     };
   };
 
@@ -797,6 +824,9 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
   };
 
   const startSession = (record: SessionRecord): void => {
+    // Read before the summary is ever built, so a nested session never renders
+    // at the top level for one frame and then jumps under its parent.
+    const lineage = options.readLineage?.(record.id);
     const managed: ManagedSession = {
       record,
       ring: createFrameRing(options.ringLimit),
@@ -810,6 +840,7 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       commands: Promise.resolve(),
       channels: [],
       channelLoadToken: Symbol(record.id),
+      ...(lineage === undefined ? {} : { lineage }),
     };
     sessions.set(record.id, managed);
     options.onNotice?.(`session ${record.id} (${record.name}) appeared`);

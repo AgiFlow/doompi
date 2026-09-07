@@ -1,36 +1,27 @@
 import { BookmarkPlusIcon } from '@agimon-ai/doompi-web-components';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { PromptsActivitySection } from './components/PromptsActivitySection.tsx';
+import { PromptsComposerMenuItem } from './components/PromptsComposerMenuItem.tsx';
+import { PromptsDialogHost } from './components/PromptsDialogHost.tsx';
 import { requestMessagePromptDraft } from './lib/messagePromptDraft.ts';
 
 /**
- * This package's cockpit presence: one activity group.
+ * This package's cockpit presence: one composer menu entry and the dialog it
+ * opens.
  *
- * No tab. The library is not a place to sit in, it is something reached for
- * mid-conversation, so it lives in the activity dock next to agents, runners
- * and workflows, and the picking happens in a dialog over the conversation.
+ * No tab, and no activity group. The library is not a place to sit in, nor is
+ * it something the session reports on; it is something reached for while
+ * writing a message. So it lives in the composer's '+' menu, beside file
+ * upload, and the picking happens in a dialog over the conversation.
  *
- * The group is always visible and never claims background work: saving a
- * prompt is not a running job, and an empty library still needs the entry
- * point that fills it.
+ * The dialog is an overlay rather than part of the menu entry, because the
+ * menu unmounts its entries on every close and because the timeline's "Save as
+ * prompt" action has to reach the same dialog without any menu being open.
  */
-const promptsActivitySource = {
-  subscribe: () => () => undefined,
-  isActive: () => false,
-};
 
 export const webPlugin = defineWebPlugin({
   id: 'prompts',
-  activityGroups: [
-    {
-      name: 'prompts',
-      // The TUI's SPC e p, so the two surfaces are reached the same way.
-      keys: 'e p',
-      activeSource: promptsActivitySource,
-      order: 40,
-    },
-  ],
-  activitySections: [{ id: 'prompts', component: PromptsActivitySection }],
+  composerMenuItems: [{ id: 'template', component: PromptsComposerMenuItem }],
+  overlays: [{ id: 'dialog-host', component: PromptsDialogHost }],
   userMessageActions: [
     {
       id: 'save',

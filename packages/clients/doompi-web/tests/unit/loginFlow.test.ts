@@ -115,4 +115,61 @@ describe('createLoginFlow', () => {
     cancelled.cancel();
     expect(cancelled.snapshot().status).toBe('cancelled');
   });
+
+  describe('a login started from the tunnel', () => {
+    const remoteInput = { ...input, type: 'oauth' as const, remote: true };
+
+    it('reports itself as remote so the page can explain the loopback redirect', () => {
+      expect(createLoginFlow(remoteInput).snapshot().remote).toBe(true);
+      expect(createLoginFlow({ ...input, type: 'oauth' as const }).snapshot().remote).toBeUndefined();
+    });
+
+    it.each([['device_code'], ['device-code']])('answers a select offering %s without asking', async (optionId) => {
+      const flow = createLoginFlow(remoteInput);
+      const answer = flow.interaction.prompt({
+        type: 'select',
+        message: 'Select login method:',
+        options: [
+          { id: 'browser', label: 'Browser login (default)' },
+          { id: optionId, label: 'Device code login (headless)' },
+        ],
+      });
+
+      await expect(answer).resolves.toBe(optionId);
+      // Never rendered, so the page cannot show a choice whose default is broken.
+      expect(flow.snapshot().prompt).toBeUndefined();
+    });
+
+    it('leaves a select with no redirect-free option to the page', () => {
+      const flow = createLoginFlow(remoteInput);
+      void flow.interaction.prompt({
+        type: 'select',
+        message: 'Pick one:',
+        options: [
+          { id: 'browser', label: 'Browser' },
+          { id: 'other', label: 'Other' },
+        ],
+      });
+      expect(flow.snapshot().prompt).toMatchObject({ id: '1', type: 'select' });
+    });
+
+    it('still asks a local login to choose', () => {
+      const flow = createLoginFlow({ ...input, type: 'oauth' as const });
+      void flow.interaction.prompt({
+        type: 'select',
+        message: 'Select login method:',
+        options: [
+          { id: 'browser', label: 'Browser' },
+          { id: 'device_code', label: 'Device code' },
+        ],
+      });
+      expect(flow.snapshot().prompt).toMatchObject({ id: '1', type: 'select' });
+    });
+
+    it('leaves a manual_code prompt to the page, since only a select is answerable', () => {
+      const flow = createLoginFlow(remoteInput);
+      void flow.interaction.prompt({ type: 'manual_code', message: 'Paste the code' });
+      expect(flow.snapshot().prompt).toMatchObject({ id: '1', type: 'manual_code' });
+    });
+  });
 });

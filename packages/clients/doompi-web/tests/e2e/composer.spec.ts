@@ -229,18 +229,59 @@ test('enter still completes a command the draft has only started', async ({ page
   await expect(page.getByTestId('composer-completion')).toBeHidden();
 });
 
+test('opens the composer menu from the plus control', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  const trigger = page.getByTestId('composer-attach');
+  const menu = page.getByTestId('composer-menu');
+
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+  await expect(menu).toBeHidden();
+
+  await trigger.click();
+
+  await expect(menu).toBeVisible();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('composer-attach-row')).toBeVisible();
+});
+
+// Only this direction is reachable: while the menu is open the composer is
+// inert, so the completion popup cannot appear behind it.
+test('dismisses the completion popup when the composer menu opens', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForCommand('get_commands');
+  cockpit.session.emit(COMMANDS);
+  const completion = page.getByTestId('composer-completion');
+
+  await page.getByTestId('composer-input').fill('/');
+  await expect(completion).toBeVisible();
+
+  await page.getByTestId('composer-attach').click();
+
+  await expect(page.getByTestId('composer-menu')).toBeVisible();
+  await expect(completion).toBeHidden();
+});
+
 test('attaches image payloads and inlines removable text files', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   const picker = page.getByTestId('composer-file-input');
+  // Every pick closes the menu, so each one starts by opening it again.
+  const openMenu = async (): Promise<void> => {
+    await page.getByTestId('composer-attach').click();
+    await expect(page.getByTestId('composer-menu')).toBeVisible();
+  };
 
+  await openMenu();
   await picker.setInputFiles({ name: 'huge.txt', mimeType: 'text/plain', buffer: Buffer.alloc(100 * 1024 + 1) });
   await expect(page.getByTestId('composer-attachment-error')).toContainText('exceeds the 100 KB text file limit');
+
+  await openMenu();
   const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByTestId('composer-attach').click();
+  await page.getByTestId('composer-attach-row').click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from('image bytes') });
   await expect(page.getByTestId('composer-attachments')).toContainText('screen.png');
 
+  await openMenu();
   await picker.setInputFiles({
     name: 'notes.txt',
     mimeType: 'text/plain',
@@ -250,6 +291,7 @@ test('attaches image payloads and inlines removable text files', async ({ page, 
   await page.getByRole('button', { name: 'remove notes.txt' }).click();
   await expect(page.getByTestId('composer-attachments')).not.toContainText('notes.txt');
 
+  await openMenu();
   await picker.setInputFiles({
     name: 'details.md',
     mimeType: 'text/markdown',

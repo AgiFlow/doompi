@@ -25,12 +25,14 @@ import {
   type DoomApi,
   type DoomApiCaller,
   type DoomApiHandler,
+  type DoomOAuthRedirect,
   type DoomRepositorySyncView,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import { findRepositoryRoot, resolveDoomConfigurationRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
+import { createOAuthRedirectRegistry } from '../services/oauthRedirectRegistry.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import {
   MAX_SESSION_FILE_BYTES,
@@ -38,6 +40,7 @@ import {
   SESSION_FILE_ROUTE,
   SESSION_FILE_SHA256_HEADER,
 } from '../types/media.ts';
+import { MCP_OAUTH_CALLBACK_ROUTE } from '../types/mcpOAuth.ts';
 import type { SettingsRepository } from '../types/settings.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
@@ -63,6 +66,8 @@ import {
 import { parseDoomNotificationEntry } from '../types/notification.ts';
 import { ATTACH_TYPE, type SessionFrame } from '../types/session.ts';
 import { readGitStatus } from './gitStatus.ts';
+import { advertiseHub } from './hubAdvertisement.ts';
+import { readSessionLineage } from './sessionLineage.ts';
 import { readRegistryRecords, watchRegistry } from './registryWatcher.ts';
 import { createServerSpawner } from './serverSpawner.ts';
 import { createSessionHub, type SessionHub, type SessionHubOptions } from './sessionHub.ts';
@@ -70,6 +75,7 @@ import { allowedOriginsFromEnv } from '../services/remoteGuardPolicy.ts';
 import { createRecordingArtifactStore } from '../services/recordingArtifacts.ts';
 import { describeStranded, planSessionMigration } from '../services/sessionMigration.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
+import { registerOAuthRedirectRoutes } from './oauthRedirectRoutes.ts';
 import { registerSettingsRoutes } from './settingsRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
 import { createRemoteGuard } from './remoteGuard.ts';
@@ -78,6 +84,8 @@ import { createBundlePublication, createPluginBundlePublication } from './bundle
 import { createLiveWebPush, type LiveWebPush } from './webPush.ts';
 import { createRemoteAccessStore } from './remoteAccessStore.ts';
 import { registerRemoteRoutes } from './remoteRoutes.ts';
+import { registerDevProxyRoutes } from './devProxyRoutes.ts';
+import { createDevProxyStore } from './devProxyStore.ts';
 import { createTunnelLauncher, reapStaleTunnel } from './tunnelProcess.ts';
 import {
   DEVICE_COOKIE,
@@ -351,6 +359,7 @@ function buildHub(
       onNotice: notice,
     }),
     readGit: readGitStatus,
+    readLineage: (sessionId) => readSessionLineage(options.registryDir, sessionId),
     ...plugins,
     ...(options.computerUse === undefined ? {} : { computerUse: options.computerUse }),
     telemetry,
@@ -421,6 +430,8 @@ export function mountHubApis(
   readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
   resolveBundleKey: (sessionId: string) => string | undefined = () => 'default',
   initialBundleKey = 'default',
+  /** Lends the hub's OAuth redirect to hub APIs that broker third-party sign-in. */
+  oauthRedirect?: () => DoomOAuthRedirect | undefined,
 ): {
   handlers: DoomApiHandler[];
   add: (apis: readonly DoomApi[], bundleKey?: string) => void;
@@ -435,7 +446,13 @@ export function mountHubApis(
       if (bundle.has(api.basePath)) continue;
       let handler: DoomApiHandler;
       try {
-        handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository, readRepositorySync });
+        handler = api.start({
+          scope: 'hub',
+          onNotice: notice,
+          resolveRepository,
+          readRepositorySync,
+          ...(oauthRedirect ? { oauthRedirect } : {}),
+        });
       } catch (error) {
         notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
         continue;
@@ -546,6 +563,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const notice = options.onNotice ?? ((): void => {});
   const telemetry = createWebTelemetry();
   const store = createRemoteAccessStore({ stateDir: options.remoteStateDir, onNotice: notice });
+  const devProxy = createDevProxyStore({ stateDir: store.directory, onNotice: notice });
   const repositoryRoot = (directory: string): string | undefined => {
     try {
       return fs.realpathSync(findRepositoryRoot(directory));
@@ -857,6 +875,16 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return next();
   });
   registerRemoteRoutes(app, { remote, listenerOf: (context) => guard.listenerOf(context) });
+  registerDevProxyRoutes(app, {
+    store: devProxy,
+    listenerOf: (context) => guard.listenerOf(context),
+    // Read at call time rather than captured: the tunnel port only exists while
+    // remote access is on, and a target validated against a stale list could
+    // end up aimed at the cockpit itself.
+    reservedPorts: () => [loopbackPort, remote.tunnelPort(), options.port],
+    upgradeWebSocket: nodeWs.upgradeWebSocket,
+    onNotice: notice,
+  });
   const tunnelBodyLimit = bodyLimit({
     maxSize: TUNNEL_BODY_BYTES,
     onError: (context) => context.json({ error: 'The tunnel request body is too large.' }, 413),
@@ -1013,7 +1041,19 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // Provider credentials belong to the machine, not to a session: the hub
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
-  registerAuthRoutes(app, providerAuth);
+  registerAuthRoutes(app, providerAuth, (context) => guard.listenerOf(context));
+  // One redirect surface for both localities. A package brokering OAuth cannot
+  // use a loopback redirect when the browser is on another machine, and the
+  // hub already serves a listener that browser can reach.
+  const oauthRedirects = createOAuthRedirectRegistry(MCP_OAUTH_CALLBACK_ROUTE);
+  registerOAuthRedirectRoutes(app, oauthRedirects);
+  const oauthRedirect = (): DoomOAuthRedirect | undefined => {
+    // Read per call: a quick tunnel reconnects on a new hostname, and a stale
+    // origin would register a redirect that no longer resolves.
+    const origin =
+      remote.publicOrigin() ?? (loopbackPort === undefined ? undefined : `http://127.0.0.1:${loopbackPort}`);
+    return origin === undefined ? undefined : oauthRedirects.surface(origin);
+  };
   // Settings read and write the machine's Doom config. Session working
   // directories are normalized to their nearest repository marker before the
   // picker or a package API can address them. The bounded registry keeps recent
@@ -1067,6 +1107,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       return selectedRegistration(compositionRoot(session.cwd))?.apiDirectory;
     },
     defaultApiBundleKey,
+    oauthRedirect,
   );
   const registeredApiBundles = new Map<string, string>();
   const apiBundleInUse = (bundleKey: string): boolean =>
@@ -1144,8 +1185,20 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       );
     }
     const name = typeof body.name === 'string' && body.name !== '' ? body.name : undefined;
+    // Lineage is accepted from the caller but never invented here. A parent id
+    // naming a session that has since gone is harmless: the rail falls back to
+    // drawing the child at the top level.
+    const parentSessionId =
+      typeof body.parentSessionId === 'string' && body.parentSessionId !== '' ? body.parentSessionId : undefined;
+    const provenance = typeof body.provenance === 'string' && body.provenance !== '' ? body.provenance : undefined;
     await ensureSessionSynced(body.cwd);
-    const outcome = await hub.create({ cwd: body.cwd, name, trace: readTraceContext(context.req.raw.headers) });
+    const outcome = await hub.create({
+      cwd: body.cwd,
+      name,
+      ...(parentSessionId === undefined ? {} : { parentSessionId }),
+      ...(provenance === undefined ? {} : { provenance }),
+      trace: readTraceContext(context.req.raw.headers),
+    });
     if (outcome.ok) return context.json({ sessionId: outcome.sessionId }, 201);
     return context.json({ error: outcome.error }, outcome.code === 'invalid_request' ? 400 : 502);
   });
@@ -1711,10 +1764,18 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       nodeWs.injectWebSocket(server);
       const url = `http://${host}:${info.port}`;
       notice(`cockpit on ${url}`);
+      // Loopback rather than `host`, which may be 0.0.0.0 and is not an address
+      // anything can connect to.
+      const withdrawAdvertisement = advertiseHub({
+        registryDir: options.registryDir,
+        url: `http://127.0.0.1:${String(info.port)}`,
+        onNotice: notice,
+      });
       let closePromise: Promise<void> | undefined;
       const close = async (): Promise<void> => {
         // Remote access first, so the tunnel is down and every paired socket
         // is closed before the rest of the hub starts letting go.
+        withdrawAdvertisement();
         await remote.close();
         await new Promise<void>((done) => {
           threads.close();

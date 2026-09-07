@@ -2,37 +2,44 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/
 import { describe, expect, it, vi } from 'vitest';
 import type { SavedPromptView } from '../../src/types/webPrompts.ts';
 import { PromptEditor } from '../../src/web/components/PromptEditor.tsx';
-import { PromptsActivitySection } from '../../src/web/components/PromptsActivitySection.tsx';
+import { PromptsComposerMenuItem } from '../../src/web/components/PromptsComposerMenuItem.tsx';
+import { PromptsDialogHost } from '../../src/web/components/PromptsDialogHost.tsx';
 import { PromptPickerList } from '../../src/web/components/PromptPickerList.tsx';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
 
 const PROMPT: SavedPromptView = { name: 'review', description: 'Review the diff', text: 'Review the diff\nnow' };
 
-describe('the prompts activity group', () => {
-  it('reports loading with the action that opens the library', () => {
-    const { props } = slotPropsFixture();
-
-    const rendered = renderPlugin(PromptsActivitySection, props);
+describe('the composer menu entry', () => {
+  it('offers the library as one menu row', () => {
+    const rendered = renderPlugin(PromptsComposerMenuItem, {});
 
     expect(rendered.error).toBeUndefined();
-    expect(rendered.html).toContain('activity-summary-prompts');
-    expect(rendered.includes('loading')).toBe(true);
-    expect(rendered.includes('send a prompt')).toBe(true);
+    expect(rendered.html).toContain('composer-menu-prompts');
+    expect(rendered.includes('Prompt template')).toBe(true);
   });
 
-  it('keeps the dialog closed until it is opened', () => {
+  it('sits in a menu rather than a list of choices', () => {
+    const rendered = renderPlugin(PromptsComposerMenuItem, {});
+
+    expect(rendered.html).toContain('role="menuitem"');
+  });
+});
+
+describe('the prompts dialog host', () => {
+  it('renders nothing until something asks for the library', () => {
     const { props } = slotPropsFixture();
 
-    const rendered = renderPlugin(PromptsActivitySection, props);
+    const rendered = renderPlugin(PromptsDialogHost, props);
 
+    expect(rendered.error).toBeUndefined();
     expect(rendered.html).not.toContain('prompts-dialog');
   });
 
-  it('renders in a dock with no session focused', () => {
+  it('mounts with no session focused', () => {
     const { props } = slotPropsFixture({ sessionId: null });
 
-    expect(renderPlugin(PromptsActivitySection, props).error).toBeUndefined();
+    expect(renderPlugin(PromptsDialogHost, props).error).toBeUndefined();
   });
 });
 

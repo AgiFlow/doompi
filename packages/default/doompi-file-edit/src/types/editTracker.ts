@@ -9,6 +9,9 @@ export interface IEditTracker {
    * Drops the tree baseline so a new session does not inherit the last one's,
    * and takes the paths this session's own bookkeeping occupies, which a tree
    * walk must never report as an edit.
+   *
+   * `isIgnored` carries the project's own ignore rules, so a path the project
+   * disowns is dropped before it costs a git call, a read, or a stored blob.
    */
-  reset(options?: { exclude?: readonly string[] }): void;
+  reset(options?: { exclude?: readonly string[]; isIgnored?: (filePath: string) => boolean }): void;
 }

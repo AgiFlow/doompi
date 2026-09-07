@@ -90,6 +90,7 @@ export const HOST_SLOTS = {
   selectionBar: 'selection-bar',
   activity: 'activity',
   composerActions: 'composer-actions',
+  composerMenu: 'composer-menu',
 } as const;
 
 const SLOT_SEPARATOR = '.';
@@ -480,6 +481,9 @@ function buildWebPluginState(plugins: readonly WebPluginDefinition[]): RegistryS
       }
       for (const surface of plugin.composerActions ?? []) {
         pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.composerActions, surface) });
+      }
+      for (const surface of plugin.composerMenuItems ?? []) {
+        pendingFills.push({ pluginId: plugin.id, fill: surfaceFill(HOST_SLOTS.composerMenu, surface) });
       }
       for (const section of plugin.activitySections ?? []) pendingSections.push({ pluginId: plugin.id, section });
       if (plugin.fileLinks !== undefined) installingState.fileLinks.push(plugin.fileLinks);

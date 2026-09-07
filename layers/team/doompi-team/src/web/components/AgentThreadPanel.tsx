@@ -92,21 +92,40 @@ export function AgentThreadPanel({
       {canSteer ? (
         <form
           data-testid="agent-steer-composer"
-          className="flex shrink-0 items-end gap-2 border-t border-doom-border-soft px-[26px] py-3"
+          className="shrink-0 border-t border-doom-border-soft bg-doom-rail px-[26px] pt-3 pb-2.5"
           onSubmit={submitGuidance}
         >
-          <Textarea
-            data-testid="agent-steer-input"
-            aria-label="Steering guidance"
-            rows={3}
-            value={guidance}
-            placeholder="Guide this agent…"
-            className="min-h-20 flex-1 resize-y"
-            onChange={(event) => setGuidance(event.target.value)}
-          />
-          <Button data-testid="agent-steer-submit" type="submit" size="xs" disabled={guidance.trim() === ''}>
-            send
-          </Button>
+          <div className="rounded-lg border border-doom-border bg-doom-deep transition-colors focus-within:border-doom-blue/60">
+            <div className="flex min-w-0 items-start gap-2.5 px-3.5 pt-3">
+              <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
+              <Textarea
+                variant="bare"
+                data-testid="agent-steer-input"
+                aria-label="Steering guidance"
+                rows={2}
+                value={guidance}
+                placeholder="Guide this agent…"
+                className="min-w-0 flex-1 text-[13px] leading-relaxed"
+                onChange={(event) => setGuidance(event.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
+              <span data-testid="agent-steer-hint" className="text-[10px] text-doom-faint">
+                guidance reaches this run while it is still working
+              </span>
+              <span className="min-w-0 flex-1" />
+              <Button
+                data-testid="agent-steer-submit"
+                type="submit"
+                variant="primary"
+                size="md"
+                className="px-3.5"
+                disabled={guidance.trim() === ''}
+              >
+                send
+              </Button>
+            </div>
+          </div>
         </form>
       ) : null}
     </div>

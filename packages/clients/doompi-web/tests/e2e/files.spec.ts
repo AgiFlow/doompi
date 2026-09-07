@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -46,17 +45,9 @@ function writeChangedFiles(registryDir: string, agentDir: string): void {
   const hiddenPath = path.join(record.cwd, 'src/HiddenTarget.ts');
   events.push({ version: 2, path: hiddenPath, tool: 'write', at: 1, origin: 'scan', verified: true });
 
-  let timelineDir = path.join(agentDir, 'doom-file-edit');
-  try {
-    const gitCommonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
-      cwd: record.cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    if (gitCommonDir !== '') timelineDir = path.join(gitCommonDir, 'doom-file-edit');
-  } catch {
-    // A non-git fixture uses the same agent-directory fallback as FileEditPaths.
-  }
+  // One location, whether or not the fixture happens to be a git repository,
+  // which is the whole point of FileEditPaths no longer asking git.
+  const timelineDir = path.join(agentDir, 'doom-file-edit');
   fs.mkdirSync(timelineDir, { recursive: true });
   const timelinePath = path.join(timelineDir, `${hash(fs.realpathSync(record.cwd))}-${hash('s1')}.jsonl`);
   fs.writeFileSync(timelinePath, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
@@ -110,13 +101,20 @@ test('files browser searches and opens the complete changed-file list', async ({
   await expect(page.getByTestId('files-file-panel')).toHaveCount(0);
 
   const options = browser.getByRole('option');
+  // The drawer groups paths under a header per shared directory. Headers are
+  // labels rather than options, so the cursor still counts files and only files.
+  await expect(options).toHaveCount(6);
+  await expect(page.getByTestId('files-browser-group-docs')).toBeVisible();
+  await expect(page.getByTestId('files-browser-group-src')).toBeVisible();
   await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowDown');
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Enter');
   await expect(browser).toHaveCount(0);
   await expect(page.getByTestId('files-file-panel')).toBeVisible();
-  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Second.ts');
+  // Grouped rows read in path order, so docs/Third.md leads and src/Fifth.ts
+  // is the row one step down.
+  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Fifth.ts');
 
   await showAll.click();
   await expect(browser).toBeVisible();
@@ -129,7 +127,7 @@ test('files browser searches and opens the complete changed-file list', async ({
   await expect(close).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(browser).toHaveCount(0);
-  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Second.ts');
+  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Fifth.ts');
 
   await showAll.click();
   await page.getByTestId('files-browser-search').fill('HiddenTarget');

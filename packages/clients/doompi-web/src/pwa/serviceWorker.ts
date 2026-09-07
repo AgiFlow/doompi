@@ -18,9 +18,9 @@ import {
   type ActiveBundleState,
   type VerifiedPluginCompositionState,
 } from './bundleCache.ts';
+import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths.ts';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
-const RAW_BUNDLE_PREFIX = '/bundle-assets/';
 const CACHE_PREFIX = 'doompi-bundle-';
 const PLUGIN_CACHE_PREFIX = 'doompi-plugin-';
 const PLUGIN_NETWORK_PREFIX = '/api/web-plugins/';
@@ -188,18 +188,6 @@ function hex(bytes: ArrayBuffer): string {
 async function manifestDigest(manifest: Parameters<typeof canonicalManifest>[0]): Promise<string> {
   const bytes = new TextEncoder().encode(canonicalManifest(manifest));
   return hex(await crypto.subtle.digest('SHA-256', bytes));
-}
-
-function trustedNetworkPath(pathname: string): boolean {
-  return (
-    pathname === '/pair' ||
-    pathname === '/sw.js' ||
-    pathname === '/manifest.webmanifest' ||
-    pathname.startsWith('/pwa/') ||
-    pathname.startsWith('/api/') ||
-    pathname === BUNDLE_MANIFEST_ROUTE ||
-    pathname.startsWith(RAW_BUNDLE_PREFIX)
-  );
 }
 
 async function verifiedResponse(state: ActiveBundleState, request: Request): Promise<Response> {

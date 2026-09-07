@@ -105,11 +105,15 @@ test.describe('composer actions', () => {
     const queue = page.getByTestId('composer-queue');
     await expect(voice).toBeVisible();
     await expect(voice).toHaveAttribute('aria-label', 'start voice recording');
-    const voiceBox = await voice.boundingBox();
-    const queueBox = await queue.boundingBox();
-    expect(voiceBox).not.toBeNull();
-    expect(queueBox).not.toBeNull();
-    expect((voiceBox?.x ?? 0) + (voiceBox?.width ?? 0)).toBeLessThanOrEqual(queueBox?.x ?? 0);
+    const voiceBox = await voice.evaluate((element) => {
+      const { x, width } = element.getBoundingClientRect();
+      return { x, width };
+    });
+    const queueBox = await queue.evaluate((element) => {
+      const { x } = element.getBoundingClientRect();
+      return { x };
+    });
+    expect(voiceBox.x + voiceBox.width).toBeLessThanOrEqual(queueBox.x);
 
     cockpit.session.emit({
       type: 'extension_ui_request',

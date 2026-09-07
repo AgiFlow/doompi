@@ -25,7 +25,12 @@ export type AnswerOutcome = 'answered' | 'unknown_flow' | 'not_waiting';
 export interface ProviderAuth {
   /** Every provider Pi knows, with its current auth state; re-read from disk each call. */
   listProviders(): Promise<ProviderAuthSummary[]>;
-  startLogin(providerId: string, type: AuthMethodType): Promise<StartLoginOutcome>;
+  /**
+   * Starts a login. `remote` means the browser driving it is on another
+   * machine, which decides whether a redirect-free method is chosen for the
+   * user; it comes from the accepted socket, never from the request body.
+   */
+  startLogin(providerId: string, type: AuthMethodType, remote?: boolean): Promise<StartLoginOutcome>;
   getLogin(flowId: string): LoginFlowSnapshot | undefined;
   answerLogin(flowId: string, promptId: string, value: string): AnswerOutcome;
   /** Cancels the flow and returns how it stands, or undefined for an unknown flow. */
@@ -122,7 +127,7 @@ export function createProviderAuth(options: ProviderAuthOptions = {}): ProviderA
         .sort((left, right) => left.name.localeCompare(right.name));
     },
 
-    async startLogin(providerId, type) {
+    async startLogin(providerId, type, remote) {
       const current = await runtime();
       const provider = findProvider(current, providerId);
       if (!provider) return { ok: false, code: 'unknown_provider', error: `Unknown provider: ${providerId}` };
@@ -136,7 +141,13 @@ export function createProviderAuth(options: ProviderAuthOptions = {}): ProviderA
       // read how they ended, short enough that the map never grows.
       for (const [id, flow] of flows) if (flow.snapshot().status !== 'running') flows.delete(id);
 
-      const flow = createLoginFlow({ id: crypto.randomUUID(), providerId, providerName: provider.name, type });
+      const flow = createLoginFlow({
+        id: crypto.randomUUID(),
+        providerId,
+        providerName: provider.name,
+        type,
+        ...(remote === true ? { remote: true } : {}),
+      });
       flows.set(flow.id, flow);
       current.login(providerId, type, flow.interaction).then(
         () => {

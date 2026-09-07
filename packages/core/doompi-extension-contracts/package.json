@@ -39,6 +39,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./agent-model": {
+      "types": "./dist/agentModel.d.mts",
+      "import": "./dist/agentModel.mjs",
+      "require": "./dist/agentModel.cjs"
+    },
     "./ask-user": {
       "types": "./dist/askUser.d.mts",
       "import": "./dist/askUser.mjs",
@@ -237,15 +242,15 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/chord": "0.85.1",
-    "typebox": "1.3.19"
+    "typebox": "1.3.25"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",
-    "@types/node": "26.4.0",
+    "@types/node": "26.4.1",
     "@vitest/coverage-v8": "4.1.11",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },

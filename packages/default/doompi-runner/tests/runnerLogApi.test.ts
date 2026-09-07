@@ -6,6 +6,7 @@ import { createRunnerLogApi } from '../src/adapters/runnerLogApi.ts';
 import { runnerStateDirFor } from '../src/adapters/webRunnerWatcher.ts';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
 import type { ILogTail, LogTailHandle, LogTailOptions } from '../src/types/logTail.ts';
+import type { IRmuxBackend } from '../src/types/rmuxBackend.ts';
 import type { RunnerLogResponse, RunnerLogStreamEvent } from '../src/types/webRunnerLog.ts';
 
 const SESSION = 'session-a';
@@ -166,7 +167,7 @@ describe('the runner log API', () => {
   it('streams appended lines and ends when the runner does', async () => {
     const store = freshStore();
     writeRun(store, {}, 'already read\n');
-    let emit: ((lines: string[]) => void) | undefined;
+    let emit: ((lines: string[], completeThrough: number) => void) | undefined;
     const logTail: ILogTail = {
       follow(_logPath: string, options: LogTailOptions): LogTailHandle {
         emit = options.onLines;
@@ -179,7 +180,7 @@ describe('the runner log API', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/event-stream');
 
-    emit?.(['fresh line']);
+    emit?.(['fresh line'], 24);
     // The runner exiting is what ends the stream; the poll notices the record.
     writeRun(store, {
       state: 'completed',
@@ -201,6 +202,191 @@ describe('the runner log API', () => {
     }
 
     expect(events.some((event) => event.lines.includes('fresh line'))).toBe(true);
+    // The offset travels with the lines so a reconnect resumes past them
+    // rather than replaying from the slice the page first read.
+    expect(events.find((event) => event.lines.includes('fresh line'))?.offset).toBe(24);
     expect(events.at(-1)?.ended).toBe(true);
   }, 15_000);
+});
+
+/**
+ * The attached pane.
+ *
+ * These routes are the only ones in the package that reach a live process, and
+ * the input one is the only one that writes, so most of what is worth testing
+ * is what they refuse.
+ */
+describe('the runner screen routes', () => {
+  const interactiveRun = { interactive: true, backend: 'rmux' as const, backendTarget: `doom-runner-${RUN}` };
+
+  function paneDouble(overrides: Partial<IRmuxBackend> = {}): IRmuxBackend {
+    return {
+      launch: async () => undefined,
+      watch: async () => undefined,
+      readOutcome: () => undefined,
+      stop: async () => false,
+      input: async () => true,
+      capture: async () => 'a screen',
+      get: () => undefined,
+      ...overrides,
+    };
+  }
+
+  function screenUrl(runId: string, suffix: string): string {
+    return `http://session/runners/${runId}/screen${suffix}`;
+  }
+
+  it('refuses to attach to a runner that was not started interactive', async () => {
+    const store = freshStore();
+    writeRun(store, {});
+    const app = createRunnerLogApi({ storeDir: store, sessionId: SESSION, pane: paneDouble() });
+
+    const response = await app.fetch(new Request(screenUrl(RUN, '/stream')));
+
+    expect(response.status).toBe(404);
+  });
+
+  it('refuses to attach to a runner backed by a plain subprocess, which has no pane', async () => {
+    const store = freshStore();
+    writeRun(store, { interactive: true, backend: 'native', backendTarget: undefined });
+    const app = createRunnerLogApi({ storeDir: store, sessionId: SESSION, pane: paneDouble() });
+
+    expect((await app.fetch(new Request(screenUrl(RUN, '/stream')))).status).toBe(404);
+  });
+
+  it('refuses input to a finished runner, whose pane is gone', async () => {
+    const store = freshStore();
+    writeRun(store, {
+      ...interactiveRun,
+      state: 'completed',
+      exit: { reason: 'completed', code: 0, signal: null, finishedAt: new Date().toISOString() },
+    });
+    const app = createRunnerLogApi({ storeDir: store, sessionId: SESSION, pane: paneDouble() });
+
+    const response = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: 'y\n' }) }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('does not let another session type into this one\u2019s runner', async () => {
+    const store = freshStore();
+    writeRun(store, interactiveRun);
+    const app = createRunnerLogApi({ storeDir: store, sessionId: 'someone-else', pane: paneDouble() });
+
+    const response = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: 'y\n' }) }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects a body that is not text, rather than passing it to the pane', async () => {
+    const store = freshStore();
+    writeRun(store, interactiveRun);
+    const sent: string[] = [];
+    const app = createRunnerLogApi({
+      storeDir: store,
+      sessionId: SESSION,
+      pane: paneDouble({
+        input: async (_target, text) => {
+          sent.push(text);
+          return true;
+        },
+      }),
+    });
+
+    const empty = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: '' }) }),
+    );
+    const wrong = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: 42 }) }),
+    );
+
+    expect(empty.status).toBe(400);
+    expect(wrong.status).toBe(400);
+    expect(sent).toEqual([]);
+  });
+
+  it('caps how much one keystroke batch may carry', async () => {
+    const store = freshStore();
+    writeRun(store, interactiveRun);
+    const app = createRunnerLogApi({ storeDir: store, sessionId: SESSION, pane: paneDouble() });
+
+    const response = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: 'x'.repeat(4097) }) }),
+    );
+
+    expect(response.status).toBe(413);
+  });
+
+  it('sends the text to the pane the record names', async () => {
+    const store = freshStore();
+    writeRun(store, interactiveRun);
+    const sent: { target: string; text: string }[] = [];
+    const app = createRunnerLogApi({
+      storeDir: store,
+      sessionId: SESSION,
+      pane: paneDouble({
+        input: async (target, text) => {
+          sent.push({ target, text });
+          return true;
+        },
+      }),
+    });
+
+    const response = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: 'yes\n' }) }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sent).toEqual([{ target: `doom-runner-${RUN}`, text: 'yes\n' }]);
+  });
+
+  it('streams the unscrubbed bytes beside the log, which is what a terminal needs', async () => {
+    const store = freshStore();
+    const record = writeRun(store, interactiveRun, 'scrubbed\n');
+    // The sink keeps the pane's own output here; the log beside it has had the
+    // cursor movement taken out and could not drive a terminal.
+    const coloured = '\u001b[32mgreen\u001b[0m\u001b[2K\r$ ';
+    fs.writeFileSync(`${record.logPath}.raw`, coloured);
+    const app = createRunnerLogApi({ storeDir: store, sessionId: SESSION, pane: paneDouble() });
+
+    const response = await app.fetch(new Request(screenUrl(RUN, '/stream?from=0')));
+    expect(response.status).toBe(200);
+
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let seen = '';
+    let delivered: string | undefined;
+    while (delivered === undefined) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      seen += value;
+      const data = /^data: (.*)$/mu.exec(seen);
+      if (data?.[1] !== undefined) {
+        const event = JSON.parse(data[1]) as { chunk: string };
+        if (event.chunk !== '') delivered = event.chunk;
+      }
+    }
+    await reader.cancel();
+
+    expect(Buffer.from(delivered ?? '', 'base64').toString('utf8')).toBe(coloured);
+  }, 15_000);
+
+  it('reports a pane that would not take the input rather than claiming success', async () => {
+    const store = freshStore();
+    writeRun(store, interactiveRun);
+    const app = createRunnerLogApi({
+      storeDir: store,
+      sessionId: SESSION,
+      pane: paneDouble({ input: async () => false }),
+    });
+
+    const response = await app.fetch(
+      new Request(screenUrl(RUN, '/input'), { method: 'POST', body: JSON.stringify({ text: 'y' }) }),
+    );
+
+    expect(response.status).toBe(502);
+  });
 });

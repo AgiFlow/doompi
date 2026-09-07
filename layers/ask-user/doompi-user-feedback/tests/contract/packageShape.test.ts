@@ -62,8 +62,8 @@ describe('doompi-user-feedback package contract', () => {
     expect(Object.keys(manifest.dependencies ?? {}).some((name) => name.startsWith('@juicesharp/'))).toBe(false);
     expect(manifest.dependencies).toMatchObject({
       '@agimon-ai/doompi-extension-contracts': 'workspace:*',
-      '@deepseek-ai/cordis': '4.0.1',
-      typebox: '1.3.19',
+      '@deepseek-ai/cordis': '4.0.2',
+      typebox: '1.3.25',
     });
     for (const packageName of ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui']) {
       expect(manifest.peerDependencies?.[packageName]).toBe('0.85.1');

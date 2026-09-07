@@ -61,14 +61,15 @@ export function useRunnerTail(sessionId: string | null, runId: string, running: 
       const initial = plainTailLine(result.slice.text.split('\n'));
       if (initial !== undefined) setTail({ runId, text: initial });
       if (!result.slice.running) return;
-      follow = followRunnerLog(sessionId, runId, result.slice.fileSize, {
+      follow = followRunnerLog(sessionId, runId, result.slice.completeBytes, {
         onEvent: (event) => {
           const next = plainTailLine(event.lines);
           if (live && next !== undefined) setTail({ runId, text: next });
         },
-        // A dropped stream freezes the line at the last one that arrived. The
-        // row is a glance, and reconnecting it would cost more than it says.
-        onError: () => undefined,
+        // A stream that stays down past its retries freezes the line at the
+        // last one that arrived. The row is a glance, and saying so would cost
+        // more room than the fact is worth.
+        onLost: () => undefined,
       });
     });
     return () => {

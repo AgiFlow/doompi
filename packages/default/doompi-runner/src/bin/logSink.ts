@@ -12,10 +12,11 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     enableLogs: true,
     enableTraces: true,
   });
-  const [logPath, rotatedPath, maxBytesRaw, donePath] = argv;
+  const [logPath, rotatedPath, maxBytesRaw, donePath, rawPath] = argv;
   try {
-    // Keep the legacy argument shape for the published executable subpath. Raw
-    // logs are append-only now, so the former rotation path and ceiling are not used.
+    // Keep the legacy argument shape for the published executable subpath. The
+    // scrubbed log is append-only, so the former rotation path is unused; the
+    // ceiling now bounds the raw copy, which only interactive runs ask for.
     if (!logPath || !rotatedPath || !maxBytesRaw || !donePath) {
       throw new Error('logSink requires log, rotated log, max bytes, and completion paths');
     }
@@ -36,10 +37,29 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     throw error;
   }
   let chunks = 0;
+  // The pane's bytes before anything is taken out of them. Scrubbing exists so
+  // the log stays worth grepping, and it is exactly what makes the log useless
+  // to a terminal, so an attached view needs its own faithful copy.
+  const rawCeiling = Number.parseInt(maxBytesRaw, 10);
+  const raw = rawPath === undefined || rawPath === '' ? undefined : openRaw(rawPath);
+  let rawWritten = raw === undefined ? 0 : rawSize(rawPath as string);
   try {
     process.stdin.setEncoding('utf8');
     for await (const chunk of process.stdin) {
-      const text = scrubTerminalOutput(String(chunk));
+      const source = String(chunk);
+      if (raw !== undefined) {
+        const rawBytes = Buffer.from(source, 'utf8');
+        // A terminal that scrolls all day must not fill the disk. Past the
+        // ceiling the copy starts over: a reader attaching later wants the
+        // recent screen, and no part of this is the record of the run.
+        if (rawWritten + rawBytes.byteLength > rawCeiling) {
+          fs.ftruncateSync(raw, 0);
+          rawWritten = 0;
+        }
+        fs.writeSync(raw, rawBytes);
+        rawWritten += rawBytes.byteLength;
+      }
+      const text = scrubTerminalOutput(source);
       if (!text) continue;
       const bytes = Buffer.from(text, 'utf8');
       fs.writeSync(handle, bytes);
@@ -47,6 +67,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
       chunks += 1;
     }
     fs.closeSync(handle);
+    if (raw !== undefined) fs.closeSync(raw);
     writeDone(donePath);
     await telemetry.recordEvent('doom_runner.file_sink_finished', {
       outcome: 'completed',
@@ -60,6 +81,19 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     throw error;
   } finally {
     await telemetry.shutdown();
+  }
+}
+
+/** Truncating rather than appending: a stale pane from a previous run is not this one's. */
+function openRaw(target: string): number {
+  return fs.openSync(target, 'w');
+}
+
+function rawSize(target: string): number {
+  try {
+    return fs.statSync(target).size;
+  } catch {
+    return 0;
   }
 }
 

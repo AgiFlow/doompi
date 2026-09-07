@@ -1,6 +1,8 @@
 export {
   type AutocompactModeConfig,
+  type AutocompactOverrideConfig,
   type AutocompactThresholdConfig,
+  type AutocompactTokenConfig,
   type ConfigValueOrigin,
   type DeepReadonly,
   DOOM_CONFIG_SERVICE,

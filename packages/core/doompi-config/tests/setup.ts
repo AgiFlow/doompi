@@ -996,6 +996,91 @@ describe('Doom configuration', () => {
       thresholds: { pass1: 0.4, pass2: 0.8 },
     });
   });
+  it('parses per-model absolute token checkpoints', () => {
+    const parsed = parseDoomConfig(
+      'modes:\n  autocompact:\n    overrides:\n      - model: claude-opus-4-[6-9]\n        tokens:\n          pass1: 75000\n          pass2: 150000\n          pass3: 200000\n      - model: anthropic/claude-opus-4-6\n        tokens:\n          pass2: 150000\n',
+      '/config.yaml',
+    );
+    expect(parsed.modes?.autocompact).toEqual({
+      overrides: [
+        { model: 'claude-opus-4-[6-9]', tokens: { pass1: 75_000, pass2: 150_000, pass3: 200_000 } },
+        { model: 'anthropic/claude-opus-4-6', tokens: { pass2: 150_000 } },
+      ],
+    });
+  });
+  it('rejects autocompact overrides the runtime could not act on', () => {
+    expect(() => parseDoomConfig('modes:\n  autocompact:\n    overrides: 3\n', '/config.yaml')).toThrow(
+      'modes.autocompact.overrides to be a list',
+    );
+    expect(() =>
+      parseDoomConfig(
+        'modes:\n  autocompact:\n    overrides:\n      - tokens:\n          pass1: 75000\n',
+        '/config.yaml',
+      ),
+    ).toThrow('modes.autocompact.overrides[0].model');
+    expect(() =>
+      parseDoomConfig("modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n", '/config.yaml'),
+    ).toThrow('modes.autocompact.overrides[0].tokens to be an object');
+    // An entry that pins nothing reads like a working override but changes nothing.
+    expect(() =>
+      parseDoomConfig(
+        "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        tokens: {}\n",
+        '/config.yaml',
+      ),
+    ).toThrow('requires one of modes.autocompact.overrides[0].tokens.pass1, pass2, or pass3');
+    expect(() =>
+      parseDoomConfig(
+        "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        tokens:\n          pass1: 0\n",
+        '/config.yaml',
+      ),
+    ).toThrow('modes.autocompact.overrides[0].tokens.pass1 to be an integer of at least 1');
+    expect(() =>
+      parseDoomConfig(
+        "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        tokens:\n          pass1: 7.5\n",
+        '/config.yaml',
+      ),
+    ).toThrow('modes.autocompact.overrides[0].tokens.pass1 to be an integer');
+    // The ratios accept the cockpit's string form; these keys are hand-written only.
+    expect(() =>
+      parseDoomConfig(
+        "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        tokens:\n          pass1: '75000'\n",
+        '/config.yaml',
+      ),
+    ).toThrow('modes.autocompact.overrides[0].tokens.pass1 to be an integer');
+    expect(() =>
+      parseDoomConfig(
+        "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        tokens:\n          pass4: 75000\n",
+        '/config.yaml',
+      ),
+    ).toThrow('unsupported modes.autocompact.overrides[0].tokens field(s): pass4');
+    expect(() =>
+      parseDoomConfig(
+        "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        window: 1000000\n",
+        '/config.yaml',
+      ),
+    ).toThrow('unsupported modes.autocompact.overrides[0] field(s): window');
+  });
+  it('replaces the whole override list rather than merging it entry by entry', () => {
+    const globalConfig = parseDoomConfig(
+      "modes:\n  autocompact:\n    model: openai/gpt-5\n    overrides:\n      - model: 'claude-opus-*'\n        tokens:\n          pass1: 75000\n",
+      '/global.yaml',
+    );
+    const repositoryConfig = parseDoomConfig(
+      "modes:\n  autocompact:\n    overrides:\n      - model: 'gpt-5'\n        tokens:\n          pass1: 30000\n",
+      '/repo.yaml',
+    );
+
+    // First-match-wins would have no answer for how two files interleave, so one list wins whole.
+    expect(mergeDoomConfigs(globalConfig, repositoryConfig).modes?.autocompact).toEqual({
+      model: 'openai/gpt-5',
+      overrides: [{ model: 'gpt-5', tokens: { pass1: 30_000 } }],
+    });
+    // A repository that says nothing about overrides still inherits the global list.
+    expect(
+      mergeDoomConfigs(globalConfig, parseDoomConfig('modes:\n  autocompact:\n    thinking: low\n', '/repo.yaml')).modes
+        ?.autocompact?.overrides,
+    ).toEqual([{ model: 'claude-opus-*', tokens: { pass1: 75_000 } }]);
+  });
   it('publishes the config service and merges planning, editor, and adapter fallbacks', () => {
     const probe = new Context();
     new DoomConfigService(probe, configContext('/missing'), loadDoomConfig);

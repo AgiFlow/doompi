@@ -14,6 +14,7 @@ function contributions(plugin: WebPluginDefinition): string[] {
   count('tool renderers', plugin.toolRenderers);
   count('activity groups', plugin.activityGroups);
   count('activity sections', plugin.activitySections);
+  count('composer menu items', plugin.composerMenuItems);
   count('minor modes', plugin.minorModes);
   count('selection axes', plugin.selectionAxes);
   count('leader bindings', plugin.leaderBindings);

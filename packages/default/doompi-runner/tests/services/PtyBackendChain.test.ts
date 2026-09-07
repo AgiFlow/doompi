@@ -25,6 +25,7 @@ function fakeBackend(overrides: Partial<IRmuxBackend> = {}): IRmuxBackend {
     watch: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(false),
     input: vi.fn().mockResolvedValue(false),
+    capture: vi.fn().mockResolvedValue(undefined),
     readOutcome: vi.fn().mockReturnValue(undefined),
     get: vi.fn().mockReturnValue(undefined),
     ...overrides,

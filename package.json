@@ -7,7 +7,7 @@
     "audit:workspace": "node scripts/audit-workspace.mjs",
     "build": "nx run-many -t build",
     "cockpit": "pnpm cockpit:build && pnpm doompi-web",
-    "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web @agimon-ai/doompi-autocompact @agimon-ai/doompi-author @agimon-ai/doompi-computer-use @agimon-ai/doompi-edit @agimon-ai/doompi-file-edit @agimon-ai/doompi-goal @agimon-ai/doompi-grep @agimon-ai/doompi-help @agimon-ai/doompi-hook @agimon-ai/doompi-log @agimon-ai/doompi-loop @agimon-ai/doompi-mcp @agimon-ai/doompi-plan @agimon-ai/doompi-prompt @agimon-ai/doompi-read @agimon-ai/doompi-runner @agimon-ai/doompi-sandbox @agimon-ai/doompi-task @agimon-ai/doompi-team @agimon-ai/doompi-user-feedback @agimon-ai/doompi-voice @agimon-ai/doompi-workflow",
+    "cockpit:build": "nx run-many -t build -p @agimon-ai/doompi @agimon-ai/doompi-server @agimon-ai/doompi-web @agimon-ai/doompi-autocompact @agimon-ai/doompi-author @agimon-ai/doompi-computer-use @agimon-ai/doompi-edit @agimon-ai/doompi-file-edit @agimon-ai/doompi-git @agimon-ai/doompi-goal @agimon-ai/doompi-grep @agimon-ai/doompi-help @agimon-ai/doompi-hook @agimon-ai/doompi-log @agimon-ai/doompi-loop @agimon-ai/doompi-mcp @agimon-ai/doompi-model-guidance @agimon-ai/doompi-plan @agimon-ai/doompi-prompt @agimon-ai/doompi-read @agimon-ai/doompi-runner @agimon-ai/doompi-sandbox @agimon-ai/doompi-task @agimon-ai/doompi-team @agimon-ai/doompi-user-feedback @agimon-ai/doompi-voice @agimon-ai/doompi-workflow",
     "examples:check": "node scripts/check-examples.mjs",
     "hooks:check": "node scripts/emit-hooks.mjs --check",
     "hooks:write": "node scripts/emit-hooks.mjs --write",
@@ -47,17 +47,17 @@
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
     "@commitlint/config-nx-scopes": "21.2.0",
-    "@nx/js": "23.1.2",
+    "@nx/js": "23.2.0",
     "husky": "9.1.7",
     "lint-staged": "17.4.1",
-    "nx": "23.1.2",
-    "oxfmt": "0.65.0",
-    "oxlint": "1.80.0",
+    "nx": "23.2.0",
+    "oxfmt": "0.66.0",
+    "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "4.1.11",
-    "zod": "4.4.3"
+    "vitest": "5.0.0",
+    "zod": "4.5.4"
   },
   "engines": {
     "node": ">=22.22.1"

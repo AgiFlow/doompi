@@ -73,6 +73,8 @@ export interface RemoteAccess {
   settings(): RemoteAccessSettings;
   updateSettings(patch: Partial<RemoteAccessSettings>): RemoteAccessSettings;
   tunnelPort(): number | undefined;
+  /** The public origin the tunnel currently answers on, while one is up. */
+  publicOrigin(): string | undefined;
   tunnelPolicy(): OriginPolicy | undefined;
   enable(): Promise<{ ok: true } | { ok: false; error: string }>;
   /** True between a contained `enable` and the handover its response defers. */
@@ -303,6 +305,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
   return {
     state: (selfDeviceId, forLocalCaller = false) => view(selfDeviceId, forLocalCaller),
     settings: () => settings,
+    publicOrigin: () => publicOrigin,
 
     updateSettings(patch) {
       // Through the parser rather than spread straight in, so a value out of

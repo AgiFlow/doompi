@@ -159,7 +159,9 @@ export type {
 } from '../types/config.ts';
 export {
   type AutocompactModeConfig,
+  type AutocompactOverrideConfig,
   type AutocompactThresholdConfig,
+  type AutocompactTokenConfig,
   type DeepReadonly,
   DOOM_CONFIG_SERVICE,
   type DoomConfig,

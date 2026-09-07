@@ -2,36 +2,51 @@ import { defineGlobalStore, type UserMessageActionRunContext } from '@agimon-ai/
 import type { DraftState } from './promptsActions.ts';
 
 /**
- * Package-local handoff from a timeline action to the mounted prompt dialog.
+ * Package-local handoff from anything that asks for the prompt library to the
+ * component that owns it.
  *
  * DESIGN PATTERNS:
- * - The web plugin action has no React owner, so it publishes one short-lived
- *   request to the activity section that already owns prompt dialog state.
- * - Message text is copied into a new editable draft; the user must choose a
- *   stable name before anything is written.
+ * - Neither caller has a React owner: a timeline action runs from the host's
+ *   menu, and a composer menu entry unmounts the moment the menu closes. Both
+ *   publish one short-lived request instead of holding dialog state.
+ * - One request pipe, not two. A request carrying a draft opens the editor on
+ *   that text; a request carrying nothing opens the picker. The dialog owner
+ *   subscribes once and handles both.
  *
  * AVOID:
  * - Persisting drafts or message content in browser storage.
  * - Making the host understand prompt-specific dialog state.
+ * - Signalling "no draft" with an empty draft: an empty draft is a real state
+ *   the editor can be in, so it cannot also mean the absence of one.
  */
 
-type MessagePromptListener = (draft: DraftState) => void;
+/** One ask for the prompt library. A absent draft opens the picker rather than the editor. */
+export interface PromptDialogRequest {
+  draft?: DraftState;
+}
 
-const messagePromptDraft = defineGlobalStore<DraftState | undefined>(undefined);
+type PromptDialogListener = (request: PromptDialogRequest) => void;
+
+const promptDialogRequest = defineGlobalStore<PromptDialogRequest | undefined>(undefined);
 
 export function requestMessagePromptDraft(context: UserMessageActionRunContext): void {
   const draft: DraftState = { name: '', text: context.text, original: '' };
-  messagePromptDraft.update(() => draft);
+  promptDialogRequest.update(() => ({ draft }));
 }
 
-export function subscribeMessagePromptDraft(listener: MessagePromptListener): () => void {
+/** Opens the library with nothing prefilled, as the composer menu entry does. */
+export function requestPromptDialogOpen(): void {
+  promptDialogRequest.update(() => ({}));
+}
+
+export function subscribePromptDialogRequest(listener: PromptDialogListener): () => void {
   const deliver = (): void => {
-    const draft = messagePromptDraft.store.state;
-    if (!draft) return;
-    messagePromptDraft.reset();
-    listener(draft);
+    const request = promptDialogRequest.store.state;
+    if (!request) return;
+    promptDialogRequest.reset();
+    listener(request);
   };
-  const subscription = messagePromptDraft.store.subscribe(deliver);
+  const subscription = promptDialogRequest.store.subscribe(deliver);
   deliver();
   return () => subscription.unsubscribe();
 }

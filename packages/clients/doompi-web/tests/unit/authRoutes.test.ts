@@ -8,9 +8,12 @@ import { createFakeAuthRuntime, tick } from '../support/fakeAuthRuntime.ts';
 const PROVIDERS = '/api/auth/providers';
 const LOGINS = '/api/auth/logins';
 
-function app(runtime: () => Promise<AuthRuntime> = async () => createFakeAuthRuntime()): Hono {
+function app(
+  runtime: () => Promise<AuthRuntime> = async () => createFakeAuthRuntime(),
+  listenerOf?: () => 'local' | 'tunnel',
+): Hono {
   const hono = new Hono();
-  registerAuthRoutes(hono, createProviderAuth({ runtime }));
+  registerAuthRoutes(hono, createProviderAuth({ runtime }), listenerOf);
   return hono;
 }
 
@@ -110,5 +113,37 @@ describe('auth routes', () => {
     expect(runtime.stored.has('anthropic')).toBe(false);
     runtime.logoutError = new Error('locked');
     expect((await hono.request(`${PROVIDERS}/anthropic`, { method: 'DELETE' })).status).toBe(502);
+  });
+
+  it('takes remote from the listener, not from the request body', async () => {
+    const tunnel = app(
+      async () => createFakeAuthRuntime(),
+      () => 'tunnel',
+    );
+    const started = await tunnel.request(LOGINS, json({ providerId: 'anthropic', type: 'oauth' }));
+    expect(started.status).toBe(201);
+    const { flow } = (await started.json()) as { flow: { remote?: boolean } };
+    expect(flow.remote).toBe(true);
+    await tick();
+
+    // A local caller claiming to be remote is ignored: the accepted socket
+    // decides, so neither side can talk its way into the other's behaviour.
+    const local = app(
+      async () => createFakeAuthRuntime(),
+      () => 'local',
+    );
+    const spoofed = await local.request(LOGINS, json({ providerId: 'anthropic', type: 'oauth', remote: true }));
+    expect(spoofed.status).toBe(201);
+    const spoofedBody = (await spoofed.json()) as { flow: { remote?: boolean } };
+    expect(spoofedBody.flow.remote).toBeUndefined();
+    await tick();
+  });
+
+  it('omits remote when no listener is wired', async () => {
+    const response = await app().request(LOGINS, json({ providerId: 'anthropic', type: 'oauth' }));
+    expect(response.status).toBe(201);
+    const { flow } = (await response.json()) as { flow: { remote?: boolean } };
+    expect(flow.remote).toBeUndefined();
+    await tick();
   });
 });

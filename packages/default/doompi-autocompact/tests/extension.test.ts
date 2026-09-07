@@ -145,6 +145,7 @@ function createHarness(
   let contextContributions = initialContextContributions;
   let idle = true;
   let pendingMessages = false;
+  let model: { id: string; provider: string } | undefined;
   let usage: { tokens: number | null; contextWindow: number; percent: number | null } = {
     tokens: 0,
     contextWindow: 200_000,
@@ -195,6 +196,9 @@ function createHarness(
     isIdle: () => idle,
     hasPendingMessages: () => pendingMessages,
     getContextUsage: () => usage,
+    get model() {
+      return model;
+    },
     compact: vi.fn((options?: CompactOptions) => compactCalls.push(options ?? {})),
   } as unknown as ExtensionContext;
 
@@ -301,6 +305,9 @@ function createHarness(
     },
     setContextContributions(value: DoomContextContributionsSnapshot) {
       contextContributions = value;
+    },
+    setModel(value: { id: string; provider: string } | undefined) {
+      model = value;
     },
     setUsage(tokens: number | null, contextWindow = 200_000) {
       usage = {
@@ -730,6 +737,43 @@ describe('doom autocompact extension', () => {
     );
   });
 
+  it('checkpoints early on a model pinned to an absolute token count', async () => {
+    loadDoomConfig.mockReturnValue({
+      modes: {
+        autocompact: {
+          overrides: [{ model: 'claude-opus-4-[6-9]', tokens: { pass1: 75_000 } }],
+        },
+      },
+    });
+    const harness = createHarness();
+    harness.setModel({ id: 'claude-opus-4-6', provider: 'anthropic' });
+    harness.appendAssistant('Large parent transcript.');
+    await harness.emit('session_start', { reason: 'startup' });
+    // Half of a one-million-token window is 500_000, so the ratio ladder would still be waiting.
+    harness.setUsage(80_000, 1_000_000);
+    await harness.emit('agent_settled');
+
+    expect(harness.generationRequests).toHaveLength(1);
+    expect(harness.generationRequests[0]?.instructions).toContain('checkpoint pass 1');
+  });
+
+  it('leaves a model the override list does not name on the ratio ladder', async () => {
+    loadDoomConfig.mockReturnValue({
+      modes: {
+        autocompact: {
+          overrides: [{ model: 'claude-opus-4-[6-9]', tokens: { pass1: 75_000 } }],
+        },
+      },
+    });
+    const harness = createHarness();
+    harness.setModel({ id: 'gpt-5', provider: 'openai' });
+    harness.appendAssistant('Large parent transcript.');
+    await harness.emit('session_start', { reason: 'startup' });
+    harness.setUsage(80_000, 1_000_000);
+    await harness.emit('agent_settled');
+
+    expect(harness.generationRequests).toHaveLength(0);
+  });
   it('stages a declined pass 2 checkpoint and advances without compacting', async () => {
     const harness = createHarness();
     const state = createInitialState();
@@ -819,6 +863,38 @@ describe('doom autocompact extension', () => {
     ).toMatchObject({ data: { baselineTokens: 30_000, baselinePending: false } });
   });
 
+  it('does not re-fire a token checkpoint the compaction baseline has already passed', async () => {
+    loadDoomConfig.mockReturnValue({
+      modes: { autocompact: { overrides: [{ model: '*', tokens: { pass1: 75_000 } }] } },
+    });
+    const harness = createHarness();
+    harness.setModel({ id: 'claude-opus-4-6', provider: 'anthropic' });
+    await harness.emit('session_start', { reason: 'startup' });
+    harness.setUsage(null, 1_000_000);
+    harness.appendCompaction('manual-compact');
+    await harness.emit('session_compact', {
+      compactionEntry: compactionEntry('manual-compact'),
+      fromExtension: false,
+      reason: 'manual',
+      willRetry: false,
+    });
+
+    // The compaction settles above the configured 75_000 checkpoint.
+    harness.setUsage(90_000, 1_000_000);
+    harness.appendAssistant('First response measured against the compacted context.');
+    await harness.emit('agent_settled');
+    expect(harness.generationRequests).toHaveLength(0);
+
+    // Without the guard this fires every turn, because usage is already past 75_000.
+    harness.setUsage(100_000, 1_000_000);
+    await harness.emit('agent_settled');
+    expect(harness.generationRequests).toHaveLength(0);
+
+    // The pass falls back to its ratio, measured from the new baseline.
+    harness.setUsage(290_000, 1_000_000);
+    await harness.emit('agent_settled');
+    expect(harness.generationRequests).toHaveLength(1);
+  });
   it('records delegation failures and retries only after the parent branch advances', async () => {
     const harness = createHarness();
     harness.appendAssistant('Large parent transcript.');

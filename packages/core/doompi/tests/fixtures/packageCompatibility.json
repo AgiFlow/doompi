@@ -81,7 +81,9 @@
     "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
     "bin": {},
-    "pi": { "extensions": ["./dist/extensions/pi.mjs"] },
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-computer-use/SKILL.md"],
     "files": [
       "dist",
@@ -439,6 +441,7 @@
   "@agimon-ai/doompi-extension-contracts": {
     "exports": {
       ".": "tir",
+      "./agent-model": "tir",
       "./ask-user": "tir",
       "./author-facade": "tir",
       "./background-work": "tir",
@@ -483,6 +486,11 @@
         "types": "./dist/index.d.mts",
         "import": "./dist/index.mjs",
         "require": "./dist/index.cjs"
+      },
+      "./agent-model": {
+        "types": "./dist/agentModel.d.mts",
+        "import": "./dist/agentModel.mjs",
+        "require": "./dist/agentModel.cjs"
       },
       "./ask-user": {
         "types": "./dist/askUser.d.mts",
@@ -2451,6 +2459,8 @@
   "@agimon-ai/doompi": {
     "exports": {
       ".": "tir",
+      "./contextApi": "tir",
+      "./sessionApi": "tir",
       "./bin/cli": "tir",
       "./bin/doomRunner": "tir",
       "./bin/dpi": "tir",
@@ -2471,9 +2481,9 @@
       "./config": "tir",
       "./config/harnessState": "tir",
       "./config/projectTrust": "tir",
-      "./contextApi": "tir",
       "./extensions/pi": "tir",
       "./entries/domains": "tir",
+      "./entries/agentModel": "tir",
       "./entries/cordisFinalizer": "tir",
       "./entries/cordisHost": "tir",
       "./entries/doom": "tir",
@@ -2497,7 +2507,6 @@
       "./services/piSettings": "tir",
       "./services/resourceCollector": "tir",
       "./services/syncState": "tir",
-      "./sessionApi": "tir",
       "./utils": "tir",
       "./utils/json": "tir",
       "./utils/moduleResolution": "tir",
@@ -2510,6 +2519,16 @@
         "types": "./dist/index.d.mts",
         "import": "./dist/index.mjs",
         "require": "./dist/index.cjs"
+      },
+      "./contextApi": {
+        "types": "./dist/contextApi.d.mts",
+        "import": "./dist/contextApi.mjs",
+        "require": "./dist/contextApi.cjs"
+      },
+      "./sessionApi": {
+        "types": "./dist/sessionApi.d.mts",
+        "import": "./dist/sessionApi.mjs",
+        "require": "./dist/sessionApi.cjs"
       },
       "./bin/cli": {
         "types": "./dist/bin/cli.d.mts",
@@ -2611,11 +2630,6 @@
         "import": "./dist/config/projectTrust.mjs",
         "require": "./dist/config/projectTrust.cjs"
       },
-      "./contextApi": {
-        "types": "./dist/contextApi.d.mts",
-        "import": "./dist/contextApi.mjs",
-        "require": "./dist/contextApi.cjs"
-      },
       "./extensions/pi": {
         "types": "./dist/extensions/pi.d.mts",
         "import": "./dist/extensions/pi.mjs",
@@ -2625,6 +2639,11 @@
         "types": "./dist/entries/domains.d.mts",
         "import": "./dist/entries/domains.mjs",
         "require": "./dist/entries/domains.cjs"
+      },
+      "./entries/agentModel": {
+        "types": "./dist/entries/agentModel.d.mts",
+        "import": "./dist/entries/agentModel.mjs",
+        "require": "./dist/entries/agentModel.cjs"
       },
       "./entries/cordisFinalizer": {
         "types": "./dist/entries/cordisFinalizer.d.mts",
@@ -2740,11 +2759,6 @@
         "types": "./dist/services/syncState.d.mts",
         "import": "./dist/services/syncState.mjs",
         "require": "./dist/services/syncState.cjs"
-      },
-      "./sessionApi": {
-        "types": "./dist/sessionApi.d.mts",
-        "import": "./dist/sessionApi.mjs",
-        "require": "./dist/sessionApi.cjs"
       },
       "./utils": {
         "types": "./dist/utils/index.d.mts",

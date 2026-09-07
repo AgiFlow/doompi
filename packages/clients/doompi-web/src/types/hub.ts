@@ -48,6 +48,15 @@ export interface SessionGitStatus {
   dirty: boolean;
 }
 
+/**
+ * A session's parent, as read from its lineage sidecar. Fixed at spawn, so the
+ * hub reads it once rather than refreshing it like git status.
+ */
+export interface SessionLineage {
+  parentSessionId: string;
+  /** The spawning package's own label, such as "worktree". Never interpreted. */
+  provenance: string;
+}
 /** One immutable, signed client composition resolved for a session. */
 export interface SessionWebComposition {
   /** Stable identity of the synchronized root and generation. */
@@ -101,6 +110,16 @@ export interface SessionSummary {
   git?: SessionGitStatus;
   /** Signed plugin composition independently resolved for this session. */
   webComposition?: SessionWebComposition;
+  /**
+   * The session this one was spawned from, when a lineage sidecar named one.
+   * The rail nests a session under its parent; absent means a top-level row.
+   */
+  parentSessionId?: string;
+  /**
+   * The spawning package's own label for the relationship, such as "worktree".
+   * The hub does not interpret it; the rail uses it to pick an affordance.
+   */
+  sessionProvenance?: string;
 }
 
 /**
@@ -134,6 +153,17 @@ export const HUB_RESYNCED_TYPE = 'hub_resynced';
  */
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
+/**
+ * The custom session entry the DoomPi runtime journals when the agent's model
+ * changes without a client having asked for it. The shape mirrors
+ * AgentModelProjection in doompi-extension-contracts.
+ *
+ * Pi reports a thinking-level switch on the wire, so that field follows from
+ * the frame alone. It has no wire event for the model, so plan mode applying
+ * its configured planning model would otherwise leave the chip naming the
+ * model the session left behind.
+ */
+export const AGENT_MODEL_ENTRY_TYPE = 'doom-agent-model';
 /**
  * The custom session entry DoomPi journals describing what the session is
  * composed of: which mode admitted each tool and skill, and what each costs.

@@ -127,6 +127,7 @@ const rmuxBackend: IRmuxBackend = {
   readOutcome: () => undefined,
   stop: async () => false,
   input: async () => false,
+  capture: async () => undefined,
   get: () => undefined,
 };
 
@@ -542,6 +543,7 @@ const rmuxPaths: IRunnerPaths = {
   stateDirectory: () => path.join(rmuxRoot, 'state'),
   logPathFor: (id) => path.join(rmuxRoot, 'logs', `${id}.log`),
   rotatedLogPathFor: (id) => path.join(rmuxRoot, 'logs', `${id}.1.log`),
+  rawLogPathFor: (id) => path.join(rmuxRoot, 'logs', `${id}.log.raw`),
   statePathFor: (id) => path.join(rmuxRoot, 'state', `${id}.json`),
   ensureDirectories: () => {
     fs.mkdirSync(path.join(rmuxRoot, 'logs'), { recursive: true });

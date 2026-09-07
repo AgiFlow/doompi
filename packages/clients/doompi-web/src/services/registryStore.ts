@@ -1,29 +1,17 @@
+import { REGISTRY_DIR_ENV, resolveRegistryDir } from '@agimon-ai/doompi-web-contracts';
 import { SESSION_RECORD_VERSION, type SessionRecord } from '../types/registry.ts';
 
 const RECORD_EXTENSION = '.json';
 const REQUIRED_STRINGS = ['id', 'cwd', 'socketPath', 'tokenFile', 'createdAt'] as const;
 
-/** Environment variable overriding where session records live. */
-export const REGISTRY_DIR_ENV = 'DOOMPI_RUNTIME_DIR';
+// Registry-dir resolution is defined once in doompi-web-contracts, because the
+// hub, the session server, and any package that spawns a session have to land
+// on the same directory or a spawned session never appears in the rail. These
+// re-exports keep this module's existing callers unchanged.
+export { REGISTRY_DIR_ENV, resolveRegistryDir };
+export type { RegistryDirInput } from '@agimon-ai/doompi-web-contracts';
 
-const DEFAULT_RUN_DIR_SEGMENT = '.doompi/run';
 const SESSIONS_SEGMENT = 'sessions';
-
-export interface RegistryDirInput {
-  /** Value of --registry-dir, when given; wins over everything else. */
-  readonly flagValue?: string;
-  /** Value of DOOMPI_RUNTIME_DIR, when set. */
-  readonly envValue?: string;
-  /** The user's home directory, supplied by the host. */
-  readonly homeDir: string;
-}
-
-/** Mirrors doompi-server's resolution so both sides land on the same directory. */
-export function resolveRegistryDir(input: RegistryDirInput): string {
-  if (input.flagValue) return input.flagValue;
-  if (input.envValue) return input.envValue;
-  return `${input.homeDir}/${DEFAULT_RUN_DIR_SEGMENT}`;
-}
 
 /** Directory the watcher scans for record files. */
 export function sessionRecordsDir(registryDir: string): string {

@@ -6,6 +6,10 @@ import path from 'node:path';
 import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
 import type { IFileEditPaths } from '../../types/fileEditPaths';
 
+/** The directory this package owns, under whichever root holds agent state. */
+const STATE_DIRECTORY = 'doom-file-edit';
+const AGENT_DIRECTORY = ['.pi', 'agent'];
+
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
@@ -19,13 +23,34 @@ export class FileEditPaths implements IFileEditPaths {
     return sessionId;
   }
 
+  /**
+   * Where every session's state lives: the Pi agent directory, the same root
+   * every other Doom package writes to, and never inside the working tree.
+   *
+   * An earlier layout put this in the repository's git common directory. That
+   * is git's own storage: nothing in git's lifecycle prunes a directory we add
+   * to it, a linked worktree writes into the main checkout rather than its own,
+   * a submodule writes inside `.git/modules`, and `PI_CODING_AGENT_DIR` was
+   * ignored outright. The snapshots are verbatim copies of files the session
+   * touched, so where they land is a question about handling content, not a
+   * question about convenience.
+   */
+  stateDirectory(): string {
+    const configured = process.env.PI_CODING_AGENT_DIR?.trim();
+    const root =
+      configured === undefined || configured === '' ? path.join(os.homedir(), ...AGENT_DIRECTORY) : configured;
+    return path.join(root, STATE_DIRECTORY);
+  }
+
+  /**
+   * One session's timeline, named from its working directory and its session so
+   * the hub and the session API can find it from another process knowing only
+   * those two things.
+   */
   timelinePath(cwd: string, sessionKey: string): string {
-    const commonDirectory = this.gitCommonDirectory(cwd);
-    const worktree = hash(fs.realpathSync(cwd));
-    const agentDirectory = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
-    const directory = path.join(commonDirectory ?? agentDirectory, 'doom-file-edit');
+    const directory = this.stateDirectory();
     fs.mkdirSync(directory, { recursive: true });
-    return path.join(directory, `${worktree}-${hash(sessionKey)}.jsonl`);
+    return path.join(directory, `${hash(fs.realpathSync(cwd))}-${hash(sessionKey)}.jsonl`);
   }
 
   /**
@@ -36,6 +61,12 @@ export class FileEditPaths implements IFileEditPaths {
     return `${this.timelinePath(cwd, sessionKey).replace(/\.jsonl$/u, '')}.blobs`;
   }
 
+  legacyStateDirectory(cwd: string): string | undefined {
+    const common = this.gitCommonDirectory(cwd);
+    return common === undefined ? undefined : path.join(common, STATE_DIRECTORY);
+  }
+
+  /** Only still read so the state an older build left behind can be cleared away. */
   private gitCommonDirectory(cwd: string): string | undefined {
     try {
       const result = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {

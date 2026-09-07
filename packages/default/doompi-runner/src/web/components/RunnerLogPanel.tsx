@@ -1,10 +1,10 @@
-import { AnsiText, Button, Input, SearchIcon, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
+import { AnsiLine, Button, Input, SearchIcon, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RunnerRunView } from '../../types/webRunners.ts';
 import type { RunnerLogResponse } from '../../types/webRunnerLog.ts';
-import { formatRunnerUptime, isFollowingLive, logViewLines } from '../lib/format.ts';
+import { formatRunnerUptime, isFollowingLive, logViewLines, tailLineNumbers } from '../lib/format.ts';
 import { fetchRunnerLog, followRunnerLog } from '../api/logApi.ts';
 import { requestRunnerStop, runners } from '../stores/runnersStore.ts';
 
@@ -15,6 +15,10 @@ const TAB_ID_PREFIX = 'runner-log-';
 const MAX_VIEW_LINES = 2000;
 /** Context lines each side of a match, the same either-side window grep would use. */
 const CONTEXT_LINES = 2;
+/** A query is typed a character at a time; each one costs a whole-file read on the hub. */
+const SEARCH_DEBOUNCE_MS = 200;
+/** How close to the bottom still counts as "at the bottom" for following. */
+const NEAR_BOTTOM_PX = 24;
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = BYTES_PER_KB * BYTES_PER_KB;
 
@@ -42,6 +46,12 @@ function badgeOf(run: RunnerRunView | undefined): { tone: StatusTone; label: str
   return clean ? { tone: 'ok', label: 'done' } : { tone: 'error', label: run.exit.reason.replace('_', ' ') };
 }
 
+/** Whether one line is a match rather than the context printed around one. */
+function isMatch(line: string, needle: string, ignoreCase: boolean): boolean {
+  if (needle === '') return false;
+  return ignoreCase ? line.toLowerCase().includes(needle.toLowerCase()) : line.includes(needle);
+}
+
 /** One fact of the runner, on its own line so a long command is never elided. */
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
@@ -49,6 +59,36 @@ function MetaRow({ label, value }: { label: string; value: string }) {
       <span className="w-14 shrink-0 text-[10px] text-doom-faint">{label}</span>
       <span className="min-w-0 flex-1 break-all text-[10px] text-doom-dim">{value}</span>
     </span>
+  );
+}
+
+/**
+ * One rendered log line: its number, whether it matched, and the text.
+ *
+ * A row per line rather than one block of joined text. The block form re-parsed
+ * every line's escapes whenever a single line arrived, because the parse was
+ * keyed on the joined string; keyed by line number instead, an append only
+ * costs the line that appended.
+ */
+function LogRow({ number, line, matched }: { number: number | undefined; line: string; matched: boolean }) {
+  return (
+    <div data-testid="runner-log-row" data-matched={matched} className="flex min-w-0 gap-2">
+      {number === undefined ? null : (
+        <span className="w-12 shrink-0 select-none text-right text-[10px] leading-[1.6] text-doom-faint">{number}</span>
+      )}
+      <span
+        aria-hidden
+        className={`w-4 shrink-0 select-none text-[10px] leading-[1.6] ${matched ? 'text-doom-yellow' : 'text-doom-faint'}`}
+      >
+        {matched ? '>>' : ''}
+      </span>
+      <AnsiLine
+        line={line}
+        className={`min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6] ${
+          matched ? 'text-doom-text' : 'text-doom-dim'
+        }`}
+      />
+    </div>
   );
 }
 
@@ -65,14 +105,19 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
   const { runs, stopRequested } = useStore(runners.store, (state) => runners.select(state, sessionId));
   const run = runs.find((candidate) => candidate.id === runId);
   const [now, setNow] = useState(() => Date.now());
+  const [typed, setTyped] = useState('');
   const [query, setQuery] = useState('');
   const [ignoreCase, setIgnoreCase] = useState(false);
   const [context, setContext] = useState(CONTEXT_LINES);
   const [following, setFollowing] = useState(true);
   const [slice, setSlice] = useState<RunnerLogResponse | undefined>(undefined);
+  const [streamFrom, setStreamFrom] = useState<number | undefined>(undefined);
   const [appended, setAppended] = useState<string[]>([]);
   const [error, setError] = useState<string | undefined>(undefined);
+  /** False once the reader scrolls up: following must not yank them back down. */
+  const [pinned, setPinned] = useState(true);
   const bottom = useRef<HTMLDivElement | null>(null);
+  const body = useRef<HTMLDivElement | null>(null);
 
   const filtering = query !== '';
   const live = isFollowingLive(following, filtering, slice?.running === true);
@@ -81,6 +126,13 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
   }, []);
+
+  // Typing is not a question yet. Reading the log costs a whole-file scan on
+  // the hub, so the question is asked once the reader stops typing.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(typed), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [typed]);
 
   const load = useCallback(
     (signal: AbortSignal) => {
@@ -95,38 +147,57 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
         setError(undefined);
         setAppended([]);
         setSlice(result.slice);
+        setStreamFrom(result.slice.completeBytes);
       });
     },
     [sessionId, runId, filtering, query, ignoreCase, context],
   );
 
-  // Re-read whenever the question changes. A query is typed a character at a
-  // time, so the in-flight request for the previous one is abandoned.
+  // Re-read whenever the question changes. A query is debounced above, so the
+  // in-flight request for the previous one is abandoned only on a real change.
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal);
     return () => controller.abort();
   }, [load]);
 
+  // Keyed on the offset rather than the slice object: a re-read that lands on
+  // the same place must not tear down a healthy stream and reopen it.
   useEffect(() => {
-    if (!live || sessionId === null || slice === undefined || !slice.running) return;
-    const follow = followRunnerLog(sessionId, runId, slice.fileSize, {
+    if (!live || sessionId === null || streamFrom === undefined) return;
+    const follow = followRunnerLog(sessionId, runId, streamFrom, {
       onEvent: (event) => {
         if (event.lines.length > 0) {
           setAppended((current) => [...current, ...event.lines].slice(-MAX_VIEW_LINES));
         }
         if (event.ended === true) setFollowing(false);
       },
-      onError: () => setFollowing(false),
+      onLost: () => setFollowing(false),
     });
     return () => follow.close();
-  }, [live, sessionId, runId, slice]);
+  }, [live, sessionId, runId, streamFrom]);
 
-  const lines = logViewLines(slice?.text ?? '', appended, MAX_VIEW_LINES);
+  // A slice read mid-line ends in a fragment the stream will send again whole.
+  const partialTail = slice !== undefined && slice.exists && slice.completeBytes < slice.fileSize;
+  const view = logViewLines(slice?.text ?? '', appended, MAX_VIEW_LINES, { dropPartialTail: live && partialTail });
+  const numbers = useMemo(() => {
+    if (slice === undefined) return [];
+    if (filtering) return slice.lineNumbers ?? [];
+    const last = slice.totalLines + appended.length - (live && partialTail ? 1 : 0);
+    return tailLineNumbers(last, view.lines.length);
+  }, [slice, filtering, appended.length, live, partialTail, view.lines.length]);
 
   useEffect(() => {
-    if (live) bottom.current?.scrollIntoView({ block: 'end' });
-  }, [live, lines.length]);
+    if (live && pinned) bottom.current?.scrollIntoView({ block: 'end' });
+  }, [live, pinned, view.lines.length]);
+
+  // Following is a promise to show the newest line, not a promise to drag the
+  // reader there. Scrolling up is how they say they are reading something else.
+  const onScroll = (): void => {
+    const element = body.current;
+    if (element === null) return;
+    setPinned(element.scrollHeight - element.scrollTop - element.clientHeight <= NEAR_BOTTOM_PX);
+  };
 
   const badge = badgeOf(run);
   const stopping = run !== undefined && stopRequested.includes(run.id);
@@ -183,9 +254,9 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           <Input
             size="sm"
             data-testid="runner-log-search"
-            value={query}
+            value={typed}
             placeholder="search this log"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => setTyped(event.target.value)}
             className="pl-7 text-[10px]"
           />
         </span>
@@ -220,7 +291,8 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
             ? 'reading…'
             : filtering
               ? `${String(slice.lineCount)} matching of ${slice.totalLines.toLocaleString('en-US')} lines`
-              : `${live ? 'tailing' : 'showing'} last ${String(lines.length)} of ${slice.totalLines.toLocaleString('en-US')} lines`}
+              : `${live ? 'tailing' : 'showing'} last ${String(view.lines.length)} of ${slice.totalLines.toLocaleString('en-US')} lines`}
+          {view.hidden > 0 ? ` · ${view.hidden.toLocaleString('en-US')} older hidden` : ''}
         </span>
         <Button
           variant={live ? 'subtle' : 'outline'}
@@ -236,25 +308,63 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
         </Button>
       </div>
 
-      <div
-        data-testid="runner-log-body"
-        className="min-h-0 flex-1 overflow-auto bg-doom-panel-deep px-3 py-3 sm:px-[26px]"
-      >
-        {error !== undefined ? (
-          <p data-testid="runner-log-error" className="text-[10px] text-doom-red">
-            {error}
-          </p>
-        ) : slice !== undefined && slice.exists === false ? (
-          <p className="text-[10px] text-doom-faint">this runner has not written a log yet</p>
-        ) : lines.length === 0 ? (
-          <p className="text-[10px] text-doom-faint">{filtering ? 'nothing matched' : 'the log is empty'}</p>
-        ) : (
-          <AnsiText
-            text={lines.join('\n')}
-            className="whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6] text-doom-dim"
-          />
-        )}
-        <div ref={bottom} />
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={body}
+          onScroll={onScroll}
+          data-testid="runner-log-body"
+          className="h-full overflow-auto bg-doom-panel-deep px-3 py-3 sm:px-[26px]"
+        >
+          {error !== undefined ? (
+            <p data-testid="runner-log-error" className="text-[10px] text-doom-red">
+              {error}
+            </p>
+          ) : slice === undefined ? (
+            <p data-testid="runner-log-reading" className="text-[10px] text-doom-faint">
+              reading…
+            </p>
+          ) : slice.exists === false ? (
+            <p className="text-[10px] text-doom-faint">this runner has not written a log yet</p>
+          ) : view.lines.length === 0 ? (
+            <p className="text-[10px] text-doom-faint">{filtering ? 'nothing matched' : 'the log is empty'}</p>
+          ) : (
+            view.lines.map((line, index) => {
+              const number = numbers[index];
+              const previous = numbers[index - 1];
+              const gap = previous !== undefined && number !== undefined && number - previous > 1;
+              return (
+                <Fragment key={number ?? `row-${String(index)}`}>
+                  {gap ? (
+                    <div
+                      data-testid="runner-log-gap"
+                      aria-hidden
+                      className="select-none py-0.5 pl-12 text-[10px] leading-[1.6] text-doom-faint"
+                    >
+                      ⋯
+                    </div>
+                  ) : null}
+                  <LogRow number={number} line={line} matched={filtering && isMatch(line, query, ignoreCase)} />
+                </Fragment>
+              );
+            })
+          )}
+          <div ref={bottom} />
+        </div>
+        {live && !pinned ? (
+          <Button
+            variant="subtle"
+            size="xs"
+            data-testid="runner-log-jump"
+            title="scroll back to the newest lines and keep following"
+            onClick={() => {
+              setPinned(true);
+              bottom.current?.scrollIntoView({ block: 'end' });
+            }}
+            className="absolute bottom-3 right-3 px-2 text-[9px] font-bold"
+          >
+            jump to latest
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex h-8 shrink-0 items-center gap-2.5 border-t border-doom-border-soft px-3 sm:px-[26px]">

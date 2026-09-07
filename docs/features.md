@@ -73,9 +73,10 @@ three plus every saved prompt, and staging one drops it into the editor instead 
 `~/.pi/agent/prompts`, so it is also `/<name>` from the next start. Arrow up and down keep Pi's own
 behaviour, untouched.
 
-In the cockpit the same library is a `prompts` group in the activity dock, served by a hub-scoped
-API over the same directory. The group opens a dialog over the conversation: picking a prompt sends
-it to the focused session, and the dialog also creates, edits, renames and deletes entries. Staged
+In the cockpit the same library is a `Prompt template` entry in the composer's `+` menu, served by a
+hub-scoped API over the same directory. The entry opens a dialog over the conversation: picking a
+prompt sends it to the focused session, and the dialog also creates, edits, renames and deletes
+entries.
 prompts stay in the terminal, since they live in the memory of the session that received them.
 
 ## Coordinated work

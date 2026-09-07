@@ -36,6 +36,15 @@ export interface TimelineEvent {
    * which could not tell an edit from a file a command merely touched.
    */
   verified?: boolean;
+  /**
+   * Set on a tool change whose file did not exist when the call began.
+   *
+   * A missing `before` is ambiguous on its own: the file may have been created,
+   * or it may have existed and been too large or too binary to capture. Only
+   * the first has a diff, and it is the whole file against nothing, so the two
+   * are told apart here rather than guessed at by a reader.
+   */
+  created?: boolean;
 }
 
 /** A version 1 event, still accepted from a timeline opened by an older build. */
@@ -65,6 +74,8 @@ export interface FileEditVersion {
   additions?: number;
   removals?: number;
   verified?: boolean;
+  /** Set when the file did not exist before this change, so its baseline is empty. */
+  created?: boolean;
 }
 
 export interface FileDiff {

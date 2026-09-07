@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LogTail } from '../../src/adapters/LogTail/LogTail.ts';
 
 let cleanups: Array<() => void> = [];
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   for (const cleanup of cleanups.splice(0).reverse()) cleanup();
 });
 
@@ -101,4 +103,62 @@ describe('LogTail', () => {
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(seen).toEqual(['before']);
   }, 15_000);
+
+  it('reports the offset through the lines it handed over, not the file size', async () => {
+    // The withheld fragment is already on disk, so resuming from the file size
+    // would skip it and lose the line it becomes.
+    const logPath = freshLog('');
+    const offsets: number[] = [];
+    const handle = new LogTail().follow(logPath, {
+      from: 0,
+      onLines: (_lines, completeThrough) => offsets.push(completeThrough),
+      onError: () => undefined,
+    });
+    cleanups.push(() => handle.close());
+
+    fs.appendFileSync(logPath, 'one\ntwo\nthr');
+    await waitFor(() => offsets.length >= 1, 'the first delivery');
+    expect(offsets.at(-1)).toBe(8);
+  }, 15_000);
+
+  it('waits through a missing log and reads it once it appears', async () => {
+    vi.useFakeTimers();
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-runner-tail-late-'));
+    cleanups.push(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const logPath = path.join(directory, 'late.log');
+    const onError = vi.fn();
+    const onLines = vi.fn();
+    const handle = new LogTail().follow(logPath, { from: 0, onLines, onError });
+    cleanups.push(() => handle.close());
+
+    await vi.advanceTimersByTimeAsync(250);
+    expect(onError).not.toHaveBeenCalled();
+
+    fs.writeFileSync(logPath, 'ready\n');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(onLines).toHaveBeenCalledWith(['ready'], 6);
+  });
+
+  it('normalizes filesystem failures before reporting them', async () => {
+    vi.useFakeTimers();
+    const failure = new Error('denied');
+    let attempt = 0;
+    vi.spyOn(fs, 'statSync').mockImplementation(() => {
+      attempt += 1;
+      throw attempt === 1 ? failure : 'broken';
+    });
+    const onError = vi.fn();
+    const handle = new LogTail().follow('/unreadable.log', {
+      from: 0,
+      onLines: () => undefined,
+      onError,
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+    handle.close();
+    handle.close();
+
+    expect(onError).toHaveBeenNthCalledWith(1, failure);
+    expect(onError).toHaveBeenNthCalledWith(2, new Error('broken'));
+  });
 });

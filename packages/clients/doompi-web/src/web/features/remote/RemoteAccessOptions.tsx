@@ -1,6 +1,7 @@
 import { Input, Spinner, Switch } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { remoteAccessStore, updateRemoteSettings } from '../../stores/remoteAccessStore.ts';
+import { DevProxyTargets } from './DevProxyTargets.tsx';
 import { PairedDeviceList } from './PairedDeviceList.tsx';
 import { SandboxWorkspaces } from './SandboxWorkspaces.tsx';
 
@@ -125,6 +126,7 @@ export function RemoteAccessOptions() {
       </p>
 
       <PairedDeviceList />
+      <DevProxyTargets />
     </div>
   );
 }

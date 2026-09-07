@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOG_DIR_ENV, LOG_MAX_BYTES_ENV } from '../../src/exports/config';
 import { LogFile } from '../../src/adapters/LogFile/LogFile';
-import { LogReader } from '../../src/adapters/LogReader/LogReader';
+import { filterLogText, LogReader } from '../../src/adapters/LogReader/LogReader';
 import { RunnerPaths } from '../../src/adapters/RunnerPaths';
 
 let directory: string;
@@ -133,6 +133,51 @@ describe('LogReader', () => {
     expect(slice.totalLines).toBe(10);
   });
 
+  it('reports the whole file as complete when it ends on a newline', () => {
+    const file = write('whole.log', 'one\ntwo\n');
+    expect(reader.read(file).completeBytes).toBe(8);
+  });
+
+  it('stops completeBytes at the last newline when the runner is caught mid-line', () => {
+    // A follower resumes here, so the fragment arrives as part of its whole
+    // line rather than split across the slice and the first appended chunk.
+    const file = write('partial.log', 'one\ntwo\nthr');
+    const slice = reader.read(file);
+
+    expect(slice.fileSize).toBe(11);
+    expect(slice.completeBytes).toBe(8);
+    // The fragment is still returned: a finished run whose last line never got
+    // a newline would otherwise lose it entirely.
+    expect(slice.text).toBe('one\ntwo\nthr');
+  });
+
+  it('counts completeBytes in bytes, not characters', () => {
+    // A multi-byte line would put the resume offset in the wrong place if the
+    // scan counted decoded characters.
+    const file = write('utf8.log', 'héllo\n');
+    expect(reader.read(file).completeBytes).toBe(7);
+  });
+
+  it('reports no line numbers for a plain tail, whose numbers run unbroken', () => {
+    const file = write('plain.log', 'one\ntwo\n');
+    expect(reader.read(file).lineNumbers).toBeUndefined();
+  });
+
+  it('numbers grep results, so a reader can tell where the gaps are', () => {
+    const file = write('grep.log', 'alpha\nbeta\ngamma\nalpha\n');
+    const slice = reader.read(file, { grep: 'alpha' });
+
+    expect(slice.text).toBe('alpha\nalpha');
+    expect(slice.lineNumbers).toEqual([1, 4]);
+  });
+
+  it('numbers context lines too, so a gap is a real gap and not a dropped context line', () => {
+    const file = write('context.log', 'one\ntwo\nmatch\nfour\nfive\nsix\nmatch\n');
+    const slice = reader.read(file, { grep: 'match', contextLines: 1 });
+
+    expect(slice.lineNumbers).toEqual([2, 3, 4, 6, 7]);
+  });
+
   it('scans a large append-only log without loading the complete file into memory', () => {
     const contents = `${Array.from({ length: 20_000 }, (_, index) => `line-${index}`).join('\n')}\n`;
     const file = write('large.log', contents);
@@ -185,5 +230,25 @@ describe('LogReader', () => {
     expect(slice.text).toBe('');
     expect(slice.lineCount).toBe(0);
     expect(slice.exists).toBe(true);
+  });
+});
+
+describe('filterLogText', () => {
+  it('returns unfiltered text when no grep is requested', () => {
+    expect(filterLogText('one\ntwo', {})).toBe('one\ntwo');
+  });
+
+  it('returns nothing when no line matches', () => {
+    expect(filterLogText('one\ntwo', { grep: 'absent' })).toBe('');
+  });
+
+  it('matches without case sensitivity and merges adjacent context windows', () => {
+    expect(filterLogText('A\nhit\nc\nd\nHIT', { grep: 'hit', ignoreCase: true, contextLines: 1 })).toBe(
+      'A\nhit\nc\nd\nHIT',
+    );
+  });
+
+  it('keeps separated matches without inventing context', () => {
+    expect(filterLogText('hit\na\nb\nc\nhit', { grep: 'hit' })).toBe('hit\nhit');
   });
 });

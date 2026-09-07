@@ -12,6 +12,15 @@ import type {
 const CANCELLED_MESSAGE = 'Login cancelled';
 const SUPERSEDED_MESSAGE = 'Superseded by a newer prompt';
 
+/**
+ * Option ids Pi's providers use for their redirect-free login.
+ *
+ * The spelling is not consistent across providers: openai-codex offers
+ * `device_code` and radius offers `device-code`, so both are matched rather
+ * than assuming one canonical form.
+ */
+const DEVICE_CODE_OPTION_IDS: ReadonlySet<string> = new Set(['device_code', 'device-code']);
+
 interface PendingPrompt {
   view: LoginPromptView;
   resolve(value: string): void;
@@ -24,6 +33,25 @@ export interface LoginFlowInput {
   providerId: string;
   providerName: string;
   type: AuthMethodType;
+  /**
+   * The login was started from the tunnel, so the browser is on another
+   * machine and a loopback redirect cannot reach this host.
+   */
+  remote?: boolean;
+}
+
+/**
+ * The redirect-free option a remote login should take, when the provider
+ * offers one.
+ *
+ * Pi asks browser-or-device-code as an ordinary select. A remote browser
+ * cannot receive a loopback redirect, so answering it for the user turns a
+ * dead end into the one method that works, rather than showing a choice whose
+ * default is broken.
+ */
+function deviceCodeOption(prompt: LoginPrompt): string | undefined {
+  if (prompt.type !== 'select') return undefined;
+  return prompt.options.find((option) => DEVICE_CODE_OPTION_IDS.has(option.id))?.id;
 }
 
 /**
@@ -81,6 +109,12 @@ export function createLoginFlow(input: LoginFlowInput): LoginFlow {
     prompt(prompt) {
       if (controller.signal.aborted || prompt.signal?.aborted) return Promise.reject(new Error(CANCELLED_MESSAGE));
       failPending(new Error(SUPERSEDED_MESSAGE));
+      // Answered before a view exists, so the page never renders a choice the
+      // remote browser cannot complete.
+      if (input.remote) {
+        const deviceCode = deviceCodeOption(prompt);
+        if (deviceCode !== undefined) return Promise.resolve(deviceCode);
+      }
       promptSeq += 1;
       const view = promptView(String(promptSeq), prompt);
       return new Promise<string>((resolve, reject) => {
@@ -113,6 +147,7 @@ export function createLoginFlow(input: LoginFlowInput): LoginFlow {
         events: [...events],
       };
       if (pending) snapshot.prompt = pending.view;
+      if (input.remote) snapshot.remote = true;
       if (error !== undefined) snapshot.error = error;
       return snapshot;
     },

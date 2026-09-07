@@ -12,6 +12,13 @@ export const tsdownConfig = defineConfig({
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,
+  /**
+   * Every dependency is external already; mermaid has to be named because it
+   * publishes a browser condition that resolves to a file inside the store,
+   * and the published output must keep the bare specifier for the consumer's
+   * bundler to code-split.
+   */
+  external: ['mermaid'],
   format: ['esm', 'cjs'],
   minify: {
     compress: true,

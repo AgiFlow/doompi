@@ -74,6 +74,21 @@ The unauthenticated allowlist contains only exact package-owned pairing, PWA boo
 
 Remote session and Pi protocol sockets need both a valid device session and a purpose-specific sealed channel. Other remote HTTP operations pass through the sealed gateway. Channel establishment has its own authenticated bootstrap route.
 
+The dev proxy prefix is the single exception, and it is authenticated rather than public: `/devproxy/` accepts every method and a socket upgrade from a paired device without the sealed gateway, because a browser rendering a proxied page issues its own subresource requests and its own hot-reload socket, and neither can be routed through a gateway that seals whole JSON responses. The guard refuses any path under that prefix containing a dot segment, so a request cannot be granted this treatment and then resolve into `/api/`.
+
+## Proxied dev sites
+
+A registered dev proxy target forwards `/devproxy/<name>/` to a local dev server, passing the path through unchanged. The application must be configured with a matching base path, `base: '/devproxy/<name>/'` in Vite or `basePath` in Next, exactly as it would behind nginx; it then emits correct asset URLs on its own and nothing has to be rewritten. Registration is refused on the tunnel listener, so a target can only be named while the operator is at the machine; using a registered target is then open to any paired device. That is the whole consent model, and it is deliberately not a passkey step-up: `relyingPartyId` returns undefined for a quick tunnel's rotating hostname, so a step-up requirement would report itself unavailable exactly where it was meant to apply.
+
+The upstream address is never a parameter: a target is a port and nothing else. The proxy dials one of two hard-coded loopback literals, `127.0.0.1` or `::1`, choosing whichever accepts a connection on that port, because Vite binds `localhost` and lands on `::1` where nothing answers on the IPv4 address. There is no hostname to resolve, so there is no DNS rebinding, alternate address encoding, or IPv4-mapped form to filter. Ports the cockpit itself holds are refused, read fresh on every registration because the tunnel port only exists while remote access is on.
+
+Two consequences are worth stating plainly, because both are downgrades and neither is hidden by the implementation:
+
+- **The proxied application shares the cockpit's origin.** It can read `sessionStorage`, which holds the sealed channel key. A hostile Node-side dev dependency is not a new capability, since `pnpm dev` already runs arbitrary code as the same user, but a browser-only compromise such as stored XSS in the dev app, or a hostile script from a CDN, previously could not reach the cockpit and now can. The cockpit's own session cookie is stripped before the request is forwarded, so the dev server never receives it, but same-origin script in the page is a different matter.
+- **Proxied traffic is not sealed.** The sealed gateway exists so the tunnel provider cannot read cockpit traffic. Subresource loads and WebSocket frames cannot use it, so the tunnel provider sees the proxied dev site in plaintext.
+
+Proxied bytes are also outside the signed-bundle guarantee below: the service worker passes the prefix to the network instead of serving it from the verified cache, because a dev server's output changes on every keystroke and carries no cockpit signature.
+
 ## Device identity
 
 ### Pairing is code plus host approval

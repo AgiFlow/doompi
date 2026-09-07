@@ -78,7 +78,7 @@ export class RmuxBackend implements IRmuxBackend {
       created = true;
       // No remain-on-exit: a finished pane ends its session, and the last session
       // ending stops the server, so a completed run leaves no process behind.
-      await rmux.cmd('pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone), { check: true });
+      await rmux.cmd('pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone, request), { check: true });
 
       const pane = rmux.session(target).pane(0, 0);
       const pid = await panePid(rmux, target);
@@ -187,6 +187,19 @@ export class RmuxBackend implements IRmuxBackend {
     return result !== undefined;
   }
 
+  async capture(target: string): Promise<string | undefined> {
+    const rmux = await this.client();
+    if (!rmux) return undefined;
+    return rmux
+      .session(target)
+      .pane(0, 0)
+      .captureText()
+      .catch((error: unknown) => {
+        process.emitWarning(`Could not capture RMUX target ${target}: ${errorMessage(error)}`);
+        return undefined;
+      });
+  }
+
   get(name: string): PtyRun | undefined {
     return this.runs.get(name);
   }
@@ -237,14 +250,24 @@ export class RmuxBackend implements IRmuxBackend {
     return supervisorPaths(this.paths.stateDirectory(sessionId), id);
   }
 
-  private logPipeCommand(logPath: string, donePath: string): string {
+  /**
+   * The sink the pane pipes into.
+   *
+   * An interactive run also asks for a raw copy: the scrubbed log it writes
+   * beside it has had cursor movement taken out, which is what a terminal
+   * needs most. Only interactive runs pay for it, because only they can be
+   * attached to.
+   */
+  private logPipeCommand(logPath: string, donePath: string, request: RmuxLaunchRequest): string {
+    const id = path.basename(logPath, '.log');
     return shellJoin([
       process.execPath,
       runtimeEntry('logSink'),
       logPath,
-      this.paths.rotatedLogPathFor(path.basename(logPath, '.log')),
+      this.paths.rotatedLogPathFor(id),
       String(getLogMaxBytes()),
       donePath,
+      ...(request.interactive ? [this.paths.rawLogPathFor(id)] : []),
     ]);
   }
 

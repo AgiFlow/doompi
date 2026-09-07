@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomOAuthRedirect, DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
 import type { McpServerStateChange, McpToolInfo, TokenStore } from '@agimon-ai/mcp-proxy';
 import type {
   McpAuthorizationFlow,
@@ -15,7 +15,7 @@ import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../t
 import { toPiToolName } from '../../services/mcpCatalog.ts';
 import { buildMcpConfigGroups } from './configSources.ts';
 import { createTokenStore } from './keyringTokenStore.ts';
-import { McpRuntimeOwner, readCachedCatalog } from './mcpRuntime.ts';
+import { hubCallbackSink, McpRuntimeOwner, readCachedCatalog } from './mcpRuntime.ts';
 import { mcpSessionConfigFromProjection } from './projection.ts';
 
 const DISCOVERY_TIMEOUT_MS = 30_000;
@@ -301,6 +301,13 @@ export class McpSettingsManager {
     repositoryRoot: string,
     sync: DoomRepositorySyncView | undefined,
     serverName: string,
+    /**
+     * The hub's redirect surface. Present, the authorization server sends the
+     * browser back to the hub, which is reachable whether the operator is at
+     * this machine or on a tunnel. Absent, the proxy keeps its loopback
+     * listener and behaviour is unchanged.
+     */
+    redirect?: DoomOAuthRedirect,
   ): Promise<McpAuthorizationFlow> {
     this.sweepFlows();
     if (this.busyRepositories.has(repositoryId))
@@ -324,7 +331,7 @@ export class McpSettingsManager {
     };
     this.flows.set(flow.id, flow);
     this.busyRepositories.add(repositoryId);
-    void this.runAuthorization(flow, prepared.configSources);
+    void this.runAuthorization(flow, prepared.configSources, redirect);
     return publicFlow(flow);
   }
 
@@ -344,7 +351,11 @@ export class McpSettingsManager {
     return publicFlow(flow);
   }
 
-  private async runAuthorization(flow: InternalAuthorizationFlow, sources: McpConfigSource[]): Promise<void> {
+  private async runAuthorization(
+    flow: InternalAuthorizationFlow,
+    sources: McpConfigSource[],
+    redirect?: DoomOAuthRedirect,
+  ): Promise<void> {
     const owner = new McpRuntimeOwner();
     flow.owner = owner;
     flow.timeout = setTimeout(() => {
@@ -358,6 +369,7 @@ export class McpSettingsManager {
       const handle = await owner.start({
         configSources: sources,
         tokenStore: await this.tokenStore(),
+        ...(redirect ? { callbackServer: hubCallbackSink(redirect) } : {}),
         onAuthorizationUrl: (url, serverName) => {
           if (serverName !== flow.serverName || isTerminal(flow.status)) return;
           const safeUrl = safeAuthorizationUrl(url);

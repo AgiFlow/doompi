@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { lineDiff } from '../../services/lineDiff.ts';
+import { lineDiff, lineDiffFromEmpty } from '../../services/lineDiff.ts';
 import type { FileEditTool, TimelineEvent } from '../../types/domain';
 import type { IEditTracker } from '../../types/editTracker';
 import type { GitStatusPort } from '../../types/gitStatus.ts';
@@ -30,18 +30,23 @@ const BASH_TOOL = 'bash';
  * this tracker last walked it against the tree now, so it answers whether a
  * file differs, never when it moved. A path a previous session left dirty, or
  * one a checkout or an install rewrote, differs exactly like a path the command
- * just wrote. So a candidate is confirmed three ways before it is recorded: its
- * modification time has to fall inside the call that is being closed, its
- * content hash has to differ from the last one this session saw, and a path
- * this session has never captured is put to git. Not every answer is available
- * for every file, an ignored temporary file is unknown to git and a first
- * sighting has no earlier hash, so an unconfirmable candidate is still
- * recorded; only a proven non-change is dropped.
+ * just wrote. So a candidate is called verified only when something actually
+ * proves its bytes moved: it appeared, it vanished, its recorded size differs,
+ * or its content hash differs from one this session already took. Absence of
+ * proof is not proof, so a candidate that shows none of those is still
+ * recorded, because the timeline is the evidence, but it goes out unverified
+ * and every surface leaves it out.
  */
 interface PendingEdit {
   tool: 'edit' | 'write';
   filePath: string;
   before: string | undefined;
+  /**
+   * Whether the file was there when the call began. A missing `before` cannot
+   * say on its own: content is left uncaptured both for a file that does not
+   * exist and for one too large or too binary to store.
+   */
+  existed: boolean;
 }
 
 function objectValue(value: unknown, key: string): string | undefined {
@@ -86,6 +91,12 @@ export class EditTracker implements IEditTracker {
    */
   private excluded: readonly string[] = [];
   /**
+   * The project's own ignore rules. A path the project disowns is not worth a
+   * git call, a read, or a stored copy of its content, so it is dropped before
+   * it costs any of them.
+   */
+  private isIgnored: ((filePath: string) => boolean) | undefined;
+  /**
    * The last content hash this session saw per path, from either mechanism.
    * A candidate whose hash has not moved was touched, not edited.
    */
@@ -107,12 +118,13 @@ export class EditTracker implements IEditTracker {
    * Forgets the previous session's tree so a new one does not inherit its
    * baseline, and takes the paths this session's own bookkeeping occupies.
    */
-  reset(options: { exclude?: readonly string[] } = {}): void {
+  reset(options: { exclude?: readonly string[]; isIgnored?: (filePath: string) => boolean } = {}): void {
     this.pending.clear();
     this.bracketed.clear();
     this.contents.clear();
     this.manifest = undefined;
     this.excluded = options.exclude ?? [];
+    this.isIgnored = options.isIgnored;
   }
 
   async start(id: string, tool: string, args: unknown, cwd: string): Promise<void> {
@@ -120,7 +132,14 @@ export class EditTracker implements IEditTracker {
       const supplied = objectValue(args, 'path');
       if (!supplied) return;
       const filePath = path.resolve(cwd, supplied);
-      this.pending.set(id, { tool, filePath, before: await this.snapshots.capture(filePath) });
+      // Both are read before the tool runs. The fingerprint is the only thing
+      // that tells a file being created from one whose content could not be
+      // captured, because a capture answers undefined for either.
+      const [before, fingerprint] = await Promise.all([
+        this.snapshots.capture(filePath),
+        this.manifests.fingerprint(filePath),
+      ]);
+      this.pending.set(id, { tool, filePath, before, existed: fingerprint !== undefined });
       return;
     }
     if (tool !== BASH_TOOL) return;
@@ -137,18 +156,23 @@ export class EditTracker implements IEditTracker {
     this.pending.delete(id);
     const startedAt = this.bracketed.get(id);
     this.bracketed.delete(id);
-    if (isError) return;
     if (pending) {
-      await this.recordTool(pending);
+      // A failed edit or write never landed, and its arguments named the file,
+      // so there is nothing left to look for.
+      if (!isError) await this.recordTool(pending);
       return;
     }
+    // A failed command may still have written before it failed. Skipping the
+    // walk would leave the baseline stale and hand those writes to whichever
+    // call closes next.
     if (startedAt !== undefined) await this.recordScan(cwd, startedAt);
   }
 
   /** An `edit` or `write` whose file was read on both sides of the call. */
   private async recordTool(pending: PendingEdit): Promise<void> {
     const after = await this.snapshots.capture(pending.filePath);
-    const counts = await this.countChanges(pending.before, after);
+    const created = !pending.existed;
+    const counts = await this.countChanges(pending.before, after, created);
     if (after !== undefined) this.contents.set(pending.filePath, after);
     await this.append({
       version: 2,
@@ -158,6 +182,7 @@ export class EditTracker implements IEditTracker {
       origin: 'tool',
       ...(pending.before === undefined ? {} : { before: pending.before }),
       ...(after === undefined ? {} : { after }),
+      ...(created ? { created: true } : {}),
       ...counts,
     });
     // The tool already accounted for this path, so the next bash comparison
@@ -171,25 +196,39 @@ export class EditTracker implements IEditTracker {
     if (before === undefined) return;
     const after = await this.manifests.take(cwd, this.excluded);
     this.manifest = after;
-    const candidates = await this.writtenDuring(this.manifests.changed(before, after), startedAt);
+    const disowned = this.isIgnored;
+    const named = this.manifests
+      .changed(before, after)
+      .filter((filePath) => disowned === undefined || !disowned(filePath));
+    const candidates = await this.writtenDuring(named, startedAt);
     if (candidates.length === 0) return;
     const unchanged = await this.unchangedInGit(cwd, candidates);
     for (const filePath of candidates) {
-      const captured = await this.snapshots.capture(filePath);
       const known = this.contents.get(filePath);
+      // Asked before the file is read: a path git vouches for is worth neither
+      // the read nor the stored copy that reading it leaves behind.
+      if (known === undefined && unchanged.has(filePath)) continue;
+      const beforePrint = before.entries.get(filePath);
+      const afterPrint = after.entries.get(filePath);
+      // A path that is gone has nothing to read, and reading it back would only
+      // confirm that.
+      const captured = afterPrint === undefined ? undefined : await this.snapshots.capture(filePath);
       if (captured !== undefined) this.contents.set(filePath, captured);
       // The bytes are the ones this session already recorded: the call moved the
       // modification time and nothing else.
       if (captured !== undefined && captured === known) continue;
-      // Never captured here, but git still holds the file and says it matches.
-      if (known === undefined && unchanged.has(filePath)) continue;
+      const proven =
+        beforePrint === undefined ||
+        afterPrint === undefined ||
+        this.manifests.sizeChanged(beforePrint, afterPrint) ||
+        (known !== undefined && captured !== undefined && captured !== known);
       await this.append({
         version: 2,
         path: filePath,
         tool: BASH_TOOL,
         at: this.now(),
         origin: 'scan',
-        verified: true,
+        ...(proven ? { verified: true } : {}),
         ...(captured === undefined ? {} : { after: captured }),
       });
     }
@@ -222,12 +261,23 @@ export class EditTracker implements IEditTracker {
     return this.git.unchanged(cwd, unseen);
   }
 
-  /** How many lines moved, when both sides were captured. */
+  /** How many lines moved, when there is enough captured content to say. */
   private async countChanges(
     before: string | undefined,
     after: string | undefined,
+    created: boolean,
   ): Promise<{ additions?: number; removals?: number }> {
-    if (before === undefined || after === undefined) return {};
+    if (after === undefined) return {};
+    if (before === undefined) {
+      // A file that did not exist has an empty baseline, so every line it now
+      // holds is an addition. A file that existed but went uncaptured has no
+      // baseline to count against at all.
+      if (!created) return {};
+      const createdText = await this.snapshots.read(after);
+      if (createdText === undefined) return {};
+      const fresh = lineDiffFromEmpty(createdText);
+      return { additions: fresh.additions, removals: fresh.removals };
+    }
     if (before === after) return { additions: 0, removals: 0 };
     const [beforeText, afterText] = await Promise.all([this.snapshots.read(before), this.snapshots.read(after)]);
     if (beforeText === undefined || afterText === undefined) return {};

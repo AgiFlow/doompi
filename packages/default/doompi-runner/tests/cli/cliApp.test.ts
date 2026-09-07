@@ -87,6 +87,7 @@ function harness(
           rmuxInput.push({ target, text });
           return true;
         },
+        capture: async () => undefined,
         get: () => undefined,
       },
       logReader: {
@@ -96,6 +97,7 @@ function harness(
           fileSize: 6,
           totalLines: 1,
           returnedLines: 1,
+          completeBytes: 6,
           lineCount: 1,
           path: '/logs/runner.log',
         }),
@@ -206,6 +208,7 @@ describe('doom-runner CLI', () => {
       fileSize: 0,
       totalLines: 0,
       returnedLines: 0,
+      completeBytes: 0,
       lineCount: 0,
       path: '/logs/runner.log',
     });
@@ -222,6 +225,7 @@ describe('doom-runner CLI', () => {
       fileSize: 0,
       totalLines: 0,
       returnedLines: 0,
+      completeBytes: 0,
       lineCount: 0,
       path: '/logs/runner.log',
     });
@@ -243,6 +247,7 @@ describe('doom-runner CLI', () => {
       fileSize: 100,
       totalLines: 1,
       returnedLines: 1,
+      completeBytes: 6,
       lineCount: 1,
       path: logPath,
     });

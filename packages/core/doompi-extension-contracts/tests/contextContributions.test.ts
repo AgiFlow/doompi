@@ -51,6 +51,48 @@ describe('Doom context contributions', () => {
     expect(snapshot).not.toHaveBeenCalled();
   });
 
+  it('validates every registration field and normalizes non-Error snapshot failures', () => {
+    expect(() => createDoomContextContributionsService('')).toThrow('require a session generation');
+    const service = createDoomContextContributionsService('session-1');
+    const valid = { source: 'source', id: 'id', label: 'Label', order: 1, snapshot: () => 'text' };
+    for (const contribution of [
+      { ...valid, source: ' ' },
+      { ...valid, id: '\t' },
+      { ...valid, label: '\n' },
+      { ...valid, order: Number.NaN },
+      { ...valid, order: Number.POSITIVE_INFINITY },
+      { ...valid, snapshot: 'text' },
+    ]) {
+      expect(() => service.register(contribution as never)).toThrow();
+    }
+    service.register({ ...valid, snapshot: () => 1 as never });
+    service.register({
+      source: 'source',
+      id: 'second',
+      label: 'Second',
+      order: 1,
+      snapshot: () => {
+        throw 'failed';
+      },
+    });
+    expect(service.snapshot().errors.map(({ message }) => message)).toEqual([
+      'Snapshot returned a non-string value.',
+      'failed',
+    ]);
+  });
+
+  it('uses source and id as deterministic tie breakers for equal order values', () => {
+    const service = createDoomContextContributionsService('session-1');
+    for (const [source, id] of [
+      ['b', 'b'],
+      ['a', 'b'],
+      ['a', 'a'],
+    ]) {
+      service.register({ source, id, label: `${source}/${id}`, order: 1, snapshot: () => `${source}/${id}` });
+    }
+    expect(service.snapshot().entries.map(({ text }) => text)).toEqual(['a/a', 'a/b', 'b/b']);
+  });
+
   it('publishes and removes the broker with a provider fiber', async () => {
     const root = new Context();
     const service = createDoomContextContributionsService('session-1');

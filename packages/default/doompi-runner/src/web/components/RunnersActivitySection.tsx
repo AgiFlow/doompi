@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { RunnerRunView } from '../../types/webRunners.ts';
 import { formatRunnerUptime } from '../lib/format.ts';
 import { runnerLogTab } from './RunnerLogPanel.tsx';
+import { runnersTab } from './RunnersPanel.tsx';
 import { requestRunnerStop, runners } from '../stores/runnersStore.ts';
 import { useRunnerTail } from '../hooks/runnerTail.ts';
 
@@ -32,9 +33,22 @@ export function RunnersActivitySection({ sessionId, sendSessionFrame, openTransi
 
   if (running.length === 0) {
     return (
-      <p data-testid="activity-summary-runners" className="px-1 text-[10px] text-doom-faint">
-        idle
-      </p>
+      <div className="flex items-center gap-2 px-1">
+        <p data-testid="activity-summary-runners" className="px-1 text-[10px] text-doom-faint">
+          idle
+        </p>
+        {sessionId === null ? null : (
+          <Button
+            variant="link"
+            size="xs"
+            data-testid="activity-runner-launch"
+            className="px-0"
+            onClick={() => openTransientTab(runnersTab())}
+          >
+            launch a runner
+          </Button>
+        )}
+      </div>
     );
   }
 

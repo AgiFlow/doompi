@@ -53,6 +53,7 @@ export function parseTimelineEvent(value: unknown): AnyTimelineEvent | null {
     ...(optionalCount(value.additions) === undefined ? {} : { additions: value.additions as number }),
     ...(optionalCount(value.removals) === undefined ? {} : { removals: value.removals as number }),
     ...(value.verified === true ? { verified: true } : {}),
+    ...(value.created === true ? { created: true } : {}),
   };
 }
 
@@ -128,17 +129,21 @@ export function foldVersions(events: readonly AnyTimelineEvent[], filePath: stri
         ...(event.additions === undefined ? {} : { additions: event.additions }),
         ...(event.removals === undefined ? {} : { removals: event.removals }),
         ...(event.verified === true ? { verified: true } : {}),
+        ...(event.created === true ? { created: true } : {}),
       };
     });
 }
 
 /**
- * Whether a file can be diffed at all: some version has to have captured what
- * the file held before it changed. A file only ever seen after the fact, which
- * is every file a bash script wrote, never can be.
+ * Whether a file can be diffed at all: some version has to give the diff a
+ * starting point. A captured baseline is one. So is a version that created the
+ * file, whose starting point is nothing at all.
+ *
+ * A file only ever seen after the fact, which is every file a bash script
+ * wrote, still cannot be.
  */
 export function isDiffable(versions: readonly FileEditVersion[]): boolean {
-  return versions.some((version) => version.before !== undefined);
+  return versions.some((version) => version.before !== undefined || version.created === true);
 }
 
 /** The oldest captured baseline for a file, which is what the whole-session diff starts from. */

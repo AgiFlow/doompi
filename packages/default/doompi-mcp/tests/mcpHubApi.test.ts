@@ -127,7 +127,9 @@ describe('mcpHubApi routes', () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual(FLOW);
-    expect(authorize).toHaveBeenCalledWith(REPOSITORY_ID, REPOSITORY_ROOT, SYNC, 'github');
+    // The fifth argument is the hub's redirect surface, absent unless the host
+    // offers one, which leaves the proxy's own loopback listener in charge.
+    expect(authorize).toHaveBeenCalledWith(REPOSITORY_ID, REPOSITORY_ROOT, SYNC, 'github', undefined);
     handler.close();
   });
 

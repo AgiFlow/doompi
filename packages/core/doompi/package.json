@@ -163,6 +163,11 @@
       "import": "./dist/entries/domains.mjs",
       "require": "./dist/entries/domains.cjs"
     },
+    "./entries/agentModel": {
+      "types": "./dist/entries/agentModel.d.mts",
+      "import": "./dist/entries/agentModel.mjs",
+      "require": "./dist/entries/agentModel.cjs"
+    },
     "./entries/cordisFinalizer": {
       "types": "./dist/entries/cordisFinalizer.d.mts",
       "import": "./dist/entries/cordisFinalizer.mjs",
@@ -329,15 +334,15 @@
     "@agimon-ai/doompi-skill": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-server": "0.85.1",
     "cross-spawn": "7.0.6",
     "gpt-tokenizer": "4.0.0",
     "minimatch": "10.2.6",
     "protobufjs": "8.8.0",
-    "rolldown": "1.2.6",
-    "typebox": "1.3.19",
+    "rolldown": "1.2.7",
+    "typebox": "1.3.25",
     "yaml": "2.9.0"
   },
   "devDependencies": {
@@ -345,7 +350,7 @@
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "26.4.0",
+    "@types/node": "26.4.1",
     "@vitest/coverage-v8": "4.1.11",
     "typescript": "7.0.2",
     "vitest": "4.1.11"

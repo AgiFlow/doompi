@@ -105,6 +105,8 @@ export interface CockpitFixture {
   runnerStore: string;
   /** The isolated Pi agent directory the hub's provider auth reads; specs write auth.json here. */
   agentDir: string;
+  /** Isolated OS temporary root shared by the hub and filesystem-backed test helpers. */
+  teamTemp: string;
   url: string;
 }
 
@@ -148,6 +150,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     }
     const registryDir = path.join(root, 'run');
     const stateDir = path.join(root, 'state');
+    const teamTemp = path.join(root, 'tmp');
+    fs.mkdirSync(teamTemp, { recursive: true });
     const homeDir = syncedHome;
     const stub = path.join(root, 'fake-doompi-server');
     const syncStub = path.join(root, 'refuse-doompi-sync');
@@ -195,6 +199,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       ...process.env,
       HOME: homeDir,
       USERPROFILE: homeDir,
+      TMPDIR: teamTemp,
+      TMP: teamTemp,
+      TEMP: teamTemp,
       WORKFLOW_MCP_HOME: workflowHome,
       PI_CODING_AGENT_DIR: agentDir,
       DOOMPI_SYNC_COMMAND: syncStub,
@@ -237,7 +244,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       throw new Error(`${(error as Error).message}\n${logs.join('')}`);
     }
 
-    await use({ sessions, session: sessions[0], registryDir, workflowHome, runnerStore, agentDir, url });
+    await use({ sessions, session: sessions[0], registryDir, workflowHome, runnerStore, agentDir, teamTemp, url });
 
     child.kill('SIGTERM');
     for (const stop of sessionApiStops) await stop();

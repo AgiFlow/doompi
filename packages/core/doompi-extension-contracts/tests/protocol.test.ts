@@ -22,7 +22,7 @@ import {
   defineNotification,
   defineRequestReply,
   type EventBusLike,
-} from '../src/schemas/protocol.ts';
+} from '../src/exports/protocol.ts';
 
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
@@ -180,6 +180,72 @@ describe('protocol runtime', () => {
     ).resolves.toEqual({ value: 'TRUSTED' });
   });
 
+  it('ignores responses until session, correlation, and source all match', async () => {
+    const bus = new TestBus();
+    let requestId = '';
+    bus.on(Ping.requestChannel, (message) => {
+      requestId = (message as { messageId: string }).messageId;
+    });
+    const pending = runtime(bus, 'client').request(Ping, { value: 'hello' }, { expectedSource: 'trusted' });
+    const response = (sessionId: string, correlationId: string, source: string) => ({
+      protocol: 'doom:test:ping',
+      version: 1,
+      kind: Ping.responseKind,
+      messageId: `response-${sessionId}-${source}`,
+      correlationId,
+      source,
+      sessionId,
+      payload: { value: 'done' },
+    });
+    bus.emit(Ping.responseChannel, response('other', requestId, 'trusted'));
+    bus.emit(Ping.responseChannel, response('session-1', 'other', 'trusted'));
+    bus.emit(Ping.responseChannel, response('session-1', requestId, 'rogue'));
+    bus.emit(Ping.responseChannel, response('session-1', requestId, 'trusted'));
+    await expect(pending).resolves.toEqual({ value: 'done' });
+  });
+
+  it('ignores error replies until session, correlation, and source all match', async () => {
+    const bus = new TestBus();
+    let requestId = '';
+    bus.on(Ping.requestChannel, (message) => {
+      requestId = (message as { messageId: string }).messageId;
+    });
+    const pending = runtime(bus, 'client').request(Ping, { value: 'hello' }, { expectedSource: 'trusted' });
+    const error = (sessionId: string, correlationId: string, source: string) => ({
+      protocol: 'doom:test:ping',
+      version: 1,
+      kind: 'error',
+      messageId: `error-${sessionId}-${source}`,
+      correlationId,
+      source,
+      sessionId,
+      payload: { code: 'DENIED', message: 'no' },
+    });
+    bus.emit(Ping.errorChannel, error('other', requestId, 'trusted'));
+    bus.emit(Ping.errorChannel, error('session-1', 'other', 'trusted'));
+    bus.emit(Ping.errorChannel, error('session-1', requestId, 'rogue'));
+    bus.emit(Ping.errorChannel, error('session-1', requestId, 'trusted'));
+    await expect(pending).rejects.toMatchObject({ code: 'DENIED' });
+  });
+
+  it('validates protocol names and both reply channels', () => {
+    expect(() =>
+      defineNotification({ channel: 'invalid' as never, kind: 'invalid', payload: Type.Object({}) }),
+    ).toThrow('Invalid Doom protocol channel');
+    expect(() =>
+      defineRequestReply({
+        channels: {
+          request: 'doom:test:alpha:v1:request',
+          response: 'doom:test:alpha:v1:response',
+          error: 'doom:test:beta:v1:error',
+        },
+        kinds: { request: 'alpha.request', response: 'alpha.response' },
+        request: Type.Object({}),
+        response: Type.Object({}),
+      }),
+    ).toThrow('Request/reply channels must share one protocol');
+  });
+
   it('preserves typed provider errors', async () => {
     const bus = new TestBus();
     runtime(bus, 'provider').provide(Ping, () => {
@@ -223,6 +289,70 @@ describe('protocol runtime', () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ code: 'ABORTED' });
     expect(bus.listenerCount(Ping.responseChannel)).toBe(0);
+  });
+
+  it('does not emit a request when its signal was already aborted', async () => {
+    const bus = new TestBus();
+    const emitted = vi.fn();
+    bus.on(Ping.requestChannel, emitted);
+    const controller = new AbortController();
+    controller.abort('before request');
+    await expect(
+      runtime(bus, 'client').request(Ping, { value: 'hello' }, { signal: controller.signal }),
+    ).rejects.toMatchObject({
+      code: 'ABORTED',
+    });
+    expect(emitted).not.toHaveBeenCalled();
+  });
+
+  it('evicts old notification ids from a bounded duplicate window', async () => {
+    const bus = new TestBus();
+    const Changed = defineNotification({
+      channel: 'doom:test:window:v1:changed',
+      kind: 'window.changed',
+      payload: Type.Object({ ready: Type.Boolean() }),
+    });
+    const handler = vi.fn();
+    createProtocolRuntime({ bus, source: 'client', sessionId: 'session-1', duplicateWindow: 1 }).onNotification(
+      Changed,
+      handler,
+    );
+    const emit = (messageId: string) =>
+      bus.emit(Changed.channel, {
+        protocol: 'doom:test:window',
+        version: 1,
+        kind: 'window.changed',
+        messageId,
+        source: 'provider',
+        sessionId: 'session-1',
+        payload: { ready: true },
+      });
+    emit('one');
+    emit('two');
+    emit('one');
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledTimes(3);
+  });
+
+  it('providers ignore other sessions and duplicate request ids', async () => {
+    const bus = new TestBus();
+    const handler = vi.fn(({ value }: { value: string }) => ({ value }));
+    runtime(bus, 'provider').provide(Ping, handler);
+    const request = (sessionId: string) => ({
+      protocol: 'doom:test:ping',
+      version: 1,
+      kind: Ping.requestKind,
+      messageId: 'same-request',
+      source: 'client',
+      sessionId,
+      payload: { value: 'hello' },
+    });
+    bus.emit(Ping.requestChannel, request('other'));
+    bus.emit(Ping.requestChannel, request('session-1'));
+    bus.emit(Ping.requestChannel, request('session-1'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it('deduplicates notification message ids within a bounded window', async () => {

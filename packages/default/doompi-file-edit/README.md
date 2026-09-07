@@ -97,9 +97,14 @@ not passed through a shell, so shell operators and expansions are not interprete
 ## Data behavior
 
 The timeline contains file paths, and the snapshot store holds copies of the file content the
-session changed. That content can be sensitive. Both live in session-scoped package state beside the
-Pi agent directory, are removed when the session ends, and should be protected with the same access
-controls as Pi session data.
+session changed. That content can be sensitive. Both live under the Pi agent directory,
+`$PI_CODING_AGENT_DIR` or `~/.pi/agent/doom-file-edit`, never inside the working tree, and should be
+protected with the same access controls as Pi session data.
+
+A session removes its own timeline and snapshots when it ends. A session that is killed cannot, so
+each session also sweeps state that no longer belongs to anyone: a timeline and its snapshots are
+removed once nothing has written to them for a week. An older build kept this state in the
+repository's git common directory, and that directory is cleared away under the same rule.
 
 The session API reads and writes only files the timeline already records, so a request cannot reach
 a file this session never changed.

@@ -20,5 +20,15 @@ export interface IRmuxBackend {
   readOutcome(id: string, sessionId: string): ExitResult | undefined;
   stop(target: string, expectedPid: number): Promise<boolean>;
   input(target: string, text: string): Promise<boolean>;
+  /**
+   * The pane's current screen as text, or undefined when it cannot be read.
+   *
+   * A screen, not a byte stream: the multiplexer holds the rendered state and
+   * hands back what is on it now. That is what makes an attached view possible
+   * from another process, where the live PTY handle is out of reach, and it is
+   * why the log file cannot stand in: it is scrubbed of cursor movement before
+   * it is ever written.
+   */
+  capture(target: string): Promise<string | undefined>;
   get(name: string): PtyRun | undefined;
 }

@@ -133,6 +133,7 @@ describe('the web plugin registry', () => {
         contextSections: [{ id: 'demo-context', component: Panel }],
         selectionBarItems: [{ id: 'demo-selection', component: Panel }],
         composerActions: [{ id: 'demo-composer', component: Panel }],
+        composerMenuItems: [{ id: 'demo-menu', component: Panel }],
         activitySections: [{ id: 'demo-activity', component: Panel }],
         paletteCommands: [{ id: 'demo-command', title: 'demo command', run: () => undefined }],
         contextActions: [
@@ -146,6 +147,7 @@ describe('the web plugin registry', () => {
     expect(slotFills(HOST_SLOTS.context).map((fill) => fill.id)).toEqual(['demo-context']);
     expect(slotFills(HOST_SLOTS.selectionBar).map((fill) => fill.id)).toEqual(['demo-selection']);
     expect(slotFills(HOST_SLOTS.composerActions).map((fill) => fill.id)).toEqual(['demo-composer']);
+    expect(slotFills(HOST_SLOTS.composerMenu).map((fill) => fill.id)).toEqual(['demo-menu']);
     // No group is named demo-activity, so the section lands in the activity tail.
     expect(slotFills(HOST_SLOTS.activity).map((fill) => [fill.pluginId, fill.id, fill.order])).toEqual([
       ['demo', 'demo-activity', 1000],

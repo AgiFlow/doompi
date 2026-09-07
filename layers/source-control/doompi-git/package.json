@@ -1,0 +1,128 @@
+{
+  "name": "@agimon-ai/doompi-git",
+  "version": "0.0.0",
+  "description": "Git worktree sessions for DoomPi: spawn an isolated worktree with its own session and manage it from the parent",
+  "keywords": [
+    "coding-agent",
+    "doompi",
+    "git-worktree",
+    "pi-coding-agent",
+    "pi-extension",
+    "pi-package",
+    "typescript"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "layers/source-control/doompi-git"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist",
+    "llms.txt",
+    "package.json",
+    "src/exports/webClient.ts",
+    "src/prompts",
+    "src/types/webWorktrees.ts",
+    "src/types/worktreeRegistry.ts",
+    "src/web"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./api/git": {
+      "types": "./dist/hubApi.d.mts",
+      "import": "./dist/hubApi.mjs",
+      "require": "./dist/hubApi.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.2",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
+    "typebox": "1.3.19"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
+    "@earendil-works/pi-agent-core": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@vitest/coverage-v8": "5.0.0",
+    "react": "19.2.8",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-agent-core": {
+      "optional": true
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "doompiApi": {
+    "basePath": "git",
+    "hub": {
+      "entry": "./src/exports/hubApi.ts",
+      "dist": "./dist/hubApi.mjs"
+    }
+  },
+  "doompiWeb": {
+    "pluginId": "git",
+    "channels": [
+      "git_worktrees"
+    ],
+    "client": "./src/exports/webClient.ts",
+    "hub": {
+      "entry": "./src/exports/webHub.ts",
+      "dist": "./dist/webHub.mjs"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

@@ -24,6 +24,7 @@ fs.writeFileSync(path.join(dir, value('--session-id') + '.json'), JSON.stringify
   tokenFile: value('--auth-token-file'),
   pid: process.pid,
   createdAt: new Date().toISOString(),
+  registryDirEnv: process.env.DOOMPI_RUNTIME_DIR ?? null,
 }));
 setInterval(() => {}, 1000);
 `;
@@ -61,6 +62,24 @@ describe('createServerSpawner', () => {
     expect(record.cwd).toBe(fs.realpathSync(cwd));
     // The prepared credentials are owner-only.
     expect(fs.statSync(record.tokenFile as string).mode & 0o077).toBe(0);
+    process.kill(record.pid as number);
+  }, 15_000);
+
+  // A package inside the session resolves the registry from the environment,
+  // so a cockpit on a non-default registry directory must hand its sessions
+  // the same directory. Without this the session finds the default hub and
+  // acts on a cockpit nobody asked it to touch.
+  it('hands the spawned session its own registry directory', async () => {
+    const { registryDir, cwd, binDir } = workspace();
+    const command = writeExecutable(binDir, 'fake-doompi-server', REGISTERING_SERVER);
+    const spawner = createServerSpawner({ registryDir, command });
+
+    const outcome = await spawner.spawn({ cwd, name: 'scoped' });
+    if (!outcome.ok) throw new Error(outcome.error);
+    const record = JSON.parse(
+      fs.readFileSync(path.join(registryDir, 'sessions', `${outcome.sessionId}.json`), 'utf8'),
+    ) as Record<string, unknown>;
+    expect(record.registryDirEnv).toBe(registryDir);
     process.kill(record.pid as number);
   }, 15_000);
 

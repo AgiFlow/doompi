@@ -462,6 +462,7 @@ export async function startPtyRuntime(
     stateDirectory: () => stateDirectory,
     logPathFor: (runnerId) => path.join(logDirectory, `${runnerId}.log`),
     rotatedLogPathFor: (runnerId) => path.join(logDirectory, `${runnerId}.log.1`),
+    rawLogPathFor: (runnerId) => path.join(logDirectory, `${runnerId}.log.raw`),
     statePathFor: (runnerId) => path.join(stateDirectory, `${runnerId}.json`),
     ensureDirectories: () => {
       fs.mkdirSync(logDirectory, { recursive: true });

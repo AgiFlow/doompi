@@ -64,6 +64,47 @@ describe('RunnerSettingsLoader', () => {
     expect(result.issues.some((issue) => issue.includes('not a valid regular expression'))).toBe(true);
   });
 
+  it('rejects non-object documents and invalid count and ratio values', () => {
+    for (const document of [null, [], 'settings']) {
+      writeSettings(JSON.stringify(document));
+      expect(loader.load(directory, true).issues).toEqual(['doompi-runner.json must contain a JSON object']);
+    }
+
+    writeSettings(
+      JSON.stringify({
+        maxResultBytes: 'large',
+        maxResultLines: 1.5,
+        errorMaxEntries: 0,
+        headRatio: 'half',
+        errorBudgetRatio: 1,
+      }),
+    );
+    const result = loader.load(directory, true);
+    expect(result.settings).toEqual({});
+    expect(result.issues).toEqual([
+      'maxResultBytes must be a positive integer',
+      'maxResultLines must be a positive integer',
+      'errorMaxEntries must be a positive integer',
+      'headRatio must be a number above 0 and below 1',
+      'errorBudgetRatio must be a number above 0 and below 1',
+    ]);
+  });
+
+  it('rejects invalid pattern collections and overlong entries', () => {
+    writeSettings(JSON.stringify({ errorPatterns: [42] }));
+    expect(loader.load(directory, true).issues).toEqual(['errorPatterns must be an array of strings']);
+
+    writeSettings(JSON.stringify({ errorPatterns: ['x'.repeat(513)] }));
+    expect(loader.load(directory, true)).toEqual({ settings: {}, issues: ['errorPatterns entry is too long'] });
+  });
+
+  it('reports unreadable settings separately from a missing file', () => {
+    const configDirectory = path.join(directory, CONFIG_DIR_NAME);
+    fs.mkdirSync(path.join(configDirectory, 'doompi-runner.json'), { recursive: true });
+
+    expect(loader.load(directory, true).issues).toEqual(['doompi-runner.json could not be read']);
+  });
+
   it('reports malformed JSON instead of throwing', () => {
     writeSettings('{ not json');
     expect(loader.load(directory, true).issues).toEqual(['doompi-runner.json is not valid JSON']);

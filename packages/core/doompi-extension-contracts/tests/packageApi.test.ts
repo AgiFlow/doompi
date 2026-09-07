@@ -66,15 +66,41 @@ describe('the doompiApi manifest vocabulary', () => {
     expect(() => declare({ hub: { entry: './src/exports/hubApi.ts' } })).toThrow(/hub\.dist is required/u);
   });
 
-  it('reads an array of blocks, so one package may serve several base paths', () => {
+  it('reads arrays and falls back to the package directory when the manifest has no name', () => {
     const declared = declaredApisOf('/a', {
-      name: 'demo',
       doompiApi: [
         { basePath: 'one', session },
         { basePath: 'two', hub },
       ],
     });
-    expect(declared.map((api) => api.basePath)).toEqual(['one', 'two']);
+    expect(declared.map((api) => [api.basePath, api.packageName])).toEqual([
+      ['one', '/a'],
+      ['two', '/a'],
+    ]);
+  });
+
+  it('rejects malformed blocks and every unsafe entry shape', () => {
+    for (const doompiApi of [null, 'demo', 1, [null]]) {
+      expect(() => declaredApisOf('/a', { doompiApi })).toThrow(/each block must be an object/u);
+    }
+    for (const basePath of [undefined, 1, '', 'Not Kebab', '-demo', 'demo-']) {
+      expect(() => declaredApisOf('/a', { doompiApi: { basePath, session } })).toThrow(/must be kebab-case/u);
+    }
+    for (const invalid of [
+      null,
+      1,
+      [],
+      {},
+      { entry: 1, dist: './dist/x.mjs' },
+      { entry: 'x.ts', dist: './dist/x.mjs' },
+    ]) {
+      expect(() => declare({ session: invalid })).toThrow(/session must be|session\.entry must be/u);
+    }
+    for (const invalid of [1, 'dist/x.mjs', './dist/../evil.mjs']) {
+      expect(() => declare({ session: { entry: './src/x.ts', dist: invalid } })).toThrow(
+        /session\.dist must be a package-relative/u,
+      );
+    }
   });
 
   it('lets the first package keep a contested base path, with a notice', () => {
@@ -93,35 +119,53 @@ describe('the doompiApi manifest vocabulary', () => {
 });
 
 describe('narrowing a module export to an API', () => {
-  it('accepts a base path and a start function, and nothing else', () => {
+  it('accepts only a non-empty base path paired with a start function', () => {
     expect(isDoomApi({ basePath: 'demo', start: () => undefined })).toBe(true);
-    expect(isDoomApi({ basePath: '', start: () => undefined })).toBe(false);
-    expect(isDoomApi({ basePath: 'demo' })).toBe(false);
-    expect(isDoomApi(undefined)).toBe(false);
+    for (const value of [
+      { basePath: '', start: () => undefined },
+      { basePath: 1, start: () => undefined },
+      { basePath: 'demo' },
+      { basePath: 'demo', start: true },
+      undefined,
+      null,
+      [],
+      'demo',
+    ]) {
+      expect(isDoomApi(value)).toBe(false);
+    }
   });
 });
 
 describe('trusted package API caller headers', () => {
-  it('parses a complete remote stamp', () => {
-    const headers = new Headers({
-      [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote',
-      [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'phone-1',
-      [DOOM_API_CALLER_STEP_UP_HEADER]: 'verified',
-    });
-    expect(doomApiCallerFrom(headers)).toEqual({ locality: 'remote', deviceId: 'phone-1', stepUp: 'verified' });
+  const caller = (locality?: string, deviceId?: string, stepUp?: string) => {
+    const headers = new Headers();
+    if (locality !== undefined) headers.set(DOOM_API_CALLER_LOCALITY_HEADER, locality);
+    if (deviceId !== undefined) headers.set(DOOM_API_CALLER_DEVICE_ID_HEADER, deviceId);
+    if (stepUp !== undefined) headers.set(DOOM_API_CALLER_STEP_UP_HEADER, stepUp);
+    return doomApiCallerFrom(headers);
+  };
+
+  it('parses every complete caller stamp', () => {
+    expect(caller('local', undefined, 'not-required')).toEqual({ locality: 'local', stepUp: 'not-required' });
+    for (const stepUp of ['not-required', 'verified', 'unavailable']) {
+      expect(caller('remote', 'phone-1', stepUp)).toEqual({ locality: 'remote', deviceId: 'phone-1', stepUp });
+    }
   });
 
-  it('rejects partial and contradictory stamps', () => {
-    expect(doomApiCallerFrom(new Headers({ [DOOM_API_CALLER_LOCALITY_HEADER]: 'remote' }))).toBeUndefined();
-    expect(
-      doomApiCallerFrom(
-        new Headers({
-          [DOOM_API_CALLER_LOCALITY_HEADER]: 'local',
-          [DOOM_API_CALLER_DEVICE_ID_HEADER]: 'spoofed',
-          [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required',
-        }),
-      ),
-    ).toBeUndefined();
+  it('rejects partial, contradictory, and unknown stamps', () => {
+    for (const stamp of [
+      [] as string[],
+      ['unknown'],
+      ['local'],
+      ['local', 'spoofed', 'not-required'],
+      ['local', undefined, 'verified'],
+      ['remote'],
+      ['remote', ''],
+      ['remote', 'phone-1'],
+      ['remote', 'phone-1', 'unknown'],
+    ]) {
+      expect(caller(stamp[0], stamp[1], stamp[2])).toBeUndefined();
+    }
   });
 });
 function generated(source: string): { homeDir: string; apiDirectory: string } {

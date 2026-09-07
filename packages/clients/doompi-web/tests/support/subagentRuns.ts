@@ -10,12 +10,19 @@ const TEMP_ROOT_PREFIX = 'doom-team';
 const SCOPE_KEY_HASH_LENGTH = 16;
 const RUN_STATUS_FILE_NAME = 'status.json';
 
+let teamTempRoot = os.tmpdir();
+
+/** Points test run fixtures at the same isolated temporary root as the spawned hub. */
+export function setTeamRunsTempRoot(root: string): void {
+  teamTempRoot = root;
+}
+
 /** The doom-team runs directory a hub will watch for this session id. */
 export function runsDirFor(sessionId: string): string {
   const uid = process.getuid?.();
   if (uid === undefined) throw new Error('This platform has no uid to scope doom-team runs by.');
   const scopeKey = createHash('sha256').update(sessionId.trim()).digest('hex').slice(0, SCOPE_KEY_HASH_LENGTH);
-  return path.join(os.tmpdir(), `${TEMP_ROOT_PREFIX}-uid-${String(uid)}`, 'sessions', scopeKey, 'runs');
+  return path.join(teamTempRoot, `${TEMP_ROOT_PREFIX}-uid-${String(uid)}`, 'sessions', scopeKey, 'runs');
 }
 
 /** Writes one run status the way doom-team's status writer would. */

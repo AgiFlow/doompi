@@ -50,6 +50,52 @@ export function runnerLogStreamUrl(sessionId: string, runId: string, from: numbe
   return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}/stream?${search.toString()}`;
 }
 
+/** One runner's attached screen, relative to the API's own mount. */
+export function runnerScreenPath(runId: string): string {
+  return `/runners/${encodeURIComponent(runId)}/screen`;
+}
+
+/**
+ * The URL a page opens an EventSource on to attach to an interactive runner.
+ *
+ * This is not the log. The log is scrubbed of cursor movement before it is
+ * written, which is what makes it worth grepping and useless to a terminal.
+ * The runner's sink keeps the unscrubbed bytes beside it, and this streams
+ * those, so a real terminal emulator on the page can render them.
+ */
+export function runnerScreenStreamUrl(sessionId: string, runId: string, from = 0): string {
+  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
+  return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/stream?${search.toString()}`;
+}
+
+/** The URL a page POSTs keystrokes to, for a runner that is waiting on input. */
+export function runnerInputUrl(sessionId: string, runId: string): string {
+  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
+  return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/input?${search.toString()}`;
+}
+
+/**
+ * One chunk of an attached pane's output.
+ *
+ * Base64 because these are terminal bytes, escape sequences and all, and a
+ * server-sent event is a line-oriented text frame that would mangle them.
+ */
+export interface RunnerScreenEvent {
+  chunk: string;
+  /** Byte offset just past this chunk, so a reconnect resumes rather than replays. */
+  offset?: number;
+  /** Set once the runner exits, so the page can stop watching. */
+  ended?: boolean;
+}
+
+/** The body of a keystroke POST. Text, not key codes: the pane wants bytes. */
+export interface RunnerInputRequest {
+  text: string;
+}
+
+/** The named SSE event carrying a RunnerScreenEvent payload. */
+export const RUNNER_SCREEN_EVENT = 'screen';
+
 /**
  * A log request as query parameters. `grep` is a literal substring, not a
  * regular expression, because that is what the reader matches; `lines` bounds
@@ -78,12 +124,30 @@ export interface RunnerLogResponse extends LogSlice {
 export interface RunnerLogStreamEvent {
   /** Appended lines, in order; empty when the event only reports the runner ending. */
   lines: string[];
+  /**
+   * Byte offset just past the last line in this event.
+   *
+   * A follower that loses the stream resumes here. Without it the page could
+   * only fall back to the offset its last slice reported, which every line
+   * delivered since has already moved past, so a reconnect would replay them.
+   */
+  offset?: number;
   /** Set once the runner exits, so the page can stop following without polling the run list. */
   ended?: boolean;
 }
 
 /** The named SSE event carrying a RunnerLogStreamEvent payload. */
 export const RUNNER_LOG_STREAM_EVENT = 'append';
+
+/**
+ * The named SSE event that carries nothing.
+ *
+ * A runner can be alive and silent for minutes, which on the wire is
+ * indistinguishable from a connection that died. This is sent on a timer so
+ * the socket keeps proving itself. Readers that only listen for `append`
+ * ignore it, which is what makes it safe to add.
+ */
+export const RUNNER_LOG_PING_EVENT = 'ping';
 
 /** Query parameter names, shared so the page and the route cannot drift apart. */
 export const RUNNER_LOG_PARAMS = {

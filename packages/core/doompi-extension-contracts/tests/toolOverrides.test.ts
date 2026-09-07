@@ -18,6 +18,7 @@ describe('Doom tool override contract', () => {
 
     const conflict = service.claim({ source: '@example/other', tools: ['write', 'read'] });
     expect(conflict.granted).toBe(false);
+    conflict.dispose();
     expect(service.owner('write')).toBeUndefined();
 
     edit.dispose();
@@ -27,6 +28,7 @@ describe('Doom tool override contract', () => {
   });
 
   it('publishes through Cordis and rejects invalid claims', async () => {
+    expect(() => createDoomToolOverridesService('')).toThrow('require a runtime generation');
     const root = new Context();
     const service = createDoomToolOverridesService('runtime-1');
     const fiber = root.plugin((context) => context.provide(DOOM_TOOL_OVERRIDES_SERVICE, service));

@@ -36,6 +36,10 @@ export class PtyBackendChain implements IRmuxBackend {
     return this.owner(target).input(target, text);
   }
 
+  capture(target: string): Promise<string | undefined> {
+    return this.owner(target).capture(target);
+  }
+
   /** Both backends persist terminal evidence at the same path, so either answers. */
   readOutcome(id: string, sessionId: string): ExitResult | undefined {
     return this.rmux.readOutcome(id, sessionId) ?? this.tmux.readOutcome(id, sessionId);

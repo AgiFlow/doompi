@@ -16,7 +16,7 @@ export interface SessionMeta {
 }
 
 export interface SessionsState {
-  /** Session ids sorted by creation, the rail's order and the ordinal shortcuts. */
+  /** Session ids in rail order: each parent immediately followed by its children. */
   order: string[];
   byId: Record<string, SessionMeta>;
   activeId: string | null;
@@ -39,12 +39,64 @@ function asSummary(value: unknown): SessionSummary | undefined {
   return value as unknown as SessionSummary;
 }
 
+/**
+ * The parent this session nests under, or undefined when it renders at the top
+ * level.
+ *
+ * A sidecar naming a parent that has since closed, naming this session itself,
+ * or forming a cycle all resolve to undefined. Lineage is written by a separate
+ * process and read best effort, so the only safe failure is to render the row
+ * where it can still be seen rather than to hide or duplicate it.
+ */
+export function resolveParentId(byId: Record<string, SessionMeta>, id: string): string | undefined {
+  const parent = byId[id]?.summary.parentSessionId;
+  if (parent === undefined || parent === id || byId[parent] === undefined) return undefined;
+  let hops = 0;
+  const limit = Object.keys(byId).length;
+  for (let at: string | undefined = parent; at !== undefined; at = byId[at]?.summary.parentSessionId) {
+    if (at === id) return undefined;
+    if (++hops > limit) return undefined;
+  }
+  return parent;
+}
+
+/**
+ * The rail's order: roots by creation, each immediately followed by its own
+ * children.
+ *
+ * Ordinal shortcuts index this array positionally, which is why a child sits
+ * directly after its parent instead of in a separate group: a worktree spawned
+ * from the focused session lands on the next digit. With no lineage present
+ * every session is a root and this produces exactly the flat creation sort it
+ * replaces.
+ */
 function sortedOrder(byId: Record<string, SessionMeta>): string[] {
-  return Object.keys(byId).sort((left, right) => {
+  const byCreation = (left: string, right: string): number => {
     const a = byId[left].summary;
     const b = byId[right].summary;
     return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
-  });
+  };
+  const children = new Map<string, string[]>();
+  const roots: string[] = [];
+  for (const id of Object.keys(byId)) {
+    const parent = resolveParentId(byId, id);
+    if (parent === undefined) {
+      roots.push(id);
+      continue;
+    }
+    const siblings = children.get(parent);
+    if (siblings === undefined) children.set(parent, [id]);
+    else siblings.push(id);
+  }
+  roots.sort(byCreation);
+  for (const siblings of children.values()) siblings.sort(byCreation);
+  const order: string[] = [];
+  const visit = (id: string): void => {
+    order.push(id);
+    for (const child of children.get(id) ?? []) visit(child);
+  };
+  for (const root of roots) visit(root);
+  return order;
 }
 
 function mergeSummary(previous: SessionMeta | undefined, summary: SessionSummary): SessionMeta {

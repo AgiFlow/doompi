@@ -19,6 +19,7 @@ export {
   type DoomApiContext,
   type DoomApiEntryDeclaration,
   type DoomApiHandler,
+  type DoomOAuthRedirect,
   type DoomRepositorySyncView,
   DoomApiManifestError,
   type DoomApiScope,

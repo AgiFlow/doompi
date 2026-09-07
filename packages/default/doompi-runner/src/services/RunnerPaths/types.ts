@@ -16,6 +16,15 @@ export interface IRunnerPaths {
   logPathFor(id: string, sessionId?: string): string;
   /** Legacy rotation path retained for cleanup and executable compatibility. */
   rotatedLogPathFor(id: string, sessionId?: string): string;
+  /**
+   * Unscrubbed pane bytes for an interactive run.
+   *
+   * The log beside it is scrubbed of cursor movement so it stays worth
+   * grepping, which also makes it useless to a terminal. This is the same
+   * output before that happened, so an attached terminal has something
+   * faithful to replay.
+   */
+  rawLogPathFor(id: string, sessionId?: string): string;
   statePathFor(id: string, sessionId?: string): string;
   ensureDirectories(sessionId?: string): void;
   /**

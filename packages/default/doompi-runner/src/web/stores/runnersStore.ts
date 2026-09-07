@@ -1,5 +1,6 @@
 import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { RUNNER_RUNS_TYPE, type RunnerRunView } from '../../types/webRunners.ts';
+import { type RunnerLaunchRequest, runnerLaunchLine } from '../lib/launchLine.ts';
 
 /** The runtime's slash verb that stops one runner headlessly. */
 const STOP_COMMAND = '/runners stop';
@@ -40,6 +41,18 @@ export function requestRunnerStop(send: SessionFrameSender, sessionId: string, i
     ...current,
     stopRequested: [...current.stopRequested.filter((known) => known !== id), id],
   }));
+}
+
+/**
+ * Asks the runtime to start a runner, through the same prompt frame the stop
+ * request uses and the same way agents and workflows launch their own work.
+ *
+ * Nothing is recorded as pending here. The runtime names the run, and it
+ * arrives in the feed on its own; guessing at an id before it exists would
+ * only have to be reconciled later.
+ */
+export function requestRunnerStart(send: SessionFrameSender, sessionId: string, request: RunnerLaunchRequest): void {
+  send(sessionId, { type: 'prompt', message: runnerLaunchLine(request) });
 }
 
 export interface RunnerRunsPayload {

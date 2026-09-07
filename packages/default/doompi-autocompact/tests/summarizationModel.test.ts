@@ -126,13 +126,21 @@ describe('summarization model resolution', () => {
     });
   });
 
-  it('reads the enable flag and the pass ratios, defaulting to on with no overrides', () => {
+  it('reads the enable flag, the pass ratios and the model overrides, defaulting to on with none', () => {
     loadDoomConfig.mockReturnValue({
       modes: { autocompact: { enabled: false, thresholds: { pass1: 0.4, pass3: 0.9 } } },
     });
-    expect(autocompactRuntimeConfig('/repo')).toEqual({ enabled: false, ratios: { 1: 0.4, 3: 0.9 } });
+    expect(autocompactRuntimeConfig('/repo')).toEqual({
+      enabled: false,
+      ratios: { 1: 0.4, 3: 0.9 },
+      overrides: [],
+    });
+
+    const overrides = [{ model: 'claude-opus-4-[6-9]', tokens: { pass1: 75_000 } }];
+    loadDoomConfig.mockReturnValue({ modes: { autocompact: { overrides } } });
+    expect(autocompactRuntimeConfig('/repo')).toEqual({ enabled: true, ratios: {}, overrides });
 
     loadDoomConfig.mockReturnValue({ modes: {} });
-    expect(autocompactRuntimeConfig('/repo')).toEqual({ enabled: true, ratios: {} });
+    expect(autocompactRuntimeConfig('/repo')).toEqual({ enabled: true, ratios: {}, overrides: [] });
   });
 });

@@ -1,6 +1,7 @@
 import {
   AlertIcon,
   BranchIcon,
+  ForkIcon,
   Button,
   buttonVariants,
   cn,
@@ -39,7 +40,7 @@ import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections.ts';
 import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore.ts';
 import { paletteStore } from '../../stores/paletteStore.ts';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
-import { sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
+import { resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
 import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore.ts';
 import { NewSessionDialog } from './NewSessionDialog.tsx';
 import { ResumeSessionDialog } from './ResumeSessionDialog.tsx';
@@ -107,12 +108,15 @@ function SessionCard({
   active,
   now,
   onNavigate,
+  nested = false,
 }: {
   meta: SessionMeta;
   ordinal: number;
   active: boolean;
   now: number;
   onNavigate?: () => void;
+  /** Rendered under its parent: one fixed indent, never multiplied by depth. */
+  nested?: boolean;
 }) {
   const navigate = useNavigate();
   const summary = meta.summary;
@@ -211,9 +215,13 @@ function SessionCard({
           {summary.git.dirty ? '*' : ''}
         </span>
       ) : null}
-      <span className={`truncate text-[10px] ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
-        {abbreviateCwd(summary.cwd)}
-      </span>
+      {/* A nested session's cwd is a generated worktree path that repeats what
+          the branch already says, so the child stays lighter than its parent. */}
+      {nested ? null : (
+        <span className={`truncate text-[10px] ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
+          {abbreviateCwd(summary.cwd)}
+        </span>
+      )}
       {error ? (
         <span data-testid="session-error" className="line-clamp-3 text-[10px] break-words text-doom-red">
           {error}
@@ -223,7 +231,12 @@ function SessionCard({
   );
 
   return (
-    <div className="group relative" data-testid={`session-card-${summary.id}`} data-active={active}>
+    <div
+      className={cn('group relative', nested && 'pl-3')}
+      data-testid={`session-card-${summary.id}`}
+      data-active={active}
+      data-nested={nested}
+    >
       {mode === 'rename' ? (
         // The name field cannot live inside the card button, so the card
         // briefly stops being one while it takes a name.
@@ -254,6 +267,14 @@ function SessionCard({
           className={cardClass}
         >
           <div className="flex items-center gap-2">
+            {/* Provenance picks the glyph rather than adding a text chip: the
+                indent and the branch name already say "worktree" twice. */}
+            {nested && summary.sessionProvenance ? (
+              <ForkIcon
+                aria-label={summary.sessionProvenance}
+                className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
+              />
+            ) : null}
             <span
               className={`min-w-0 flex-1 truncate text-[13px] font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
             >
@@ -469,6 +490,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
             active={id === activeId}
             now={now}
             onNavigate={onDismiss}
+            nested={resolveParentId(byId, id) !== undefined}
           />
         ))}
       </div>

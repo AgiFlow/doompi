@@ -77,7 +77,7 @@ export class TmuxBackend implements IRmuxBackend {
       // before Node has finished starting, losing the output of fast commands,
       // and leaves #{pane_dead} with nothing to report.
       await this.checked(tmux, ['set-option', '-t', target, 'remain-on-exit', 'on']);
-      await this.checked(tmux, ['pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone)]);
+      await this.checked(tmux, ['pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone, request)]);
 
       const pid = await panePid(tmux, target);
       fs.writeFileSync(aux.gate, '', { mode: 0o600 });
@@ -166,6 +166,16 @@ export class TmuxBackend implements IRmuxBackend {
     return result?.returnCode === 0;
   }
 
+  async capture(target: string): Promise<string | undefined> {
+    const tmux = await this.client();
+    if (!tmux) return undefined;
+    const result = await tmux.run(['capture-pane', '-p', '-t', target]).catch((error: unknown) => {
+      process.emitWarning(`Could not capture tmux target ${target}: ${errorMessage(error)}`);
+      return undefined;
+    });
+    return result?.returnCode === 0 ? result.stdout : undefined;
+  }
+
   get(name: string): PtyRun | undefined {
     return this.runs.get(name);
   }
@@ -217,14 +227,24 @@ export class TmuxBackend implements IRmuxBackend {
     return supervisorPaths(this.paths.stateDirectory(sessionId), id);
   }
 
-  private logPipeCommand(logPath: string, donePath: string): string {
+  /**
+   * The sink the pane pipes into.
+   *
+   * An interactive run also asks for a raw copy: the scrubbed log it writes
+   * beside it has had cursor movement taken out, which is what a terminal
+   * needs most. Only interactive runs pay for it, because only they can be
+   * attached to.
+   */
+  private logPipeCommand(logPath: string, donePath: string, request: RmuxLaunchRequest): string {
+    const id = path.basename(logPath, '.log');
     return shellJoin([
       process.execPath,
       runtimeEntry('logSink'),
       logPath,
-      this.paths.rotatedLogPathFor(path.basename(logPath, '.log')),
+      this.paths.rotatedLogPathFor(id),
       String(getLogMaxBytes()),
       donePath,
+      ...(request.interactive ? [this.paths.rawLogPathFor(id)] : []),
     ]);
   }
 
