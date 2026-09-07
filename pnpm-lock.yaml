@@ -234,6 +234,61 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  layers/source-control/doompi-git:
+    dependencies:
+      '@agimon-ai/doompi-extension-contracts':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-extension-contracts
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-web-components
+      '@agimon-ai/doompi-web-contracts':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-web-contracts
+      '@deepseek-ai/cordis':
+        specifier: 4.0.1
+        version: 4.0.1
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
+      typebox:
+        specifier: 1.3.19
+        version: 1.3.19
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-agent-core':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.21.3)(zod@4.4.3)
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
   layers/task/doompi-task:
     dependencies:
       '@agimon-ai/doompi-extension-contracts':
@@ -1652,8 +1707,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-contracts
       '@agimon-ai/mcp-proxy':
-        specifier: 0.31.20
-        version: 0.31.20(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+        specifier: 0.31.22
+        version: 0.31.22(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1
@@ -2494,8 +2549,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.20':
-    resolution: {integrity: sha512-sVffXtU8JRObzwNnk8JtQ+pgRSr9TuLmfj/tspJ043LrIfxPlflTAaOb+jdl3XWdjY4fKxGDuS8CoWJ5sA9W8Q==}
+  '@agimon-ai/foundation-port-registry@0.29.22':
+    resolution: {integrity: sha512-LMvT1K2ZqIkHS/9XVnUZ1wLTWIKUmbhKV56Kq/xVWCVqyPt+MtLOAL4WXDD0+Y2TuEHxjswNalR7pQxUGPHiSw==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -2506,8 +2561,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.29.20':
-    resolution: {integrity: sha512-zQg5JD7Y3589g5vWewrgTFub+Kz4RtVFGIjBXjjSQtIYK8TlcPUsFNTD2a11G/9qig+3wRj/6K6ctbWQlFhf3Q==}
+  '@agimon-ai/foundation-process-registry@0.29.22':
+    resolution: {integrity: sha512-Uz+eq8To2w5WVVr2qpjRB/v1PkuJBX6MNJFsWabeDmDCPHf2/PLUUOnW8hiV9mxAekgJUcItaTIyM+TrcVGxLA==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -2517,8 +2572,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/foundation-validator@0.26.20':
-    resolution: {integrity: sha512-7LTNktd+h2irZ6J129+Lqx5/+rEQBeaCkQWy16OSJcKazUduW3MLOmKAH0B6msMiHavEObzGkn7eSr+xpF4MRQ==}
+  '@agimon-ai/foundation-validator@0.26.22':
+    resolution: {integrity: sha512-4FvAEOb97zpBnSSnNDiiu89z4SEZ5AUlByAF3qBRPCsLSrfjL/GAZomw4qFlbWCG+RqW5MaPylPjGrHc/OEiCQ==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -2532,8 +2587,8 @@ packages:
       '@earendil-works/pi-coding-agent':
         optional: true
 
-  '@agimon-ai/log-sink-mcp@0.29.20':
-    resolution: {integrity: sha512-IGB5aj4L79vX60l+vNXD8PMNSKRyhJsZ2+RQDkEyLCwCwuZM2cb0iOGpFjXLOTsldqetwjUNuLnPsygEkyNCHQ==}
+  '@agimon-ai/log-sink-mcp@0.29.22':
+    resolution: {integrity: sha512-vXaEhcNnj7RPjhB8S8Ao2iwW0kIwxxxW8KVCUNFHHAtqEGAjk1mRw2VF/TtISjrxNKJsSPOaNP1BUikXNufPwA==}
     hasBin: true
     peerDependencies:
       '@earendil-works/pi-coding-agent': '*'
@@ -2542,8 +2597,8 @@ packages:
       '@earendil-works/pi-coding-agent':
         optional: true
 
-  '@agimon-ai/mcp-proxy@0.31.20':
-    resolution: {integrity: sha512-9DU5D90NUH0uxVoazmdsJZeyNgHMSVt8070pacpSnt6JZ5SwiyRNr55yjue15VonUMpSFvjKDI1BCM4I3+WQWg==}
+  '@agimon-ai/mcp-proxy@0.31.22':
+    resolution: {integrity: sha512-6zqiFv3B8VolUO2uzb3TKKXiEZc3h5jYEO9EP9g4TWrXcZmlD8+Kiik7W9QcJ9a/eDA69McEtxm40AedIvMDfA==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -7392,8 +7447,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@3.15.1:
-    resolution: {integrity: sha512-S99WuO3HlhO3XN41EtYUNl9zzXjoJx7QvmipxsJVxtCBT0YHEFy+iOJhjSvrmV12nYhWpZaM8lPHkJm0yUMbag==}
+  js-yaml@3.15.2:
+    resolution: {integrity: sha512-6EuL879VkRA+1Cz578mKMiKvjPNEuk6+r1JaFzoSWejZmtf7xWbIyw1e3KkxlkzTIt9Taw6JBhEppG7utc1P+w==}
     hasBin: true
 
   js-yaml@4.3.1:
@@ -9233,7 +9288,7 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.20(zod@4.4.3)':
+  '@agimon-ai/foundation-port-registry@0.29.22(zod@4.4.3)':
     dependencies:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
@@ -9244,9 +9299,9 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.29.20(zod@4.4.3)':
+  '@agimon-ai/foundation-process-registry@0.29.22(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.20(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.22(zod@4.4.3)
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
@@ -9254,7 +9309,7 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@agimon-ai/foundation-validator@0.26.20(zod@4.4.3)':
+  '@agimon-ai/foundation-validator@0.26.22(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
@@ -9321,11 +9376,11 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.20(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
+  '@agimon-ai/log-sink-mcp@0.29.22(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.20(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.20(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.20(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.22(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.22(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.22(zod@4.4.3)
       '@hono/node-server': 2.0.10(hono@4.12.34)
       '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
@@ -9384,12 +9439,12 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/mcp-proxy@0.31.20(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
+  '@agimon-ai/mcp-proxy@0.31.22(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.20(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.20(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.20(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.20(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.22(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.22(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.22(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.22(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3))(zod@4.4.3)
       '@hono/node-server': 2.0.10(hono@4.12.34)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       chalk: 5.6.2
@@ -14127,7 +14182,7 @@ snapshots:
 
   gray-matter@4.0.3:
     dependencies:
-      js-yaml: 3.15.1
+      js-yaml: 3.15.2
       kind-of: 6.0.3
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
@@ -14354,7 +14409,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@3.15.1:
+  js-yaml@3.15.2:
     dependencies:
       argparse: 1.0.10
       esprima: 4.0.1

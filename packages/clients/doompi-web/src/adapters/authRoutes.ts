@@ -1,6 +1,15 @@
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { AUTH_LOGINS_API_ROUTE, AUTH_PROVIDERS_API_ROUTE, type AuthMethodType } from '../types/auth.ts';
 import type { ProviderAuth } from './providerAuth.ts';
+
+/**
+ * Which listener accepted a request.
+ *
+ * Supplied by the guard, which reads the accepted socket. A caller cannot
+ * influence it, so a remote browser cannot claim to be local to dodge the
+ * redirect-free login, nor a local one claim to be remote.
+ */
+export type AuthListenerOf = (context: Context) => 'local' | 'tunnel';
 
 const METHOD_TYPES: readonly AuthMethodType[] = ['api_key', 'oauth'];
 
@@ -21,7 +30,7 @@ function describe(error: unknown): string {
  * turns a load failure into 502 with the cause, so a machine without a usable
  * Pi install explains itself on the providers page instead of hanging it.
  */
-export function registerAuthRoutes(app: Hono, auth: ProviderAuth): void {
+export function registerAuthRoutes(app: Hono, auth: ProviderAuth, listenerOf?: AuthListenerOf): void {
   app.get(AUTH_PROVIDERS_API_ROUTE, async (context) => {
     try {
       return context.json({ providers: await auth.listProviders() });
@@ -55,7 +64,8 @@ export function registerAuthRoutes(app: Hono, auth: ProviderAuth): void {
       return context.json({ error: `type must be one of ${METHOD_TYPES.join(', ')}.` }, 400);
     }
     try {
-      const outcome = await auth.startLogin(body.providerId, body.type);
+      const remote = listenerOf?.(context) === 'tunnel';
+      const outcome = await auth.startLogin(body.providerId, body.type, remote);
       if (outcome.ok) return context.json({ flow: outcome.flow }, 201);
       const status = outcome.code === 'unknown_provider' ? 404 : outcome.code === 'busy' ? 409 : 400;
       return context.json({ error: outcome.error }, status);

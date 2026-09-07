@@ -90,7 +90,13 @@ async function handleAuthorize(request: Request, context: DoomApiContext): Promi
   if (!repositoryRoot) return json({ error: 'That repository is not available to this hub.' }, 404);
   try {
     return json(
-      await manager.authorize(repositoryId, repositoryRoot, context.readRepositorySync?.(repositoryId), serverName),
+      await manager.authorize(
+        repositoryId,
+        repositoryRoot,
+        context.readRepositorySync?.(repositoryId),
+        serverName,
+        context.oauthRedirect?.(),
+      ),
       202,
     );
   } catch (error) {

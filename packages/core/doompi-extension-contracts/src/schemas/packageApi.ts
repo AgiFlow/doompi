@@ -67,6 +67,29 @@ export function doomApiCallerFrom(headers: Headers): DoomApiCaller | undefined {
   }
   return undefined;
 }
+/**
+ * A browser-reachable OAuth redirect the host serves on its own listener.
+ *
+ * A package brokering third-party OAuth cannot use a loopback redirect when the
+ * operator's browser is on another machine: `127.0.0.1` resolves to whichever
+ * machine the browser runs on. The host owns a listener that is reachable from
+ * wherever the cockpit is being used, so it lends that instead of the package
+ * opening a port of its own.
+ */
+export interface DoomOAuthRedirect {
+  /** Absolute URL to register as the redirect target, already origin-correct. */
+  readonly redirectUri: string;
+  /**
+   * Accept redirects carrying this state. Must complete before the
+   * authorization URL is surfaced, or the redirect races its own reservation.
+   */
+  reserve(state: string, timeoutMs?: number): Promise<void>;
+  /** Resolves once the redirect carrying this state arrives. */
+  wait(state: string, timeoutMs?: number): Promise<{ code: string; state: string }>;
+  /** Drops a reservation whose flow ended without a redirect. */
+  cancel(state: string): void;
+}
+
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
@@ -85,6 +108,11 @@ export interface DoomApiContext {
   resolveRepository?(repositoryId: string): string | undefined;
   /** Reads the admitted repository's sync projection without exposing its state path. */
   readRepositorySync?(repositoryId: string): DoomRepositorySyncView | undefined;
+  /**
+   * Borrows the hub's OAuth redirect surface. Undefined when the hub cannot
+   * currently serve one, in which case the package keeps its own behaviour.
+   */
+  oauthRedirect?(): DoomOAuthRedirect | undefined;
   onNotice(message: string): void;
 }
 

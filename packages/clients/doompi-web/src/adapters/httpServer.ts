@@ -25,12 +25,14 @@ import {
   type DoomApi,
   type DoomApiCaller,
   type DoomApiHandler,
+  type DoomOAuthRedirect,
   type DoomRepositorySyncView,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import { findRepositoryRoot, resolveDoomConfigurationRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
+import { createOAuthRedirectRegistry } from '../services/oauthRedirectRegistry.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import {
   MAX_SESSION_FILE_BYTES,
@@ -38,6 +40,7 @@ import {
   SESSION_FILE_ROUTE,
   SESSION_FILE_SHA256_HEADER,
 } from '../types/media.ts';
+import { MCP_OAUTH_CALLBACK_ROUTE } from '../types/mcpOAuth.ts';
 import type { SettingsRepository } from '../types/settings.ts';
 import type { WebServer, WebServerOptions } from '../types/bridge.ts';
 import {
@@ -70,6 +73,7 @@ import { allowedOriginsFromEnv } from '../services/remoteGuardPolicy.ts';
 import { createRecordingArtifactStore } from '../services/recordingArtifacts.ts';
 import { describeStranded, planSessionMigration } from '../services/sessionMigration.ts';
 import { registerAuthRoutes } from './authRoutes.ts';
+import { registerOAuthRedirectRoutes } from './oauthRedirectRoutes.ts';
 import { registerSettingsRoutes } from './settingsRoutes.ts';
 import { createProviderAuth } from './providerAuth.ts';
 import { createRemoteGuard } from './remoteGuard.ts';
@@ -421,6 +425,8 @@ export function mountHubApis(
   readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
   resolveBundleKey: (sessionId: string) => string | undefined = () => 'default',
   initialBundleKey = 'default',
+  /** Lends the hub's OAuth redirect to hub APIs that broker third-party sign-in. */
+  oauthRedirect?: () => DoomOAuthRedirect | undefined,
 ): {
   handlers: DoomApiHandler[];
   add: (apis: readonly DoomApi[], bundleKey?: string) => void;
@@ -435,7 +441,13 @@ export function mountHubApis(
       if (bundle.has(api.basePath)) continue;
       let handler: DoomApiHandler;
       try {
-        handler = api.start({ scope: 'hub', onNotice: notice, resolveRepository, readRepositorySync });
+        handler = api.start({
+          scope: 'hub',
+          onNotice: notice,
+          resolveRepository,
+          readRepositorySync,
+          ...(oauthRedirect ? { oauthRedirect } : {}),
+        });
       } catch (error) {
         notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
         continue;
@@ -1013,7 +1025,19 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // Provider credentials belong to the machine, not to a session: the hub
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
-  registerAuthRoutes(app, providerAuth);
+  registerAuthRoutes(app, providerAuth, (context) => guard.listenerOf(context));
+  // One redirect surface for both localities. A package brokering OAuth cannot
+  // use a loopback redirect when the browser is on another machine, and the
+  // hub already serves a listener that browser can reach.
+  const oauthRedirects = createOAuthRedirectRegistry(MCP_OAUTH_CALLBACK_ROUTE);
+  registerOAuthRedirectRoutes(app, oauthRedirects);
+  const oauthRedirect = (): DoomOAuthRedirect | undefined => {
+    // Read per call: a quick tunnel reconnects on a new hostname, and a stale
+    // origin would register a redirect that no longer resolves.
+    const origin =
+      remote.publicOrigin() ?? (loopbackPort === undefined ? undefined : `http://127.0.0.1:${loopbackPort}`);
+    return origin === undefined ? undefined : oauthRedirects.surface(origin);
+  };
   // Settings read and write the machine's Doom config. Session working
   // directories are normalized to their nearest repository marker before the
   // picker or a package API can address them. The bounded registry keeps recent
@@ -1067,6 +1091,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       return selectedRegistration(compositionRoot(session.cwd))?.apiDirectory;
     },
     defaultApiBundleKey,
+    oauthRedirect,
   );
   const registeredApiBundles = new Map<string, string>();
   const apiBundleInUse = (bundleKey: string): boolean =>

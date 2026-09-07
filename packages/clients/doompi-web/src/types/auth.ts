@@ -82,6 +82,12 @@ export interface LoginFlowSnapshot {
   events: LoginEvent[];
   /** The question the flow is waiting on, while there is one. */
   prompt?: LoginPromptView;
+  /**
+   * The login was started from the tunnel. The page uses this to explain that
+   * the provider's redirect lands on a loopback address this browser cannot
+   * reach, so the code has to be pasted back.
+   */
+  remote?: boolean;
   /** Why the flow failed, once it has. */
   error?: string;
 }

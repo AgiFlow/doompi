@@ -65,12 +65,14 @@ function FlowEvent({ event }: { event: LoginEvent }) {
 function PromptField({
   prompt,
   value,
+  remote,
   onChange,
   onSubmit,
   onSelect,
 }: {
   prompt: LoginPromptView;
   value: string;
+  remote: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onSelect: (optionId: string) => void;
@@ -99,6 +101,15 @@ function PromptField({
   return (
     <label data-testid="login-prompt" data-prompt-type={prompt.type} className="flex flex-col gap-1">
       <span className="text-[11px] text-doom-text">{prompt.message}</span>
+      {/* The provider redirects to a loopback address that belongs to whichever
+          machine the browser runs on, so a remote tab lands on an error page.
+          The URL still carries the code, which is what this asks for. */}
+      {remote && prompt.type === 'manual_code' ? (
+        <span data-testid="login-prompt-remote-hint" className="text-[10px] text-doom-faint">
+          the page it sends you to will not load from here. copy the whole address from your browser's address bar and
+          paste it below.
+        </span>
+      ) : null}
       <div className="flex items-center gap-2">
         <Input
           data-testid="login-prompt-input"
@@ -190,6 +201,7 @@ export function LoginFlowDialog({
             <PromptField
               prompt={prompt}
               value={value}
+              remote={flow.remote === true}
               onChange={setValue}
               onSubmit={submit}
               onSelect={(optionId) => onAnswer(prompt.id, optionId)}

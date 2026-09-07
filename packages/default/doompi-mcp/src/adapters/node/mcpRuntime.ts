@@ -2,15 +2,45 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { ConfigSource, McpServerStateChange, McpToolInfo, SharedServices, TokenStore } from '@agimon-ai/mcp-proxy';
+import type {
+  ConfigSource,
+  McpServerStateChange,
+  McpToolInfo,
+  OAuthCallbackSink,
+  SharedServices,
+  TokenStore,
+} from '@agimon-ai/mcp-proxy';
+import type { DoomOAuthRedirect } from '@agimon-ai/doompi-extension-contracts/package-api';
 import mcpProxyPackage from '@agimon-ai/mcp-proxy/package.json' with { type: 'json' };
 import type { McpConfigSource } from '../../types/mcpConfig.ts';
 import type { CachedCatalog } from '../../types/mcpRuntime.ts';
+
+/**
+ * Presents the hub's redirect surface as the proxy's callback collaborator.
+ *
+ * `listen` binds nothing: the hub already serves the address this advertises,
+ * so opening a loopback port would only create one nobody redirects to.
+ */
+export function hubCallbackSink(redirect: DoomOAuthRedirect): OAuthCallbackSink {
+  return {
+    redirectUri: () => redirect.redirectUri,
+    getPort: () => undefined,
+    listen: (preferredPort) => Promise.resolve(preferredPort),
+    reserve: (state, timeoutMs) => redirect.reserve(state, timeoutMs),
+    waitForCallback: (state, timeoutMs) => redirect.wait(state, timeoutMs),
+    cancel: (state) => redirect.cancel(state),
+  };
+}
 
 export interface McpRuntimeOptions {
   /** Ordered config layers. Later layers override earlier ones. */
   configSources: McpConfigSource[];
   tokenStore?: TokenStore;
+  /**
+   * Where OAuth redirects are received. Omitted, the proxy binds its own
+   * loopback listener, which only a browser on this machine can reach.
+   */
+  callbackServer?: OAuthCallbackSink;
   onAuthorizationUrl?: (url: URL, serverName: string) => void;
   onServerStateChange?: (change: McpServerStateChange) => void;
 }
@@ -150,7 +180,11 @@ export class McpRuntimeOwner {
       definitionsCachePath: cachePath,
       // Never blocking: an unreachable server must not delay Pi's first prompt.
       startupMode: 'background',
-      auth: { tokenStore: options.tokenStore, onAuthorizationUrl: options.onAuthorizationUrl },
+      auth: {
+        tokenStore: options.tokenStore,
+        onAuthorizationUrl: options.onAuthorizationUrl,
+        ...(options.callbackServer ? { callbackServer: options.callbackServer } : {}),
+      },
     });
 
     if (generation !== this.generation) {
