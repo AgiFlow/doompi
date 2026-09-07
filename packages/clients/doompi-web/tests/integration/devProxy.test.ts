@@ -252,13 +252,14 @@ describe('dev proxy forwarding', () => {
         response.end();
         return;
       }
-      response.end(`based ${request.url ?? ''}`);
+      response.end('based');
     });
     try {
       await register('based', based.port);
       const answer = await fetch(url('/devproxy/based/'));
       expect(answer.status).toBe(200);
-      expect(await answer.text()).toBe('based /devproxy/based/');
+      expect(await answer.text()).toBe('based');
+      expect(based.seen.at(-1)?.url).toBe('/devproxy/based/');
     } finally {
       await based.close();
     }
@@ -286,12 +287,13 @@ describe('dev proxy forwarding', () => {
    * every connection to a default Vite dev server.
    */
   it('reaches a dev server listening only on IPv6 loopback', async () => {
-    const sixOnly = await startUpstream((request, response) => response.end(`v6 ${request.url ?? ''}`), '::1');
+    const sixOnly = await startUpstream((_request, response) => response.end('v6'), '::1');
     try {
       await register('sixish', sixOnly.port);
       const answer = await fetch(url('/devproxy/sixish/'));
       expect(answer.status).toBe(200);
-      expect(await answer.text()).toBe('v6 /devproxy/sixish/');
+      expect(await answer.text()).toBe('v6');
+      expect(sixOnly.seen.at(-1)?.url).toBe('/devproxy/sixish/');
       expect(sixOnly.seen.at(-1)?.host).toBe(`[::1]:${String(sixOnly.port)}`);
     } finally {
       await sixOnly.close();
