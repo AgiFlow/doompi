@@ -1,0 +1,11 @@
+# @agimon-ai/doompi-model-guidance
+
+Package-owned guidance for per-model system prompt guidance, layered across global and repository scope
+
+## How to use
+
+- [Use Model Guidance](./src/prompts/doompi-use-model-guidance/SKILL.md): Configure per-model system prompt text and understand how the two scopes merge.
+
+## Resources
+
+- [Package README](./README.md): Installation, development commands, Pi entrypoint, and extension-specific usage.

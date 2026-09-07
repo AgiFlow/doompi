@@ -72,6 +72,7 @@
           "@agimon-ai/doompi-loop",
           "@agimon-ai/doompi-major-mode",
           "@agimon-ai/doompi-mcp",
+          "@agimon-ai/doompi-model-guidance",
           "@agimon-ai/doompi-notification",
           "@agimon-ai/doompi-plan",
           "@agimon-ai/doompi-profile",

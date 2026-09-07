@@ -35,16 +35,19 @@ layers:
   sandbox:
     packages:
       - "./layers/sandbox/doompi-sandbox"
+  llm:
+    packages:
+      - "./layers/llm/doompi-model-guidance"
 
 defaultMajorMode: copilot
 
 majorMode:
   minimal:
     description: Lean mode with Team delegation and persistent tasks.
-    layers: [team, task]
+    layers: [team, task, llm]
   copilot:
     description: General-purpose coding mode with delegation, persistent tasks, supervised commands, and structured user feedback.
-    layers: [team, ask-user, task, sandbox]
+    layers: [team, ask-user, task, sandbox, llm]
   examples:
     description: Layer-free base mode for the repository's plugin and workflow examples.
     layers: []

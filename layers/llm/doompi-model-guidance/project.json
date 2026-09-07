@@ -1,0 +1,8 @@
+{
+  "name": "@agimon-ai/doompi-model-guidance",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "layers/llm/doompi-model-guidance/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-extension"
+}
