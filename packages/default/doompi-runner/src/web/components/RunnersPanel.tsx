@@ -8,6 +8,7 @@ import { useRunnerTail } from '../hooks/runnerTail.ts';
 import { requestRunnerStop, runners } from '../stores/runnersStore.ts';
 import { LaunchRunnerDialog } from './LaunchRunnerDialog.tsx';
 import { runnerLogTab } from './RunnerLogPanel.tsx';
+import { runnerShellTab } from './RunnerShellPanel.tsx';
 
 const TICK_MS = 10_000;
 const RUNNERS_TAB_ID = 'runner-runs';
@@ -169,6 +170,20 @@ function RunnerCard({
         >
           log
         </Button>
+        {/* Only an interactive run has a pane to attach to. A plain one has
+            nothing to type into, so it is not offered. */}
+        {run.interactive && sessionId !== null ? (
+          <Button
+            variant="outline"
+            size="xs"
+            data-testid={`runners-card-shell-${run.id}`}
+            title="attach to this runner's terminal"
+            onClick={() => openTransientTab(runnerShellTab(run))}
+            className="px-2 text-[9px] font-bold"
+          >
+            shell
+          </Button>
+        ) : null}
         <span className="min-w-0 flex-1" />
         {sessionId !== null ? (
           <Button

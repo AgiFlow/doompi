@@ -87,6 +87,7 @@ function harness(
           rmuxInput.push({ target, text });
           return true;
         },
+        capture: async () => undefined,
         get: () => undefined,
       },
       logReader: {

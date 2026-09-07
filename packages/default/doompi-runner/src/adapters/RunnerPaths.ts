@@ -14,6 +14,8 @@ const STATE_DIR_NAME = 'runs';
 const LOG_EXTENSION = '.log';
 const STATE_EXTENSION = '.json';
 const ROTATED_SUFFIX = '.1';
+/** Unscrubbed pane bytes, kept beside the log so an attached terminal can replay them. */
+const RAW_SUFFIX = '.raw';
 const PI_CODING_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
 const HOME_ALIAS = '~';
 const HOME_ALIAS_PREFIX = '~/';
@@ -239,6 +241,10 @@ export class RunnerPaths implements IRunnerPaths {
 
   rotatedLogPathFor(id: string, sessionId?: string): string {
     return `${this.logPathFor(id, sessionId)}${ROTATED_SUFFIX}`;
+  }
+
+  rawLogPathFor(id: string, sessionId?: string): string {
+    return `${this.logPathFor(id, sessionId)}${RAW_SUFFIX}`;
   }
 
   statePathFor(id: string, sessionId?: string): string {
@@ -493,7 +499,12 @@ export class RunnerPaths implements IRunnerPaths {
   }
 
   private removeHistoryFiles(sessionId: string, id: string, statePath: string, result: LogSweepResult): void {
-    const candidates = [statePath, this.logPathFor(id, sessionId), this.rotatedLogPathFor(id, sessionId)];
+    const candidates = [
+      statePath,
+      this.logPathFor(id, sessionId),
+      this.rotatedLogPathFor(id, sessionId),
+      this.rawLogPathFor(id, sessionId),
+    ];
     for (const candidate of candidates) {
       try {
         fs.unlinkSync(candidate);

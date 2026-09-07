@@ -148,6 +148,10 @@ export class FakeRunnerPaths implements IRunnerPaths {
     return `${this.logPathFor(id)}.1`;
   }
 
+  rawLogPathFor(id: string): string {
+    return `${this.logPathFor(id)}.raw`;
+  }
+
   statePathFor(id: string): string {
     return path.join(this.stateDirectory(), `${id}.json`);
   }

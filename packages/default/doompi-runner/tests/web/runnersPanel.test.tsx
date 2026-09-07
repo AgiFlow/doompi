@@ -2,6 +2,7 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/
 import { afterEach, describe, expect, it } from 'vitest';
 import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog.tsx';
 import { RunnersPanel } from '../../src/web/components/RunnersPanel.tsx';
+import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel.tsx';
 import { webPlugin } from '../../src/web/index.ts';
 import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
 import type { RunnerRunView } from '../../src/types/webRunners.ts';
@@ -112,6 +113,52 @@ describe('the launch dialog', () => {
       sendSessionFrame: props.sendSessionFrame,
       onClose: () => undefined,
     });
+
+    expect(rendered.error).toBeUndefined();
+  });
+});
+
+describe('the attached shell', () => {
+  it('is offered only for a runner that was started interactive', () => {
+    runnerRunsChannel.apply(
+      's1',
+      runnerRunsChannel.parse({
+        runs: [run('plain', 'running'), { ...run('tty', 'running'), interactive: true }],
+      })!,
+    );
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnersPanel, props);
+
+    expect(rendered.html).toContain('runners-card-shell-tty');
+    // A non-interactive run has no pane to type into.
+    expect(rendered.html).not.toContain('runners-card-shell-plain');
+  });
+
+  it('names its tab after the runner, so two attached panes stay apart', () => {
+    const tab = runnerShellTab({ ...run('tty', 'running'), interactive: true });
+
+    expect(tab.id).toBe('runner-shell-tty');
+    expect(tab.label).toBe('shell · tty');
+  });
+
+  it('renders while it is still attaching', () => {
+    runnerRunsChannel.apply(
+      's1',
+      runnerRunsChannel.parse({ runs: [{ ...run('tty', 'running'), interactive: true }] })!,
+    );
+    const { props } = slotPropsFixture({ sessionId: 's1' });
+
+    const rendered = renderPlugin(RunnerShellPanel, { ...props, runId: 'tty' });
+
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.includes('attaching…')).toBe(true);
+  });
+
+  it('renders with nothing focused, the state an empty cockpit opens in', () => {
+    const { props } = slotPropsFixture({ sessionId: null });
+
+    const rendered = renderPlugin(RunnerShellPanel, { ...props, runId: 'tty' });
 
     expect(rendered.error).toBeUndefined();
   });

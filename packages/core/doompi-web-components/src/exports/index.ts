@@ -196,6 +196,7 @@ export {
   TabsTrigger,
   tabVariants,
 } from '../components/Tabs.tsx';
+export { type TerminalHandle, TerminalView, type TerminalViewProps } from '../components/TerminalView.tsx';
 export { Textarea, type TextareaProps } from '../components/Textarea.tsx';
 export {
   Toast,

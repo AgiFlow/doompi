@@ -24,6 +24,7 @@ function pathsFor(repositoryPath: string): IRunnerPaths {
     logDirectory: () => path.join(repositoryPath, 'logs'),
     logPathFor: (name) => path.join(repositoryPath, 'logs', `${name}.log`),
     rotatedLogPathFor: (name) => path.join(repositoryPath, 'logs', `${name}.log.1`),
+    rawLogPathFor: (name) => path.join(repositoryPath, 'logs', `${name}.log.raw`),
     stateDirectory: () => stateDirectory,
     statePathFor: (id) => path.join(stateDirectory, `${id}.json`),
     ensureDirectories: () => fs.mkdirSync(stateDirectory, { recursive: true }),
