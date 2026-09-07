@@ -110,13 +110,20 @@ test('files browser searches and opens the complete changed-file list', async ({
   await expect(page.getByTestId('files-file-panel')).toHaveCount(0);
 
   const options = browser.getByRole('option');
+  // The drawer groups paths under a header per shared directory. Headers are
+  // labels rather than options, so the cursor still counts files and only files.
+  await expect(options).toHaveCount(6);
+  await expect(page.getByTestId('files-browser-group-docs')).toBeVisible();
+  await expect(page.getByTestId('files-browser-group-src')).toBeVisible();
   await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowDown');
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Enter');
   await expect(browser).toHaveCount(0);
   await expect(page.getByTestId('files-file-panel')).toBeVisible();
-  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Second.ts');
+  // Grouped rows read in path order, so docs/Third.md leads and src/Fifth.ts
+  // is the row one step down.
+  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Fifth.ts');
 
   await showAll.click();
   await expect(browser).toBeVisible();
@@ -129,7 +136,7 @@ test('files browser searches and opens the complete changed-file list', async ({
   await expect(close).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(browser).toHaveCount(0);
-  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Second.ts');
+  await expect(page.getByTestId('files-breadcrumb')).toContainText('src/Fifth.ts');
 
   await showAll.click();
   await page.getByTestId('files-browser-search').fill('HiddenTarget');

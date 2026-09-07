@@ -38,6 +38,70 @@ export function filterFileItems(items: readonly FilesItemView[], query: string):
   return items.filter((item) => item.relPath.toLocaleLowerCase().includes(normalized));
 }
 
+/** One header row and the files under it: the drawer's two-level grouping of a flat path list. */
+export interface FileGroup {
+  /** The shared directory the header names, or empty for files at the repository root. */
+  prefix: string;
+  items: FilesItemView[];
+}
+
+/** The directory part of a relative path, or empty for a file at the root. */
+function parentDir(relPath: string): string {
+  const cut = relPath.lastIndexOf('/');
+  return cut === -1 ? '' : relPath.slice(0, cut);
+}
+
+/** The longest directory two paths share, compared segment by segment rather than character by character. */
+function commonDir(left: string, right: string): string {
+  const leftParts = left.split('/');
+  const rightParts = right.split('/');
+  const shared: string[] = [];
+  for (let index = 0; index < Math.min(leftParts.length, rightParts.length); index += 1) {
+    if (leftParts[index] !== rightParts[index]) break;
+    shared.push(leftParts[index]);
+  }
+  return shared.join('/');
+}
+
+/**
+ * Groups a flat list into one header per top-level segment, each headed by the
+ * deepest directory that group shares.
+ *
+ * Two levels rather than a full tree: paths here run five and six segments
+ * deep, so a node per segment spends more rows on directories than on the
+ * files someone opened the drawer to find. The header carries the shared run
+ * of directories and each row carries what is left, so a file stays one row
+ * and the part that distinguishes it stays readable.
+ *
+ * Ordering is by path, not by recency, because a header only means anything
+ * when its files sit together underneath it. The caller marks the newest
+ * change instead.
+ */
+export function groupFileItems(items: readonly FilesItemView[]): FileGroup[] {
+  const buckets = new Map<string, FilesItemView[]>();
+  for (const item of items) {
+    const cut = item.relPath.indexOf('/');
+    const key = cut === -1 ? '' : item.relPath.slice(0, cut);
+    const bucket = buckets.get(key);
+    if (bucket === undefined) buckets.set(key, [item]);
+    else bucket.push(item);
+  }
+  const groups: FileGroup[] = [];
+  for (const [key, bucket] of buckets) {
+    const sorted = [...bucket].sort((left, right) => left.relPath.localeCompare(right.relPath));
+    // Root files have no directory to name, so they keep an empty header and
+    // render their own paths in full.
+    const prefix = key === '' ? '' : sorted.map((item) => parentDir(item.relPath)).reduce(commonDir);
+    groups.push({ prefix, items: sorted });
+  }
+  return groups.sort((left, right) => left.prefix.localeCompare(right.prefix));
+}
+
+/** What one row shows once its group's header has already said the shared part. */
+export function groupRowLabel(prefix: string, relPath: string): string {
+  return prefix === '' ? relPath : relPath.slice(prefix.length + 1);
+}
+
 /**
  * How the preview shows a file: as the thing it is, wherever the browser can.
  *
