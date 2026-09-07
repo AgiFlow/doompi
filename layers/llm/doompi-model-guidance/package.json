@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-model-guidance",
-  "version": "0.0.1-alpha.62",
+  "version": "0.0.1-alpha.63",
   "description": "Per-model system prompt guidance for Pi agents, layered across global and repository scope.",
   "keywords": [
     "ai",

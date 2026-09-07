@@ -1,3 +1,20 @@
+## 0.0.1-alpha.28 (2026-09-07)
+
+### 🩹 Fixes
+
+- update web client behavior and documentation ([fa613547](https://github.com/AgiFlow/doompi/commit/fa613547))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.62
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.60
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.27 (2026-09-07)
 
 ### 🩹 Fixes
