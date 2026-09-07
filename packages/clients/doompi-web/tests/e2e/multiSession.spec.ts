@@ -124,7 +124,7 @@ test('switches focus by card click and by ordinal digit', async ({ page, cockpit
   await expect(page).toHaveURL(/\/session\/s2$/);
   // The timeline catches up from the hub's ring.
   await expect(page.getByTestId('entry-assistant')).toContainText('from session two');
-  await expect(page.getByTestId('top-cwd')).toBeVisible();
+  await expect(page.getByTestId('session-title')).toBeVisible();
 
   await page.keyboard.press('1');
   await expect(page).toHaveURL(/\/session\/s1$/);
