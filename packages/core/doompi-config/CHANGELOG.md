@@ -1,3 +1,18 @@
+## 0.0.1-alpha.62 (2026-09-07)
+
+### 🚀 Features
+
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.61
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.61 (2026-09-06)
 
 ### 🚀 Features

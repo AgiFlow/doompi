@@ -1,3 +1,18 @@
+## 0.0.1-alpha.25 (2026-09-07)
+
+### 🚀 Features
+
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🩹 Fixes
+
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.24 (2026-09-06)
 
 ### 🚀 Features

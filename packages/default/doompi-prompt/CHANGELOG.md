@@ -1,3 +1,26 @@
+## 0.0.1-alpha.13 (2026-09-07)
+
+### 🚀 Features
+
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+
+### 🩹 Fixes
+
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.22
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.24
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.59
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.12 (2026-09-06)
 
 ### 🚀 Features
