@@ -494,6 +494,36 @@ describe('Doom voice-tools Cordis service', () => {
     ).toBe('VOICE_TOOL_STALE_CATALOG');
   });
 
+  it('keeps other claims when one conflicting registration is replaced', () => {
+    const service = createDoomVoiceToolsService('voice-generation');
+    const original = service.register(definition('shared'));
+    const other = service.register(definition('shared', undefined, '@test/other', 'other-id'));
+    const replacement = service.register(definition('shared'));
+    const session = service.bindSession('voice-session');
+
+    expect(session.describe().conflicts).toHaveLength(1);
+    original.dispose();
+    other.dispose();
+    expect(session.describe().tools.map(({ name }) => name)).toEqual(['shared']);
+    replacement.dispose();
+    service.dispose();
+  });
+
+  it('bounds terminal operation replay history', async () => {
+    const service = createDoomVoiceToolsService('voice-generation');
+    service.register(definition('bounded'));
+    const session = service.bindSession('voice-session');
+    session.setActive(true);
+    const input = { catalogToken: session.describe().catalogToken, calls: [{ name: 'bounded', input: {} }] };
+
+    for (let index = 0; index < 130; index += 1) {
+      await session.executeBatch(input, undefined, { operationId: `operation-${String(index)}` });
+    }
+    const replay = await session.executeBatch(input, undefined, { operationId: 'operation-129' });
+    expect(replay.status).toBe('completed');
+    service.dispose();
+  });
+
   it('makes provider, session, subscription, and registration disposal idempotent', async () => {
     const service = createDoomVoiceToolsService('voice-generation');
     const registration = service.register(definition('disposable'));

@@ -249,10 +249,10 @@
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@types/node": "26.4.1",
-    "@vitest/coverage-v8": "5.0.0",
+    "@vitest/coverage-v8": "4.1.11",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.0"
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1"

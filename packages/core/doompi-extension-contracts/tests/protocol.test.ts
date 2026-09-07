@@ -22,7 +22,7 @@ import {
   defineNotification,
   defineRequestReply,
   type EventBusLike,
-} from '@agimon-ai/doompi-extension-contracts/protocol';
+} from '../src/exports/protocol.ts';
 
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();

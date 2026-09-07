@@ -12,7 +12,7 @@ import {
   normalizeDoomNotificationRequest,
   readDoomNotificationService,
   requireDoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+} from '../src/exports/notification.ts';
 import * as internalNotification from '../src/schemas/notification.ts';
 describe('Doom notification Cordis contract', () => {
   it('normalizes a bounded request into complete versioned entry data', () => {
@@ -45,6 +45,23 @@ describe('Doom notification Cordis contract', () => {
     expect(isDoomNotificationEntryData({ ...entry, version: 2 })).toBe(false);
     expect(isDoomNotificationRequest({ body: '', level: 'success' })).toBe(false);
     expect(normalizeDoomNotificationRequest({ body: '\u0000\u007f' })).toBeUndefined();
+  });
+
+  it('omits optional text that normalizes to empty', () => {
+    expect(
+      normalizeDoomNotificationRequest({
+        title: '',
+        subtitle: ' \n\t ',
+        body: 'Saved\u007f successfully',
+      }),
+    ).toEqual({ body: 'Saved successfully' });
+    expect(createDoomNotificationEntryData({ title: ' ', subtitle: '', body: 'Saved.' })).toEqual({
+      version: 1,
+      title: '',
+      subtitle: '',
+      body: 'Saved.',
+      level: 'info',
+    });
   });
 
   it.each([null, [], 'Saved.', {}, { body: 42 }, { body: 'Saved.', title: false }, { body: 'Saved.', subtitle: [] }])(

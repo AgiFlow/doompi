@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOG_DIR_ENV, LOG_MAX_BYTES_ENV } from '../../src/exports/config';
 import { LogFile } from '../../src/adapters/LogFile/LogFile';
-import { LogReader } from '../../src/adapters/LogReader/LogReader';
+import { filterLogText, LogReader } from '../../src/adapters/LogReader/LogReader';
 import { RunnerPaths } from '../../src/adapters/RunnerPaths';
 
 let directory: string;
@@ -230,5 +230,25 @@ describe('LogReader', () => {
     expect(slice.text).toBe('');
     expect(slice.lineCount).toBe(0);
     expect(slice.exists).toBe(true);
+  });
+});
+
+describe('filterLogText', () => {
+  it('returns unfiltered text when no grep is requested', () => {
+    expect(filterLogText('one\ntwo', {})).toBe('one\ntwo');
+  });
+
+  it('returns nothing when no line matches', () => {
+    expect(filterLogText('one\ntwo', { grep: 'absent' })).toBe('');
+  });
+
+  it('matches without case sensitivity and merges adjacent context windows', () => {
+    expect(filterLogText('A\nhit\nc\nd\nHIT', { grep: 'hit', ignoreCase: true, contextLines: 1 })).toBe(
+      'A\nhit\nc\nd\nHIT',
+    );
+  });
+
+  it('keeps separated matches without inventing context', () => {
+    expect(filterLogText('hit\na\nb\nc\nhit', { grep: 'hit' })).toBe('hit\nhit');
   });
 });

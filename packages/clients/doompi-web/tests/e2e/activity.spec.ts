@@ -179,14 +179,16 @@ test('shows an active goal without claiming background work is running', async (
   await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
-test('the group name opens the owning plugin panel, and is a label where there is none', async ({ page, cockpit }) => {
+test('the group name opens its owning plugin panel', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
   cockpit.session.emit(status('doom-team-agents'));
   cockpit.session.emit(status('doom-runner-runners'));
   await expect(page.getByTestId('activity-keys-runners')).toHaveText('r l');
-  await expect(page.getByTestId('activity-open-runners')).toHaveCount(0);
+
+  await page.getByTestId('activity-open-runners').click();
+  await expect(page).toHaveURL(/\/session\/s1\/runner-runs$/);
 
   await page.getByTestId('activity-open-agents').click();
   await expect(page).toHaveURL(/\/session\/s1\/subagents-fleet$/);
