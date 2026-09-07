@@ -1,3 +1,7 @@
+## 0.0.1-alpha.61 (2026-09-07)
+
+This was a version bump only for @agimon-ai/doompi-runner-rtk-linux-arm64 to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.60 (2026-09-07)
 
 This was a version bump only for @agimon-ai/doompi-runner-rtk-linux-arm64 to align it with other projects, there were no code changes.
