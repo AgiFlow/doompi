@@ -30,18 +30,6 @@ const clock: IClock = {
   clear: (timer) => clearTimeout(timer),
 };
 
-async function eventually(assertion: () => void): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch {
-      await Promise.resolve();
-    }
-  }
-  assertion();
-}
-
 function json(value: object): RequestInit {
   return { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(value) };
 }
@@ -326,7 +314,9 @@ async function createFixture(provider?: RealtimeProvider) {
   };
   const client = new VoiceMediaClient('browser', 'connection', transport, device, undefined, undefined, factory);
   client.start();
-  await eventually(() => expect(transport.connections).toHaveLength(1));
+  // A connect attempt is not an acquired media lease; polling starts after the connection is acknowledged.
+  await vi.waitFor(() => expect(transport.polling).toBe(true));
+  expect(transport.connections).toHaveLength(1);
 
   const sends = vi.fn();
   const host = new InMemoryAuthenticatedHost(api);
@@ -359,14 +349,14 @@ async function createFixture(provider?: RealtimeProvider) {
     },
     async activate() {
       await controller.activate(ui);
-      await eventually(() => expect(sessions).toHaveLength(1));
-      await eventually(() => expect(sessions[0]!.answer).toBe('provider-answer'));
+      await vi.waitFor(() => expect(sessions, controller.activationError).toHaveLength(1));
+      await vi.waitFor(() => expect(sessions[0]!.answer).toBe('provider-answer'));
     },
     async ready() {
       sessions[0]!.providerEvent({ type: 'session.started', session: { id: 'provider-session' } });
       await Promise.resolve();
       await vi.advanceTimersByTimeAsync(250);
-      await eventually(() => expect(controller.state).toBe('active'));
+      await vi.waitFor(() => expect(controller.state).toBe('active'));
     },
     async close() {
       await controller.shutdown(ui);
@@ -397,7 +387,7 @@ describe('integrated live voice path', () => {
 
     f.setContext('updated '.repeat(90));
     await vi.advanceTimersByTimeAsync(250);
-    await eventually(() =>
+    await vi.waitFor(() =>
       expect(f.sessions[0]!.sent.some((message) => message.includes('session.context.append'))).toBe(true),
     );
     const contextMessages = f.sessions[0]!.sent.map(
@@ -425,7 +415,7 @@ describe('integrated live voice path', () => {
     });
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(250);
-    await eventually(() => expect(f.sends).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(f.sends).toHaveBeenCalledOnce());
     expect(f.sends).toHaveBeenCalledWith('Run the focused tests', 'immediate');
 
     f.sessions[0]!.providerEvent({
@@ -446,7 +436,7 @@ describe('integrated live voice path', () => {
     expect(result).toMatchObject({ delegation_item_id: 'request-1', channel: 'commentary' });
     expect(result?.content).toEqual([{ type: 'input_text', text: 'submitted' }]);
     await f.controller.publishAgentResult('pi-final', 'Actual fixture receipt: integration-789');
-    await eventually(() =>
+    await vi.waitFor(() =>
       expect(f.sessions[0]!.sent.some((message) => message.includes('integration-789'))).toBe(true),
     );
     const completion = f.sessions[0]!.sent.map((message) => JSON.parse(message)).find(
@@ -461,18 +451,18 @@ describe('integrated live voice path', () => {
     const f = await createFixture();
     fixtures.push(f);
     await Promise.all([f.controller.activate(f.ui), f.controller.activate(f.ui)]);
-    await eventually(() => expect(f.sessions).toHaveLength(1));
+    await vi.waitFor(() => expect(f.sessions).toHaveLength(1));
     expect(f.controller.activationId).toBe(1);
     expect((await f.host.rawStart('stale-activation')).status).toBe(409);
     await f.ready();
 
     f.controller.setMicrophoneMuted(true);
     f.controller.setMicrophoneMuted(false);
-    await eventually(() => expect(f.sessions[0]!.controls).toEqual(['mute', 'unmute']));
+    await vi.waitFor(() => expect(f.sessions[0]!.controls).toEqual(['mute', 'unmute']));
     f.sessions[0]!.browserEnd();
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(250);
-    await eventually(() => expect(f.controller.state).toBe('disabled'));
+    await vi.waitFor(() => expect(f.controller.state).toBe('disabled'));
     expect((await f.host.rawStart('activation')).status).toBe(409);
 
     const second = await createFixture();
@@ -480,7 +470,7 @@ describe('integrated live voice path', () => {
     await second.activate();
     await second.ready();
     await second.controller.deactivate(second.ui);
-    await eventually(() => expect(second.sessions[0]!.close).toHaveBeenCalled());
+    await vi.waitFor(() => expect(second.sessions[0]!.close).toHaveBeenCalled());
     expect(second.controller.state).toBe('disabled');
   });
 
@@ -506,12 +496,12 @@ describe('integrated live voice path', () => {
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(250);
     expect(f.sends).not.toHaveBeenCalled();
-    await eventually(() => expect(f.sessions[0]!.sent.some((message) => message.includes('rejected'))).toBe(true));
+    await vi.waitFor(() => expect(f.sessions[0]!.sent.some((message) => message.includes('rejected'))).toBe(true));
 
     f.sessions[0]!.providerEvent({ type: 'error', code: 'provider_failed' });
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(250);
-    await eventually(() => expect(f.controller.state).toBe('disabled'));
+    await vi.waitFor(() => expect(f.controller.state).toBe('disabled'));
     expect(f.ui.notify).toHaveBeenCalledWith('Live voice connection failed.', 'error');
 
     const createCall = vi.fn(async () => {
@@ -520,9 +510,9 @@ describe('integrated live voice path', () => {
     const negotiationFailure = await createFixture({ createCall });
     fixtures.push(negotiationFailure);
     await negotiationFailure.controller.activate(negotiationFailure.ui);
-    await eventually(() => expect(createCall).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(createCall).toHaveBeenCalledOnce());
     await vi.advanceTimersByTimeAsync(250);
-    await eventually(() => expect(negotiationFailure.controller.state).toBe('disabled'));
+    await vi.waitFor(() => expect(negotiationFailure.controller.state).toBe('disabled'));
     expect(negotiationFailure.sends).not.toHaveBeenCalled();
   });
 
@@ -534,10 +524,10 @@ describe('integrated live voice path', () => {
     await f.ready();
     expect(f.device.startCapture).not.toHaveBeenCalled();
 
-    await eventually(() => expect(f.transport.polling).toBe(true));
+    await vi.waitFor(() => expect(f.transport.polling).toBe(true));
     f.transport.injectTransportLoss();
     await vi.advanceTimersByTimeAsync(2_000);
-    await eventually(() => expect(f.transport.connections.length).toBeGreaterThan(1));
+    await vi.waitFor(() => expect(f.transport.connections.length).toBeGreaterThan(1));
     expect(f.sessions).toHaveLength(1);
     expect(f.device.startCapture).not.toHaveBeenCalled();
     expect(f.sessions[0]!.close).toHaveBeenCalled();
