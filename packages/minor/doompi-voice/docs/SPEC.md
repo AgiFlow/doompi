@@ -13,13 +13,26 @@ The lifecycle MUST be implemented with **XState v5**. Hand-written state flags m
 The manual `SPC v m` dictation flow remains a separate product mode and is not governed by this specification except for shared recorder, transcription, and privacy requirements.
 
 The experimental browser realtime port is a separate, opt-in companion path. It MUST NOT
-weaken any legacy guarantee in this specification or become active through restoration,
+weaken any half-duplex guarantee in this specification or become active through restoration,
 repository configuration, or ordinary reload. Experimental explicit activation is wired,
 but production acceptance remains gated on direct subscription and physical media qualification.
 Realtime delegations MUST remain requests for the main DoomPi agent, not direct capability
 execution or a second coding-agent loop. Sign-in, synthetic live trials, and microphone trials
 require explicit consent. Transcript events and non-silent RTP MUST NOT be reported as proof
 of complete physical playback, exact narration, or safe approval provenance.
+
+The companion MUST leave the primary Pi model unchanged. A submission acknowledgement MUST
+NOT be presented as completed work. Pi's settled final response MAY be sent as bounded,
+quoted companion data, correlated to submitted requests where available. Subsequent settled
+Pi turns MAY produce speakable session updates. Duplicate completion events MUST NOT repeat
+an update, and teardown MUST fence pending transfers. Oversized results MUST produce an
+explicit unavailable-result notice instead of silent truncation or an invented summary.
+Thinking and raw tool output MUST NOT be exposed to the companion. Live mode MUST NOT enable
+the half-duplex `narrate` tool or TTS fallback. Both interaction modes remain supported.
+
+Until provider cancellation and playout boundaries are qualified, live interruption MUST
+remain local output suppression, not a claim of response cancellation. It MUST NOT abort
+Pi tools or silently resume capture. Output recovery currently requires explicit reactivation.
 
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative.
 

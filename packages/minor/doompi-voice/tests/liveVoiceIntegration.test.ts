@@ -445,6 +445,15 @@ describe('integrated live voice path', () => {
     );
     expect(result).toMatchObject({ delegation_item_id: 'request-1', channel: 'commentary' });
     expect(result?.content).toEqual([{ type: 'input_text', text: 'submitted' }]);
+    await f.controller.publishAgentResult('pi-final', 'Actual fixture receipt: integration-789');
+    await eventually(() =>
+      expect(f.sessions[0]!.sent.some((message) => message.includes('integration-789'))).toBe(true),
+    );
+    const completion = f.sessions[0]!.sent.map((message) => JSON.parse(message)).find(
+      (message) => message.channel === 'speakable',
+    );
+    expect(completion).toMatchObject({ type: 'delegation.context.append', delegation_item_id: 'request-1' });
+    expect(completion.content[0].text).toContain('Actual fixture receipt: integration-789');
   });
 
   it('rejects duplicate and stale activation, forwards mute controls, and ends from either side', async () => {

@@ -914,13 +914,13 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
   };
 }
 
-export function reconcileVoiceModeTools(pi: ExtensionAPI, enabled: boolean): void {
+export function reconcileVoiceModeTools(pi: ExtensionAPI, enabled: boolean, narrationEnabled = true): void {
   const activeTools = pi.getActiveTools();
   const voiceToolNames = new Set<string>(VOICE_MODE_TOOL_NAMES);
   const registeredNames = new Set(pi.getAllTools().map((tool) => tool.name));
   const nextTools = activeTools.filter((name) => !voiceToolNames.has(name));
   if (enabled && VOICE_MODE_TOOL_NAMES.every((name) => registeredNames.has(name))) {
-    nextTools.push(...VOICE_MODE_TOOL_NAMES);
+    nextTools.push(...VOICE_MODE_TOOL_NAMES.filter((name) => narrationEnabled || name !== VOICE_NARRATE_TOOL_NAME));
   }
   if (nextTools.length !== activeTools.length || nextTools.some((name, index) => name !== activeTools[index])) {
     pi.setActiveTools(nextTools);
@@ -1001,7 +1001,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         voiceToolSession !== undefined &&
         contextSessionId === voiceToolSession.sessionId;
       voiceToolSession?.setActive(enabled);
-      reconcileVoiceModeTools(pi, enabled);
+      reconcileVoiceModeTools(pi, enabled, autoController.selectedMode !== 'live');
       voiceToolFacades?.refresh();
     };
     const configuredMode = (): 'legacy' | 'live' =>
@@ -1370,17 +1370,31 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       activeContext = ctx;
       const sessionId = (ctx as unknown as VoiceSessionContextLike).sessionManager?.getSessionId();
       narrationToolRuntime =
-        voiceToolSession && sessionId === voiceToolSession.sessionId
+        autoController.selectedMode !== 'live' && voiceToolSession && sessionId === voiceToolSession.sessionId
           ? { context: ctx, session: voiceToolSession, controller: autoController }
           : undefined;
       reconcileVoiceTools(autoController.state);
     });
     const disposeVoiceTurnFallback = registerVoiceTurnFallback(pi, {
       activeGeneration: (context) =>
-        active && isNarrationRuntimeActive(narrationToolRuntime, context) ? autoController.activationId : undefined,
+        active && autoController.selectedMode !== 'live' && isNarrationRuntimeActive(narrationToolRuntime, context)
+          ? autoController.activationId
+          : undefined,
       narrate: (finalResponse, signal) => autoController.narrateFallback(finalResponse, signal),
     });
     yield disposeVoiceTurnFallback;
+    pi.on('agent_settled', async (_event, ctx) => {
+      if (!active || autoController.selectedMode !== 'live' || liveController.state !== 'active') return;
+      if (ctx.sessionManager !== activeContext?.sessionManager) return;
+      const lastMessage = ctx.sessionManager.getBranch().findLast((entry) => entry.type === 'message');
+      if (!lastMessage || lastMessage.type !== 'message') return;
+      const message = lastMessage.message;
+      const text =
+        message.role === 'assistant' && message.stopReason !== 'error' && message.stopReason !== 'aborted'
+          ? extractTerminalAssistantText(message)
+          : undefined;
+      await liveController.publishAgentResult(lastMessage.id, text);
+    });
     const disposeAutoCaptureEvents = registerAutoCaptureCordisEventHandlers(cordis, autoController);
     yield disposeAutoCaptureEvents;
     yield async () => {

@@ -111,6 +111,15 @@ describe('LiveVoiceController', () => {
       expect.any(AbortSignal),
     );
     await expect(controller.narrateAgent('Exact words')).resolves.toBe('failed');
+    await controller.publishAgentResult('pi-final-1', 'Actual result: probe_ok, receipt test-123');
+    await controller.publishAgentResult('pi-final-1', 'Actual result: probe_ok, receipt test-123');
+    const spoken = vi
+      .mocked(host.send)
+      .mock.calls.flatMap((call) => call[1].map((value) => JSON.parse(value)))
+      .filter((value) => value.channel === 'speakable');
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0].delegation_item_id).toBe('request-1');
+    expect(spoken[0].content[0].text).toContain('Actual result: probe_ok, receipt test-123');
     await controller.deactivate(ui);
     await expect(controller.narrateAgent('Exact words')).resolves.toBe('interrupted');
   });
@@ -260,7 +269,7 @@ describe('LiveVoiceController', () => {
     await settle();
     expect(controller.state).toBe('active');
     expect(vi.mocked(host.start).mock.calls[0]?.[1]).toHaveLength(16_384);
-    expect(vi.mocked(host.start).mock.calls[0]?.[1]).toContain('DoomPi is the sole authority');
+    expect(vi.mocked(host.start).mock.calls[0]?.[1]).toContain('primary DoomPi agent owns reasoning, tools');
     controller.setMicrophoneMuted(true);
     controller.setMicrophoneMuted(false);
     controller.interruptSpeech();
@@ -343,5 +352,43 @@ describe('LiveVoiceController', () => {
     expect(controller.activationError).toBe('browser owner unavailable');
     expect(host.stop).toHaveBeenCalledWith('activation-live');
     expect(ui.notify).toHaveBeenCalledWith('browser owner unavailable', 'error');
+  });
+  it('publishes later Pi completions without a new delegation and fences stopped activations', async () => {
+    const { controller, host, ui } = harness();
+    await controller.activate(ui);
+    await settle();
+    await controller.publishAgentResult('team-final', 'The delegated fixture finished successfully.');
+    const sent = vi.mocked(host.send).mock.calls.flatMap((call) => call[1].map((value) => JSON.parse(value)));
+    expect(sent).toEqual([expect.objectContaining({ type: 'session.context.append', channel: 'speakable' })]);
+    expect(sent[0].content[0].text).toContain('delegated fixture finished');
+    await controller.deactivate(ui);
+    await controller.publishAgentResult('stale-final', 'Must not cross activation teardown');
+    expect(host.send).toHaveBeenCalledOnce();
+  });
+
+  it('does not silently truncate an oversized final or claim its contents', async () => {
+    const { controller, host, ui } = harness();
+    await controller.activate(ui);
+    await settle();
+    await controller.publishAgentResult('long-final', 'x'.repeat(9_000));
+    const sent = vi.mocked(host.send).mock.calls.flatMap((call) => call[1].map((value) => JSON.parse(value)));
+    expect(sent[0].content[0].text).toContain('Its contents were not transmitted');
+    expect(ui.notify).toHaveBeenCalledWith(expect.stringContaining('full response remains in the Pi session'), 'info');
+    expect(controller.state).toBe('active');
+    await controller.deactivate(ui);
+  });
+
+  it('surfaces a failed result transfer and closes only voice ownership', async () => {
+    const { controller, host, ui } = harness({
+      sendHost: async () => {
+        throw new Error('result transport failed');
+      },
+    });
+    await controller.activate(ui);
+    await settle();
+    await controller.publishAgentResult('pi-final', 'Fixture result');
+    expect(controller.state).toBe('disabled');
+    expect(controller.activationError).toBe('result transport failed');
+    expect(host.stop).toHaveBeenCalledOnce();
   });
 });

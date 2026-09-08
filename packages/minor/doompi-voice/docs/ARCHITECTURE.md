@@ -21,7 +21,7 @@ The experimental live path is a focused TypeScript port, not a Codex app-server 
 - `adapters/pi/{realtimeContext,realtimeDelivery}.ts`: bounded visible-branch projection and deduplicated user-text delivery.
 - `web/api/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.
 
-`voice.ts` composes legacy and live controllers. Global configuration selects the controller
+`voice.ts` composes half-duplex (`legacy` configuration value) and realtime companion controllers.
 only on explicit activation. Local ASR readiness does not gate live mode. Login is a separate
 command and never starts capture. Reload handoffs and reconnect cannot resume live media.
 
@@ -35,14 +35,25 @@ Queued stale provider events are discarded after local end or ownership transfer
 The Pi bridge uses finalized user text, not companion reformulations, for main-agent input.
 Busy-agent submission steers the existing agent; it does not start another coding loop.
 Changed request payloads and ambiguous delivery fail closed. Submission is not completion.
-Context is rebuilt from the current visible branch and bounded task/question projection on
-polling ticks; commentary updates are coalesced and have a cumulative budget.
+The primary Pi model is never replaced or pinned. `agent_settled` publishes the current
+session's last visible final response through `LiveVoiceController.publishAgentResult`.
+Submitted delegation IDs receive correlated results, with only the latest steering request
+marked speakable. Later Pi completions without an outstanding delegation use speakable
+session context, so Team and Workflow completion turns can reach the companion too.
+Pi message IDs deduplicate publication within an activation. Transfer failure ends Voice
+visibly, without aborting Pi work. Oversized results produce an explicit notice, not a
+silently clipped answer. No raw tool output or thinking is forwarded.
 
-Direct subscription access, silent context-update behavior, full spoken replies, microphone
-and speaker echo, latency and duplex usability still require separately approved live trials.
-Exact narration and voice-only approval provenance remain unavailable. Interruption suppresses
-local output until a fresh activation; this is not a qualified backend cancellation or resume
-boundary. It never cancels main-agent work.
+Live mode excludes the half-duplex `narrate` tool and fallback; unrelated active tools remain.
+Reference context is rebuilt from the visible branch and bounded task/question projection
+on polling ticks; commentary updates are coalesced and have a cumulative budget.
+
+Subscription WebRTC and same-call host sideband connectivity have been exercised in isolated
+trials, as has a synthetic echo/result roundtrip. That does not qualify physical speech.
+Full audible replies, microphone and speaker echo, latency and duplex usability still need
+separately approved trials. Exact narration and voice-only approval provenance remain unavailable.
+Interruption suppresses local output until explicit reactivation; no safe provider cancellation
+or buffered-audio resume boundary has been established. It never cancels main-agent work.
 
 ## Contents
 

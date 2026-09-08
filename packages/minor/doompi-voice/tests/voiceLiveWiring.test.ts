@@ -19,21 +19,31 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
   const commands = new Map<string, { handler(args: string, context: ExtensionContext): Promise<void> }>();
   const events = new Map<string, (event: object, context: ExtensionContext) => Promise<void>>();
   const tools = new Map<string, { name: string; execute(...args: unknown[]): unknown }>();
+  const branch: ReturnType<ExtensionContext['sessionManager']['getBranch']> = [];
+  let activeTools = ['read'];
   const context = {
     hasUI: true,
     isIdle: () => true,
-    sessionManager: { getSessionId: () => 'session-live', getBranch: () => [] },
+    sessionManager: { getSessionId: () => 'session-live', getBranch: () => branch },
     ui: { notify: vi.fn(), setStatus: vi.fn() },
   } as unknown as ExtensionContext;
   const pi = {
     registerCommand: (name: string, command: { handler(args: string, context: ExtensionContext): Promise<void> }) =>
       commands.set(name, command),
-    on: (event: string, handler: (event: object, context: ExtensionContext) => Promise<void>) =>
-      events.set(event, handler),
+    on: (event: string, handler: (event: object, context: ExtensionContext) => Promise<void>) => {
+      const previous = events.get(event);
+      events.set(event, async (value, ctx) => {
+        await previous?.(value, ctx);
+        await handler(value, ctx);
+      });
+    },
     registerTool: (tool: { name: string; execute(...args: unknown[]): unknown }) => tools.set(tool.name, tool),
-    getActiveTools: () => [],
-    getAllTools: () => [],
-    setActiveTools: vi.fn(),
+    getActiveTools: () => activeTools,
+    getAllTools: () => [...tools.values()],
+    setActiveTools: vi.fn((names: string[]) => {
+      activeTools = names;
+    }),
+    setModel: vi.fn(),
     getSessionName: () => 'Voice test',
     sendUserMessage: vi.fn(),
   } as unknown as ExtensionAPI;
@@ -58,7 +68,7 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
       events: [],
     })),
     stop: vi.fn(async () => undefined),
-    send: vi.fn(async () => undefined),
+    send: vi.fn<RealtimeHost['send']>(async () => undefined),
     control: vi.fn(async () => undefined),
   } satisfies RealtimeHost;
   const cancel = vi.fn();
@@ -86,6 +96,8 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
   };
   return {
     cordis,
+    pi,
+    branch,
     command,
     events,
     tools,
@@ -204,5 +216,49 @@ describe('production live voice command wiring', () => {
     await f.command('voice-auto', 'resume');
     expect(f.context.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Usage:'), 'info');
     expect(f.host.start).not.toHaveBeenCalled();
+  });
+  it('steers the primary Pi agent and returns its actual result without narrate or model switching', async () => {
+    const f = fixture();
+    await f.events.get('session_start')!({}, f.context);
+    vi.spyOn(f.context, 'isIdle').mockReturnValue(false);
+    f.host.poll.mockImplementation(async (activationId, after) => ({
+      activationId,
+      state: 'active',
+      cursor: 2,
+      events:
+        after === 0
+          ? [
+              {
+                sequence: 1,
+                event: { type: 'transcript', role: 'user', text: 'Run the harmless fixture', complete: true },
+              },
+              { sequence: 2, event: { type: 'request', requestId: 'native-request', text: 'Companion reformulation' } },
+            ]
+          : [],
+    }));
+    await f.command('voice-auto');
+    expect(f.pi.sendUserMessage).toHaveBeenCalledExactlyOnceWith('Run the harmless fixture', { deliverAs: 'steer' });
+    expect(f.pi.getActiveTools()).toContain('read');
+    expect(f.pi.getActiveTools()).not.toContain('narrate');
+    expect(f.pi.setModel).not.toHaveBeenCalled();
+    f.branch.push({
+      type: 'message',
+      id: 'pi-final',
+      message: {
+        role: 'assistant',
+        stopReason: 'stop',
+        content: [{ type: 'text', text: 'Fixture returned receipt fixture-456.' }],
+      },
+    } as (typeof f.branch)[number]);
+    await f.events.get('agent_settled')!({}, f.context);
+    await f.events.get('agent_settled')!({}, f.context);
+    const results = f.host.send.mock.calls
+      .flatMap((call) => call[1].map((value) => JSON.parse(value)))
+      .filter((value) => value.channel === 'speakable');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ type: 'delegation.context.append', delegation_item_id: 'native-request' });
+    expect(results[0].content[0].text).toContain('fixture-456');
+    await f.command('voice-auto', 'end');
+    expect(f.pi.getActiveTools()).toEqual(['read']);
   });
 });
