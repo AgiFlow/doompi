@@ -1,3 +1,14 @@
+## 0.0.1-alpha.32 (2026-09-08)
+
+### 🩹 Fixes
+
+- **root:** improve web performance and voice continuity ([165a76f1](https://github.com/AgiFlow/doompi/commit/165a76f1))
+- tighten workflow dispatch and runtime caching ([45296d03](https://github.com/AgiFlow/doompi/commit/45296d03))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.31 (2026-09-08)
 
 ### 🚀 Features
