@@ -30,7 +30,7 @@ export function FilesActivitySection({ sessionId, openTransientTab }: WebPluginS
   };
   if (items.length === 0) {
     return (
-      <p data-testid="activity-summary-files" className="px-1 text-[10px] text-doom-faint">
+      <p data-testid="activity-summary-files" className="px-1 text-xs text-doom-faint">
         nothing changed yet
       </p>
     );
@@ -49,7 +49,7 @@ export function FilesActivitySection({ sessionId, openTransientTab }: WebPluginS
           size="xs"
           data-testid="activity-files-show-all"
           aria-label={`show all ${items.length} changed files`}
-          className="self-start px-1 pt-0.5 text-[9px] text-doom-faint"
+          className="self-start px-1 pt-0.5 text-2xs text-doom-faint"
           onClick={() => setBrowserOpen(true)}
         >
           show all {items.length} files

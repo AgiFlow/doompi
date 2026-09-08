@@ -5,6 +5,7 @@ export {
   doomComponentsLayerBoundary,
   doomWebLayerBoundary,
   isComponentLibrary,
+  noArbitraryStyleValue,
   noCrossFeatureImport,
   noRawThemeColor,
   preferSharedPrimitive,

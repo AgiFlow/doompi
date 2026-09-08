@@ -53,7 +53,7 @@ export function AuthorDocumentPanel(props: AuthorDocumentPanelProps) {
       return <fallback.panel {...props} />;
     }
     return (
-      <p data-testid="author-mode-inactive" className="p-3 text-xs text-doom-dim">
+      <p data-testid="author-mode-inactive" className="p-3 text-sm text-doom-dim">
         No file viewer is available for this path.
       </p>
     );
@@ -114,7 +114,7 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
     };
   }, [kind, path, sessionId]);
   if (document === undefined || sessionId === null) {
-    return <p className="p-4 text-[11px] text-doom-faint">{status ?? 'Loading document...'}</p>;
+    return <p className="p-4 text-sm text-doom-faint">{status ?? 'Loading document...'}</p>;
   }
 
   const save = async (): Promise<void> => {
@@ -145,7 +145,7 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
   return (
     <section data-testid="author-document" className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b border-doom-border px-4 py-2">
-        <strong className="min-w-0 flex-1 truncate text-sm text-doom-hi">{document.title ?? document.path}</strong>
+        <strong className="min-w-0 flex-1 truncate text-base text-doom-hi">{document.title ?? document.path}</strong>
         {document.kind === 'markdown' ? (
           <Button
             size="xs"
@@ -157,10 +157,10 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
           </Button>
         ) : null}
         {document.kind === 'video' ? (
-          <span className="text-sm text-doom-dim">Video feedback</span>
+          <span className="text-base text-doom-dim">Video feedback</span>
         ) : (
           <Button
-            className="min-h-11 px-4 text-sm"
+            className="min-h-11 px-4 text-base"
             variant="outline"
             data-testid="author-save"
             disabled={document.revisions.length === 0 || document.savingVersion !== undefined}
@@ -170,7 +170,7 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
           </Button>
         )}
       </header>
-      {status === undefined ? null : <output className="px-4 py-1 text-[10px] text-doom-faint">{status}</output>}
+      {status === undefined ? null : <output className="px-4 py-1 text-xs text-doom-faint">{status}</output>}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {document.kind === 'text' || document.kind === 'markdown' ? (
           textPanel

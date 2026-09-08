@@ -18,6 +18,10 @@ export const vitestConfig = defineConfig({
         'src/exports/',
         '**/*.d.ts',
         '**/*.config.*',
+        // Story files are render fixtures for the style-system screenshot
+        // pipeline, not shipped logic. They are never imported by the package
+        // entries and hold no behaviour a unit test could assert.
+        '**/*.stories.tsx',
         '**/coverage/**',
         // CodeMirror and xterm mount onto a real element and measure it, so
         // neither editor can be reached by server rendering. The modules under

@@ -62,7 +62,7 @@ export function TimelineChart({ buckets, bucketUnit }: TimelineChartProps) {
           );
         })}
       </svg>
-      <div className="flex flex-wrap justify-between gap-x-3 text-[9px] text-doom-faint">
+      <div className="flex flex-wrap justify-between gap-x-3 text-2xs text-doom-faint">
         <span>{buckets[0]?.label ?? ''}</span>
         {buckets.length > 1 ? <span>peak {formatTokens(max)}</span> : null}
         <span>

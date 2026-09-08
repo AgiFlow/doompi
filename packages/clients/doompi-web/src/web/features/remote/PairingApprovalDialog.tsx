@@ -33,14 +33,14 @@ export function PairingApprovalDialog() {
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-2">
-          <p data-testid="pairing-approval-agent" className="break-words text-xs text-doom-hi">
+          <p data-testid="pairing-approval-agent" className="break-words text-sm text-doom-hi">
             {request.userAgent}
           </p>
           {/* Labelled as reported rather than stated as fact: anything that can
               reach the tunnel listener can set this header to whatever it likes,
               so it is a clue for the human and never a security decision. */}
-          <p className="text-[11px] text-doom-faint">address reported by the edge: {request.edgeIp}</p>
-          <p className="text-[11px] text-doom-faint">
+          <p className="text-sm text-doom-faint">address reported by the edge: {request.edgeIp}</p>
+          <p className="text-sm text-doom-faint">
             Approving grants the same access you have here, including running shell commands.
           </p>
         </DialogBody>

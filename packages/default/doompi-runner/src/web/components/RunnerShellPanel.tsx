@@ -80,7 +80,7 @@ export function RunnerShellPanel({ sessionId, runId }: WebPluginSlotProps & { ru
   return (
     <div data-testid="runner-shell-panel" className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-11 shrink-0 items-center gap-2.5 border-b border-doom-border-soft px-3 sm:h-11 sm:px-[26px]">
-        <span data-testid="runner-shell-name" className="shrink-0 truncate text-[12px] font-bold text-doom-hi">
+        <span data-testid="runner-shell-name" className="shrink-0 truncate text-sm font-bold text-doom-hi">
           {run?.name ?? runId}
         </span>
         <StatusBadge tone={live ? 'running' : 'neutral'} data-testid="runner-shell-state">
@@ -88,7 +88,7 @@ export function RunnerShellPanel({ sessionId, runId }: WebPluginSlotProps & { ru
         </StatusBadge>
         <span className="min-w-0 flex-1" />
         {lost ? (
-          <span data-testid="runner-shell-lost" className="shrink-0 text-[9px] text-doom-red">
+          <span data-testid="runner-shell-lost" className="shrink-0 text-2xs text-doom-red">
             the connection to this pane dropped
           </span>
         ) : null}
@@ -99,7 +99,7 @@ export function RunnerShellPanel({ sessionId, runId }: WebPluginSlotProps & { ru
             data-testid="runner-shell-interrupt"
             title="send ctrl-c"
             onClick={() => send('\u0003')}
-            className="px-2 text-[9px] font-bold"
+            className="px-2 text-2xs font-bold"
           >
             ctrl-c
           </Button>
@@ -114,14 +114,14 @@ export function RunnerShellPanel({ sessionId, runId }: WebPluginSlotProps & { ru
           onReady={() => setReady(true)}
         />
         {ready ? null : (
-          <p data-testid="runner-shell-reading" className="text-[10px] text-doom-faint">
+          <p data-testid="runner-shell-reading" className="text-xs text-doom-faint">
             attaching…
           </p>
         )}
       </div>
 
       <div className="flex h-8 shrink-0 items-center border-t border-doom-border-soft px-3 sm:px-[26px]">
-        <span className="min-w-0 flex-1 truncate text-[9px] text-doom-faint">
+        <span className="min-w-0 flex-1 truncate text-2xs text-doom-faint">
           {live ? 'typing goes straight to the runner' : 'this runner is no longer accepting input'}
         </span>
       </div>

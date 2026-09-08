@@ -9,7 +9,7 @@ export function Checkbox({ className, ...props }: ComponentProps<typeof Checkbox
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        'flex h-3.5 w-3.5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-doom-border bg-doom-deep outline-none transition-colors focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 data-[state=checked]:border-doom-blue data-[state=indeterminate]:border-doom-blue',
+        'flex h-3.5 w-3.5 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-doom-border bg-doom-deep outline-none transition-colors focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 data-[state=checked]:border-doom-blue data-[state=indeterminate]:border-doom-blue',
         className,
       )}
       {...props}

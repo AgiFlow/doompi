@@ -21,7 +21,7 @@ export function RemoteControlSettings() {
       />
 
       {state.view === undefined ? (
-        <p className="flex items-center gap-2 text-[11px] text-doom-faint">
+        <p className="flex items-center gap-2 text-sm text-doom-faint">
           <Spinner label="reading remote control settings" />
           reading remote control settings…
         </p>
@@ -29,7 +29,7 @@ export function RemoteControlSettings() {
         <TunnelSettings tunnel={state.view.settings.tunnel} />
       )}
 
-      <p className="text-[11px] leading-relaxed text-doom-faint">
+      <p className="text-sm leading-relaxed text-doom-faint">
         install <code>cloudflared</code> on this machine before turning remote access on. the remote access dialog
         remains the place to start the tunnel, pair devices, and turn access off.
       </p>

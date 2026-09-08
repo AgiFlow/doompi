@@ -111,7 +111,7 @@ export function TopBar({
             title="show sessions"
             aria-label="show sessions"
             onClick={onShowSessions}
-            className="shrink-0 text-[16px] text-doom-dim md:hidden"
+            className="shrink-0 text-lg text-doom-dim md:hidden"
           >
             <span aria-hidden>☰</span>
           </Button>
@@ -130,7 +130,7 @@ export function TopBar({
               if (event.key === 'Escape') setRenaming(false);
             }}
             onBlur={commitRename}
-            className="h-6 w-44 shrink-0 border-doom-blue/60 px-1.5 text-[13px] font-bold"
+            className="h-6 w-44 shrink-0 border-doom-blue/60 px-1.5 text-base font-bold"
           />
         ) : (
           <Button
@@ -142,7 +142,7 @@ export function TopBar({
               setDraft(title);
               setRenaming(true);
             }}
-            className="h-6 max-w-24 shrink-0 truncate px-1 text-[13px] font-bold text-doom-hi max-sm:hidden sm:max-w-44"
+            className="h-6 max-w-24 shrink-0 truncate px-1 text-base font-bold text-doom-hi max-sm:hidden sm:max-w-44"
           >
             {title}
           </Button>

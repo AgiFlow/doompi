@@ -21,7 +21,7 @@ export function RemoteAccessPairing() {
         <SectionLabel>or enter this pairing code</SectionLabel>
         <code
           data-testid="remote-pair-code"
-          className="rounded bg-doom-deep p-2 text-center font-mono text-lg tracking-[0.25em] text-doom-text"
+          className="rounded bg-doom-deep p-2 text-center font-mono text-lg tracking-widest text-doom-text"
         >
           {state.pairCode}
         </code>
@@ -30,17 +30,17 @@ export function RemoteAccessPairing() {
         <SectionLabel>signing-key fingerprint</SectionLabel>
         <code
           data-testid="remote-signing-fingerprint"
-          className="break-all rounded bg-doom-deep p-2 text-center font-mono text-[11px] text-doom-text"
+          className="break-all rounded bg-doom-deep p-2 text-center font-mono text-sm text-doom-text"
         >
           {state.pairFingerprint.match(/.{1,8}/gu)?.join(' ') ?? state.pairFingerprint}
         </code>
-        <p className="text-[11px] text-doom-faint">
+        <p className="text-sm text-doom-faint">
           Compare this on the phone when entering the manual code. Bundle revision {String(state.pairRevision)}.
         </p>
       </div>
       <div className="flex w-full flex-col gap-1">
         <SectionLabel>or open this address</SectionLabel>
-        <code data-testid="remote-pair-url" className="break-all rounded bg-doom-deep p-2 text-[11px] text-doom-faint">
+        <code data-testid="remote-pair-url" className="break-all rounded bg-doom-deep p-2 text-sm text-doom-faint">
           {state.pairUrl}
         </code>
       </div>
@@ -54,7 +54,7 @@ export function RemoteAccessPairing() {
       {state.passkeys?.supported === true ? (
         <div className="flex w-full flex-col gap-1.5 border-t border-doom-border pt-3">
           <SectionLabel>passkeys</SectionLabel>
-          <p className="text-[11px] text-doom-faint">
+          <p className="text-sm text-doom-faint">
             {state.passkeys.count === 0
               ? 'Add one on the device you just paired and it will not need the code again.'
               : `${String(state.passkeys.count)} registered. A paired device signs in with a gesture instead of a code.`}
@@ -64,7 +64,7 @@ export function RemoteAccessPairing() {
           </Button>
         </div>
       ) : state.passkeys?.reason === undefined ? null : (
-        <p data-testid="remote-passkey-unavailable" className="w-full text-[11px] text-doom-faint">
+        <p data-testid="remote-passkey-unavailable" className="w-full text-sm text-doom-faint">
           {state.passkeys.reason}
         </p>
       )}

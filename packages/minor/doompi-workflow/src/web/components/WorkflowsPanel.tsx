@@ -154,7 +154,7 @@ function WorkflowPicker({
         >
           <SearchIcon className="h-3 w-3 shrink-0 text-doom-faint" />
           <span className="min-w-0 flex-1 truncate text-left font-bold text-doom-hi">{selected.displayName}</span>
-          <span className="shrink-0 text-[9px] font-normal text-doom-faint">{runs.length} workflows</span>
+          <span className="shrink-0 text-2xs font-normal text-doom-faint">{runs.length} workflows</span>
           <ChevronDownIcon className="h-3 w-3 shrink-0 text-doom-dim" />
         </Button>
       </PopoverTrigger>
@@ -175,13 +175,11 @@ function WorkflowPicker({
         </PopoverHeader>
         <div className="grid max-h-[360px] grid-cols-1 gap-2 overflow-y-auto p-2 sm:grid-cols-2">
           {sections.length === 0 ? (
-            <span className="px-2 py-5 text-center text-[10px] text-doom-faint sm:col-span-2">
-              no matching workflows
-            </span>
+            <span className="px-2 py-5 text-center text-xs text-doom-faint sm:col-span-2">no matching workflows</span>
           ) : (
             sections.map((section) => (
               <div key={section.label} className="flex min-w-0 flex-col gap-0.5">
-                <span className="px-2 py-1 text-[8px] font-bold uppercase tracking-[0.14em] text-doom-faint">
+                <span className="px-2 py-1 text-2xs font-bold uppercase tracking-wider text-doom-faint">
                   {section.label} · {section.runs.length}
                 </span>
                 {section.runs.map((run) => {
@@ -204,12 +202,12 @@ function WorkflowPicker({
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <Dot tone={runDot(run)} pulse={run.stage === 'running'} />
-                        <span className={cn('min-w-0 flex-1 truncate text-[10px]', active && 'font-bold text-doom-hi')}>
+                        <span className={cn('min-w-0 flex-1 truncate text-xs', active && 'font-bold text-doom-hi')}>
                           {run.displayName}
                         </span>
-                        <span className="shrink-0 text-[8px] text-doom-faint">{runState(run)}</span>
+                        <span className="shrink-0 text-2xs text-doom-faint">{runState(run)}</span>
                       </span>
-                      <span className="truncate pl-3.5 text-[8px] text-doom-dim">
+                      <span className="truncate pl-3.5 text-2xs text-doom-dim">
                         {[run.position?.job, run.position?.step].filter(Boolean).join(' · ') || 'settled'}
                       </span>
                     </button>
@@ -244,10 +242,10 @@ function SelectedAttention({ run }: { run: WorkflowRunView }) {
       <StatusBadge size="xs" tone={attention.kind === 'error' ? 'error' : 'running'}>
         {attention.kind === 'error' ? 'ERROR' : 'PAUSED'}
       </StatusBadge>
-      <span data-testid={`needs-card-${run.runKey}`} className="min-w-0 flex-1 truncate text-[10px] text-doom-text">
+      <span data-testid={`needs-card-${run.runKey}`} className="min-w-0 flex-1 truncate text-xs text-doom-text">
         {run.displayName}: {attention.text}
       </span>
-      <span className="shrink-0 text-[9px] text-doom-faint">
+      <span className="shrink-0 text-2xs text-doom-faint">
         {attention.kind === 'error' ? 'recover from the owning session' : 'resume from the owning session'}
       </span>
     </div>
@@ -275,11 +273,11 @@ function JobRow({
       onClick={onSelect}
       className={cn('gap-2 rounded px-2 py-1.5', !selected && 'hover:bg-doom-deep')}
     >
-      <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
-      <OptionLabel density="compact" className={cn('text-[10px]', selected ? 'text-doom-hi' : 'text-doom-text')}>
+      <span className={`w-3 shrink-0 text-xs ${icon.className}`}>{icon.glyph}</span>
+      <OptionLabel density="compact" className={cn('text-xs', selected ? 'text-doom-hi' : 'text-doom-text')}>
         {job.name}
       </OptionLabel>
-      <span className="shrink-0 text-[8px] text-doom-faint">{spanDuration(job.startedAt, job.endedAt, now) ?? ''}</span>
+      <span className="shrink-0 text-2xs text-doom-faint">{spanDuration(job.startedAt, job.endedAt, now) ?? ''}</span>
     </OptionRow>
   );
 }
@@ -309,23 +307,21 @@ function StepRow({
       )}
     >
       <span className="flex items-center gap-2">
-        <span className={`w-3 shrink-0 text-[10px] ${icon.className}`}>{icon.glyph}</span>
+        <span className={`w-3 shrink-0 text-xs ${icon.className}`}>{icon.glyph}</span>
         <span
           className={cn(
-            'min-w-0 flex-1 truncate text-[9px]',
+            'min-w-0 flex-1 truncate text-2xs',
             step.status === 'failed' ? 'text-doom-red' : 'text-doom-text',
           )}
         >
           {step.name}
         </span>
-        <span className="shrink-0 text-[8px] text-doom-faint">
+        <span className="shrink-0 text-2xs text-doom-faint">
           {spanDuration(step.startedAt, step.endedAt, now) ?? ''}
         </span>
       </span>
       {step.reason === undefined ? null : (
-        <span
-          className={cn('truncate pl-5 text-[8px]', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}
-        >
+        <span className={cn('truncate pl-5 text-2xs', step.status === 'failed' ? 'text-doom-red' : 'text-doom-faint')}>
           {step.reason}
         </span>
       )}
@@ -385,12 +381,12 @@ function InlineStepOutput({
     <div data-testid="workflow-inline-output" className="flex min-h-0 flex-1 flex-col bg-doom-deep">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft px-3">
         <Dot tone={ended ? 'neutral' : 'blue'} pulse={!ended && run.stage === 'running'} />
-        <span className={cn('text-[9px] font-bold', ended ? 'text-doom-faint' : 'text-doom-blue')}>
+        <span className={cn('text-2xs font-bold', ended ? 'text-doom-faint' : 'text-doom-blue')}>
           {ended ? 'FINAL OUTPUT' : 'LIVE OUTPUT'}
         </span>
-        <span className="min-w-0 truncate text-[10px] font-bold text-doom-hi">{step?.name ?? job.name}</span>
+        <span className="min-w-0 truncate text-xs font-bold text-doom-hi">{step?.name ?? job.name}</span>
         <span className="min-w-0 flex-1" />
-        <span className="text-[8px] text-doom-faint">{ended ? 'settled' : 'following · 500ms'}</span>
+        <span className="text-2xs text-doom-faint">{ended ? 'settled' : 'following · 500ms'}</span>
         <Button variant="outline" size="xs" data-testid="workflow-open-terminal" onClick={onOpenTerminal}>
           open terminal
         </Button>
@@ -398,10 +394,10 @@ function InlineStepOutput({
       <div
         ref={screenRef}
         data-testid="workflow-inline-screen"
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-3 font-mono text-[11px] leading-[15px] text-doom-text"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-3 font-mono text-sm leading-tight text-doom-text"
       >
         {lines.length === 0 ? (
-          <span className="text-[10px] text-doom-faint">
+          <span className="text-xs text-doom-faint">
             {capabilities?.readable === false
               ? (capabilities.reason ?? 'This run has no terminal to read.')
               : 'waiting for the run to paint…'}
@@ -411,7 +407,7 @@ function InlineStepOutput({
         )}
         {!ended && run.stage === 'running' ? <StreamCursor className="mt-0.5 h-[12px] w-1.5" /> : null}
       </div>
-      <div className="flex h-7 shrink-0 items-center gap-2 border-t border-doom-border-soft px-3 text-[8px] text-doom-faint">
+      <div className="flex h-7 shrink-0 items-center gap-2 border-t border-doom-border-soft px-3 text-2xs text-doom-faint">
         <span>output follows automatically · select another step to inspect its current screen</span>
         <span className="min-w-0 flex-1" />
         <span>last 48 lines</span>
@@ -459,11 +455,11 @@ function DeleteWorkflowDialog({
           <DialogTitle>Delete {run.displayName}?</DialogTitle>
         </DialogHeader>
         <DialogBody>
-          <p className="text-[11px] leading-relaxed text-doom-dim">
+          <p className="text-sm leading-relaxed text-doom-dim">
             This permanently removes the workflow run, including its logs and artifacts. This action cannot be undone.
           </p>
           {error === undefined ? null : (
-            <p data-testid="delete-workflow-error" className="text-[10px] text-doom-red">
+            <p data-testid="delete-workflow-error" className="text-xs text-doom-red">
               {error}
             </p>
           )}
@@ -569,13 +565,13 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
               <StatusBadge tone={run.stage === 'error' ? 'error' : run.stage === 'running' ? 'info' : 'ok'}>
                 {runState(run)}
               </StatusBadge>
-              <span className="truncate text-[9px] text-doom-dim">
+              <span className="truncate text-2xs text-doom-dim">
                 {[run.position?.job, run.position?.step].filter(Boolean).join(' · ') ||
                   run.workflowName ||
                   run.displayName}
               </span>
               <span className="min-w-0 flex-1" />
-              <span data-testid="workflows-tally" className="text-[9px] text-doom-faint">
+              <span data-testid="workflows-tally" className="text-2xs text-doom-faint">
                 {runs.filter((candidate) => candidate.stage === 'running').length} running · {runs.length} total
               </span>
               {run.stage === 'running' ? null : (
@@ -606,9 +602,9 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
                 className="flex max-h-44 w-full shrink-0 flex-col overflow-y-auto rounded-md border border-doom-border bg-doom-panel p-1.5 sm:max-h-none sm:w-[214px]"
               >
                 <div className="flex items-center px-2 pb-1 pt-1">
-                  <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint">JOBS</span>
+                  <span className="text-2xs font-bold tracking-wider text-doom-faint">JOBS</span>
                   <span className="min-w-0 flex-1" />
-                  <span className="text-[8px] text-doom-faint">
+                  <span className="text-2xs text-doom-faint">
                     {jobs.filter((candidate) => candidate.status === 'completed').length}/{jobs.length}
                   </span>
                 </div>
@@ -635,11 +631,11 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
                     <div className="flex items-center px-2 pb-1">
                       <span
                         data-testid="job-pane-name"
-                        className="min-w-0 flex-1 truncate text-[9px] font-bold text-doom-hi"
+                        className="min-w-0 flex-1 truncate text-2xs font-bold text-doom-hi"
                       >
                         {job.name}
                       </span>
-                      <span className="text-[8px] text-doom-faint">
+                      <span className="text-2xs text-doom-faint">
                         {spanDuration(job.startedAt, job.endedAt, now) ?? ''}
                       </span>
                     </div>
@@ -662,7 +658,7 @@ export function WorkflowsPanel({ sessionId, openTransientTab, sendSessionFrame }
               </div>
               <DetailPane>
                 <div className="flex h-9 shrink-0 items-center gap-2 border-b border-doom-border-soft bg-doom-panel px-3">
-                  <span className="min-w-0 truncate text-[10px] font-bold text-doom-hi">
+                  <span className="min-w-0 truncate text-xs font-bold text-doom-hi">
                     {job?.name ?? run.displayName}
                   </span>
                   {job === undefined ? null : (

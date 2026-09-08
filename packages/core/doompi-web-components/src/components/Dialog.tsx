@@ -128,7 +128,7 @@ export function DialogTitle({ className, ...props }: ComponentProps<typeof Dialo
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-[12px] font-bold tracking-wide text-doom-hi', className)}
+      className={cn('text-sm font-bold tracking-wide text-doom-hi', className)}
       {...props}
     />
   );
@@ -138,7 +138,7 @@ export function DialogDescription({ className, ...props }: ComponentProps<typeof
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-[11px] leading-relaxed text-doom-dim', className)}
+      className={cn('text-sm leading-relaxed text-doom-dim', className)}
       {...props}
     />
   );

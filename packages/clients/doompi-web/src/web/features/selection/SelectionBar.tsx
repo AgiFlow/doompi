@@ -72,7 +72,6 @@ const DEFAULT_ACCENT = { border: 'border-doom-border', title: 'text-doom-hi' };
  * that package, and leaves the chip correct when the package is absent.
  */
 const AGENT_COST_STATUS_KEY = 'doom-team-cost';
-
 const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
   on: 'text-doom-hi',
   off: 'text-doom-dim',
@@ -110,10 +109,10 @@ function AxisMenu({ menu, dialog }: { menu: string; dialog: DialogRequest }) {
       className={`w-[420px] ${accent.border}`}
     >
       <PopoverHeader>
-        <span data-testid="dialog-title" className={`text-[10px] font-bold tracking-wide ${accent.title}`}>
+        <span data-testid="dialog-title" className={`text-xs font-bold tracking-wide ${accent.title}`}>
           {MENU_TITLE[menu] ?? menu.toUpperCase()}
         </span>
-        <span className="truncate text-[9px] text-doom-faint">{dialog.title}</span>
+        <span className="truncate text-2xs text-doom-faint">{dialog.title}</span>
       </PopoverHeader>
       <div className="flex max-h-[320px] min-h-0 flex-col">
         <OptionList
@@ -200,7 +199,7 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
     <PopoverContent side="top" align="start" data-testid="minor-popup" className="w-[430px] border-doom-edge-magenta">
       <PopoverHeader>
         <SectionLabel className="tracking-wide text-doom-magenta">minor modes</SectionLabel>
-        <span className="text-[9px] text-doom-faint">{on} on</span>
+        <span className="text-2xs text-doom-faint">{on} on</span>
       </PopoverHeader>
       <div
         role="listbox"
@@ -242,20 +241,20 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
               {mode.name}
             </OptionLabel>
             {mode.detail ? (
-              <span data-testid={`minor-detail-${mode.name}`} className="truncate text-[9px] text-doom-magenta">
+              <span data-testid={`minor-detail-${mode.name}`} className="truncate text-2xs text-doom-magenta">
                 {mode.detail}
               </span>
             ) : null}
             {mode.availability === 'unavailable' && mode.unavailableReason ? (
               <span
                 data-testid={`minor-reason-${mode.name}`}
-                className="min-w-0 flex-1 truncate text-right text-[9px] text-doom-faint/70"
+                className="min-w-0 flex-1 truncate text-right text-2xs text-doom-faint/70"
               >
                 {mode.unavailableReason}
               </span>
             ) : null}
             {mode.availability === 'unavailable' ? (
-              <span className="shrink-0 text-[8px] text-doom-faint/60">n/a</span>
+              <span className="shrink-0 text-2xs text-doom-faint/60">n/a</span>
             ) : (
               <Dot tone={mode.availability === 'on' ? 'magenta' : 'muted'} />
             )}
@@ -301,7 +300,7 @@ function ModelPopup({
     <PopoverContent side="top" align="end" data-testid="model-popup" className="w-[400px] border-doom-edge-yellow">
       <PopoverHeader>
         <SectionLabel className="tracking-wide text-doom-yellow">model</SectionLabel>
-        <span className="truncate text-[9px] text-doom-faint">{agent ? `${agent.provider}/${agent.model}` : ''}</span>
+        <span className="truncate text-2xs text-doom-faint">{agent ? `${agent.provider}/${agent.model}` : ''}</span>
       </PopoverHeader>
       <div className="border-b border-doom-border-soft p-1.5">
         <Input
@@ -310,12 +309,12 @@ function ModelPopup({
           autoFocus
           placeholder="filter models…"
           onChange={(event) => setFilter(event.target.value)}
-          className="w-full px-2 py-1 text-[11px]"
+          className="w-full px-2 py-1 text-sm"
         />
       </div>
       <div role="listbox" aria-label="models" className="flex max-h-[260px] flex-col gap-0.5 overflow-y-auto p-1.5">
         {models.length === 0 ? (
-          <span className="flex items-center gap-2 px-2 py-1.5 text-[10px] text-doom-faint">
+          <span className="flex items-center gap-2 px-2 py-1.5 text-xs text-doom-faint">
             <Spinner label="asking the session for its models" />
             asking the session for its models…
           </span>
@@ -340,11 +339,11 @@ function ModelPopup({
                 current && 'bg-doom-tint-yellow hover:brightness-125',
               )}
             >
-              <span className="w-20 shrink-0 truncate text-[9px] text-doom-faint">{model.provider}</span>
+              <span className="w-20 shrink-0 truncate text-2xs text-doom-faint">{model.provider}</span>
               <OptionLabel density="compact" className={current ? 'text-doom-yellow' : 'text-doom-hi'}>
                 {model.id}
               </OptionLabel>
-              {model.reasoning ? <span className="text-[8px] text-doom-faint">thinks</span> : null}
+              {model.reasoning ? <span className="text-2xs text-doom-faint">thinks</span> : null}
               <Dot tone={current ? 'yellow' : 'muted'} />
             </OptionRow>
           );
@@ -352,7 +351,7 @@ function ModelPopup({
       </div>
       <PopoverFooter className="flex-wrap justify-start gap-1 py-1.5">
         <SectionLabel className="mr-1 tracking-wide">thinking</SectionLabel>
-        {levels.length === 0 ? <span className="text-[9px] text-doom-faint">…</span> : null}
+        {levels.length === 0 ? <span className="text-2xs text-doom-faint">…</span> : null}
         {levels.map((level) => {
           const current = agent?.thinkingLevel === level;
           return (
@@ -367,7 +366,7 @@ function ModelPopup({
                 onClose();
               }}
               className={cn(
-                'text-[10px]',
+                'text-xs',
                 current && 'bg-doom-yellow/25 font-bold text-doom-yellow hover:bg-doom-yellow/25',
               )}
             >
@@ -410,7 +409,6 @@ export function SelectionBar() {
   const reportedAgentCost = Number(statuses[AGENT_COST_STATUS_KEY] ?? '');
   const agentCost = Number.isFinite(reportedAgentCost) ? reportedAgentCost : 0;
   const sessionCost = stats === null ? null : stats.cost + liveCost;
-
   /** The dialog this axis asked for, when the claim named it and it is still open. */
   const dialogFor = (name: string): DialogRequest | null =>
     dialog !== null && claimed !== null && claimed.dialogId === dialog.id && claimed.menu === name ? dialog : null;
@@ -418,12 +416,12 @@ export function SelectionBar() {
 
   const modeClass = cn(
     buttonVariants({ variant: 'primary', size: 'sm' }),
-    'h-[21px] min-w-0 rounded-[3px] px-2 text-doom-rail max-sm:max-w-24 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
+    'h-[21px] min-w-0 rounded-sm px-2 text-doom-rail max-sm:max-w-24 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
     selection.pending && 'bg-doom-yellow',
   );
   const axisClass = cn(
     buttonVariants({ variant: 'outline', size: 'sm' }),
-    'h-[21px] min-w-0 rounded-[3px] px-2 max-sm:max-w-28 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
+    'h-[21px] min-w-0 rounded-sm px-2 max-sm:max-w-28 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
   );
 
   return (
@@ -439,7 +437,7 @@ export function SelectionBar() {
         claimedDialog={dialogFor('mode')}
         className={modeClass}
       >
-        <span data-testid="selection-mode" className="truncate text-[10px] font-bold tracking-[0.08em]">
+        <span data-testid="selection-mode" className="truncate text-xs font-bold tracking-wide">
           {(selection.majorMode || 'mode').toUpperCase()}
         </span>
       </AxisButton>
@@ -455,7 +453,7 @@ export function SelectionBar() {
         >
           <span
             data-testid={`selection-${axis.name}`}
-            className={`truncate text-[10px] ${axis.multi ? '' : 'font-bold'} ${
+            className={`truncate text-xs ${axis.multi ? '' : 'font-bold'} ${
               axis.values.length > 0 ? (AXIS_TONE[axis.name] ?? 'text-doom-hi') : 'text-doom-faint'
             }`}
           >
@@ -482,16 +480,16 @@ export function SelectionBar() {
             variant={activeMinors.length > 0 ? 'subtle' : 'outline'}
             size="sm"
             className={cn(
-              'h-[21px] min-w-0 rounded-[3px] px-2 max-sm:max-w-24 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
+              'h-[21px] min-w-0 rounded-sm px-2 max-sm:max-w-24 max-sm:flex-1 max-sm:basis-0 max-sm:shrink',
               activeMinors.length > 0
                 ? 'bg-doom-tint-magenta text-doom-magenta hover:bg-doom-tint-magenta hover:brightness-125'
                 : 'text-doom-faint',
             )}
           >
-            <span data-testid="minor-summary" className="truncate text-[10px] font-bold">
+            <span data-testid="minor-summary" className="truncate text-xs font-bold">
               {activeMinors[0]?.name ?? 'minor'}
             </span>
-            {activeMinors.length > 1 ? <span className="text-[9px]">+{activeMinors.length - 1}</span> : null}
+            {activeMinors.length > 1 ? <span className="text-2xs">+{activeMinors.length - 1}</span> : null}
             <ChevronDownIcon className="h-[10px] w-[10px]" />
           </Button>
         </PopoverTrigger>
@@ -509,10 +507,10 @@ export function SelectionBar() {
       <Popover open={modelOpen} onOpenChange={setModelOpen}>
         <PopoverTrigger asChild>
           <Button data-testid="axis-model" title="model and thinking level" className={axisClass}>
-            <span data-testid="agent-model" className="min-w-0 truncate text-[10px] text-doom-hi">
+            <span data-testid="agent-model" className="min-w-0 truncate text-xs text-doom-hi">
               {agent?.model ?? '—'}
             </span>
-            <span data-testid="agent-thinking" className="text-[10px] text-doom-yellow max-sm:hidden">
+            <span data-testid="agent-thinking" className="text-xs text-doom-yellow max-sm:hidden">
               {agent?.thinkingLevel ?? ''}
             </span>
             <ChevronDownIcon className="h-[10px] w-[10px] text-doom-faint" />
@@ -530,7 +528,7 @@ export function SelectionBar() {
             ? `${stats.contextTokens.toLocaleString()} of ${stats.contextWindow.toLocaleString()} tokens`
             : 'context usage, once the session reports it'
         }
-        className="shrink-0 text-[10px] text-doom-dim max-sm:hidden"
+        className="shrink-0 text-xs text-doom-dim max-sm:hidden"
       >
         {stats?.contextPercent == null ? 'ctx —' : `ctx ${Math.round(stats.contextPercent)}%`}
       </span>
@@ -543,7 +541,7 @@ export function SelectionBar() {
               ? `$${sessionCost.toFixed(2)} session + $${agentCost.toFixed(2)} agents, ${stats.totalTokens.toLocaleString()} tokens this session`
               : `${stats.totalTokens.toLocaleString()} tokens this session`
         }
-        className="shrink-0 text-[10px] text-doom-dim max-sm:hidden"
+        className="shrink-0 text-xs text-doom-dim max-sm:hidden"
       >
         {sessionCost === null ? '' : `$${(sessionCost + agentCost).toFixed(2)}`}
       </span>

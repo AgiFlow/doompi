@@ -127,7 +127,7 @@ export function CockpitPage() {
         {transferLabel !== null ? (
           <output
             data-testid="voice-transfer-transition"
-            className="border-b border-doom-cyan/30 bg-doom-cyan/10 px-4 py-2 text-center text-[11px] font-bold tracking-wide text-doom-cyan"
+            className="border-b border-doom-cyan/30 bg-doom-cyan/10 px-4 py-2 text-center text-sm font-bold tracking-wide text-doom-cyan"
           >
             Transferring voice to {transferLabel}...
           </output>
@@ -175,7 +175,7 @@ export function CockpitPage() {
           data-testid="activity-show"
           title="show the activity dock"
           onClick={() => setDockOpen(true)}
-          className="hidden h-auto shrink-0 rounded-none border-l border-doom-border bg-doom-rail px-2 py-3 text-[9px] tracking-widest text-doom-dim hover:bg-doom-rail lg:flex"
+          className="hidden h-auto shrink-0 rounded-none border-l border-doom-border bg-doom-rail px-2 py-3 text-2xs tracking-widest text-doom-dim hover:bg-doom-rail lg:flex"
           style={{ writingMode: 'vertical-rl' }}
         >
           ACTIVITY

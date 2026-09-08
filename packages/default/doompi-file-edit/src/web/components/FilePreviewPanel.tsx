@@ -62,25 +62,25 @@ export function FilePreviewPanel({ filePath, sessionId, closeTransientTab }: Fil
     <div data-testid="files-preview-panel" className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 items-center gap-2 border-b border-doom-border px-4 py-2">
         <Breadcrumb path={relPath} data-testid="files-preview-breadcrumb" className="min-w-0 flex-1" />
-        <span className="shrink-0 text-[9px] text-doom-faint">unchanged</span>
+        <span className="shrink-0 text-2xs text-doom-faint">unchanged</span>
         <Button
           variant="ghost"
           size="xs"
           data-testid="files-preview-close"
           onClick={() => closeTransientTab(filePreviewTabId(filePath))}
-          className="shrink-0 text-[9px]"
+          className="shrink-0 text-2xs"
         >
           close
         </Button>
       </header>
 
       {error === undefined ? null : (
-        <p data-testid="files-preview-error" className="px-4 py-3 text-[11px] text-doom-red">
+        <p data-testid="files-preview-error" className="px-4 py-3 text-sm text-doom-red">
           {error}
         </p>
       )}
       {preview === undefined && error === undefined ? (
-        <p data-testid="files-preview-loading" className="px-4 py-3 text-[11px] text-doom-faint">
+        <p data-testid="files-preview-loading" className="px-4 py-3 text-sm text-doom-faint">
           reading this file…
         </p>
       ) : null}
@@ -90,10 +90,10 @@ export function FilePreviewPanel({ filePath, sessionId, closeTransientTab }: Fil
           <div
             data-testid="files-preview"
             data-mode={previewMode}
-            className="flex h-full flex-col gap-2 p-4 text-[12px] text-doom-text"
+            className="flex h-full flex-col gap-2 p-4 text-sm text-doom-text"
           >
             {previewMode === 'unavailable' ? (
-              <p data-testid="files-preview-unavailable" className="text-[11px] text-doom-faint">
+              <p data-testid="files-preview-unavailable" className="text-sm text-doom-faint">
                 {working?.reason ?? 'this file cannot be shown'}
               </p>
             ) : null}
@@ -120,7 +120,7 @@ export function FilePreviewPanel({ filePath, sessionId, closeTransientTab }: Fil
             ) : (
               <pre
                 data-testid="files-preview-text"
-                className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.5] text-doom-text"
+                className="whitespace-pre-wrap break-words font-mono text-sm leading-normal text-doom-text"
               >
                 {content}
               </pre>

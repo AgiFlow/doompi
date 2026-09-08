@@ -20,7 +20,7 @@ const linkClass = 'inline break-all decoration-doom-blue/40 hover:decoration-doo
 function FlowEvent({ event }: { event: LoginEvent }) {
   if (event.type === 'auth_url') {
     return (
-      <div className="flex flex-col gap-1 text-[11px] text-doom-text">
+      <div className="flex flex-col gap-1 text-sm text-doom-text">
         <span>open this link to authorize:</span>
         <Button asChild variant="link" size="xs" className={linkClass}>
           <a data-testid="login-flow-auth-url" href={event.url} target="_blank" rel="noreferrer">
@@ -33,7 +33,7 @@ function FlowEvent({ event }: { event: LoginEvent }) {
   }
   if (event.type === 'device_code') {
     return (
-      <div className="flex flex-col gap-1 text-[11px] text-doom-text">
+      <div className="flex flex-col gap-1 text-sm text-doom-text">
         <span>
           enter code{' '}
           <span data-testid="login-flow-device-code" className="font-bold text-doom-hi">
@@ -49,7 +49,7 @@ function FlowEvent({ event }: { event: LoginEvent }) {
   }
   if (event.type === 'info') {
     return (
-      <div className="flex flex-col gap-1 text-[11px] text-doom-text">
+      <div className="flex flex-col gap-1 text-sm text-doom-text">
         <span>{event.message}</span>
         {event.links?.map((link) => (
           <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className={linkClass}>
@@ -59,7 +59,7 @@ function FlowEvent({ event }: { event: LoginEvent }) {
       </div>
     );
   }
-  return <span className="text-[11px] text-doom-dim">{event.message}</span>;
+  return <span className="text-sm text-doom-dim">{event.message}</span>;
 }
 
 function PromptField({
@@ -80,7 +80,7 @@ function PromptField({
   if (prompt.type === 'select') {
     return (
       <div data-testid="login-prompt" data-prompt-type={prompt.type} className="flex flex-col gap-2">
-        <span className="text-[11px] text-doom-text">{prompt.message}</span>
+        <span className="text-sm text-doom-text">{prompt.message}</span>
         <div className="flex flex-col gap-1">
           {(prompt.options ?? []).map((option) => (
             <Button
@@ -90,8 +90,8 @@ function PromptField({
               onClick={() => onSelect(option.id)}
               className="h-auto flex-col items-start gap-0.5 px-2.5 py-1.5 text-left whitespace-normal focus-visible:border-doom-blue/50 focus-visible:ring-0"
             >
-              <span className="text-[11px] text-doom-hi">{option.label}</span>
-              {option.description ? <span className="text-[10px] text-doom-faint">{option.description}</span> : null}
+              <span className="text-sm text-doom-hi">{option.label}</span>
+              {option.description ? <span className="text-xs text-doom-faint">{option.description}</span> : null}
             </Button>
           ))}
         </div>
@@ -100,12 +100,12 @@ function PromptField({
   }
   return (
     <label data-testid="login-prompt" data-prompt-type={prompt.type} className="flex flex-col gap-1">
-      <span className="text-[11px] text-doom-text">{prompt.message}</span>
+      <span className="text-sm text-doom-text">{prompt.message}</span>
       {/* The provider redirects to a loopback address that belongs to whichever
           machine the browser runs on, so a remote tab lands on an error page.
           The URL still carries the code, which is what this asks for. */}
       {remote && prompt.type === 'manual_code' ? (
-        <span data-testid="login-prompt-remote-hint" className="text-[10px] text-doom-faint">
+        <span data-testid="login-prompt-remote-hint" className="text-xs text-doom-faint">
           the page it sends you to will not load from here. copy the whole address from your browser's address bar and
           paste it below.
         </span>
@@ -185,7 +185,7 @@ export function LoginFlowDialog({
       <DialogContent width="md" data-testid="login-flow" data-status={flow.status} aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>sign in to {flow.providerName}</DialogTitle>
-          <span className="text-[10px] text-doom-faint">{METHOD_LABEL[flow.type]}</span>
+          <span className="text-xs text-doom-faint">{METHOD_LABEL[flow.type]}</span>
         </DialogHeader>
         <DialogBody>
           {flow.events.length > 0 ? (
@@ -208,13 +208,13 @@ export function LoginFlowDialog({
             />
           ) : null}
           {running && !prompt ? (
-            <p data-testid="login-flow-waiting" className="flex items-center gap-2 text-[11px] text-doom-dim">
+            <p data-testid="login-flow-waiting" className="flex items-center gap-2 text-sm text-doom-dim">
               <Spinner />
               {flow.events.length === 0 ? 'starting…' : `waiting for ${flow.providerName}…`}
             </p>
           ) : null}
           {outcome ? (
-            <p data-testid="login-flow-result" className={`text-[11px] ${outcome.className}`}>
+            <p data-testid="login-flow-result" className={`text-sm ${outcome.className}`}>
               {outcome.text}
             </p>
           ) : null}

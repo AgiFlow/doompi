@@ -23,7 +23,7 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
     sendSessionFrame(sessionId, { type: computerUseChannelType, payload: { action: 'targets' } });
   }, [sendSessionFrame, sessionId]);
 
-  if (sessionId === null) return <p className="px-1 text-[10px] text-doom-faint">Select a session.</p>;
+  if (sessionId === null) return <p className="px-1 text-xs text-doom-faint">Select a session.</p>;
   const state = session.state;
   const target = session.targets[selected];
   const artifact = state.artifact;
@@ -45,7 +45,7 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
   };
 
   return (
-    <div data-testid="computer-use-panel" className="flex flex-col gap-2 text-[10px] text-doom-text">
+    <div data-testid="computer-use-panel" className="flex flex-col gap-2 text-xs text-doom-text">
       <header className="flex items-center justify-between gap-2">
         <span className="text-doom-faint">{state.phase.replaceAll('_', ' ')}</span>
         <button type="button" className="rounded bg-doom-panel px-2 py-1" onClick={() => send({ action: 'targets' })}>

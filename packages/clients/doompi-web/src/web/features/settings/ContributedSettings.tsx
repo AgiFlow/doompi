@@ -66,7 +66,7 @@ function OriginBadge({ origin, scope }: { origin: SettingsOrigin; scope: Setting
   // colouring: it is why an edit at the other scope would appear to do nothing.
   const shadowed = origin === 'repository' && scope === 'global';
   return (
-    <Badge tone={shadowed ? 'yellow' : 'neutral'} className="shrink-0 text-[8px]">
+    <Badge tone={shadowed ? 'yellow' : 'neutral'} className="shrink-0 text-2xs">
       {originLabel(origin, scope)}
     </Badge>
   );
@@ -109,22 +109,22 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
   return (
     <div data-testid={`settings-field-${field.id}`} data-dirty={dirty} className="flex flex-col gap-1 py-2.5">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-doom-hi">{field.label}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-doom-hi">{field.label}</span>
         {dirty ? (
-          <Badge tone="cyan" data-testid={`settings-dirty-${field.id}`} className="shrink-0 text-[8px]">
+          <Badge tone="cyan" data-testid={`settings-dirty-${field.id}`} className="shrink-0 text-2xs">
             unsaved
           </Badge>
         ) : null}
         {view === undefined ? null : <OriginBadge origin={view.origin} scope={scope} />}
         {locked === undefined ? null : (
-          <Badge tone="neutral" data-testid={`settings-locked-${field.id}`} className="shrink-0 text-[8px]">
+          <Badge tone="neutral" data-testid={`settings-locked-${field.id}`} className="shrink-0 text-2xs">
             {locked}
           </Badge>
         )}
       </div>
 
       {kind === 'info' ? (
-        <span className="text-[11px] text-doom-text">{value || '—'}</span>
+        <span className="text-sm text-doom-text">{value || '—'}</span>
       ) : kind === 'toggle' ? (
         <Switch
           data-testid={`settings-toggle-${field.id}`}
@@ -138,7 +138,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
           disabled={busy || locked !== undefined}
           onValueChange={(next) => onDraft(field, next === INHERIT_VALUE ? null : next)}
         >
-          <SelectTrigger data-testid={`settings-select-${field.id}`} className="text-[11px]">
+          <SelectTrigger data-testid={`settings-select-${field.id}`} className="text-sm">
             <SelectValue placeholder={field.placeholder ?? 'inherit'} />
           </SelectTrigger>
           <SelectContent>
@@ -168,20 +168,20 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
           // A blank field means "inherit": the parser rejects an empty value, so
           // clearing the key is how the file spells it.
           onChange={(event) => onDraft(field, event.target.value === '' ? null : event.target.value)}
-          className="text-[11px]"
+          className="text-sm"
         />
       )}
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {field.detail === undefined ? null : (
-          <span className="min-w-0 basis-full text-[9px] leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
+          <span className="min-w-0 basis-full text-2xs leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
             {field.detail}
           </span>
         )}
         {/* The config key earns its place on a page that writes a config file,
             but it is reference, not prose: it wraps instead of running off the
             edge, and never squeezes the sentence beside it. */}
-        <code className="min-w-0 max-w-full break-all text-[9px] text-doom-faint/70 min-[480px]:shrink-0">
+        <code className="min-w-0 max-w-full break-all text-2xs text-doom-faint/70 min-[480px]:shrink-0">
           {keyOf(field)}
         </code>
         {dirty ? (
@@ -191,7 +191,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
             data-testid={`settings-revert-${field.id}`}
             disabled={busy}
             onClick={() => onDraft(field, undefined)}
-            className="shrink-0 text-[9px]"
+            className="shrink-0 text-2xs"
           >
             revert
           </Button>
@@ -202,7 +202,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
             data-testid={`settings-clear-${field.id}`}
             disabled={busy}
             onClick={() => onDraft(field, null)}
-            className="shrink-0 text-[9px]"
+            className="shrink-0 text-2xs"
           >
             clear override
           </Button>
@@ -322,14 +322,14 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
     <div data-testid={`settings-contributed-${section.id}`} className="flex flex-col gap-3">
       <SettingsSectionHeader title={section.label} detail={section.detail}>
         {scope === 'repository' && repoRoot === '' ? (
-          <span data-testid="settings-no-repositories" className="shrink-0 text-[9px] text-doom-faint">
+          <span data-testid="settings-no-repositories" className="shrink-0 text-2xs text-doom-faint">
             pick a repository above to edit its config
           </span>
         ) : null}
       </SettingsSectionHeader>
 
       {error === '' ? null : (
-        <p data-testid="settings-error" className="text-[11px] leading-relaxed text-doom-red">
+        <p data-testid="settings-error" className="text-sm leading-relaxed text-doom-red">
           {error}
         </p>
       )}
@@ -359,7 +359,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
           loading={busy}
           disabled={busy || !canSaveSettings({ dirty: dirtyFields.length, scope, repoRoot })}
           onClick={() => void save()}
-          className="text-[10px]"
+          className="text-xs"
         >
           save
         </Button>
@@ -370,14 +370,14 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
             data-testid="settings-discard"
             disabled={busy}
             onClick={discard}
-            className="text-[10px]"
+            className="text-xs"
           >
             discard
           </Button>
         )}
         <span
           data-testid="settings-save-note"
-          className="min-w-0 basis-full text-[9px] leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1"
+          className="min-w-0 basis-full text-2xs leading-relaxed text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1"
         >
           {dirtyFields.length > 0
             ? `${String(dirtyFields.length)} unsaved · writing to ${scope === 'global' ? 'the global config' : 'this repository'}`

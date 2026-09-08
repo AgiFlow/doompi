@@ -14,8 +14,8 @@ export const optionListVariants = cva('flex min-h-0 flex-1 flex-col overflow-y-a
 export const optionRowVariants = cva('flex shrink-0 cursor-pointer items-center text-left outline-none', {
   variants: {
     density: {
-      compact: 'gap-2.5 rounded-[5px] px-2 py-[7px]',
-      comfortable: 'min-h-[42px] gap-3 rounded-md border px-[11px] py-2 text-[12px] text-doom-text transition-colors',
+      compact: 'gap-2.5 rounded-md px-2 py-[7px]',
+      comfortable: 'min-h-[42px] gap-3 rounded-md border px-[11px] py-2 text-sm text-doom-text transition-colors',
     },
     active: { true: '', false: '' },
   },
@@ -30,8 +30,8 @@ export const optionRowVariants = cva('flex shrink-0 cursor-pointer items-center 
 export const optionMarkerVariants = cva('flex shrink-0 items-center justify-center rounded-full font-bold', {
   variants: {
     density: {
-      compact: 'h-[15px] w-[15px] border border-doom-border text-[8px] text-doom-faint',
-      comfortable: 'h-[18px] w-[18px] bg-doom-deep text-[10px] text-doom-dim',
+      compact: 'h-[15px] w-[15px] border border-doom-border text-2xs text-doom-faint',
+      comfortable: 'h-[18px] w-[18px] bg-doom-deep text-xs text-doom-dim',
     },
   },
   defaultVariants: { density: 'comfortable' },
@@ -77,7 +77,7 @@ export function OptionLabel({
       data-slot="option-label"
       className={cn(
         'min-w-0 flex-1',
-        density === 'compact' ? 'truncate text-[12px] text-doom-text' : 'break-words',
+        density === 'compact' ? 'truncate text-sm text-doom-text' : 'break-words',
         className,
       )}
       {...props}

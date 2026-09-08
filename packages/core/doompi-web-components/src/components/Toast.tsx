@@ -52,7 +52,7 @@ export function ToastTitle({ className, ...props }: ComponentProps<typeof ToastP
   return (
     <ToastPrimitive.Title
       data-slot="toast-title"
-      className={cn('text-[11px] font-bold text-doom-hi', className)}
+      className={cn('text-sm font-bold text-doom-hi', className)}
       {...props}
     />
   );
@@ -62,7 +62,7 @@ export function ToastDescription({ className, ...props }: ComponentProps<typeof 
   return (
     <ToastPrimitive.Description
       data-slot="toast-description"
-      className={cn('text-[11px] leading-relaxed text-doom-dim', className)}
+      className={cn('text-sm leading-relaxed text-doom-dim', className)}
       {...props}
     />
   );

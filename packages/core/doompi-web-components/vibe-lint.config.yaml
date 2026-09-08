@@ -15,6 +15,16 @@ ignore:
   - "dist/**"
   - "coverage/**"
 
+# Story files are read by the style-system renderer, which resolves the default
+# export by looking for a bare `const meta` declaration. Naming the export at
+# the point of definition breaks the render, so the export-shape rules are off
+# here. Every other rule, theming included, still applies to stories.
+overrides:
+  - files:
+      - "src/components/*.stories.tsx"
+    rules:
+      no-default-export: "off"
+      direct-export-only: "off"
 boundaries:
   - name: types
     pattern: src/types/**

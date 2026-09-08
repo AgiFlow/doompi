@@ -37,7 +37,7 @@ export function GoalActivitySection({ sessionId, statuses, sendSessionFrame }: W
 
   if (view === undefined) {
     return (
-      <p data-testid="activity-summary-goal" className="px-1 text-[10px] text-doom-faint">
+      <p data-testid="activity-summary-goal" className="px-1 text-xs text-doom-faint">
         no goal set yet
       </p>
     );
@@ -54,10 +54,10 @@ export function GoalActivitySection({ sessionId, statuses, sendSessionFrame }: W
     <div data-testid="activity-goal-row" className="flex flex-col gap-0.5">
       <div className="flex min-w-0 items-start gap-1.5 px-1">
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span data-testid="activity-goal-objective" className="text-[10px] font-bold text-doom-hi">
+          <span data-testid="activity-goal-objective" className="text-xs font-bold text-doom-hi">
             {view.objective}
           </span>
-          <span data-testid="activity-goal-state" className="text-[9px] tabular-nums text-doom-faint">
+          <span data-testid="activity-goal-state" className="text-2xs tabular-nums text-doom-faint">
             {view.state}
           </span>
         </span>

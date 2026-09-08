@@ -122,6 +122,56 @@
 
   --font-mono: var(--doom-font-mono);
 
+  /*
+   * Type scale.
+   *
+   * Normalised from the nine ad-hoc sizes that had accumulated as `text-[Npx]`
+   * utilities. Tailwind's stock steps (12/14/16/18px) are too large for this
+   * 13px-base terminal UI, which is why they were routinely bypassed; these
+   * values deliberately override them so there is a single scale.
+   *
+   * Line heights are restated for every step. Overriding `--text-*` alone would
+   * leave Tailwind's default `--text-*--line-height` in place, pairing a stale
+   * leading with the new size.
+   */
+  --text-2xs: 9px;
+  --text-2xs--line-height: 1.45;
+  --text-xs: 10px;
+  --text-xs--line-height: 1.45;
+  --text-sm: 12px;
+  --text-sm--line-height: 1.45;
+  --text-base: 13px;
+  --text-base--line-height: 1.5;
+  --text-lg: 15px;
+  --text-lg--line-height: 1.4;
+
+  /* Tailwind's default spacing base, stated explicitly so the value is
+   * discoverable as a token rather than an implicit framework default. */
+  --spacing: 0.25rem;
+
+  /*
+   * Corner radii, tightened to the values this UI actually draws. Tailwind's
+   * stock steps (4/6/8px) sat just wide of the 2/3/5/10px the components were
+   * hand-rolling as `rounded-[Npx]`.
+   *
+   * Only `rounded-xs|sm|md|lg` read these. Bare `rounded`, `rounded-t|b`,
+   * `rounded-full` and `rounded-none` compile to hardcoded values and are not
+   * retunable, so the 4px of a bare `rounded` sits between sm and md by design.
+   */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 10px;
+
+  /*
+   * Letter spacing for the uppercase micro-labels this UI leans on. Tailwind's
+   * widest step is 0.1em, which is narrower than every tracking value in the
+   * codebase, so the whole ramp shifts wider rather than adding parallel names.
+   */
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.14em;
+  --tracking-widest: 0.18em;
+
   --animate-doom-fade: doom-fade 140ms ease-out;
   --animate-doom-pop: doom-pop 160ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-doom-rise: doom-rise 160ms cubic-bezier(0.16, 1, 0.3, 1);

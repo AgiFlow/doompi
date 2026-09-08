@@ -76,7 +76,7 @@ function DelimitedPreview({ text, delimiter }: { text: string; delimiter: ',' | 
   const [head = [], ...body] = rows;
   return (
     <div className="overflow-auto">
-      <table data-testid="artifact-table" className="min-w-full border-collapse font-mono text-[11px]">
+      <table data-testid="artifact-table" className="min-w-full border-collapse font-mono text-sm">
         <thead className="sticky top-0 bg-doom-panel text-doom-hi">
           <tr>
             {head.map((cell, index) => (
@@ -142,12 +142,12 @@ function ArtifactPreview({
     return raw ? (
       <pre
         data-testid="artifact-raw"
-        className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[17px] text-doom-text"
+        className="whitespace-pre-wrap break-words font-mono text-sm leading-snug text-doom-text"
       >
         {text}
       </pre>
     ) : (
-      <div data-testid="artifact-markdown" className="max-w-5xl text-[13px] text-doom-text">
+      <div data-testid="artifact-markdown" className="max-w-5xl text-base text-doom-text">
         <Markdown text={text} />
       </div>
     );
@@ -160,9 +160,7 @@ function ArtifactPreview({
       // An incomplete file remains useful as literal text while a workflow writes it.
     }
     return (
-      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[17px] text-doom-text">
-        {formatted}
-      </pre>
+      <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-snug text-doom-text">{formatted}</pre>
     );
   }
   if (mimeType === 'text/csv' || mimeType === 'text/tab-separated-values') {
@@ -216,9 +214,7 @@ function ArtifactPreview({
     );
   }
   if (content.text !== undefined) {
-    return (
-      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[17px] text-doom-text">{text}</pre>
-    );
+    return <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-snug text-doom-text">{text}</pre>;
   }
   return (
     <EmptyState title="preview unavailable" description="Download this artifact to open it with a local application." />
@@ -278,9 +274,9 @@ export function ArtifactViewerPanel({
   return (
     <div data-testid="artifact-viewer" className="flex min-h-0 flex-1 flex-col px-[26px] py-[18px]">
       <div className="flex items-center gap-2.5 pb-3">
-        <span className="truncate text-[12px] font-bold text-doom-hi">{path}</span>
+        <span className="truncate text-sm font-bold text-doom-hi">{path}</span>
         <Badge size="xs">{mimeType ?? 'artifact'}</Badge>
-        <span className="text-[9px] text-doom-faint">
+        <span className="text-2xs text-doom-faint">
           {content === undefined ? '' : `${formatSize(content.size)} · written ${formatWhen(content.modifiedAt)}`}
         </span>
         <span className="min-w-0 flex-1" />
@@ -320,17 +316,17 @@ export function ArtifactViewerPanel({
       </div>
       <div className="min-h-0 flex-1 overflow-auto rounded-md border border-doom-border bg-doom-deep p-4">
         {error !== undefined ? (
-          <span data-testid="artifact-error" className="text-[10px] text-doom-yellow">
+          <span data-testid="artifact-error" className="text-xs text-doom-yellow">
             {error}
           </span>
         ) : content === undefined ? (
-          <span className="text-[10px] text-doom-faint">loading preview</span>
+          <span className="text-xs text-doom-faint">loading preview</span>
         ) : (
           <ArtifactPreview content={content} rawUrl={rawUrl} raw={raw} />
         )}
       </div>
       {content?.truncated === true ? (
-        <span className="pt-2 text-[9px] text-doom-faint">
+        <span className="pt-2 text-2xs text-doom-faint">
           this preview shows the first {formatSize(content.text?.length)}; download the artifact for the complete file
         </span>
       ) : null}
@@ -397,8 +393,8 @@ export function ArtifactsPane({
         className={`flex flex-col gap-0.5 px-3 py-1.5 text-left ${openable ? 'cursor-pointer hover:bg-doom-panel' : 'cursor-default'}`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className={`w-3 shrink-0 text-[10px] ${glyph.className}`}>{glyph.glyph}</span>
-          <span className={`truncate text-[11px] ${entry.state === 'pending' ? 'text-doom-dim' : 'text-doom-hi'}`}>
+          <span className={`w-3 shrink-0 text-xs ${glyph.className}`}>{glyph.glyph}</span>
+          <span className={`truncate text-sm ${entry.state === 'pending' ? 'text-doom-dim' : 'text-doom-hi'}`}>
             {entry.path}
           </span>
           {entry.producedBy.length === 0 ? null : (
@@ -407,14 +403,14 @@ export function ArtifactsPane({
             </Badge>
           )}
           <span className="min-w-0 flex-1" />
-          <span className="shrink-0 text-[9px] text-doom-faint">
+          <span className="shrink-0 text-2xs text-doom-faint">
             {entry.state === 'pending'
               ? 'not written yet'
               : `${formatSize(entry.size)} · ${formatWhen(entry.modifiedAt)}`}
           </span>
         </span>
         {entry.description === '' ? null : (
-          <span className="truncate pl-5 text-[9px] text-doom-faint">{entry.description}</span>
+          <span className="truncate pl-5 text-2xs text-doom-faint">{entry.description}</span>
         )}
       </button>
     );
@@ -430,7 +426,7 @@ export function ArtifactsPane({
       ) : null}
       {declared.length === 0 ? null : (
         <>
-          <span className="px-3 pb-1 pt-2 text-[9px] font-bold tracking-[0.14em] text-doom-faint">
+          <span className="px-3 pb-1 pt-2 text-2xs font-bold tracking-wider text-doom-faint">
             DECLARED · {listing?.description || 'run-directory'}
           </span>
           {declared.map((entry) => (
@@ -440,16 +436,14 @@ export function ArtifactsPane({
       )}
       {found.length === 0 ? null : (
         <>
-          <span className="px-3 pb-1 pt-3 text-[9px] font-bold tracking-[0.14em] text-doom-faint">
-            ALSO IN THE FOLDER
-          </span>
+          <span className="px-3 pb-1 pt-3 text-2xs font-bold tracking-wider text-doom-faint">ALSO IN THE FOLDER</span>
           {found.map((entry) => (
             <Row key={entry.path} entry={entry} />
           ))}
         </>
       )}
       {listing === undefined ? null : (
-        <span className="truncate px-3 py-2 text-[9px] text-doom-faint">{listing.runDir}</span>
+        <span className="truncate px-3 py-2 text-2xs text-doom-faint">{listing.runDir}</span>
       )}
     </div>
   );

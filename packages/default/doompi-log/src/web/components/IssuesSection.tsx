@@ -50,14 +50,14 @@ export function IssuesSection({ tools, focus }: IssuesSectionProps) {
   return (
     <section className="flex flex-col gap-1" data-testid="metrics-issues">
       <div className="flex items-center gap-2">
-        <span className="text-[9px] font-bold text-doom-faint">issues</span>
+        <span className="text-2xs font-bold text-doom-faint">issues</span>
         {open ? null : (
-          <Button variant="ghost" size="xs" className="text-[9px]" onClick={load} data-testid="metrics-issues-open">
+          <Button variant="ghost" size="xs" className="text-2xs" onClick={load} data-testid="metrics-issues-open">
             show detail
           </Button>
         )}
         {open && !loading ? (
-          <Button variant="ghost" size="xs" className="text-[9px]" onClick={load} data-testid="metrics-issues-reload">
+          <Button variant="ghost" size="xs" className="text-2xs" onClick={load} data-testid="metrics-issues-reload">
             reload
           </Button>
         ) : null}
@@ -66,13 +66,13 @@ export function IssuesSection({ tools, focus }: IssuesSectionProps) {
       {/* Reading this scans the whole window in a subprocess, so the reader is
           told why it is behind a click rather than left wondering. */}
       {open ? null : (
-        <span className="text-[9px] text-doom-faint/70">
+        <span className="text-2xs text-doom-faint/70">
           the log sink has no issues endpoint, so this is read separately and takes a moment
         </span>
       )}
 
       {message === '' ? null : (
-        <span className="text-[10px] text-doom-yellow" data-testid="metrics-issues-message">
+        <span className="text-xs text-doom-yellow" data-testid="metrics-issues-message">
           {message}
         </span>
       )}

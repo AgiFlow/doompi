@@ -56,8 +56,8 @@ function isMatch(line: string, needle: string, ignoreCase: boolean): boolean {
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <span className="flex min-w-0 gap-2.5">
-      <span className="w-14 shrink-0 text-[10px] text-doom-faint">{label}</span>
-      <span className="min-w-0 flex-1 break-all text-[10px] text-doom-dim">{value}</span>
+      <span className="w-14 shrink-0 text-xs text-doom-faint">{label}</span>
+      <span className="min-w-0 flex-1 break-all text-xs text-doom-dim">{value}</span>
     </span>
   );
 }
@@ -74,17 +74,17 @@ function LogRow({ number, line, matched }: { number: number | undefined; line: s
   return (
     <div data-testid="runner-log-row" data-matched={matched} className="flex min-w-0 gap-2">
       {number === undefined ? null : (
-        <span className="w-12 shrink-0 select-none text-right text-[10px] leading-[1.6] text-doom-faint">{number}</span>
+        <span className="w-12 shrink-0 select-none text-right text-xs leading-relaxed text-doom-faint">{number}</span>
       )}
       <span
         aria-hidden
-        className={`w-4 shrink-0 select-none text-[10px] leading-[1.6] ${matched ? 'text-doom-yellow' : 'text-doom-faint'}`}
+        className={`w-4 shrink-0 select-none text-xs leading-relaxed ${matched ? 'text-doom-yellow' : 'text-doom-faint'}`}
       >
         {matched ? '>>' : ''}
       </span>
       <AnsiLine
         line={line}
-        className={`min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-[10px] leading-[1.6] ${
+        className={`min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed ${
           matched ? 'text-doom-text' : 'text-doom-dim'
         }`}
       />
@@ -207,7 +207,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
   return (
     <div data-testid="runner-log-panel" className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-doom-border-soft px-3 py-2 sm:h-11 sm:flex-nowrap sm:gap-2.5 sm:px-[26px] sm:py-0">
-        <span data-testid="runner-log-name" className="shrink-0 truncate text-[12px] font-bold text-doom-hi">
+        <span data-testid="runner-log-name" className="shrink-0 truncate text-sm font-bold text-doom-hi">
           {run?.name ?? runId}
         </span>
         <StatusBadge tone={badge.tone} data-testid="runner-log-state">
@@ -215,13 +215,13 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
         </StatusBadge>
         {run ? (
           <>
-            <span className="shrink-0 text-[10px] text-doom-faint">{elapsed}</span>
-            <span className="shrink-0 text-[10px] text-doom-faint">
+            <span className="shrink-0 text-xs text-doom-faint">{elapsed}</span>
+            <span className="shrink-0 text-xs text-doom-faint">
               {`pid ${String(run.pid)} · ${run.backend}${run.interactive ? ' · tty' : ''}`}
             </span>
           </>
         ) : (
-          <span data-testid="runner-log-gone" className="text-[10px] text-doom-faint">
+          <span data-testid="runner-log-gone" className="text-xs text-doom-faint">
             no longer listed; its log stays readable
           </span>
         )}
@@ -234,7 +234,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
             disabled={stopping}
             title={stopping ? 'stop requested; the runner reports its own exit' : 'ask the runtime to stop this runner'}
             onClick={() => requestRunnerStop(sendSessionFrame, sessionId, run.id)}
-            className="px-2 text-[9px] font-bold"
+            className="px-2 text-2xs font-bold"
           >
             {stopping ? 'stopping…' : 'stop'}
           </Button>
@@ -257,7 +257,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
             value={typed}
             placeholder="search this log"
             onChange={(event) => setTyped(event.target.value)}
-            className="pl-7 text-[10px]"
+            className="pl-7 text-xs"
           />
         </span>
         <Button
@@ -267,7 +267,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           aria-pressed={ignoreCase}
           title="match regardless of case"
           onClick={() => setIgnoreCase((current) => !current)}
-          className="px-2 text-[9px] font-bold"
+          className="px-2 text-2xs font-bold"
         >
           aA
         </Button>
@@ -278,14 +278,14 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           disabled={!filtering}
           title="lines of context kept either side of a match"
           onClick={() => setContext((current) => (current === 0 ? CONTEXT_LINES : 0))}
-          className="px-2 text-[9px] font-bold"
+          className="px-2 text-2xs font-bold"
         >
           {`± ${String(context)} lines`}
         </Button>
         <span className="min-w-0 flex-1" />
         <span
           data-testid="runner-log-stats"
-          className="min-w-0 basis-full truncate text-[10px] text-doom-faint sm:basis-auto"
+          className="min-w-0 basis-full truncate text-xs text-doom-faint sm:basis-auto"
         >
           {slice === undefined
             ? 'reading…'
@@ -302,7 +302,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           disabled={filtering || slice?.running !== true}
           title={filtering ? 'a filtered view is a snapshot; clear the query to follow' : 'follow the log as it grows'}
           onClick={() => setFollowing((current) => !current)}
-          className="px-2 text-[9px] font-bold"
+          className="px-2 text-2xs font-bold"
         >
           {filtering ? 'follow · paused' : 'follow'}
         </Button>
@@ -316,17 +316,17 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
           className="h-full overflow-auto bg-doom-panel-deep px-3 py-3 sm:px-[26px]"
         >
           {error !== undefined ? (
-            <p data-testid="runner-log-error" className="text-[10px] text-doom-red">
+            <p data-testid="runner-log-error" className="text-xs text-doom-red">
               {error}
             </p>
           ) : slice === undefined ? (
-            <p data-testid="runner-log-reading" className="text-[10px] text-doom-faint">
+            <p data-testid="runner-log-reading" className="text-xs text-doom-faint">
               reading…
             </p>
           ) : slice.exists === false ? (
-            <p className="text-[10px] text-doom-faint">this runner has not written a log yet</p>
+            <p className="text-xs text-doom-faint">this runner has not written a log yet</p>
           ) : view.lines.length === 0 ? (
-            <p className="text-[10px] text-doom-faint">{filtering ? 'nothing matched' : 'the log is empty'}</p>
+            <p className="text-xs text-doom-faint">{filtering ? 'nothing matched' : 'the log is empty'}</p>
           ) : (
             view.lines.map((line, index) => {
               const number = numbers[index];
@@ -338,7 +338,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
                     <div
                       data-testid="runner-log-gap"
                       aria-hidden
-                      className="select-none py-0.5 pl-12 text-[10px] leading-[1.6] text-doom-faint"
+                      className="select-none py-0.5 pl-12 text-xs leading-relaxed text-doom-faint"
                     >
                       ⋯
                     </div>
@@ -360,7 +360,7 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
               setPinned(true);
               bottom.current?.scrollIntoView({ block: 'end' });
             }}
-            className="absolute bottom-3 right-3 px-2 text-[9px] font-bold"
+            className="absolute bottom-3 right-3 px-2 text-2xs font-bold"
           >
             jump to latest
           </Button>
@@ -368,11 +368,11 @@ export function RunnerLogPanel({ sessionId, runId, sendSessionFrame }: WebPlugin
       </div>
 
       <div className="flex h-8 shrink-0 items-center gap-2.5 border-t border-doom-border-soft px-3 sm:px-[26px]">
-        <span data-testid="runner-log-path" className="min-w-0 flex-1 truncate text-[9px] text-doom-faint">
+        <span data-testid="runner-log-path" className="min-w-0 flex-1 truncate text-2xs text-doom-faint">
           {run?.logPath ?? slice?.path ?? ''}
         </span>
         {slice !== undefined ? (
-          <span className="shrink-0 text-[9px] text-doom-faint">{formatSize(slice.fileSize)}</span>
+          <span className="shrink-0 text-2xs text-doom-faint">{formatSize(slice.fileSize)}</span>
         ) : null}
       </div>
     </div>

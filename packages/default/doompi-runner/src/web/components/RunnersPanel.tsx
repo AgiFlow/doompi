@@ -80,8 +80,8 @@ export function RunnersPanel({ sessionId, sendSessionFrame, openTransientTab }: 
   return (
     <div data-testid="runners-panel" className="flex min-h-0 flex-1 flex-col overflow-auto">
       <div className="flex min-h-11 shrink-0 items-center gap-2.5 border-b border-doom-border-soft px-3 sm:h-11 sm:px-[26px]">
-        <span className="text-[12px] font-bold text-doom-hi">runners</span>
-        <span data-testid="runners-panel-count" className="text-[10px] text-doom-faint">
+        <span className="text-sm font-bold text-doom-hi">runners</span>
+        <span data-testid="runners-panel-count" className="text-xs text-doom-faint">
           {running.length === 0 ? 'nothing running' : `${String(running.length)} running`}
         </span>
         <span className="min-w-0 flex-1" />
@@ -124,7 +124,7 @@ export function RunnersPanel({ sessionId, sendSessionFrame, openTransientTab }: 
               size="xs"
               data-testid="runners-panel-launch-empty"
               onClick={() => setLaunching(true)}
-              className="px-2 text-[9px] font-bold"
+              className="px-2 text-2xs font-bold"
             >
               launch a runner
             </Button>
@@ -181,26 +181,26 @@ function RunnerCard({
   return (
     <div
       data-testid={`runners-card-${run.id}`}
-      className="flex min-w-0 flex-col gap-1.5 rounded-[5px] border border-doom-border-soft bg-doom-panel p-2.5"
+      className="flex min-w-0 flex-col gap-1.5 rounded-md border border-doom-border-soft bg-doom-panel p-2.5"
     >
       <div className="flex min-w-0 items-center gap-1.5">
         <Dot tone="yellow" pulse />
-        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-doom-hi">{run.name}</span>
-        <span className="shrink-0 text-[9px] text-doom-faint">
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-doom-hi">{run.name}</span>
+        <span className="shrink-0 text-2xs text-doom-faint">
           {formatRunnerUptime(run.startedAt, now)}
           {run.interactive ? ' · tty' : ''}
         </span>
       </div>
 
-      <span className="min-w-0 break-all text-[9px] leading-[1.5] text-doom-dim">{run.command}</span>
-      <span className="min-w-0 truncate text-[9px] text-doom-faint">{run.cwd}</span>
+      <span className="min-w-0 break-all text-2xs leading-normal text-doom-dim">{run.command}</span>
+      <span className="min-w-0 truncate text-2xs text-doom-faint">{run.cwd}</span>
 
       {/* What it is doing, falling back to what it was asked to do until the
           first line of output arrives. */}
       <span
         data-testid={`runners-card-detail-${run.id}`}
         data-detail={tail === undefined ? 'command' : 'tail'}
-        className="min-w-0 truncate text-[9px] text-doom-faint"
+        className="min-w-0 truncate text-2xs text-doom-faint"
       >
         {tail ?? '…'}
       </span>
@@ -212,7 +212,7 @@ function RunnerCard({
           data-testid={`runners-card-log-${run.id}`}
           title="open this runner's log"
           onClick={() => openTransientTab(runnerLogTab(run))}
-          className="px-2 text-[9px] font-bold"
+          className="px-2 text-2xs font-bold"
         >
           log
         </Button>
@@ -225,7 +225,7 @@ function RunnerCard({
             data-testid={`runners-card-shell-${run.id}`}
             title="attach to this runner's terminal"
             onClick={() => openTransientTab(runnerShellTab(run))}
-            className="px-2 text-[9px] font-bold"
+            className="px-2 text-2xs font-bold"
           >
             shell
           </Button>
@@ -241,7 +241,7 @@ function RunnerCard({
               stopRequested ? 'stop requested; the runner reports its own exit' : 'ask the runtime to stop this runner'
             }
             onClick={() => requestRunnerStop(sendSessionFrame, sessionId, run.id)}
-            className="px-2 text-[9px] font-bold"
+            className="px-2 text-2xs font-bold"
           >
             {stopRequested ? 'stopping…' : 'stop'}
           </Button>

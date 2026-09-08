@@ -5,7 +5,7 @@ import { cn } from '../lib/cn.ts';
 import type { StatusTone as Tone } from '../types/tone.ts';
 
 export const statusBadgeVariants = cva(
-  'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[3px] font-mono font-bold uppercase',
+  'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm font-mono font-bold uppercase',
   {
     variants: {
       tone: {
@@ -17,10 +17,10 @@ export const statusBadgeVariants = cva(
         accent: 'bg-doom-tint-magenta text-doom-magenta',
       } satisfies Record<Tone, string>,
       size: {
-        xs: 'px-1.5 py-0.5 text-[8px]',
-        sm: 'px-[7px] py-[3px] text-[9px]',
-        md: 'h-[21px] px-2 text-[10px] normal-case',
-        lg: 'h-6 px-2.5 text-[11px] normal-case',
+        xs: 'px-1.5 py-0.5 text-2xs',
+        sm: 'px-[7px] py-[3px] text-xs',
+        md: 'h-[21px] px-2 text-sm normal-case',
+        lg: 'h-6 px-2.5 text-base normal-case',
       },
     },
     defaultVariants: { tone: 'neutral', size: 'sm' },

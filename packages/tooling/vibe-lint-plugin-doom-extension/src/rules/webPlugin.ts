@@ -34,6 +34,17 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
   COMPONENTS_PACKAGE,
   SECURITY_BROWSER_PACKAGE,
 ]);
+/**
+ * Story files may also reach for the contract's own slot fixtures.
+ *
+ * The allowlist exists because the cockpit's bundler compiles a plugin's web/
+ * folder into the host bundle. A story is never imported by the plugin entry,
+ * so the bundler never reaches it, and `files` in each package excludes
+ * `*.stories.tsx` from the tarball. Hand-rolled prop stubs would be the only
+ * alternative, and those drift silently when the slot contract changes.
+ */
+const STORY_SUFFIX = '.stories.tsx';
+const CONTRACTS_TESTING_PACKAGE = `${CONTRACTS_PACKAGE}/testing`;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
@@ -239,13 +250,16 @@ export const webPluginImportAllowlist: RuleDefinition = {
     const sourceFile = readSource(filePath);
     if (!sourceFile) return null;
     const offenders = new Set<string>();
+    const allowed = filePath.endsWith(STORY_SUFFIX)
+      ? new Set([...ALLOWED_BARE_SPECIFIERS, CONTRACTS_TESTING_PACKAGE])
+      : ALLOWED_BARE_SPECIFIERS;
     for (const specifier of moduleSpecifiers(sourceFile)) {
       if (specifier.startsWith('.')) {
         const target = relativeTarget(filePath, specifier, configRoot);
         if (target === null || !(isWebPath(target) || isTypesPath(target))) {
           offenders.add(specifier);
         }
-      } else if (!ALLOWED_BARE_SPECIFIERS.has(specifier)) {
+      } else if (!allowed.has(specifier)) {
         offenders.add(specifier);
       }
     }

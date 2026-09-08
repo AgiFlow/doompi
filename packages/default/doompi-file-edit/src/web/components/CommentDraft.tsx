@@ -29,8 +29,8 @@ export function CommentDraft({ snippet, startLine, endLine, onSubmit, onCancel }
 
   return (
     <div data-testid="files-comment-draft" className="flex flex-col gap-1.5 border-t border-doom-border p-2">
-      <p className="text-[9px] text-doom-faint">{range}</p>
-      <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-doom-border-soft bg-doom-deep p-1.5 font-mono text-[10px] text-doom-dim">
+      <p className="text-2xs text-doom-faint">{range}</p>
+      <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-doom-border-soft bg-doom-deep p-1.5 font-mono text-xs text-doom-dim">
         {trimSnippet(snippet, 8, 600)}
       </pre>
       <Textarea
@@ -46,7 +46,7 @@ export function CommentDraft({ snippet, startLine, endLine, onSubmit, onCancel }
           event.preventDefault();
           if (body.trim() !== '') onSubmit(body);
         }}
-        className="text-[11px]"
+        className="text-sm"
       />
       <div className="flex items-center gap-1.5">
         <Button
@@ -55,14 +55,14 @@ export function CommentDraft({ snippet, startLine, endLine, onSubmit, onCancel }
           data-testid="files-comment-add"
           disabled={body.trim() === ''}
           onClick={() => onSubmit(body)}
-          className="text-[9px]"
+          className="text-2xs"
         >
           add comment
         </Button>
-        <Button variant="ghost" size="xs" data-testid="files-comment-cancel" onClick={onCancel} className="text-[9px]">
+        <Button variant="ghost" size="xs" data-testid="files-comment-cancel" onClick={onCancel} className="text-2xs">
           cancel
         </Button>
-        <span className="text-[9px] text-doom-faint">⌘⏎ to add</span>
+        <span className="text-2xs text-doom-faint">⌘⏎ to add</span>
       </div>
     </div>
   );

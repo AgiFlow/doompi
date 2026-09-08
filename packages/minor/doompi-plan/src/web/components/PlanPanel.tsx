@@ -87,7 +87,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
   return (
     <div data-testid="plan-panel" className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 items-center gap-2 border-b border-doom-border px-4 py-2">
-        <span data-testid="plan-title" className="min-w-0 flex-1 truncate text-[12px] font-bold text-doom-hi">
+        <span data-testid="plan-title" className="min-w-0 flex-1 truncate text-sm font-bold text-doom-hi">
           {detail?.title ?? 'plan'}
         </span>
         <nav className="flex shrink-0 items-center gap-1">
@@ -98,7 +98,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
               size="xs"
               data-testid={`plan-view-${entry}`}
               onClick={() => setView(entry)}
-              className="text-[9px]"
+              className="text-2xs"
             >
               {entry}
             </Button>
@@ -109,32 +109,32 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
           size="xs"
           data-testid="plan-close"
           onClick={() => closeTransientTab(PLAN_TAB_ID)}
-          className="shrink-0 text-[9px]"
+          className="shrink-0 text-2xs"
         >
           close
         </Button>
       </header>
 
       {loading && detail === undefined ? (
-        <p data-testid="plan-loading" className="px-4 py-3 text-[11px] text-doom-faint">
+        <p data-testid="plan-loading" className="px-4 py-3 text-sm text-doom-faint">
           reading this session's plan…
         </p>
       ) : null}
       {error === undefined ? null : (
-        <p data-testid="plan-error" className="px-4 py-3 text-[11px] text-doom-red">
+        <p data-testid="plan-error" className="px-4 py-3 text-sm text-doom-red">
           {error}
         </p>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         {detail === undefined ? null : detail.unavailable ? (
-          <p data-testid="plan-unavailable" className="px-4 py-3 text-[11px] text-doom-faint">
+          <p data-testid="plan-unavailable" className="px-4 py-3 text-sm text-doom-faint">
             {detail.reason ?? 'this plan cannot be shown'}
           </p>
         ) : view === 'preview' ? (
           <div
             data-testid="plan-preview"
-            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-4 text-[12px] text-doom-text"
+            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-4 text-sm text-doom-text"
           >
             <Markdown text={content} />
           </div>
@@ -157,7 +157,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
                 loading={saving}
                 disabled={draft === undefined || saving}
                 onClick={() => void save()}
-                className="text-[9px]"
+                className="text-2xs"
               >
                 save to disk
               </Button>
@@ -167,7 +167,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
                   size="xs"
                   data-testid="plan-revert"
                   onClick={() => setDraft(undefined)}
-                  className="text-[9px]"
+                  className="text-2xs"
                 >
                   discard edits
                 </Button>
@@ -175,7 +175,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
               {saveNote === undefined ? null : (
                 <span
                   data-testid="plan-save-note"
-                  className={saveNote === SAVED_NOTE ? 'text-[9px] text-doom-green' : 'text-[9px] text-doom-red'}
+                  className={saveNote === SAVED_NOTE ? 'text-2xs text-doom-green' : 'text-2xs text-doom-red'}
                 >
                   {saveNote}
                 </span>
@@ -187,7 +187,7 @@ export function PlanPanel({ sessionId, statuses, closeTransientTab }: WebPluginS
 
       {detail === undefined ? null : (
         <footer data-testid="plan-source-path" className="shrink-0 truncate border-t border-doom-border px-4 py-1.5">
-          <span className="text-[9px] text-doom-faint">{detail.path}</span>
+          <span className="text-2xs text-doom-faint">{detail.path}</span>
         </footer>
       )}
     </div>

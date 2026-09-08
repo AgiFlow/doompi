@@ -34,7 +34,8 @@
     "src/web",
     "src/exports/webClient.ts",
     "src/types/webWorkflows.ts",
-    "src/types/webWorkflowTerminal.ts"
+    "src/types/webWorkflowTerminal.ts",
+    "!src/web/**/*.stories.tsx"
   ],
   "type": "module",
   "main": "./dist/index.cjs",

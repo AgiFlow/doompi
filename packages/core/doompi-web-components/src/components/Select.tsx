@@ -25,7 +25,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'flex h-7 cursor-pointer items-center justify-between gap-2 rounded border border-doom-border bg-doom-deep px-2.5 font-mono text-[11px] text-doom-hi outline-none transition-colors hover:border-doom-blue/50 focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 data-[placeholder]:text-doom-faint',
+        'flex h-7 cursor-pointer items-center justify-between gap-2 rounded border border-doom-border bg-doom-deep px-2.5 font-mono text-sm text-doom-hi outline-none transition-colors hover:border-doom-blue/50 focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 data-[placeholder]:text-doom-faint',
         className,
       )}
       {...props}
@@ -67,7 +67,7 @@ export function SelectLabel({ className, ...props }: ComponentProps<typeof Selec
   return (
     <SelectPrimitive.Label
       data-slot="select-label"
-      className={cn('px-2 py-1 text-[8px] font-bold tracking-[0.14em] text-doom-faint uppercase', className)}
+      className={cn('px-2 py-1 text-2xs font-bold tracking-wider text-doom-faint uppercase', className)}
       {...props}
     />
   );
@@ -78,7 +78,7 @@ export function SelectItem({ className, children, ...props }: ComponentProps<typ
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex cursor-pointer items-center gap-2 rounded-[3px] py-1.5 pr-2 pl-7 text-[11px] text-doom-hi outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[highlighted]:bg-doom-deep',
+        'relative flex cursor-pointer items-center gap-2 rounded-sm py-1.5 pr-2 pl-7 text-sm text-doom-hi outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[highlighted]:bg-doom-deep',
         className,
       )}
       {...props}

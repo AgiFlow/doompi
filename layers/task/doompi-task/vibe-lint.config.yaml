@@ -19,6 +19,15 @@ rules:
   file-naming-convention: error
 
 overrides:
+  # Story files are read by the style-system renderer, which resolves the
+  # default export by looking for a bare `const meta`. Naming the export at the
+  # point of definition breaks the render, so the export-shape rules are off
+  # here. Every other rule, theming included, still applies to stories.
+  - files:
+      - src/web/components/*.stories.tsx
+    rules:
+      no-default-export: off
+      direct-export-only: off
   # These two commands render their own output rather than returning a value the
   # Pi adapter renders, which is how doompi-mcp keeps commands free of the TUI.
   # Inverting that is a behaviour change, so it is tracked separately and these

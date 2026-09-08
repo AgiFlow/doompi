@@ -279,7 +279,7 @@ export function AuthorMediaView({
                   height: `${String(rect.height * 100)}%`,
                 }}
               >
-                <span className="absolute -left-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-doom-yellow px-1 text-[9px] font-bold text-doom-deep">
+                <span className="absolute -left-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-doom-yellow px-1 text-2xs font-bold text-doom-deep">
                   {ordinal}
                 </span>
               </div>,
@@ -350,7 +350,7 @@ export function AuthorMediaView({
           }}
         />
       ) : null}
-      {error ? <output className="text-sm text-doom-red">{error}</output> : null}
+      {error ? <output className="text-base text-doom-red">{error}</output> : null}
     </div>
   );
 }

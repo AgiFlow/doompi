@@ -23,7 +23,7 @@ export function VoiceToolMessage({ toolName, args, result, running, isError }: T
         aria-label="narration"
         data-testid="narration-message"
         data-narration-state={running ? 'playing' : isError ? 'failed' : 'complete'}
-        className="flex min-w-0 items-start gap-2 text-[13px] text-doom-text"
+        className="flex min-w-0 items-start gap-2 text-base text-doom-text"
       >
         <VolumeIcon aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-doom-magenta" />
         <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text || 'Narration unavailable.'}</p>

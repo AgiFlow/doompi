@@ -27,14 +27,14 @@ export function AuthorVideoControls({
   const duration = playback.duration;
   const invalid =
     seconds.trim() === '' || !Number.isFinite(Number(seconds)) || Number(seconds) < 0 || Number(seconds) > duration;
-  const buttonClass = 'min-h-11 px-3 text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs';
+  const buttonClass = 'min-h-11 px-3 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm';
   return (
     <section
       aria-label="Video annotation controls"
-      className="mt-2 space-y-2 rounded border border-doom-border bg-doom-panel p-2.5 text-sm text-doom-text sm:text-xs"
+      className="mt-2 space-y-2 rounded border border-doom-border bg-doom-panel p-2.5 text-base text-doom-text sm:text-sm"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <output aria-label="Playback position" className="font-mono text-sm tabular-nums">
+        <output aria-label="Playback position" className="font-mono text-base tabular-nums">
           {videoTimeLabel(playback.currentTime)} / {videoTimeLabel(duration)}
         </output>
         <span className="text-doom-dim">
@@ -99,7 +99,7 @@ export function AuthorVideoControls({
             onChange={(event) => setSeconds(event.target.value)}
             disabled={locked || duration <= 0}
             placeholder="1.250"
-            className="h-11 w-24 rounded border border-doom-border bg-doom-deep px-2 text-base [@media(pointer:fine)]:h-8 sm:text-xs"
+            className="h-11 w-24 rounded border border-doom-border bg-doom-deep px-2 text-lg [@media(pointer:fine)]:h-8 sm:text-sm"
           />
           <Button type="submit" className={buttonClass} disabled={locked || duration <= 0 || invalid}>
             Go

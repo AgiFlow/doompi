@@ -59,7 +59,7 @@ export function AuthorTextView({
   return (
     <div ref={host} className="flex min-h-0 flex-1 flex-col">
       {preview ? (
-        <div data-testid="author-markdown" className="min-h-0 flex-1 overflow-auto p-4 text-[12px] text-doom-text">
+        <div data-testid="author-markdown" className="min-h-0 flex-1 overflow-auto p-4 text-sm text-doom-text">
           <Markdown text={document.content ?? ''} />
         </div>
       ) : (

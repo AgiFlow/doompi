@@ -1,0 +1,17 @@
+/*
+ * Render entrypoint for style-system story screenshots.
+ *
+ * This file exists because `styles/tokens.css` is the *consumer-facing* export:
+ * it deliberately does not pull in Tailwind, leaving that to whoever imports it.
+ * The screenshot renderer only injects `@import 'tailwindcss'` when a project
+ * configures no `cssFiles` at all, so a project that names one has to bring
+ * Tailwind itself.
+ *
+ * `@source` for the component sources is appended by the renderer, which scans
+ * `<appPath>/src`. That matters here because tokens.css scans `../dist`, which
+ * holds built output rather than the sources a story renders from.
+ *
+ * Referenced by `style-system.config.yaml` (preset `doom-components`).
+ */
+@import 'tailwindcss';
+@import './tokens.css';

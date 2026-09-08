@@ -69,7 +69,7 @@ export function AuthorGridOverlay({
         const row = Math.floor(index / AUTHOR_GRID_SIZE);
         return (
           <div key={index} className="relative border border-doom-red/25">
-            <span className="absolute left-1 top-0.5 rounded bg-doom-deep/80 px-1 text-[8px] font-bold text-doom-red">
+            <span className="absolute left-1 top-0.5 rounded bg-doom-deep/80 px-1 text-2xs font-bold text-doom-red">
               {AUTHOR_GRID_COLUMNS[column]}
               {row + 1}
             </span>

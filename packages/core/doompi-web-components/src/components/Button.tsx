@@ -19,10 +19,10 @@ export const buttonVariants = cva(
         link: 'text-doom-blue hover:underline',
       },
       size: {
-        xs: 'h-5 rounded px-1.5 text-[9px]',
-        sm: 'h-6 px-2.5 text-[10px]',
-        md: 'h-7 px-3 text-[11px]',
-        lg: 'h-8 px-3.5 text-[12px]',
+        xs: 'h-5 rounded px-1.5 text-2xs',
+        sm: 'h-6 px-2.5 text-xs',
+        md: 'h-7 px-3 text-sm',
+        lg: 'h-8 px-3.5 text-base',
         icon: 'h-5 w-5 rounded p-0',
         'icon-md': 'h-7 w-7 p-0',
         /**

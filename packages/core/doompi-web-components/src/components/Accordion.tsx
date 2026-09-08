@@ -24,7 +24,7 @@ export function AccordionTrigger({ className, children, ...props }: ComponentPro
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          'flex flex-1 cursor-pointer items-center justify-between gap-2 py-2 text-left text-[11px] text-doom-hi outline-none transition-colors hover:text-doom-blue focus-visible:text-doom-blue [&[data-state=open]>svg]:rotate-180',
+          'flex flex-1 cursor-pointer items-center justify-between gap-2 py-2 text-left text-sm text-doom-hi outline-none transition-colors hover:text-doom-blue focus-visible:text-doom-blue [&[data-state=open]>svg]:rotate-180',
           className,
         )}
         {...props}
@@ -40,7 +40,7 @@ export function AccordionContent({ className, ...props }: ComponentProps<typeof 
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className={cn('overflow-hidden pb-2 text-[11px] text-doom-dim', className)}
+      className={cn('overflow-hidden pb-2 text-sm text-doom-dim', className)}
       {...props}
     />
   );

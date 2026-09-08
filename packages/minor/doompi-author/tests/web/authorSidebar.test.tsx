@@ -123,7 +123,7 @@ describe('Author annotation sidebar', () => {
     for (const control of controls) {
       expect(control.props.className).toContain('min-h-11');
       expect(control.props.className).toContain('min-w-11');
-      expect(control.props.className).toContain('text-sm');
+      expect(control.props.className).toContain('text-base');
     }
   });
   it('keeps drafts when submission fails and handles the rejection', async () => {

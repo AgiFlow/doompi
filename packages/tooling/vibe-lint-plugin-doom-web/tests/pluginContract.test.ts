@@ -3,6 +3,7 @@ import doomWebPlugin, {
   doomComponentsLayerBoundary,
   doomWebLayerBoundary,
   doomWebPlugin as namedPlugin,
+  noArbitraryStyleValue,
   noCrossFeatureImport,
   noRawThemeColor,
   patterns,
@@ -15,6 +16,7 @@ import doomWebPlugin, {
 const EXPECTED_RULE_IDS = [
   'doom-components-layer-boundary',
   'doom-web-layer-boundary',
+  'no-arbitrary-style-value',
   'no-cross-feature-import',
   'no-raw-theme-color',
   'prefer-shared-primitive',
@@ -29,6 +31,7 @@ const EXPECTED_RULE_IDS = [
 const RULE_SEVERITY: Readonly<Record<(typeof EXPECTED_RULE_IDS)[number], 'error' | 'warn'>> = {
   'doom-components-layer-boundary': 'error',
   'doom-web-layer-boundary': 'error',
+  'no-arbitrary-style-value': 'error',
   'no-cross-feature-import': 'error',
   'no-raw-theme-color': 'error',
   'prefer-shared-primitive': 'error',
@@ -72,6 +75,7 @@ describe('Doom web plugin contract', () => {
     expect(Object.values(rules)).toEqual([
       doomComponentsLayerBoundary,
       doomWebLayerBoundary,
+      noArbitraryStyleValue,
       noCrossFeatureImport,
       noRawThemeColor,
       preferSharedPrimitive,

@@ -31,7 +31,7 @@ export function PanelBody({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="panel-body"
-      className={cn('border-t border-doom-border-soft bg-doom-deep px-3 py-2 text-[11px] text-doom-dim', className)}
+      className={cn('border-t border-doom-border-soft bg-doom-deep px-3 py-2 text-sm text-doom-dim', className)}
       {...props}
     />
   );

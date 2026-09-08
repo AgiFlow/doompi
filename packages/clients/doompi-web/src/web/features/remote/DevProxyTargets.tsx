@@ -39,7 +39,7 @@ export function DevProxyTargets() {
   return (
     <div className="flex w-full flex-col gap-1.5">
       <SectionLabel>dev sites</SectionLabel>
-      <span className="text-[11px] text-doom-faint">
+      <span className="text-sm text-doom-faint">
         Reach a local dev server from a paired device, on this same address.
       </span>
 
@@ -54,13 +54,13 @@ export function DevProxyTargets() {
               href={`${DEV_PROXY_PREFIX}${target.name}/`}
               target="_blank"
               rel="noreferrer"
-              className="truncate text-xs text-doom-hi underline"
+              className="truncate text-sm text-doom-hi underline"
               data-testid={`dev-proxy-open-${target.name}`}
             >
               {DEV_PROXY_PREFIX}
               {target.name}/
             </a>
-            <span className="truncate text-[10px] text-doom-faint">
+            <span className="truncate text-xs text-doom-faint">
               port {target.port} &middot; set base: &apos;{DEV_PROXY_PREFIX}
               {target.name}/&apos; in the dev server
             </span>
@@ -110,13 +110,13 @@ export function DevProxyTargets() {
           </Button>
         </div>
       ) : (
-        <span className="text-[11px] text-doom-faint">
+        <span className="text-sm text-doom-faint">
           Add a dev site on the host. A paired device can open the ones already listed, but not name new ones.
         </span>
       )}
 
       {state.error === undefined ? null : (
-        <span data-testid="dev-proxy-error" className="text-[11px] text-doom-warn">
+        <span data-testid="dev-proxy-error" className="text-sm text-doom-warn">
           {state.error}
         </span>
       )}

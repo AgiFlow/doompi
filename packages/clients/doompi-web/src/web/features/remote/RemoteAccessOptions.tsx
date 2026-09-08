@@ -24,10 +24,8 @@ export function RemoteAccessOptions() {
     <div className="flex flex-col gap-4">
       <label htmlFor="remote-autoclose-switch" className="flex items-start justify-between gap-4">
         <span className="flex flex-col gap-0.5">
-          <span className="text-xs text-doom-hi">close the tunnel automatically</span>
-          <span className="text-[11px] text-doom-faint">
-            So a tunnel you forgot about does not stay open for weeks.
-          </span>
+          <span className="text-sm text-doom-hi">close the tunnel automatically</span>
+          <span className="text-sm text-doom-faint">So a tunnel you forgot about does not stay open for weeks.</span>
         </span>
         <Switch
           id="remote-autoclose-switch"
@@ -38,7 +36,7 @@ export function RemoteAccessOptions() {
       </label>
       {settings.autoCloseEnabled ? (
         <label htmlFor="remote-autoclose-minutes" className="flex items-center justify-between gap-4 pl-4">
-          <span className="text-[11px] text-doom-faint">after this many minutes</span>
+          <span className="text-sm text-doom-faint">after this many minutes</span>
           <Input
             id="remote-autoclose-minutes"
             data-testid="remote-autoclose-minutes"
@@ -54,8 +52,8 @@ export function RemoteAccessOptions() {
 
       <label htmlFor="remote-expiry-switch" className="flex items-start justify-between gap-4">
         <span className="flex flex-col gap-0.5">
-          <span className="text-xs text-doom-hi">expire paired sessions</span>
-          <span className="text-[11px] text-doom-faint">
+          <span className="text-sm text-doom-hi">expire paired sessions</span>
+          <span className="text-sm text-doom-faint">
             A device that goes quiet, or has simply been paired a long time, has to pair again.
           </span>
         </span>
@@ -68,7 +66,7 @@ export function RemoteAccessOptions() {
       </label>
       {settings.sessionExpiryEnabled ? (
         <div className="flex items-center justify-between gap-4 pl-4">
-          <label htmlFor="remote-idle-minutes" className="flex items-center gap-2 text-[11px] text-doom-faint">
+          <label htmlFor="remote-idle-minutes" className="flex items-center gap-2 text-sm text-doom-faint">
             idle minutes
             <Input
               id="remote-idle-minutes"
@@ -81,7 +79,7 @@ export function RemoteAccessOptions() {
               onChange={(event) => void updateRemoteSettings({ idleMinutes: Number(event.target.value) })}
             />
           </label>
-          <label htmlFor="remote-absolute-hours" className="flex items-center gap-2 text-[11px] text-doom-faint">
+          <label htmlFor="remote-absolute-hours" className="flex items-center gap-2 text-sm text-doom-faint">
             total hours
             <Input
               id="remote-absolute-hours"
@@ -99,8 +97,8 @@ export function RemoteAccessOptions() {
 
       <label htmlFor="remote-sandbox-switch" className="flex items-start justify-between gap-4">
         <span className="flex flex-col gap-0.5">
-          <span className="text-xs text-doom-hi">run the cockpit in a container</span>
-          <span className="text-[11px] text-doom-faint">
+          <span className="text-sm text-doom-hi">run the cockpit in a container</span>
+          <span className="text-sm text-doom-faint">
             The agent gets a shell either way. This decides whether that shell can see the rest of this machine.
           </span>
         </span>
@@ -115,13 +113,13 @@ export function RemoteAccessOptions() {
       </label>
       {settings.sandbox.enabled ? <SandboxWorkspaces workspaces={settings.sandbox.workspaces} /> : null}
       {settings.sandbox.enabled ? (
-        <p className="text-[11px] text-doom-faint">
+        <p className="text-sm text-doom-faint">
           Turning remote access on moves this cockpit into the container and reopens it on the same address. Running
           sessions inside the mounted workspaces move with it; the first start builds the image, which takes a while.
         </p>
       ) : null}
 
-      <p className="text-[11px] text-doom-faint">
+      <p className="text-sm text-doom-faint">
         Switching remote access off always revokes every paired device. Requires <code>cloudflared</code> on PATH.
       </p>
 

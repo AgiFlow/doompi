@@ -24,8 +24,8 @@ export function EmptyState({ title, description, children, className, asChild = 
       {...props}
     >
       <div className="flex w-[520px] max-w-full flex-col items-center gap-3 text-center">
-        <span className="text-[14px] font-bold text-doom-hi">{title}</span>
-        {description ? <span className="text-[11px] leading-relaxed text-doom-dim">{description}</span> : null}
+        <span className="text-base font-bold text-doom-hi">{title}</span>
+        {description ? <span className="text-sm leading-relaxed text-doom-dim">{description}</span> : null}
         {children}
       </div>
     </Component>

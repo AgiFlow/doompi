@@ -30,7 +30,8 @@
     "src/web",
     "src/exports/webClient.ts",
     "src/types/webTasks.ts",
-    "package.json"
+    "package.json",
+    "!src/web/**/*.stories.tsx"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -188,6 +189,7 @@
     "@types/react": "19.2.18",
     "@vitest/coverage-v8": "5.0.0",
     "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"

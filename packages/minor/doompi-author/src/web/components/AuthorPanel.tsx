@@ -34,12 +34,12 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
     <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
       {sessionId !== null && workspace !== undefined && focused !== undefined ? (
         <>
-          <h2 className="text-sm font-semibold text-doom-text">Annotations</h2>
-          <p className="text-sm leading-normal text-doom-dim sm:text-xs">
+          <h2 className="text-base font-semibold text-doom-text">Annotations</h2>
+          <p className="text-base leading-normal text-doom-dim sm:text-sm">
             Select a region, add a comment, then submit here. Requests queue while the agent is working.
           </p>
           {focused.kind === 'video' ? (
-            <p className="text-sm text-doom-dim sm:text-xs">
+            <p className="text-base text-doom-dim sm:text-sm">
               Annotations reference video frames. They do not save changes to the source video.
             </p>
           ) : null}
@@ -47,7 +47,7 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
           {autonomousVoiceGridVisible(statuses) && grid !== undefined ? (
             <div
               data-testid="author-grid-snapshot"
-              className="rounded border border-doom-red/40 bg-doom-red/5 p-2 text-sm text-doom-dim"
+              className="rounded border border-doom-red/40 bg-doom-red/5 p-2 text-base text-doom-dim"
             >
               <strong className="text-doom-red">VOICE GRID A1–H8</strong>
               <p className="mt-1 truncate">token {grid.geometryToken}</p>
@@ -57,7 +57,7 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
           {workspace.regions.length > 0 ? (
             <div className="space-y-1.5 border-b border-doom-border-soft pb-3">
               <Button
-                className="min-h-11 min-w-11 w-full text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs"
+                className="min-h-11 min-w-11 w-full text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
                 variant="outline"
                 data-testid="author-attach-capture"
                 disabled={capturing || workspace.candidate !== undefined || submitCapture === undefined}
@@ -87,16 +87,16 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
                   : `Submit ${workspace.regions.length} annotation${workspace.regions.length === 1 ? '' : 's'}`}
               </Button>
               {workspace.candidate ? (
-                <p className="text-sm text-doom-dim sm:text-xs">
+                <p className="text-base text-doom-dim sm:text-sm">
                   Add or discard the current selection before submitting.
                 </p>
               ) : null}
             </div>
           ) : null}
           {submitCapture === undefined ? (
-            <output className="text-xs text-doom-red">Submission unavailable. Reload to update the app.</output>
+            <output className="text-sm text-doom-red">Submission unavailable. Reload to update the app.</output>
           ) : null}
-          {captureStatus ? <output className="block text-xs text-doom-dim">{captureStatus}</output> : null}
+          {captureStatus ? <output className="block text-sm text-doom-dim">{captureStatus}</output> : null}
         </>
       ) : null}
       <AuthorRequestLog requests={workspace?.requests ?? []} />

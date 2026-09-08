@@ -19,6 +19,15 @@ rules:
   file-naming-convention: error
 
 overrides:
+  # Story files are read by the style-system renderer, which resolves the
+  # default export by looking for a bare `const meta`. Naming the export at the
+  # point of definition breaks the render, so the export-shape rules are off
+  # here. Every other rule, theming included, still applies to stories.
+  - files:
+      - src/web/components/*.stories.tsx
+    rules:
+      no-default-export: off
+      direct-export-only: off
   # Reads time, randomness or process state ambiently instead of taking it as a
   # dependency. Each needs a clock, id factory or env threaded through its
   # caller; until then the rule stays on for every other module here.

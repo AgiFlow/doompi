@@ -25,10 +25,10 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
     <section className="space-y-2" data-testid="author-region-drafts">
       {workspace.candidate ? (
         <>
-          <h3 className="text-sm font-semibold text-doom-text">Current selection</h3>
-          <p className="text-sm text-doom-dim sm:text-xs">Add a comment to keep this selection as an unsent draft.</p>
+          <h3 className="text-base font-semibold text-doom-text">Current selection</h3>
+          <p className="text-base text-doom-dim sm:text-sm">Add a comment to keep this selection as an unsent draft.</p>
           {workspace.candidate.anchor.kind === 'video-time-rect' ? (
-            <p className="text-sm text-doom-dim sm:text-xs">
+            <p className="text-base text-doom-dim sm:text-sm">
               Frame at {workspace.candidate.anchor.timeSeconds.toFixed(3)}s
             </p>
           ) : null}
@@ -38,10 +38,10 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             onChange={(event) => setComment(event.target.value)}
             placeholder="What should change here?"
             rows={3}
-            className="min-h-11 w-full resize-y rounded border border-doom-border bg-doom-deep p-2 text-base leading-normal text-doom-text focus:border-doom-red focus:outline-none sm:text-xs"
+            className="min-h-11 w-full resize-y rounded border border-doom-border bg-doom-deep p-2 text-lg leading-normal text-doom-text focus:border-doom-red focus:outline-none sm:text-sm"
           />
           <Button
-            className="min-h-11 min-w-11 text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs"
+            className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
             variant="outline"
             onClick={add}
             disabled={!workspace.candidate || !comment.trim() || workspace.regions.length >= 16}
@@ -50,7 +50,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
           </Button>
           <Button
             variant="ghost"
-            className="min-h-11 min-w-11 text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs"
+            className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
             onClick={() => {
               setAuthorRegionCandidate(sessionId, undefined);
               setComment('');
@@ -61,15 +61,15 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
           </Button>
         </>
       ) : null}
-      {error ? <output className="block text-sm text-doom-red">{error}</output> : null}
+      {error ? <output className="block text-base text-doom-red">{error}</output> : null}
       {workspace.regions.length > 0 ? (
-        <h3 className="text-sm font-semibold text-doom-text">Unsent drafts ({workspace.regions.length})</h3>
+        <h3 className="text-base font-semibold text-doom-text">Unsent drafts ({workspace.regions.length})</h3>
       ) : null}
       <ol className="space-y-2">
         {workspace.regions.map((region, index) => (
           <li
             key={region.id}
-            className="rounded border border-doom-border bg-doom-panel p-2 text-sm leading-normal text-doom-text sm:text-xs"
+            className="rounded border border-doom-border bg-doom-panel p-2 text-base leading-normal text-doom-text sm:text-sm"
           >
             <span>
               ({index + 1}) {region.comment}
@@ -77,7 +77,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
             {region.anchor.kind === 'video-time-rect' ? (
               <Button
                 variant="outline"
-                className="min-h-11 min-w-11 text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs"
+                className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
                 disabled={workspace.candidate !== undefined}
                 onClick={() => {
                   if (region.anchor.kind === 'video-time-rect') seekAuthorVideo(sessionId, region.anchor.timeSeconds);
@@ -87,7 +87,7 @@ export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string
               </Button>
             ) : null}
             <Button
-              className="min-h-11 min-w-11 text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs"
+              className="min-h-11 min-w-11 text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
               variant="ghost"
               aria-label={`Remove region ${index + 1}`}
               onClick={() => removeAuthorRegion(sessionId, region.id)}

@@ -64,7 +64,7 @@ export function PopoverFooter({ className, ...props }: ComponentProps<'div'>) {
     <div
       data-slot="popover-footer"
       className={cn(
-        'flex min-h-[30px] shrink-0 items-center justify-between gap-3 border-t border-doom-border-soft bg-doom-deep px-3 text-[9px] text-doom-faint',
+        'flex min-h-[30px] shrink-0 items-center justify-between gap-3 border-t border-doom-border-soft bg-doom-deep px-3 text-2xs text-doom-faint',
         className,
       )}
       {...props}

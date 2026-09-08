@@ -21,7 +21,7 @@ function Resources({ agent }: { agent: SubagentCatalogAgent }) {
     ['file', agent.filePath],
   ];
   return (
-    <dl data-testid={`catalog-resources-${agent.name}`} className="flex flex-col gap-1 pt-1 text-[9px]">
+    <dl data-testid={`catalog-resources-${agent.name}`} className="flex flex-col gap-1 pt-1 text-2xs">
       {rows.map(([label, value]) => (
         <div key={label} className="flex gap-2">
           <dt className="w-16 shrink-0 text-doom-faint">{label}</dt>
@@ -62,17 +62,17 @@ function AgentRow({
       }`}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[12px] font-bold text-doom-hi">{agent.name}</span>
+        <span className="truncate text-sm font-bold text-doom-hi">{agent.name}</span>
         <Badge size="xs" className="shrink-0">
           {agent.packageName ?? agent.source}
         </Badge>
         <span className="min-w-0 flex-1" />
-        <span className={`shrink-0 text-[9px] ${agent.model ? 'text-doom-cyan' : 'text-doom-faint'}`}>
+        <span className={`shrink-0 text-2xs ${agent.model ? 'text-doom-cyan' : 'text-doom-faint'}`}>
           {agent.model ? shortModel(agent.model) : 'agent default'}
         </span>
       </div>
-      <span className="truncate text-[10px] text-doom-dim">{agent.description}</span>
-      <span className="truncate text-[9px] text-doom-faint">{agentMeta(agent)}</span>
+      <span className="truncate text-xs text-doom-dim">{agent.description}</span>
+      <span className="truncate text-2xs text-doom-faint">{agentMeta(agent)}</span>
       {selected ? (
         <div className="flex items-center gap-3 pt-0.5">
           <Button
@@ -175,7 +175,7 @@ export function AgentCatalogDrawer({
       className="flex w-[min(440px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail outline-none"
     >
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border px-4">
-        <span className="text-[13px] font-bold text-doom-hi">agent catalog</span>
+        <span className="text-base font-bold text-doom-hi">agent catalog</span>
         <Badge size="xs" data-testid="catalog-count">
           {state.agents.length} agent{state.agents.length === 1 ? '' : 's'}
         </Badge>
@@ -196,7 +196,7 @@ export function AgentCatalogDrawer({
       </div>
       <div role="listbox" className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
         {shown.length === 0 ? (
-          <p data-testid="catalog-empty" className="px-4 py-3 text-[10px] text-doom-faint">
+          <p data-testid="catalog-empty" className="px-4 py-3 text-xs text-doom-faint">
             {state.warning ??
               (state.agents.length === 0
                 ? 'no agents found for this session; add one under .doom/agents or ~/.doompi/agent/agents'
@@ -205,9 +205,7 @@ export function AgentCatalogDrawer({
         ) : null}
         {sections.map((section) => (
           <div key={section.source} className="flex flex-col">
-            <span className="px-4 pt-2.5 pb-1 text-[9px] font-bold tracking-[0.18em] text-doom-faint">
-              {section.label}
-            </span>
+            <span className="px-4 pt-2.5 pb-1 text-2xs font-bold tracking-widest text-doom-faint">{section.label}</span>
             {section.agents.map((agent) => (
               <AgentRow
                 key={agent.name}
@@ -223,8 +221,8 @@ export function AgentCatalogDrawer({
         ))}
       </div>
       <div className="flex h-8 shrink-0 items-center justify-between border-t border-doom-border-soft bg-doom-deep px-4">
-        <span className="text-[9px] text-doom-faint">↑↓ choose · enter launch · f fork · i inspect · esc close</span>
-        <span className="text-[9px] text-doom-faint">
+        <span className="text-2xs text-doom-faint">↑↓ choose · enter launch · f fork · i inspect · esc close</span>
+        <span className="text-2xs text-doom-faint">
           {sections.length} source{sections.length === 1 ? '' : 's'}
         </span>
       </div>

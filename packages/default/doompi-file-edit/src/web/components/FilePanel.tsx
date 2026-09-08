@@ -193,12 +193,12 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
         {/* Edit is not one of the header's two toggles, so with neither lit the
             mode needs saying; picking either toggle leaves it. */}
         {view === 'edit' ? (
-          <Badge tone="neutral" data-testid="files-editing" className="shrink-0 text-[8px]">
+          <Badge tone="neutral" data-testid="files-editing" className="shrink-0 text-2xs">
             editing
           </Badge>
         ) : null}
         {detail === undefined ? null : (
-          <span className="shrink-0 text-[9px] text-doom-faint">
+          <span className="shrink-0 text-2xs text-doom-faint">
             +{detail.cumulative.additions} -{detail.cumulative.removals}
           </span>
         )}
@@ -213,7 +213,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
               size="xs"
               data-testid={`files-view-${entry}`}
               onClick={() => setView(entry)}
-              className="text-[9px]"
+              className="text-2xs"
             >
               {entry}
             </Button>
@@ -262,12 +262,12 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
       />
 
       {loading && detail === undefined ? (
-        <p data-testid="files-loading" className="px-4 py-3 text-[11px] text-doom-faint">
+        <p data-testid="files-loading" className="px-4 py-3 text-sm text-doom-faint">
           reading this file's history…
         </p>
       ) : null}
       {error === undefined ? null : (
-        <p data-testid="files-error" className="px-4 py-3 text-[11px] text-doom-red">
+        <p data-testid="files-error" className="px-4 py-3 text-sm text-doom-red">
           {error}
         </p>
       )}
@@ -276,7 +276,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
         {detail === undefined ? null : view === 'diff' ? (
           <div className="flex flex-col">
             {detail.cumulative.note === undefined ? null : (
-              <p data-testid="files-cumulative-note" className="px-4 py-2 text-[10px] text-doom-yellow">
+              <p data-testid="files-cumulative-note" className="px-4 py-2 text-xs text-doom-yellow">
                 {detail.cumulative.note}
               </p>
             )}
@@ -288,7 +288,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
               />
             )}
             <section className="mt-2 border-t border-doom-border">
-              <h2 className="px-4 py-2 text-[10px] font-bold tracking-wide text-doom-faint uppercase">
+              <h2 className="px-4 py-2 text-xs font-bold tracking-wide text-doom-faint uppercase">
                 {detail.versions.length} {detail.versions.length === 1 ? 'change' : 'changes'} this session
               </h2>
               {detail.versions.map((version) => (
@@ -301,22 +301,22 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
                     className="w-full gap-2 rounded-none px-4 py-1.5 hover:bg-doom-panel"
                   >
                     <span className="flex w-full min-w-0 items-center gap-2">
-                      <span className="shrink-0 text-[9px] text-doom-faint">#{version.index}</span>
-                      <span className="min-w-0 flex-1 truncate text-left text-[10px] text-doom-text">
+                      <span className="shrink-0 text-2xs text-doom-faint">#{version.index}</span>
+                      <span className="min-w-0 flex-1 truncate text-left text-xs text-doom-text">
                         {versionSummary(version)}
                       </span>
                       {version.origin === 'scan' ? (
-                        <Badge tone="neutral" className="shrink-0 text-[8px]">
+                        <Badge tone="neutral" className="shrink-0 text-2xs">
                           no baseline
                         </Badge>
                       ) : null}
-                      <span className="shrink-0 text-[9px] text-doom-faint">
+                      <span className="shrink-0 text-2xs text-doom-faint">
                         {expanded === version.index ? '▾' : '▸'}
                       </span>
                     </span>
                   </Button>
                   {expanded !== version.index ? null : version.hunks === undefined ? (
-                    <p className="px-4 py-1.5 text-[10px] text-doom-faint">{version.note ?? 'nothing to show'}</p>
+                    <p className="px-4 py-1.5 text-xs text-doom-faint">{version.note ?? 'nothing to show'}</p>
                   ) : (
                     <DiffView
                       hunks={version.hunks}
@@ -331,7 +331,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
         ) : view === 'edit' ? (
           <div className="flex h-full flex-col gap-2 p-3">
             {working?.unavailable === true ? (
-              <p data-testid="files-source-unavailable" className="text-[11px] text-doom-faint">
+              <p data-testid="files-source-unavailable" className="text-sm text-doom-faint">
                 {working.reason ?? 'this file cannot be shown'}
               </p>
             ) : (
@@ -365,7 +365,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
                     loading={saving}
                     disabled={source === undefined || saving}
                     onClick={() => void save()}
-                    className="text-[9px]"
+                    className="text-2xs"
                   >
                     save to disk
                   </Button>
@@ -375,7 +375,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
                       size="xs"
                       data-testid="files-revert"
                       onClick={() => setSource(undefined)}
-                      className="text-[9px]"
+                      className="text-2xs"
                     >
                       discard edits
                     </Button>
@@ -383,7 +383,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
                   {saveNote === undefined ? null : (
                     <span
                       data-testid="files-save-note"
-                      className={saveNote === 'saved' ? 'text-[9px] text-doom-green' : 'text-[9px] text-doom-red'}
+                      className={saveNote === 'saved' ? 'text-2xs text-doom-green' : 'text-2xs text-doom-red'}
                     >
                       {saveNote}
                     </span>
@@ -398,8 +398,8 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
             data-mode={previewMode}
             className={
               previewMode === 'code'
-                ? 'flex h-full flex-col gap-2 p-4 text-[12px] text-doom-text'
-                : 'flex flex-col gap-2 p-4 text-[12px] text-doom-text'
+                ? 'flex h-full flex-col gap-2 p-4 text-sm text-doom-text'
+                : 'flex flex-col gap-2 p-4 text-sm text-doom-text'
             }
             onMouseUp={() => {
               // Highlighted source knows which lines were picked, so a note on
@@ -417,7 +417,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
             {/* A file the editor cannot hold is still a file the reader came
                 to see, so the reason is said and the bytes are shown anyway. */}
             {previewMode === 'unavailable' ? (
-              <p data-testid="files-preview-unavailable" className="text-[11px] text-doom-faint">
+              <p data-testid="files-preview-unavailable" className="text-sm text-doom-faint">
                 {working?.reason ?? 'this file cannot be shown'}
               </p>
             ) : null}
@@ -453,7 +453,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
               // reading view rather than an empty pane.
               <pre
                 data-testid="files-preview-text"
-                className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.5] text-doom-text"
+                className="whitespace-pre-wrap break-words font-mono text-sm leading-normal text-doom-text"
               >
                 {content}
               </pre>
@@ -475,7 +475,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
       {comments.length === 0 ? null : (
         <footer data-testid="files-review" className="shrink-0 border-t border-doom-border px-3 py-2">
           <div className="flex items-center gap-2 pb-1">
-            <span className="flex-1 text-[10px] font-bold text-doom-hi">
+            <span className="flex-1 text-xs font-bold text-doom-hi">
               {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
             </span>
             <Button
@@ -483,15 +483,15 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
               size="xs"
               data-testid="files-send-review"
               onClick={sendReview}
-              className="text-[9px]"
+              className="text-2xs"
             >
               send review
             </Button>
           </div>
           {comments.map((comment) => (
             <div key={comment.id} data-testid="files-review-comment" className="flex items-start gap-2 py-0.5">
-              <span className="shrink-0 text-[9px] text-doom-faint">{commentAnchor(comment)}</span>
-              <span className="min-w-0 flex-1 truncate text-[10px] text-doom-text">{comment.body}</span>
+              <span className="shrink-0 text-2xs text-doom-faint">{commentAnchor(comment)}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-doom-text">{comment.body}</span>
               <Button
                 variant="ghost"
                 size="xs"
@@ -499,7 +499,7 @@ export function FilePanel({ filePath, relPath, sessionId, sendSessionFrame, clos
                 onClick={() => {
                   if (sessionId !== null) removeComment(sessionId, comment.id);
                 }}
-                className="shrink-0 text-[9px]"
+                className="shrink-0 text-2xs"
               >
                 remove
               </Button>

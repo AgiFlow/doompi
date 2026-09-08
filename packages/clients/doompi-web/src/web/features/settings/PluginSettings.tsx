@@ -40,12 +40,12 @@ export function PluginSettings() {
       />
       <div className="flex flex-col gap-2">
         <SectionLabel>installed</SectionLabel>
-        <p className="text-[11px] leading-relaxed text-doom-faint">
+        <p className="text-sm leading-relaxed text-doom-faint">
           the web plugins compiled into this bundle; doompi sync rebuilds it from the packages installed in the
           composition.
         </p>
         {plugins.length === 0 ? (
-          <p data-testid="settings-plugins-empty" className="text-[11px] text-doom-dim">
+          <p data-testid="settings-plugins-empty" className="text-sm text-doom-dim">
             no web plugins in this bundle. run doompi sync to bundle the installed packages.
           </p>
         ) : (
@@ -57,10 +57,10 @@ export function PluginSettings() {
                 className="flex flex-col gap-0.5 bg-transparent px-3 py-2 min-[480px]:flex-row min-[480px]:items-baseline min-[480px]:gap-3"
               >
                 <li data-testid={`settings-plugin-${plugin.id}`}>
-                  <span className="text-[12px] font-bold text-doom-hi">{plugin.id}</span>
+                  <span className="text-sm font-bold text-doom-hi">{plugin.id}</span>
                   {/* Wraps rather than truncates: a clipped "2 lea…" tells the
                       reader less than nothing about what the plugin contributed. */}
-                  <span className="min-w-0 w-full text-[10px] leading-relaxed text-doom-faint min-[480px]:w-auto min-[480px]:flex-1">
+                  <span className="min-w-0 w-full text-xs leading-relaxed text-doom-faint min-[480px]:w-auto min-[480px]:flex-1">
                     {contributions(plugin).join(' · ') || 'no contributions'}
                   </span>
                 </li>
@@ -72,12 +72,12 @@ export function PluginSettings() {
 
       <div className="flex flex-col gap-2">
         <SectionLabel>install diagnostics</SectionLabel>
-        <p className="text-[11px] leading-relaxed text-doom-faint">
+        <p className="text-sm leading-relaxed text-doom-faint">
           plugins are independent, so when two want the same tab, tool, group, or key the install keeps one and records
           the other here rather than failing the page.
         </p>
         {diagnostics.length === 0 ? (
-          <p data-testid="settings-plugin-diagnostics-empty" className="text-[11px] text-doom-dim">
+          <p data-testid="settings-plugin-diagnostics-empty" className="text-sm text-doom-dim">
             nothing to resolve: no two plugins wanted the same name.
           </p>
         ) : (
@@ -89,10 +89,10 @@ export function PluginSettings() {
                 className="flex flex-col gap-0.5 bg-transparent px-3 py-2"
               >
                 <li data-testid={`settings-plugin-diagnostic-${diagnostic.pluginId}`} data-kind={diagnostic.kind}>
-                  <span className="text-[10px] font-bold text-doom-yellow">
+                  <span className="text-xs font-bold text-doom-yellow">
                     {diagnostic.pluginId} · {diagnostic.kind}
                   </span>
-                  <span className="text-[10px] leading-snug text-doom-dim">{diagnostic.message}</span>
+                  <span className="text-xs leading-snug text-doom-dim">{diagnostic.message}</span>
                 </li>
               </Panel>
             ))}

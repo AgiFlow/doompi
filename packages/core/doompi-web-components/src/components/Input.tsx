@@ -18,10 +18,10 @@ export const fieldVariants = cva(
       },
       /** The same rungs Button names, so a field and the button beside it line up. */
       size: {
-        xs: 'px-1.5 py-0.5 text-[10px]',
-        sm: 'px-2 py-1 text-[11px]',
-        md: 'px-2.5 py-1.5 text-[12px]',
-        lg: 'px-3 py-2 text-[13px]',
+        xs: 'px-1.5 py-0.5 text-2xs',
+        sm: 'px-2 py-1 text-xs',
+        md: 'px-2.5 py-1.5 text-sm',
+        lg: 'px-3 py-2 text-base',
       },
     },
     compoundVariants: [

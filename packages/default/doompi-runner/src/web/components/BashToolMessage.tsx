@@ -101,7 +101,7 @@ export function BashToolMessage({
                     event.stopPropagation();
                     openTransientTab(runnerLogTab(run));
                   }}
-                  className="shrink-0 gap-1 px-1.5 text-[9px] font-bold"
+                  className="shrink-0 gap-1 px-1.5 text-2xs font-bold"
                 >
                   <FileIcon className="h-2.5 w-2.5" />
                   log
@@ -122,7 +122,7 @@ export function BashToolMessage({
                     if (sessionId !== null && runnerId !== undefined)
                       requestRunnerStop(sendSessionFrame, sessionId, runnerId);
                   }}
-                  className="shrink-0 px-1.5 text-[9px] font-bold"
+                  className="shrink-0 px-1.5 text-2xs font-bold"
                 >
                   {stopping ? 'stopping…' : 'stop'}
                 </Button>

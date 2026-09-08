@@ -51,8 +51,8 @@ export function PlanReviewPrompt({ dialog, answer, cancel }: ToolPromptRenderPro
     >
       <div className="flex flex-col gap-1 px-3.5 pt-3 pb-2">
         <SectionLabel>plan review</SectionLabel>
-        <p className="text-[13px] leading-relaxed text-doom-hi">{dialog.title}</p>
-        <p className="text-[11px] leading-relaxed text-doom-dim">
+        <p className="text-base leading-relaxed text-doom-hi">{dialog.title}</p>
+        <p className="text-sm leading-relaxed text-doom-dim">
           Review the plan in the conversation before choosing what happens next.
         </p>
       </div>
@@ -67,7 +67,7 @@ export function PlanReviewPrompt({ dialog, answer, cancel }: ToolPromptRenderPro
       />
 
       <div className="flex min-h-[34px] items-center gap-2 border-t border-doom-border-soft px-3.5 py-2">
-        <span className="text-[10px] text-doom-faint">
+        <span className="text-xs text-doom-faint">
           {optionListHint(dialog.options.length)} · <Kbd>esc</Kbd> cancels
         </span>
         <Button variant="outline" size="sm" data-testid="plan-review-cancel" className="ml-auto" onClick={cancel}>

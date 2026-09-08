@@ -60,17 +60,17 @@ export function AgentThreadPanel({
       >
         {run ? (
           <>
-            <span data-testid="agent-thread-agent" className="shrink-0 truncate text-[12px] font-bold text-doom-hi">
+            <span data-testid="agent-thread-agent" className="shrink-0 truncate text-sm font-bold text-doom-hi">
               {run.agent}
             </span>
             <StatusBadge tone={RUN_BADGE[run.state].tone} data-testid="agent-thread-state">
               {RUN_BADGE[run.state].label}
             </StatusBadge>
-            <span className="shrink-0 text-[10px] text-doom-faint">{elapsedRun(run, now)}</span>
+            <span className="shrink-0 text-xs text-doom-faint">{elapsedRun(run, now)}</span>
             {run.model ? (
-              <span className="shrink-0 text-[10px] text-doom-faint">{run.model.split('/').pop() ?? run.model}</span>
+              <span className="shrink-0 text-xs text-doom-faint">{run.model.split('/').pop() ?? run.model}</span>
             ) : null}
-            <span data-testid="agent-thread-task" className="min-w-0 flex-1 truncate text-[10px] text-doom-dim">
+            <span data-testid="agent-thread-task" className="min-w-0 flex-1 truncate text-xs text-doom-dim">
               {firstLine}
             </span>
             {sessionId !== null && !isTerminalRun(run) ? (
@@ -83,7 +83,7 @@ export function AgentThreadPanel({
             ) : null}
           </>
         ) : (
-          <span data-testid="agent-thread-gone" className="text-[10px] text-doom-faint">
+          <span data-testid="agent-thread-gone" className="text-xs text-doom-faint">
             run {runId.slice(0, 8)} is no longer listed; its transcript stays readable
           </span>
         )}
@@ -97,7 +97,7 @@ export function AgentThreadPanel({
         >
           <div className="rounded-lg border border-doom-border bg-doom-deep transition-colors focus-within:border-doom-blue/60">
             <div className="flex min-w-0 items-start gap-2.5 px-3.5 pt-3">
-              <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
+              <span className="mt-[3px] shrink-0 select-none text-base leading-none text-doom-green">&gt;</span>
               <Textarea
                 variant="bare"
                 data-testid="agent-steer-input"
@@ -105,12 +105,12 @@ export function AgentThreadPanel({
                 rows={2}
                 value={guidance}
                 placeholder="Guide this agent…"
-                className="min-w-0 flex-1 text-[13px] leading-relaxed"
+                className="min-w-0 flex-1 text-base leading-relaxed"
                 onChange={(event) => setGuidance(event.target.value)}
               />
             </div>
             <div className="flex items-center gap-2 px-3.5 pt-2 pb-2.5">
-              <span data-testid="agent-steer-hint" className="text-[10px] text-doom-faint">
+              <span data-testid="agent-steer-hint" className="text-xs text-doom-faint">
                 guidance reaches this run while it is still working
               </span>
               <span className="min-w-0 flex-1" />

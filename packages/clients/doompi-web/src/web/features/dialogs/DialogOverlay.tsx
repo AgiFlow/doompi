@@ -83,31 +83,31 @@ export function DialogOverlay() {
           event.preventDefault();
           focusPrompt();
         }}
-        className="rounded-[10px] border-doom-edge-magenta"
+        className="rounded-lg border-doom-edge-magenta"
       >
         <DialogHeader className="h-[42px] border-doom-edge-magenta bg-doom-tint-magenta py-0">
           <DialogTitle data-testid="dialog-title" className="flex items-center gap-2 text-doom-magenta">
             <ShieldIcon className="h-[13px] w-[13px] shrink-0" />
             {dialog.title}
           </DialogTitle>
-          <span className="text-[9px] text-doom-faint">extension · {dialog.method}</span>
+          <span className="text-2xs text-doom-faint">extension · {dialog.method}</span>
         </DialogHeader>
 
         <DialogBody>
           {dialog.message && dialog.method === 'select' ? (
             <Panel data-testid="dialog-command" className="bg-doom-deep px-3 py-2.5">
               <div className="flex gap-2">
-                <span className="text-[12px] text-doom-green">$</span>
+                <span className="text-sm text-doom-green">$</span>
                 <pre
                   data-testid="dialog-message"
-                  className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-doom-hi"
+                  className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-doom-hi"
                 >
                   {dialog.message}
                 </pre>
               </div>
             </Panel>
           ) : dialog.message ? (
-            <p data-testid="dialog-message" className="text-[12px] leading-relaxed text-doom-text">
+            <p data-testid="dialog-message" className="text-sm leading-relaxed text-doom-text">
               {dialog.message}
             </p>
           ) : null}
@@ -143,7 +143,7 @@ export function DialogOverlay() {
         <DialogFooter variant="bar" className="h-auto min-h-[34px]">
           <span
             data-testid="dialog-hints"
-            className="w-full text-[10px] text-doom-faint sm:flex sm:w-auto sm:items-center sm:gap-1.5"
+            className="w-full text-xs text-doom-faint sm:flex sm:w-auto sm:items-center sm:gap-1.5"
           >
             {dialog.method === 'select' ? optionListHint(dialog.options.length) : 'enter confirm'} · <Kbd>esc</Kbd>{' '}
             cancels and tells the agent

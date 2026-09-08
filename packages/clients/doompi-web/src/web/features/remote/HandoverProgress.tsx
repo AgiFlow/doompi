@@ -11,11 +11,11 @@ import { Spinner } from '@agimon-ai/doompi-web-components';
 export function HandoverProgress() {
   return (
     <div className="flex flex-col gap-3" data-testid="remote-handover">
-      <div className="flex items-center gap-2 text-xs text-doom-hi">
+      <div className="flex items-center gap-2 text-sm text-doom-hi">
         <Spinner />
         Moving the cockpit into a container.
       </div>
-      <p className="text-[11px] leading-relaxed text-doom-faint">
+      <p className="text-sm leading-relaxed text-doom-faint">
         This page reconnects on its own when the container is serving, and the code to scan appears then. The first run
         for a new version builds the image, which can take several minutes. Progress is printed in the terminal that
         started the cockpit.

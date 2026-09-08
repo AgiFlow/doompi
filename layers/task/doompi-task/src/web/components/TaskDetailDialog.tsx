@@ -27,7 +27,7 @@ const DESCRIPTION_ROWS = 5;
 const MESSAGE_ROWS = 4;
 
 function FieldLabel({ children }: { children: string }) {
-  return <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">{children}</span>;
+  return <span className="text-2xs font-bold tracking-widest text-doom-faint">{children}</span>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -41,7 +41,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function ReadOnlyValue({ value, testId }: { value: string; testId: string }) {
   return (
-    <span data-testid={testId} className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-doom-dim">
+    <span data-testid={testId} className="whitespace-pre-wrap break-words text-sm leading-relaxed text-doom-dim">
       {value}
     </span>
   );
@@ -128,7 +128,7 @@ export function TaskDetailDialog({
       <DialogContent width="lg" data-testid="task-detail-dialog" data-mode={mode} aria-describedby={undefined}>
         <DialogHeader>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
-            <span className="text-[9px] text-doom-faint">task #{task.id}</span>
+            <span className="text-2xs text-doom-faint">task #{task.id}</span>
             <DialogTitle data-testid="task-detail-title" className="max-w-full break-words">
               {task.subject}
             </DialogTitle>
@@ -189,7 +189,7 @@ export function TaskDetailDialog({
                 >
                   <SelectTrigger
                     data-testid="task-detail-status-input"
-                    className="h-7 w-full min-w-0 text-[10px] sm:min-w-[200px]"
+                    className="h-7 w-full min-w-0 text-xs sm:min-w-[200px]"
                   >
                     <SelectValue />
                   </SelectTrigger>
@@ -203,7 +203,7 @@ export function TaskDetailDialog({
                 </Select>
               </Field>
               <DialogFooter className="flex-wrap sm:flex-nowrap">
-                <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+                <span className="w-full text-2xs text-doom-faint sm:w-auto">
                   saved as one prompt naming only the fields you changed
                 </span>
                 <span className="min-w-0 flex-1" />
@@ -230,7 +230,7 @@ export function TaskDetailDialog({
                 />
               </Field>
               <DialogFooter className="flex-wrap sm:flex-nowrap">
-                <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+                <span className="w-full text-2xs text-doom-faint sm:w-auto">
                   steers the run, it does not edit the task
                 </span>
                 <span className="min-w-0 flex-1" />

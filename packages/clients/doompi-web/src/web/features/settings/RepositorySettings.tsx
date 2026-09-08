@@ -32,7 +32,7 @@ const ORIGIN_LABEL: Readonly<Record<SettingsOrigin, string>> = {
 
 function OriginBadge({ origin }: { origin: SettingsOrigin }) {
   return (
-    <Badge tone={origin === 'repository' ? 'cyan' : 'neutral'} className="shrink-0 text-[8px]">
+    <Badge tone={origin === 'repository' ? 'cyan' : 'neutral'} className="shrink-0 text-2xs">
       {ORIGIN_LABEL[origin]}
     </Badge>
   );
@@ -85,16 +85,16 @@ function SingleAxis({
   return (
     <div data-testid={`repository-axis-${id}`} data-dirty={dirty} className="flex flex-col gap-1.5 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 text-[11px] font-bold text-doom-hi">{label}</span>
+        <span className="min-w-0 flex-1 text-sm font-bold text-doom-hi">{label}</span>
         {dirty ? (
-          <Badge tone="cyan" className="text-[8px]">
+          <Badge tone="cyan" className="text-2xs">
             unsaved
           </Badge>
         ) : null}
         <OriginBadge origin={origin} />
       </div>
       <Select value={selected} disabled={busy} onValueChange={(next) => onChange(next === INHERIT_VALUE ? null : next)}>
-        <SelectTrigger data-testid={`repository-select-${id}`} className="text-[11px]">
+        <SelectTrigger data-testid={`repository-select-${id}`} className="text-sm">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -107,7 +107,7 @@ function SingleAxis({
         </SelectContent>
       </Select>
       <div className="flex min-w-0 flex-col items-stretch gap-1.5 min-[480px]:flex-row min-[480px]:items-start min-[480px]:gap-2">
-        <span className="min-w-0 flex-1 text-[9px] leading-relaxed text-doom-faint">
+        <span className="min-w-0 flex-1 text-2xs leading-relaxed text-doom-faint">
           {optionDetail(options, shown) || detail}
         </span>
         {dirty ? (
@@ -116,7 +116,7 @@ function SingleAxis({
             size="xs"
             disabled={busy}
             onClick={onRevert}
-            className="self-end text-[9px] min-[480px]:shrink-0 min-[480px]:self-auto"
+            className="self-end text-2xs min-[480px]:shrink-0 min-[480px]:self-auto"
           >
             revert
           </Button>
@@ -126,7 +126,7 @@ function SingleAxis({
             size="xs"
             disabled={busy}
             onClick={() => onChange(null)}
-            className="self-end text-[9px] min-[480px]:shrink-0 min-[480px]:self-auto"
+            className="self-end text-2xs min-[480px]:shrink-0 min-[480px]:self-auto"
           >
             clear override
           </Button>
@@ -156,9 +156,9 @@ function DomainsAxis({ view, draft, dirty, busy, onChange, onRevert }: DomainsAx
   return (
     <div data-testid="repository-axis-domains" data-dirty={dirty} className="flex flex-col gap-2 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 text-[11px] font-bold text-doom-hi">domains</span>
+        <span className="min-w-0 flex-1 text-sm font-bold text-doom-hi">domains</span>
         {dirty ? (
-          <Badge tone="cyan" className="text-[8px]">
+          <Badge tone="cyan" className="text-2xs">
             unsaved
           </Badge>
         ) : null}
@@ -177,29 +177,29 @@ function DomainsAxis({ view, draft, dirty, busy, onChange, onRevert }: DomainsAx
               disabled={busy}
               title={domain.description}
               onClick={() => onChange(toggled(domain.name))}
-              className={active ? 'text-[9px] text-doom-blue' : 'text-[9px] text-doom-dim'}
+              className={active ? 'text-2xs text-doom-blue' : 'text-2xs text-doom-dim'}
             >
               {domain.name}
             </Button>
           );
         })}
         {view.catalogs.domains.length === 0 ? (
-          <span className="text-[10px] text-doom-faint">no domains are configured.</span>
+          <span className="text-xs text-doom-faint">no domains are configured.</span>
         ) : null}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 text-[9px] text-doom-faint">
+        <span className="min-w-0 flex-1 text-2xs text-doom-faint">
           {selected.length === 0 ? 'No domains selected.' : selected.join(', ')}
         </span>
-        <Button variant="ghost" size="xs" disabled={busy} onClick={() => onChange([])} className="text-[9px]">
+        <Button variant="ghost" size="xs" disabled={busy} onClick={() => onChange([])} className="text-2xs">
           select none
         </Button>
         {dirty ? (
-          <Button variant="ghost" size="xs" disabled={busy} onClick={onRevert} className="text-[9px]">
+          <Button variant="ghost" size="xs" disabled={busy} onClick={onRevert} className="text-2xs">
             revert
           </Button>
         ) : axis.origin === 'repository' ? (
-          <Button variant="ghost" size="xs" disabled={busy} onClick={() => onChange(null)} className="text-[9px]">
+          <Button variant="ghost" size="xs" disabled={busy} onClick={() => onChange(null)} className="text-2xs">
             clear override
           </Button>
         ) : null}
@@ -296,13 +296,13 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
       />
 
       {repository === null ? (
-        <p data-testid="repository-settings-empty" className="text-[11px] text-doom-faint">
+        <p data-testid="repository-settings-empty" className="text-sm text-doom-faint">
           open a session inside a .doom or Git repository to configure it here.
         </p>
       ) : null}
 
       {error === '' ? null : (
-        <p data-testid="repository-settings-error" className="text-[11px] text-doom-red">
+        <p data-testid="repository-settings-error" className="text-sm text-doom-red">
           {error}
         </p>
       )}
@@ -353,16 +353,16 @@ export function RepositorySettings({ repository }: { repository: SettingsReposit
               loading={busy}
               disabled={busy || dirty === 0}
               onClick={() => void save()}
-              className="text-[10px]"
+              className="text-xs"
             >
               save defaults
             </Button>
             {dirty === 0 ? null : (
-              <Button variant="ghost" size="xs" disabled={busy} onClick={() => setDrafts({})} className="text-[10px]">
+              <Button variant="ghost" size="xs" disabled={busy} onClick={() => setDrafts({})} className="text-xs">
                 discard
               </Button>
             )}
-            <span className="min-w-0 basis-full text-[9px] text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
+            <span className="min-w-0 basis-full text-2xs text-doom-faint min-[480px]:basis-auto min-[480px]:flex-1">
               {dirty > 0 ? `${String(dirty)} unsaved ${dirty === 1 ? 'axis' : 'axes'}` : note}
             </span>
           </footer>

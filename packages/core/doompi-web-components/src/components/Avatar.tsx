@@ -27,7 +27,7 @@ export function AvatarFallback({ className, ...props }: ComponentProps<typeof Av
   return (
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
-      className={cn('flex h-full w-full items-center justify-center text-[10px] font-bold text-doom-dim', className)}
+      className={cn('flex h-full w-full items-center justify-center text-xs font-bold text-doom-dim', className)}
       {...props}
     />
   );

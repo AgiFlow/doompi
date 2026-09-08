@@ -27,7 +27,7 @@ function Detail({ workflow }: { workflow: WorkflowCatalogEntryView }) {
     ['file', workflow.relativePath],
   ];
   return (
-    <dl data-testid={`catalog-detail-${workflow.name}`} className="flex flex-col gap-1 pt-1 text-[9px]">
+    <dl data-testid={`catalog-detail-${workflow.name}`} className="flex flex-col gap-1 pt-1 text-2xs">
       {rows.map(([label, value]) => (
         <div key={label} className="flex gap-2">
           <dt className="w-16 shrink-0 text-doom-faint">{label}</dt>
@@ -69,26 +69,26 @@ function WorkflowRow({
       }`}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[12px] font-bold text-doom-hi">{workflow.name}</span>
+        <span className="truncate text-sm font-bold text-doom-hi">{workflow.name}</span>
         {workflow.tags.map((tag) => (
           <Badge key={tag} size="xs" className="shrink-0">
             {tag}
           </Badge>
         ))}
         <span className="min-w-0 flex-1" />
-        <span className={`shrink-0 text-[9px] ${workflow.error === undefined ? 'text-doom-cyan' : 'text-doom-red'}`}>
+        <span className={`shrink-0 text-2xs ${workflow.error === undefined ? 'text-doom-cyan' : 'text-doom-red'}`}>
           {workflow.error === undefined ? `${jobs} job${jobs === 1 ? '' : 's'}` : 'unreadable'}
         </span>
       </div>
-      <span className="truncate text-[10px] text-doom-dim">{workflow.description || workflow.relativePath}</span>
+      <span className="truncate text-xs text-doom-dim">{workflow.description || workflow.relativePath}</span>
       {workflow.error === undefined ? (
-        <span className="truncate text-[9px] text-doom-faint">
+        <span className="truncate text-2xs text-doom-faint">
           {workflow.inputs.length} input{workflow.inputs.length === 1 ? '' : 's'} ·{' '}
           {workflow.runners === undefined ? 'any runner' : workflow.runners.join(', ') || 'no runner in common'}
           {workflow.artifacts.length > 0 ? ` · ${workflow.artifacts.length} artifacts` : ''}
         </span>
       ) : (
-        <span className="truncate text-[9px] text-doom-red">{workflow.error}</span>
+        <span className="truncate text-2xs text-doom-red">{workflow.error}</span>
       )}
       {selected ? (
         <div className="flex items-center gap-3 pt-0.5">
@@ -179,7 +179,7 @@ export function WorkflowCatalogDrawer({
       className="flex w-[min(440px,calc(100vw-24px))] shrink-0 flex-col overflow-hidden border-l border-doom-border bg-doom-rail outline-none"
     >
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border px-4">
-        <span className="text-[13px] font-bold text-doom-hi">workflow catalog</span>
+        <span className="text-base font-bold text-doom-hi">workflow catalog</span>
         <Badge size="xs" data-testid="catalog-count">
           {state.workflows.length} workflow{state.workflows.length === 1 ? '' : 's'}
         </Badge>
@@ -200,7 +200,7 @@ export function WorkflowCatalogDrawer({
       </div>
       <div role="listbox" className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
         {shown.length === 0 ? (
-          <p data-testid="catalog-empty" className="px-4 py-3 text-[10px] text-doom-faint">
+          <p data-testid="catalog-empty" className="px-4 py-3 text-xs text-doom-faint">
             {state.warning ??
               (state.workflows.length === 0
                 ? 'no workflows found for this session; add one under automations/workflows'
@@ -220,8 +220,8 @@ export function WorkflowCatalogDrawer({
         ))}
       </div>
       <div className="flex h-8 shrink-0 items-center justify-between border-t border-doom-border-soft bg-doom-deep px-4">
-        <span className="text-[9px] text-doom-faint">↑↓ choose · enter launch · i inspect · esc close</span>
-        <span className="text-[9px] text-doom-faint">{state.cwd}</span>
+        <span className="text-2xs text-doom-faint">↑↓ choose · enter launch · i inspect · esc close</span>
+        <span className="text-2xs text-doom-faint">{state.cwd}</span>
       </div>
     </aside>
   );
