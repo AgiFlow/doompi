@@ -52,9 +52,10 @@ import {
 } from '../adapters/syncState.ts';
 import { HARNESS_STATE_POINTER, loadHarnessState } from '../adapters/config/harnessState';
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
-import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
+import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
 import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
-import { loadDoomConfig } from '../services/config/projectTrust';
+import { loadDoomConfigLenient } from '../services/config/projectTrust';
 import { createLayerResolvers, PERSONA_ENTRY, resolveExtensionComposition } from '../services/extensionAssembler.ts';
 import type { HarnessOptions } from '../types/interfaces/harness';
 import { resolveDoomConfigurationRoot } from '../adapters/repository/repository';
@@ -150,6 +151,20 @@ export function recordedEnvironment(environment: NodeJS.ProcessEnv): Record<stri
 }
 
 /**
+ * Reports the config keys sync chose to ignore.
+ *
+ * Never fatal. A key nobody recognises is usually a config written for another
+ * version of a layer, and refusing to build over it is worse than proceeding
+ * without it. The strict check lives in `doompi doctor`.
+ */
+function writeConfigDiagnostics(diagnostics: readonly ConfigDiagnostic[], output: SyncOutput): void {
+  if (diagnostics.length === 0) return;
+  const lines = diagnostics.map((entry) => `  ${entry.filePath}: ${entry.path}`).join('\n');
+  output.write(
+    `config:   ignored ${String(diagnostics.length)} unsupported key(s); run doompi doctor for the strict check\n${lines}\n`,
+  );
+}
+/**
  * Layers the repository's declared selection under the usual resolution.
  *
  * `.doom/config.yaml` holds what the repository selects by default, the way
@@ -158,7 +173,7 @@ export function recordedEnvironment(environment: NodeJS.ProcessEnv): Record<stri
  * exported variable, then the declared default.
  */
 export function selectionEnvironment(repoRoot: string, environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const { selection } = loadDoomConfig(repoRoot);
+  const { selection } = loadDoomConfigLenient(repoRoot).config;
   if (!selection) return environment;
   return {
     ...environment,
@@ -432,7 +447,11 @@ export class SyncCommand {
     const repoRoot = inheritedRoot
       ? path.resolve(inheritedRoot)
       : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
-    const defaultMajorMode = loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode;
+    // Sync tolerates keys it does not recognise so a config written against a
+    // different version cannot break a build. `doompi doctor` reports them.
+    const modes = loadMajorModesConfigLenient(repoRoot, homeDirectory);
+    const configDiagnostics = [...loadDoomConfigLenient(repoRoot, homeDirectory).diagnostics, ...modes.diagnostics];
+    const defaultMajorMode = modes.config.defaultMajorMode;
     const defaultDomains = loadDomains(repoRoot, homeDirectory).defaultDomains;
     const parsed = parseHarnessArgs(
       rest,
@@ -456,8 +475,9 @@ export class SyncCommand {
         throw new Error(`DoomPi Pi integration is not ready:\n${drift.map((entry) => `  ${entry}`).join('\n')}`);
       }
     }
+    writeConfigDiagnostics(configDiagnostics, output);
     if (check) {
-      const majorModesConfig = loadMajorModesConfig(repoRoot, homeDirectory);
+      const majorModesConfig = modes.config;
       const missingPackages = missingLayerPackageSpecifiers(
         majorModesConfig,
         Object.keys(majorModesConfig.layers),

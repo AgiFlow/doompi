@@ -1,0 +1,30 @@
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { describe, expect, it } from 'vitest';
+
+const run = promisify(execFile);
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ENTRY = path.join(PACKAGE_ROOT, 'src/bin/serve.ts');
+
+/**
+ * Spawned rather than imported: the point of the lazy imports in serve.ts is
+ * that `--help` and `--version` answer before the cockpit's dependencies load,
+ * and a test that imported the entry would have paid that cost already. The
+ * hub's WebAuthn stack prints two experimental-feature warnings when it loads,
+ * so a clean stderr is the observable proof it did not.
+ */
+describe('doompi-web informational flags', () => {
+  it('prints help on stdout and nothing on stderr', async () => {
+    const { stdout, stderr } = await run(process.execPath, [ENTRY, '--help'], { cwd: PACKAGE_ROOT });
+    expect(stdout).toContain('Usage: doompi-web [options]');
+    expect(stderr).toBe('');
+  });
+
+  it('prints the version on stdout and nothing on stderr', async () => {
+    const { stdout, stderr } = await run(process.execPath, [ENTRY, '--version'], { cwd: PACKAGE_ROOT });
+    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    expect(stderr).toBe('');
+  });
+});

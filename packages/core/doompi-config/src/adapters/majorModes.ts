@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import type { ConfigDiagnostic } from '../types/config.ts';
 import { DOOM_DIR, type DoomConfigProvenance, readDoomConfigSources } from './layeredConfig.ts';
 
 export type LayerPackageConfig = Record<string, unknown>;
@@ -109,11 +110,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Where a lenient load collects unknown keys instead of throwing.
+ *
+ * Same shape as the sink in configPolicy, for the same reason: `assertKnownKeys`
+ * is the only reader and the whole load is synchronous.
+ */
+let unknownKeySink: ConfigDiagnostic[] | undefined;
+
 function assertKnownKeys(value: Record<string, unknown>, keys: readonly string[], location: string): void {
   const unsupported = Object.keys(value).filter((key) => !keys.includes(key));
-  if (unsupported.length > 0) {
-    throw new Error(`${location} has unsupported field(s): ${unsupported.join(', ')}`);
+  if (unsupported.length === 0) return;
+  if (unknownKeySink !== undefined) {
+    for (const key of unsupported) {
+      unknownKeySink.push({
+        filePath: MAJOR_MODES_RELATIVE_PATH,
+        path: key,
+        message: `${location} has unsupported field`,
+      });
+    }
+    return;
   }
+  throw new Error(`${location} has unsupported field(s): ${unsupported.join(', ')}`);
 }
 
 function parseLayerPackage(layerName: string, value: unknown, index: number): string | LayerPackage {
@@ -452,4 +470,25 @@ export function filterHookDisabledLayers(
 ): string[] {
   if (hooks) return [...layers];
   return layers.filter((layer) => (config.layers[layer]?.hookGroups?.length ?? 0) === 0);
+}
+
+/**
+ * Reads layers and major modes, tolerating unknown keys.
+ *
+ * `doompi sync` uses this so a modes.yaml written against a different set of
+ * layer packages cannot break a build. Every other caller keeps the strict
+ * `loadMajorModesConfig`, and `doompi doctor` still reports what was tolerated.
+ */
+export function loadMajorModesConfigLenient(
+  repoRoot: string,
+  homeDirectory: string = os.homedir(),
+): { config: MajorModesConfig; diagnostics: ConfigDiagnostic[] } {
+  const diagnostics: ConfigDiagnostic[] = [];
+  const previous = unknownKeySink;
+  unknownKeySink = diagnostics;
+  try {
+    return { config: loadMajorModesConfig(repoRoot, homeDirectory), diagnostics };
+  } finally {
+    unknownKeySink = previous;
+  }
 }

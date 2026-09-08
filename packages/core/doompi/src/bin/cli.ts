@@ -8,21 +8,24 @@
  */
 
 import { HARNESS_VERSION, printHelp } from '../commands/cli/help.ts';
+import { informationalRequest, routeCommand } from '../commands/cli/router.ts';
 
 const args = process.argv.slice(2);
-const command = args[0];
-const ownsArguments = command === 'init' || command === 'sync' || command === 'compat';
+// A named subcommand parses its own arguments, including its own --help, so the
+// fast path below must not answer for it.
+const ownsArguments = routeCommand(args) !== undefined;
 
 // Keep informational startup independent from telemetry, configuration, Pi,
 // and the extension compiler. Those graphs are useful for a real command but
 // used to account for almost all of `doompi --help` and `doompi --version`.
+const informational = ownsArguments ? undefined : informationalRequest(args);
 const informationalExit =
-  !ownsArguments && args.some((argument) => argument === '--help' || argument === '-h')
+  informational === 'help'
     ? (() => {
         printHelp();
         return 0;
       })()
-    : !ownsArguments && args.some((argument) => argument === '--version' || argument === '-v')
+    : informational === 'version'
       ? (() => {
           process.stdout.write(`${HARNESS_VERSION}\n`);
           return 0;

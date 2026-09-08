@@ -4,6 +4,7 @@
 
 export { BaseCommand } from '../../commands/baseCommand';
 export { CompatibilityCommand } from '../../commands/compatibilityCommand';
+export { DoctorCommand, type DoctorOutput } from '../../commands/doctorCommand';
 export { EmitMcpCommand } from '../../commands/emitMcpCommand';
 export { ExplainCommand, explainMatrix, type MatrixExplanation } from '../../commands/explainCommand';
 export { InitCommand } from '../../commands/initCommand';

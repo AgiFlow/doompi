@@ -4,6 +4,7 @@ export {
   globalDoomConfigPath,
   loadDoomConfig,
   loadDoomConfigAsync,
+  loadDoomConfigLenient,
   loadDoomConfigLayers,
   repositoryDoomConfigPath,
   resolvePlanningPlansDirectory,
@@ -73,6 +74,7 @@ export {
   layerEntries,
   layerHookGroups,
   loadMajorModesConfig,
+  loadMajorModesConfigLenient,
   resolveLayers,
   resolvePackageConfigurations,
 } from '../adapters/majorModes.ts';

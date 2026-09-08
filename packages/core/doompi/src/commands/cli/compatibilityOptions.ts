@@ -19,6 +19,11 @@ import {
 } from './matrixOptions.ts';
 
 const COMPATIBILITY_PROVIDERS = new Set<CompatibilityProvider>(['antigravity', 'claude', 'codex']);
+
+/** Whether a token names a provider, without throwing the way parsing does. */
+export function isCompatibilityProvider(value: string | undefined): value is CompatibilityProvider {
+  return value !== undefined && COMPATIBILITY_PROVIDERS.has(value as CompatibilityProvider);
+}
 const PROVIDER_ARGUMENT_SEPARATOR = '--';
 const SKIP_PERMISSIONS_OPTION = '--skip-permissions';
 

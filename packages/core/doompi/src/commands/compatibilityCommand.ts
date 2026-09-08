@@ -9,7 +9,13 @@ import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { launchCompatibility } from '../adapters/compatibility';
 import { buildCompatibilityContext } from '../adapters/compatibilityContext';
 import { findRepositoryRoot } from '../adapters/repository/repository';
-import { parseCompatibilityArgs, parseCompatibilityProvider } from './cli/compatibilityOptions.ts';
+import {
+  isCompatibilityProvider,
+  parseCompatibilityArgs,
+  parseCompatibilityProvider,
+} from './cli/compatibilityOptions.ts';
+import { compatHelp } from './cli/help.ts';
+import { wantsHelp } from './cli/router.ts';
 
 const COMPAT_COMMAND = 'compat';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
@@ -35,6 +41,12 @@ export class CompatibilityCommand {
     environment: NodeJS.ProcessEnv = process.env,
     currentDirectory = process.cwd(),
   ): Promise<number> {
+    // Only when no provider was named. Once one is, every remaining argument
+    // belongs to that frontend, so `compat claude --help` is Claude's help.
+    if (!isCompatibilityProvider(args[1]) && wantsHelp(args.slice(1))) {
+      process.stdout.write(compatHelp());
+      return 0;
+    }
     const provider = parseCompatibilityProvider(args[1]);
     const inheritedRoot = environment[HARNESS_ROOT_ENV];
     const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : findRepositoryRoot(currentDirectory);

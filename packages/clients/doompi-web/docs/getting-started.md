@@ -32,6 +32,9 @@ Open <http://127.0.0.1:7433>. The loopback bind is deliberate: the local listene
 
 On first start, the command runs its bundled `doompi init` when the personal DoomPi directory is missing. It then synchronizes the global cockpit root, watches the session registry, and attaches to live server records.
 
+`doompi-web --help` lists every option and `doompi-web --version` prints the installed version. Both answer without
+starting the cockpit, so neither loads the server graph. Options accept either `--port 7433` or `--port=7433`.
+
 A second process using the same package version reports the existing URL and exits. A different version may replace an idle loopback hub, but it does not interrupt a hub with live sessions.
 
 ## How sessions appear

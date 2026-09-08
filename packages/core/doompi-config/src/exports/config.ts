@@ -3,6 +3,7 @@ export {
   globalDoomConfigPath,
   loadDoomConfig,
   loadDoomConfigAsync,
+  loadDoomConfigLenient,
   loadDoomConfigLayers,
   repositoryDoomConfigPath,
   resolvePlanningPlansDirectory,
@@ -22,4 +23,11 @@ export {
   resolveVoiceConfig,
   valueAtKeyPath,
 } from '../services/configPolicy.ts';
-export type { ConfigValueOrigin, DoomConfigLayer, DoomConfigLayers } from '../types/config.ts';
+export type {
+  ConfigDiagnostic,
+  ConfigValueOrigin,
+  DoomConfigLayer,
+  DoomConfigLayers,
+  LenientParseOptions,
+  LenientParseResult,
+} from '../types/config.ts';

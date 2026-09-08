@@ -309,3 +309,28 @@ export interface DoomConfigLayers {
   /** The effective value at this key path, or undefined when nothing set it. */
   valueAt(keyPath: readonly string[]): unknown;
 }
+
+/**
+ * One tolerated problem found while reading a config file.
+ *
+ * Carries the file it came from because a lenient load merges the global and
+ * repository files, and "unsupported field: voice.engine" is unactionable
+ * without saying which of the two declared it.
+ */
+export interface ConfigDiagnostic {
+  filePath: string;
+  /** Dotted path to the offending key, for example `voice.recorder.typo`. */
+  path: string;
+  message: string;
+}
+
+/** Opts a parse into collecting unknown keys instead of throwing on them. */
+export interface LenientParseOptions {
+  lenient: true;
+}
+
+/** What a lenient parse returns in place of a bare config. */
+export interface LenientParseResult {
+  config: DoomConfig;
+  diagnostics: ConfigDiagnostic[];
+}

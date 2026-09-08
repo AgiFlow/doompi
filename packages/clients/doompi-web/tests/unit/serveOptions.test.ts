@@ -12,9 +12,25 @@ describe('doompi-web command options', () => {
     });
   });
 
-  it('accepts both forms of the pinned repository directory', () => {
+  it('accepts both forms of every flag', () => {
     expect(parseServeOptions(['--dir=/workspace/inline']).directory).toBe('/workspace/inline');
     expect(parseServeOptions(['--dir', '/workspace/separate']).directory).toBe('/workspace/separate');
+    expect(parseServeOptions(['--port=9999']).port).toBe(9999);
+    expect(parseServeOptions(['--port', '9999']).port).toBe(9999);
+    expect(parseServeOptions(['--registry-dir=/tmp/run']).registryDir).toBe('/tmp/run');
+    expect(parseServeOptions(['--host=0.0.0.0']).host).toBe('0.0.0.0');
+  });
+
+  it('rejects unknown flags and bare arguments', () => {
+    expect(() => parseServeOptions(['--nope'])).toThrow('Unknown option "--nope".');
+    expect(() => parseServeOptions(['-x'])).toThrow('Unknown option "-x".');
+    expect(() => parseServeOptions(['serve'])).toThrow('Unknown option "serve".');
+    expect(() => parseServeOptions(['--port', '8123', 'extra'])).toThrow('Unknown option "extra".');
+  });
+
+  it('rejects a port that is not a port', () => {
+    expect(() => parseServeOptions(['--port', 'http'])).toThrow('--port expects a port number, received "http".');
+    expect(() => parseServeOptions(['--port=70000'])).toThrow('--port expects a port number, received "70000".');
   });
 
   it('recognizes standard help and version flags', () => {

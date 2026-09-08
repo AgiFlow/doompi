@@ -9,6 +9,8 @@ import { writePiExtensionAlias } from '../adapters/piExtensionAlias.ts';
 import { piAgentDirectory, piThemeDirectory, readPiSettings, writePiSettings } from '../adapters/piSettings.ts';
 import { DEFAULT_THEME_NAME, writeDefaultTheme } from '@agimon-ai/doompi-ui/theme';
 import { InitPresenter, type InitOutput, type PiIntegrationSummary } from './initPresenter.ts';
+import { initHelp } from './cli/help.ts';
+import { wantsHelp } from './cli/router.ts';
 
 const INIT_COMMAND = 'init';
 const FORCE_FLAG = '--force';
@@ -55,6 +57,10 @@ export class InitCommand {
   ): Promise<number> {
     const flags = args.slice(1);
     const unknown = flags.find((flag) => flag !== FORCE_FLAG);
+    if (wantsHelp(args)) {
+      process.stdout.write(initHelp());
+      return 0;
+    }
     if (unknown !== undefined) throw new Error(`doompi init does not accept ${unknown}`);
 
     const presenter = new InitPresenter(output, environment);

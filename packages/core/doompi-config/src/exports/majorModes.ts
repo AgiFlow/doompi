@@ -14,6 +14,7 @@ export {
   layerEntries,
   layerHookGroups,
   loadMajorModesConfig,
+  loadMajorModesConfigLenient,
   resolveLayers,
   resolvePackageConfigurations,
 } from '../adapters/majorModes.ts';

@@ -24,6 +24,11 @@ Use `dpi` to evaluate the distribution, `doompi init` to make it part of regular
 | `doompi init --force` | Replaces the four personal `.doom` files and refreshes the Pi integration resources.                              |
 | `doompi sync`         | Installs required packages and publishes state for the registered integration without rewriting Pi user settings. |
 | `doompi sync --check` | Checks package resolution, drift, artifacts, alias, theme, and Pi settings without writing.                       |
+| `doompi doctor`       | Runs the strict configuration check, then everything `sync --check` reports. Changes nothing.                     |
+
+Every command accepts `-h`/`--help`, including the subcommands: `doompi sync --help` prints help rather than running a sync.
+
+`doompi sync` reports unsupported keys in `.doom/config.yaml` and `.doom/modes.yaml` and then ignores them, so a config written against a different version cannot break a build. Invalid values for keys it does recognize still fail. `doompi doctor` is the strict check that reports those keys as problems.
 
 Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Publication is atomic and retains one superseded generation. See [Composition and runtime bundling](bundling.md) for the lifecycle.
 
@@ -74,8 +79,54 @@ Compatibility mode resolves the DoomPi matrix and launches the named frontend. I
 
 `--skip-permissions` disables the frontend's approval prompts for that run. DoomPi maps it to `--dangerously-skip-permissions` for Claude and Antigravity and `--yolo` for Codex, and prints a warning. Scoping the loaded tools and approving individual actions are separate controls. See [Approval prompts in compatibility mode](trust-and-data-boundaries.md#approval-prompts-in-compatibility-mode).
 
+## Diagnostics
+
+```bash
+doompi doctor
+```
+
+Reports what is wrong without changing anything, grouped by area:
+
+```text
+config.yaml   ok
+modes.yaml    ok
+packages      ok
+sync state    ok
+drift         2 problem(s)
+  selection changed since the last sync
+  precompiled runtime is missing or stale
+
+2 problem(s) found
+```
+
+It exits non-zero when any check fails. The configuration sections are strict, so they report the unsupported keys `doompi sync` ignores. When either config file fails to parse, the remaining sections are skipped rather than reported against a composition that could not be resolved.
+
+Use `doompi sync --check` in CI when the question is only whether synchronized state is stale; its output and exit codes are unchanged.
+
+## The web cockpit
+
+```bash
+doompi-web [options]
+```
+
+| Option                  | Effect                                           |
+| ----------------------- | ------------------------------------------------ |
+| `--dir <path>`          | Pin, sync, and watch one repository composition. |
+| `--registry-dir <path>` | Session registry. Defaults to `~/.doompi/run`.   |
+| `--spawn-command <cmd>` | Command used to launch sessions.                 |
+| `--port <number>`       | HTTP port. Defaults to `7433`.                   |
+| `--host <address>`      | Bind address. Defaults to `127.0.0.1`.           |
+| `--assets <path>`       | Override the built SPA directory.                |
+| `--state-dir <path>`    | Remote-access and cockpit state directory.       |
+| `--cloudflared <path>`  | Explicit `cloudflared` binary.                   |
+| `-h`, `--help`          | Print help.                                      |
+| `-v`, `--version`       | Print the installed package version.             |
+
+Every option accepts both `--port 7433` and `--port=7433`.
+
 ## Troubleshooting and direct use
 
+- Run `doompi doctor` first: it covers configuration, packages, sync state, and drift in one pass.
 - Run `doompi sync --check` to identify drift, then `doompi sync` to install missing packages and publish a replacement generation.
 - Leader menus require Pi's interactive TUI. Commands and tools may remain available in JSON, RPC, and other headless modes when their package supports those modes.
 - Runner tries bundled RMUX, `rmux` on `PATH`, then `tmux` on `PATH`. Without one, non-interactive commands use a supervised subprocess and interactive commands are rejected.

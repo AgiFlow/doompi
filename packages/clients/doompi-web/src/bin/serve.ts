@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 
 import os from 'node:os';
-import { createCockpitContainer } from '../adapters/cockpitContainer.ts';
-import { createComputerUseIpcBinding } from '../adapters/computerUseIpc.ts';
-import { handOffRemoteAccess } from '../adapters/cockpitHandoff.ts';
-import { ensureDoomInitialized } from '../adapters/doomInitialization.ts';
-import { hubAnswers, probeHub } from '../adapters/hubProbe.ts';
-import { packagedVersion, serveWeb } from '../adapters/httpServer.ts';
-import { defaultRemoteStateDir } from '../adapters/remoteAccessStore.ts';
-import { relaunchSessions } from '../adapters/sessionRelaunch.ts';
-import { REGISTRY_DIR_ENV, resolveRegistryDir } from '../services/registryStore.ts';
+import { packagedVersion } from '../adapters/packageVersion.ts';
 import { isLoopbackHost, parseServeOptions, serveHelp } from '../services/serveOptions.ts';
+// Everything else loads inside main, after --help and --version have answered.
+// Reaching the cockpit's adapters pulls in WebAuthn, the Pi server and the rest
+// of the hub, which costs a second of startup and prints experimental-feature
+// warnings over the output of a command that only had to print one line.
+import type { createCockpitContainer } from '../adapters/cockpitContainer.ts';
 import type { WebServer } from '../types/bridge.ts';
 import type { MigratingSession, RemoteAccessSettings } from '../types/remoteAccess.ts';
 
@@ -29,6 +26,7 @@ function notice(message: string): void {
  * the probe is only this machine's pid when the hub is on this machine.
  */
 async function stopRunningHub(pid: number, host: string, port: number): Promise<boolean> {
+  const { hubAnswers } = await import('../adapters/hubProbe.ts');
   try {
     process.kill(pid, 'SIGTERM');
   } catch {
@@ -52,6 +50,23 @@ async function main(): Promise<void> {
     process.stdout.write(`${packagedVersion()}\n`);
     return;
   }
+  const [
+    { createCockpitContainer },
+    { createComputerUseIpcBinding },
+    { ensureDoomInitialized },
+    { hubAnswers, probeHub },
+    { serveWeb },
+    { defaultRemoteStateDir },
+    { REGISTRY_DIR_ENV, resolveRegistryDir },
+  ] = await Promise.all([
+    import('../adapters/cockpitContainer.ts'),
+    import('../adapters/computerUseIpc.ts'),
+    import('../adapters/doomInitialization.ts'),
+    import('../adapters/hubProbe.ts'),
+    import('../adapters/httpServer.ts'),
+    import('../adapters/remoteAccessStore.ts'),
+    import('../services/registryStore.ts'),
+  ]);
   await ensureDoomInitialized({ homeDirectory: os.homedir(), onNotice: notice });
   const url = `http://${options.host}:${String(options.port)}`;
   const stateDir = options.stateDir ?? defaultRemoteStateDir();
@@ -195,6 +210,8 @@ async function handOver(input: {
   host: string;
   adopt: (shutDown: () => Promise<void>) => void;
 }): Promise<void> {
+  const { handOffRemoteAccess } = await import('../adapters/cockpitHandoff.ts');
+  const { relaunchSessions } = await import('../adapters/sessionRelaunch.ts');
   await input.serving.close();
   const started = await input.container.start({
     workspaces: input.handover.settings.sandbox.workspaces.map((workspace) => ({ path: workspace })),
