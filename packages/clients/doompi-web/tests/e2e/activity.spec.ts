@@ -31,6 +31,10 @@ test('keeps the workflow launcher available before any package reports work', as
   await expect(page.getByTestId('activity-workflows')).toBeVisible();
   await expect(page.getByTestId('activity-workflow-launch')).toBeVisible();
   await expect(page.getByTestId('activity-empty')).toBeHidden();
+  await expect(page.getByTestId('activity-loops')).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
+  await expect(page.getByTestId('activity-busy')).toBeHidden();
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
 // The prompt library is no longer a dock group; it is reached from the

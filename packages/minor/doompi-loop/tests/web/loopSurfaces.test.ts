@@ -22,7 +22,7 @@ describe('Loop web surfaces', () => {
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }),
     ]);
-    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(true);
+    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(false);
     expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive(null)).toBe(false);
     expect(webPlugin.activitySections?.map(({ id }) => id)).toEqual(['loops']);
     expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.registration', 'loop.items']);

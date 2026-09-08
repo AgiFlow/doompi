@@ -5,7 +5,7 @@ import type { WebPluginDefinition, WebPluginSlotProps } from '@agimon-ai/doompi-
 import type { ComponentType } from 'react';
 import { afterAll, describe, expect, it } from 'vitest';
 import { scanWebPlugins } from '../../src/adapters/webPluginScan.ts';
-import { PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition.ts';
+import { activityGroups, PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition.ts';
 import {
   installWebPlugins,
   pluginMinorModes,
@@ -125,7 +125,9 @@ describe('the workspace web plugin composition', () => {
     expect(loop?.activityGroups).toEqual([
       expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: 'doom-loop-instances', order: 40 }),
     ]);
-    expect(loop?.activityGroups?.[0]?.activeSource?.isActive('session-1')).toBe(true);
+    expect(activityGroups({}, [], 'session-1')).toContainEqual(
+      expect.objectContaining({ name: 'loops', active: false }),
+    );
     expect(loop?.activitySections?.map(({ id }) => id)).toEqual(['loops']);
   });
 

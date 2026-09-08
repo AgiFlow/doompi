@@ -9,7 +9,8 @@ import { LoopActivityItems, LoopsActivitySection } from './components/LoopsActiv
 const LOOPS_GROUP = { key: 'l', label: 'loops', detail: 'recurring prompt loops' };
 const LOOPS_ACTIVITY_SOURCE = {
   subscribe: () => () => undefined,
-  isActive: (sessionId: string | null) => sessionId !== null,
+  // Keeping the scheduler's launcher visible does not mean a result is pending.
+  isActive: (_sessionId: string | null) => false,
 };
 
 export const webPlugin = defineWebPlugin({

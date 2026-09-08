@@ -44,9 +44,9 @@ export const SAFE_TRANSITIVE_OVERRIDES = {
   '@opentelemetry/core@2.0.0 - 2.7.999': '2.8.0',
   'brace-expansion@5.0.0 - 5.0.8': '^5.0.9',
   'hono@4.0.0 - 4.12.33': '^4.12.34',
-  'js-yaml@4.0.0 - 4.3.0': '^4.3.1',
+  'js-yaml@4.0.0 - 4.3.1': '^4.3.2',
   'js-yaml@5.0.0 - 5.2.1': '^5.2.2',
-  'liquidjs@10.0.0 - 10.27.0': '^10.27.1',
+  'liquidjs@10.0.0 - 10.27.1': '^10.27.2',
   'protobufjs@8.0.0 - 8.7.1': '^8.7.2',
 } as const satisfies Readonly<Record<string, string>>;
 
