@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PLUGIN_ROOTS_FILE } from '../services/webDevRoots.ts';
+import { bundleAssetPolicyPlugin } from './bundleAssetPolicy.ts';
 import { SERVER_REGISTRY_FILE, webHostPackageRoot, writeSyncWebPluginModules } from './webPluginGenerate.ts';
 import { scanWebPlugins } from './webPluginScan.ts';
 import {
@@ -84,7 +85,7 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
     envDir: false,
     logLevel: 'warn',
     root: clientRoot,
-    plugins: [webPluginOverridePlugin(clientRoot, generated), react(), tailwindcss()],
+    plugins: [webPluginOverridePlugin(clientRoot, generated), react(), tailwindcss(), bundleAssetPolicyPlugin()],
     resolve: {
       dedupe: [...DEDUPED_RUNTIMES],
       alias: [...webPluginRuntimeAliases(clientRoot), webPluginCssAlias(generated)],

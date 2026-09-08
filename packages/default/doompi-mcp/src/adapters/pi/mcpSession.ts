@@ -80,6 +80,8 @@ export class McpSession {
     diagnostics: [],
   };
   private readonly options: McpSessionOptions;
+  /** Credential persistence used by the active runtime and explicit reauthorization. */
+  private tokenStore: TokenStore | undefined;
   /** Resources per server, listed on demand. Errors are never cached, so a retry re-dials. */
   private readonly resourceCache = new Map<string, readonly McpResourceView[]>();
   private readonly changeListeners = new Set<() => void>();
@@ -244,6 +246,7 @@ export class McpSession {
     this.resourceCache.clear();
     const configSources = this.configSources();
     const tokenStore = this.options.tokenStore ?? (await createTokenStore());
+    this.tokenStore = tokenStore;
     await runtime.start({
       configSources,
       tokenStore,
@@ -310,10 +313,12 @@ export class McpSession {
   }
 
   /**
-   * Reconnects one server, running its OAuth flow when it demands one.
+   * Reconnects one server with a fresh OAuth registration.
    *
-   * The existing connection is dropped first: a server holding a stale token would
-   * otherwise keep answering from cache and never reach the authorization step.
+   * The connection is dropped before credentials are cleared so a failed disconnect
+   * does not silently sign the user out. Clearing both tokens and dynamic client
+   * information prevents a server-side registration reset from replaying a stale
+   * `client_id` forever.
    */
   async reauthorize(serverName: string): Promise<void> {
     const clientManager = this.clientManager();
@@ -325,6 +330,7 @@ export class McpSession {
     this.browserAuthorizationRequests.add(serverName);
     try {
       await clientManager.disconnectServer(serverName);
+      await this.tokenStore?.clear(serverName);
       await clientManager.ensureConnected(serverName);
     } finally {
       this.browserAuthorizationRequests.delete(serverName);

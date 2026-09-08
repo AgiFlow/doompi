@@ -45,6 +45,12 @@ Every pass can start another model turn and repeat tool or external side effects
 conservative intervals, make prompts idempotent where possible, and stop loops when the recurring
 work is complete.
 
+## Web extension slots
+
+The Loop Activity section declares `loop.registration` for start controls and `loop.items` for
+session-scoped instance rows. Other web plugins may fill either slot; Loop owns the section shell and
+renders all registered fills without requiring a feature-specific dependency.
+
 ## Extension authors: cross-extension launchers
 
 Launcher definitions use the shared Cordis service. A consumer registers a launcher and returns its

@@ -122,9 +122,7 @@ describe('the workspace web plugin composition', () => {
     const definitions = await installed();
     const loop = definitions.find(({ id }) => id === 'loop');
 
-    expect(loop?.activityGroups).toEqual([
-      { name: 'loops', keys: 'l l', statusKey: 'doom-loop-instances', hideWhenEmpty: true, order: 40 },
-    ]);
+    expect(loop?.activityGroups).toEqual([{ name: 'loops', keys: 'l l', statusKey: 'doom-loop-instances', order: 40 }]);
     expect(loop?.activitySections?.map(({ id }) => id)).toEqual(['loops']);
   });
 

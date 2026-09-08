@@ -116,9 +116,15 @@ The normal listener serves the shell built into `@agimon-ai/doompi-web`. `--asse
 
 The hub copies the selected `plugins/` output into its immutable publication store and signs a manifest containing each path, content type, byte length, and SHA-256 digest. It exposes raw publication bytes under composition- and revision-specific routes.
 
-The browser does not execute those raw URLs directly. Its service worker verifies the signature and every asset, commits the complete composition to Cache Storage, and exposes a verified local route. Only then does the shell load `composition.js` and its styles. Switching sessions activates the verified composition assigned to that session and disposes the previous session's plugin UI.
+The shell build also emits `bundle-asset-policy.json`. Vite derives it from original module ownership and emitted resource references, not hashed filenames. Only output exclusively owned by the known PDF or Mermaid graph, including the PDF worker resource, is optional. Shared and unclassified output stays in the required core. The signer includes this compact policy as a regular manifest v2 asset, so no manifest migration is needed.
 
-A failed verification or download leaves the previous verified revision in place. Assets from two revisions are not mixed.
+For the shell, the service worker first verifies the policy bytes. Missing or unsupported policy data falls back to eager activation. It revalidates matching bytes from the previous cache, fetches only missing or changed core assets with a four-request pool, and atomically commits a unique staging cache after all core checks pass. Reusable optional bytes are retained when possible, while the previous complete cache remains available for rollback and legacy offline use.
+
+An uncached optional shell asset is fetched only when requested. The worker resolves the exact path in the captured signed manifest, deduplicates concurrent misses, fetches revision-specific bytes, verifies them, and caches them before responding. It never serves an unlisted or unverified fallback. If that revision has already been superseded, one verified refresh uses the existing update notification and page reload path. Offline misses keep the feature's existing fallback or error state until reconnect and reload.
+
+Plugin composition delivery is unchanged. The browser does not execute plugin raw URLs directly. Its service worker verifies the signature and every plugin asset, commits the complete composition to Cache Storage, and exposes a verified local route. Only then does the shell load `composition.js` and its styles. Switching sessions activates the verified composition assigned to that session and disposes the previous session's plugin UI.
+
+A failed verification, download, or required cache write leaves the previous verified revision in place. Assets from two revisions are not mixed. Session data and private file bytes never enter these caches.
 
 ### Hub channels
 

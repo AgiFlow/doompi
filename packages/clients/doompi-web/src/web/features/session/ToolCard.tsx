@@ -1,3 +1,4 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import {
   collapseLines,
   MessageItem,
@@ -6,13 +7,11 @@ import {
   MessageItemStatus,
   type StatusTone,
 } from '@agimon-ai/doompi-web-components';
+import { memo } from 'react';
 import { ToolRendererBoundary } from '../../components/ToolRendererBoundary.tsx';
 import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
 import { imagesFromContent, type ToolEntry } from '../../lib/sessionModel.ts';
 import { toolMessageProps } from '../../lib/toolMessageProps.ts';
-import { useActiveSession } from '../../stores/sessionStore.ts';
-import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
-import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
 
 const MAX_PREVIEW_LINES = 12;
 
@@ -206,10 +205,15 @@ function HostToolMessage({ entry }: { entry: ToolEntry }) {
  * renderShell 'self'; the host only marks the row, catches a renderer that
  * throws, and stands in for a tool nobody claims.
  */
-export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: string | null }) {
-  useWebPluginRegistry();
-  const statuses = useActiveSession((state) => state.statuses);
-  const slotProps = usePluginSlotProps(sessionId);
+export const ToolCard = memo(function ToolCard({
+  entry,
+  slotProps,
+  statuses,
+}: {
+  entry: ToolEntry;
+  slotProps: WebPluginSlotProps;
+  statuses: Readonly<Record<string, string>>;
+}) {
   const renderer = pluginToolRenderer(entry.name, statuses);
   const state = toneOf(entry);
   const props = toolMessageProps(slotProps, entry, statuses);
@@ -227,4 +231,4 @@ export function ToolCard({ entry, sessionId }: { entry: ToolEntry; sessionId: st
       )}
     </ToolRendererBoundary>
   );
-}
+});

@@ -1,4 +1,4 @@
-import type { UserMessageActionRunContext } from '@agimon-ai/doompi-web-contracts';
+import type { UserMessageActionRunContext, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import {
   Avatar,
   AvatarFallback,
@@ -14,14 +14,13 @@ import {
   StreamCursor,
   UserIcon,
 } from '@agimon-ai/doompi-web-components';
-import { Fragment, memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import type { Store } from '@tanstack/store';
-import { useActivityGroups } from '../../lib/composition.ts';
+import { fileTabForPath, useActivityGroups, useFileLinks } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
 import { pluginToolRenderer, pluginUserMessageActions } from '../../lib/pluginRegistry.ts';
 import { focusPrompt } from '../../lib/promptFocus.ts';
-import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
 import {
   isSupportedImageMimeType,
   type ProfileIdentity,
@@ -39,8 +38,12 @@ import {
   useActiveSession,
 } from '../../stores/sessionStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
+import { openTransientTab } from '../../stores/transientTabsStore.ts';
+import { useOpenTab } from '../../stores/useOpenTab.ts';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
+import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
 import { MentionPreviews } from './MentionPreviews.tsx';
-import { MessageMarkdown } from './MessageMarkdown.tsx';
+import { MessageMarkdown, type MessageFileLinkHandler } from './MessageMarkdown.tsx';
 import { ToolCard } from './ToolCard.tsx';
 
 const SUGGESTIONS = [
@@ -127,12 +130,16 @@ function SpeakerAvatar({ speaker, identity }: { speaker: 'assistant' | 'user'; i
   );
 }
 
+type UserMessageActions = ReturnType<typeof pluginUserMessageActions>;
+
 function MessageActions({
+  actions,
   disabled,
   onQuote,
   onRewind,
   userMessage,
 }: {
+  actions: UserMessageActions;
   disabled: boolean;
   onQuote: () => void;
   onRewind: () => void;
@@ -144,7 +151,7 @@ function MessageActions({
       className="pointer-events-none absolute right-1 bottom-0 z-10 flex max-w-[calc(100%-0.5rem)] translate-y-1/2 flex-wrap justify-end gap-1 rounded-md border border-doom-border-soft bg-doom-panel p-0.5 opacity-0 shadow-sm transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
     >
       {userMessage
-        ? pluginUserMessageActions().map((action) => {
+        ? actions.map((action) => {
             const ActionIcon = action.icon;
             return (
               <Button
@@ -193,12 +200,13 @@ function MessageActions({
 }
 function ToolEntryRow({
   entry,
-  sessionId,
+  slotProps,
+  statuses,
 }: {
   entry: Extract<TimelineEntry, { kind: 'tool' }>;
-  sessionId: string | null;
+  slotProps: WebPluginSlotProps;
+  statuses: Readonly<Record<string, string>>;
 }) {
-  const statuses = useActiveSession((state) => state.statuses);
   const presentation = pluginToolRenderer(entry.name, statuses)?.timelinePresentation ?? 'tool';
   return (
     <div
@@ -208,7 +216,7 @@ function ToolEntryRow({
     >
       {presentation === 'tool' ? <Gutter label="tool" tone="text-doom-faint" /> : null}
       <div className="min-w-0 flex-1">
-        <ToolCard entry={entry} sessionId={sessionId} />
+        <ToolCard entry={entry} slotProps={slotProps} statuses={statuses} />
       </div>
     </div>
   );
@@ -222,11 +230,13 @@ function ToolEntryRow({
 function ToolGroupRow({
   name,
   entries,
-  sessionId,
+  slotProps,
+  statuses,
 }: {
   name: string;
   entries: readonly ToolEntry[];
-  sessionId: string | null;
+  slotProps: WebPluginSlotProps;
+  statuses: Readonly<Record<string, string>>;
 }) {
   return (
     <div
@@ -245,23 +255,33 @@ function ToolGroupRow({
         className="min-w-0 flex-1"
       >
         {entries.map((entry) => (
-          <ToolCard key={entry.id} entry={entry} sessionId={sessionId} />
+          <ToolCard key={entry.id} entry={entry} slotProps={slotProps} statuses={statuses} />
         ))}
       </MessageItemGroup>
     </div>
   );
 }
-const Entry = memo(function Entry({
-  entry,
-  sessionId,
-  sessionIdentity,
-}: {
+interface EntryProps {
   entry: TimelineEntry;
+  onFileLink: MessageFileLinkHandler;
+  pluginActions: UserMessageActions;
   sessionId: string | null;
   sessionIdentity: ProfileIdentity | null;
-}) {
-  useWebPluginRegistry();
-  const sessionStreaming = useActiveSession((state) => state.streaming);
+  sessionStreaming: boolean;
+  slotProps: WebPluginSlotProps;
+  toolStatuses: Readonly<Record<string, string>>;
+}
+
+const Entry = memo(function Entry({
+  entry,
+  onFileLink,
+  pluginActions,
+  sessionId,
+  sessionIdentity,
+  sessionStreaming,
+  slotProps,
+  toolStatuses,
+}: EntryProps) {
   const quoteSource = useRef<HTMLDivElement>(null);
   const quoteMessage = (text: string): void => {
     const selection = window.getSelection();
@@ -291,7 +311,7 @@ const Entry = memo(function Entry({
             ref={quoteSource}
             className="flex flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-base text-doom-hi"
           >
-            <MessageMarkdown sessionId={sessionId} text={entry.text} />
+            <MessageMarkdown onFileLink={onFileLink} text={entry.text} />
             {entry.images && entry.images.length > 0 ? (
               <div data-testid="user-attachments" className="flex flex-wrap gap-2">
                 {entry.images
@@ -310,6 +330,7 @@ const Entry = memo(function Entry({
             {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
           </div>
           <MessageActions
+            actions={pluginActions}
             disabled={sessionStreaming}
             onQuote={() => quoteMessage(entry.text)}
             onRewind={() => rewindToMessage(entry.id, sessionId)}
@@ -342,15 +363,16 @@ const Entry = memo(function Entry({
                 // uses strong emphasis for status updates.
                 className="text-sm font-normal text-doom-dim [&_p]:whitespace-pre-wrap [&_strong]:font-normal [&_strong]:text-doom-dim"
               >
-                <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
+                <MessageMarkdown onFileLink={onFileLink} text={entry.thinking} />
               </div>
             ) : null}
             <div ref={quoteSource} className="text-base text-doom-text">
-              <MessageMarkdown sessionId={sessionId} text={entry.text} />
+              <MessageMarkdown onFileLink={onFileLink} text={entry.text} />
               {entry.streaming ? <StreamCursor /> : null}
             </div>
           </div>
           <MessageActions
+            actions={pluginActions}
             disabled={sessionStreaming}
             onQuote={() => quoteMessage(entry.text)}
             onRewind={() => rewindToMessage(entry.id, sessionId)}
@@ -360,7 +382,7 @@ const Entry = memo(function Entry({
     );
   }
 
-  if (entry.kind === 'tool') return <ToolEntryRow entry={entry} sessionId={sessionId} />;
+  if (entry.kind === 'tool') return <ToolEntryRow entry={entry} slotProps={slotProps} statuses={toolStatuses} />;
 
   if (entry.kind === 'settled') {
     return (
@@ -406,7 +428,29 @@ const Entry = memo(function Entry({
       </p>
     </div>
   );
-});
+}, entriesEqual);
+
+function entriesEqual(previous: EntryProps, next: EntryProps): boolean {
+  if (previous.entry !== next.entry || previous.sessionId !== next.sessionId) return false;
+  if (next.entry.kind === 'tool') {
+    return previous.slotProps === next.slotProps && previous.toolStatuses === next.toolStatuses;
+  }
+  if (next.entry.kind === 'user') {
+    return (
+      previous.onFileLink === next.onFileLink &&
+      previous.pluginActions === next.pluginActions &&
+      previous.sessionStreaming === next.sessionStreaming
+    );
+  }
+  if (next.entry.kind === 'assistant') {
+    return (
+      previous.onFileLink === next.onFileLink &&
+      previous.sessionIdentity === next.sessionIdentity &&
+      previous.sessionStreaming === next.sessionStreaming
+    );
+  }
+  return true;
+}
 
 function BackgroundWorkNotice() {
   return (
@@ -451,27 +495,48 @@ export function Transcript({
   // answer for one of them, and it corrects itself when the identity lands late,
   // which a stamp written at merge time cannot do.
   const sessionIdentity = useStore(store, (state) => state.profileIdentity);
+  const sessionStreaming = useActiveSession((state) => state.streaming);
+  const toolStatuses = useActiveSession((state) => state.statuses);
+  const resolveFileLink = useFileLinks(sessionId);
+  const openTab = useOpenTab();
+  const registryRevision = useWebPluginRegistry();
+  const slotProps = usePluginSlotProps(sessionId);
+  const pluginActions = useMemo(() => {
+    void registryRevision;
+    return pluginUserMessageActions();
+  }, [registryRevision]);
+  const onFileLink = useCallback<MessageFileLinkHandler>(
+    (label, explicit = false) => {
+      if (sessionId === null) return undefined;
+      const tab = explicit ? fileTabForPath(sessionId, label) : resolveFileLink(label);
+      if (tab === undefined) return undefined;
+      return () => {
+        openTransientTab(sessionId, tab);
+        openTab(tab.id);
+      };
+    },
+    [openTab, resolveFileLink, sessionId],
+  );
   const visibleEntries = useMemo(() => {
     const shown = entries.filter((entry) => entry.kind !== 'queued');
     return limit === undefined ? shown : shown.slice(-limit);
   }, [entries, limit]);
-  const toolStatuses = useActiveSession((state) => state.statuses);
   // A tool that presents itself as a message has no frame to share, so only
   // the card-shaped ones are gathered into runs.
-  const units = useMemo(
-    () =>
-      timelineUnits(
-        visibleEntries,
-        (name) => (pluginToolRenderer(name, toolStatuses)?.timelinePresentation ?? 'tool') === 'tool',
-      ),
-    [visibleEntries, toolStatuses],
-  );
+  const units = useMemo(() => {
+    void registryRevision;
+    return timelineUnits(
+      visibleEntries,
+      (name) => (pluginToolRenderer(name, toolStatuses)?.timelinePresentation ?? 'tool') === 'tool',
+    );
+  }, [registryRevision, toolStatuses, visibleEntries]);
   const scroller = useRef<HTMLDivElement>(null);
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
   // an event fires after the fact and a fast run can grow the transcript
   // before the browser has reported the reader's scroll.
   const lastHeight = useRef(0);
+  const lastLayoutEntries = useRef(visibleEntries);
   const following = useRef(true);
   const [unread, setUnread] = useState(false);
   // Where the bottom of the transcript sat before a window was prepended.
@@ -538,6 +603,11 @@ export function Transcript({
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element) return;
+    const entriesChanged = lastLayoutEntries.current !== visibleEntries;
+    lastLayoutEntries.current = visibleEntries;
+    // Registry/status regrouping can resize unchanged entries. A no-op regroup
+    // must not manufacture unread activity for someone reading older content.
+    if (!entriesChanged && element.scrollHeight === lastHeight.current) return;
     // A prepended window grew the transcript upwards; hold the reader where
     // they were by moving down by exactly what appeared above them.
     const held = anchor.current;
@@ -571,7 +641,7 @@ export function Transcript({
       return;
     }
     setUnread(true);
-  }, [visibleEntries]);
+  }, [units, visibleEntries]);
 
   if (visibleEntries.length === 0) {
     return (
@@ -612,9 +682,18 @@ export function Transcript({
             }
           >
             {unit.kind === 'group' ? (
-              <ToolGroupRow name={unit.name} entries={unit.entries} sessionId={sessionId} />
+              <ToolGroupRow name={unit.name} entries={unit.entries} slotProps={slotProps} statuses={toolStatuses} />
             ) : (
-              <Entry entry={unit.entry} sessionId={sessionId} sessionIdentity={sessionIdentity} />
+              <Entry
+                entry={unit.entry}
+                onFileLink={onFileLink}
+                pluginActions={pluginActions}
+                sessionId={sessionId}
+                sessionIdentity={sessionIdentity}
+                sessionStreaming={sessionStreaming}
+                slotProps={slotProps}
+                toolStatuses={toolStatuses}
+              />
             )}
           </div>
         ))}

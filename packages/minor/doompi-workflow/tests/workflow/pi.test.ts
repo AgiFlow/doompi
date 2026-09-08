@@ -854,7 +854,7 @@ describe('workflow-mcp Pi extension', () => {
     const tools = createHarness().tools as unknown as Map<string, { promptGuidelines?: string[] }>;
     const guidelines = (name: string) => (tools.get(name)?.promptGuidelines ?? []).join('\n');
 
-    expect(guidelines('launch_workflow')).toContain('AGIFLOW_JOB_KIND and AGIFLOW_JOB_ID together');
+    expect(guidelines('launch_workflow')).toContain('AGIFLOW_PROJECT_ID, AGIFLOW_JOB_KIND, and AGIFLOW_JOB_ID');
     expect(guidelines('launch_workflow')).toContain('a non-empty prompt');
     expect(guidelines('launch_workflow')).toContain('STARTED, not when it has finished');
     expect(guidelines('launch_workflow')).toContain('409');
@@ -1246,7 +1246,47 @@ describe('workflow-mcp Pi extension', () => {
     );
   });
 
-  it('lets dispatcher-owned Agiflow identity override agent launch env', async () => {
+  it('requires complete and valid Agiflow job identity before launch', async () => {
+    const harness = createHarness();
+    await expect(
+      harness.callTool('launch_workflow', {
+        env: { AGIFLOW_JOB_KIND: 'task', AGIFLOW_JOB_ID: 'task-1' },
+        prompt: 'Dispatch the selected task.',
+        workflowPath: '/repo/automations/workflows/dev-full.workflow.yml',
+      }),
+    ).rejects.toThrow('require AGIFLOW_PROJECT_ID');
+    await expect(
+      harness.callTool('launch_workflow', {
+        env: { AGIFLOW_JOB_KIND: 'invalid', AGIFLOW_JOB_ID: 'task-1', AGIFLOW_PROJECT_ID: 'project-a' },
+        prompt: 'Dispatch the selected task.',
+        workflowPath: '/repo/automations/workflows/dev-full.workflow.yml',
+      }),
+    ).rejects.toThrow('AGIFLOW_JOB_KIND to be task or work-unit');
+    expect(harness.runToolExecute).not.toHaveBeenCalled();
+  });
+
+  it('allows explicit multi-project identity outside dispatcher-context launches', async () => {
+    vi.stubEnv('AGIFLOW_PROJECT_ID', 'default-project');
+    try {
+      const harness = createHarness();
+      await harness.callTool('launch_workflow', {
+        env: {
+          AGIFLOW_JOB_KIND: 'task',
+          AGIFLOW_JOB_ID: 'task-1',
+          AGIFLOW_PROJECT_ID: 'selected-project',
+        },
+        prompt: 'Dispatch the selected task.',
+        workflowPath: '/repo/automations/workflows/dev-full.workflow.yml',
+      });
+      expect(harness.runToolExecute).toHaveBeenCalledWith(
+        expect.objectContaining({ env: expect.objectContaining({ AGIFLOW_PROJECT_ID: 'selected-project' }) }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('rejects conflicting dispatcher and explicit Agiflow project identity before launch', async () => {
     vi.stubEnv('AGIFLOW_DISPATCH_CONTEXT_FILE', '/tmp/dispatch-context.xml');
     vi.stubEnv('AGIFLOW_ORGANIZATION_ID', 'host-org');
     vi.stubEnv('AGIFLOW_PROJECT_ID', 'host-project');
@@ -1255,30 +1295,19 @@ describe('workflow-mcp Pi extension', () => {
     vi.stubEnv('AGIFLOW_DISPATCH_SECRET_FILE', '/tmp/host-secrets.env');
     try {
       const harness = createHarness();
-      await harness.callTool('launch_workflow', {
-        env: {
-          AGIFLOW_ORGANIZATION_ID: 'agent-org',
-          AGIFLOW_PROJECT_ID: 'agent-project',
-          AGIFLOW_DEVICE_ID: 'agent-device',
-          BACKEND_AGIFLOW_API_ENDPOINT: 'https://agent.agiflow.test',
-          AGIFLOW_DISPATCH_SECRET_FILE: '/tmp/agent-secrets.env',
-        },
-        workflowPath: '/repo/automations/workflows/dev-full.workflow.yml',
-        workspace: 'agiflow',
-      });
-
-      expect(harness.runToolExecute).toHaveBeenCalledWith(
-        expect.objectContaining({
+      await expect(
+        harness.callTool('launch_workflow', {
           env: {
-            AGIFLOW_DEVICE_ID: 'host-device',
-            AGIFLOW_DISPATCH_SECRET_FILE: '/tmp/host-secrets.env',
-            AGIFLOW_ORGANIZATION_ID: 'host-org',
-            AGIFLOW_PROJECT_ID: 'host-project',
-            BACKEND_AGIFLOW_API_ENDPOINT: 'https://host.agiflow.test',
-            PI_SESSION_ID: SESSION_ID,
+            AGIFLOW_JOB_KIND: 'task',
+            AGIFLOW_JOB_ID: 'task-1',
+            AGIFLOW_PROJECT_ID: 'agent-project',
           },
+          prompt: 'Dispatch the selected task.',
+          workflowPath: '/repo/automations/workflows/dev-full.workflow.yml',
+          workspace: 'agiflow',
         }),
-      );
+      ).rejects.toThrow('project identity conflicts');
+      expect(harness.runToolExecute).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllEnvs();
     }

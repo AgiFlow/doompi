@@ -166,7 +166,11 @@ A browser plugin that calls `fetch` directly sends plaintext through the relay. 
 
 Payload encryption is insufficient if the provider can replace the JavaScript that performs encryption. DoomPi Web therefore signs the shell and each session plugin publication.
 
-The QR pins the host ECDSA public key and a minimum revision. A signed manifest records the revision, path, content type, byte length, and SHA-256 digest for every asset. The service worker downloads assets into a staging cache, verifies every byte, and commits the complete revision only after all checks pass. A failed update leaves the previous verified revision active.
+The QR pins the host ECDSA public key and a minimum revision. A signed manifest records the revision, path, content type, byte length, and SHA-256 digest for every asset. The service worker verifies an authenticated build policy, revalidates reusable cached bytes, and downloads the required core into a unique staging cache with bounded concurrency. It commits the core revision only after every required byte passes verification. A failed update leaves the previous verified revision active.
+
+The build policy remains an ordinary signed manifest v2 asset. It can defer only output proven by Vite's module and resource graph to belong to the PDF or Mermaid feature. Missing, unsupported, or inconsistent policy data makes every asset eager. Each deferred asset is fetched from its revision-specific raw path on first use, verified against the captured signed manifest, and only then cached and served. Concurrent requests for the same asset share one verified fetch. An unavailable obsolete revision triggers at most one normal verified refresh, then the existing bundle-update message reloads open pages.
+
+Legacy complete caches remain available offline after an upgrade. Until a successful online activation stores the signed manifest and policy metadata, that legacy state is cache-only and cannot fetch a missing asset. Session data, private file contents, and plugin caches are outside this policy.
 
 The public routes are revision-specific:
 

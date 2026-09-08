@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership.ts';
 import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity.ts';
 import { VoiceActivitySection } from '../src/web/components/VoiceActivitySection.tsx';
@@ -21,6 +21,20 @@ afterEach(() => {
 });
 
 describe('browser voice media', () => {
+  it('reuses page voice state across independently evaluated session compositions', async () => {
+    vi.resetModules();
+    const first = await import('../src/web/stores/voiceMediaWakeStore.ts');
+    vi.resetModules();
+    const second = await import('../src/web/stores/voiceMediaWakeStore.ts');
+
+    expect(second.activeVoiceSession).toBe(first.activeVoiceSession);
+    expect(second.voiceMediaBrowserState).toBe(first.voiceMediaBrowserState);
+    expect(second.voiceMediaWakes).toBe(first.voiceMediaWakes);
+
+    first.activeVoiceSession.reset();
+    first.voiceMediaBrowserState.reset();
+    first.voiceMediaWakes.reset();
+  });
   it('publishes both controls and page-lifetime media channels', async () => {
     const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
 
@@ -263,8 +277,8 @@ describe('browser voice media', () => {
     const source = await readFile(new URL('../src/web/components/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
-    expect(source).toContain('defineGlobalStore<PageVoiceMediaRuntime | undefined>');
-    expect(source).toContain('pageVoiceMediaRuntime.store.state');
+    expect(source).toContain('voiceMediaPageRuntime.store.state');
+    expect(source).toContain('voiceMediaPageRuntime.update');
     expect(source).toContain("window.addEventListener('pagehide', this.closeOnPageHide");
     expect(source).toContain('this.boundSessionId = sessionId');
     expect(source).toContain('return () => undefined');

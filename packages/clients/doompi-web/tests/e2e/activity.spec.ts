@@ -113,7 +113,9 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
   await expect(row).toHaveAttribute('data-loop-state', 'stopping');
 
   cockpit.session.emit(status('doom-loop-instances'));
-  await expect(page.getByTestId('activity-loops')).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+  await expect(page.getByTestId('activity-loops')).toBeVisible();
+  await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
 });
 
 test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {

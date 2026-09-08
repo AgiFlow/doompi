@@ -1,9 +1,9 @@
-import { defineGlobalStore, type WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
 import { browserVoiceMediaClientId } from '../lib/browserMediaIdentity.ts';
 import { BrowserVoiceMediaDevice } from '../api/browserMediaDevice.ts';
 import { BrowserVoiceMediaTransport } from '../stores/clientMediaTransport.ts';
 import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../api/voiceMediaClient.ts';
-import { activeVoiceSession, voiceMediaBrowserState } from '../stores/voiceMediaWakeStore.ts';
+import { activeVoiceSession, voiceMediaBrowserState, voiceMediaPageRuntime } from '../stores/voiceMediaWakeStore.ts';
 
 class PageVoiceMediaRuntime {
   private readonly device = new BrowserVoiceMediaDevice(true);
@@ -92,13 +92,11 @@ class PageVoiceMediaRuntime {
   }
 }
 
-const pageVoiceMediaRuntime = defineGlobalStore<PageVoiceMediaRuntime | undefined>(undefined);
-
 export function startVoiceMediaRuntime(_runtime: WebPluginRuntime): () => void {
-  let instance = pageVoiceMediaRuntime.store.state;
+  let instance = voiceMediaPageRuntime.store.state as PageVoiceMediaRuntime | undefined;
   if (instance === undefined) {
     instance = new PageVoiceMediaRuntime();
-    pageVoiceMediaRuntime.update(() => instance);
+    voiceMediaPageRuntime.update(() => instance);
   }
   // Session plugin compositions are route-scoped, but microphone ownership is page-scoped.
   // The pagehide listener owns real cleanup so focus changes cannot disconnect active capture.

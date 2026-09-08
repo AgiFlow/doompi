@@ -257,6 +257,72 @@ describe('doom loop extension', () => {
     await extension.shutdown();
   });
 
+  it('launches a registered launcher by ID without opening the chooser', async () => {
+    const extension = await harness('extension-targeted-start');
+    await extension.startSession();
+    await extension.mountLauncher({
+      id: 'agiflow.workflow',
+      source: 'test',
+      label: 'Agiflow project dispatch',
+      description: 'Dispatch selected projects',
+      launch: async ({ instanceId }) => ({
+        instanceId,
+        label: 'Project dispatch',
+        detail: 'selected projects',
+        stop: vi.fn(),
+      }),
+    });
+
+    await extension.commands.get(START_COMMAND_NAME)?.handler('agiflow.workflow', extension.context);
+
+    expect(extension.select).not.toHaveBeenCalled();
+    expect(extension.notify).toHaveBeenCalledWith('Project dispatch started.', 'info');
+    await extension.shutdown();
+  });
+
+  it('does not open overlapping loop setup requests', async () => {
+    const extension = await harness('extension-overlapping-start');
+    await extension.startSession();
+    let finishLaunch: (() => void) | undefined;
+    const launch = vi.fn(
+      ({ instanceId }: { instanceId: string }) =>
+        new Promise<{ instanceId: string; label: string; detail: string; stop: () => void }>((resolve) => {
+          finishLaunch = () =>
+            resolve({ instanceId, label: 'Project dispatch', detail: 'selected projects', stop: vi.fn() });
+        }),
+    );
+    await extension.mountLauncher({
+      id: 'agiflow.workflow',
+      source: 'test',
+      label: 'Agiflow project dispatch',
+      description: 'Dispatch selected projects',
+      launch,
+    });
+
+    const first = extension.commands.get(START_COMMAND_NAME)?.handler('agiflow.workflow', extension.context);
+    await vi.waitFor(() => expect(launch).toHaveBeenCalledOnce());
+    await extension.commands.get(START_COMMAND_NAME)?.handler('agiflow.workflow', extension.context);
+
+    expect(extension.notify).toHaveBeenCalledWith('A loop setup is already in progress.', 'info');
+    expect(launch).toHaveBeenCalledOnce();
+    finishLaunch?.();
+    await first;
+    await extension.shutdown();
+  });
+
+  it('rejects unknown and extra launcher arguments without opening the chooser', async () => {
+    const extension = await harness('extension-invalid-start');
+    await extension.startSession();
+
+    await extension.commands.get(START_COMMAND_NAME)?.handler('missing.launcher', extension.context);
+    await extension.commands.get(START_COMMAND_NAME)?.handler('one two', extension.context);
+
+    expect(extension.select).not.toHaveBeenCalled();
+    expect(extension.notify).toHaveBeenCalledWith('Unknown loop launcher: missing.launcher', 'error');
+    expect(extension.notify).toHaveBeenCalledWith('Usage: /loop [launcherId]', 'error');
+    await extension.shutdown();
+  });
+
   it('publishes starting, running, stopping, and removal views for non-TUI sessions', async () => {
     const extension = await harness('extension-loop-view');
     await extension.startSession();

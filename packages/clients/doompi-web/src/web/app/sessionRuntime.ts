@@ -1,3 +1,4 @@
+import { batch } from '@tanstack/store';
 import {
   HISTORY_PAGE_TYPE,
   HUB_RESYNCED_TYPE,
@@ -146,9 +147,9 @@ export function startSessionRuntime(): () => void {
   restoreComposerDrafts();
   const stopBundleWatch = watchVerifiedBundleUpdates();
   const stopFileLinkModes = bindSessionFileLinkModes();
-  // The hub-side subscription this page currently holds; it dies with the
-  // socket, which is why the snapshot handler re-subscribes.
-  let subscribed: string | null = null;
+  // The visible session and the autonomous voice owner keep hub subscriptions.
+  // Both die with the socket, which is why a fresh snapshot re-subscribes them.
+  const subscribed = new Set<string>();
   let currentVoiceOwner: string | null = null;
   let pendingVoiceTransferTarget: string | undefined;
   let pendingVoiceTransferFocus: Promise<void> | undefined;
@@ -174,13 +175,22 @@ export function startSessionRuntime(): () => void {
         completeSessionTransfer(target);
       });
     }
-    if (!force && target === subscribed) return;
-    if (subscribed !== null && subscribed !== target) {
-      disconnectCaptures(subscribed);
-      sendHubFrame(unsubscribeFrame(subscribed));
+
+    const desired = new Set<string>();
+    if (target !== null) desired.add(target);
+    if (currentVoiceOwner !== null && currentVoiceOwner in byId) desired.add(currentVoiceOwner);
+    if (force) subscribed.clear();
+    for (const sessionId of subscribed) {
+      if (desired.has(sessionId)) continue;
+      subscribed.delete(sessionId);
+      disconnectCaptures(sessionId);
+      sendHubFrame(unsubscribeFrame(sessionId));
     }
-    subscribed = target;
-    if (target !== null) sendHubFrame(subscribeFrame(target));
+    for (const sessionId of desired) {
+      if (subscribed.has(sessionId)) continue;
+      subscribed.add(sessionId);
+      sendHubFrame(subscribeFrame(sessionId));
+    }
   };
 
   /** Both remote frames carry the same shape; only who receives them differs. */
@@ -228,7 +238,8 @@ export function startSessionRuntime(): () => void {
           removeSessionWebPluginRuntime(frame.sessionId);
           dropThreads(frame.sessionId);
           dropTransientTabs(frame.sessionId);
-          if (subscribed === frame.sessionId) subscribed = null;
+          subscribed.delete(frame.sessionId);
+          if (currentVoiceOwner === frame.sessionId) currentVoiceOwner = null;
           syncSubscription();
           return;
         }
@@ -238,12 +249,15 @@ export function startSessionRuntime(): () => void {
           const frames = frame.frames.filter(isRecord);
           const dropped = typeof frame.dropped === 'number' ? frame.dropped : 0;
           recordBrowserPerformance({ name: 'web.browser.backlog', count: Math.min(10_000, frames.length + dropped) });
-          applySessionBacklog(sessionId, frames.length, dropped);
-          resetSessionStore(sessionId);
-          for (const replayed of frames) applySessionFrame(sessionId, replayed);
-          // Where the backlog starts is where paging back has to continue
-          // from, so the oldest journal id it carried becomes the cursor.
-          seedHistoryCursor(sessionId, oldestEntryId(frames));
+          // Publish the completed replay, not every intermediate frame, to store subscribers.
+          batch(() => {
+            applySessionBacklog(sessionId, frames.length, dropped);
+            resetSessionStore(sessionId);
+            for (const replayed of frames) applySessionFrame(sessionId, replayed);
+            // Where the backlog starts is where paging back has to continue
+            // from, so the oldest journal id it carried becomes the cursor.
+            seedHistoryCursor(sessionId, oldestEntryId(frames));
+          });
           refreshSessionFacts(sessionId);
           return;
         }
@@ -263,9 +277,13 @@ export function startSessionRuntime(): () => void {
           }
           applyCaptureFrame(frame.sessionId, frame.frame);
           applySessionFrame(frame.sessionId, frame.frame);
-          // A select the bar asked for becomes the bar's popover; the claim is
-          // settled here, at frame time, so no surface renders it twice.
-          if (frame.frame.type === 'extension_ui_request' && frame.frame.method === 'select') {
+          // Only the visible session owns the composer's pending menu. The retained
+          // voice owner may keep streaming in the background while another session is open.
+          if (
+            frame.sessionId === sessionsStore.state.activeId &&
+            frame.frame.type === 'extension_ui_request' &&
+            frame.frame.method === 'select'
+          ) {
             claimDialogMenu(typeof frame.frame.id === 'string' ? frame.frame.id : '');
           }
           // A reload rebuilt the resource catalog, so the commands and skills
@@ -284,7 +302,7 @@ export function startSessionRuntime(): () => void {
             refreshSessionStats(frame.sessionId);
           }
           if (frame.frame.type === 'agent_settled') {
-            clearPendingMenu();
+            if (frame.sessionId === sessionsStore.state.activeId) clearPendingMenu();
             refreshSessionFacts(frame.sessionId);
           }
           return;
@@ -295,8 +313,11 @@ export function startSessionRuntime(): () => void {
           if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
           if (!Array.isArray(frame.frames)) return;
           const key = threadStoreKey(frame.sessionId, frame.threadId);
-          resetSessionStore(key);
-          for (const replayed of frame.frames.filter(isRecord)) applyThreadFrame(key, replayed);
+          const frames = frame.frames.filter(isRecord);
+          batch(() => {
+            resetSessionStore(key);
+            for (const replayed of frames) applyThreadFrame(key, replayed);
+          });
           return;
         }
         case THREAD_FRAME_TYPE: {
@@ -338,6 +359,7 @@ export function startSessionRuntime(): () => void {
           // Any other frame type may be a plugin channel; unclaimed types are
           // dropped silently the way unknown frames always have been.
           dispatchChannelFrame(frame);
+          if (owner !== undefined) syncSubscription();
           return;
         }
       }
@@ -346,7 +368,7 @@ export function startSessionRuntime(): () => void {
       // The snapshot that follows the hub's hello is the real "connected".
     },
     onClose() {
-      subscribed = null;
+      subscribed.clear();
       disconnectCaptures();
       markSocketClosed();
     },

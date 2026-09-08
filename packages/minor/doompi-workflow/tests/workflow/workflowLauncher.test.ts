@@ -266,7 +266,11 @@ describe('createWorkflowLaunchExecutor', () => {
       executor.execute(
         {
           workflowPath: '/repo/workflow.yml',
-          env: { AGIFLOW_JOB_KIND: 'work-unit', AGIFLOW_JOB_ID: '01K' },
+          env: {
+            AGIFLOW_JOB_KIND: 'work-unit',
+            AGIFLOW_JOB_ID: '01K',
+            AGIFLOW_PROJECT_ID: 'project-1',
+          },
         },
         context(),
       ),
