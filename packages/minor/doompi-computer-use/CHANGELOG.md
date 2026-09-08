@@ -1,3 +1,22 @@
+## 0.0.1-alpha.10 (2026-09-08)
+
+### 🚀 Features
+
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.28
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.62
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.9 (2026-09-07)
 
 ### 🚀 Features
