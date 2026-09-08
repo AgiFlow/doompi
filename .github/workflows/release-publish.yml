@@ -14,9 +14,15 @@ concurrency:
 
 jobs:
   publish:
+    # A merge commit does not always carry the release pull request title in its
+    # body, and one that does not used to skip the publish silently, leaving main
+    # on a version the registry never received. The release branch name is in the
+    # merge subject either way, so it is matched as well.
     if: >-
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'chore(release): publish'))
+      (github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, 'chore(release): publish') ||
+      contains(github.event.head_commit.message, format('from {0}/release/alpha-', github.repository_owner)))
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment:
@@ -98,8 +104,12 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$NODE_AUTH_TOKEN"
-          readonly RECONCILE_ATTEMPTS=5
-          readonly RECONCILE_DELAY_SECONDS=30
+          # npm serves a version it has just accepted from a read path that lags
+          # behind the write path, so the budget has to outlast that lag: a short
+          # one fails the job over a registry that is merely catching up, and
+          # takes the tagging and the latest promotion down with it.
+          readonly RECONCILE_ATTEMPTS=8
+          readonly RECONCILE_DELAY_SECONDS=60
           readonly PENDING_FILE="${RUNNER_TEMP}/doompi-release-pending.tsv"
           readonly ROUND_FILE="${RUNNER_TEMP}/doompi-release-pending-round.tsv"
 

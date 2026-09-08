@@ -81,6 +81,10 @@ jobs:
           fi
           echo "RELEASE_PROJECTS=${RELEASE_PROJECTS}" >> "${GITHUB_ENV}"
 
+      - name: Raise the selected versions to the registry floor
+        if: env.RELEASE_PROJECTS != ''
+        run: node scripts/sync-registry-versions.mjs "${RELEASE_PROJECTS}"
+
       - name: Validate the release candidate
         if: env.RELEASE_PROJECTS != ''
         run: |
