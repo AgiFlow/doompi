@@ -94,7 +94,7 @@ function Gutter({ label, tone, trailing = false }: { label: string; tone: string
   const placement = trailing
     ? 'w-full text-right sm:w-auto sm:text-left'
     : 'w-full text-left sm:w-11 sm:pt-0.5 sm:text-right';
-  return <span className={`shrink-0 text-[10px] font-bold ${placement} ${tone}`}>{label}</span>;
+  return <span className={`shrink-0 text-xs font-bold ${placement} ${tone}`}>{label}</span>;
 }
 
 /** Two letters from a persona name, so a profile without an icon is still distinct. */
@@ -104,7 +104,7 @@ function personaInitials(name: string): string {
   return letters.toUpperCase() || 'DP';
 }
 
-function SpeakerAvatar({ speaker, identity }: { speaker: 'assistant' | 'user'; identity?: ProfileIdentity }) {
+function SpeakerAvatar({ speaker, identity }: { speaker: 'assistant' | 'user'; identity?: ProfileIdentity | null }) {
   if (speaker === 'assistant') {
     // The icon arrives as a bounded data URL on the journalled identity entry,
     // so a persona without one, or with one that failed to load, still renders.
@@ -156,7 +156,7 @@ function MessageActions({
                 title={action.label}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => action.run(userMessage)}
-                className={ActionIcon ? 'border-0 shadow-none' : 'h-6 border-0 px-2 text-[10px] shadow-none'}
+                className={ActionIcon ? 'border-0 shadow-none' : 'h-6 border-0 px-2 text-xs shadow-none'}
               >
                 {ActionIcon ? <ActionIcon aria-hidden={true} className="h-3 w-3" /> : action.label}
               </Button>
@@ -251,7 +251,15 @@ function ToolGroupRow({
     </div>
   );
 }
-const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; sessionId: string | null }) {
+const Entry = memo(function Entry({
+  entry,
+  sessionId,
+  sessionIdentity,
+}: {
+  entry: TimelineEntry;
+  sessionId: string | null;
+  sessionIdentity: ProfileIdentity | null;
+}) {
   useWebPluginRegistry();
   const sessionStreaming = useActiveSession((state) => state.streaming);
   const quoteSource = useRef<HTMLDivElement>(null);
@@ -281,7 +289,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
         <div className="relative min-w-0 flex-1">
           <div
             ref={quoteSource}
-            className="flex flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-[13px] text-doom-hi"
+            className="flex flex-col gap-2 rounded-md border border-doom-border-soft bg-doom-deep px-3.5 py-2.5 text-base text-doom-hi"
           >
             <MessageMarkdown sessionId={sessionId} text={entry.text} />
             {entry.images && entry.images.length > 0 ? (
@@ -324,7 +332,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
         data-streaming={entry.streaming}
         className="group/message flex flex-col gap-2 sm:flex-row sm:gap-3"
       >
-        <SpeakerAvatar speaker="assistant" identity={entry.identity} />
+        <SpeakerAvatar speaker="assistant" identity={entry.identity ?? sessionIdentity} />
         <div className="relative min-w-0 flex-1">
           <div className="flex flex-col gap-2">
             {entry.thinking ? (
@@ -332,12 +340,12 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
                 data-testid="entry-thinking"
                 // Thinking stays quiet and neutral, even when its Markdown source
                 // uses strong emphasis for status updates.
-                className="text-[11px] font-normal text-doom-dim [&_p]:whitespace-pre-wrap [&_strong]:font-normal [&_strong]:text-doom-dim"
+                className="text-sm font-normal text-doom-dim [&_p]:whitespace-pre-wrap [&_strong]:font-normal [&_strong]:text-doom-dim"
               >
                 <MessageMarkdown sessionId={sessionId} text={entry.thinking} />
               </div>
             ) : null}
-            <div ref={quoteSource} className="text-[13px] text-doom-text">
+            <div ref={quoteSource} className="text-base text-doom-text">
               <MessageMarkdown sessionId={sessionId} text={entry.text} />
               {entry.streaming ? <StreamCursor /> : null}
             </div>
@@ -358,7 +366,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
     return (
       <div data-testid="entry-settled" className="flex items-center gap-3 sm:pl-14">
         <Separator className="flex-1" />
-        <span className="text-[10px] text-doom-faint">
+        <span className="text-xs text-doom-faint">
           agent settled{entry.tools > 0 ? ` · ${entry.tools} tool${entry.tools === 1 ? '' : 's'}` : ''}
         </span>
         <Separator className="flex-1" />
@@ -374,12 +382,12 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
     <div data-testid="entry-notice" data-tone={entry.tone} className="flex gap-2 sm:gap-3">
       {/* One character wide, so it stays beside its line even on a phone. */}
       <span
-        className={`shrink-0 pt-0.5 text-[10px] font-bold sm:w-11 sm:text-right ${isError ? 'text-doom-red' : 'text-doom-faint'}`}
+        className={`shrink-0 pt-0.5 text-xs font-bold sm:w-11 sm:text-right ${isError ? 'text-doom-red' : 'text-doom-faint'}`}
       >
         {isError ? '!' : '·'}
       </span>
       <p
-        className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-[12px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}
+        className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-sm ${isError ? 'text-doom-red' : 'text-doom-dim'}`}
       >
         {entry.text.split(/(\s+)/u).map((part, index) => {
           const href = noticeHref(part);
@@ -403,7 +411,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
 function BackgroundWorkNotice() {
   return (
     <output data-testid="background-work-notice" className="mt-auto flex shrink-0 justify-center px-3 pt-2 pb-3">
-      <span className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel px-3 py-2 text-center text-[10px] leading-relaxed text-doom-yellow">
+      <span className="max-w-lg rounded-md border border-doom-yellow/40 bg-doom-panel px-3 py-2 text-center text-xs leading-relaxed text-doom-yellow">
         Background work is still running. The agent will resume when results are ready.
       </span>
     </output>
@@ -437,6 +445,12 @@ export function Transcript({
   compact?: boolean;
 }) {
   const entries = useStore(store, (state) => state.entries);
+  // Pi's protocol transcript carries no persona, and a history window taken from
+  // the middle of a session carries no identity entry either, so an entry from
+  // those paths has no stamp of its own. The fold's current persona is the honest
+  // answer for one of them, and it corrects itself when the identity lands late,
+  // which a stamp written at merge time cannot do.
+  const sessionIdentity = useStore(store, (state) => state.profileIdentity);
   const visibleEntries = useMemo(() => {
     const shown = entries.filter((entry) => entry.kind !== 'queued');
     return limit === undefined ? shown : shown.slice(-limit);
@@ -600,7 +614,7 @@ export function Transcript({
             {unit.kind === 'group' ? (
               <ToolGroupRow name={unit.name} entries={unit.entries} sessionId={sessionId} />
             ) : (
-              <Entry entry={unit.entry} sessionId={sessionId} />
+              <Entry entry={unit.entry} sessionId={sessionId} sessionIdentity={sessionIdentity} />
             )}
           </div>
         ))}

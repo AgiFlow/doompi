@@ -59,3 +59,43 @@ describe('Timeline user-message actions', () => {
     expect(markup.match(/data-testid="entry-quote"/g)).toHaveLength(4);
   });
 });
+
+describe('Timeline persona avatar', () => {
+  it('falls back to the fold persona for an assistant entry rebuilt without one', () => {
+    const store = new Store({
+      ...initialSessionState,
+      profileIdentity: { profile: 'ponytail', name: 'Ponytail' },
+      entries: [{ kind: 'assistant' as const, id: 'a1', text: 'hi', thinking: '', streaming: false }],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, { store, sessionId: 'session-1', empty: createElement('div') }),
+    );
+
+    expect(markup).toContain('aria-label="Ponytail"');
+  });
+
+  it('keeps the persona a message was written under over the fold persona', () => {
+    const store = new Store({
+      ...initialSessionState,
+      profileIdentity: { profile: 'ponytail', name: 'Ponytail' },
+      entries: [
+        {
+          kind: 'assistant' as const,
+          id: 'a1',
+          text: 'hi',
+          thinking: '',
+          streaming: false,
+          identity: { profile: 'rhea', name: 'Rhea' },
+        },
+      ],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, { store, sessionId: 'session-1', empty: createElement('div') }),
+    );
+
+    expect(markup).toContain('aria-label="Rhea"');
+    expect(markup).not.toContain('aria-label="Ponytail"');
+  });
+});
