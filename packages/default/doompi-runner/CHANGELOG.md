@@ -1,3 +1,45 @@
+## 0.0.1-alpha.67 (2026-09-08)
+
+### 🚀 Features
+
+- **doompi-runner:** add direct shell launch ([523c8735](https://github.com/AgiFlow/doompi/commit/523c8735))
+- **doompi-runner:** attach a real terminal to an interactive runner ([062ae7ed](https://github.com/AgiFlow/doompi/commit/062ae7ed))
+- **doompi-runner:** fix log streaming and add a runners tab with launch ([4c5df0a4](https://github.com/AgiFlow/doompi/commit/4c5df0a4))
+
+### 🩹 Fixes
+
+- ⚠️  **doompi-runner:** wake-up guidance for runners, drop the dead alarm param ([6f682388](https://github.com/AgiFlow/doompi/commit/6f682388))
+
+### ⚠️  Breaking Changes
+
+- **doompi-runner:** wake-up guidance for runners, drop the dead alarm param  ([6f682388](https://github.com/AgiFlow/doompi/commit/6f682388))
+  removes `MIN_ALARM_SECONDS` from the tool schema export, and
+  `clearAlarm`, `markAlarmFired`, `RegisterRunnerInput.alarmMs`,
+  `RunnerRecord.alarm` and `RunnerAlarm` from the RunnerRegistry exports. No
+  consumer in this repository used them and no run record ever carried the field.
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.28
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.66 (2026-09-08)
 
 ### 🚀 Features

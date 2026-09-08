@@ -1,3 +1,24 @@
+## 0.0.1-alpha.26 (2026-09-08)
+
+### 🚀 Features
+
+- **doompi-web-components:** render fenced code with syntax colour, mermaid and copy ([b3c4d8c7](https://github.com/AgiFlow/doompi/commit/b3c4d8c7))
+- **doompi-runner:** attach a real terminal to an interactive runner ([062ae7ed](https://github.com/AgiFlow/doompi/commit/062ae7ed))
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+
+### 🩹 Fixes
+
+- **doompi-web-components:** close dialogs from nested select backdrops ([97373ec0](https://github.com/AgiFlow/doompi/commit/97373ec0))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.62
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.25 (2026-09-08)
 
 ### 🚀 Features
