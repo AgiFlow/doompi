@@ -73,7 +73,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
             setDimension(next as MetricsDimension);
           }}
         >
-          <SelectTrigger data-testid="metrics-dimension" className="w-[140px] text-[10px]">
+          <SelectTrigger data-testid="metrics-dimension" className="w-[140px] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -85,7 +85,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
           </SelectContent>
         </Select>
         <Select value={period} onValueChange={(next) => setPeriod(next as MetricsPeriod)}>
-          <SelectTrigger data-testid="metrics-period" className="w-[110px] text-[10px]">
+          <SelectTrigger data-testid="metrics-period" className="w-[110px] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -100,7 +100,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
         <Button
           variant="ghost"
           size="xs"
-          className="ml-auto text-[9px]"
+          className="ml-auto text-2xs"
           onClick={() => setPeriod((current) => current)}
           disabled={loading}
         >
@@ -109,7 +109,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
       </div>
 
       {error === '' ? null : (
-        <span className="text-[10px] text-doom-red" data-testid="metrics-error">
+        <span className="text-xs text-doom-red" data-testid="metrics-error">
           {error}
         </span>
       )}

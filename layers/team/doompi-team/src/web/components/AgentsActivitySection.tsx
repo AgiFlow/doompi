@@ -48,7 +48,7 @@ export function AgentsActivitySection({ sessionId, openTransientTab }: WebPlugin
   if (runs.length === 0) {
     return (
       <div className="flex items-center gap-2 px-1">
-        <p data-testid="activity-summary-agents" className="text-[10px] text-doom-faint">
+        <p data-testid="activity-summary-agents" className="text-xs text-doom-faint">
           idle
         </p>
         <Button
@@ -82,21 +82,21 @@ export function AgentsActivitySection({ sessionId, openTransientTab }: WebPlugin
             if (sessionId === null) return;
             openTransientTab(agentThreadTab(run));
           }}
-          className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
+          className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
         >
           <span className="flex min-w-0 items-center gap-1.5">
             <Dot tone={STATE_TONE[run.state]} pulse={run.state === 'running'} />
             <span
-              className={`min-w-0 flex-1 truncate text-[10px] font-bold ${isTerminalRun(run) ? 'text-doom-dim' : 'text-doom-hi'}`}
+              className={`min-w-0 flex-1 truncate text-xs font-bold ${isTerminalRun(run) ? 'text-doom-dim' : 'text-doom-hi'}`}
             >
               {run.agent}
             </span>
-            <span className="shrink-0 text-[9px] text-doom-faint">
+            <span className="shrink-0 text-2xs text-doom-faint">
               {elapsed(run, now)}
               {run.toolCount !== undefined ? ` · ${run.toolCount} tools` : ''}
             </span>
           </span>
-          <span className={`truncate pl-3 text-[9px] ${run.state === 'failed' ? 'text-doom-red' : 'text-doom-faint'}`}>
+          <span className={`truncate pl-3 text-2xs ${run.state === 'failed' ? 'text-doom-red' : 'text-doom-faint'}`}>
             {detail(run)}
           </span>
         </Button>

@@ -54,6 +54,7 @@ export interface RunnerExecutionHandlers {
 
 export interface RunnerProgress {
   tokens?: number;
+  cost?: number;
   currentTool?: string;
   toolCount?: number;
 }
@@ -104,11 +105,17 @@ export class RunnerExecution implements RunnerExecutionContract {
   }
 
   setProgress(progress: RunnerProgress): void {
-    if (progress.tokens === undefined && progress.currentTool === undefined && progress.toolCount === undefined) {
+    if (
+      progress.tokens === undefined &&
+      progress.cost === undefined &&
+      progress.currentTool === undefined &&
+      progress.toolCount === undefined
+    ) {
       return;
     }
     this.statusWriter.update((status) => {
       if (progress.tokens !== undefined) status.tokens = progress.tokens;
+      if (progress.cost !== undefined) status.cost = progress.cost;
       if (progress.currentTool !== undefined) status.currentTool = progress.currentTool;
       if (progress.toolCount !== undefined) status.toolCount = progress.toolCount;
       status.lastUpdate = Date.now();

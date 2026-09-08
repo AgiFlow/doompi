@@ -569,9 +569,9 @@ export function Composer() {
                       }}
                       className="w-full items-baseline gap-2.5 rounded-none px-3 py-1.5"
                     >
-                      <span className="shrink-0 text-[12px] font-bold text-doom-blue">{item.label}</span>
+                      <span className="shrink-0 text-sm font-bold text-doom-blue">{item.label}</span>
                       {item.detail ? (
-                        <OptionLabel density="compact" className="text-[10px] text-doom-dim">
+                        <OptionLabel density="compact" className="text-xs text-doom-dim">
                           {item.detail}
                         </OptionLabel>
                       ) : null}
@@ -586,7 +586,7 @@ export function Composer() {
               </PopoverContent>
             ) : null}
             <div className="flex min-w-0 items-start gap-2 px-2.5 pt-3 sm:gap-2.5 sm:px-3.5">
-              <span className="mt-[3px] shrink-0 select-none text-[13px] leading-none text-doom-green">&gt;</span>
+              <span className="mt-[3px] shrink-0 select-none text-base leading-none text-doom-green">&gt;</span>
               <Textarea
                 variant="bare"
                 ref={inputRef}
@@ -659,7 +659,7 @@ export function Composer() {
                 }}
                 rows={1}
                 placeholder={placeholder}
-                className="min-h-[20px] min-w-0 flex-1 text-[13px] leading-relaxed"
+                className="min-h-[20px] min-w-0 flex-1 text-base leading-relaxed"
               />
             </div>
             {attachments.length > 0 ? (
@@ -668,7 +668,7 @@ export function Composer() {
                   <span
                     key={attachment.id}
                     data-testid={`composer-attachment-${attachment.id}`}
-                    className="flex max-w-full items-center gap-1.5 rounded border border-doom-border bg-doom-panel px-1.5 py-1 text-[10px] text-doom-dim"
+                    className="flex max-w-full items-center gap-1.5 rounded border border-doom-border bg-doom-panel px-1.5 py-1 text-xs text-doom-dim"
                   >
                     {attachment.kind === 'image' ? (
                       <img src={attachment.dataUrl} alt="" className="h-6 w-6 rounded object-cover" />
@@ -696,16 +696,12 @@ export function Composer() {
               </div>
             ) : null}
             {attachmentError ? (
-              <p
-                role="alert"
-                data-testid="composer-attachment-error"
-                className="px-3.5 pt-1.5 text-[10px] text-doom-red"
-              >
+              <p role="alert" data-testid="composer-attachment-error" className="px-3.5 pt-1.5 text-xs text-doom-red">
                 {attachmentError}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2 px-2.5 pt-2 pb-2.5 sm:flex-nowrap sm:px-3.5">
-              <span data-testid="composer-hint" className="text-[10px] text-doom-faint max-sm:hidden">
+              <span data-testid="composer-hint" className="text-xs text-doom-faint max-sm:hidden">
                 {streaming
                   ? 'enter steers the run · esc aborts'
                   : 'enter sends · shift+enter for a new line · space opens leader'}
@@ -752,7 +748,7 @@ export function Composer() {
                     <label
                       aria-disabled={!attached}
                       data-testid="composer-attach-row"
-                      className={`relative overflow-hidden text-[12px] text-doom-text hover:bg-doom-tint-blue ${optionRowVariants(
+                      className={`relative overflow-hidden text-sm text-doom-text hover:bg-doom-tint-blue ${optionRowVariants(
                         { density: 'compact' },
                       )} ${attached ? '' : 'pointer-events-none opacity-40'}`}
                     >

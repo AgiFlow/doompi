@@ -27,7 +27,7 @@ export function PromptEditor({ draft, busy, onChange, onSave, onCancel }: Prompt
   return (
     <div data-testid="prompts-editor" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="prompts-name" className="text-[10px] font-bold text-doom-dim">
+        <label htmlFor="prompts-name" className="text-xs font-bold text-doom-dim">
           prompt name
         </label>
         <Input
@@ -41,7 +41,7 @@ export function PromptEditor({ draft, busy, onChange, onSave, onCancel }: Prompt
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="prompts-text" className="text-[10px] font-bold text-doom-dim">
+        <label htmlFor="prompts-text" className="text-xs font-bold text-doom-dim">
           prompt text
         </label>
         <Textarea

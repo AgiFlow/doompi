@@ -40,13 +40,13 @@ function IssueRow({ group, max, tools }: IssueRowProps) {
   return (
     <li className="flex flex-col">
       <div className="relative">
-        <span aria-hidden="true" className="absolute inset-y-0 left-0 rounded-[2px] bg-doom-red/20" style={{ width }} />
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 rounded-xs bg-doom-red/20" style={{ width }} />
         <button
           type="button"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
           data-testid={`metrics-issue-${group.key}`}
-          className="relative flex w-full items-center gap-2 rounded-[2px] px-1 py-[3px] text-left text-[10px] hover:bg-doom-tint focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
+          className="relative flex w-full items-center gap-2 rounded-xs px-1 py-[3px] text-left text-xs hover:bg-doom-tint focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
         >
           <span className="w-8 shrink-0 text-right font-bold text-doom-red">{group.occurrences}</span>
           <span className="w-24 shrink-0 truncate text-doom-hi">{titleOf(group)}</span>
@@ -56,8 +56,8 @@ function IssueRow({ group, max, tools }: IssueRowProps) {
       </div>
 
       {open ? (
-        <div className="flex flex-col gap-1 px-2 py-2 text-[10px]" data-testid={`metrics-issue-body-${group.key}`}>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-doom-faint">
+        <div className="flex flex-col gap-1 px-2 py-2 text-xs" data-testid={`metrics-issue-body-${group.key}`}>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-2xs text-doom-faint">
             <span>category {group.category}</span>
             {group.tool === null ? null : <span>tool {group.tool}</span>}
             {group.errorType === null ? null : <span>error {group.errorType}</span>}
@@ -67,7 +67,7 @@ function IssueRow({ group, max, tools }: IssueRowProps) {
             <span>last seen {group.lastSeen}</span>
           </div>
           <span className="break-words text-doom-dim">{group.detail}</span>
-          <ul className="flex flex-col gap-[1px] text-[9px] text-doom-faint">
+          <ul className="flex flex-col gap-[1px] text-2xs text-doom-faint">
             {group.members.map((member, index) => (
               <li key={`${member.timestamp}-${String(index)}`} className="flex flex-wrap gap-x-2">
                 <span>{member.timestamp}</span>
@@ -99,7 +99,7 @@ export function IssuesDetail({ view, tools }: IssuesDetailProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <span className="text-[10px] text-doom-dim">
+      <span className="text-xs text-doom-dim">
         <span className="text-doom-hi">{view.totalIssues}</span> occurrences of{' '}
         <span className="text-doom-hi">{groups.length}</span> distinct problems, worst first
       </span>
@@ -113,8 +113,8 @@ export function IssuesDetail({ view, tools }: IssuesDetailProps) {
       )}
 
       <div className="flex flex-col gap-1">
-        <span className="text-[9px] font-bold text-doom-faint">failures by tool</span>
-        <table className="w-full text-[10px]" data-testid="metrics-issues-tools">
+        <span className="text-2xs font-bold text-doom-faint">failures by tool</span>
+        <table className="w-full text-xs" data-testid="metrics-issues-tools">
           <tbody>
             {countRows(view.byTool).map(([name, failures]) => {
               const calls = callsByTool.get(name);
@@ -134,8 +134,8 @@ export function IssuesDetail({ view, tools }: IssuesDetailProps) {
         </table>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-doom-dim">
-        <span className="text-[9px] font-bold text-doom-faint">by category</span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-doom-dim">
+        <span className="text-2xs font-bold text-doom-faint">by category</span>
         {countRows(view.byCategory).map(([name, count]) => (
           <span key={name}>
             {name} <span className="text-doom-hi">{count}</span>

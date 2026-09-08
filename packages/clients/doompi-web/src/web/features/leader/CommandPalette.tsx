@@ -242,7 +242,7 @@ export function CommandPalette() {
           <StatusBadge tone="accent" size="xs" className="tracking-widest">
             {LEADER_PREFIX}
           </StatusBadge>
-          <span data-testid="palette-path" className="text-[12px] font-bold text-doom-hi">
+          <span data-testid="palette-path" className="text-sm font-bold text-doom-hi">
             {keys.length === 0 ? 'Leader Space' : `${keys.join(' ')} · ${group?.label ?? ''}`}
           </span>
           <CommandInput
@@ -258,7 +258,7 @@ export function CommandPalette() {
             onKeyDown={onSearchKey}
             className="text-right"
           />
-          <span data-testid="palette-count" className="text-[10px] text-doom-faint">
+          <span data-testid="palette-count" className="text-xs text-doom-faint">
             {rowCount}
           </span>
         </CommandHeader>
@@ -281,8 +281,8 @@ export function CommandPalette() {
                     onClick={() => invoke(command.name)}
                     className={cn('w-full gap-2.5 px-3 py-1.5', index === cursor && 'bg-doom-magenta/10')}
                   >
-                    <span className="text-[11px] font-bold text-doom-blue">/{command.name}</span>
-                    <CommandItemLabel className="text-[10px] text-doom-faint">{command.description}</CommandItemLabel>
+                    <span className="text-sm font-bold text-doom-blue">/{command.name}</span>
+                    <CommandItemLabel className="text-xs text-doom-faint">{command.description}</CommandItemLabel>
                   </CommandItem>
                 ))
               )
@@ -311,9 +311,9 @@ export function CommandPalette() {
                   >
                     {option.key}
                   </Kbd>
-                  <CommandItemLabel className="text-[11px] text-doom-text">{option.label}</CommandItemLabel>
+                  <CommandItemLabel className="text-sm text-doom-text">{option.label}</CommandItemLabel>
                   {option.binding ? null : (
-                    <span className="text-[9px] text-doom-faint">
+                    <span className="text-2xs text-doom-faint">
                       {option.children.length} {option.children.length === 1 ? 'key' : 'keys'}
                     </span>
                   )}
@@ -330,9 +330,9 @@ export function CommandPalette() {
                     onClick={() => runPluginCommand(command.id)}
                     className="w-full gap-2.5 px-3 py-1.5 hover:bg-doom-magenta/10"
                   >
-                    <CommandItemLabel className="text-[11px] text-doom-text">{command.title}</CommandItemLabel>
+                    <CommandItemLabel className="text-sm text-doom-text">{command.title}</CommandItemLabel>
                     {command.description ? (
-                      <span className="truncate text-[9px] text-doom-faint">{command.description}</span>
+                      <span className="truncate text-2xs text-doom-faint">{command.description}</span>
                     ) : null}
                   </CommandItem>
                 ))}
@@ -343,19 +343,19 @@ export function CommandPalette() {
           <div data-testid="palette-detail" className="hidden min-w-0 flex-1 flex-col gap-2 px-4 py-3 sm:flex">
             {currentMatch ? (
               <>
-                <span className="text-[12px] font-bold text-doom-blue">/{currentMatch.name}</span>
-                <span className="text-[11px] text-doom-faint">{currentMatch.description}</span>
+                <span className="text-sm font-bold text-doom-blue">/{currentMatch.name}</span>
+                <span className="text-sm text-doom-faint">{currentMatch.description}</span>
               </>
             ) : null}
             {current ? (
               <>
                 <div className="flex items-center gap-2">
-                  <span className="text-[12px] font-bold text-doom-magenta">{pathLabel([...keys, current.key])}</span>
-                  <span className="text-[12px] text-doom-hi">{current.label}</span>
+                  <span className="text-sm font-bold text-doom-magenta">{pathLabel([...keys, current.key])}</span>
+                  <span className="text-sm text-doom-hi">{current.label}</span>
                 </div>
-                {current.detail ? <span className="text-[10px] text-doom-faint">{current.detail}</span> : null}
+                {current.detail ? <span className="text-xs text-doom-faint">{current.detail}</span> : null}
                 {current.binding ? (
-                  <span data-testid="palette-target" className="text-[11px] font-bold text-doom-blue">
+                  <span data-testid="palette-target" className="text-sm font-bold text-doom-blue">
                     {'command' in current.binding ? `/${current.binding.command}` : 'in the cockpit'}
                   </span>
                 ) : (
@@ -367,9 +367,9 @@ export function CommandPalette() {
                         onClick={() => descend(child, [...keys, current.key])}
                         className="min-h-0 gap-3 border-doom-border-soft bg-doom-deep px-3 py-1.5 hover:border-doom-blue/50"
                       >
-                        <span className="w-5 text-center text-[10px] font-bold text-doom-magenta">{child.key}</span>
-                        <span className="text-[11px] font-bold text-doom-hi">{child.label}</span>
-                        <OptionLabel className="truncate text-[10px] text-doom-faint">{child.detail}</OptionLabel>
+                        <span className="w-5 text-center text-xs font-bold text-doom-magenta">{child.key}</span>
+                        <span className="text-sm font-bold text-doom-hi">{child.label}</span>
+                        <OptionLabel className="truncate text-xs text-doom-faint">{child.detail}</OptionLabel>
                       </OptionRow>
                     ))}
                   </div>
@@ -380,7 +380,7 @@ export function CommandPalette() {
         </div>
 
         <CommandFooter className="px-4 py-2.5">
-          <span className="flex items-center gap-1.5 text-[10px] text-doom-faint">
+          <span className="flex items-center gap-1.5 text-xs text-doom-faint">
             {searching ? (
               <>
                 <Kbd>↑↓</Kbd> move · <Kbd>enter</Kbd> run · <Kbd>esc</Kbd> back to keys
@@ -391,7 +391,7 @@ export function CommandPalette() {
               </>
             )}
           </span>
-          <span className="text-[10px] text-doom-dim">
+          <span className="text-xs text-doom-dim">
             {bindings.length} keys · {commands.length} commands
           </span>
         </CommandFooter>

@@ -18,11 +18,11 @@ export function PairedDeviceList() {
           className="flex items-center justify-between gap-3 rounded border border-doom-border px-2.5 py-1.5"
         >
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-xs text-doom-hi">
+            <span className="truncate text-sm text-doom-hi">
               {device.label}
               {device.self ? ' \u00b7 this device' : ''}
             </span>
-            <span className="truncate text-[10px] text-doom-faint">{device.userAgent}</span>
+            <span className="truncate text-xs text-doom-faint">{device.userAgent}</span>
           </span>
           <Button
             variant="ghost"

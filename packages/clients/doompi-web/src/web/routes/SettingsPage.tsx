@@ -71,11 +71,11 @@ export function SettingsPage() {
               title="show sessions"
               aria-label="show sessions"
               onClick={() => setRailOpen(true)}
-              className="shrink-0 text-[16px] text-doom-dim md:hidden"
+              className="shrink-0 text-lg text-doom-dim md:hidden"
             >
               <span aria-hidden>☰</span>
             </Button>
-            <span className="truncate text-[13px] font-bold text-doom-hi">settings</span>
+            <span className="truncate text-base font-bold text-doom-hi">settings</span>
           </span>
           <nav
             className="order-3 col-span-2 flex w-full items-center gap-0.5 rounded-md border border-doom-border bg-doom-panel p-0.5 sm:order-none sm:w-auto"

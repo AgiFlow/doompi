@@ -35,7 +35,8 @@
     "llms.txt",
     "README.md",
     "LICENSE",
-    "package.json"
+    "package.json",
+    "!src/web/**/*.stories.tsx"
   ],
   "type": "module",
   "main": "./dist/index.cjs",

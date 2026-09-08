@@ -57,12 +57,12 @@ export function ImageSettings() {
         detail="how large an image may be when it reaches a model. applies to images the agent reads and to the ones you attach here; Pi's own settings screen writes the same file."
       />
       {error === undefined ? null : (
-        <p data-testid="image-settings-error" className="text-[11px] text-doom-red">
+        <p data-testid="image-settings-error" className="text-sm text-doom-red">
           {error}
         </p>
       )}
       {images === undefined ? (
-        <p className="text-[11px] text-doom-dim">reading the machine's image settings…</p>
+        <p className="text-sm text-doom-dim">reading the machine's image settings…</p>
       ) : (
         <div className="flex flex-col gap-3 rounded border border-doom-border bg-doom-panel p-3">
           <label className="flex items-center gap-3">
@@ -73,14 +73,14 @@ export function ImageSettings() {
               onCheckedChange={(checked) => void save({ autoResize: checked })}
             />
             <span className="flex flex-col gap-0.5">
-              <span className="text-[11px] font-bold text-doom-hi">auto-resize images</span>
-              <span className="text-[9px] leading-relaxed text-doom-faint">
+              <span className="text-sm font-bold text-doom-hi">auto-resize images</span>
+              <span className="text-2xs leading-relaxed text-doom-faint">
                 off sends every image at the size it arrived, which a provider may reject for the whole conversation.
               </span>
             </span>
           </label>
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold text-doom-hi">longest edge</span>
+            <span className="text-sm font-bold text-doom-hi">longest edge</span>
             <div className="flex items-center gap-2">
               <Input
                 data-testid="image-max-dimension"
@@ -89,7 +89,7 @@ export function ImageSettings() {
                 spellCheck={false}
                 disabled={busy || !images.autoResize}
                 onChange={(event) => setDraft(event.target.value)}
-                className="w-28 text-[11px]"
+                className="w-28 text-sm"
               />
               <Button
                 size="sm"
@@ -100,7 +100,7 @@ export function ImageSettings() {
                 save
               </Button>
             </div>
-            <span className="text-[9px] leading-relaxed text-doom-faint">
+            <span className="text-2xs leading-relaxed text-doom-faint">
               pixels, between {images.minDimension} and {images.maxAllowedDimension}. a value outside that range is
               clamped, because Pi resizes every tool result at {images.maxAllowedDimension} whatever this says.
             </span>

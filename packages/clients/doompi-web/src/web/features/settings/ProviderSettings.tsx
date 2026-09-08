@@ -35,15 +35,15 @@ function ProviderRow({
     >
       <li data-testid={`provider-${provider.id}`} data-authenticated={authenticated}>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
-          <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
+          <span className="truncate text-sm font-bold text-doom-hi">{provider.name}</span>
+          <span className="truncate text-xs text-doom-faint">{provider.id}</span>
         </div>
         {/* State is read, not pressed. It used to wear the same outlined chip as
             the sign-in button beside it, so forty rows offered what looked like
             two buttons each. Only the actions keep a border. */}
         <span
           data-testid={`provider-status-${provider.id}`}
-          className={`flex shrink-0 items-center gap-1.5 self-start text-[10px] min-[560px]:self-auto ${
+          className={`flex shrink-0 items-center gap-1.5 self-start text-xs min-[560px]:self-auto ${
             authenticated ? 'text-doom-green' : 'text-doom-faint'
           }`}
         >
@@ -76,7 +76,7 @@ function ProviderRow({
           </Button>
         ) : null}
         {provider.methods.length === 0 ? (
-          <span className="text-[10px] text-doom-faint">ambient credentials only</span>
+          <span className="text-xs text-doom-faint">ambient credentials only</span>
         ) : null}
       </li>
     </Panel>
@@ -187,12 +187,12 @@ export function ProviderSettings() {
         detail="sign in to the model providers Pi can use. credentials land in Pi's auth.json on this machine, so every session shares them."
       />
       {error ? (
-        <p data-testid="provider-settings-error" className="text-[11px] leading-relaxed text-doom-red">
+        <p data-testid="provider-settings-error" className="text-sm leading-relaxed text-doom-red">
           {error}
         </p>
       ) : null}
       {providers === null && !error ? (
-        <p className="flex items-center gap-2 text-[11px] text-doom-faint">
+        <p className="flex items-center gap-2 text-sm text-doom-faint">
           <Spinner label="reading providers" />
           reading providers…
         </p>
@@ -207,7 +207,7 @@ export function ProviderSettings() {
               onChange={(event) => setFilter(event.target.value)}
               className="flex-1"
             />
-            <span className="shrink-0 text-right text-[10px] text-doom-faint">
+            <span className="shrink-0 text-right text-xs text-doom-faint">
               {authenticatedCount} of {providers.length} signed in
             </span>
           </div>

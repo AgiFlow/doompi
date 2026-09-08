@@ -218,6 +218,17 @@ export function getMessageUsageTokens(message: ChildTranscriptMessage): number |
 }
 
 /**
+ * Return the cost observed on one finalized child message.
+ *
+ * Same observation contract as `getMessageUsageTokens`: absent usage is no
+ * observation and returns undefined, while a usage object whose cost is
+ * missing or unreadable is a real zero (see `normalizeUsage`).
+ */
+export function getMessageUsageCost(message: ChildTranscriptMessage): number | undefined {
+  if (message.role !== 'assistant' || !message.usage || typeof message.usage !== 'object') return undefined;
+  return normalizeUsage(message.usage)?.cost;
+}
+/**
  * A bounded tail of the assistant's current streamed text/thinking.
  *
  * The tail changes as the model streams, so a parent can show what the child is

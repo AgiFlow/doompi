@@ -25,7 +25,7 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
   if (session.worktrees.length === 0 && session.pending === undefined) {
     return (
       <div className="flex items-center gap-2 px-1">
-        <p data-testid="activity-summary-git" className="px-1 text-[10px] text-doom-faint">
+        <p data-testid="activity-summary-git" className="px-1 text-xs text-doom-faint">
           idle
         </p>
         {sessionId === null ? null : (
@@ -45,18 +45,18 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
 
   return (
     <div data-testid="activity-git-worktrees" className="flex flex-col gap-0.5">
-      {session.pending === undefined ? null : <p className="px-1 text-[10px] text-doom-dim">{session.pending}</p>}
+      {session.pending === undefined ? null : <p className="px-1 text-xs text-doom-dim">{session.pending}</p>}
       {session.worktrees.map((worktree: WorktreeView) => (
         <button
           key={worktree.id}
           type="button"
           data-testid={`activity-git-worktree-${worktree.id}`}
-          className="flex items-center gap-2 px-1 text-left text-[11px] text-doom-dim hover:text-doom-bright"
+          className="flex items-center gap-2 px-1 text-left text-sm text-doom-dim hover:text-doom-bright"
           onClick={() => openTransientTab(worktreesTab())}
         >
           <span className="truncate">{worktree.branch}</span>
-          {worktree.orphaned ? <span className="text-[10px] text-doom-faint">orphaned</span> : null}
-          {worktree.unowned ? <span className="text-[10px] text-doom-faint">unowned</span> : null}
+          {worktree.orphaned ? <span className="text-xs text-doom-faint">orphaned</span> : null}
+          {worktree.unowned ? <span className="text-xs text-doom-faint">unowned</span> : null}
         </button>
       ))}
     </div>

@@ -51,7 +51,7 @@ export function RemoteAccessDialog() {
         <DialogBody className="flex flex-col gap-5">
           {/* Said before the switch, not after: a paired device can do
               everything the person at this keyboard can do. */}
-          <p className="text-xs leading-relaxed text-doom-faint">
+          <p className="text-sm leading-relaxed text-doom-faint">
             A paired device can prompt the agent, approve its tool calls, and run shell commands as you. Pair only
             devices you hold, and only when you mean to.
           </p>
@@ -61,7 +61,7 @@ export function RemoteAccessDialog() {
           {pairing || moving ? null : <RemoteAccessOptions />}
 
           {state.error === undefined ? null : (
-            <p data-testid="remote-access-error" className="text-xs text-doom-red">
+            <p data-testid="remote-access-error" className="text-sm text-doom-red">
               {state.error}
             </p>
           )}

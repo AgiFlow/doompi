@@ -96,20 +96,20 @@ export function ContextPanel() {
 
       <div className="shrink-0 border-t border-doom-border px-4 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-doom-text">active</span>
-          <span data-testid="context-total" className="text-[10px] font-bold text-doom-text">
+          <span className="text-xs font-bold text-doom-text">active</span>
+          <span data-testid="context-total" className="text-xs font-bold text-doom-text">
             {tokens(total)}
           </span>
         </div>
         {idle > 0 ? (
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-doom-faint">inactive</span>
-            <span data-testid="context-inactive" className="text-[10px] text-doom-faint">
+            <span className="text-xs text-doom-faint">inactive</span>
+            <span data-testid="context-inactive" className="text-xs text-doom-faint">
               {`+${tokens(idle)}`}
             </span>
           </div>
         ) : null}
-        <span className="text-[9px] leading-relaxed text-doom-faint">
+        <span className="text-2xs leading-relaxed text-doom-faint">
           {`estimated · ${context?.estimator ?? 'gpt-tokenizer'} BPE · not a billed total`}
         </span>
       </div>
@@ -130,18 +130,18 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
           says "section", so a mode never reads as one more row among the tools
           it brought with it. */}
       <div className="flex items-center gap-2 px-1">
-        <span aria-hidden className="text-[11px] font-bold text-doom-faint">
+        <span aria-hidden className="text-sm font-bold text-doom-faint">
           #
         </span>
-        <span className="flex-1 text-[11px] font-bold text-doom-text">{group.label}</span>
-        <span className="text-[8px] font-bold tracking-widest text-doom-violet uppercase">{group.kind}</span>
-        <span data-testid={`context-subtotal-${group.id}`} className="w-14 text-right text-[10px] text-doom-dim">
+        <span className="flex-1 text-sm font-bold text-doom-text">{group.label}</span>
+        <span className="text-2xs font-bold tracking-widest text-doom-violet uppercase">{group.kind}</span>
+        <span data-testid={`context-subtotal-${group.id}`} className="w-14 text-right text-xs text-doom-dim">
           {tokens(group.tokens)}
         </span>
       </div>
 
       {group.items.length === 0 ? (
-        <p data-testid={`context-pending-${group.id}`} className="px-1 text-[10px] text-doom-faint">
+        <p data-testid={`context-pending-${group.id}`} className="px-1 text-xs text-doom-faint">
           {group.detail || 'no tools or skills reported'}
         </p>
       ) : (
@@ -154,9 +154,9 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
               title={owner.owner}
               className="flex items-center gap-2 px-1 pt-1"
             >
-              <span className="flex-1 truncate text-[10px] text-doom-dim">{ownerLabel(owner.owner)}</span>
-              <span className="text-[9px] text-doom-faint">{SOURCE_LABEL[owner.source]}</span>
-              <span className="w-14 text-right text-[10px] text-doom-dim">{tokens(owner.tokens)}</span>
+              <span className="flex-1 truncate text-xs text-doom-dim">{ownerLabel(owner.owner)}</span>
+              <span className="text-2xs text-doom-faint">{SOURCE_LABEL[owner.source]}</span>
+              <span className="w-14 text-right text-xs text-doom-dim">{tokens(owner.tokens)}</span>
             </div>
             {owner.items.map((item) => (
               // A row is a question as much as a figure: what am I paying for.
@@ -171,12 +171,12 @@ function ContextGroupView({ group, onSelect }: { group: ContextGroup; onSelect: 
                 onClick={() => onSelect({ itemKind: item.itemKind, name: item.name, owner: item.owner })}
                 className="flex-row items-center gap-2 rounded-none py-px pr-1 pl-4"
               >
-                <span className={`flex-1 truncate text-[10px] ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}>
+                <span className={`flex-1 truncate text-xs ${item.active ? 'text-doom-text' : 'text-doom-faint'}`}>
                   {item.name}
                 </span>
                 <span
                   title={item.active ? undefined : 'not sent to the model; costs nothing until switched on'}
-                  className={`w-14 text-right text-[10px] ${item.active ? 'text-doom-dim' : 'text-doom-faint'}`}
+                  className={`w-14 text-right text-xs ${item.active ? 'text-doom-dim' : 'text-doom-faint'}`}
                 >
                   {item.active ? tokens(item.tokens) : `(${tokens(item.tokens)})`}
                 </span>

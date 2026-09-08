@@ -12,6 +12,7 @@ import {
   createChildTranscriptWriter,
   formatToolActivity,
   getMessageActivity,
+  getMessageUsageCost,
   getMessageUsageTokens,
 } from '../../src/adapters/process/childTranscript';
 
@@ -179,6 +180,14 @@ describe('message usage metrics', () => {
 
   it('returns undefined when usage is absent', () => {
     expect(getMessageUsageTokens({ role: 'assistant' })).toBeUndefined();
+    expect(getMessageUsageCost({ role: 'assistant' })).toBeUndefined();
+  });
+
+  it('reads cost from either the bare-number or the object encoding, and zero when it is absent', () => {
+    expect(getMessageUsageCost({ role: 'assistant', usage: { cost: 0.0125 } })).toBe(0.0125);
+    expect(getMessageUsageCost({ role: 'assistant', usage: { cost: { total: 0.0125 } } })).toBe(0.0125);
+    expect(getMessageUsageCost({ role: 'assistant', usage: { totalTokens: 7 } })).toBe(0);
+    expect(getMessageUsageCost({ role: 'toolResult', usage: { cost: 9 } })).toBeUndefined();
   });
 });
 

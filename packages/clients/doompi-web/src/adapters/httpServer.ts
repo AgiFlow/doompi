@@ -1548,7 +1548,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
               if (threadSubscriptions.delete(key)) threads.unsubscribe(sessionId, threadId);
               return;
             }
-            if (threadSubscriptions.has(key) || hub.backlog(sessionId) === undefined) return;
+            // Register even when the hub does not know the session yet. The tailer resolves
+            // the journal path lazily on every tick, so the subscription self-heals once the
+            // session appears. Refusing here would drop the request in silence, and the page
+            // only sends it again on a fresh socket.
+            if (threadSubscriptions.has(key)) return;
             threadSubscriptions.set(key, { sessionId, threadId });
             registered?.post(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId)));
             return;

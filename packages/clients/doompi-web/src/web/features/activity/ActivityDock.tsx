@@ -69,7 +69,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
             </StatusBadge>
           ) : null}
         </div>
-        <Button variant="ghost" size="xs" data-testid="activity-close" onClick={onClose} className="text-[10px]">
+        <Button variant="ghost" size="xs" data-testid="activity-close" onClick={onClose} className="text-xs">
           hide
         </Button>
       </div>
@@ -109,7 +109,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
           ) : null}
 
           <div className="border-t border-doom-border px-4 py-3">
-            <span className="text-[9px] leading-relaxed text-doom-faint">
+            <span className="text-2xs leading-relaxed text-doom-faint">
               each group is rendered by the package that owns it; the session's summary line stands in until that
               package publishes per-run detail
             </span>
@@ -143,7 +143,7 @@ function ActivityGroupView({
         <span
           aria-hidden
           data-active={group.active}
-          className={`text-[11px] font-bold ${group.active ? 'animate-pulse text-doom-yellow' : 'text-doom-faint'}`}
+          className={`text-sm font-bold ${group.active ? 'animate-pulse text-doom-yellow' : 'text-doom-faint'}`}
         >
           #
         </span>
@@ -151,7 +151,7 @@ function ActivityGroupView({
             temporary, so the tab strip carries it only while the reader is
             using it. Groups without a panel keep the name as a plain label. */}
         {group.transientTab === undefined ? (
-          <span className="flex-1 text-[11px] font-bold text-doom-text">{group.name}</span>
+          <span className="flex-1 text-sm font-bold text-doom-text">{group.name}</span>
         ) : (
           <Button
             variant="ghost"
@@ -162,7 +162,7 @@ function ActivityGroupView({
               const tab = group.transientTab?.();
               if (tab !== undefined) slotProps.openTransientTab(tab);
             }}
-            className="h-auto flex-1 justify-start px-0 py-0 text-[11px] font-bold text-doom-text hover:underline"
+            className="h-auto flex-1 justify-start px-0 py-0 text-sm font-bold text-doom-text hover:underline"
           >
             {group.name}
           </Button>
@@ -176,7 +176,7 @@ function ActivityGroupView({
       ) : (
         <p
           data-testid={`activity-summary-${group.name}`}
-          className={`px-1 text-[10px] ${group.active ? 'text-doom-yellow' : 'text-doom-faint'}`}
+          className={`px-1 text-xs ${group.active ? 'text-doom-yellow' : 'text-doom-faint'}`}
         >
           {group.summary || 'idle'}
         </p>

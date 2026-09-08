@@ -22,7 +22,7 @@ import type { PollSchedulerContract } from '../../pollScheduler';
 import { type AgentLaunchRequest, openAgentCatalog } from './agentCatalog';
 import { buildAgentCatalogEntries } from './agentResourceProjection';
 import { type FleetActionDispatcher, openSubagentFleet } from './fleet';
-import { AGENT_PULSE_FRAMES, agentFleetStatus, FLEET_STATUS_KEY } from './fleetStatus';
+import { AGENT_PULSE_FRAMES, agentFleetStatus, COST_STATUS_KEY, FLEET_STATUS_KEY } from './fleetStatus';
 
 export const SUBAGENT_FLEET_COMMAND = 'subagents-fleet';
 export const SUBAGENT_LIST_COMMAND = 'subagents-list';
@@ -37,6 +37,8 @@ const SUBAGENT_LEADER_SEGMENT = {
 const AGENT_FOOTER_ORDER = 20;
 const AGENT_STATUS_POLL_INTERVAL_MS = 250;
 const REQUESTED_STATUS = 'requested';
+/** Sub-cent precision: below any real run cost, short enough to read. */
+const COST_DECIMALS = 6;
 
 /** Publishes the nested SPC a menu for available agents and current-session runs. */
 export function registerSubagentLeaderContribution(hub: DoomUiHubService): () => void {
@@ -135,7 +137,21 @@ export function registerAgentStatus(
   hub: DoomUiHubService,
   deps: RegisterFleetCommandDeps,
 ): () => void {
-  let current: { ctx: ExtensionContext; jobs: TrackedAsyncJobsContract; fingerprint: string | undefined } | undefined;
+  let current:
+    | {
+        ctx: ExtensionContext;
+        jobs: TrackedAsyncJobsContract;
+        fingerprint: string | undefined;
+        /**
+         * Last-seen cost per run. The tracker evicts a finished run once its
+         * retention window expires, so summing `list()` alone would make the
+         * session total drop; remembering the run's final figure here keeps it
+         * monotonic for as long as the session lives.
+         */
+        costs: Map<string, number>;
+        costText: string | undefined;
+      }
+    | undefined;
   let disposed = false;
   let frame = 0;
   const footerContribution = hub.registerFooter({
@@ -144,11 +160,31 @@ export function registerAgentStatus(
     order: AGENT_FOOTER_ORDER,
   });
 
+  const publishCost = (): boolean => {
+    if (!current) return false;
+    for (const job of current.jobs.list()) {
+      if (job.cost !== undefined) current.costs.set(job.runId, job.cost);
+    }
+    let total = 0;
+    for (const cost of current.costs.values()) total += cost;
+    // Repeated float addition leaves artifacts ('0.30000000000000004'); the
+    // consumer reads this with Number(), so round to sub-cent precision first.
+    // A zero total is published as nothing at all, so a session that never ran
+    // an agent contributes no chip.
+    const text = total > 0 ? String(Number(total.toFixed(COST_DECIMALS))) : undefined;
+    if (text === current.costText) return false;
+    current.costText = text;
+    if (current.ctx.hasUI) current.ctx.ui.setStatus(COST_STATUS_KEY, text);
+    return true;
+  };
+
   const publish = (force = false): boolean => {
     if (!current) return false;
+    const costChanged = publishCost();
     const status = agentFleetStatus(current.jobs, frame);
     const fingerprint = status?.fingerprint;
-    if (!force && fingerprint === current.fingerprint) return false;
+    // The fleet fingerprint ignores cost, so cost is published above the guard.
+    if (!force && fingerprint === current.fingerprint) return costChanged;
     footerContribution.update(status?.footer);
     if (current.ctx.hasUI) current.ctx.ui.setStatus(FLEET_STATUS_KEY, status?.text);
     current.fingerprint = fingerprint;
@@ -170,6 +206,8 @@ export function registerAgentStatus(
       ctx,
       jobs: deps.tracker.forSession(ctx.sessionManager.getSessionId()),
       fingerprint: undefined,
+      costs: new Map(),
+      costText: undefined,
     };
     publish(true);
   });
@@ -179,7 +217,10 @@ export function registerAgentStatus(
     disposed = true;
     unregisterPoll();
     footerContribution.dispose();
-    if (current?.ctx.hasUI) current.ctx.ui.setStatus(FLEET_STATUS_KEY, undefined);
+    if (current?.ctx.hasUI) {
+      current.ctx.ui.setStatus(FLEET_STATUS_KEY, undefined);
+      current.ctx.ui.setStatus(COST_STATUS_KEY, undefined);
+    }
     current = undefined;
   };
 }

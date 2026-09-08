@@ -65,10 +65,10 @@ export function AuthorStructuredView({
   }
   return (
     <div data-testid="author-structured" className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
-      {!cells ? <p className="text-[10px] text-doom-faint">Slide text view, not a layout-faithful rendering.</p> : null}
+      {!cells ? <p className="text-xs text-doom-faint">Slide text view, not a layout-faithful rendering.</p> : null}
       {[...groups].map(([location, fragments]) => (
         <section key={location} className="space-y-1">
-          <h3 className="text-[10px] text-doom-faint">{location}</h3>
+          <h3 className="text-xs text-doom-faint">{location}</h3>
           <div className={cells ? 'flex gap-1' : 'space-y-2'}>
             {fragments.map((fragment) => (
               <div
@@ -78,7 +78,7 @@ export function AuthorStructuredView({
                 className={`${cells ? 'w-40 shrink-0' : ''} relative rounded ${displayedByFragment.has(fragment.id) ? 'ring-1 ring-doom-yellow' : ''}`}
               >
                 {displayedByFragment.has(fragment.id) ? (
-                  <span className="absolute -left-1 -top-1 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-doom-yellow px-1 text-[9px] font-bold text-doom-deep">
+                  <span className="absolute -left-1 -top-1 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-doom-yellow px-1 text-2xs font-bold text-doom-deep">
                     {displayedByFragment.get(fragment.id)}
                   </span>
                 ) : null}
@@ -108,7 +108,7 @@ export function AuthorStructuredView({
                   aria-label={fragment.location}
                   value={fragment.text}
                   readOnly={fragment.readOnly === true}
-                  className="w-full rounded border border-doom-border bg-doom-deep p-2 text-[11px] text-doom-text"
+                  className="w-full rounded border border-doom-border bg-doom-deep p-2 text-sm text-doom-text"
                   onChange={(event) => reviseAuthorFragment(sessionId, document.path, fragment.id, event.target.value)}
                 />
               </div>

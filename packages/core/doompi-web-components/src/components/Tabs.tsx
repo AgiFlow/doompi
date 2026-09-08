@@ -10,7 +10,7 @@ import { cn } from '../lib/cn.ts';
  * panels, and a link that looks like a tab must not be a second implementation.
  */
 export const tabVariants = cva(
-  'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-[10px] transition-colors outline-none',
+  'flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors outline-none',
   {
     variants: {
       active: {
@@ -24,7 +24,7 @@ export const tabVariants = cva(
 
 /** The count a tab carries; it inverts on the active tab so it stays readable on the tint. */
 export const tabBadgeVariants = cva(
-  'flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[8px] font-bold',
+  'flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-2xs font-bold',
   {
     variants: {
       active: { true: 'bg-doom-blue text-doom-rail', false: 'bg-doom-panel text-doom-dim' },

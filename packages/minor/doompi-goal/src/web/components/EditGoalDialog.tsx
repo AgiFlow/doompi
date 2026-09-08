@@ -75,7 +75,7 @@ export function EditGoalDialog({
               rows={3}
               spellCheck={false}
               onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setDraft(event.target.value)}
-              className="text-[11px]"
+              className="text-sm"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -88,10 +88,10 @@ export function EditGoalDialog({
                 budgetHint === '' ? 'none; leave blank to keep it that way' : `${budgetHint}; blank keeps it`
               }
               onChange={(event: ChangeEvent<HTMLInputElement>) => setBudget(event.target.value)}
-              className="text-[11px]"
+              className="text-sm"
             />
           </div>
-          <p data-testid="goal-edit-preview" className="truncate font-mono text-[9px] text-doom-faint">
+          <p data-testid="goal-edit-preview" className="truncate font-mono text-2xs text-doom-faint">
             {command ?? 'nothing to send'}
           </p>
           <DialogFooter>

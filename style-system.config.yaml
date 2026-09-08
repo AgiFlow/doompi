@@ -1,0 +1,50 @@
+# Workspace-root style-system configuration.
+#
+# Resolution order for a project is: `defaults` -> preset chain -> project config,
+# with whole-value replacement per field. Project configs are read only at the exact
+# `--app-path` given on the command line; there is no upward directory walk.
+#
+# `themePath` is workspace-root relative. `cssFiles` entries are app-relative and
+# must not contain `..`.
+root: true
+
+sharedComponentTags:
+  - style-system
+
+defaults:
+  # doompi-web-components is shadcn-on-Radix.
+  type: shadcn
+  # styles/tokens.css hardcodes `color-scheme: dark`. The light palette is swapped
+  # at runtime from JSON, so it is not discoverable from CSS.
+  colorScheme: dark
+
+presets:
+  # Shared component library rendered in isolation.
+  doom-components:
+    themePath: packages/core/doompi-web-components/styles/tokens.css
+    cssFiles:
+      - styles/preview.css
+    viewport:
+      width: 1280
+      height: 800
+
+  # The web client, which composes the library plus runtime-mounted plugin trees.
+  doom-web-app:
+    themePath: packages/core/doompi-web-components/styles/tokens.css
+    cssFiles:
+      - src/web/styles/app.css
+    viewport:
+      width: 1440
+      height: 900
+
+  # A plugin's own web tree. Its components consume the library as a package
+  # rather than by path, so the preview stylesheet imports the library's
+  # published `styles.css` instead of reaching across the workspace with `..`,
+  # which `cssFiles` forbids.
+  doom-plugin:
+    themePath: packages/core/doompi-web-components/styles/tokens.css
+    cssFiles:
+      - styles/preview.css
+    viewport:
+      width: 1280
+      height: 800

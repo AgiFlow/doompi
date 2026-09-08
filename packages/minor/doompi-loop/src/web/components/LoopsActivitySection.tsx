@@ -31,15 +31,15 @@ export function LoopsActivitySection({ sessionId, statuses, sendSessionFrame }: 
             >
               <span className="flex min-w-0 items-center gap-1.5">
                 <Dot tone={toneOf(loop.state)} pulse={loop.state !== 'running'} />
-                <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-doom-hi">{loop.label}</span>
-                <span className="shrink-0 text-[9px] text-doom-faint">{loop.state}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-bold text-doom-hi">{loop.label}</span>
+                <span className="shrink-0 text-2xs text-doom-faint">{loop.state}</span>
               </span>
-              <span className="truncate pl-3 text-[9px] text-doom-faint">{loop.detail}</span>
+              <span className="truncate pl-3 text-2xs text-doom-faint">{loop.detail}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="px-1 text-[10px] text-doom-faint">loop status unavailable</p>
+        <p className="px-1 text-xs text-doom-faint">loop status unavailable</p>
       )}
       <Button
         variant="subtle"
@@ -51,7 +51,7 @@ export function LoopsActivitySection({ sessionId, statuses, sendSessionFrame }: 
           if (sessionId === null) return;
           sendSessionFrame(sessionId, { type: 'prompt', message: MANAGE_COMMAND });
         }}
-        className="self-end text-[8px] font-bold"
+        className="self-end text-2xs font-bold"
       >
         manage
       </Button>

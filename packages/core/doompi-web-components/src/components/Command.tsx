@@ -88,7 +88,7 @@ export function CommandGroupLabel({ className, ...props }: ComponentProps<'div'>
   return (
     <div
       data-slot="command-group-label"
-      className={cn('px-2 pt-2 pb-1 text-[8px] font-bold tracking-[0.14em] text-doom-faint uppercase', className)}
+      className={cn('px-2 pt-2 pb-1 text-2xs font-bold tracking-wider text-doom-faint uppercase', className)}
       {...props}
     />
   );
@@ -109,7 +109,7 @@ export function CommandEmpty({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="command-empty"
-      className={cn('px-2 py-6 text-center text-[11px] text-doom-faint', className)}
+      className={cn('px-2 py-6 text-center text-sm text-doom-faint', className)}
       {...props}
     />
   );
@@ -121,7 +121,7 @@ export function CommandFooter({ className, ...props }: ComponentProps<'div'>) {
     <div
       data-slot="command-footer"
       className={cn(
-        'flex min-h-[30px] shrink-0 items-center justify-between gap-3 border-t border-doom-border-soft bg-doom-deep px-3 text-[9px] text-doom-faint',
+        'flex min-h-[30px] shrink-0 items-center justify-between gap-3 border-t border-doom-border-soft bg-doom-deep px-3 text-2xs text-doom-faint',
         className,
       )}
       {...props}

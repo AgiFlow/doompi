@@ -50,7 +50,7 @@ function TaskRow({
     <div
       data-testid={`activity-task-${task.id}`}
       data-task-status={task.status}
-      className="flex flex-col gap-1 rounded-[5px] px-1 py-1"
+      className="flex flex-col gap-1 rounded-md px-1 py-1"
     >
       <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-1.5">
         <Dot tone={STATUS_TONE[task.status]} pulse={task.status === 'in_progress'} />
@@ -59,11 +59,11 @@ function TaskRow({
           data-testid={`activity-task-title-${task.id}`}
           title={task.subject}
           onClick={() => openDialog('view')}
-          className={`min-w-0 truncate text-left text-[10px] font-bold hover:underline ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
+          className={`min-w-0 truncate text-left text-xs font-bold hover:underline ${task.status === 'failed' ? 'text-doom-red' : task.status === 'completed' ? 'text-doom-dim' : 'text-doom-hi'}`}
         >
           <span className="text-doom-faint">#{task.id}</span> {task.subject}
         </button>
-        <span className="shrink-0 text-[8px] text-doom-faint">{task.status.replace('_', ' ')}</span>
+        <span className="shrink-0 text-2xs text-doom-faint">{task.status.replace('_', ' ')}</span>
         {task.status !== 'completed' && task.status !== 'deleted' ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -105,7 +105,7 @@ function TaskRow({
         ) : null}
       </div>
       {detail || agent || task.blockedBy.length > 0 ? (
-        <span className="truncate pl-3 text-[9px] text-doom-faint">
+        <span className="truncate pl-3 text-2xs text-doom-faint">
           {agent ? `[${agent}] ` : ''}
           {detail ?? ''}
           {task.blockedBy.length > 0 ? ` · blocked by ${task.blockedBy.map((id) => `#${id}`).join(', ')}` : ''}
@@ -131,15 +131,13 @@ export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginS
         <span
           aria-hidden
           className={
-            active.length > 0
-              ? 'animate-pulse text-[11px] font-bold text-doom-yellow'
-              : 'text-[11px] font-bold text-doom-faint'
+            active.length > 0 ? 'animate-pulse text-sm font-bold text-doom-yellow' : 'text-sm font-bold text-doom-faint'
           }
         >
           #
         </span>
-        <span className="flex-1 text-[11px] font-bold text-doom-text">tasks</span>
-        <span className="text-[9px] text-doom-faint">{active.length} active</span>
+        <span className="flex-1 text-sm font-bold text-doom-text">tasks</span>
+        <span className="text-2xs text-doom-faint">{active.length} active</span>
       </div>
       {active.length > 0 ? (
         <div className="flex flex-col gap-0.5">
@@ -161,15 +159,15 @@ export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginS
             size="xs"
             aria-expanded={historyOpen}
             onClick={() => setHistoryOpen((open) => !open)}
-            className="justify-start gap-1.5 rounded-[5px] px-1 py-0.5 hover:bg-doom-panel"
+            className="justify-start gap-1.5 rounded-md px-1 py-0.5 hover:bg-doom-panel"
           >
             {historyOpen ? (
               <ChevronDownIcon className="h-2.5 w-2.5 text-doom-faint" />
             ) : (
               <ChevronRightIcon className="h-2.5 w-2.5 text-doom-faint" />
             )}
-            <span className="text-[10px] font-bold text-doom-dim">session</span>
-            <span className="text-[9px] text-doom-faint">{history.length}</span>
+            <span className="text-xs font-bold text-doom-dim">session</span>
+            <span className="text-2xs text-doom-faint">{history.length}</span>
           </Button>
           {historyOpen ? (
             <div className="flex flex-col gap-0.5 pl-2">

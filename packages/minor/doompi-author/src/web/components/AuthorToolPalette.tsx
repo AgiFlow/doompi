@@ -72,7 +72,7 @@ export function AuthorToolPalette({
   ];
   return (
     <section data-testid="author-tool-palette" className="space-y-2 border-b border-doom-border-soft pb-3">
-      <div className="flex justify-between text-xs text-doom-dim">
+      <div className="flex justify-between text-sm text-doom-dim">
         <h3 className="font-bold tracking-widest">TOOLS</h3>
         <span>focused tab</span>
       </div>
@@ -85,19 +85,19 @@ export function AuthorToolPalette({
             aria-label={tool.label === 'Region' ? 'mark region' : tool.label}
             aria-pressed={tool.active}
             onClick={tool.action}
-            className={`min-h-11 min-w-11 gap-1.5 rounded border text-sm [@media(pointer:fine)]:min-h-8 sm:text-xs ${tool.active ? 'border-doom-red bg-doom-red/10 text-doom-red hover:bg-doom-red/15' : 'border-doom-border bg-doom-panel text-doom-dim'}`}
+            className={`min-h-11 min-w-11 gap-1.5 rounded border text-base [@media(pointer:fine)]:min-h-8 sm:text-sm ${tool.active ? 'border-doom-red bg-doom-red/10 text-doom-red hover:bg-doom-red/15' : 'border-doom-border bg-doom-panel text-doom-dim'}`}
           >
             <span aria-hidden="true">{tool.glyph}</span>
             {tool.label}
           </Button>
         ))}
       </div>
-      <p className="text-sm leading-normal text-doom-dim sm:text-xs">
+      <p className="text-base leading-normal text-doom-dim sm:text-sm">
         {activeTool === 'mark'
           ? 'Drag over the document to mark a region.'
           : 'Choose Region to mark an area for a comment.'}
       </p>
-      {error ? <output className="block text-sm text-doom-red">{error}</output> : null}
+      {error ? <output className="block text-base text-doom-red">{error}</output> : null}
     </section>
   );
 }

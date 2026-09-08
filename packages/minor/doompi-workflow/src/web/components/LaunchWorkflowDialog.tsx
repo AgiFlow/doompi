@@ -32,7 +32,7 @@ const BOOLEAN_TYPE = 'boolean';
 const BOOLEAN_VALUES = ['true', 'false'] as const;
 
 function FieldLabel({ children }: { children: string }) {
-  return <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">{children}</span>;
+  return <span className="text-2xs font-bold tracking-widest text-doom-faint">{children}</span>;
 }
 
 /** One `workflow_dispatch` input: a picker when the workflow constrains it, a field otherwise. */
@@ -58,7 +58,7 @@ function InputField({
       className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5"
       data-testid={`launch-input-${input.name}`}
     >
-      <span className="min-w-0 truncate text-[10px] font-bold text-doom-text sm:w-28 sm:shrink-0">
+      <span className="min-w-0 truncate text-xs font-bold text-doom-text sm:w-28 sm:shrink-0">
         {input.name}
         {input.required === true ? <span className="text-doom-yellow"> *</span> : null}
       </span>
@@ -71,7 +71,7 @@ function InputField({
         />
       ) : (
         <Select value={value === '' ? undefined : value} onValueChange={onChange}>
-          <SelectTrigger className="h-7 w-full min-w-0 text-[10px] sm:min-w-[160px]">
+          <SelectTrigger className="h-7 w-full min-w-0 text-xs sm:min-w-[160px]">
             <SelectValue placeholder="choose…" />
           </SelectTrigger>
           <SelectContent>
@@ -83,7 +83,7 @@ function InputField({
           </SelectContent>
         </Select>
       )}
-      <span className="min-w-0 truncate text-[9px] text-doom-faint sm:w-40 sm:shrink-0">{hint}</span>
+      <span className="min-w-0 truncate text-2xs text-doom-faint sm:w-40 sm:shrink-0">{hint}</span>
     </div>
   );
 }
@@ -144,7 +144,7 @@ export function LaunchWorkflowDialog({
       <DialogContent width="lg" data-testid="launch-workflow-dialog" aria-describedby={undefined}>
         <DialogHeader>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
-            <span className="text-[9px] text-doom-faint">launch workflow</span>
+            <span className="text-2xs text-doom-faint">launch workflow</span>
             <DialogTitle data-testid="launch-workflow-name" className="max-w-full break-words">
               {workflow.name}
             </DialogTitle>
@@ -154,7 +154,7 @@ export function LaunchWorkflowDialog({
           </div>
         </DialogHeader>
         <DialogBody>
-          <p className="text-[11px] leading-relaxed text-doom-dim">
+          <p className="text-sm leading-relaxed text-doom-dim">
             {workflow.description || 'This workflow declares no description.'}
           </p>
           <div className="flex flex-col gap-1.5">
@@ -168,15 +168,13 @@ export function LaunchWorkflowDialog({
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={onPromptKeyDown}
             />
-            <span className="text-[9px] text-doom-faint">enter launches · shift+enter for a new line</span>
+            <span className="text-2xs text-doom-faint">enter launches · shift+enter for a new line</span>
           </div>
           {workflow.inputs.length === 0 ? null : (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <FieldLabel>INPUTS</FieldLabel>
-                <span className="text-[9px] text-doom-faint">
-                  workflow_dispatch · {workflow.inputs.length} declared
-                </span>
+                <span className="text-2xs text-doom-faint">workflow_dispatch · {workflow.inputs.length} declared</span>
               </div>
               {workflow.inputs.map((input) => (
                 <InputField
@@ -192,13 +190,10 @@ export function LaunchWorkflowDialog({
             <div className="flex flex-col gap-1.5">
               <FieldLabel>RUNNER</FieldLabel>
               {workflow.runners === undefined || workflow.runners.length === 0 ? (
-                <span className="flex h-7 items-center text-[10px] text-doom-dim">whatever the workflow resolves</span>
+                <span className="flex h-7 items-center text-xs text-doom-dim">whatever the workflow resolves</span>
               ) : (
                 <Select value={runner} onValueChange={setRunner}>
-                  <SelectTrigger
-                    data-testid="launch-runner"
-                    className="h-7 w-full min-w-0 text-[10px] sm:min-w-[160px]"
-                  >
+                  <SelectTrigger data-testid="launch-runner" className="h-7 w-full min-w-0 text-xs sm:min-w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -210,36 +205,36 @@ export function LaunchWorkflowDialog({
                   </SelectContent>
                 </Select>
               )}
-              <span className="text-[9px] text-doom-faint">
+              <span className="text-2xs text-doom-faint">
                 {workflow.runners === undefined ? 'no runner map declared' : 'the runners every step agrees on'}
               </span>
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>JOBS</FieldLabel>
-              <span className="flex h-7 items-center text-[10px] text-doom-dim">
+              <span className="flex h-7 items-center text-xs text-doom-dim">
                 {workflow.jobs.map((job) => job.name).join(' → ') || 'none declared'}
               </span>
-              <span className="text-[9px] text-doom-faint">in the order the file declares them</span>
+              <span className="text-2xs text-doom-faint">in the order the file declares them</span>
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>CWD</FieldLabel>
-              <span className="flex h-7 items-center text-[10px] text-doom-dim">{cwd}</span>
-              <span className="text-[9px] text-doom-faint">the session's directory</span>
+              <span className="flex h-7 items-center text-xs text-doom-dim">{cwd}</span>
+              <span className="text-2xs text-doom-faint">the session's directory</span>
             </div>
           </div>
           <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2">
             <FieldLabel>SENT TO THE SESSION</FieldLabel>
-            <pre data-testid="launch-line" className="whitespace-pre-wrap break-words text-[10px] text-doom-green">
+            <pre data-testid="launch-line" className="whitespace-pre-wrap break-words text-xs text-doom-green">
               {line}
             </pre>
           </div>
           {problems.length === 0 ? null : (
-            <p data-testid="launch-problems" className="text-[10px] text-doom-yellow">
+            <p data-testid="launch-problems" className="text-xs text-doom-yellow">
               {problems.join(' ')}
             </p>
           )}
           <DialogFooter className="flex-wrap sm:flex-nowrap">
-            <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+            <span className="w-full text-2xs text-doom-faint sm:w-auto">
               the run appears on the board as soon as it starts
             </span>
             <span className="min-w-0 flex-1" />

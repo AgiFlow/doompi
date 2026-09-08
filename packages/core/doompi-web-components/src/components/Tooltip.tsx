@@ -27,7 +27,7 @@ export function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'z-50 rounded border border-doom-border bg-doom-deep px-2 py-1 font-mono text-[10px] text-doom-text shadow-lg data-[state=delayed-open]:animate-doom-fade',
+          'z-50 rounded border border-doom-border bg-doom-deep px-2 py-1 font-mono text-xs text-doom-text shadow-lg data-[state=delayed-open]:animate-doom-fade',
           className,
         )}
         {...props}

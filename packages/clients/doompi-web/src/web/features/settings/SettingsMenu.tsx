@@ -37,7 +37,7 @@ function SectionLinks({
       >
         {/* Title only: each page repeats its own detail in the panel header, and
             eight stacked descriptions made the menu taller than the page. */}
-        <span className={`truncate text-[12px] font-bold ${current ? 'text-doom-blue' : 'text-doom-hi'}`}>
+        <span className={`truncate text-sm font-bold ${current ? 'text-doom-blue' : 'text-doom-hi'}`}>
           {section.label}
         </span>
       </Link>
@@ -65,8 +65,8 @@ export function SettingsMenu({ active, workspace }: { active: string | undefined
           <span className="flex min-w-0 items-center gap-2.5">
             <GearIcon className="h-3.5 w-3.5 shrink-0 text-doom-blue" />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate text-[11px] font-bold text-doom-hi">{current?.label ?? workspace}</span>
-              <span className="truncate text-[9px] font-normal text-doom-faint">{current?.detail}</span>
+              <span className="truncate text-sm font-bold text-doom-hi">{current?.label ?? workspace}</span>
+              <span className="truncate text-2xs font-normal text-doom-faint">{current?.detail}</span>
             </span>
           </span>
           <ChevronUpIcon className="h-3.5 w-3.5 shrink-0 text-doom-faint" />
@@ -77,7 +77,7 @@ export function SettingsMenu({ active, workspace }: { active: string | undefined
         data-testid="settings-menu"
         className="hidden w-[220px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-doom-border px-2.5 py-3 lg:flex"
       >
-        <span className="px-[11px] pb-1 pt-0.5 text-[9px] font-bold uppercase tracking-wide text-doom-faint">
+        <span className="px-[11px] pb-1 pt-0.5 text-2xs font-bold uppercase tracking-wide text-doom-faint">
           {workspace}
         </span>
         <SectionLinks active={active} sections={sections} />

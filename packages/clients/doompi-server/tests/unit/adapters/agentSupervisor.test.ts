@@ -175,7 +175,9 @@ describe('superviseAgentRelaunches', () => {
     fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
 
     // The watcher asks for a graceful end first. Wait for the filesystem event
-    // instead of assuming it will arrive within a fixed scheduling window.
+    // instead of assuming it will arrive within a fixed scheduling window; the
+    // case's own timeout has to outlast the two waits below or a slow fs event
+    // fails the test instead of the behaviour.
     await vi.waitFor(() => expect(spawned[0]?.inputEnded).toBe(true), { timeout: 5_000 });
     expect(spawned[0]?.stopped).toBe(false);
 
@@ -184,7 +186,7 @@ describe('superviseAgentRelaunches', () => {
     await settled();
     expect(spawned).toHaveLength(2);
     expect(spawned[1]?.options.args).toEqual(['--name', 'web', '--mode', 'rpc', '--major-mode', 'minimal']);
-  });
+  }, 10_000);
 
   it('treats a malformed relaunch file as a real exit', async () => {
     const { agent, relaunchFile } = await supervise();

@@ -105,7 +105,7 @@ export function SheetTitle({ className, ...props }: ComponentProps<typeof SheetP
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn('truncate text-[13px] font-bold text-doom-hi', className)}
+      className={cn('truncate text-base font-bold text-doom-hi', className)}
       {...props}
     />
   );
@@ -115,7 +115,7 @@ export function SheetDescription({ className, ...props }: ComponentProps<typeof 
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn('text-[11px] leading-relaxed text-doom-dim', className)}
+      className={cn('text-sm leading-relaxed text-doom-dim', className)}
       {...props}
     />
   );

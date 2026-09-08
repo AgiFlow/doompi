@@ -140,7 +140,7 @@ export function NewSessionDialog({
         </DialogHeader>
         <DialogBody>
           <label htmlFor="new-session-cwd" className="flex flex-col gap-1">
-            <span className="text-[10px] text-doom-faint">
+            <span className="text-xs text-doom-faint">
               working directory <span className="text-doom-faint/70">(type a folder name or paste a path)</span>
             </span>
             <Input
@@ -172,7 +172,7 @@ export function NewSessionDialog({
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setHighlight(index)}
                   onClick={() => pick(directory)}
-                  className="w-full px-2.5 py-1 text-[11px]"
+                  className="w-full px-2.5 py-1 text-sm"
                 >
                   {directory}
                 </OptionRow>
@@ -196,7 +196,7 @@ export function NewSessionDialog({
             </div>
           ) : null}
           <label htmlFor="new-session-name" className="flex flex-col gap-1">
-            <span className="text-[10px] text-doom-faint">name (optional)</span>
+            <span className="text-xs text-doom-faint">name (optional)</span>
             <Input
               id="new-session-name"
               data-testid="new-session-name"
@@ -214,7 +214,7 @@ export function NewSessionDialog({
             // worth resizing the dialog for, so it lives in its own scroller.
             <pre
               data-testid="new-session-error"
-              className="max-h-28 overflow-y-auto rounded border border-doom-edge-red bg-doom-tint-red/40 px-2.5 py-2 text-[10px] leading-relaxed whitespace-pre-wrap break-words text-doom-red"
+              className="max-h-28 overflow-y-auto rounded border border-doom-edge-red bg-doom-tint-red/40 px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap break-words text-doom-red"
             >
               {error}
             </pre>

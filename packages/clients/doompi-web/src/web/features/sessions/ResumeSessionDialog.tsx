@@ -107,26 +107,26 @@ export function ResumeSessionDialog({ sessionId, onClose }: { sessionId: string;
                   className="w-full items-start px-2.5 py-2 text-left"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11px] font-bold text-doom-hi">{threadLabel(thread)}</span>
+                    <span className="block truncate text-sm font-bold text-doom-hi">{threadLabel(thread)}</span>
                     {thread.name && thread.firstMessage ? (
-                      <span className="mt-0.5 line-clamp-2 block text-[10px] text-doom-dim">{thread.firstMessage}</span>
+                      <span className="mt-0.5 line-clamp-2 block text-xs text-doom-dim">{thread.firstMessage}</span>
                     ) : null}
                   </span>
-                  <span className="shrink-0 pl-3 text-[9px] text-doom-faint">
+                  <span className="shrink-0 pl-3 text-2xs text-doom-faint">
                     {running ? 'running' : `${thread.messageCount} messages`}
                   </span>
                 </OptionRow>
               );
             })}
             {!loading && visible.length === 0 ? (
-              <p className="px-2.5 py-6 text-center text-[10px] text-doom-faint">
+              <p className="px-2.5 py-6 text-center text-xs text-doom-faint">
                 {query.trim() ? 'no matching threads' : 'no Pi history for this workspace'}
               </p>
             ) : null}
-            {loading ? <p className="px-2.5 py-6 text-center text-[10px] text-doom-faint">loading history…</p> : null}
+            {loading ? <p className="px-2.5 py-6 text-center text-xs text-doom-faint">loading history…</p> : null}
           </div>
           {error ? (
-            <p data-testid="session-resume-error" className="text-[10px] text-doom-red">
+            <p data-testid="session-resume-error" className="text-xs text-doom-red">
               {error}
             </p>
           ) : null}

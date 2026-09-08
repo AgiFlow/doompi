@@ -39,19 +39,19 @@ export function FocusNotice({ requested, applied, dimension, onClear }: FocusNot
     // whole numbers. Saying "showing model X" over them would be a lie, so the
     // drill-down is reported as refused instead.
     return (
-      <span className="text-[10px] text-doom-yellow" data-testid="metrics-focus-refused">
+      <span className="text-xs text-doom-yellow" data-testid="metrics-focus-refused">
         this log sink does not support narrowing by {DIMENSION_LABELS[dimension]}, so the numbers below are still
         everything
-        <Button variant="ghost" size="xs" className="ml-2 text-[9px]" onClick={onClear}>
+        <Button variant="ghost" size="xs" className="ml-2 text-2xs" onClick={onClear}>
           clear
         </Button>
       </span>
     );
   }
   return (
-    <span className="text-[10px] text-doom-dim" data-testid="metrics-focus">
+    <span className="text-xs text-doom-dim" data-testid="metrics-focus">
       narrowed to <span className="text-doom-hi">{applied}</span>
-      <Button variant="ghost" size="xs" className="ml-2 text-[9px]" onClick={onClear}>
+      <Button variant="ghost" size="xs" className="ml-2 text-2xs" onClick={onClear}>
         clear
       </Button>
     </span>

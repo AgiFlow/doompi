@@ -42,7 +42,7 @@ export function DropdownMenuContent({
 }
 
 export const dropdownMenuItemVariants = cva(
-  'flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-[11px] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[highlighted]:bg-doom-deep',
+  'flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[highlighted]:bg-doom-deep',
   {
     variants: {
       variant: {
@@ -164,7 +164,7 @@ export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof
   return (
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
-      className={cn('px-2.5 py-1 text-[8px] font-bold tracking-[0.14em] text-doom-faint uppercase', className)}
+      className={cn('px-2.5 py-1 text-2xs font-bold tracking-wider text-doom-faint uppercase', className)}
       {...props}
     />
   );
@@ -175,7 +175,7 @@ export function DropdownMenuShortcut({ className, ...props }: ComponentProps<'sp
   return (
     <span
       data-slot="dropdown-menu-shortcut"
-      className={cn('ml-auto shrink-0 text-[10px] tracking-[0.08em] text-doom-faint', className)}
+      className={cn('ml-auto shrink-0 text-xs tracking-wide text-doom-faint', className)}
       {...props}
     />
   );

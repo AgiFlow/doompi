@@ -26,7 +26,7 @@ const AGENT_DEFAULT = 'agent-default';
 const TASK_ROWS = 4;
 
 function FieldLabel({ children }: { children: string }) {
-  return <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">{children}</span>;
+  return <span className="text-2xs font-bold tracking-widest text-doom-faint">{children}</span>;
 }
 
 /**
@@ -82,7 +82,7 @@ export function LaunchAgentDialog({
       <DialogContent width="lg" data-testid="launch-dialog" aria-describedby={undefined}>
         <DialogHeader>
           <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2.5">
-            <span className="text-[9px] text-doom-faint">launch subagent</span>
+            <span className="text-2xs text-doom-faint">launch subagent</span>
             <DialogTitle data-testid="launch-agent" className="max-w-full break-words">
               {agent.name}
             </DialogTitle>
@@ -92,7 +92,7 @@ export function LaunchAgentDialog({
           </div>
         </DialogHeader>
         <DialogBody>
-          <p className="text-[11px] leading-relaxed text-doom-dim">{agent.description}</p>
+          <p className="text-sm leading-relaxed text-doom-dim">{agent.description}</p>
           <div className="flex flex-col gap-1.5">
             <FieldLabel>TASK</FieldLabel>
             <Textarea
@@ -104,9 +104,7 @@ export function LaunchAgentDialog({
               onChange={(event) => setTask(event.target.value)}
               onKeyDown={onTaskKeyDown}
             />
-            <span className="text-[9px] text-doom-faint">
-              enter launches · shift+enter for a new line · @ for files
-            </span>
+            <span className="text-2xs text-doom-faint">enter launches · shift+enter for a new line · @ for files</span>
           </div>
           <div className="flex flex-wrap gap-5">
             <div className="flex flex-col gap-1.5">
@@ -131,12 +129,12 @@ export function LaunchAgentDialog({
                   fork this session
                 </Button>
               </div>
-              <span className="text-[9px] text-doom-faint">fork shares the conversation so far</span>
+              <span className="text-2xs text-doom-faint">fork shares the conversation so far</span>
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>MODEL</FieldLabel>
               <Select value={model} onValueChange={setModel}>
-                <SelectTrigger data-testid="launch-model" className="h-7 w-full min-w-0 text-[10px] sm:min-w-[200px]">
+                <SelectTrigger data-testid="launch-model" className="h-7 w-full min-w-0 text-xs sm:min-w-[200px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -148,22 +146,22 @@ export function LaunchAgentDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <span className="text-[9px] text-doom-faint">a pick becomes model=… on the command</span>
+              <span className="text-2xs text-doom-faint">a pick becomes model=… on the command</span>
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>CWD</FieldLabel>
-              <span className="flex h-7 items-center text-[10px] text-doom-dim">{abbreviateCwd(cwd)}</span>
-              <span className="text-[9px] text-doom-faint">the session's directory</span>
+              <span className="flex h-7 items-center text-xs text-doom-dim">{abbreviateCwd(cwd)}</span>
+              <span className="text-2xs text-doom-faint">the session's directory</span>
             </div>
           </div>
           <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2">
             <FieldLabel>SENT TO THE SESSION</FieldLabel>
-            <pre data-testid="launch-command" className="whitespace-pre-wrap break-words text-[10px] text-doom-green">
+            <pre data-testid="launch-command" className="whitespace-pre-wrap break-words text-xs text-doom-green">
               {command}
             </pre>
           </div>
           <DialogFooter className="flex-wrap sm:flex-nowrap">
-            <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+            <span className="w-full text-2xs text-doom-faint sm:w-auto">
               the run opens in its own tab once it starts
             </span>
             <span className="min-w-0 flex-1" />

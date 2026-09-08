@@ -112,6 +112,7 @@ export interface TrackedAsyncJob {
   /** Which runtime is executing this run. Absent means the default `pi` path. */
   runtime?: string;
   tokens?: number;
+  cost?: number;
   currentTool?: string;
   toolCount?: number;
 }
@@ -187,6 +188,7 @@ interface ReadStatusResult {
   attentionReason?: string;
   runtime?: string;
   tokens?: number;
+  cost?: number;
   currentTool?: string;
   toolCount?: number;
 }
@@ -279,6 +281,7 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
       attentionReason: status.attentionReason,
       runtime: status.runtime,
       tokens: status.tokens,
+      cost: status.cost,
       currentTool: status.currentTool,
       toolCount: status.toolCount,
     };
@@ -321,6 +324,7 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
       existing.status !== job.status ||
       existing.updatedAt !== job.updatedAt ||
       existing.tokens !== job.tokens ||
+      existing.cost !== job.cost ||
       existing.currentTool !== job.currentTool ||
       existing.toolCount !== job.toolCount
     );

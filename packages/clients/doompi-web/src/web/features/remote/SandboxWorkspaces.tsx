@@ -38,14 +38,14 @@ export function SandboxWorkspaces({ workspaces }: SandboxWorkspacesProps) {
   return (
     <div className="flex flex-col gap-2 pl-4" data-testid="sandbox-workspaces">
       {workspaces.length === 0 ? (
-        <p className="text-[11px] text-doom-faint">
+        <p className="text-sm text-doom-faint">
           Nothing is mounted yet, so the container would have no directory to work in. Add at least one.
         </p>
       ) : (
         <ul className="flex flex-col gap-1">
           {workspaces.map((workspace) => (
             <li key={workspace} className="flex items-center justify-between gap-2">
-              <code className="truncate text-[11px] text-doom-hi">{workspace}</code>
+              <code className="truncate text-sm text-doom-hi">{workspace}</code>
               <Button
                 variant="ghost"
                 data-testid={`sandbox-workspace-remove-${workspace}`}
@@ -75,7 +75,7 @@ export function SandboxWorkspaces({ workspaces }: SandboxWorkspacesProps) {
           add
         </Button>
       </div>
-      <p className="text-[11px] text-doom-faint">
+      <p className="text-sm text-doom-faint">
         Absolute paths only, mounted at the same path inside. Sessions working anywhere else stay on the host and will
         not appear in the contained cockpit.
       </p>

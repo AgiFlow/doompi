@@ -38,7 +38,7 @@ export function QueueSheet({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className="mb-2 h-7 w-full justify-between rounded-md border border-doom-border-soft bg-doom-panel/60 px-2.5 text-[10px] text-doom-dim hover:text-doom-hi"
+        className="mb-2 h-7 w-full justify-between rounded-md border border-doom-border-soft bg-doom-panel/60 px-2.5 text-xs text-doom-dim hover:text-doom-hi"
       >
         <span className="flex min-w-0 items-center gap-2">
           <RefreshIcon className="h-3 w-3 shrink-0 text-doom-cyan" />
@@ -61,7 +61,7 @@ export function QueueSheet({
           <span aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-doom-border" />
           <DialogHeader dismissible closeLabel="close queued messages" className="py-2.5">
             <DialogTitle>queued messages</DialogTitle>
-            <span className="text-[10px] text-doom-faint">{label} waiting</span>
+            <span className="text-xs text-doom-faint">{label} waiting</span>
           </DialogHeader>
           <DialogBody className="overflow-y-auto p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <ol className="flex flex-col gap-1.5">
@@ -71,15 +71,11 @@ export function QueueSheet({
                   data-testid="queue-sheet-item"
                   className="flex min-w-0 gap-3 rounded-md border border-doom-border-soft bg-doom-deep px-3 py-2.5"
                 >
-                  <span className="pt-0.5 text-[10px] font-bold text-doom-cyan">
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
+                  <span className="pt-0.5 text-xs font-bold text-doom-cyan">{String(index + 1).padStart(2, '0')}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-doom-hi">
-                      {entry.text}
-                    </p>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-doom-hi">{entry.text}</p>
                     {entry.images && entry.images.length > 0 ? (
-                      <p className="mt-1 text-[9px] text-doom-faint">
+                      <p className="mt-1 text-2xs text-doom-faint">
                         {entry.images.length} image{entry.images.length === 1 ? '' : 's'} attached
                       </p>
                     ) : null}
@@ -103,7 +99,7 @@ export function QueueSheet({
               {unlisted > 0 ? (
                 <li
                   data-testid="queue-sheet-unlisted"
-                  className="rounded-md border border-dashed border-doom-border px-3 py-2.5 text-[11px] text-doom-faint"
+                  className="rounded-md border border-dashed border-doom-border px-3 py-2.5 text-sm text-doom-faint"
                 >
                   {unlisted} more queued message{unlisted === 1 ? ' is' : 's are'} waiting in the session. Their text is
                   not available in this browser.

@@ -24,13 +24,13 @@ export function RunWorktreeToolMessage({ args, output, running, isError }: ToolM
 
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] font-bold text-doom-hi">
+      <span className="text-sm font-bold text-doom-hi">
         {ACTION_LABEL[action] ?? 'Worktree'}
         {subject === '' ? '' : ` ${subject}`}
         {running ? ' …' : ''}
       </span>
       {output !== '' && (
-        <pre className={`whitespace-pre-wrap text-[10px] ${isError ? 'text-doom-red' : 'text-doom-dim'}`}>{output}</pre>
+        <pre className={`whitespace-pre-wrap text-xs ${isError ? 'text-doom-red' : 'text-doom-dim'}`}>{output}</pre>
       )}
     </div>
   );

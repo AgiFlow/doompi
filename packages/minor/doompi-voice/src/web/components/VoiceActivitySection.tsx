@@ -24,7 +24,7 @@ function Meter({ tone }: { tone: VoiceTone }) {
       {bars.map((height, index) => (
         <span
           key={index}
-          className={`w-[2px] animate-pulse rounded-[1px] ${tone === 'attention' ? 'bg-doom-yellow' : 'bg-doom-cyan'}`}
+          className={`w-[2px] animate-pulse rounded-xs ${tone === 'attention' ? 'bg-doom-yellow' : 'bg-doom-cyan'}`}
           style={{ height: `${String(height)}px`, animationDelay: `${String(index * 120)}ms` }}
         />
       ))}
@@ -64,11 +64,11 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
     >
       <span className="flex min-w-0 items-center gap-2">
         <Dot tone={TONE_DOT[tone]} pulse={mediaConflict ? false : view.active} />
-        <span data-testid="voice-label" className={`flex-1 truncate text-[11px] font-bold ${TONE_TEXT[tone]}`}>
+        <span data-testid="voice-label" className={`flex-1 truncate text-sm font-bold ${TONE_TEXT[tone]}`}>
           {mediaConflict ? 'microphone unavailable' : view.label}
         </span>
         {view.elapsed ? (
-          <span data-testid="voice-elapsed" className="shrink-0 text-[10px] tabular-nums text-doom-yellow">
+          <span data-testid="voice-elapsed" className="shrink-0 text-xs tabular-nums text-doom-yellow">
             {view.elapsed}
           </span>
         ) : null}
@@ -88,14 +88,14 @@ export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: 
         {!mediaConflict && view.active ? <Meter tone={view.tone} /> : null}
       </span>
       {mediaConflict || view.detail ? (
-        <span data-testid="voice-detail" className="text-[9px] leading-relaxed text-doom-faint">
+        <span data-testid="voice-detail" className="text-2xs leading-relaxed text-doom-faint">
           {mediaConflict
             ? 'another browser tab owns voice capture. Close it or stop voice there, then retry.'
             : view.detail}
         </span>
       ) : null}
       {view.mode !== 'off' ? (
-        <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint/70 uppercase">
+        <span className="text-2xs font-bold tracking-wider text-doom-faint/70 uppercase">
           {view.mode === 'auto' ? 'autonomous capture' : 'one-shot dictation'}
         </span>
       ) : null}

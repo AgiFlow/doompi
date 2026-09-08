@@ -72,8 +72,8 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
   return (
     <article data-testid={prominent ? 'author-active-request' : undefined} className="space-y-3">
       <header className="border-b border-doom-border-soft pb-3">
-        <p className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">DOCUMENT CONTEXT</p>
-        <p className="mt-2 flex items-center gap-2 truncate text-[13px] font-bold text-doom-hi">
+        <p className="text-2xs font-bold tracking-widest text-doom-faint">DOCUMENT CONTEXT</p>
+        <p className="mt-2 flex items-center gap-2 truncate text-base font-bold text-doom-hi">
           <span aria-hidden className="text-doom-magenta">
             ↗
           </span>
@@ -85,16 +85,16 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
         <ol className="space-y-3">
           {request.regions.map((region, index) => (
             <li key={region.id} className="space-y-2">
-              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-doom-yellow">
+              <p className="font-mono text-2xs font-bold uppercase tracking-wider text-doom-yellow">
                 WHERE · {request.regions.length > 1 ? `${index + 1} · ` : ''}
                 {documentName(request.documentPath)} / {anchorLabel(region.anchor)} · rev {request.revision}
               </p>
               {region.quote ? (
-                <blockquote className="line-clamp-3 text-[11px] italic leading-relaxed text-doom-text">
+                <blockquote className="line-clamp-3 text-sm italic leading-relaxed text-doom-text">
                   “{region.quote}”
                 </blockquote>
               ) : null}
-              <p className="text-[10px] leading-relaxed text-doom-dim">{region.comment}</p>
+              <p className="text-xs leading-relaxed text-doom-dim">{region.comment}</p>
             </li>
           ))}
         </ol>
@@ -104,7 +104,7 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
         data-testid={prominent ? 'author-operation-card' : undefined}
         className={`rounded border p-3 ${STATUS_STYLES[request.status]}`}
       >
-        <p className="font-mono text-[10px] font-bold tracking-[0.14em]">
+        <p className="font-mono text-xs font-bold tracking-wider">
           ●{' '}
           {request.status === 'CHANGING'
             ? 'WORKING'
@@ -114,12 +114,12 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
                 ? 'ERROR'
                 : request.status}
         </p>
-        <p className="mt-2 text-[12px] leading-relaxed text-doom-hi">
+        <p className="mt-2 text-sm leading-relaxed text-doom-hi">
           {request.currentOperation || STATUS_LABELS[request.status]}
         </p>
-        {request.error ? <p className="mt-2 text-[10px] leading-relaxed text-doom-red">{request.error}</p> : null}
+        {request.error ? <p className="mt-2 text-xs leading-relaxed text-doom-red">{request.error}</p> : null}
         {request.before !== undefined || request.after !== undefined ? (
-          <details className="mt-2 border-t border-current/20 pt-2 text-[10px] text-doom-dim">
+          <details className="mt-2 border-t border-current/20 pt-2 text-xs text-doom-dim">
             <summary className="cursor-pointer select-none">change preview</summary>
             {request.before !== undefined ? (
               <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-words font-mono">
@@ -136,15 +136,15 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
       </section>
 
       <section className="space-y-2">
-        <p className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">REQUEST · HOW TO CHANGE</p>
+        <p className="text-2xs font-bold tracking-widest text-doom-faint">REQUEST · HOW TO CHANGE</p>
         <div className="rounded border border-doom-border bg-doom-deep p-3">
-          <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-doom-text">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-doom-text">
             {instruction || 'No additional instruction.'}
           </p>
         </div>
       </section>
 
-      <footer className="font-mono text-[9px] text-doom-dim">{progressLabel(request)}</footer>
+      <footer className="font-mono text-2xs text-doom-dim">{progressLabel(request)}</footer>
     </article>
   );
 }
@@ -154,15 +154,15 @@ export function AuthorRequestLog({ requests }: { requests: readonly AuthorReques
   const earlier = requests.slice(0, -1).toReversed();
   return (
     <section data-testid="author-request-history" className="space-y-3">
-      <h3 className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">AUTHORING</h3>
+      <h3 className="text-2xs font-bold tracking-widest text-doom-faint">AUTHORING</h3>
       {latest === undefined ? (
-        <p className="text-[11px] leading-relaxed text-doom-dim">No requests or changes yet.</p>
+        <p className="text-sm leading-relaxed text-doom-dim">No requests or changes yet.</p>
       ) : (
         <RequestRecord request={latest} prominent />
       )}
       {earlier.length > 0 ? (
         <details className="border-t border-doom-border-soft pt-3" data-testid="author-earlier-requests">
-          <summary className="cursor-pointer select-none text-[9px] font-bold tracking-[0.14em] text-doom-faint">
+          <summary className="cursor-pointer select-none text-2xs font-bold tracking-wider text-doom-faint">
             EARLIER REQUESTS ({earlier.length})
           </summary>
           <ol className="mt-3 space-y-5">

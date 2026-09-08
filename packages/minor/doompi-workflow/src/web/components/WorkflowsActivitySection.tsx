@@ -59,7 +59,7 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
   if (groups.length === 0) {
     return (
       <div className="flex items-center gap-2 px-1">
-        <p data-testid="activity-summary-workflows" className="text-[10px] text-doom-faint">
+        <p data-testid="activity-summary-workflows" className="text-xs text-doom-faint">
           idle
         </p>
         <Button
@@ -91,20 +91,20 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
         focusRun(sessionId, row.identity);
         openTransientTab(workflowsTab());
       }}
-      className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
+      className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <Dot tone={TONE_DOT[row.tone]} pulse={row.tone === 'running'} />
         <span
-          className={`min-w-0 flex-1 truncate text-[10px] font-bold ${
+          className={`min-w-0 flex-1 truncate text-xs font-bold ${
             row.tone === 'running' || row.tone === 'paused' ? 'text-doom-hi' : 'text-doom-dim'
           }`}
         >
           {row.name}
         </span>
-        <span className="shrink-0 text-[9px] text-doom-faint">{row.elapsed}</span>
+        <span className="shrink-0 text-2xs text-doom-faint">{row.elapsed}</span>
       </span>
-      <span className={`truncate pl-3 text-[9px] ${TONE_DETAIL[row.tone]}`}>{row.detail}</span>
+      <span className={`truncate pl-3 text-2xs ${TONE_DETAIL[row.tone]}`}>{row.detail}</span>
     </Button>
   );
 
@@ -121,15 +121,15 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
               data-open={open}
               aria-expanded={open}
               onClick={() => setFolded((current) => ({ ...current, [group.name]: !open }))}
-              className="justify-start gap-1.5 rounded-[5px] px-1 py-0.5 hover:bg-doom-panel"
+              className="justify-start gap-1.5 rounded-md px-1 py-0.5 hover:bg-doom-panel"
             >
               {open ? (
                 <ChevronDownIcon className="h-2.5 w-2.5 text-doom-faint" />
               ) : (
                 <ChevronRightIcon className="h-2.5 w-2.5 text-doom-faint" />
               )}
-              <span className={`text-[10px] font-bold ${GROUP_LABEL[group.name]}`}>{group.name}</span>
-              <span className="text-[9px] text-doom-faint">{group.rows.length}</span>
+              <span className={`text-xs font-bold ${GROUP_LABEL[group.name]}`}>{group.name}</span>
+              <span className="text-2xs text-doom-faint">{group.rows.length}</span>
             </Button>
             {open ? (
               <div className="flex flex-col gap-0.5 pl-2">
@@ -138,7 +138,7 @@ export function WorkflowsActivitySection({ sessionId, openTransientTab }: WebPlu
                 ))}
               </div>
             ) : (
-              <span className="truncate pl-5 text-[9px] text-doom-faint">
+              <span className="truncate pl-5 text-2xs text-doom-faint">
                 {group.rows
                   .slice(0, 2)
                   .map((row) => row.name)

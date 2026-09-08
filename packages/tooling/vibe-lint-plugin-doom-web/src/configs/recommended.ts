@@ -3,6 +3,7 @@ import type { PluginConfigPreset, Severity } from '@agimon-ai/vibe-lint';
 const rules: Record<string, Severity> = {
   'doom-components-layer-boundary': 'error',
   'doom-web-layer-boundary': 'error',
+  'no-arbitrary-style-value': 'error',
   'no-cross-feature-import': 'error',
   'no-raw-theme-color': 'error',
   'prefer-shared-primitive': 'error',

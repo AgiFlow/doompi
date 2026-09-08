@@ -5,8 +5,8 @@ import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-[10px] text-doom-faint">{label}</span>
-      <span className="truncate text-[10px] text-doom-text">{value}</span>
+      <span className="shrink-0 text-xs text-doom-faint">{label}</span>
+      <span className="truncate text-xs text-doom-text">{value}</span>
     </div>
   );
 }
@@ -43,7 +43,7 @@ export function RefusedCard() {
           <Spinner className="text-doom-red/70" />
         </DialogHeader>
         <div className="flex flex-col gap-3 px-4 py-4">
-          <p className="text-[12px] leading-relaxed text-doom-text">
+          <p className="text-sm leading-relaxed text-doom-text">
             doompi-server holds one client at a time so two views cannot fight over the same agent. Another cockpit is
             attached to this socket right now.
           </p>
@@ -53,7 +53,7 @@ export function RefusedCard() {
             <Detail label="cwd" value={abbreviateCwd(meta.summary.cwd)} />
             <Detail label="retry" value="automatic, with backoff" />
           </div>
-          <p data-testid="refused-hint" className="text-[10px] text-doom-faint">
+          <p data-testid="refused-hint" className="text-xs text-doom-faint">
             close the other cockpit and this one takes over on the next attempt.
           </p>
         </div>

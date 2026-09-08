@@ -1,7 +1,9 @@
-import { getDocument, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-dist/webpack.mjs';
+import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/webpack.mjs';
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { Button } from './Button.tsx';
+
+type PdfLoadingTask = ReturnType<typeof import('pdfjs-dist/webpack.mjs').getDocument>;
 
 export interface PdfNormalizedRectangle {
   x: number;
@@ -88,22 +90,29 @@ export function PdfPreview({ src, path, className, controllerRef, 'data-testid':
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
-    const loading = getDocument({ url: src });
     let disposed = false;
-    void loading.promise
-      .then((document) => {
-        if (disposed) return;
-        documentRef.current = document;
-        setError(undefined);
-        setPage(1);
-        setPageState({ ...EMPTY_STATE, pageCount: document.numPages });
+    let loading: PdfLoadingTask | undefined;
+    // pdfjs is imported on demand: `pdfjs-dist/webpack.mjs` spins up its worker
+    // at module scope, so a static import would make every consumer of this
+    // package pay for the worker whether or not it ever shows a PDF.
+    void import('pdfjs-dist/webpack.mjs')
+      .then(({ getDocument }) => {
+        if (disposed) return undefined;
+        loading = getDocument({ url: src });
+        return loading.promise.then((document) => {
+          if (disposed) return;
+          documentRef.current = document;
+          setError(undefined);
+          setPage(1);
+          setPageState({ ...EMPTY_STATE, pageCount: document.numPages });
+        });
       })
       .catch((reason: unknown) => {
         if (!disposed) setError(reason instanceof Error ? reason.message : String(reason));
       });
     return () => {
       disposed = true;
-      void loading.destroy();
+      void loading?.destroy();
       renderTask.current?.cancel();
       renderTask.current = null;
       documentRef.current = null;
@@ -162,7 +171,7 @@ export function PdfPreview({ src, path, className, controllerRef, 'data-testid':
 
   return (
     <section data-testid={testId} data-kind="pdf" className={cn('flex min-h-0 flex-col gap-2', className)}>
-      <div className="flex items-center justify-between gap-2 text-[10px] text-doom-faint">
+      <div className="flex items-center justify-between gap-2 text-xs text-doom-faint">
         <span>{path}</span>
         <div className="flex items-center gap-2">
           <Button
@@ -186,7 +195,7 @@ export function PdfPreview({ src, path, className, controllerRef, 'data-testid':
           </Button>
         </div>
       </div>
-      {error === undefined ? null : <output className="text-[10px] text-doom-red">{error}</output>}
+      {error === undefined ? null : <output className="text-xs text-doom-red">{error}</output>}
       <div className="min-h-0 overflow-auto rounded border border-doom-border bg-doom-deep">
         <canvas ref={canvasRef} aria-label={path} className="mx-auto block max-w-full" />
       </div>

@@ -39,7 +39,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-3 text-[10px] text-doom-dim">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-doom-dim">
           <span>
             <span className="text-doom-hi">{formatTokens(report.totals.totalTokens)}</span> total
           </span>
@@ -70,41 +70,41 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
             beside it without this line reads as a breakdown that does not
             add up, which is worse than not showing them.
           */}
-        <span className="text-[9px] text-doom-faint/70">
+        <span className="text-2xs text-doom-faint/70">
           total is what the providers reported and is dominated by cache traffic; the parts beside it are counted
           separately and do not sum to it
         </span>
       </div>
 
       <section className="flex flex-col gap-1">
-        <span className="text-[9px] font-bold text-doom-faint">tokens over time</span>
+        <span className="text-2xs font-bold text-doom-faint">tokens over time</span>
         <TimelineChart buckets={report.timeline} bucketUnit={report.bucketUnit} />
       </section>
 
       <section className="flex flex-col gap-1">
-        <span className="text-[9px] font-bold text-doom-faint">tokens by {DIMENSION_LABELS[report.dimension]}</span>
+        <span className="text-2xs font-bold text-doom-faint">tokens by {DIMENSION_LABELS[report.dimension]}</span>
         {DIMENSION_NOTES[report.dimension] === undefined ? null : (
-          <span className="text-[9px] text-doom-faint/70">{DIMENSION_NOTES[report.dimension]}</span>
+          <span className="text-2xs text-doom-faint/70">{DIMENSION_NOTES[report.dimension]}</span>
         )}
         <GroupBars groups={report.groups} focus={report.focus} onFocus={onFocus} />
       </section>
 
       <section className="flex flex-col gap-1">
-        <span className="text-[9px] font-bold text-doom-faint">tool calls</span>
+        <span className="text-2xs font-bold text-doom-faint">tool calls</span>
         {/*
             The token column is a ranking hint, not a measurement. The sink
             attributes a turn's whole total to every tool that ran in that
             turn, so saying otherwise here would be a lie the chart repeats.
           */}
-        <span className="text-[9px] text-doom-faint/70">
+        <span className="text-2xs text-doom-faint/70">
           call counts are exact; the token column ranks tools by the turns they ran in, and is not each tool&apos;s own
           consumption
         </span>
-        <table className="w-full text-[10px]" data-testid="metrics-tools">
+        <table className="w-full text-xs" data-testid="metrics-tools">
           {/* Without heads the two right columns are just numbers; "1006" and
               "325.9k" do not say which is a call count and which is tokens. */}
           <thead>
-            <tr className="text-[9px] text-doom-faint/70">
+            <tr className="text-2xs text-doom-faint/70">
               <th className="py-1 text-left font-normal">tool</th>
               <th className="w-20 py-1 text-right font-normal">calls</th>
               <th className="w-20 py-1 text-right font-normal">tokens</th>
@@ -124,7 +124,7 @@ export function MetricsReportView({ report, onFocus }: MetricsReportViewProps) {
 
       <IssuesSection tools={report.tools} focus={report.dimension === 'session' ? report.focus : undefined} />
 
-      <span className="text-[9px] text-doom-faint/70" data-testid="metrics-provenance">
+      <span className="text-2xs text-doom-faint/70" data-testid="metrics-provenance">
         read over {report.transport ?? 'an unreported transport'} · generated {report.generatedAt}
       </span>
     </div>

@@ -115,7 +115,7 @@ describe('primitives', () => {
     expect(html(<Input placeholder="p" />)).toContain('placeholder="p"');
     expect(html(<Textarea variant="bare" />)).toContain('bg-transparent');
     expect(html(<Kbd>SPC</Kbd>)).toContain('<kbd');
-    expect(html(<SectionLabel>sessions</SectionLabel>)).toContain('tracking-[0.18em]');
+    expect(html(<SectionLabel>sessions</SectionLabel>)).toContain('tracking-widest');
     expect(html(<Separator orientation="vertical" />)).toContain('data-orientation="vertical"');
     expect(html(<Spinner />)).toContain('animate-spin');
     expect(html(<StreamCursor />)).toContain('animate-doom-blink');

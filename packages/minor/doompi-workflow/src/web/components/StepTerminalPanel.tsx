@@ -160,15 +160,13 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
   return (
     <div data-testid="step-terminal-panel" className="flex min-h-0 flex-1 flex-col px-[26px] py-[18px]">
       <div data-testid="step-terminal-head" className="flex items-center gap-2.5 pb-3">
-        <span className="shrink-0 truncate text-[12px] font-bold text-doom-hi">
-          {run?.displayName ?? target.runKey}
-        </span>
-        <span className="text-[10px] text-doom-faint">›</span>
-        <span className="shrink-0 truncate text-[11px] font-bold text-doom-blue">{target.job}</span>
+        <span className="shrink-0 truncate text-sm font-bold text-doom-hi">{run?.displayName ?? target.runKey}</span>
+        <span className="text-xs text-doom-faint">›</span>
+        <span className="shrink-0 truncate text-sm font-bold text-doom-blue">{target.job}</span>
         {target.step === undefined ? null : (
           <>
-            <span className="text-[10px] text-doom-faint">›</span>
-            <span className="min-w-0 truncate text-[11px] text-doom-text">{target.step}</span>
+            <span className="text-xs text-doom-faint">›</span>
+            <span className="min-w-0 truncate text-sm text-doom-text">{target.step}</span>
           </>
         )}
         {run === undefined ? null : (
@@ -204,12 +202,12 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
         data-testid="step-terminal-screen"
         tabIndex={0}
         onKeyDown={onKeyDown}
-        className={`min-h-0 flex-1 overflow-y-auto rounded-md border bg-doom-deep px-4 py-3 font-mono text-[11px] leading-[15px] text-doom-text outline-none ${
+        className={`min-h-0 flex-1 overflow-y-auto rounded-md border bg-doom-deep px-4 py-3 font-mono text-sm leading-tight text-doom-text outline-none ${
           held ? 'border-doom-blue/60' : 'border-doom-border'
         }`}
       >
         {lines.length === 0 ? (
-          <span className="text-[10px] text-doom-faint">
+          <span className="text-xs text-doom-faint">
             {capabilities?.readable === false
               ? (capabilities.reason ?? 'This run has no terminal to read.')
               : 'waiting for the run to paint…'}
@@ -220,7 +218,7 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
         {held && !ended ? <StreamCursor className="mt-0.5 h-[12px] w-1.5" /> : null}
       </div>
       <div className="flex items-center gap-3 pt-2.5">
-        <span data-testid="step-terminal-hint" className="text-[9px] text-doom-faint">
+        <span data-testid="step-terminal-hint" className="text-2xs text-doom-faint">
           {held
             ? 'keys go to the run · ctrl-c and ctrl-d pass through · esc releases the keyboard'
             : capabilities?.writable === false
@@ -229,12 +227,12 @@ export function StepTerminalPanel({ sessionId, target }: WebPluginSlotProps & { 
         </span>
         <span className="min-w-0 flex-1" />
         {ended ? (
-          <span data-testid="step-terminal-ended" className="text-[9px] text-doom-faint">
+          <span data-testid="step-terminal-ended" className="text-2xs text-doom-faint">
             the run has settled; this is its last screen
           </span>
         ) : null}
         {notice === undefined ? null : (
-          <span data-testid="step-terminal-notice" className="text-[9px] text-doom-yellow">
+          <span data-testid="step-terminal-notice" className="text-2xs text-doom-yellow">
             {notice}
           </span>
         )}

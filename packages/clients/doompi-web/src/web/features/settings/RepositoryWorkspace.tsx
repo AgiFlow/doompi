@@ -82,11 +82,11 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-doom-border bg-doom-panel px-3 py-2 sm:px-5 lg:px-6">
-        <span className="order-1 shrink-0 text-[9px] font-bold text-doom-faint sm:order-none">repository</span>
+        <span className="order-1 shrink-0 text-2xs font-bold text-doom-faint sm:order-none">repository</span>
         <Select value={repositoryId} disabled={loading || repositories.length === 0} onValueChange={selectRepository}>
           <SelectTrigger
             data-testid="repository-workspace-picker"
-            className="order-4 w-full text-[10px] sm:order-none sm:w-[min(360px,45vw)]"
+            className="order-4 w-full text-xs sm:order-none sm:w-[min(360px,45vw)]"
           >
             <SelectValue placeholder={loading ? 'loading repositories' : 'pick a repository'} />
           </SelectTrigger>
@@ -104,7 +104,7 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
             {repository.active ? 'active' : 'recent'}
           </Badge>
         )}
-        <span className="order-5 w-full min-w-0 truncate text-[9px] text-doom-faint/70 sm:order-none sm:w-auto sm:flex-1">
+        <span className="order-5 w-full min-w-0 truncate text-2xs text-doom-faint/70 sm:order-none sm:w-auto sm:flex-1">
           {repository?.path}
         </span>
         <Button
@@ -119,7 +119,7 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
               setLoading(false);
             });
           }}
-          className="order-3 ml-auto text-[9px] sm:order-none sm:ml-0"
+          className="order-3 ml-auto text-2xs sm:order-none sm:ml-0"
         >
           refresh
         </Button>

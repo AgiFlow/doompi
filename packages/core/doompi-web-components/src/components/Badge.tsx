@@ -20,10 +20,10 @@ export const badgeVariants = cva('inline-flex items-center gap-1.5 whitespace-no
     } satisfies Record<ChipTone, string>,
     /** The same rungs Button names, so a chip can sit beside a button of any size. */
     size: {
-      xs: 'px-1.5 py-0.5 text-[8px] font-bold',
-      sm: 'px-2 py-0.5 text-[10px]',
-      md: 'px-2.5 py-1 text-[11px]',
-      lg: 'px-3 py-1.5 text-[12px]',
+      xs: 'px-1.5 py-0.5 text-2xs font-bold',
+      sm: 'px-2 py-0.5 text-xs',
+      md: 'px-2.5 py-1 text-sm',
+      lg: 'px-3 py-1.5 text-base',
     },
   },
   defaultVariants: { tone: 'neutral', size: 'sm' },

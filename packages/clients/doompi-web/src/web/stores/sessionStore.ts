@@ -313,6 +313,16 @@ export function refreshSessionFacts(sessionId: string): void {
   sendFrame(sessionId, getCommandsCommand());
 }
 
+/**
+ * Asks only for the usage figures, cheap enough to run once per message.
+ *
+ * `refreshSessionFacts` costs three round trips because it also re-reads the
+ * state and the command list, and neither of those changes mid-turn.
+ */
+export function refreshSessionStats(sessionId: string): void {
+  sendFrame(sessionId, getSessionStatsCommand());
+}
+
 /** Asks what the model picker lists; Pi's answer depends on the current model. */
 export function loadModelChoices(sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;

@@ -1,0 +1,16 @@
+/*
+ * Render entrypoint for style-system story screenshots.
+ *
+ * A plugin consumes the component library as a package, so the palette and the
+ * Tailwind token mapping come from its published `styles.css` rather than from
+ * a relative path: `cssFiles` entries are app-relative and may not contain
+ * `..`. Tailwind itself has to be imported here, because the renderer only
+ * injects it for a project that configures no `cssFiles` at all.
+ *
+ * `@source` for this plugin's own sources is appended by the renderer, which
+ * scans `<appPath>/src`.
+ *
+ * Referenced by `style-system.config.yaml` (preset `doom-plugin`).
+ */
+@import 'tailwindcss';
+@import '@agimon-ai/doompi-web-components/styles.css';

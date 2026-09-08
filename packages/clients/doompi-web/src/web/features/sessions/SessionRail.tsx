@@ -198,7 +198,7 @@ function SessionCard({
         ) : null}
         <span
           data-testid="session-status"
-          className={`text-[11px] leading-snug ${awaitingInput ? 'text-doom-red' : active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
+          className={`text-sm leading-snug ${awaitingInput ? 'text-doom-red' : active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
         >
           {restarting ? 'restarting…' : status}
         </span>
@@ -206,7 +206,7 @@ function SessionCard({
       {summary.git ? (
         <span
           data-testid="session-branch"
-          className={`flex items-center gap-[7px] pt-0.5 text-[10px] ${active ? 'text-doom-on-selected/85' : 'text-doom-faint'}`}
+          className={`flex items-center gap-[7px] pt-0.5 text-xs ${active ? 'text-doom-on-selected/85' : 'text-doom-faint'}`}
         >
           <BranchIcon
             className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
@@ -218,12 +218,12 @@ function SessionCard({
       {/* A nested session's cwd is a generated worktree path that repeats what
           the branch already says, so the child stays lighter than its parent. */}
       {nested ? null : (
-        <span className={`truncate text-[10px] ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
+        <span className={`truncate text-xs ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
           {abbreviateCwd(summary.cwd)}
         </span>
       )}
       {error ? (
-        <span data-testid="session-error" className="line-clamp-3 text-[10px] break-words text-doom-red">
+        <span data-testid="session-error" className="line-clamp-3 text-xs break-words text-doom-red">
           {error}
         </span>
       ) : null}
@@ -251,7 +251,7 @@ function SessionCard({
               if (event.key === 'Escape') enterMode('view');
             }}
             onBlur={() => enterMode('view')}
-            className="border-doom-blue/60 px-1.5 py-0.5 text-[13px] font-bold"
+            className="border-doom-blue/60 px-1.5 py-0.5 text-base font-bold"
           />
           {details}
         </div>
@@ -276,14 +276,14 @@ function SessionCard({
               />
             ) : null}
             <span
-              className={`min-w-0 flex-1 truncate text-[13px] font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
+              className={`min-w-0 flex-1 truncate text-base font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
             >
               {summary.name || 'untitled'}
             </span>
             {ordinal <= 9 ? (
               <span
                 title={`press ${String(ordinal)} to focus`}
-                className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
+                className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-2xs font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
                   active ? 'bg-doom-on-selected/20 text-doom-on-selected' : 'bg-doom-tint-magenta text-doom-magenta'
                 }`}
               >
@@ -426,7 +426,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
         className="flex items-center justify-between border-b border-doom-border px-4 pt-4 pb-3.5"
       >
         <span className="flex items-center gap-[3px]" aria-label="DoomPi">
-          <span aria-hidden="true" className="text-[15px] font-bold tracking-[0.16em] text-doom-hi">
+          <span aria-hidden="true" className="text-lg font-bold tracking-wider text-doom-hi">
             DOOM
           </span>
           <MascotMark size={22} />
@@ -506,7 +506,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
               onDismiss?.();
               openNewSession();
             }}
-            className="w-full justify-start px-[11px] text-[11px]"
+            className="w-full justify-start px-[11px] text-sm"
           >
             <PlusIcon className="h-3 w-3" />
             new session
@@ -520,7 +520,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
         {remote === undefined || remote.status === 'off' ? null : (
           <div
             data-testid="remote-banner"
-            className={`flex flex-col gap-1.5 border-t px-4 py-2 text-[11px] ${
+            className={`flex flex-col gap-1.5 border-t px-4 py-2 text-sm ${
               remote.status === 'failed' ? 'bg-doom-tint-red text-doom-red' : 'bg-doom-tint-yellow text-doom-yellow'
             }`}
           >
@@ -566,7 +566,7 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
             </TooltipTrigger>
             <TooltipContent side="top">settings</TooltipContent>
           </Tooltip>
-          <span className="text-[9px] text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
+          <span className="text-2xs text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
         </div>
       </div>
 

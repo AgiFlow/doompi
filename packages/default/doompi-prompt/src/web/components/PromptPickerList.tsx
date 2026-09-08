@@ -40,12 +40,12 @@ export function PromptPickerList(props: PromptPickerListProps) {
       />
 
       {props.loading ? (
-        <p data-testid="prompts-loading" className="py-4 text-center text-[11px] text-doom-faint">
+        <p data-testid="prompts-loading" className="py-4 text-center text-sm text-doom-faint">
           loading prompts…
         </p>
       ) : props.error !== '' ? (
-        <div className="flex items-center justify-between gap-3 rounded-[5px] border border-doom-red/40 p-3">
-          <span className="text-[11px] text-doom-red" data-testid="prompts-error">
+        <div className="flex items-center justify-between gap-3 rounded-md border border-doom-red/40 p-3">
+          <span className="text-sm text-doom-red" data-testid="prompts-error">
             {props.error}
           </span>
           <Button variant="outline" size="sm" data-testid="prompts-retry" onClick={props.onRetry}>
@@ -53,7 +53,7 @@ export function PromptPickerList(props: PromptPickerListProps) {
           </Button>
         </div>
       ) : visible.length === 0 ? (
-        <p data-testid="prompts-empty" className="py-4 text-center text-[11px] text-doom-faint">
+        <p data-testid="prompts-empty" className="py-4 text-center text-sm text-doom-faint">
           {props.prompts.length === 0 ? 'no saved prompts yet. create one below.' : 'nothing matches that filter'}
         </p>
       ) : null}
@@ -64,7 +64,7 @@ export function PromptPickerList(props: PromptPickerListProps) {
             <div
               key={prompt.name}
               data-testid={`prompts-item-${prompt.name}`}
-              className="flex min-h-11 items-center gap-1 rounded-[5px] border border-doom-border-soft px-2 py-1.5 text-doom-text hover:bg-doom-deep"
+              className="flex min-h-11 items-center gap-1 rounded-md border border-doom-border-soft px-2 py-1.5 text-doom-text hover:bg-doom-deep"
             >
               <Button
                 variant="ghost"
@@ -74,8 +74,8 @@ export function PromptPickerList(props: PromptPickerListProps) {
                 title="send this prompt to the focused session"
                 onClick={() => props.onSend(prompt)}
               >
-                <span className="w-full truncate text-[11px] font-bold">/{prompt.name}</span>
-                <span className="w-full truncate text-[10px] font-normal text-doom-faint">{prompt.description}</span>
+                <span className="w-full truncate text-sm font-bold">/{prompt.name}</span>
+                <span className="w-full truncate text-xs font-normal text-doom-faint">{prompt.description}</span>
               </Button>
               <Button
                 variant="ghost"

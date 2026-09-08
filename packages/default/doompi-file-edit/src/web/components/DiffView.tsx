@@ -49,7 +49,7 @@ export function DiffView({ hunks, testId, onSelect }: DiffViewProps) {
 
   if (hunks.length === 0) {
     return (
-      <p data-testid={`${testId}-empty`} className="px-2 py-1 text-[10px] text-doom-faint">
+      <p data-testid={`${testId}-empty`} className="px-2 py-1 text-xs text-doom-faint">
         no lines changed
       </p>
     );
@@ -60,12 +60,12 @@ export function DiffView({ hunks, testId, onSelect }: DiffViewProps) {
       data-testid={testId}
       data-diff-surface={testId}
       onMouseUp={handleSelect}
-      className="overflow-x-auto font-mono text-[11px] leading-[1.5]"
+      className="overflow-x-auto font-mono text-sm leading-normal"
     >
       {hunks.map((hunk, position) => (
         <div key={`${hunk.start}-${position}`}>
           {position > 0 ? (
-            <div className="flex items-center gap-2 px-2 py-0.5 text-[9px] text-doom-faint">
+            <div className="flex items-center gap-2 px-2 py-0.5 text-2xs text-doom-faint">
               <span className="h-px flex-1 bg-doom-border-soft" />
               <span>⋯</span>
               <span className="h-px flex-1 bg-doom-border-soft" />

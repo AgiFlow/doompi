@@ -1,14 +1,15 @@
 # DoomPi Development Plugin
 
-This example plugin provides one portable implementation workflow for Codex, Claude Code, and DoomPi. Both native plugin manifests load the same skill instead of maintaining host-specific prompt copies.
+This example plugin provides portable implementation guidance for Codex, Claude Code, and DoomPi. Both native plugin manifests load the same skills instead of maintaining host-specific prompt copies.
 
 ## What it includes
 
 - [`doompi-development`](skills/doompi-development/SKILL.md) scopes a requested code change, implements the smallest coherent solution, and verifies it with the target repository's own checks.
+- [`style-system`](skills/style-system/SKILL.md) renders a DoomPi web component in a real browser and checks it against the design tokens, for changes where appearance is the question.
 - [`doompi-developer`](agents/doompi-developer.md) provides the corresponding implementation agent on hosts that support Markdown agents.
 - `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` expose the shared `skills/` directory to their respective hosts.
 
-The plugin does not choose a model, framework, package manager, or test runner. It reads and follows the target repository's instructions and existing conventions.
+The `doompi-development` skill does not choose a model, framework, package manager, or test runner. It reads and follows the target repository's instructions and existing conventions. The `style-system` skill is specific to this repository's web component library and its token contract.
 
 ## Install the plugin directly
 

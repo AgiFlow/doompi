@@ -48,10 +48,10 @@ export function NotificationSettings() {
         detail="open pages receive full live notification text. a closed installed app receives only a generic live alert, with no session content and no replay after downtime."
       />
       <div className="flex flex-col items-start gap-2 rounded border border-doom-border bg-doom-panel p-3">
-        <p data-testid="notification-permission-status" className="text-[11px] text-doom-dim">
+        <p data-testid="notification-permission-status" className="text-sm text-doom-dim">
           {STATUS_COPY[status]}
         </p>
-        <p data-testid="push-subscription-status" className="text-[11px] text-doom-dim">
+        <p data-testid="push-subscription-status" className="text-sm text-doom-dim">
           {PUSH_COPY[pushStatus]}
         </p>
         {pushStatus === 'enabled' ? (
@@ -64,7 +64,7 @@ export function NotificationSettings() {
           </Button>
         ) : null}
         {status === 'denied' ? (
-          <p className="text-[11px] text-doom-dim">enable notifications for this site in your browser settings</p>
+          <p className="text-sm text-doom-dim">enable notifications for this site in your browser settings</p>
         ) : null}
       </div>
     </div>

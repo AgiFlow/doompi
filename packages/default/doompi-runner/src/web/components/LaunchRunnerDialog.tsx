@@ -19,7 +19,7 @@ const COMMAND_ROWS = 3;
 const INTERACTIVE_FIELD_ID = 'runner-launch-interactive-field';
 
 function FieldLabel({ children }: { children: string }) {
-  return <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">{children}</span>;
+  return <span className="text-2xs font-bold tracking-widest text-doom-faint">{children}</span>;
 }
 
 /**
@@ -77,7 +77,7 @@ export function LaunchRunnerDialog({
               value={command}
               placeholder="pnpm test"
               onChange={(event) => setCommand(event.target.value)}
-              className="text-[11px]"
+              className="text-sm"
             />
           </div>
 
@@ -90,7 +90,7 @@ export function LaunchRunnerDialog({
                 value={cwd}
                 placeholder="the session's own directory"
                 onChange={(event) => setCwd(event.target.value)}
-                className="text-[10px]"
+                className="text-xs"
               />
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -101,7 +101,7 @@ export function LaunchRunnerDialog({
                 value={name}
                 placeholder="chosen for you when empty"
                 onChange={(event) => setName(event.target.value)}
-                className="text-[10px]"
+                className="text-xs"
               />
             </div>
           </div>
@@ -115,29 +115,26 @@ export function LaunchRunnerDialog({
               checked={interactive}
               onCheckedChange={(checked) => setInteractive(checked === true)}
             />
-            <label htmlFor={INTERACTIVE_FIELD_ID} className="text-[10px] text-doom-dim">
+            <label htmlFor={INTERACTIVE_FIELD_ID} className="text-xs text-doom-dim">
               needs a terminal, for a command that prompts (requires rmux or tmux)
             </label>
           </div>
 
           <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2">
             <FieldLabel>SENT TO THE SESSION</FieldLabel>
-            <pre
-              data-testid="runner-launch-line"
-              className="whitespace-pre-wrap break-words text-[10px] text-doom-green"
-            >
+            <pre data-testid="runner-launch-line" className="whitespace-pre-wrap break-words text-xs text-doom-green">
               {line}
             </pre>
           </div>
 
           {problems.length > 0 ? (
-            <p data-testid="runner-launch-problem" className="text-[10px] text-doom-red">
+            <p data-testid="runner-launch-problem" className="text-xs text-doom-red">
               {problems.join(' ')}
             </p>
           ) : null}
 
           <DialogFooter className="flex-wrap sm:flex-nowrap">
-            <span className="w-full text-[9px] text-doom-faint sm:w-auto">
+            <span className="w-full text-2xs text-doom-faint sm:w-auto">
               it appears above once the runtime starts it
             </span>
             <span className="min-w-0 flex-1" />

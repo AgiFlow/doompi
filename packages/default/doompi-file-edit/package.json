@@ -32,7 +32,8 @@
     "src/types/domain.ts",
     "src/types/webFiles.ts",
     "src/types/fileEditsApi.ts",
-    "LICENSE"
+    "LICENSE",
+    "!src/web/**/*.stories.tsx"
   ],
   "type": "module",
   "main": "./dist/index.cjs",

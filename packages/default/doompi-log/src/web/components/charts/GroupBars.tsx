@@ -28,7 +28,7 @@ export function GroupBars({ groups, focus, onFocus }: GroupBarsProps) {
       {/* The two right-hand columns were bare numbers. A row reading "11.0M  12"
           gave no way to know the second figure counted issues. Same widths and
           padding as a row, so the heads sit over their own columns. */}
-      <div aria-hidden className="flex items-center gap-2 px-1 text-[9px] text-doom-faint/70">
+      <div aria-hidden className="flex items-center gap-2 px-1 text-2xs text-doom-faint/70">
         <span className="min-w-0 flex-1" />
         <span className="w-14 shrink-0 text-right">tokens</span>
         <span className="w-10 shrink-0 text-right">issues</span>
@@ -58,18 +58,18 @@ export function GroupBars({ groups, focus, onFocus }: GroupBarsProps) {
                 track for horizontal space. */}
               <span
                 aria-hidden="true"
-                className={`absolute inset-y-0 left-0 rounded-[2px] ${selected ? 'bg-doom-blue/30' : 'bg-doom-blue/15'}`}
+                className={`absolute inset-y-0 left-0 rounded-xs ${selected ? 'bg-doom-blue/30' : 'bg-doom-blue/15'}`}
                 style={{ width }}
               />
               {onFocus === undefined ? (
-                <span className="relative flex items-center gap-2 px-1 py-[3px] text-[10px]">{row}</span>
+                <span className="relative flex items-center gap-2 px-1 py-[3px] text-xs">{row}</span>
               ) : (
                 <button
                   type="button"
                   onClick={() => onFocus(selected ? '' : group.key)}
                   aria-pressed={selected}
                   data-testid={`metrics-group-${group.key}`}
-                  className="relative flex w-full items-center gap-2 rounded-[2px] px-1 py-[3px] text-[10px] hover:bg-doom-tint focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
+                  className="relative flex w-full items-center gap-2 rounded-xs px-1 py-[3px] text-xs hover:bg-doom-tint focus-visible:outline focus-visible:outline-1 focus-visible:outline-doom-blue"
                 >
                   {row}
                 </button>

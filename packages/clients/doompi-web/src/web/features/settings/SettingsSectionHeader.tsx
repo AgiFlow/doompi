@@ -23,12 +23,10 @@ export function SettingsSectionHeader({
   return (
     <header className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <h2 className="text-[13px] font-bold text-doom-hi">{title}</h2>
+        <h2 className="text-base font-bold text-doom-hi">{title}</h2>
         {children}
       </div>
-      {detail === undefined || detail === '' ? null : (
-        <p className="text-[11px] leading-relaxed text-doom-dim">{detail}</p>
-      )}
+      {detail === undefined || detail === '' ? null : <p className="text-sm leading-relaxed text-doom-dim">{detail}</p>}
     </header>
   );
 }

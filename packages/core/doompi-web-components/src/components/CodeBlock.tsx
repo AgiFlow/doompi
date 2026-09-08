@@ -33,7 +33,7 @@ export function CodeBlock({ text, className }: CodeBlockProps) {
       <SyntaxText
         text={text}
         grammar={fenceGrammarOf(language)}
-        className="overflow-x-auto text-[12px] leading-relaxed text-doom-text"
+        className="overflow-x-auto text-sm leading-relaxed text-doom-text"
       />
     );
   return (

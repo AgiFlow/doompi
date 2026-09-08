@@ -20,7 +20,7 @@ export function PlanActivitySection({ sessionId, statuses, openTransientTab }: W
 
   if (view === undefined) {
     return (
-      <p data-testid="activity-summary-plan" className="px-1 text-[10px] text-doom-faint">
+      <p data-testid="activity-summary-plan" className="px-1 text-xs text-doom-faint">
         no plan written yet
       </p>
     );
@@ -38,23 +38,23 @@ export function PlanActivitySection({ sessionId, statuses, openTransientTab }: W
           if (sessionId === null) return;
           openTransientTab(planTab());
         }}
-        className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
+        className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
       >
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <span
             data-testid="activity-plan-title"
-            className="min-w-0 flex-1 truncate text-left text-[10px] font-bold text-doom-hi"
+            className="min-w-0 flex-1 truncate text-left text-xs font-bold text-doom-hi"
           >
             {view.title}
           </span>
           {view.stamp === '' ? null : (
-            <span data-testid="activity-plan-stamp" className="shrink-0 text-[9px] tabular-nums text-doom-faint">
+            <span data-testid="activity-plan-stamp" className="shrink-0 text-2xs tabular-nums text-doom-faint">
               {view.stamp}
             </span>
           )}
         </span>
       </Button>
-      <p className="px-1 text-[9px] leading-relaxed text-doom-faint">
+      <p className="px-1 text-2xs leading-relaxed text-doom-faint">
         open to read or edit; the agent reads what you save.
       </p>
     </div>

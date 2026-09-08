@@ -20,7 +20,7 @@ export function PromptsComposerMenuItem() {
       role="menuitem"
       density="compact"
       data-testid="composer-menu-prompts"
-      className="w-full text-[12px] text-doom-text hover:bg-doom-tint-blue"
+      className="w-full text-sm text-doom-text hover:bg-doom-tint-blue"
       onClick={requestPromptDialogOpen}
     >
       <BookmarkPlusIcon className="h-3 w-3 shrink-0" />

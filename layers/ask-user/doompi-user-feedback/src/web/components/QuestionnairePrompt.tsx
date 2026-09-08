@@ -53,7 +53,7 @@ function StepBar({
             data-testid={`questionnaire-step-${String(index)}`}
             data-step-state={active ? 'current' : answered ? 'answered' : 'pending'}
             onClick={() => onPick(index)}
-            className={`gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] ${
+            className={`gap-1.5 rounded-full px-2.5 py-0.5 text-xs ${
               active
                 ? 'bg-doom-selected text-doom-on-selected'
                 : answered
@@ -112,7 +112,7 @@ function QuestionBody({
   const preview = question.options[cursor]?.preview;
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <p data-testid="questionnaire-question" className="break-words text-[13px] leading-relaxed text-doom-hi">
+      <p data-testid="questionnaire-question" className="break-words text-base leading-relaxed text-doom-hi">
         {question.question}
       </p>
 
@@ -134,15 +134,15 @@ function QuestionBody({
               }
               className="min-w-0 items-start gap-2.5 rounded-md px-2.5 py-1.5 whitespace-normal"
             >
-              <span className={`mt-[2px] shrink-0 text-[11px] ${chosen ? 'text-doom-green' : 'text-doom-faint'}`}>
+              <span className={`mt-[2px] shrink-0 text-sm ${chosen ? 'text-doom-green' : 'text-doom-faint'}`}>
                 {question.multiSelect ? (chosen ? '[x]' : '[ ]') : chosen ? '●' : '○'}
               </span>
               <OptionLabel className="min-w-0 flex flex-col gap-0.5 text-left">
-                <span className={`break-words text-[12px] ${chosen ? 'text-doom-hi' : 'text-doom-text'}`}>
+                <span className={`break-words text-sm ${chosen ? 'text-doom-hi' : 'text-doom-text'}`}>
                   {option.label}
                 </span>
                 {option.description ? (
-                  <span className="break-words text-[11px] leading-relaxed whitespace-normal text-doom-dim">
+                  <span className="break-words text-sm leading-relaxed whitespace-normal text-doom-dim">
                     {option.description}
                   </span>
                 ) : null}
@@ -157,8 +157,8 @@ function QuestionBody({
           onClick={() => onDraft(setCustom(draft, index, entry.custom ?? ''), false)}
           className="min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1.5 whitespace-normal"
         >
-          <span className="shrink-0 text-[11px] text-doom-faint">✎</span>
-          <OptionLabel className="min-w-0 text-[12px] whitespace-normal text-doom-text">{CUSTOM_LABEL}</OptionLabel>
+          <span className="shrink-0 text-sm text-doom-faint">✎</span>
+          <OptionLabel className="min-w-0 text-sm whitespace-normal text-doom-text">{CUSTOM_LABEL}</OptionLabel>
         </OptionRow>
       </div>
 
@@ -173,7 +173,7 @@ function QuestionBody({
             placeholder="type your answer…"
             onChange={(event) => onDraft(setCustom(draft, index, event.target.value), false)}
             onKeyDown={fieldKeys(() => onCommit(true))}
-            className="text-[12px]"
+            className="text-sm"
           />
         </div>
       ) : null}
@@ -181,7 +181,7 @@ function QuestionBody({
       {preview ? (
         <div data-testid="questionnaire-preview" className="flex flex-col gap-1">
           <SectionLabel>preview</SectionLabel>
-          <div className="max-h-40 overflow-y-auto border-l-2 border-doom-edge-magenta pl-3 text-[11px] text-doom-dim">
+          <div className="max-h-40 overflow-y-auto border-l-2 border-doom-edge-magenta pl-3 text-sm text-doom-dim">
             <Markdown text={preview} />
           </div>
         </div>
@@ -196,7 +196,7 @@ function QuestionBody({
           placeholder="anything the options do not cover"
           onChange={(event) => onDraft(setNotes(draft, index, event.target.value), false)}
           onKeyDown={fieldKeys(() => onCommit(false))}
-          className="text-[11px]"
+          className="text-sm"
         />
       </div>
     </div>
@@ -262,7 +262,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
   if (question === undefined) {
     return (
       <div className="flex items-center justify-between gap-3 px-3.5 py-3">
-        <span data-testid="questionnaire-empty" className="text-[12px] text-doom-dim">
+        <span data-testid="questionnaire-empty" className="text-sm text-doom-dim">
           the agent asked something this cockpit could not read
         </span>
         <Button variant="outline" size="sm" data-testid="questionnaire-cancel" onClick={cancel}>
@@ -320,7 +320,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
       <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pt-2.5 pb-2 sm:gap-3 sm:px-3.5">
         <StepBar questions={questions} draft={draft} current={current} onPick={show} />
         <span className="min-w-0 flex-1" />
-        <Badge size="xs" className="shrink-0 border-transparent bg-doom-panel py-0.5 text-[9px] text-doom-dim">
+        <Badge size="xs" className="shrink-0 border-transparent bg-doom-panel py-0.5 text-2xs text-doom-dim">
           question {current + 1} / {questions.length}
         </Badge>
       </div>
@@ -345,7 +345,7 @@ export function QuestionnairePrompt({ args, dialog, answer, cancel }: ToolPrompt
       <Separator />
 
       <div className="flex min-w-0 items-center gap-2 px-3 py-2 sm:px-3.5">
-        <span data-testid="questionnaire-hint" className="min-w-0 truncate text-[10px] text-doom-faint max-sm:hidden">
+        <span data-testid="questionnaire-hint" className="min-w-0 truncate text-xs text-doom-faint max-sm:hidden">
           <Kbd>←→</Kbd> questions · <Kbd>↑↓</Kbd> options · <Kbd>enter</Kbd>{' '}
           {question.multiSelect ? 'toggles' : 'selects'} · <Kbd>esc</Kbd> cancels
         </span>

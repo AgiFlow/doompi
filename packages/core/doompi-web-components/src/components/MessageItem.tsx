@@ -139,7 +139,7 @@ export function MessageItemGroup({
   return (
     <MessageItemGroupContext.Provider value={{ tone: tone ?? 'neutral' }}>
       <div data-slot="message-item-group" className={cn(messageItemVariants({ tone }), className)} {...props}>
-        <div className="flex min-h-8 items-center gap-2 border-doom-border-soft border-b px-[11px] text-[11px] text-doom-dim">
+        <div className="flex min-h-8 items-center gap-2 border-doom-border-soft border-b px-[11px] text-sm text-doom-dim">
           <span className="shrink-0 font-bold text-doom-hi">{title}</span>
           <span className="min-w-0 flex-1 truncate text-doom-faint">{summary}</span>
           {label !== null && label !== '' ? <StatusBadge tone={tone ?? 'neutral'}>{label}</StatusBadge> : null}
@@ -194,7 +194,7 @@ export function MessageItemHeader({ className, title, badge, children, ...props 
   return (
     <div
       data-slot="message-item-header"
-      className={cn('flex min-h-8 items-center gap-2 px-[11px] text-[11px] text-doom-dim', className)}
+      className={cn('flex min-h-8 items-center gap-2 px-[11px] text-sm text-doom-dim', className)}
       {...props}
     >
       {group === null ? <span className="shrink-0 font-bold text-doom-hi">{title}</span> : null}
@@ -228,7 +228,7 @@ export function MessageItemBody({ className, ...props }: ComponentProps<'div'>) 
   return (
     <div
       data-slot="message-item-body"
-      className={cn('border-t border-doom-border-soft bg-doom-deep px-3 py-2 text-[11px] text-doom-dim', className)}
+      className={cn('border-t border-doom-border-soft bg-doom-deep px-3 py-2 text-sm text-doom-dim', className)}
       {...props}
     />
   );

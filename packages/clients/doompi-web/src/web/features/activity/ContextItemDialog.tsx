@@ -85,17 +85,17 @@ export function ContextItemDialog({ sessionId, target, onClose }: ContextItemDia
       <DialogContent width="lg" data-testid="context-item-dialog" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle data-testid="context-item-title">{target.name}</DialogTitle>
-          <span className="text-[9px] text-doom-faint">
+          <span className="text-2xs text-doom-faint">
             {target.itemKind} · {target.owner}
           </span>
         </DialogHeader>
         <DialogBody>
           {error !== null ? (
-            <p data-testid="context-item-error" className="text-[11px] text-doom-dim">
+            <p data-testid="context-item-error" className="text-sm text-doom-dim">
               {error}
             </p>
           ) : detail === null ? (
-            <p data-testid="context-item-loading" className="flex items-center gap-2 text-[11px] text-doom-dim">
+            <p data-testid="context-item-loading" className="flex items-center gap-2 text-sm text-doom-dim">
               <Spinner />
               reading the session's inventory
             </p>
@@ -117,7 +117,7 @@ function ContextItemBody({ detail }: { detail: ContextItemDetail }) {
         <Section title="description">
           <p
             data-testid="context-item-description"
-            className="text-[11px] leading-relaxed whitespace-pre-wrap text-doom-text"
+            className="text-sm leading-relaxed whitespace-pre-wrap text-doom-text"
           >
             {detail.description}
           </p>
@@ -134,7 +134,7 @@ function ContextItemBody({ detail }: { detail: ContextItemDetail }) {
         <Section title="prompt guidelines">
           <ul data-testid="context-item-guidelines" className="flex flex-col gap-1">
             {detail.promptGuidelines.map((line) => (
-              <li key={line} className="text-[11px] leading-relaxed text-doom-dim">
+              <li key={line} className="text-sm leading-relaxed text-doom-dim">
                 {line}
               </li>
             ))}
@@ -154,7 +154,7 @@ function ContextItemBody({ detail }: { detail: ContextItemDetail }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[9px] font-bold tracking-widest text-doom-faint uppercase">{title}</span>
+      <span className="text-2xs font-bold tracking-widest text-doom-faint uppercase">{title}</span>
       {children}
     </div>
   );
@@ -163,7 +163,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Pre({ testId, children }: { testId: string; children: string }) {
   return (
     <Panel className="max-h-64 overflow-auto bg-doom-deep px-3 py-2">
-      <pre data-testid={testId} className="text-[11px] leading-relaxed whitespace-pre-wrap text-doom-dim">
+      <pre data-testid={testId} className="text-sm leading-relaxed whitespace-pre-wrap text-doom-dim">
         {children}
       </pre>
     </Panel>
@@ -178,7 +178,7 @@ function ToolCost({ detail }: { detail: Extract<ContextItemDetail, { itemKind: '
       <Row label="system prompt" value={tokens(detail.tokens.promptTokens)} />
       <Row label="total" value={tokens(detail.tokens.totalTokens)} strong />
       {detail.active ? null : (
-        <p className="text-[10px] text-doom-faint">not sent to the model; costs nothing until switched on</p>
+        <p className="text-xs text-doom-faint">not sent to the model; costs nothing until switched on</p>
       )}
     </div>
   );
@@ -189,7 +189,7 @@ function SkillFacts({ detail }: { detail: Extract<ContextItemDetail, { itemKind:
     <div data-testid="context-item-cost" className="flex flex-col gap-1">
       <Row label="listing" value={tokens(detail.tokens)} strong />
       <Row label="file" value={detail.filePath} />
-      {detail.modelInvocable ? null : <p className="text-[10px] text-doom-faint">not offered to the model</p>}
+      {detail.modelInvocable ? null : <p className="text-xs text-doom-faint">not offered to the model</p>}
     </div>
   );
 }
@@ -197,8 +197,8 @@ function SkillFacts({ detail }: { detail: Extract<ContextItemDetail, { itemKind:
 function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="text-[10px] text-doom-faint">{label}</span>
-      <span className={`truncate text-[10px] ${strong ? 'font-bold text-doom-text' : 'text-doom-dim'}`}>{value}</span>
+      <span className="text-xs text-doom-faint">{label}</span>
+      <span className={`truncate text-xs ${strong ? 'font-bold text-doom-text' : 'text-doom-dim'}`}>{value}</span>
     </div>
   );
 }

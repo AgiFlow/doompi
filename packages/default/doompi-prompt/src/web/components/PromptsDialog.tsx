@@ -150,14 +150,14 @@ export function PromptsDialog({
 
         <DialogBody>
           {error === '' ? null : draft || confirmation ? (
-            <span className="text-[11px] text-doom-red" data-testid="prompts-error">
+            <span className="text-sm text-doom-red" data-testid="prompts-error">
               {error}
             </span>
           ) : null}
 
           {confirmation?.kind === 'remove' ? (
             <div className="flex flex-col gap-4" data-testid="prompts-remove-confirmation">
-              <p className="text-[11px] leading-relaxed text-doom-dim">
+              <p className="text-sm leading-relaxed text-doom-dim">
                 Remove <strong className="text-doom-hi">/{confirmation.prompt.name}</strong>? This cannot be undone.
               </p>
               <div className="flex justify-end gap-2">
@@ -177,7 +177,7 @@ export function PromptsDialog({
             </div>
           ) : confirmation?.kind === 'replace' && draft ? (
             <div className="flex flex-col gap-4" data-testid="prompts-replace-confirmation">
-              <p className="text-[11px] leading-relaxed text-doom-dim">
+              <p className="text-sm leading-relaxed text-doom-dim">
                 <strong className="text-doom-hi">/{confirmation.name}</strong> already exists. Replace its text with
                 this draft?
               </p>
@@ -229,7 +229,7 @@ export function PromptsDialog({
 
         {draft || confirmation ? null : (
           <DialogFooter variant="bar">
-            <span className="text-[10px] text-doom-faint">
+            <span className="text-xs text-doom-faint">
               {prompts.length === 0 ? 'build your reusable library' : `${String(prompts.length)} saved`}
             </span>
             <Button

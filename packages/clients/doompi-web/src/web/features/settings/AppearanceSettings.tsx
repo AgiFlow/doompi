@@ -68,17 +68,17 @@ export function AppearanceSettings() {
             >
               <ThemeSwatch theme={theme} />
               <span className="flex items-center gap-2">
-                <span className={`flex-1 text-[12px] font-bold ${selected ? 'text-doom-blue' : 'text-doom-hi'}`}>
+                <span className={`flex-1 text-sm font-bold ${selected ? 'text-doom-blue' : 'text-doom-hi'}`}>
                   {theme.label}
                 </span>
-                <span className="text-[9px] text-doom-faint">{theme.scheme}</span>
+                <span className="text-2xs text-doom-faint">{theme.scheme}</span>
                 {selected ? <CheckIcon className="h-3 w-3 text-doom-blue" /> : null}
               </span>
             </RadioGroupCard>
           );
         })}
       </RadioGroup>
-      <p className="text-[10px] leading-relaxed text-doom-faint">
+      <p className="text-xs leading-relaxed text-doom-faint">
         a theme is a JSON config of twenty palette tokens; see @agimon-ai/doompi-web-components for the contract.
       </p>
     </div>

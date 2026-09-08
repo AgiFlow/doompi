@@ -71,24 +71,24 @@ export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
             Create
           </Button>
         </div>
-        <p className="text-[10px] text-doom-faint">
+        <p className="text-xs text-doom-faint">
           Creates the worktree outside the repository, installs its dependencies, then starts a session nested under
           this one. The install is what makes the wait; a warm store is under a minute.
         </p>
         {session.pending === undefined ? null : (
-          <p data-testid="git-worktree-pending" className="text-[10px] text-doom-dim">
+          <p data-testid="git-worktree-pending" className="text-xs text-doom-dim">
             {session.pending}
           </p>
         )}
         {session.error === undefined ? null : (
-          <p data-testid="git-worktree-error" className="text-[10px] text-doom-error">
+          <p data-testid="git-worktree-error" className="text-xs text-doom-error">
             {session.error}
           </p>
         )}
       </div>
 
       {session.worktrees.length === 0 ? (
-        <p className="text-[11px] text-doom-faint">No worktrees yet.</p>
+        <p className="text-sm text-doom-faint">No worktrees yet.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {session.worktrees.map((worktree: WorktreeView) => (
@@ -98,12 +98,12 @@ export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
               className="flex items-center justify-between gap-2 border border-doom-line px-2 py-1"
             >
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-[11px] text-doom-bright">{worktree.branch}</span>
-                <span className="truncate text-[10px] text-doom-faint">{worktree.path}</span>
+                <span className="truncate text-sm text-doom-bright">{worktree.branch}</span>
+                <span className="truncate text-xs text-doom-faint">{worktree.path}</span>
               </div>
               <div className="flex items-center gap-2">
-                {worktree.orphaned ? <span className="text-[10px] text-doom-faint">orphaned</span> : null}
-                {worktree.unowned ? <span className="text-[10px] text-doom-faint">unowned</span> : null}
+                {worktree.orphaned ? <span className="text-xs text-doom-faint">orphaned</span> : null}
+                {worktree.unowned ? <span className="text-xs text-doom-faint">unowned</span> : null}
                 {sessionId === null ? null : (
                   <Button
                     variant="link"

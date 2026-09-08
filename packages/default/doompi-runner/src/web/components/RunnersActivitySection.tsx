@@ -34,7 +34,7 @@ export function RunnersActivitySection({ sessionId, sendSessionFrame, openTransi
   if (running.length === 0) {
     return (
       <div className="flex items-center gap-2 px-1">
-        <p data-testid="activity-summary-runners" className="px-1 text-[10px] text-doom-faint">
+        <p data-testid="activity-summary-runners" className="px-1 text-xs text-doom-faint">
           idle
         </p>
         {sessionId === null ? null : (
@@ -98,12 +98,12 @@ function RunnerRow({
         if (sessionId === null) return;
         openTransientTab(runnerLogTab(run));
       }}
-      className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
+      className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <Dot tone="yellow" pulse />
-        <span className="min-w-0 flex-1 truncate text-left text-[10px] font-bold text-doom-hi">{run.name}</span>
-        <span className="shrink-0 text-[9px] text-doom-faint">
+        <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-doom-hi">{run.name}</span>
+        <span className="shrink-0 text-2xs text-doom-faint">
           {formatRunnerUptime(run.startedAt, now)}
           {run.interactive ? ' · tty' : ''}
         </span>
@@ -117,7 +117,7 @@ function RunnerRow({
             title={
               stopRequested ? 'stop requested; the runner reports its own exit' : 'ask the runtime to stop this runner'
             }
-            className="px-1.5 text-[8px] font-bold"
+            className="px-1.5 text-2xs font-bold"
           >
             {/* The row is already a button, so the stop control lends it
                 the primitive's styling rather than nesting a second one. */}
@@ -146,7 +146,7 @@ function RunnerRow({
       <span
         data-testid={`activity-runner-detail-${run.id}`}
         data-detail={tail === undefined ? 'command' : 'tail'}
-        className="truncate pl-3 text-left text-[9px] text-doom-faint"
+        className="truncate pl-3 text-left text-2xs text-doom-faint"
       >
         {tail ?? run.command}
       </span>

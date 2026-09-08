@@ -8,7 +8,7 @@ export function Label({ className, ...props }: ComponentProps<typeof LabelPrimit
     <LabelPrimitive.Root
       data-slot="label"
       className={cn(
-        'flex items-center gap-1.5 text-[10px] text-doom-faint select-none has-[+:disabled]:opacity-50',
+        'flex items-center gap-1.5 text-xs text-doom-faint select-none has-[+:disabled]:opacity-50',
         className,
       )}
       {...props}

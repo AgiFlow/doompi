@@ -54,7 +54,7 @@ export function Breadcrumb({ path, keep, className, 'data-testid': testId }: Bre
             data-slot="breadcrumb"
             data-testid={testId}
             title={undefined}
-            className={cn('flex min-w-0 items-baseline gap-1 truncate font-mono text-[12px]', className)}
+            className={cn('flex min-w-0 items-baseline gap-1 truncate font-mono text-sm', className)}
           >
             {segments.map((segment, index) => (
               // Segments repeat in a path (src/app/src), so the index is what

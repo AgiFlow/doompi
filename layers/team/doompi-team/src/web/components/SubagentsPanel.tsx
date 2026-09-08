@@ -58,10 +58,10 @@ function WorkLine({ run }: { run: SubagentRun }) {
   if (run.taskRef) {
     return (
       <div className="flex items-center gap-2 px-3 pb-2.5">
-        <Badge tone="violet" size="xs" className="shrink-0 rounded-[3px] bg-doom-violet/10">
+        <Badge tone="violet" size="xs" className="shrink-0 rounded-sm bg-doom-violet/10">
           TASK {run.taskRef}
         </Badge>
-        <span data-testid="run-work" className="min-w-0 truncate text-[10px] text-doom-hi">
+        <span data-testid="run-work" className="min-w-0 truncate text-xs text-doom-hi">
           {firstLine}
         </span>
       </div>
@@ -69,8 +69,8 @@ function WorkLine({ run }: { run: SubagentRun }) {
   }
   return (
     <div className="flex items-center gap-2 px-3 pb-2.5">
-      <span className="shrink-0 text-[8px] font-bold text-doom-faint">PROMPT</span>
-      <span data-testid="run-work" className="min-w-0 truncate text-[10px] text-doom-dim">
+      <span className="shrink-0 text-2xs font-bold text-doom-faint">PROMPT</span>
+      <span data-testid="run-work" className="min-w-0 truncate text-xs text-doom-dim">
         {firstLine}
       </span>
     </div>
@@ -196,11 +196,11 @@ function RunCard({
           onKeyDown={onKeyDown}
         >
           <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
-            <span data-testid="run-agent" className="truncate text-[12px] font-bold text-doom-hi">
+            <span data-testid="run-agent" className="truncate text-sm font-bold text-doom-hi">
               {run.agent}
             </span>
             <span className="min-w-0 flex-1" />
-            <span className="shrink-0 text-[9px] text-doom-faint">{elapsedRun(run, now)}</span>
+            <span className="shrink-0 text-2xs text-doom-faint">{elapsedRun(run, now)}</span>
             <StatusBadge tone={badge.tone} data-testid="run-state">
               {badge.label}
             </StatusBadge>
@@ -217,14 +217,14 @@ function RunCard({
           {run.state === 'failed' && run.error ? (
             <span
               data-testid="run-error"
-              className="truncate border-t border-doom-border-soft px-3 py-1.5 text-[10px] text-doom-red"
+              className="truncate border-t border-doom-border-soft px-3 py-1.5 text-xs text-doom-red"
             >
               {run.error}
             </span>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3 border-t border-doom-border-soft px-3 py-1.5">
-          <span className="truncate text-[9px] text-doom-faint">
+          <span className="truncate text-2xs text-doom-faint">
             {run.toolCount !== undefined ? `${run.toolCount} tools` : '—'}
             {run.tokens !== undefined ? ` · ${run.tokens.toLocaleString()} tk` : ''}
             {run.model ? ` · ${run.model.split('/').pop() ?? run.model}` : ''}
@@ -247,8 +247,8 @@ function RunCard({
 function SheetRow({ label, value, tone = 'text-doom-dim' }: { label: string; value: string; tone?: string }) {
   return (
     <div className="flex gap-2.5">
-      <span className="w-11 shrink-0 text-[9px] text-doom-faint">{label}</span>
-      <span className={`min-w-0 break-words text-[10px] ${tone}`}>{value}</span>
+      <span className="w-11 shrink-0 text-2xs text-doom-faint">{label}</span>
+      <span className={`min-w-0 break-words text-xs ${tone}`}>{value}</span>
     </div>
   );
 }
@@ -256,10 +256,10 @@ function SheetRow({ label, value, tone = 'text-doom-dim' }: { label: string; val
 function SheetBlock({ label, text, testId, tone }: { label: string; text: string; testId: string; tone?: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2.5">
-      <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint">{label}</span>
+      <span className="text-2xs font-bold tracking-wider text-doom-faint">{label}</span>
       <pre
         data-testid={testId}
-        className={`overflow-x-auto whitespace-pre-wrap break-words text-[10px] leading-relaxed ${tone ?? 'text-doom-text'}`}
+        className={`overflow-x-auto whitespace-pre-wrap break-words text-xs leading-relaxed ${tone ?? 'text-doom-text'}`}
       >
         {text}
       </pre>
@@ -302,7 +302,7 @@ function RunDetailSheet({
           <SheetTitle data-testid="sheet-agent">{run.agent}</SheetTitle>
           <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
           <span className="min-w-0 flex-1" />
-          <span className="text-[10px] text-doom-faint">{elapsedRun(run, now)}</span>
+          <span className="text-xs text-doom-faint">{elapsedRun(run, now)}</span>
           {renderSlot(RUN_ACTIONS_SLOT.slot)}
           <RunControl sessionId={sessionId} run={run} stopping={stopping} send={send} />
         </SheetHeader>
@@ -386,11 +386,11 @@ export function SubagentsPanel({
     <div data-testid="subagents-panel" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-3 py-3 sm:px-[26px] sm:py-[18px]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-3">
-          <span className="text-[9px] font-bold tracking-[0.18em] text-doom-faint">SUBAGENTS · this session</span>
+          <span className="text-2xs font-bold tracking-widest text-doom-faint">SUBAGENTS · this session</span>
           <span className="hidden min-w-0 flex-1 sm:block" />
           <span
             data-testid="subagents-tally"
-            className="order-3 w-full text-[9px] text-doom-faint sm:order-none sm:w-auto"
+            className="order-3 w-full text-2xs text-doom-faint sm:order-none sm:w-auto"
           >
             {runs.length === 0 ? 'no runs yet' : `${runningTally} running · ${doneTally} done · ${failedTally} failed`}
           </span>
@@ -439,7 +439,7 @@ export function SubagentsPanel({
                     />
                   ))}
             </div>
-            <span className="pt-3 text-[9px] text-doom-faint">
+            <span className="pt-3 text-2xs text-doom-faint">
               click a card to open the run's thread · the card menu holds details, stop and clear · finished runs leave
               the grid after 10m
             </span>

@@ -9,16 +9,14 @@ function FileMetadata({ item, label, recent = false }: { item: FilesItemView; la
     <span className="flex min-w-0 w-full items-center gap-1.5">
       {/* The dock passes no label and keeps the whole path; the drawer's tree
           passes what its group header has not already said. */}
-      <span className="min-w-0 flex-1 truncate text-left text-[10px] font-bold text-doom-hi">
-        {label ?? item.relPath}
-      </span>
+      <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-doom-hi">{label ?? item.relPath}</span>
       {recent ? (
-        <span data-recent="true" title="most recent change" className="shrink-0 text-[9px] text-doom-blue">
+        <span data-recent="true" title="most recent change" className="shrink-0 text-2xs text-doom-blue">
           ●
         </span>
       ) : null}
-      {item.count > 1 ? <span className="shrink-0 text-[9px] text-doom-faint">{item.count}×</span> : null}
-      <span className={`shrink-0 text-[9px] ${item.diffable ? 'text-doom-faint' : 'text-doom-yellow'}`}>
+      {item.count > 1 ? <span className="shrink-0 text-2xs text-doom-faint">{item.count}×</span> : null}
+      <span className={`shrink-0 text-2xs ${item.diffable ? 'text-doom-faint' : 'text-doom-yellow'}`}>
         {TOOL_LABEL[item.tool] ?? item.tool}
       </span>
     </span>
@@ -34,7 +32,7 @@ export function FileActivityRow({ item, onOpen }: { item: FilesItemView; onOpen:
       data-file-diffable={item.diffable}
       title={item.diffable ? item.path : `${item.path} (changed by a command, so no diff was captured)`}
       onClick={onOpen}
-      className="min-w-0 gap-0.5 rounded-[5px] px-1 py-1 hover:bg-doom-panel"
+      className="min-w-0 gap-0.5 rounded-md px-1 py-1 hover:bg-doom-panel"
     >
       <FileMetadata item={item} />
     </Button>
@@ -52,7 +50,7 @@ function FileGroupHeader({ prefix }: { prefix: string }) {
   return (
     <div
       data-testid={`files-browser-group-${prefix}`}
-      className="truncate px-4 pt-2 pb-1 text-[9px] font-bold tracking-wide text-doom-faint"
+      className="truncate px-4 pt-2 pb-1 text-2xs font-bold tracking-wide text-doom-faint"
     >
       {prefix}
     </div>
@@ -170,8 +168,8 @@ export function FilesBrowser({
       className="fixed inset-y-0 right-0 z-50 flex w-[min(440px,calc(100vw-24px))] flex-col overflow-hidden border-l border-doom-border bg-doom-rail outline-none"
     >
       <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-doom-border px-4">
-        <span className="text-[13px] font-bold text-doom-hi"># files</span>
-        <span data-testid="files-browser-total" className="text-[9px] text-doom-faint">
+        <span className="text-base font-bold text-doom-hi"># files</span>
+        <span data-testid="files-browser-total" className="text-2xs text-doom-faint">
           {items.length} changed
         </span>
         <span className="min-w-0 flex-1" />
@@ -215,7 +213,7 @@ export function FilesBrowser({
           </Button>
         ) : null}
       </div>
-      <p data-testid="files-browser-matches" className="shrink-0 px-4 pb-2 text-[9px] text-doom-faint">
+      <p data-testid="files-browser-matches" className="shrink-0 px-4 pb-2 text-2xs text-doom-faint">
         {shown.length} matches · {grouped === undefined ? 'newest change first' : 'by path'}
       </p>
       <div
@@ -224,7 +222,7 @@ export function FilesBrowser({
         aria-label="changed files"
         className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2"
       >
-        {shown.length === 0 ? <p className="px-4 py-3 text-[10px] text-doom-faint">nothing matches the path</p> : null}
+        {shown.length === 0 ? <p className="px-4 py-3 text-xs text-doom-faint">nothing matches the path</p> : null}
         {grouped === undefined
           ? shown.map((item) => (
               <BrowserFileRow
@@ -256,7 +254,7 @@ export function FilesBrowser({
             ))}
       </div>
       <div className="flex h-8 shrink-0 items-center border-t border-doom-border-soft bg-doom-deep px-4">
-        <span className="text-[9px] text-doom-faint">↑↓ choose · enter open · esc close</span>
+        <span className="text-2xs text-doom-faint">↑↓ choose · enter open · esc close</span>
       </div>
     </aside>
   );
