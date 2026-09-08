@@ -86,6 +86,7 @@ function wav(amplitude: number, milliseconds: number): Buffer {
   return buffer;
 }
 const resolvedConfig: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'whisper-cpp',
   language: 'auto',
   recorder: { device: 'none:default' },

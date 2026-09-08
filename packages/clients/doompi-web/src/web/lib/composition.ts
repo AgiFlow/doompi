@@ -64,9 +64,11 @@ export interface MinorMode {
   availability: MinorModeAvailability;
   /** What the mode itself is reporting while on. */
   detail: string;
+  /** Activity group to focus instead of invoking the mode command from the cockpit. */
+  activityGroup?: string;
   /**
    * Why the mode cannot be driven from here, in the words of the mode itself.
-   * Empty when it can be. A mode may be installed and still refuse a cockpit:
+   * Empty when it can. A mode may be installed and still refuse a cockpit:
    * autonomous voice captures from the terminal's own microphone, which a
    * browser talking to a headless agent does not have.
    */
@@ -77,7 +79,10 @@ export interface MinorModeSource {
   name: string;
   /** The catalog mode this row drives, when the runtime registers it under another id. */
   modeId?: string;
+  /** Leader Space key path, as the TUI documents it. */
   keys: string;
+  /** Activity group to focus instead of invoking the mode command from the cockpit. */
+  activityGroup?: string;
   statusKey?: string;
   widgetKey?: string;
   hideWhenMissing?: boolean;
@@ -96,7 +101,7 @@ export interface MinorModeSource {
 export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'help', keys: 'h e' },
   { name: 'plan', keys: 'p e', statusKey: 'plan-mode' },
-  { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
+  { name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops' },
   { name: 'goal', keys: 'g e', statusKey: 'goal' },
   { name: 'author', keys: 'o a' },
   { name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress' },
@@ -139,6 +144,7 @@ function catalogMinorModes(sources: readonly MinorModeSource[], projection: Mino
       id: mode.id,
       keys: source?.keys ?? '',
       availability: blocked && !on ? 'unavailable' : on ? 'on' : 'off',
+      ...(source?.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
       detail: mode.detail ?? (mode.activation === 'activating' ? 'activating' : ''),
       unavailableReason: reason,
     };
@@ -152,6 +158,7 @@ function catalogMinorModes(sources: readonly MinorModeSource[], projection: Mino
         id: source.modeId ?? source.name,
         keys: source.keys,
         availability: 'unavailable',
+        ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
         detail: '',
         unavailableReason: 'No package in this session registers this mode.',
       });
@@ -179,6 +186,7 @@ export function minorModes(
             id: source.modeId ?? source.name,
             keys: source.keys,
             availability: 'unavailable' as const,
+            ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
             detail: '',
             unavailableReason: 'This session has not reported the mode.',
           },
@@ -190,6 +198,7 @@ export function minorModes(
         id: source.modeId ?? source.name,
         keys: source.keys,
         availability: detail ? ('on' as const) : ('off' as const),
+        ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
         detail,
         unavailableReason: '',
       };
@@ -200,6 +209,7 @@ export function minorModes(
         id: source.modeId ?? source.name,
         keys: source.keys,
         availability: 'off' as const,
+        ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
         detail: '',
         unavailableReason: '',
       };
@@ -209,6 +219,7 @@ export function minorModes(
       id: source.name,
       keys: source.keys,
       availability: 'unavailable' as const,
+      ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
       detail: '',
       unavailableReason: 'This session has not reported the mode.',
     };

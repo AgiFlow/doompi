@@ -3,7 +3,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
@@ -13,6 +13,15 @@ import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
  * shape Vite speaks: a subprotocol on the handshake, then text frames in both
  * directions on a socket the browser opened first.
  */
+
+// Proxy fixtures supply their own assets; never sync the developer's repositories or global config.
+vi.mock('../../src/adapters/syncGuard.ts', () => ({
+  createSyncGuard: () => ({
+    ensureSynced: async () => undefined,
+    watch: () => undefined,
+    close: () => undefined,
+  }),
+}));
 
 const SESSION = 'devproxy-socket';
 
@@ -81,9 +90,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await upstream.close();
-  await server.close();
-  await session.close();
+  await upstream?.close();
+  await server?.close();
+  await session?.close();
   fs.rmSync(registryDir, { recursive: true, force: true });
   fs.rmSync(assetsDir, { recursive: true, force: true });
 });

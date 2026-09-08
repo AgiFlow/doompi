@@ -1,4 +1,6 @@
 import { ClientCaptureActivityLifecycle, type SpeechPresenceDetector } from '../../types/clientCaptureActivity.ts';
+import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../../types/realtime.ts';
+import { BrowserRealtimeSession } from './browserRealtimeSession.ts';
 import {
   type VoiceMediaCapabilities,
   type VoiceMediaCapture,
@@ -11,7 +13,18 @@ import {
 
 const RECONNECT_DELAY_MS = 2_000;
 const MAX_CONNECTION_ID_LENGTH = 200;
+const MAX_PENDING_REALTIME_POSTS = 128;
 const MEDIA_CLIENT_CONFLICT = 'Another client owns voice media for this session.';
+
+interface RealtimeBrowserSession {
+  start(): Promise<void>;
+  send(event: string): void;
+  mute(muted: boolean): void;
+  interruptSpeech(): void;
+  close(): void;
+}
+
+export type RealtimeBrowserSessionFactory = (options: BrowserRealtimeOptions) => RealtimeBrowserSession;
 
 export type VoiceMediaClientConnectionState = 'connecting' | 'connected' | 'conflict' | 'disconnected';
 
@@ -30,7 +43,8 @@ function capabilitiesMatch(left: VoiceMediaCapabilities, right: VoiceMediaCapabi
     left.playback === right.playback &&
     left.captureActivity === right.captureActivity &&
     left.autonomousOrchestration === right.autonomousOrchestration &&
-    left.playbackDucking === right.playbackDucking
+    left.playbackDucking === right.playbackDucking &&
+    left.realtime === right.realtime
   );
 }
 
@@ -65,6 +79,11 @@ export class VoiceMediaClient {
   private connectionAttempt = 0;
   private failAttempt: ((error: Error) => void) | undefined;
   private runOperation: Promise<void> | undefined;
+  private realtime: RealtimeBrowserSession | undefined;
+  private realtimeActivationId: string | undefined;
+  private realtimeGeneration = 0;
+  private realtimePosts: Promise<void> = Promise.resolve();
+  private pendingRealtimePosts = 0;
   private readonly listeningWaiters = new Set<(listening: boolean) => void>();
 
   public constructor(
@@ -73,6 +92,9 @@ export class VoiceMediaClient {
     private readonly transport: VoiceMediaTransport,
     private readonly device: VoiceMediaDevice,
     private readonly onConnectionState: (state: VoiceMediaClientConnectionState) => void = () => undefined,
+    private readonly onRealtimeState: (state: RealtimeBrowserState | undefined) => void = () => undefined,
+    private readonly createRealtimeSession: RealtimeBrowserSessionFactory = (options) =>
+      new BrowserRealtimeSession(options),
   ) {}
 
   public start(): void {
@@ -91,6 +113,7 @@ export class VoiceMediaClient {
   }
 
   public async stop(closeDevice = true): Promise<void> {
+    this.closeRealtime();
     this.abortController.abort();
     await this.runOperation?.catch(() => undefined);
     await this.releaseMedia(closeDevice);
@@ -137,6 +160,7 @@ export class VoiceMediaClient {
         if (signal.aborted) return;
         if (error instanceof Error && error.message === MEDIA_CLIENT_CONFLICT) this.onConnectionState('conflict');
         attemptController.abort();
+        this.closeRealtime();
         await this.releaseMedia();
         if (this.activeConnectionId === connectionId) {
           await this.transport.disconnect(this.clientId, connectionId).catch(() => undefined);
@@ -171,7 +195,24 @@ export class VoiceMediaClient {
 
   private async handle(event: VoiceMediaClientEvent, connectionId: string): Promise<void> {
     switch (event.type) {
+      case 'realtime-start':
+        this.startRealtime(event.activationId, connectionId);
+        return;
+      case 'realtime-stop':
+        if (this.realtimeActivationId === event.activationId) this.closeRealtime();
+        return;
+      case 'realtime-control':
+        if (this.realtimeActivationId !== event.activationId) return;
+        if (event.action === 'mute') this.realtime?.mute(true);
+        else if (event.action === 'unmute') this.realtime?.mute(false);
+        else this.realtime?.interruptSpeech();
+        return;
+      case 'realtime-send':
+        if (this.realtimeActivationId !== event.activationId) return;
+        for (const message of event.messages) this.realtime?.send(message);
+        return;
       case 'capture-start':
+        this.closeRealtime();
         await this.startCapture(event, connectionId);
         return;
       case 'capture-stop':
@@ -181,6 +222,7 @@ export class VoiceMediaClient {
         if (this.captureId === event.captureId) await this.finishCapture(event.captureId, connectionId, false);
         return;
       case 'playback-start':
+        this.closeRealtime();
         await this.startPlayback(event, connectionId);
         return;
       case 'playback-stop':
@@ -192,6 +234,120 @@ export class VoiceMediaClient {
         this.playback?.stop('aborted');
         return;
     }
+  }
+
+  public muteRealtime(muted: boolean): void {
+    this.realtime?.mute(muted);
+  }
+
+  public interruptRealtime(): void {
+    this.realtime?.interruptSpeech();
+  }
+
+  public endRealtime(): void {
+    this.closeRealtime();
+  }
+
+  private startRealtime(activationId: string, connectionId: string): void {
+    this.closeRealtime();
+    const generation = ++this.realtimeGeneration;
+    this.realtimeActivationId = activationId;
+    void this.beginRealtime(activationId, connectionId, generation).catch((error: unknown) =>
+      this.failRealtime(generation, error),
+    );
+  }
+
+  private async beginRealtime(activationId: string, connectionId: string, generation: number): Promise<void> {
+    await this.releaseMedia(false);
+    if (!this.isCurrentRealtime(activationId, connectionId, generation)) return;
+    const { realtimeNegotiate, realtimeEvent, realtimeState } = this.transport;
+    if (realtimeNegotiate === undefined || realtimeEvent === undefined || realtimeState === undefined)
+      throw new Error('Realtime browser transport is unavailable.');
+    let session!: RealtimeBrowserSession;
+    session = this.createRealtimeSession({
+      negotiate: (sdp, signal) =>
+        realtimeNegotiate.call(this.transport, this.clientId, connectionId, activationId, sdp, signal),
+      onEvent: (event) => {
+        if (this.realtime !== session || !this.isCurrentRealtime(activationId, connectionId, generation)) return;
+        this.enqueueRealtimePost(generation, () =>
+          realtimeEvent.call(this.transport, this.clientId, connectionId, activationId, event),
+        );
+      },
+      onState: (state) => {
+        if (this.realtime !== session || !this.isCurrentRealtime(activationId, connectionId, generation)) return;
+        this.onRealtimeState(state);
+        this.enqueueRealtimePost(generation, () =>
+          realtimeState.call(this.transport, this.clientId, connectionId, activationId, state),
+        );
+      },
+    });
+    this.realtime = session;
+    await session.start();
+  }
+
+  private closeRealtime(): void {
+    const session = this.realtime;
+    const activationId = this.realtimeActivationId;
+    if (session === undefined && activationId === undefined) return;
+    const connectionId = this.activeConnectionId;
+    const generation = this.realtimeGeneration;
+    this.realtime = undefined;
+    this.realtimeActivationId = undefined;
+    this.realtimeGeneration += 1;
+    session?.close();
+    this.onRealtimeState(undefined);
+    const realtimeState = this.transport.realtimeState;
+    if (activationId !== undefined && connectionId !== undefined && realtimeState !== undefined) {
+      this.enqueueRealtimePost(
+        generation,
+        () =>
+          realtimeState.call(this.transport, this.clientId, connectionId, activationId, {
+            connection: 'closed',
+            listening: false,
+            speaking: false,
+            muted: false,
+          }),
+        true,
+      );
+    }
+  }
+
+  private isCurrentRealtime(activationId: string, connectionId: string, generation: number): boolean {
+    return (
+      this.realtimeGeneration === generation &&
+      this.realtimeActivationId === activationId &&
+      this.activeConnectionId === connectionId &&
+      !this.abortController.signal.aborted
+    );
+  }
+
+  private enqueueRealtimePost(generation: number, operation: () => Promise<void>, terminal = false): void {
+    if (this.pendingRealtimePosts >= MAX_PENDING_REALTIME_POSTS) {
+      this.failRealtime(generation, new Error('Realtime browser event queue exceeded its limit.'));
+      return;
+    }
+    this.pendingRealtimePosts += 1;
+    const post = this.realtimePosts.then(() => {
+      // Do not submit queued utterances after local end or ownership transfer.
+      if (!terminal && generation !== this.realtimeGeneration) return;
+      return operation();
+    });
+    this.realtimePosts = post.catch(() => undefined);
+    void post.then(
+      () => {
+        this.pendingRealtimePosts -= 1;
+      },
+      (error: unknown) => {
+        this.pendingRealtimePosts -= 1;
+        this.failRealtime(generation, error);
+      },
+    );
+  }
+
+  private failRealtime(generation: number, error: unknown): void {
+    if (generation !== this.realtimeGeneration) return;
+    this.closeRealtime();
+    this.failAttempt?.(error instanceof Error ? error : new Error(String(error)));
   }
 
   private async startCapture(

@@ -482,6 +482,8 @@ export interface MinorModeContribution {
   widgetKey?: string;
   /** Omit the row when the active session does not register this opt-in mode. */
   hideWhenMissing?: boolean;
+  /** Activity group to focus instead of invoking the mode command from the cockpit. */
+  activityGroup?: string;
   /** Sort position in the selection bar list; lower first, name breaks ties. */
   order?: number;
 }

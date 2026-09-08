@@ -2,10 +2,19 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serveWeb } from '../../src/adapters/httpServer.ts';
 import type { WebServer } from '../../src/types/bridge.ts';
 import { type FakeSession, startFakeSession } from '../support/fakeSession.ts';
+
+// Proxy fixtures supply their own assets; never sync the developer's repositories or global config.
+vi.mock('../../src/adapters/syncGuard.ts', () => ({
+  createSyncGuard: () => ({
+    ensureSynced: async () => undefined,
+    watch: () => undefined,
+    close: () => undefined,
+  }),
+}));
 
 const SESSION = 'devproxy';
 
@@ -63,9 +72,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await upstream.close();
-  await server.close();
-  await session.close();
+  await upstream?.close();
+  await server?.close();
+  await session?.close();
   fs.rmSync(registryDir, { recursive: true, force: true });
   fs.rmSync(assetsDir, { recursive: true, force: true });
 });

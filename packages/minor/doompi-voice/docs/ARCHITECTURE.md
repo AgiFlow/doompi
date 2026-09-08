@@ -7,6 +7,54 @@ question of what the system _must_ do; this one explains what the code _is_. Whe
 disagreed, the disagreements are listed in [Known divergences](#known-divergences) rather than
 quietly reconciled.
 
+## Realtime port foundations
+
+The experimental live path is a focused TypeScript port, not a Codex app-server wrapper:
+
+- `adapters/realtime/{codexAuth,codexAuthStorage,codexLogin,realtimeRuntime}.ts`: dedicated host-only login, refresh, private storage and loopback callback.
+- `adapters/realtime/codexRealtime.ts`: pinned subscriber call creation with truthful DoomPi identity.
+- `services/realtimeProtocol.ts`: bounded Frameless V3 parsing and correlated context messages.
+- `services/realtimeSession.ts`: one-activation XState lifecycle and explicit delivery admission.
+- `adapters/realtime/realtimeMediaBroker.ts`: existing media lease integration, request identities, event cursor bounds and control-loss cleanup.
+- `adapters/realtime/realtimeHost.ts`: authenticated Unix HTTP signaling from the active Pi session.
+- `adapters/pi/{liveVoiceController,voiceModeController}.ts`: explicit mode selection, bounded polling, context updates and main-agent requests.
+- `adapters/pi/{realtimeContext,realtimeDelivery}.ts`: bounded visible-branch projection and deduplicated user-text delivery.
+- `web/api/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.
+
+`voice.ts` composes half-duplex (`legacy` configuration value) and realtime companion controllers.
+only on explicit activation. Local ASR readiness does not gate live mode. Login is a separate
+command and never starts capture. Reload handoffs and reconnect cannot resume live media.
+
+The coordinator binds work to session, activation, lease, and connection identities. A successful
+HTTP call alone is not readiness: both provider readiness and media connectivity are required.
+Host signaling uses existing authenticated APIs; credentials never cross to the browser.
+Legacy capture and playback cannot run while live reserves the media lease. Browser shutdown
+stops local resources synchronously and reports terminal state without inventing playback proof.
+Queued stale provider events are discarded after local end or ownership transfer.
+
+The Pi bridge uses finalized user text, not companion reformulations, for main-agent input.
+Busy-agent submission steers the existing agent; it does not start another coding loop.
+Changed request payloads and ambiguous delivery fail closed. Submission is not completion.
+The primary Pi model is never replaced or pinned. `agent_settled` publishes the current
+session's last visible final response through `LiveVoiceController.publishAgentResult`.
+Submitted delegation IDs receive correlated results, with only the latest steering request
+marked speakable. Later Pi completions without an outstanding delegation use speakable
+session context, so Team and Workflow completion turns can reach the companion too.
+Pi message IDs deduplicate publication within an activation. Transfer failure ends Voice
+visibly, without aborting Pi work. Oversized results produce an explicit notice, not a
+silently clipped answer. No raw tool output or thinking is forwarded.
+
+Live mode excludes the half-duplex `narrate` tool and fallback; unrelated active tools remain.
+Reference context is rebuilt from the visible branch and bounded task/question projection
+on polling ticks; commentary updates are coalesced and have a cumulative budget.
+
+Subscription WebRTC and same-call host sideband connectivity have been exercised in isolated
+trials, as has a synthetic echo/result roundtrip. That does not qualify physical speech.
+Full audible replies, microphone and speaker echo, latency and duplex usability still need
+separately approved trials. Exact narration and voice-only approval provenance remain unavailable.
+Interruption suppresses local output until explicit reactivation; no safe provider cancellation
+or buffered-audio resume boundary has been established. It never cancels main-agent work.
+
 ## Contents
 
 - [1. What runs where](#1-what-runs-where)

@@ -1,0 +1,13 @@
+This package includes portions adapted from OpenAI Codex.
+Copyright 2025 OpenAI
+https://github.com/openai/codex
+Source revision: 5ecb3afd1b
+
+Adapted files:
+- src/adapters/realtime/codexAuth.ts, codexLogin.ts, and codexAuthStorage.ts: subscription login, credential storage, and refresh
+- src/adapters/realtime/codexRealtime.ts: realtime call creation
+- src/services/realtimeProtocol.ts: Frameless realtime events and context messages
+
+These portions were modified for DoomPi and are licensed under Apache-2.0.
+A copy is included in licenses/Codex-Apache-2.0.txt.
+The package's MIT license continues to apply to its original code.

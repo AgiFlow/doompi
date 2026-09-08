@@ -110,7 +110,13 @@ describe('minorModes', () => {
     expect(byName.help).toMatchObject({ id: 'help', availability: 'on', keys: 'h e' });
     expect(byName.plan).toMatchObject({ id: 'plan', availability: 'off' });
     // The id stem links the catalog record to the declared row and its keys.
-    expect(byName.loop).toMatchObject({ id: 'loop.active', availability: 'off', detail: 'activating', keys: 'l l' });
+    expect(byName.loop).toMatchObject({
+      id: 'loop.active',
+      availability: 'off',
+      detail: 'activating',
+      keys: 'l l',
+      activityGroup: 'loops',
+    });
     // Declared modes the catalog lacks stay listed as unavailable.
     expect(byName.goal.availability).toBe('unavailable');
     expect(byName.workflow.availability).toBe('unavailable');

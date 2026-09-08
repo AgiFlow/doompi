@@ -10,6 +10,7 @@ import type {
 } from '../src/types/index.ts';
 
 const config: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'mlx-whisper',
   language: 'auto',
   recorder: { device: 'none:default' },

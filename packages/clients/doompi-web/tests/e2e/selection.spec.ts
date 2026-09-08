@@ -222,10 +222,11 @@ test('the journaled catalog drives the popup and rows send /minor for their mode
   await expect(page.getByTestId('minor-loop')).toHaveAttribute('data-availability', 'off');
   await expect(page.getByTestId('minor-plan')).toHaveAttribute('data-availability', 'unavailable');
 
-  // A row hands its catalog id to /minor and the popup closes.
-  await page.getByTestId('minor-loop').click();
+  // A command-backed row hands its catalog id to /minor and the popup closes.
+  // Loop instead focuses Activity, covered by the activity suite.
+  await page.getByTestId('minor-help').click();
   const prompt = await cockpit.session.waitForCommand('prompt');
-  expect(prompt.message).toBe('/minor loop.active');
+  expect(prompt.message).toBe('/minor help');
   await expect(page.getByTestId('minor-popup')).toBeHidden();
 });
 

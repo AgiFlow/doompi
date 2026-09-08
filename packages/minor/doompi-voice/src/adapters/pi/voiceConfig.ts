@@ -44,6 +44,7 @@ import { type InstallPlan, type InstallStep, planBlocker, planInstall } from '..
 
 export const VOICE_CONFIG_SECTION_ID = 'voice';
 const SECTION_ORDER = 10;
+const FIELD_MODE = 'mode';
 const FIELD_ENGINE = 'engine';
 const FIELD_MODEL = 'model';
 const FIELD_LANGUAGE = 'language';
@@ -67,6 +68,20 @@ const DEFAULT_TTS_ENGINE = 'macos-say';
 /** `VoiceTtsEngine` is a single literal today; a choice list keeps it discoverable. */
 const TTS_ENGINE_CHOICES = [
   { id: DEFAULT_TTS_ENGINE, label: DEFAULT_TTS_ENGINE, detail: 'macOS `say`', action: CONFIG_ACTION.set },
+];
+const MODE_CHOICES: ConfigChoice[] = [
+  {
+    id: 'legacy',
+    label: 'legacy',
+    detail: 'Use local transcription and narration.',
+    action: CONFIG_ACTION.clear,
+  },
+  {
+    id: 'live',
+    label: 'live',
+    detail: 'Use the live voice service without local transcription.',
+    action: CONFIG_ACTION.set,
+  },
 ];
 /** Clearing the language is what `auto` means in the file, so the entry clears. */
 const LANGUAGE_AUTO_ID = 'auto';
@@ -218,6 +233,7 @@ interface InstallState {
 
 /** Every field the panel writes straight through, and where each one lives. */
 const SIMPLE_FIELD_PATHS: Readonly<Record<string, readonly string[]>> = {
+  [FIELD_MODE]: [...VOICE_PATH, 'mode'],
   [FIELD_LANGUAGE]: [...VOICE_PATH, 'language'],
   [FIELD_DEVICE]: [...VOICE_PATH, 'recorder', 'device'],
   [FIELD_AUTO_MODEL]: [...VOICE_PATH, 'autoCapture', 'model'],
@@ -357,6 +373,15 @@ export class VoiceConfigController {
         detail: this.readiness(voice),
         ...(this.notice ? { notice: this.notice, noticeLevel: 'error' as const } : {}),
         fields: [
+          {
+            id: FIELD_MODE,
+            label: 'mode',
+            kind: 'choice',
+            keyPath: 'voice.mode',
+            detail: 'Legacy keeps the existing local pipeline. Live does not require a local speech model.',
+            choices: MODE_CHOICES,
+            value: voice?.mode ?? 'legacy',
+          },
           {
             id: FIELD_MODEL,
             label: 'model',
@@ -597,6 +622,7 @@ export class VoiceConfigController {
 
   private readiness(voice: ResolvedVoiceConfig | undefined): string {
     if (this.install?.phase === INSTALL_RUNNING) return 'installing';
+    if (voice?.mode === 'live') return 'live selected';
     return this.activeModelId(voice) ? 'ready' : 'no model installed';
   }
 

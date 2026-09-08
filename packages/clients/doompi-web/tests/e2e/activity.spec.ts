@@ -31,6 +31,10 @@ test('keeps the workflow launcher available before any package reports work', as
   await expect(page.getByTestId('activity-workflows')).toBeVisible();
   await expect(page.getByTestId('activity-workflow-launch')).toBeVisible();
   await expect(page.getByTestId('activity-empty')).toBeHidden();
+  await expect(page.getByTestId('activity-loops')).toHaveAttribute('data-active', 'false');
+  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
+  await expect(page.getByTestId('activity-busy')).toBeHidden();
+  await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
 
 // The prompt library is no longer a dock group; it is reached from the
@@ -92,7 +96,8 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
       { instanceId: 'loop-release', label: 'Release watcher', detail: 'every 60s · Check release status', state },
     ]);
 
-  await expect(page.getByTestId('activity-loops')).toHaveCount(0);
+  await expect(page.getByTestId('activity-loops')).toBeVisible();
+  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
   cockpit.session.emit(status('doom-loop-instances', loop('starting')));
 
   const row = page.getByTestId('activity-loop-loop-release');
@@ -118,6 +123,47 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
   await expect(page.getByTestId('activity-loops-manage')).toHaveCount(1);
 });
 
+test('clicking Loop focuses idle Activity loops instead of opening a generic launcher dialog', async ({
+  page,
+  cockpit,
+}) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      customType: 'doom-minor-modes',
+      data: {
+        version: 1,
+        revision: 1,
+        modes: [
+          {
+            id: 'loop.active',
+            label: 'Loop',
+            description: '',
+            order: 30,
+            activation: 'inactive',
+            condition: 'ready',
+            actions: [{ id: 'start', label: 'Start', description: '', needsInput: false, enabled: true }],
+          },
+        ],
+      },
+    },
+  });
+
+  await expect(page.getByTestId('activity-loops')).toBeVisible();
+  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
+  await page.getByTestId('axis-minor').click();
+  await page.getByTestId('minor-loop').click();
+
+  await expect(page.getByTestId('dock-tab-activity')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('activity-loops')).toBeVisible();
+  expect(
+    cockpit.session.received.filter((frame) => frame.type === 'prompt' && frame.message === '/minor loop.active'),
+  ).toHaveLength(0);
+});
 test('keeps bottom-pinned groups visible while ordinary groups scroll', async ({ page, cockpit }) => {
   await page.setViewportSize({ width: 1280, height: 280 });
   await page.goto(cockpit.url);

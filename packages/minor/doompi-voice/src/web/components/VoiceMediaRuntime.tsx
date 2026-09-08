@@ -1,9 +1,15 @@
 import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { RealtimeBrowserState } from '../../types/realtime.ts';
 import { browserVoiceMediaClientId } from '../lib/browserMediaIdentity.ts';
 import { BrowserVoiceMediaDevice } from '../api/browserMediaDevice.ts';
 import { BrowserVoiceMediaTransport } from '../stores/clientMediaTransport.ts';
 import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../api/voiceMediaClient.ts';
-import { activeVoiceSession, voiceMediaBrowserState, voiceMediaPageRuntime } from '../stores/voiceMediaWakeStore.ts';
+import {
+  activeVoiceSession,
+  voiceMediaBrowserState,
+  voiceMediaPageRuntime,
+  voiceRealtimeBrowserControls,
+} from '../stores/voiceMediaWakeStore.ts';
 
 class PageVoiceMediaRuntime {
   private readonly device = new BrowserVoiceMediaDevice(true);
@@ -31,6 +37,7 @@ class PageVoiceMediaRuntime {
     this.closed = true;
     window.removeEventListener('pagehide', this.closeOnPageHide);
     this.unsubscribe();
+    this.client?.endRealtime();
     const dispose = async (): Promise<void> => {
       try {
         await this.detach();
@@ -45,6 +52,7 @@ class PageVoiceMediaRuntime {
   }
 
   private select(sessionId: string | null): void {
+    if (sessionId !== this.boundSessionId) this.client?.endRealtime();
     const switchSession = async (): Promise<void> => {
       if (this.closed) return;
       if (sessionId === null) await this.detach();
@@ -67,7 +75,19 @@ class PageVoiceMediaRuntime {
         if (current?.sessionId === sessionId) voiceMediaBrowserState.reset();
         return;
       }
-      voiceMediaBrowserState.update(() => ({ sessionId, phase }));
+      voiceMediaBrowserState.update((current) =>
+        current?.sessionId === sessionId ? { ...current, phase } : { sessionId, phase },
+      );
+    };
+    const reportRealtimeState = (realtime: RealtimeBrowserState | undefined): void => {
+      if (this.client !== client || this.boundSessionId !== sessionId) return;
+      const current = voiceMediaBrowserState.store.state;
+      if (current?.sessionId !== sessionId) return;
+      voiceMediaBrowserState.update(() => ({
+        ...current,
+        ...(realtime === undefined ? {} : { realtime }),
+        ...(realtime === undefined ? { realtime: undefined, realtimeOutputInterrupted: undefined } : {}),
+      }));
     };
     client = new VoiceMediaClient(
       this.clientId,
@@ -75,9 +95,21 @@ class PageVoiceMediaRuntime {
       new BrowserVoiceMediaTransport(sessionId),
       this.device,
       reportConnectionState,
+      reportRealtimeState,
     );
     this.client = client;
     this.boundSessionId = sessionId;
+    voiceRealtimeBrowserControls.update(() => ({
+      sessionId,
+      mute: (muted) => client.muteRealtime(muted),
+      interrupt: () => {
+        client.interruptRealtime();
+        const current = voiceMediaBrowserState.store.state;
+        if (current?.sessionId === sessionId)
+          voiceMediaBrowserState.update(() => ({ ...current, realtimeOutputInterrupted: true }));
+      },
+      end: () => client.endRealtime(),
+    }));
     client.start();
   }
 
@@ -88,6 +120,8 @@ class PageVoiceMediaRuntime {
     this.boundSessionId = undefined;
     if (sessionId !== undefined && voiceMediaBrowserState.store.state?.sessionId === sessionId)
       voiceMediaBrowserState.reset();
+    if (sessionId !== undefined && voiceRealtimeBrowserControls.store.state?.sessionId === sessionId)
+      voiceRealtimeBrowserControls.reset();
     await client?.stop(false);
   }
 }

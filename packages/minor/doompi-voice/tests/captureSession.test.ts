@@ -18,6 +18,7 @@ import type { VoiceMediaCaptureActivity } from '../src/types/clientMedia.ts';
 
 const directories: string[] = [];
 const config: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'whisper-cpp',
   language: 'auto',
   recorder: { device: 'none:default' },

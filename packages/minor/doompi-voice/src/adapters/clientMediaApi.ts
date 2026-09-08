@@ -1,4 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { dirname } from 'node:path';
+import { globalDoomConfigPath } from '@agimon-ai/doompi-config/config';
+import {
+  REALTIME_LIMITS,
+  REALTIME_ROUTES,
+  type RealtimeBrowserState,
+  type RealtimeProvider,
+} from '../types/realtime.ts';
+import { RealtimeMediaBroker } from './realtime/realtimeMediaBroker.ts';
+import { createRealtimeRuntime } from './realtime/realtimeRuntime.ts';
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
@@ -63,6 +73,7 @@ interface ClientLease {
   playbackDucking: boolean;
   controlLocation: VoiceMediaConnectRequest['controlLocation'];
   lastSeenAt: number;
+  realtime: boolean;
 }
 
 type CaptureState = 'active' | 'stopping' | 'stopped' | 'aborted' | 'failed';
@@ -107,6 +118,8 @@ export interface VoiceMediaApiOptions {
   wakePublisher?: VoiceMediaWakePublisher;
   ownershipCommandTimeoutMs?: number;
   onNotice?: (message: string) => void;
+  sessionId?: string;
+  realtimeProvider?: RealtimeProvider;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,6 +132,43 @@ function validId(value: unknown): value is string {
 
 function errorResponse(message: string, status: number): Response {
   return Response.json({ error: message }, { status });
+}
+
+async function boundedRealtimeJson(request: Request): Promise<Record<string, unknown> | undefined> {
+  if (!request.body) return undefined;
+  const reader = request.body.getReader();
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5_000)]);
+  const cancel = (): void => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancel, { once: true });
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      signal.throwIfAborted();
+      const { value, done } = await reader.read();
+      signal.throwIfAborted();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 262_144) return undefined;
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    return isRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    cancel();
+    reader.releaseLock();
+  }
 }
 
 async function jsonRecord(request: Request): Promise<Record<string, unknown> | undefined> {
@@ -264,9 +314,14 @@ class VoiceMediaBroker implements DoomApiHandler {
   private ownershipSyncedAt: number | undefined;
   private pendingOwnershipCommand: PendingOwnershipCommand | undefined;
   private closed = false;
+  private realtime: RealtimeMediaBroker | undefined;
+  private readonly realtimeProvider: RealtimeProvider | undefined;
+  private readonly sessionId: string;
 
   public constructor(options: VoiceMediaApiOptions) {
     this.internalToken = options.internalToken;
+    this.realtimeProvider = options.realtimeProvider;
+    this.sessionId = options.sessionId ?? 'voice-media';
     this.hubToken = options.hubToken;
     this.now = options.now ?? Date.now;
     this.clientConnectWaitMs = options.clientConnectWaitMs ?? CLIENT_CONNECT_WAIT_MS;
@@ -281,6 +336,7 @@ class VoiceMediaBroker implements DoomApiHandler {
   public fetch(request: Request): Promise<Response> | Response {
     if (this.closed) return errorResponse('Voice media transport is closed.', 503);
     const url = new URL(request.url);
+    this.realtime?.check();
     if (url.pathname.startsWith('/host/')) {
       const authorized =
         this.internalToken !== undefined && request.headers.get('authorization') === `Bearer ${this.internalToken}`;
@@ -292,6 +348,8 @@ class VoiceMediaBroker implements DoomApiHandler {
       if (!authorized) return errorResponse('Not found.', 404);
     }
 
+    if (url.pathname.startsWith('/host/realtime/') || url.pathname.startsWith('/client/realtime/'))
+      return this.realtimeRequest(request, url);
     if (request.method === 'GET' && url.pathname === VOICE_OWNERSHIP_ROUTES.state)
       return Response.json(this.currentOwnershipSnapshot());
     if (request.method === 'POST' && url.pathname === VOICE_OWNERSHIP_ROUTES.command)
@@ -331,6 +389,132 @@ class VoiceMediaBroker implements DoomApiHandler {
     if (request.method === 'POST' && url.pathname === VOICE_MEDIA_ROUTES.hostPlaybackAbort)
       return this.stopPlayback(request, true);
     return errorResponse('Not found.', 404);
+  }
+
+  private async realtimeRequest(request: Request, url: URL): Promise<Response> {
+    const body = request.method === 'POST' ? await boundedRealtimeJson(request) : undefined;
+    const route = url.pathname;
+    if (route.startsWith('/client/') && !this.matchesClient(body?.clientId, body?.connectionId))
+      return errorResponse('Voice media client does not own this session.', 409);
+    if (route === REALTIME_ROUTES.hostStart && request.method === 'POST') {
+      if (
+        !validId(body?.activationId) ||
+        typeof body.instructions !== 'string' ||
+        body.instructions.length > REALTIME_LIMITS.instructionsCharacters
+      )
+        return errorResponse('Invalid live voice activation.', 400);
+      if (this.realtime?.activationId === body.activationId)
+        return this.realtime.active
+          ? Response.json({}, { status: 201 })
+          : errorResponse('Live activation ended. Start a fresh activation.', 409);
+      if (this.realtime?.active) return errorResponse('Live voice is already active.', 409);
+      if (this.realtimeProvider === undefined) return errorResponse('Live voice is unavailable on this host.', 503);
+      await this.clientAvailableAfterWait('capture');
+      if (this.closed) return errorResponse('Voice media transport is closed.', 503);
+      if (this.realtime?.active) return errorResponse('Live voice is already active.', 409);
+      const client = this.client;
+      const registration = this.currentOwnershipSnapshot().registration;
+      if (
+        !client ||
+        client.kind !== 'browser' ||
+        !client.realtime ||
+        !this.clientAvailable('capture') ||
+        !registration?.eligible
+      )
+        return errorResponse('Live voice requires the active browser media owner.', 503);
+      if (
+        (this.capture && ['active', 'stopping'].includes(this.capture.state)) ||
+        (this.playback && this.playback.result === undefined)
+      )
+        return errorResponse('Stop legacy capture and playback before starting live voice.', 409);
+      const identity = {
+        sessionId: this.sessionId,
+        activationId: body.activationId,
+        mediaLeaseId: registration.leaseId,
+        connectionId: client.connectionId,
+      };
+      this.realtime = new RealtimeMediaBroker({
+        identity,
+        instructions: body.instructions,
+        provider: this.realtimeProvider,
+        clock: { now: this.now, setTimeout, setInterval, clear: (timer) => clearTimeout(timer) },
+        ownsMedia: () =>
+          this.matchesFreshClient(client.id, client.connectionId) &&
+          this.currentOwnershipSnapshot().registration?.leaseId === registration.leaseId,
+        publish: (command) => this.publish(command),
+      });
+      this.realtime.start();
+      return Response.json({}, { status: 201 });
+    }
+    const activationId = request.method === 'GET' ? url.searchParams.get('activationId') : body?.activationId;
+    const realtime = this.realtime;
+    if (!validId(activationId) || realtime?.activationId !== activationId)
+      return errorResponse('Live voice activation does not own this session.', 409);
+    try {
+      if (route === REALTIME_ROUTES.hostPoll && request.method === 'GET') {
+        const after = Number(url.searchParams.get('after') ?? '0');
+        if (!Number.isSafeInteger(after) || after < 0) return errorResponse('Invalid live event cursor.', 400);
+        return Response.json(realtime.poll(after));
+      }
+      if (request.method !== 'POST' || body === undefined) return errorResponse('Invalid live voice request.', 400);
+      if (route === REALTIME_ROUTES.hostStop) {
+        realtime.close();
+        return new Response(null, { status: 204 });
+      }
+      if (route === REALTIME_ROUTES.clientNegotiate) {
+        if (typeof body.sdp !== 'string' || new TextEncoder().encode(body.sdp).byteLength > REALTIME_LIMITS.sdpBytes)
+          return errorResponse('Invalid live SDP.', 400);
+        return Response.json({ sdp: await realtime.negotiate(body.sdp) });
+      }
+      if (route === REALTIME_ROUTES.clientEvent) {
+        if (
+          typeof body.event !== 'string' ||
+          new TextEncoder().encode(body.event).byteLength > REALTIME_LIMITS.eventBytes
+        )
+          return errorResponse('Invalid live event.', 400);
+        realtime.receive(body.event);
+        return new Response(null, { status: 204 });
+      }
+      if (route === REALTIME_ROUTES.clientState) {
+        const state = body.state;
+        if (
+          !isRecord(state) ||
+          !['connecting', 'connected', 'closed', 'failed'].includes(String(state.connection)) ||
+          typeof state.listening !== 'boolean' ||
+          typeof state.speaking !== 'boolean' ||
+          typeof state.muted !== 'boolean'
+        )
+          return errorResponse('Invalid live media state.', 400);
+        realtime.updateBrowser({
+          connection: state.connection as RealtimeBrowserState['connection'],
+          listening: state.listening,
+          speaking: state.speaking,
+          muted: state.muted,
+        });
+        return new Response(null, { status: 204 });
+      }
+      if (route === REALTIME_ROUTES.hostControl) {
+        if (body.action !== 'mute' && body.action !== 'unmute' && body.action !== 'interrupt')
+          return errorResponse('Invalid live media control.', 400);
+        realtime.control(body.action);
+        return new Response(null, { status: 204 });
+      }
+      if (route === REALTIME_ROUTES.hostSend) {
+        if (
+          !Array.isArray(body.messages) ||
+          body.messages.length > 64 ||
+          !body.messages.every((message) => typeof message === 'string') ||
+          new TextEncoder().encode(JSON.stringify(body.messages)).byteLength > REALTIME_LIMITS.eventBytes
+        )
+          return errorResponse('Invalid live control messages.', 400);
+        realtime.send(body.messages);
+        return new Response(null, { status: 204 });
+      }
+      return errorResponse('Not found.', 404);
+    } catch {
+      realtime.close();
+      return errorResponse('Live voice transport failed. Start a fresh activation.', 503);
+    }
   }
 
   private async ownershipCommand(request: Request): Promise<Response> {
@@ -411,7 +595,8 @@ class VoiceMediaBroker implements DoomApiHandler {
       typeof capabilities.playback !== 'boolean' ||
       typeof capabilities.captureActivity !== 'boolean' ||
       typeof capabilities.autonomousOrchestration !== 'boolean' ||
-      (capabilities.playbackDucking !== undefined && typeof capabilities.playbackDucking !== 'boolean')
+      (capabilities.playbackDucking !== undefined && typeof capabilities.playbackDucking !== 'boolean') ||
+      (capabilities.realtime !== undefined && typeof capabilities.realtime !== 'boolean')
     ) {
       return errorResponse('Invalid voice media client declaration.', 400);
     }
@@ -443,6 +628,7 @@ class VoiceMediaBroker implements DoomApiHandler {
       playbackDucking: declaration.capabilities.playbackDucking === true,
       controlLocation: declaration.controlLocation,
       lastSeenAt: this.now(),
+      realtime: declaration.capabilities.realtime === true,
     };
     this.wake();
     return Response.json({
@@ -587,6 +773,7 @@ class VoiceMediaBroker implements DoomApiHandler {
   }
 
   private async startCapture(request: Request): Promise<Response> {
+    if (this.realtime?.active) return errorResponse('End live voice before starting legacy capture.', 409);
     const body = await jsonRecord(request);
     const requested = isRecord(body?.configuration) ? body.configuration : { mode: 'manual', activityControl: 'host' };
     if (!validId(body?.captureId)) return errorResponse('Voice capture id is required.', 400);
@@ -601,6 +788,7 @@ class VoiceMediaBroker implements DoomApiHandler {
       return errorResponse('Voice capture configuration is invalid.', 400);
     if (!(await this.clientAvailableAfterWait('capture')))
       return errorResponse('No capture-capable voice client is connected.', 503);
+    if (this.realtime?.active) return errorResponse('End live voice before starting legacy capture.', 409);
     if (
       this.capture !== undefined &&
       this.capture.state !== 'stopped' &&
@@ -696,11 +884,13 @@ class VoiceMediaBroker implements DoomApiHandler {
   }
 
   private async startPlayback(request: Request): Promise<Response> {
+    if (this.realtime?.active) return errorResponse('Exact narration is unavailable during live voice.', 409);
     const body = await jsonRecord(request);
     if (!validId(body?.playbackId) || typeof body.text !== 'string' || body.text.trim() === '')
       return errorResponse('Voice playback id and text are required.', 400);
     if (!(await this.clientAvailableAfterWait('playback')))
       return errorResponse('No playback-capable voice client is connected.', 503);
+    if (this.realtime?.active) return errorResponse('Exact narration is unavailable during live voice.', 409);
     if (this.playback !== undefined && this.playback.result === undefined)
       return errorResponse('Voice playback is already active.', 409);
     const delivery: VoiceMediaPlaybackDelivery =
@@ -803,6 +993,15 @@ class VoiceMediaBroker implements DoomApiHandler {
     );
   }
 
+  private matchesFreshClient(clientId: string, connectionId: string): boolean {
+    const client = this.client;
+    return (
+      this.matchesClient(clientId, connectionId) &&
+      client !== undefined &&
+      this.now() - client.lastSeenAt <= CLIENT_LEASE_MS
+    );
+  }
+
   private touchClient(): void {
     if (this.client) this.client.lastSeenAt = this.now();
   }
@@ -852,6 +1051,7 @@ class VoiceMediaBroker implements DoomApiHandler {
   }
 
   private failActiveClientWork(message: string): void {
+    this.realtime?.close();
     if (this.capture !== undefined && this.capture.state !== 'stopped' && this.capture.state !== 'aborted')
       this.capture.state = 'failed';
     if (this.playback !== undefined && this.playback.result === undefined) {
@@ -894,6 +1094,8 @@ export const api: DoomApi = {
     }
     return createVoiceMediaApi({
       internalToken: context.internalToken,
+      sessionId: context.sessionId,
+      realtimeProvider: createRealtimeRuntime({ stateDirectory: dirname(globalDoomConfigPath()) }).provider,
       hubToken: context.hubToken,
       wakePublisher,
       onNotice: (message) => context.onNotice(message),

@@ -20,6 +20,7 @@ import {
 import type { AutoCaptureUi, IClock, ITtsAdapter, TtsPlaybackResult } from '../src/types/index.ts';
 
 const config: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'mlx-whisper',
   language: 'en',
   recorder: { device: 'default' },

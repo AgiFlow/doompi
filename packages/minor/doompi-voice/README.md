@@ -9,6 +9,47 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 
 > **Alpha:** Voice state, tool, and platform support may change between releases.
 
+## Realtime companion
+
+Realtime is an optional conversational interface, not a replacement for the primary Pi
+agent or for half-duplex Voice. Pi keeps its selected model, reasoning, tools, approvals,
+Team and Workflow. The companion handles speech and forwards fresh action requests to Pi;
+it does not execute tools or launch a second coding agent.
+
+The experimental live path connects browser WebRTC, DoomPi-owned subscription login,
+the exclusive media lease, bounded session context, and main-agent requests/results.
+Subscription connectivity and a synthetic echo roundtrip have been exercised. Physical
+playback, echo safety, interruption recovery and microphone usability remain **unqualified**.
+
+For a separately approved trial:
+
+1. Select `voice.mode: live` in global configuration. Repository configuration cannot enable it.
+2. Run `/voice-auto login` and open the displayed URL on the DoomPi host. Credentials stay
+   in DoomPi's private `voice/subscription-auth` directory beside its global configuration,
+   separate from Codex and Pi OAuth. `/voice-auto login-cancel` cancels the attempt.
+3. With separate provider and microphone consent, explicitly activate Voice with a connected
+   WebRTC-capable browser. Selecting live or signing in does not activate capture.
+4. Use browser controls or `/voice-auto mute`, `unmute`, `interrupt`, and `end`.
+
+Pi's settled final text is returned as a correlated companion result, separately from the
+initial submission acknowledgement. Later Pi turns, including turns responding to Team or
+Workflow completion, can supply speakable session updates without another voice request.
+Responses exceeding the bounded result limit stay in the Pi session; Voice reports that it
+cannot summarize contents it did not transmit. Thinking and raw tool output are not forwarded.
+
+Interruption suppresses output for the remainder of that activation; explicitly end and
+reactivate Voice to hear replies again. It does not cancel main-agent work. Exact primary-agent
+`narrate` and its TTS fallback are not enabled in live mode. Voice-only approval answers remain
+unavailable. Reconnect and reload do not resume microphone transmission.
+
+Omit `voice.mode` or select the compatibility value `legacy` for the existing half-duplex
+Voice path. It remains a supported interaction choice. Live capture does not require local
+ASR; the local transcription requirements below apply to half-duplex and manual Voice.
+No API-key fallback is provided if subscription access fails.
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md#realtime-port-foundations) for the current boundary.
+Upstream port attribution is in `NOTICE` and `licenses/Codex-Apache-2.0.txt`.
+
 ## Requirements
 
 - Node.js 22.19.0 or newer

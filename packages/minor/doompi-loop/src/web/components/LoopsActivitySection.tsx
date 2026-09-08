@@ -3,6 +3,30 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView, type LoopStatusState } from '../../types/loopView.ts';
 
 const MANAGE_COMMAND = '/loops';
+const DEFAULT_LOOP_COMMAND = '/loop doompi.default';
+
+/** Starts the built-in prompt loop without opening a generic launcher chooser. */
+export function DefaultLoopLauncher({
+  sessionId,
+  sendSessionFrame,
+}: Pick<WebPluginSlotProps, 'sessionId' | 'sendSessionFrame'>) {
+  return (
+    <Button
+      variant="subtle"
+      size="xs"
+      data-testid="activity-loop-default-launch"
+      aria-label="launch default loop"
+      disabled={sessionId === null}
+      onClick={() => {
+        if (sessionId === null) return;
+        sendSessionFrame(sessionId, { type: 'prompt', message: DEFAULT_LOOP_COMMAND });
+      }}
+      className="text-2xs font-bold"
+    >
+      default loop
+    </Button>
+  );
+}
 
 function toneOf(state: LoopStatusState): DotTone {
   if (state === 'running') return 'green';
@@ -11,7 +35,7 @@ function toneOf(state: LoopStatusState): DotTone {
 }
 
 /** Renders active recurring prompts contributed to the Loop activity section. */
-export function LoopActivityItems({ statuses }: WebPluginSlotProps) {
+export function LoopActivityItems({ statuses }: Pick<WebPluginSlotProps, 'statuses'>) {
   const raw = statuses[LOOP_VIEW_STATUS_KEY];
   const loops = parseLoopStatusView(raw);
   const unavailable = raw !== undefined && raw.trim() !== '' && loops === undefined;
@@ -45,7 +69,10 @@ export function LoopActivityItems({ statuses }: WebPluginSlotProps) {
 export function LoopsActivitySection({ sessionId, renderSlot, sendSessionFrame }: WebPluginSlotProps) {
   return (
     <div data-testid="activity-loop-instances" className="flex flex-col gap-2">
-      {renderSlot('loop.registration')}
+      <div className="flex flex-wrap items-center gap-1">
+        <DefaultLoopLauncher sessionId={sessionId} sendSessionFrame={sendSessionFrame} />
+        {renderSlot('loop.registration')}
+      </div>
       {renderSlot('loop.items')}
       <Button
         variant="subtle"

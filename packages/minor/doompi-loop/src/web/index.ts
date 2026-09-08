@@ -7,11 +7,18 @@ import { LoopActivityItems, LoopsActivitySection } from './components/LoopsActiv
  * while the activity dock shows each loop the active session is scheduling.
  */
 const LOOPS_GROUP = { key: 'l', label: 'loops', detail: 'recurring prompt loops' };
+const LOOPS_ACTIVITY_SOURCE = {
+  subscribe: () => () => undefined,
+  // Keeping the scheduler's launcher visible does not mean a result is pending.
+  isActive: (_sessionId: string | null) => false,
+};
 
 export const webPlugin = defineWebPlugin({
   id: 'loop',
-  minorModes: [{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', order: 30 }],
-  activityGroups: [{ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }],
+  minorModes: [{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 }],
+  activityGroups: [
+    { name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, activeSource: LOOPS_ACTIVITY_SOURCE, order: 40 },
+  ],
   activitySections: [{ id: 'loops', component: LoopsActivitySection }],
   slots: [defineSlot({ slot: 'loop.registration' }), defineSlot({ slot: 'loop.items' })],
   fills: [{ slot: 'loop.items', id: 'instances', component: LoopActivityItems }],

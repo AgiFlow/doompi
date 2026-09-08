@@ -113,6 +113,7 @@ function recoverTurnSpool(directory: string): NodeTurnSpool | undefined {
 
 function resolvedConfig(command: Extract<VoiceWorkerCommand, { kind: 'begin-capture' }>): ResolvedVoiceConfig {
   return {
+    mode: 'legacy',
     engine: command.config.engine,
     language: command.config.language,
     recorder: { ...command.config.recorder },

@@ -16,6 +16,7 @@ import type {
   VoiceAutoCaptureConfig,
   VoiceConfig,
   VoiceEngine,
+  VoiceMode,
   VoiceModelConfig,
   VoiceTtsConfig,
   VoiceTtsEngine,
@@ -23,6 +24,7 @@ import type {
 import type { PersonaVoiceOverride } from './personaFrontMatter.ts';
 
 const DEFAULT_PROJECT_TRUST: ProjectTrust = 'ask';
+const DEFAULT_VOICE_MODE: VoiceMode = 'legacy';
 const DEFAULT_VOICE_ENGINE: VoiceEngine = 'auto';
 const DEFAULT_VOICE_LANGUAGE = 'auto';
 const DEFAULT_RECORDER_DEVICE = 'none:default';
@@ -45,7 +47,7 @@ const MAX_AUTOCOMPACT_RATIO = 0.99;
  */
 const MIN_AUTOCOMPACT_TOKENS = 1;
 const EDITOR_KEYS = ['command'] as const;
-const VOICE_KEYS = ['engine', 'language', 'recorder', 'adapters', 'autoCapture'] as const;
+const VOICE_KEYS = ['mode', 'engine', 'language', 'recorder', 'adapters', 'autoCapture'] as const;
 const RECORDER_KEYS = ['binary', 'device'] as const;
 const WHISPER_CPP_ENGINE = 'whisper-cpp' as const;
 const OPENAI_WHISPER_ENGINE = 'openai-whisper' as const;
@@ -117,6 +119,7 @@ const PHRASE_PUNCTUATION_PATTERN = /[\p{P}\p{S}]+/gu;
  * validating Sets below are built from these for the same reason.
  */
 export const DOOM_PLANNING_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export const DOOM_VOICE_MODES = [DEFAULT_VOICE_MODE, 'live'] as const;
 export const DOOM_VOICE_ENGINES = [
   DEFAULT_VOICE_ENGINE,
   WHISPER_CPP_ENGINE,
@@ -127,6 +130,7 @@ export const DOOM_VOICE_TTS_ENGINES = [MACOS_SAY_TTS_ENGINE] as const;
 
 const THINKING_VALUES = new Set<PlanningThinkingLevel>(DOOM_PLANNING_THINKING_LEVELS);
 const TRUST_VALUES = new Set<ProjectTrust>(['ask', 'always', 'never']);
+const VOICE_MODE_VALUES = new Set<VoiceMode>(DOOM_VOICE_MODES);
 const ENGINE_VALUES = new Set<VoiceEngine>(DOOM_VOICE_ENGINES);
 const TTS_ENGINE_VALUES = new Set<VoiceTtsEngine>(DOOM_VOICE_TTS_ENGINES);
 type ConfigObject = Record<string, unknown>;
@@ -511,6 +515,13 @@ function parseVoice(value: unknown, filePath: string): VoiceConfig | undefined {
   if (!isObject(value)) throw new Error(`Doom config at ${filePath} requires voice to be an object`);
   assertKeys(value, VOICE_KEYS, 'voice', filePath);
   const result: VoiceConfig = {};
+  if (value.mode !== undefined) {
+    if (typeof value.mode !== 'string' || !VOICE_MODE_VALUES.has(value.mode as VoiceMode))
+      throw new Error(
+        `Doom config at ${filePath} requires voice.mode to be one of: ${[...VOICE_MODE_VALUES].join(', ')}`,
+      );
+    result.mode = value.mode as VoiceMode;
+  }
   if (value.engine !== undefined) {
     if (typeof value.engine !== 'string' || !ENGINE_VALUES.has(value.engine as VoiceEngine))
       throw new Error(
@@ -629,6 +640,8 @@ function mergeAgent(
   return globalValue || repositoryValue ? { ...globalValue, ...repositoryValue } : undefined;
 }
 export function mergeDoomConfigs(globalConfig: DoomConfig, repositoryConfig: DoomConfig): DoomConfig {
+  if (repositoryConfig.voice?.mode)
+    throw new Error('Repository Doom config voice.mode is global-only; configure it in ~/.pi/.doom/config.yaml');
   if (repositoryConfig.voice?.autoCapture)
     throw new Error('Repository Doom config voice.autoCapture is global-only; configure it in ~/.pi/.doom/config.yaml');
   if (repositoryConfig.computerUse)
@@ -689,6 +702,7 @@ function mergeVoice(globalValue?: VoiceConfig, repositoryValue?: VoiceConfig): V
   return {
     ...globalValue,
     ...repositoryValue,
+    ...(globalValue?.mode ? { mode: globalValue.mode } : {}),
     recorder:
       globalValue?.recorder || repositoryValue?.recorder
         ? { ...globalValue?.recorder, ...repositoryValue?.recorder }
@@ -728,6 +742,7 @@ function mergeVoice(globalValue?: VoiceConfig, repositoryValue?: VoiceConfig): V
  */
 export function resolveVoiceConfig(config: VoiceConfig, ttsOverride?: PersonaVoiceOverride): ResolvedVoiceConfig {
   return {
+    mode: config.mode ?? DEFAULT_VOICE_MODE,
     engine: config.engine ?? DEFAULT_VOICE_ENGINE,
     language: config.language ?? DEFAULT_VOICE_LANGUAGE,
     recorder: { ...config.recorder, device: config.recorder?.device ?? DEFAULT_RECORDER_DEVICE },
@@ -763,8 +778,8 @@ export function resolveVoiceConfig(config: VoiceConfig, ttsOverride?: PersonaVoi
  *
  * `mergeDoomConfigs` above already decides this per field, but it decides it by
  * doing it: `editor` reads only from the global side, `projectTrust` only from
- * the repository side, and a repository `voice.autoCapture` throws outright.
- * A caller holding a key path has no way to ask. Without an answer, a settings
+ * the repository side, and repository `voice.mode` or `voice.autoCapture`
+ * declarations throw outright. A caller holding a key path has no way to ask.
  * surface offers writes that throw, or worse, writes that land in a file the
  * merge will ignore, so the change appears to do nothing.
  *
@@ -776,8 +791,11 @@ export type ConfigKeyScope = 'global' | 'repository' | 'both';
 /** Root keys the merge reads from one side only. */
 const GLOBAL_ONLY_ROOTS: readonly string[] = ['computerUse', 'editor'];
 const REPOSITORY_ONLY_ROOTS: readonly string[] = ['projectTrust'];
-/** The one nested exception; a repository declaration of it throws in the merge. */
-const GLOBAL_ONLY_PATHS: readonly (readonly string[])[] = [['voice', 'autoCapture']];
+/** Nested exceptions; a repository declaration of either throws in the merge. */
+const GLOBAL_ONLY_PATHS: readonly (readonly string[])[] = [
+  ['voice', 'mode'],
+  ['voice', 'autoCapture'],
+];
 
 function startsWith(keyPath: readonly string[], prefix: readonly string[]): boolean {
   return prefix.length <= keyPath.length && prefix.every((segment, index) => keyPath[index] === segment);
