@@ -1,3 +1,24 @@
+## 0.0.1-alpha.12 (2026-09-08)
+
+### 🚀 Features
+
+- wire the style-system across every web package ([56e0dd7d](https://github.com/AgiFlow/doompi/commit/56e0dd7d))
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.30
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.64
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.11 (2026-09-08)
 
 ### 🚀 Features

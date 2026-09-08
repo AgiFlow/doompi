@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-git",
-  "version": "0.0.1-alpha.3",
+  "version": "0.0.1-alpha.4",
   "description": "Git worktree sessions for DoomPi: spawn an isolated worktree with its own session and manage it from the parent",
   "keywords": [
     "coding-agent",

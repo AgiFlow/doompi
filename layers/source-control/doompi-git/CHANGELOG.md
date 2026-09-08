@@ -1,3 +1,22 @@
+## 0.0.1-alpha.4 (2026-09-08)
+
+### 🚀 Features
+
+- wire the style-system across every web package ([56e0dd7d](https://github.com/AgiFlow/doompi/commit/56e0dd7d))
+- **doompi-git:** create worktrees from the panel and scope them to their session ([dfec5ea0](https://github.com/AgiFlow/doompi/commit/dfec5ea0))
+- **doompi-web-components:** render fenced code with syntax colour, mermaid and copy ([b3c4d8c7](https://github.com/AgiFlow/doompi/commit/b3c4d8c7))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.30
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.64
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.3 (2026-09-08)
 
 ### 🚀 Features

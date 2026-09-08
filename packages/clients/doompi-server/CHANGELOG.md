@@ -1,3 +1,25 @@
+## 0.0.1-alpha.32 (2026-09-08)
+
+### 🚀 Features
+
+- wire the style-system across every web package ([56e0dd7d](https://github.com/AgiFlow/doompi/commit/56e0dd7d))
+
+### 🩹 Fixes
+
+- update web client behavior and documentation ([fa613547](https://github.com/AgiFlow/doompi/commit/fa613547))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.66
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.64
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.31 (2026-09-08)
 
 ### 🩹 Fixes
