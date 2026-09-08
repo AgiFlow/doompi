@@ -5,6 +5,7 @@ import {
   type SessionStore,
 } from '@agimon-ai/doompi-web-contracts';
 import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../../types/clientMedia.ts';
+import type { RealtimeBrowserState } from '../../types/realtime.ts';
 import {
   VOICE_OWNERSHIP_FRAME_TYPE,
   parseBrowserVoiceOwnershipPayload,
@@ -18,6 +19,8 @@ const VOICE_MEDIA_PAGE_STATE = Symbol.for('@agimon-ai/doompi-voice:web-media-pag
 export interface VoiceMediaBrowserState {
   sessionId: string;
   phase: 'connecting' | 'connected' | 'conflict';
+  realtime?: RealtimeBrowserState;
+  realtimeOutputInterrupted?: boolean;
 }
 
 interface VoiceMediaPageState {
@@ -52,6 +55,14 @@ export const voiceMediaWakes = pageState.wakes;
 export const activeVoiceSession = pageState.activeSession;
 export const voiceMediaBrowserState = pageState.browserState;
 export const voiceMediaPageRuntime = pageState.runtime;
+
+export interface VoiceRealtimeBrowserControls {
+  sessionId: string;
+  mute(muted: boolean): void;
+  interrupt(): void;
+  end(): void;
+}
+export const voiceRealtimeBrowserControls = defineGlobalStore<VoiceRealtimeBrowserControls | undefined>(undefined);
 
 export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;

@@ -42,6 +42,7 @@ import {
 const directories: string[] = [];
 const AMBIENT_REBASE_EXERCISE_MS = 1_600;
 const config: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'mlx-whisper',
   language: 'auto',
   recorder: { device: 'none:default' },

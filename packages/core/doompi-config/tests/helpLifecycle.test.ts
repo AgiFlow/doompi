@@ -1,4 +1,4 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_HELP_SERVICE, type DoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +32,7 @@ describe('Config standard extension lifecycle', () => {
       },
     } as unknown as ExtensionAPI;
 
+    const controller = await installDoomCordisHost(pi, { mode: 'composed', source: 'config-help-lifecycle-host' });
     await registerConfigExtension(pi);
     const connection = await connectDoomCordisHost(pi, 'config-help-lifecycle-test');
     const helpService = { generation: 'help-generation' } as DoomHelpService;
@@ -57,5 +58,6 @@ describe('Config standard extension lifecycle', () => {
     for (const handler of handlers.get('session_shutdown') ?? []) await handler({}, {});
     await replacementFiber.dispose();
     await replacementConnection.dispose();
+    await controller.shutdown();
   });
 });

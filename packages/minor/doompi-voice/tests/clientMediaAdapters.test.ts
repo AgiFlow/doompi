@@ -6,6 +6,7 @@ import type { IClock, IVoiceMediaHostConnection, TimerHandle, VoiceMediaAudioPol
 import type { VoiceMediaPlaybackResult } from '../src/types/clientMedia.ts';
 
 const config: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'whisper-cpp',
   language: 'auto',
   recorder: { device: 'unused' },

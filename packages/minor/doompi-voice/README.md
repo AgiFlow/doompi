@@ -9,6 +9,36 @@ the primary agent a bounded `narrate` tool and accepts narration requests from o
 
 > **Alpha:** Voice state, tool, and platform support may change between releases.
 
+## Live companion port status
+
+The experimental live path connects browser WebRTC, DoomPi-owned subscription login,
+the exclusive media lease, bounded session context, and action requests to the main agent.
+It launches no Codex helper or second coding agent. Subscription access and actual duplex
+speech remain **unqualified**; deterministic tests are not evidence of complete spoken
+replies, echo safety, approval provenance, or microphone usability.
+
+For a separately approved trial:
+
+1. Select `voice.mode: live` in global configuration. Repository configuration cannot enable it.
+2. Run `/voice-auto login` and open the displayed URL on the DoomPi host. Credentials stay
+   in DoomPi's private `voice/subscription-auth` directory beside its global configuration,
+   separate from Codex and Pi OAuth. `/voice-auto login-cancel` cancels the attempt.
+3. With separate provider and microphone consent, explicitly activate Voice with a connected
+   WebRTC-capable browser. Selecting live or signing in does not activate capture.
+4. Use browser controls or `/voice-auto mute`, `unmute`, `interrupt`, and `end`.
+
+Interruption suppresses output for the remainder of that activation; start a fresh session
+to hear replies again. It does not cancel main-agent work. Exact primary-agent narration
+and voice-only approval answers are unavailable in live mode. Action submission is not
+work completion. Reconnect and reload do not resume microphone transmission.
+
+Omit `voice.mode` or select `legacy` to retain existing behavior. Live capture does not
+require local ASR; the local transcription requirements below apply to legacy and manual
+voice. No API-key fallback is provided if subscription access fails.
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md#realtime-port-foundations) for the current boundary.
+Upstream port attribution is in `NOTICE` and `licenses/Codex-Apache-2.0.txt`.
+
 ## Requirements
 
 - Node.js 22.19.0 or newer

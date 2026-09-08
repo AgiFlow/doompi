@@ -4,7 +4,13 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadDoomConfigLayers } from '../src/adapters/config.ts';
 import { setDoomConfigValue, unsetDoomConfigValue } from '../src/adapters/configWriter.ts';
-import { configLeafKeys, configScopeOf, mergeDoomConfigs, parseDoomConfig } from '../src/services/configPolicy.ts';
+import {
+  configLeafKeys,
+  configScopeOf,
+  mergeDoomConfigs,
+  parseDoomConfig,
+  resolveVoiceConfig,
+} from '../src/services/configPolicy.ts';
 
 /**
  * Scope, made answerable.
@@ -54,7 +60,10 @@ describe('which file a key may be written to', () => {
     expect(configScopeOf(['projectTrust'])).toBe('repository');
   });
 
-  it('calls autonomous voice global only, which is the one rule the merge throws over', () => {
+  it('keeps voice mode and autonomous capture global only', () => {
+    expect(() => mergeDoomConfigs({ projectTrust: 'ask' }, { projectTrust: 'ask', voice: { mode: 'live' } })).toThrow(
+      'voice.mode is global-only',
+    );
     expect(() =>
       mergeDoomConfigs(
         { projectTrust: 'ask' },
@@ -62,6 +71,24 @@ describe('which file a key may be written to', () => {
       ),
     ).toThrow('global-only');
 
+    const merged = mergeDoomConfigs(
+      {
+        projectTrust: 'ask',
+        voice: {
+          mode: 'live',
+          engine: 'whisper-cpp',
+          autoCapture: { model: 'a/b', tts: { engine: 'macos-say' } },
+        },
+      },
+      { projectTrust: 'ask', voice: { language: 'en' } },
+    );
+    expect(merged.voice).toMatchObject({
+      mode: 'live',
+      engine: 'whisper-cpp',
+      language: 'en',
+      autoCapture: { model: 'a/b' },
+    });
+    expect(configScopeOf(['voice', 'mode'])).toBe('global');
     expect(configScopeOf(['voice', 'autoCapture'])).toBe('global');
     expect(configScopeOf(['voice', 'autoCapture', 'tts', 'rate'])).toBe('global');
   });
@@ -81,6 +108,15 @@ describe('which file a key may be written to', () => {
     expect(configScopeOf(['modes', 'planning', 'subagents', 'model'])).toBe('both');
     expect(configScopeOf(['selection', 'profile'])).toBe('both');
     expect(configScopeOf(['voice', 'language'])).toBe('both');
+  });
+
+  it('parses and resolves voice mode with legacy as the omission default', () => {
+    expect(resolveVoiceConfig(parseDoomConfig('', '/config.yaml').voice ?? {}).mode).toBe('legacy');
+    expect(parseDoomConfig('voice:\n  mode: live\n', '/config.yaml').voice?.mode).toBe('live');
+    expect(resolveVoiceConfig({ mode: 'live' }).mode).toBe('live');
+    expect(() => parseDoomConfig('voice:\n  mode: realtime\n', '/config.yaml')).toThrow(
+      'requires voice.mode to be one of: legacy, live',
+    );
   });
 
   it('parses computer use as an explicit opt-in', () => {

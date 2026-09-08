@@ -11,6 +11,7 @@ export { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/confi
 export type ProjectTrust = 'ask' | 'always' | 'never';
 export type PlanningThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type VoiceEngine = 'auto' | 'whisper-cpp' | 'openai-whisper' | 'mlx-whisper';
+export type VoiceMode = 'legacy' | 'live';
 export type VoiceTtsEngine = 'macos-say';
 
 export interface PlanningAgentConfig {
@@ -111,6 +112,7 @@ export interface ResolvedVoiceAutoCaptureConfig {
   tts: VoiceTtsConfig;
 }
 export interface VoiceConfig {
+  mode?: VoiceMode;
   engine?: VoiceEngine;
   language?: string;
   recorder?: { binary?: string; device?: string };
@@ -122,6 +124,7 @@ export interface VoiceConfig {
   autoCapture?: VoiceAutoCaptureConfig;
 }
 export interface ResolvedVoiceConfig {
+  mode: VoiceMode;
   engine: VoiceEngine;
   language: string;
   recorder: { binary?: string; device: string };

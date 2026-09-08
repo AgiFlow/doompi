@@ -513,6 +513,30 @@ describe('VoiceConfigController', () => {
     expect(fs.existsSync(configPath())).toBe(false);
   });
 
+  it('offers global live mode without claiming provider readiness', async () => {
+    const { instance } = controller({
+      present: [],
+      loadVoice: () => ({
+        mode: 'live',
+        engine: 'auto',
+        language: 'auto',
+        recorder: { device: 'none:default' },
+        adapters: {},
+      }),
+    });
+
+    const section = instance.sections()[0];
+    const mode = section?.fields.find((field) => field.id === 'mode');
+    expect(mode).toMatchObject({ kind: 'choice', keyPath: 'voice.mode', value: 'live' });
+    expect(mode?.choices?.map((choice) => choice.id)).toEqual(['legacy', 'live']);
+    expect(section?.detail).toBe('live selected');
+
+    await instance.handlers().set?.({ fieldId: 'mode', value: 'live' });
+    expect(readConfig().voice?.mode).toBe('live');
+    await instance.handlers().clear?.({ fieldId: 'mode' });
+    expect(readConfig().voice?.mode).toBeUndefined();
+  });
+
   it('writes and clears the simple text fields', async () => {
     const { instance } = controller({ present: [] });
     await instance.handlers().set?.({ fieldId: 'language', value: 'en' });
@@ -726,6 +750,7 @@ describe('VoiceConfigController', () => {
         resolver: resolverFor(new Set(['whisper-cli'])),
         spawner: spawnerRecording([]),
         loadVoice: () => ({
+          mode: 'legacy',
           engine: 'whisper-cpp',
           language: 'auto',
           recorder: { device: 'none:default' },

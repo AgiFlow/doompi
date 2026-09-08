@@ -12,6 +12,15 @@ The lifecycle MUST be implemented with **XState v5**. Hand-written state flags m
 
 The manual `SPC v m` dictation flow remains a separate product mode and is not governed by this specification except for shared recorder, transcription, and privacy requirements.
 
+The experimental browser realtime port is a separate, opt-in companion path. It MUST NOT
+weaken any legacy guarantee in this specification or become active through restoration,
+repository configuration, or ordinary reload. Experimental explicit activation is wired,
+but production acceptance remains gated on direct subscription and physical media qualification.
+Realtime delegations MUST remain requests for the main DoomPi agent, not direct capability
+execution or a second coding-agent loop. Sign-in, synthetic live trials, and microphone trials
+require explicit consent. Transcript events and non-silent RTP MUST NOT be reported as proof
+of complete physical playback, exact narration, or safe approval provenance.
+
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative.
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is the companion descriptive document. It explains how the implementation is actually arranged and records the places where it currently diverges from this specification.

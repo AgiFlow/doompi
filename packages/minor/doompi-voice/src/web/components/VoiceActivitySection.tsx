@@ -2,7 +2,7 @@ import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type VoiceTone, voiceActivityView } from '../lib/voiceActivityView.ts';
-import { voiceMediaBrowserState } from '../stores/voiceMediaWakeStore.ts';
+import { voiceMediaBrowserState, voiceRealtimeBrowserControls } from '../stores/voiceMediaWakeStore.ts';
 
 const TONE_DOT: Readonly<Record<VoiceTone, DotTone>> = {
   idle: 'muted',
@@ -44,6 +44,73 @@ function Meter({ tone }: { tone: VoiceTone }) {
 export function VoiceActivitySection({ sessionId, sendSessionFrame, statuses }: WebPluginSlotProps) {
   const view = voiceActivityView(statuses['doom-voice']);
   const browserState = useStore(voiceMediaBrowserState.store);
+  const realtimeControls = useStore(voiceRealtimeBrowserControls.store);
+  const realtime = browserState?.sessionId === sessionId ? browserState.realtime : undefined;
+  const controls = realtimeControls?.sessionId === sessionId ? realtimeControls : undefined;
+  if (realtime !== undefined) {
+    const live = realtime.connection === 'connected';
+    const detail = browserState?.realtimeOutputInterrupted
+      ? 'output interrupted locally and will stay silent until this realtime session ends.'
+      : realtime.error
+        ? `${realtime.error} End realtime voice, then retry from the session.`
+        : realtime.speaking
+          ? 'assistant speaking'
+          : realtime.muted
+            ? 'microphone muted'
+            : realtime.listening
+              ? 'microphone live'
+              : 'establishing secure media';
+    return (
+      <div
+        data-testid="voice-activity"
+        data-voice-phase={`realtime-${realtime.connection}`}
+        className="flex flex-col gap-1.5 px-1"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Dot tone={realtime.connection === 'failed' ? 'yellow' : live ? 'cyan' : 'muted'} pulse={live} />
+          <span
+            data-testid="voice-label"
+            className={`flex-1 truncate text-[11px] font-bold ${TONE_TEXT[live ? 'live' : 'attention']}`}
+          >
+            {realtime.connection === 'failed'
+              ? 'realtime voice failed'
+              : live
+                ? 'realtime voice live'
+                : 'connecting realtime voice'}
+          </span>
+          {controls !== undefined && live ? (
+            <>
+              <Button
+                variant="subtle"
+                size="xs"
+                aria-pressed={realtime.muted}
+                onClick={() => controls.mute(!realtime.muted)}
+              >
+                {realtime.muted ? 'unmute' : 'mute'}
+              </Button>
+              <Button
+                variant="subtle"
+                size="xs"
+                title="Interrupt local output. Output stays silent until this realtime session ends."
+                onClick={() => controls.interrupt()}
+              >
+                interrupt
+              </Button>
+            </>
+          ) : null}
+          {controls !== undefined ? (
+            <Button variant="subtle" size="xs" onClick={() => controls.end()}>
+              end
+            </Button>
+          ) : null}
+        </span>
+        <span data-testid="voice-detail" className="text-[9px] leading-relaxed text-doom-faint">
+          {detail}
+        </span>
+        <span className="text-[8px] font-bold tracking-[0.14em] text-doom-faint/70 uppercase">browser realtime</span>
+      </div>
+    );
+  }
   const mediaConflict =
     sessionId !== null &&
     browserState?.sessionId === sessionId &&

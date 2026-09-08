@@ -9,6 +9,7 @@ import { VoiceToolMessage } from '../src/web/components/VoiceToolMessage.tsx';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
+  voiceRealtimeBrowserControls,
   voiceMediaWakes,
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
@@ -17,6 +18,7 @@ import {
 afterEach(() => {
   activeVoiceSession.reset();
   voiceMediaBrowserState.reset();
+  voiceRealtimeBrowserControls.reset();
   voiceMediaWakes.reset();
 });
 
@@ -273,6 +275,31 @@ describe('browser voice media', () => {
     expect(composer.html).toContain('data-voice-phase="blocked"');
     expect(composer.html).toContain('manual voice is unavailable while autonomous voice is active');
   });
+
+  it('renders accurate realtime connection controls and the local interruption limitation', () => {
+    voiceMediaBrowserState.update(() => ({
+      sessionId: 'session-a',
+      phase: 'connected',
+      realtime: { connection: 'connected', listening: true, speaking: true, muted: false },
+      realtimeOutputInterrupted: true,
+    }));
+    voiceRealtimeBrowserControls.update(() => ({
+      sessionId: 'session-a',
+      mute: () => undefined,
+      interrupt: () => undefined,
+      end: () => undefined,
+    }));
+
+    const rendered = renderPlugin(VoiceActivitySection, slotPropsFixture({ sessionId: 'session-a' }).props);
+
+    expect(rendered.html).toContain('data-voice-phase="realtime-connected"');
+    expect(rendered.html).toContain('realtime voice live');
+    expect(rendered.html).toContain('>mute<');
+    expect(rendered.html).toContain('>interrupt<');
+    expect(rendered.html).toContain('>end<');
+    expect(rendered.html).toContain('will stay silent until this realtime session ends');
+  });
+
   it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
     const source = await readFile(new URL('../src/web/components/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
 

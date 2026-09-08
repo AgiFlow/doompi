@@ -272,6 +272,10 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     captureActivity: false,
     autonomousOrchestration: false,
     playbackDucking: browserSpeechPlaybackAvailable() || browserPcmPlaybackAvailable(),
+    realtime:
+      typeof RTCPeerConnection === 'function' &&
+      typeof navigator !== 'undefined' &&
+      navigator.mediaDevices?.getUserMedia !== undefined,
   };
   public constructor(private readonly rebindProtocolSupported = false) {}
 

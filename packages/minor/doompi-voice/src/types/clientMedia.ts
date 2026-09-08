@@ -1,4 +1,5 @@
 import type { SpeechPresenceDetector } from './clientCaptureActivity.ts';
+import type { RealtimeMediaCommand, RealtimeMediaTransport } from './realtime.ts';
 
 export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
 export const VOICE_MEDIA_PROTOCOL_VERSION = 6;
@@ -47,6 +48,7 @@ export interface VoiceMediaCapabilities {
   captureActivity: boolean;
   autonomousOrchestration: boolean;
   playbackDucking?: boolean;
+  realtime?: boolean;
 }
 
 export type VoiceMediaCaptureMode = 'manual' | 'autonomous';
@@ -92,6 +94,7 @@ export interface VoiceMediaConnectResult {
 export type VoiceMediaHeartbeatResult = VoiceMediaWake;
 
 export type VoiceMediaClientEvent =
+  | RealtimeMediaCommand
   | {
       sequence: number;
       type: 'capture-start';
@@ -123,7 +126,7 @@ export interface VoiceMediaPlaybackResult {
   error?: string;
 }
 
-export interface VoiceMediaTransport {
+export interface VoiceMediaTransport extends Partial<RealtimeMediaTransport> {
   connect(
     clientId: string,
     connectionId: string,

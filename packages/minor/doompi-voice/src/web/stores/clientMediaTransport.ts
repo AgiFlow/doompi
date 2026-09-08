@@ -1,4 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import { REALTIME_ROUTES, type RealtimeBrowserState } from '../../types/realtime.ts';
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -25,6 +26,8 @@ import { parseVoiceMediaWakePayload, waitForVoiceMediaWake } from './voiceMediaW
 const JSON_CONTENT_TYPE = 'application/json';
 const MAX_HEARTBEAT_MS = 60_000;
 const MAX_EVENT_EPOCH_LENGTH = 200;
+const CONTROL_REQUEST_DEADLINE_MS = 8_000;
+const REALTIME_NEGOTIATION_DEADLINE_MS = 20_000;
 
 interface PushConnection {
   eventEpoch: string;
@@ -57,6 +60,69 @@ async function responseError(response: Response): Promise<Error> {
 
 function jsonBody(value: object): RequestInit {
   return { method: 'POST', headers: { 'content-type': JSON_CONTENT_TYPE }, body: JSON.stringify(value) };
+}
+
+function cancelResponseBody(response: Response | undefined): void {
+  try {
+    void response?.body?.cancel().catch(() => undefined);
+  } catch {
+    // Injected transports may expose a nonstandard response body.
+  }
+}
+
+async function boundedControlRequest<T>(
+  input: string,
+  init: RequestInit,
+  deadlineMs: number,
+  consume: (response: Response) => Promise<T> | T,
+  parentSignal?: AbortSignal,
+): Promise<T> {
+  const deadlineController = new AbortController();
+  const signal = parentSignal ?? deadlineController.signal;
+  let response: Response | undefined;
+  let cancelled = false;
+  let cancellationReason: unknown;
+  let rejectCancellation!: (reason: unknown) => void;
+  const cancellation = new Promise<never>((_resolve, reject) => {
+    rejectCancellation = reject;
+  });
+  const cancel = (reason: unknown): void => {
+    if (cancelled) return;
+    cancelled = true;
+    cancellationReason = reason;
+    deadlineController.abort(reason);
+    cancelResponseBody(response);
+    rejectCancellation(reason);
+  };
+  const abortParent = (): void =>
+    cancel(parentSignal?.reason ?? new DOMException('Voice media control request was aborted.', 'AbortError'));
+  const timer = setTimeout(() => cancel(new Error('Voice media control request timed out.')), deadlineMs);
+  parentSignal?.addEventListener('abort', abortParent, { once: true });
+
+  let fetched: Promise<Response>;
+  try {
+    fetched = sealedTransport.fetch(input, { ...init, signal });
+  } catch (error) {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener('abort', abortParent);
+    throw error;
+  }
+  const operation = fetched.then(async (result) => {
+    response = result;
+    if (cancelled) {
+      cancelResponseBody(result);
+      throw cancellationReason;
+    }
+    return consume(result);
+  });
+
+  try {
+    if (parentSignal?.aborted) abortParent();
+    return await Promise.race([operation, cancellation]);
+  } finally {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener('abort', abortParent);
+  }
 }
 
 export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
@@ -151,29 +217,36 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
     signal: AbortSignal,
     nonblocking: boolean,
   ): Promise<VoiceMediaClientEvent | undefined> {
-    const response = await sealedTransport.fetch(
+    return boundedControlRequest(
       voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientEvents, {
         clientId,
         connectionId,
         after: String(after),
         ...(nonblocking ? { wait: VOICE_MEDIA_EVENT_WAIT_NONE } : {}),
       }),
-      { signal },
+      {},
+      CONTROL_REQUEST_DEADLINE_MS,
+      async (response) => {
+        if (response.status === 204) return undefined;
+        if (!response.ok) throw await responseError(response);
+        return (await response.json()) as VoiceMediaClientEvent;
+      },
+      signal,
     );
-    if (response.status === 204) return undefined;
-    if (!response.ok) throw await responseError(response);
-    return (await response.json()) as VoiceMediaClientEvent;
   }
 
-  private async heartbeat(clientId: string, connectionId: string): Promise<VoiceMediaWake> {
-    const response = await sealedTransport.fetch(
+  private heartbeat(clientId: string, connectionId: string): Promise<VoiceMediaWake> {
+    return boundedControlRequest(
       voiceMediaClientUrl(this.sessionId, VOICE_MEDIA_ROUTES.clientHeartbeat),
       jsonBody({ clientId, connectionId }),
+      CONTROL_REQUEST_DEADLINE_MS,
+      async (response) => {
+        if (!response.ok) throw await responseError(response);
+        const wake = parseVoiceMediaWakePayload(await response.json());
+        if (wake === null) throw new Error('Voice media heartbeat response is invalid.');
+        return wake;
+      },
     );
-    if (!response.ok) throw await responseError(response);
-    const wake = parseVoiceMediaWakePayload(await response.json());
-    if (wake === null) throw new Error('Voice media heartbeat response is invalid.');
-    return wake;
   }
 
   public async sendAudio(
@@ -274,5 +347,56 @@ export class BrowserVoiceMediaTransport implements VoiceMediaTransport {
       jsonBody({ clientId, connectionId, ...result }),
     );
     if (!response.ok) throw await responseError(response);
+  }
+
+  public async realtimeNegotiate(
+    clientId: string,
+    connectionId: string,
+    activationId: string,
+    sdp: string,
+    signal: AbortSignal,
+  ): Promise<string> {
+    return boundedControlRequest(
+      voiceMediaClientUrl(this.sessionId, REALTIME_ROUTES.clientNegotiate),
+      jsonBody({ clientId, connectionId, activationId, sdp }),
+      REALTIME_NEGOTIATION_DEADLINE_MS,
+      async (response) => {
+        if (!response.ok) throw await responseError(response);
+        const body: unknown = await response.json();
+        if (typeof body !== 'object' || body === null || typeof (body as { sdp?: unknown }).sdp !== 'string')
+          throw new Error('Realtime negotiation response is invalid.');
+        return (body as { sdp: string }).sdp;
+      },
+      signal,
+    );
+  }
+
+  public async realtimeEvent(
+    clientId: string,
+    connectionId: string,
+    activationId: string,
+    event: string,
+  ): Promise<void> {
+    await this.postRealtime(REALTIME_ROUTES.clientEvent, { clientId, connectionId, activationId, event });
+  }
+
+  public async realtimeState(
+    clientId: string,
+    connectionId: string,
+    activationId: string,
+    state: RealtimeBrowserState,
+  ): Promise<void> {
+    await this.postRealtime(REALTIME_ROUTES.clientState, { clientId, connectionId, activationId, state });
+  }
+
+  private postRealtime(route: string, body: object): Promise<void> {
+    return boundedControlRequest(
+      voiceMediaClientUrl(this.sessionId, route),
+      jsonBody(body),
+      CONTROL_REQUEST_DEADLINE_MS,
+      async (response) => {
+        if (!response.ok) throw await responseError(response);
+      },
+    );
   }
 }

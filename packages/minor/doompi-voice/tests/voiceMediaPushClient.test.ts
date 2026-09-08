@@ -2,6 +2,7 @@ import { driveChannel } from '@agimon-ai/doompi-web-contracts/testing';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER, type VoiceMediaClientEvent } from '../src/types/clientMedia.ts';
+import { REALTIME_ROUTES } from '../src/types/realtime.ts';
 import { BrowserVoiceMediaTransport } from '../src/web/stores/clientMediaTransport.ts';
 import {
   parseVoiceMediaWakePayload,
@@ -301,5 +302,36 @@ describe('browser voice media push transport', () => {
     controller.abort();
     await expect(waiting).resolves.toBeUndefined();
     expect(vi.mocked(sealedTransport.fetch)).toHaveBeenCalledOnce();
+  });
+
+  it('posts realtime negotiation, provider events, and browser state through sealed transport', async () => {
+    vi.mocked(sealedTransport.fetch)
+      .mockResolvedValueOnce(jsonResponse({ sdp: 'answer-sdp' }))
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const transport = new BrowserVoiceMediaTransport('session-realtime');
+    const controller = new AbortController();
+
+    await expect(
+      transport.realtimeNegotiate('client', 'connection', 'activation', 'offer-sdp', controller.signal),
+    ).resolves.toBe('answer-sdp');
+    await transport.realtimeEvent('client', 'connection', 'activation', '{"type":"ready"}');
+    await transport.realtimeState('client', 'connection', 'activation', {
+      connection: 'connected',
+      listening: true,
+      speaking: false,
+      muted: false,
+    });
+
+    const calls = vi.mocked(sealedTransport.fetch).mock.calls;
+    expect(requestUrl(calls[0] ?? [])).toContain(REALTIME_ROUTES.clientNegotiate);
+    expect(requestUrl(calls[1] ?? [])).toContain(REALTIME_ROUTES.clientEvent);
+    expect(requestUrl(calls[2] ?? [])).toContain(REALTIME_ROUTES.clientState);
+    expect(JSON.parse(calls[0]?.[1]?.body as string)).toEqual({
+      clientId: 'client',
+      connectionId: 'connection',
+      activationId: 'activation',
+      sdp: 'offer-sdp',
+    });
+    expect(calls[0]?.[1]?.signal).toBe(controller.signal);
   });
 });

@@ -14,6 +14,7 @@ export {
   configScopeOf,
   DOOM_PLANNING_THINKING_LEVELS,
   DOOM_VOICE_ENGINES,
+  DOOM_VOICE_MODES,
   DOOM_VOICE_TTS_ENGINES,
   mergeDoomConfigs,
   parseAutocompactModeConfig,

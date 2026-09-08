@@ -33,6 +33,7 @@ export {
   type VoiceAutoCaptureConfig,
   type VoiceConfig,
   type VoiceEngine,
+  type VoiceMode,
   type VoiceModelConfig,
   type VoiceTtsConfig,
   type VoiceTtsEngine,

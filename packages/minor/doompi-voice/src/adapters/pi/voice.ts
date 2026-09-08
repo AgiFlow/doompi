@@ -94,6 +94,11 @@ import {
 } from '../audio/infrastructure.ts';
 import { ClientPcmAudioRecorder, ClientTtsAdapter, voiceMediaHostConnection } from '../audio/clientMedia.ts';
 import { VoiceWorkerAutoCaptureController } from '../process/voiceWorkerAutoCaptureController.ts';
+import { LiveVoiceController } from './liveVoiceController.ts';
+import { VoiceModeController } from './voiceModeController.ts';
+import { buildRealtimeContext } from './realtimeContext.ts';
+import { realtimeHostConnection, type RealtimeHost } from '../realtime/realtimeHost.ts';
+import { createRealtimeRuntime, type RealtimeSignInAttempt } from '../realtime/realtimeRuntime.ts';
 import {
   type VoiceWorkerSessionClientFactory,
   VoiceWorkerSessionController,
@@ -930,6 +935,8 @@ export interface VoiceExtensionOptions {
   autoClientFactory?: VoiceWorkerSessionClientFactory;
   identityNonceFactory?: AutonomousTurnNonceFactory;
   waitUntilConfigured?: (context: ExtensionContext, signal?: AbortSignal) => Promise<void>;
+  liveHost?: RealtimeHost;
+  liveSignIn?: (signal: AbortSignal) => Promise<RealtimeSignInAttempt>;
 }
 
 export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: VoiceExtensionOptions = {}): void {
@@ -969,9 +976,12 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
     const transferVoiceTool = typeof pi.registerTool === 'function' ? createTransferVoiceToolLifecycle(pi) : undefined;
     if (transferVoiceTool) yield () => transferVoiceTool.dispose();
 
+    const waitUntilSelectedModeReady = async (context: ExtensionContext, signal?: AbortSignal): Promise<void> => {
+      if (autoController.selectedMode !== 'live') await options.waitUntilConfigured?.(context, signal);
+    };
     const voiceToolFacades =
       typeof pi.registerTool === 'function'
-        ? registerVoiceToolFacades(pi, () => voiceToolSession, options.waitUntilConfigured)
+        ? registerVoiceToolFacades(pi, () => voiceToolSession, waitUntilSelectedModeReady)
         : undefined;
     if (voiceToolFacades) yield () => voiceToolFacades.dispose();
 
@@ -994,7 +1004,15 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       reconcileVoiceModeTools(pi, enabled);
       voiceToolFacades?.refresh();
     };
-    const autoController = new VoiceWorkerAutoCaptureController({
+    const configuredMode = (): 'legacy' | 'live' =>
+      configs.load(process.env.PI_PROJECT_ROOT ?? process.cwd()).voice?.mode === 'live' ? 'live' : 'legacy';
+    const publishActivation = (state: AutoCaptureActivationState): void => {
+      if (!active) return;
+      reconcileVoiceTools(state);
+      mode?.publish(voiceModeState(state, canRunVoice(activeContext)));
+      leader.update(voiceLeaderBindings(state !== 'disabled'));
+    };
+    const legacyController = new VoiceWorkerAutoCaptureController({
       loadConfig: () => {
         const root = process.env.PI_PROJECT_ROOT ?? process.cwd();
         const loaded = configs.load(root).voice;
@@ -1027,18 +1045,76 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         activeContext
           ? collectVoiceCommandContext(activeContext.sessionManager.getBranch(), modeCatalog.records())
           : undefined,
-      onActivationStateChange: (state) => {
-        if (!active) return;
-        reconcileVoiceTools(state);
-        mode?.publish(voiceModeState(state, canRunVoice(activeContext)));
-        // Republished here rather than only at registration: the `e` row is the
-        // one entry whose label depends on the controller, and the panel is read
-        // between activations, not just at session start.
-        leader.update(voiceLeaderBindings(state !== 'disabled'));
-      },
+      onActivationStateChange: publishActivation,
       ...(options.autoClientFactory ? { clientFactory: options.autoClientFactory } : {}),
       ...(options.identityNonceFactory ? { identityNonceFactory: options.identityNonceFactory } : {}),
     });
+    const liveController = new LiveVoiceController({
+      host: options.liveHost ?? realtimeHostConnection(),
+      clock: container.clock,
+      manualState: () => controller.state,
+      isBusy: () => activeContext?.isIdle() === false,
+      contextText: () =>
+        activeContext
+          ? buildRealtimeContext(activeContext.sessionManager.getBranch(), { busy: !activeContext.isIdle() })
+          : '',
+      send: (text, intent) => {
+        if (!activeContext) throw new Error('No live voice session is active.');
+        deliverAutoCaptureInput(pi, activeContext, text, intent === 'follow-up' ? 'queuedFollowUp' : 'immediate');
+      },
+      onActivationStateChange: publishActivation,
+    });
+    const autoController = new VoiceModeController({
+      legacy: legacyController,
+      live: liveController,
+      getMode: configuredMode,
+    });
+    let signInAttempt: RealtimeSignInAttempt | undefined;
+    let signInController: AbortController | undefined;
+    const cancelSignIn = (): void => {
+      signInController?.abort();
+      signInAttempt?.cancel();
+      signInAttempt = undefined;
+    };
+    yield cancelSignIn;
+    const signIn = async (ui: AutoCaptureUi): Promise<void> => {
+      cancelSignIn();
+      const cancellation = new AbortController();
+      signInController = cancellation;
+      try {
+        const attempt = await (
+          options.liveSignIn ??
+          ((signal: AbortSignal) =>
+            createRealtimeRuntime({ stateDirectory: path.dirname(globalDoomConfigPath()) }).signIn(signal))
+        )(cancellation.signal);
+        if (cancellation.signal.aborted || !active) {
+          attempt.cancel();
+          return;
+        }
+        signInAttempt = attempt;
+        ui.notify(
+          `Open this URL in a browser on the DoomPi host to sign in. Microphone capture stays off:\n${attempt.authorizationUrl}`,
+          'info',
+        );
+        void attempt.completion
+          .then(
+            () => {
+              if (!cancellation.signal.aborted && active)
+                ui.notify('Subscription sign-in completed. Activate live voice explicitly when ready.', 'info');
+            },
+            () => {
+              if (!cancellation.signal.aborted && active)
+                ui.notify('Subscription sign-in failed or timed out. Run /voice-auto login to try again.', 'error');
+            },
+          )
+          .finally(() => {
+            if (signInAttempt === attempt) signInAttempt = undefined;
+          });
+      } catch {
+        if (!cancellation.signal.aborted && active)
+          ui.notify('Could not start subscription sign-in. Check that localhost port 1455 is available.', 'error');
+      }
+    };
     const requestAutonomousActivation = async (ui: AutoCaptureUi, context: ExtensionContext): Promise<void> => {
       if (ownershipHost === undefined) {
         await autoController.activate(ui);
@@ -1075,7 +1151,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
 
     registerSessionVoiceNarrationService(cordis, autoController, () => narrationToolRuntime);
     if (typeof pi.registerTool === 'function') {
-      registerNarrationTool(pi, () => narrationToolRuntime, options.waitUntilConfigured);
+      registerNarrationTool(pi, () => narrationToolRuntime, waitUntilSelectedModeReady);
     }
     cordis.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (modeContext) => {
       const owner = registerMinorModeOwner<ExtensionContext>(requireMinorModeCatalog(modeContext), {
@@ -1112,7 +1188,8 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         initialState: voiceModeState('disabled'),
         async handleAction(actionId, _argumentsValue, execution) {
           if (!active) throw new Error('Voice runtime is disposed.');
-          await options.waitUntilConfigured?.(execution.context);
+          if (actionId === 'manual' || (actionId === 'activate' && configuredMode() !== 'live'))
+            await options.waitUntilConfigured?.(execution.context);
           if (!active) throw new Error('Voice runtime is disposed.');
           activeContext = execution.context;
           const ui = createAutoCaptureUi(execution.context, footer);
@@ -1122,6 +1199,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
             return { message: 'Autonomous voice activation requested through the session hub.' };
           }
           if (actionId === 'manual') {
+            if (autoController.state !== 'disabled') throw new Error('End voice mode before using manual dictation.');
             lastUi = createVoiceUi(execution.context, footer);
             await controller.toggle(lastUi);
             return { message: 'Manual voice recording started. Stop it to fill the current prompt.' };
@@ -1155,10 +1233,20 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       },
     });
     pi.registerCommand(AUTO_COMMAND_NAME, {
-      description: 'Toggle autonomous voice capture, or mute and unmute its microphone',
+      description: 'Toggle voice, mute/unmute, end, or use live subscription login and interruption',
       handler: async (args, ctx) => {
         if (!active || !ctx.hasUI) return;
-        await options.waitUntilConfigured?.(ctx);
+        const action = args.trim().toLowerCase();
+        if (action === 'login') {
+          await signIn(createAutoCaptureUi(ctx, footer));
+          return;
+        }
+        if (action === 'login-cancel') {
+          cancelSignIn();
+          return;
+        }
+        if (!action && autoController.state === 'disabled' && configuredMode() !== 'live')
+          await options.waitUntilConfigured?.(ctx);
         if (!active) return;
         activeContext = ctx;
         lastAutoUi = createAutoCaptureUi(ctx, footer);
@@ -1171,8 +1259,18 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
           autoController.setMicrophoneMuted(microphoneAction === 'mute');
           return;
         }
+        if (microphoneAction === 'end') {
+          await autoController.deactivate(lastAutoUi);
+          return;
+        }
+        if (microphoneAction === 'interrupt') {
+          if (autoController.selectedMode !== 'live' || autoController.state !== 'active')
+            lastAutoUi.notify('Live voice is not active.', INFO_NOTIFICATION);
+          else autoController.interruptSpeech();
+          return;
+        }
         if (microphoneAction) {
-          lastAutoUi.notify('Usage: /voice-auto [mute|unmute]', INFO_NOTIFICATION);
+          lastAutoUi.notify('Usage: /voice-auto [mute|unmute|end|interrupt|login|login-cancel]', INFO_NOTIFICATION);
           return;
         }
         if (autoController.state === 'disabled') await requestAutonomousActivation(lastAutoUi, ctx);
@@ -1187,6 +1285,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
     };
     pi.on('session_start', async (event, ctx) => {
       if (!active) return;
+      cancelSignIn();
       transferVoiceTool?.sessionStarted();
       const ownGeneration = ++sessionGeneration;
       const reason = (event as { reason?: string }).reason;
@@ -1261,7 +1360,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         ownershipBridge = new SessionVoiceOwnershipBridge(sessionVoiceOwnership, ownershipHost, container.clock);
         ownershipBridge.start();
       }
-      if (reloadHandoff && lastAutoUi) {
+      if (reloadHandoff && lastAutoUi && configuredMode() !== 'live') {
         if (ownershipHost === undefined) await autoController.activate(lastAutoUi);
         else await requestAutonomousActivation(lastAutoUi, ctx);
       }

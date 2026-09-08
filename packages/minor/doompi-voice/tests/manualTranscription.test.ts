@@ -36,6 +36,7 @@ import type { ResolvedVoiceConfig, VoiceAdapterConfig } from '@agimon-ai/doompi-
 
 const adapterConfig: VoiceAdapterConfig = { model: { id: 'test' } };
 const voiceConfig: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'mlx-whisper',
   language: 'en',
   recorder: { device: ':0' },

@@ -19,6 +19,7 @@ import {
 
 const temporaryDirectories: string[] = [];
 const resolvedConfig: ResolvedVoiceConfig = {
+  mode: 'legacy',
   engine: 'whisper-cpp',
   language: 'auto',
   recorder: { device: 'none:default' },
