@@ -53,6 +53,14 @@ vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({
 import { startSessionRuntime } from '../../src/web/app/sessionRuntime.ts';
 import { onHubConnected } from '../../src/web/lib/transport.ts';
 import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore.ts';
+import {
+  applyProtocolTranscript,
+  applySessionFrame,
+  dropSessionStore,
+  requestOlderHistory,
+  sessionStoreFor,
+} from '../../src/web/stores/sessionStore.ts';
+import { threadStoreKey } from '../../src/web/stores/threadStore.ts';
 
 afterEach(() => {
   socketState.handlers = undefined;
@@ -70,6 +78,105 @@ function sentCommandTypes(sessionId: string): string[] {
     .map((frame) => (frame.frame as { type?: string } | undefined)?.type ?? '')
     .filter((type) => type.length > 0);
 }
+
+describe('session runtime backlog publication', () => {
+  it.each(['session', 'protocol', 'thread'] as const)('publishes only the completed %s replay', (kind) => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessionId = `backlog-${kind}`;
+    const key = kind === 'thread' ? threadStoreKey(sessionId, 'child') : sessionId;
+    const otherId = `${sessionId}-other`;
+    const stop = startSessionRuntime();
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [{ id: sessionId, name: kind, createdAt: '1' }],
+    });
+    applySessionFrame(key, {
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'stale',
+      statusText: 'old',
+    });
+    if (kind === 'protocol') {
+      applyProtocolTranscript(
+        key,
+        [{ kind: 'assistant', id: 'protocol-1', text: 'history', thinking: '', streaming: false }],
+        false,
+      );
+    }
+    const store = sessionStoreFor(key);
+    const otherState = sessionStoreFor(otherId).state;
+    const published = vi.fn();
+    const commandsDuringPublish: string[][] = [];
+    const subscription = store.subscribe((state) => {
+      published(state);
+      commandsDuringPublish.push(sentCommandTypes(sessionId));
+    });
+    socketState.sent = [];
+    const frames = [
+      {
+        type: 'entry_appended',
+        entry: {
+          type: 'message',
+          id: 'oldest-entry',
+          message: { role: 'user', content: [{ type: 'text', text: 'replayed' }] },
+        },
+      },
+      ...Array.from({ length: 1_000 }, (_, index) => ({
+        type: 'extension_ui_request',
+        method: 'setStatus',
+        statusKey: 'progress',
+        statusText: String(index),
+      })),
+    ];
+
+    try {
+      socketState.handlers?.onFrame({
+        type: kind === 'thread' ? 'thread_backlog' : 'session_backlog',
+        sessionId,
+        threadId: 'child',
+        frames,
+        dropped: 4,
+      });
+
+      expect(published).toHaveBeenCalledTimes(1);
+      expect(published).toHaveBeenCalledWith(store.state);
+      expect(commandsDuringPublish).toEqual([[]]);
+      expect(store.state.statuses).toEqual({ progress: '999' });
+      expect(store.state.entries).toEqual([
+        expect.objectContaining(
+          kind === 'protocol'
+            ? { kind: 'assistant', id: 'protocol-1', text: 'history' }
+            : { kind: 'user', text: 'replayed' },
+        ),
+      ]);
+      expect(sessionStoreFor(otherId).state).toBe(otherState);
+      if (kind === 'thread') {
+        expect(sentCommandTypes(sessionId)).toEqual([]);
+        expect(sessionStoreFor(sessionId).state.entries).toEqual([]);
+      } else {
+        expect(sentCommandTypes(sessionId)).toEqual(['get_state', 'get_session_stats', 'get_commands']);
+        expect(sessionsStore.state.byId[sessionId]).toMatchObject({ replayed: frames.length, dropped: 4 });
+        expect(requestOlderHistory(sessionId)).toBe(true);
+        expect(socketState.sent.at(-1)).toEqual({ type: 'history_request', sessionId, before: 'oldest-entry' });
+      }
+
+      socketState.handlers?.onFrame({
+        type: kind === 'thread' ? 'thread_frame' : 'session_frame',
+        sessionId,
+        threadId: 'child',
+        frame: { type: 'extension_ui_request', method: 'setStatus', statusKey: 'progress', statusText: 'live' },
+      });
+      expect(published).toHaveBeenCalledTimes(2);
+      expect(store.state.statuses.progress).toBe('live');
+    } finally {
+      subscription.unsubscribe();
+      stop();
+      dropSessionStore(key);
+      dropSessionStore(sessionId);
+      dropSessionStore(otherId);
+    }
+  });
+});
 
 describe('session runtime hub connection lifecycle', () => {
   it('notifies subscribers after every fresh socket snapshot', () => {

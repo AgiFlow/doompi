@@ -191,6 +191,7 @@ describe('McpSession', () => {
       );
       expect(ensureConnected).not.toHaveBeenCalled();
       await active.reauthorize('pencil');
+      expect(store.clear).toHaveBeenCalledWith('pencil');
       emitState({ serverName: 'pencil', state: 'connected' });
       await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
     });
@@ -394,17 +395,21 @@ describe('McpSession', () => {
   });
 
   describe('reauthorize', () => {
-    it('drops the connection first so a stale token cannot answer from cache', async () => {
+    it('drops the connection and stale OAuth registration before reconnecting', async () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
       active.activate();
       await active.start();
+      const store = createProxyContainer.mock.calls[0]?.[0]?.auth.tokenStore;
 
       await active.reauthorize('boomlink');
 
       expect(disconnectServer).toHaveBeenCalledWith('boomlink');
+      expect(store.clear).toHaveBeenCalledWith('boomlink');
       expect(ensureConnected).toHaveBeenCalledWith('boomlink');
+      expect(disconnectServer.mock.invocationCallOrder[0]).toBeLessThan(store.clear.mock.invocationCallOrder[0]);
+      expect(store.clear.mock.invocationCallOrder[0]).toBeLessThan(ensureConnected.mock.invocationCallOrder[0]);
     });
 
     it('clears the previous URL before retry even when disconnect rejects without a state event', async () => {

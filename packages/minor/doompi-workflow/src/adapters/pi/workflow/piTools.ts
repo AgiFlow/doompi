@@ -26,7 +26,7 @@ import {
 
 const AGIFLOW_JOB_ID_ENV = 'AGIFLOW_JOB_ID';
 const AGIFLOW_JOB_KIND_ENV = 'AGIFLOW_JOB_KIND';
-
+const AGIFLOW_PROJECT_ID_ENV = 'AGIFLOW_PROJECT_ID';
 const PI_LAUNCH_FIELDS = {
   workflowPath: true,
   workspace: true,
@@ -266,8 +266,15 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
       dependencies.observeSession?.(sessionId);
       const agiflowJobKind = input.env?.[AGIFLOW_JOB_KIND_ENV]?.trim();
       const agiflowJobId = input.env?.[AGIFLOW_JOB_ID_ENV]?.trim();
+      const explicitProjectId = input.env?.[AGIFLOW_PROJECT_ID_ENV]?.trim();
       if (Boolean(agiflowJobKind) !== Boolean(agiflowJobId)) {
         throw new Error('Agiflow workflow launches require AGIFLOW_JOB_KIND and AGIFLOW_JOB_ID together.');
+      }
+      if (agiflowJobKind && agiflowJobKind !== 'task' && agiflowJobKind !== 'work-unit') {
+        throw new Error('Agiflow workflow launches require AGIFLOW_JOB_KIND to be task or work-unit.');
+      }
+      if (agiflowJobKind && !explicitProjectId) {
+        throw new Error('Agiflow workflow launches require AGIFLOW_PROJECT_ID with the job identity.');
       }
       if (agiflowJobKind && !input.prompt?.trim()) {
         throw new Error(
@@ -293,7 +300,20 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
       }
       reportProgress(onUpdate, LAUNCH_WORKFLOW_TOOL_NAME, `Launching workflow ${input.workflowPath}...`);
       const workflowEnv = { ...input.env };
-      if (process.env.AGIFLOW_DISPATCH_CONTEXT_FILE) {
+      const dispatcherContextFile = process.env.AGIFLOW_DISPATCH_CONTEXT_FILE;
+      const dispatcherProjectId = process.env[AGIFLOW_PROJECT_ID_ENV]?.trim();
+      if (
+        dispatcherContextFile &&
+        agiflowJobKind &&
+        dispatcherProjectId &&
+        explicitProjectId &&
+        dispatcherProjectId !== explicitProjectId
+      ) {
+        throw new Error(
+          `Agiflow workflow project identity conflicts with the dispatcher context (${explicitProjectId} versus ${dispatcherProjectId}).`,
+        );
+      }
+      if (dispatcherContextFile) {
         for (const key of [
           'AGIFLOW_ORGANIZATION_ID',
           'AGIFLOW_PROJECT_ID',
@@ -404,7 +424,7 @@ export function registerWorkflowPiTools(pi: ExtensionAPI, dependencies: Workflow
     promptGuidelines: [
       'Before launching, call list_workflows and pick the workflow whose own description matches the work. A workflow description is the source of truth; never infer one from its filename. If nothing matches, say so and stop rather than launching an approximate fit.',
       'launch_workflow returns when the run has STARTED, not when it has finished. Never report success from its result. Poll workflow_run with action status, or wait for the completion notice the extension delivers on its own.',
-      'When dispatching Agiflow work, pass AGIFLOW_JOB_KIND and AGIFLOW_JOB_ID together through env plus a non-empty prompt. The id alone is not a key, and omitting prompt leaves user_prompt workflows waiting for terminal input.',
+      'When dispatching Agiflow work, pass AGIFLOW_PROJECT_ID, AGIFLOW_JOB_KIND, and AGIFLOW_JOB_ID through env plus a non-empty prompt. Kind must be task or work-unit. The id alone is not a key, and omitting prompt leaves user_prompt workflows waiting for terminal input.',
       'A workflow claims its own job in its pre step. Never claim a job yourself. JOB_ALREADY_CLAIMED or HTTP 409 means another worker won the race, so report contention and do not unlock, release, or retry automatically.',
       'If a result says WORKFLOW_NOT_OWNED or a release failed, inspect current ownership and ask the user before any release or unlock. Never force another worker’s lock.',
       'If a running workflow is not found, call workflow_run with action status to re-check current state before retrying.',

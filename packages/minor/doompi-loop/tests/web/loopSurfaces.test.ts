@@ -1,6 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView.ts';
+import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection.tsx';
 import { webPlugin } from '../../src/web/index.ts';
 
 const payload = JSON.stringify([
@@ -9,22 +10,24 @@ const payload = JSON.stringify([
   { instanceId: 'stopping-loop', label: 'Stopping loop', detail: 'every 90s', state: 'stopping' },
 ]);
 
-const LoopsActivitySection = webPlugin.activitySections?.[0]?.component;
-if (!LoopsActivitySection) throw new Error('Expected the Loop activity section.');
+const loopsActivitySection = webPlugin.activitySections?.[0]?.component;
+if (!loopsActivitySection) throw new Error('Expected the Loop activity section.');
 
 describe('Loop web surfaces', () => {
-  it('declares the Loop mode, activity group, section, and command bindings', () => {
+  it('declares the Loop mode, activity group, slots, and command bindings', () => {
     expect(webPlugin.minorModes).toEqual([{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', order: 30 }]);
     expect(webPlugin.activityGroups).toEqual([
-      { name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, hideWhenEmpty: true, order: 40 },
+      { name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 },
     ]);
     expect(webPlugin.activitySections?.map(({ id }) => id)).toEqual(['loops']);
+    expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.registration', 'loop.items']);
+    expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([{ slot: 'loop.items', id: 'instances' }]);
     expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.start', 'loop.list']);
   });
 
-  it('renders semantic rows, lifecycle labels, full detail text, and one manage action', () => {
+  it('renders semantic rows, lifecycle labels, and full detail text', () => {
     const rendered = renderPlugin(
-      LoopsActivitySection,
+      LoopActivityItems,
       slotPropsFixture({ statuses: { [LOOP_VIEW_STATUS_KEY]: payload } }).props,
     );
     const { html } = rendered;
@@ -38,31 +41,31 @@ describe('Loop web surfaces', () => {
     expect(html).toContain('data-loop-state="starting"');
     expect(html).toContain('data-loop-state="running"');
     expect(html).toContain('data-loop-state="stopping"');
-    expect(html.match(/activity-loops-manage/gu)).toHaveLength(1);
   });
 
-  it('renders nothing for an absent status and a defensive fallback for malformed data', () => {
-    expect(renderPlugin(LoopsActivitySection, slotPropsFixture().props).html).toBe('');
+  it('renders nothing for absent status and a defensive fallback for malformed data', () => {
+    expect(renderPlugin(LoopActivityItems, slotPropsFixture().props).html).toBe('');
 
     const rendered = renderPlugin(
-      LoopsActivitySection,
+      LoopActivityItems,
       slotPropsFixture({ statuses: { [LOOP_VIEW_STATUS_KEY]: 'not json' } }).props,
     );
     const { html } = rendered;
     expect(rendered.error).toBeUndefined();
     expect(html).toContain('loop status unavailable');
-    expect(html).toContain('activity-loops-manage');
   });
 
-  it('disables manage without an active session', () => {
-    const rendered = renderPlugin(
-      LoopsActivitySection,
+  it('keeps the manage action visible while idle and disables it without an active session', () => {
+    const rendered = renderPlugin(loopsActivitySection, slotPropsFixture().props);
+    expect(rendered.error).toBeUndefined();
+    expect(rendered.html).toContain('data-testid="activity-loops-manage"');
+
+    const withoutSession = renderPlugin(
+      loopsActivitySection,
       slotPropsFixture({ sessionId: null, statuses: { [LOOP_VIEW_STATUS_KEY]: payload } }).props,
     );
-    const { html } = rendered;
-    expect(rendered.error).toBeUndefined();
-
-    expect(html).toContain('data-testid="activity-loops-manage"');
-    expect(html).toContain('disabled=""');
+    expect(withoutSession.error).toBeUndefined();
+    expect(withoutSession.html).toContain('data-testid="activity-loops-manage"');
+    expect(withoutSession.html).toContain('disabled=""');
   });
 });

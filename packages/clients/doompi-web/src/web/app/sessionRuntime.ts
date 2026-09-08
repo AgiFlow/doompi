@@ -1,3 +1,4 @@
+import { batch } from '@tanstack/store';
 import {
   HISTORY_PAGE_TYPE,
   HUB_RESYNCED_TYPE,
@@ -238,12 +239,15 @@ export function startSessionRuntime(): () => void {
           const frames = frame.frames.filter(isRecord);
           const dropped = typeof frame.dropped === 'number' ? frame.dropped : 0;
           recordBrowserPerformance({ name: 'web.browser.backlog', count: Math.min(10_000, frames.length + dropped) });
-          applySessionBacklog(sessionId, frames.length, dropped);
-          resetSessionStore(sessionId);
-          for (const replayed of frames) applySessionFrame(sessionId, replayed);
-          // Where the backlog starts is where paging back has to continue
-          // from, so the oldest journal id it carried becomes the cursor.
-          seedHistoryCursor(sessionId, oldestEntryId(frames));
+          // Publish the completed replay, not every intermediate frame, to store subscribers.
+          batch(() => {
+            applySessionBacklog(sessionId, frames.length, dropped);
+            resetSessionStore(sessionId);
+            for (const replayed of frames) applySessionFrame(sessionId, replayed);
+            // Where the backlog starts is where paging back has to continue
+            // from, so the oldest journal id it carried becomes the cursor.
+            seedHistoryCursor(sessionId, oldestEntryId(frames));
+          });
           refreshSessionFacts(sessionId);
           return;
         }
@@ -295,8 +299,11 @@ export function startSessionRuntime(): () => void {
           if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
           if (!Array.isArray(frame.frames)) return;
           const key = threadStoreKey(frame.sessionId, frame.threadId);
-          resetSessionStore(key);
-          for (const replayed of frame.frames.filter(isRecord)) applyThreadFrame(key, replayed);
+          const frames = frame.frames.filter(isRecord);
+          batch(() => {
+            resetSessionStore(key);
+            for (const replayed of frames) applyThreadFrame(key, replayed);
+          });
           return;
         }
         case THREAD_FRAME_TYPE: {

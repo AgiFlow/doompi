@@ -1,6 +1,6 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineSlot, defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
 import { LOOP_VIEW_STATUS_KEY } from '../types/loopView.ts';
-import { LoopsActivitySection } from './components/LoopsActivitySection.tsx';
+import { LoopActivityItems, LoopsActivitySection } from './components/LoopsActivitySection.tsx';
 
 /**
  * This package's cockpit presence. The selection bar carries the minor mode,
@@ -11,8 +11,10 @@ const LOOPS_GROUP = { key: 'l', label: 'loops', detail: 'recurring prompt loops'
 export const webPlugin = defineWebPlugin({
   id: 'loop',
   minorModes: [{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', order: 30 }],
-  activityGroups: [{ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, hideWhenEmpty: true, order: 40 }],
+  activityGroups: [{ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }],
   activitySections: [{ id: 'loops', component: LoopsActivitySection }],
+  slots: [defineSlot({ slot: 'loop.registration' }), defineSlot({ slot: 'loop.items' })],
+  fills: [{ slot: 'loop.items', id: 'instances', component: LoopActivityItems }],
   // The TUI's SPC l s and SPC l l: both are slash commands, so both carry over.
   leaderBindings: [
     {

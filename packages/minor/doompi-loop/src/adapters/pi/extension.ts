@@ -74,6 +74,7 @@ export function installLoopRuntime(cordis: Context, pi: ExtensionAPI): void {
   let activeSession: ActiveLoopSession | undefined;
   let mode: MinorModeOwnerHandle | undefined;
   let disposeLeader: (() => void) | undefined;
+  const launchesInProgress = new WeakSet<ActiveLoopSession>();
 
   const currentSession = (context: ExtensionContext): ActiveLoopSession | undefined => {
     const binding = activeSession;
@@ -191,23 +192,46 @@ export function installLoopRuntime(cordis: Context, pi: ExtensionAPI): void {
   });
 
   registerCommands(pi, {
-    async start(ctx) {
+    async start(ctx, args) {
       const binding = currentSession(ctx);
       if (!binding) return;
-      const launchers = binding.launchers.listLaunchers();
-      if (!launchers.length) {
-        ctx.ui.notify('No loop launchers are registered for this session.', NOTIFY_INFO_LEVEL);
+      if (launchesInProgress.has(binding)) {
+        ctx.ui.notify('A loop setup is already in progress.', NOTIFY_INFO_LEVEL);
         return;
       }
-      const launcherId = await openStartLoopOverlay(ctx, launchers);
-      if (activeSession !== binding || !launcherId) return;
+      launchesInProgress.add(binding);
       try {
+        const launchers = binding.launchers.listLaunchers();
+        if (!launchers.length) {
+          ctx.ui.notify('No loop launchers are registered for this session.', NOTIFY_INFO_LEVEL);
+          return;
+        }
+
+        const argument = args.trim();
+        let launcherId: string | undefined;
+        if (argument) {
+          if (argument.split(/\s+/u).length !== 1) {
+            ctx.ui.notify('Usage: /loop [launcherId]', 'error');
+            return;
+          }
+          if (!launchers.some((launcher) => launcher.id === argument)) {
+            ctx.ui.notify(`Unknown loop launcher: ${argument}`, 'error');
+            return;
+          }
+          launcherId = argument;
+        } else {
+          launcherId = await openStartLoopOverlay(ctx, launchers);
+          if (activeSession !== binding || !launcherId) return;
+        }
+
         const instance = await binding.launchers.launch(launcherId);
         if (activeSession !== binding) return;
         if (instance) ctx.ui.notify(`${instance.label ?? instance.launcherLabel} started.`, NOTIFY_INFO_LEVEL);
       } catch (error) {
         if (activeSession !== binding) return;
         ctx.ui.notify(`Loop could not start: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      } finally {
+        launchesInProgress.delete(binding);
       }
     },
     async list(ctx) {
