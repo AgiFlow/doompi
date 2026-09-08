@@ -1,8 +1,5 @@
 import { Markdown } from '@agimon-ai/doompi-web-components';
-import { useCallback } from 'react';
-import { fileTabForPath, useFileLinks } from '../../lib/composition.ts';
-import { openTransientTab } from '../../stores/transientTabsStore.ts';
-import { useOpenTab } from '../../stores/useOpenTab.ts';
+import { memo, type ComponentProps } from 'react';
 
 /**
  * A message's markdown, with the files this session changed as links.
@@ -12,20 +9,14 @@ import { useOpenTab } from '../../stores/useOpenTab.ts';
  * in the same transient tab the activity dock opens, rather than a second view
  * of the same file.
  */
-export function MessageMarkdown({ sessionId, text }: { sessionId: string | null; text: string }) {
-  const resolve = useFileLinks(sessionId);
-  const openTab = useOpenTab();
-  const onFileLink = useCallback(
-    (label: string, explicit = false) => {
-      if (sessionId === null) return undefined;
-      const tab = explicit ? fileTabForPath(sessionId, label) : resolve(label);
-      if (tab === undefined) return undefined;
-      return () => {
-        openTransientTab(sessionId, tab);
-        openTab(tab.id);
-      };
-    },
-    [resolve, sessionId, openTab],
-  );
+export type MessageFileLinkHandler = NonNullable<ComponentProps<typeof Markdown>['onFileLink']>;
+
+export const MessageMarkdown = memo(function MessageMarkdown({
+  onFileLink,
+  text,
+}: {
+  onFileLink: MessageFileLinkHandler;
+  text: string;
+}) {
   return <Markdown text={text} onFileLink={onFileLink} />;
-}
+});

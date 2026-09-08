@@ -18,6 +18,7 @@ const pluginState = vi.hoisted(() => ({
   focusedSessions: [] as string[],
 }));
 
+const menuState = vi.hoisted(() => ({ claimed: [] as string[], cleared: 0 }));
 vi.mock('../../src/web/lib/wsClient.ts', () => ({
   sessionSocketUrl: () => 'ws://test/api/session',
   createSessionSocket: (_url: string, handlers: SocketHandlers) => {
@@ -50,6 +51,13 @@ vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({
   recordBrowserPerformance: () => undefined,
 }));
 
+vi.mock('../../src/web/stores/menuStore.ts', () => ({
+  claimDialogMenu: (id: string) => menuState.claimed.push(id),
+  clearPendingMenu: () => {
+    menuState.cleared += 1;
+  },
+}));
+
 import { startSessionRuntime } from '../../src/web/app/sessionRuntime.ts';
 import { onHubConnected } from '../../src/web/lib/transport.ts';
 import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore.ts';
@@ -68,6 +76,8 @@ afterEach(() => {
   pluginState.dispatched = [];
   pluginState.focus = (_sessionId: string) => Promise.resolve();
   pluginState.focusedSessions = [];
+  menuState.claimed = [];
+  menuState.cleared = 0;
   resetSessions();
 });
 
@@ -79,6 +89,9 @@ function sentCommandTypes(sessionId: string): string[] {
     .filter((type) => type.length > 0);
 }
 
+function sessionSubscriptionFrames(): Record<string, unknown>[] {
+  return socketState.sent.filter((frame) => frame.type === 'subscribe' || frame.type === 'unsubscribe');
+}
 describe('session runtime backlog publication', () => {
   it.each(['session', 'protocol', 'thread'] as const)('publishes only the completed %s replay', (kind) => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
@@ -175,6 +188,131 @@ describe('session runtime backlog publication', () => {
       dropSessionStore(sessionId);
       dropSessionStore(otherId);
     }
+  });
+});
+
+describe('session runtime voice subscription lifetime', () => {
+  it('keeps the voice owner subscribed while another session is visible', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const stop = startSessionRuntime();
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [
+        { id: 's1', name: 'Voice owner', createdAt: '1' },
+        { id: 's2', name: 'Visible', createdAt: '2' },
+      ],
+    });
+    setActiveSession('s1');
+    socketState.handlers?.onFrame({
+      type: 'voice_ownership',
+      sessionId: 's1',
+      payload: { activeSessionId: 's1' },
+    });
+    socketState.sent = [];
+
+    setActiveSession('s2');
+
+    expect(sessionSubscriptionFrames()).toEqual([{ type: 'subscribe', sessionId: 's2' }]);
+    stop();
+  });
+
+  it('releases the previous owner subscription after voice stops', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const stop = startSessionRuntime();
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [
+        { id: 's1', name: 'Voice owner', createdAt: '1' },
+        { id: 's2', name: 'Visible', createdAt: '2' },
+      ],
+    });
+    setActiveSession('s1');
+    socketState.handlers?.onFrame({
+      type: 'voice_ownership',
+      sessionId: 's1',
+      payload: { activeSessionId: 's1' },
+    });
+    setActiveSession('s2');
+    socketState.sent = [];
+
+    socketState.handlers?.onFrame({
+      type: 'voice_ownership',
+      sessionId: 's1',
+      payload: { activeSessionId: null },
+    });
+
+    expect(sessionSubscriptionFrames()).toEqual([{ type: 'unsubscribe', sessionId: 's1' }]);
+    stop();
+  });
+
+  it('keeps background owner frames away from the visible session menu', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const stop = startSessionRuntime();
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [
+        { id: 's1', name: 'Voice owner', createdAt: '1' },
+        { id: 's2', name: 'Visible', createdAt: '2' },
+      ],
+    });
+    setActiveSession('s1');
+    socketState.handlers?.onFrame({
+      type: 'voice_ownership',
+      sessionId: 's1',
+      payload: { activeSessionId: 's1' },
+    });
+    setActiveSession('s2');
+
+    socketState.handlers?.onFrame({
+      type: 'session_frame',
+      sessionId: 's1',
+      frame: { type: 'extension_ui_request', method: 'select', id: 'background-menu' },
+    });
+    socketState.handlers?.onFrame({
+      type: 'session_frame',
+      sessionId: 's1',
+      frame: { type: 'agent_settled' },
+    });
+    socketState.handlers?.onFrame({
+      type: 'session_frame',
+      sessionId: 's2',
+      frame: { type: 'extension_ui_request', method: 'select', id: 'visible-menu' },
+    });
+    socketState.handlers?.onFrame({
+      type: 'session_frame',
+      sessionId: 's2',
+      frame: { type: 'agent_settled' },
+    });
+
+    expect(menuState.claimed).toEqual(['visible-menu']);
+    expect(menuState.cleared).toBe(1);
+    stop();
+  });
+
+  it('restores both visible and owner subscriptions after a fresh socket snapshot', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessions = [
+      { id: 's1', name: 'Voice owner', createdAt: '1' },
+      { id: 's2', name: 'Visible', createdAt: '2' },
+    ];
+    const stop = startSessionRuntime();
+    socketState.handlers?.onFrame({ type: 'sessions_snapshot', sessions });
+    setActiveSession('s1');
+    socketState.handlers?.onFrame({
+      type: 'voice_ownership',
+      sessionId: 's1',
+      payload: { activeSessionId: 's1' },
+    });
+    setActiveSession('s2');
+    socketState.sent = [];
+
+    socketState.handlers?.onFrame({ type: 'sessions_snapshot', sessions });
+
+    expect(sessionSubscriptionFrames()).toEqual([
+      { type: 'subscribe', sessionId: 's2' },
+      { type: 'subscribe', sessionId: 's1' },
+    ]);
+    stop();
   });
 });
 

@@ -1,3 +1,5 @@
+import type { BundleManifest, SignedBundleManifest } from '@agimon-ai/doompi-web-security/browser';
+
 export const PWA_DATABASE = 'doompi-pwa';
 export const PWA_DATABASE_VERSION = 1;
 export const PWA_STATE_STORE = 'state';
@@ -9,6 +11,12 @@ export interface ActiveBundleState {
   manifestDigest: string;
   revision: number;
   cacheName: string;
+  /** Absent on v1 state written before lazy verified assets existed. */
+  manifest?: BundleManifest;
+  /** Reverified after worker restarts before metadata can authorize asset delivery. */
+  signedManifest?: SignedBundleManifest;
+  /** Absent means the legacy cache is usable offline, but cannot fetch misses. */
+  optionalAssetPaths?: string[];
 }
 
 export interface VerifiedPluginCompositionState {

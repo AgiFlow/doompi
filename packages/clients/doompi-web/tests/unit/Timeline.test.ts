@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin, type ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
 import { Store } from '@tanstack/store';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Transcript } from '../../src/web/features/session/Timeline.tsx';
 import { initialSessionState } from '../../src/web/lib/sessionModel.ts';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
+import { sessionStoreFor } from '../../src/web/stores/sessionStore.ts';
 
 vi.mock('../../src/web/features/session/MessageMarkdown.tsx', () => ({
   MessageMarkdown: ({ text }: { text: string }) => createElement('span', null, text),
@@ -97,5 +98,79 @@ describe('Timeline persona avatar', () => {
 
     expect(markup).toContain('aria-label="Rhea"');
     expect(markup).not.toContain('aria-label="Ponytail"');
+  });
+});
+
+describe('Timeline tool props', () => {
+  it('uses active statuses for renderer selection while binding actions to the transcript session', () => {
+    sessionStoreFor('session-bound').setState(() => ({
+      ...initialSessionState,
+      statuses: { 'doom-mcp': 'github' },
+    }));
+    const PluginMessage = (props: ToolMessageRenderProps) =>
+      createElement('span', {
+        'data-testid': 'plugin-tool-message',
+        'data-session-id': props.sessionId,
+        'data-status': props.statuses['doom-mcp'] ?? 'none',
+      });
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'tools',
+        toolRenderers: [
+          {
+            tools: ['exact_tool'],
+            message: PluginMessage,
+          },
+          {
+            tools: [],
+            matches: (name, statuses) =>
+              name === 'github_search' && (statuses['doom-mcp'] ?? '').split(',').includes('github'),
+            message: PluginMessage,
+          },
+        ],
+      }),
+    ]);
+    const store = new Store({
+      ...initialSessionState,
+      entries: [
+        {
+          kind: 'tool' as const,
+          id: 'exact',
+          toolCallId: 'call-exact',
+          name: 'exact_tool',
+          args: {},
+          argSummary: '',
+          result: null,
+          output: '',
+          isError: false,
+          running: false,
+        },
+        {
+          kind: 'tool' as const,
+          id: 'matched',
+          toolCallId: 'call-matched',
+          name: 'github_search',
+          args: {},
+          argSummary: '',
+          result: null,
+          output: '',
+          isError: false,
+          running: false,
+        },
+      ],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, {
+        store,
+        sessionId: 'session-bound',
+        empty: createElement('div'),
+      }),
+    );
+
+    expect(markup).toContain('data-session-id="session-bound"');
+    expect(markup).toContain('data-status="none"');
+    expect(markup.match(/data-tool-renderer="plugin"/g)).toHaveLength(1);
+    expect(markup).toContain('data-tool-name="github_search" data-tool-state="ok" data-tool-renderer="host"');
   });
 });

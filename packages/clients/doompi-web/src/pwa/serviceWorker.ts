@@ -2,7 +2,10 @@
 
 import {
   BUNDLE_MANIFEST_ROUTE,
+  type BundleAsset,
+  type BundleManifest,
   canonicalManifest,
+  type SignedBundleManifest,
   verifyBundleAsset,
   verifySignedBundleManifest,
 } from '@agimon-ai/doompi-web-security/browser';
@@ -18,6 +21,7 @@ import {
   type ActiveBundleState,
   type VerifiedPluginCompositionState,
 } from './bundleCache.ts';
+import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '../types/bundleAssetPolicy.ts';
 import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths.ts';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
@@ -33,6 +37,7 @@ const RESET_MESSAGE = 'doompi:reset-bundle-trust';
 const PLUGIN_FETCH_MESSAGE = 'doompi:plugin-fetch';
 const PLUGIN_FETCH_RESULT_MESSAGE = 'doompi:plugin-fetch-result';
 const PLUGIN_FETCH_TIMEOUT_MS = 120_000;
+const ASSET_FETCH_CONCURRENCY = 4;
 
 interface ActivateBundleMessage {
   type: typeof ACTIVATE_MESSAGE;
@@ -190,12 +195,204 @@ async function manifestDigest(manifest: Parameters<typeof canonicalManifest>[0])
   return hex(await crypto.subtle.digest('SHA-256', bytes));
 }
 
+function assetResponse(asset: BundleAsset, bytes: ArrayBuffer): Response {
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Length': String(asset.byteLength),
+      'Content-Type': asset.contentType,
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+const optionalFetches = new Map<string, Promise<Response>>();
+const assetControllers = new Set<AbortController>();
+const assetWaiters: Array<() => void> = [];
+let activeAssetFetches = 0;
+let trustEpoch = 0;
+let trustOperation: Promise<unknown> = Promise.resolve();
+
+function queueTrustOperation<T>(operation: (epoch: number) => Promise<T>): Promise<T> {
+  const epoch = trustEpoch;
+  const queued = trustOperation.then(
+    async () => await operation(epoch),
+    async () => await operation(epoch),
+  );
+  trustOperation = queued;
+  return queued;
+}
+
+async function fetchRawAsset(manifest: BundleManifest, asset: BundleAsset): Promise<ArrayBuffer> {
+  const epoch = trustEpoch;
+  if (activeAssetFetches >= ASSET_FETCH_CONCURRENCY) {
+    await new Promise<void>((resolve) => assetWaiters.push(resolve));
+  } else activeAssetFetches += 1;
+  const controller = new AbortController();
+  assetControllers.add(controller);
+  try {
+    if (epoch !== trustEpoch) throw new Error('Bundle trust changed before the asset download.');
+    const source = `${RAW_BUNDLE_PREFIX}${String(manifest.revision)}${asset.path}`;
+    const response = await fetch(source, {
+      credentials: 'include',
+      cache: 'no-store',
+      redirect: 'error',
+      signal: controller.signal,
+    });
+    const responseUrl = new URL(response.url);
+    if (
+      !response.ok ||
+      response.redirected ||
+      responseUrl.origin !== worker.location.origin ||
+      responseUrl.pathname !== source
+    ) {
+      throw new Error(`The raw bundle asset ${asset.path} was unavailable.`);
+    }
+    const bytes = await response.arrayBuffer();
+    const result = await verifyBundleAsset(manifest, asset.path, bytes);
+    if (!result.ok) throw new Error(`The raw bundle asset ${asset.path} failed ${result.failure.code}.`);
+    return bytes;
+  } finally {
+    assetControllers.delete(controller);
+    const next = assetWaiters.shift();
+    if (next === undefined) activeAssetFetches -= 1;
+    else next();
+  }
+}
+
+async function verifiedCachedBytes(
+  cache: Cache | undefined,
+  manifest: BundleManifest,
+  asset: BundleAsset,
+): Promise<ArrayBuffer | undefined> {
+  const cached = await cache?.match(asset.path);
+  if (cached === undefined || cached.status !== 200) return undefined;
+  const bytes = await cached.arrayBuffer();
+  return (await verifyBundleAsset(manifest, asset.path, bytes)).ok ? bytes : undefined;
+}
+
+async function runBounded<T>(values: readonly T[], operation: (value: T) => Promise<void>): Promise<void> {
+  let index = 0;
+  let failed = false;
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(ASSET_FETCH_CONCURRENCY, values.length) }, async () => {
+      while (!failed && index < values.length) {
+        const value = values[index++];
+        try {
+          if (value !== undefined) await operation(value);
+        } catch (error) {
+          failed = true;
+          throw error;
+        }
+      }
+    }),
+  );
+  const rejected = results.find((result) => result.status === 'rejected');
+  if (rejected?.status === 'rejected') {
+    const error: unknown = rejected.reason;
+    throw error instanceof Error ? error : new Error('An asset operation failed.', { cause: error });
+  }
+}
+
+function optionalPaths(manifest: BundleManifest, bytes: ArrayBuffer): string[] {
+  try {
+    const policy = parseBundleAssetPolicy(JSON.parse(new TextDecoder().decode(bytes)) as unknown);
+    if (
+      policy !== undefined &&
+      policy.optional.every(
+        (assetPath) =>
+          assetPath !== '/index.html' &&
+          assetPath !== BUNDLE_ASSET_POLICY_PATH &&
+          manifest.assets.some((asset) => asset.path === assetPath),
+      )
+    ) {
+      return policy.optional;
+    }
+  } catch {
+    // Authenticated but unsupported policy means eager activation, never an integrity bypass.
+  }
+  return [];
+}
+
+async function verifiedStateManifest(state: ActiveBundleState): Promise<BundleManifest | undefined> {
+  const verified = await verifySignedBundleManifest(state.signedManifest, state.signerPublicKey, state.revision);
+  if (
+    !verified.ok ||
+    verified.manifest.revision !== state.revision ||
+    (await manifestDigest(verified.manifest)) !== state.manifestDigest
+  )
+    return undefined;
+  return verified.manifest;
+}
+
+async function lazyVerifiedResponse(
+  state: ActiveBundleState,
+  manifest: BundleManifest,
+  asset: BundleAsset,
+): Promise<Response> {
+  const key = `${state.cacheName}:${state.manifestDigest}:${asset.path}`;
+  const existing = optionalFetches.get(key);
+  if (existing !== undefined) return (await existing).clone();
+  const epoch = trustEpoch;
+  const fetching = (async () => {
+    const bytes = await fetchRawAsset(manifest, asset);
+    const current = await readActiveBundle();
+    if (
+      epoch !== trustEpoch ||
+      current?.cacheName !== state.cacheName ||
+      current.manifestDigest !== state.manifestDigest
+    ) {
+      throw new Error('The active bundle changed while the optional asset was downloading.');
+    }
+    const response = assetResponse(asset, bytes);
+    const cache = await caches.open(state.cacheName);
+    await cache.put(asset.path, response.clone());
+    const committed = await readActiveBundle();
+    if (
+      epoch !== trustEpoch ||
+      committed?.cacheName !== state.cacheName ||
+      committed.manifestDigest !== state.manifestDigest
+    ) {
+      if (epoch !== trustEpoch) await caches.delete(state.cacheName);
+      else await cache.delete(asset.path);
+      throw new Error('The active bundle changed while the optional asset was being cached.');
+    }
+    return response;
+  })();
+  optionalFetches.set(key, fetching);
+  try {
+    return (await fetching).clone();
+  } finally {
+    if (optionalFetches.get(key) === fetching) optionalFetches.delete(key);
+  }
+}
+
 async function verifiedResponse(state: ActiveBundleState, request: Request): Promise<Response> {
+  const unavailable = () => new Response('That verified cockpit asset is unavailable.', { status: 404 });
+  if (request.method !== 'GET')
+    return new Response('Only GET assets are supported.', { status: 405, headers: { Allow: 'GET' } });
   const cache = await caches.open(state.cacheName);
-  const url = new URL(request.url);
-  const key = request.mode === 'navigate' ? '/index.html' : url.pathname;
-  const cached = await cache.match(key);
-  return cached ?? new Response('That verified cockpit asset is unavailable.', { status: 404 });
+  const key = request.mode === 'navigate' ? '/index.html' : new URL(request.url).pathname;
+  if (state.signedManifest === undefined) {
+    // Old complete caches retain their original offline contract, but cannot authorize new downloads.
+    if (state.manifest !== undefined || state.optionalAssetPaths !== undefined) return unavailable();
+    return (await cache.match(key)) ?? unavailable();
+  }
+  const manifest = await verifiedStateManifest(state);
+  const asset = manifest?.assets.find((candidate) => candidate.path === key);
+  if (manifest === undefined || asset === undefined) return unavailable();
+  const bytes = await verifiedCachedBytes(cache, manifest, asset);
+  if (bytes !== undefined) return assetResponse(asset, bytes);
+  const policyAsset = manifest.assets.find((candidate) => candidate.path === BUNDLE_ASSET_POLICY_PATH);
+  const policyBytes = policyAsset === undefined ? undefined : await verifiedCachedBytes(cache, manifest, policyAsset);
+  if (policyBytes === undefined || !optionalPaths(manifest, policyBytes).includes(key)) return unavailable();
+  try {
+    return await lazyVerifiedResponse(state, manifest, asset);
+  } catch {
+    await revalidatePinnedBundle(state);
+    return unavailable();
+  }
 }
 
 async function fetchManifest(): Promise<unknown> {
@@ -232,7 +429,9 @@ async function prunePluginCompositions(): Promise<void> {
 async function activatePluginComposition(
   request: ActivatePluginCompositionMessage,
   fetchPlugin: (path: string) => Promise<Response>,
+  expectedEpoch: number,
 ): Promise<WorkerReply> {
+  if (expectedEpoch !== trustEpoch) return { ok: false, code: 'trust-reset', message: 'Bundle trust was reset.' };
   const host = await readActiveBundle();
   if (host === undefined) {
     return { ok: false, code: 'no-pin', message: 'No trusted cockpit signing key is pinned.' };
@@ -258,7 +457,9 @@ async function activatePluginComposition(
       return { ok: false, code: 'revision-conflict', message: 'The plugin revision was reused for different bytes.' };
     }
     if (await caches.has(previous.cacheName)) {
+      if (expectedEpoch !== trustEpoch) return { ok: false, code: 'trust-reset', message: 'Bundle trust was reset.' };
       await commitVerifiedPluginComposition({ ...previous, lastUsedAt: Date.now() });
+      if (expectedEpoch !== trustEpoch) return { ok: false, code: 'trust-reset', message: 'Bundle trust was reset.' };
       return { ok: true, revision: previous.revision };
     }
   }
@@ -296,7 +497,9 @@ async function activatePluginComposition(
       verifiedAssetBaseUrl: request.verifiedAssetBaseUrl,
       lastUsedAt: Date.now(),
     };
+    if (expectedEpoch !== trustEpoch) throw new Error('Bundle trust was reset during plugin activation.');
     await commitVerifiedPluginComposition(next);
+    if (expectedEpoch !== trustEpoch) throw new Error('Bundle trust was reset during plugin activation.');
     try {
       if (previous !== undefined && previous.cacheName !== next.cacheName) await caches.delete(previous.cacheName);
       await prunePluginCompositions();
@@ -306,6 +509,7 @@ async function activatePluginComposition(
     return { ok: true, revision: next.revision };
   } catch (error) {
     await caches.delete(cacheName);
+    if (expectedEpoch !== trustEpoch) return { ok: false, code: 'trust-reset', message: 'Bundle trust was reset.' };
     return { ok: false, code: 'asset-verification', message: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -315,11 +519,12 @@ const pluginActivations = new Map<string, Promise<WorkerReply>>();
 function queuePluginActivation(
   request: ActivatePluginCompositionMessage,
   fetchPlugin: (path: string) => Promise<Response>,
+  expectedEpoch: number,
 ): Promise<WorkerReply> {
   const previous = pluginActivations.get(request.compositionId) ?? Promise.resolve({ ok: true } as WorkerReply);
   const activation = previous.then(
-    async () => await activatePluginComposition(request, fetchPlugin),
-    async () => await activatePluginComposition(request, fetchPlugin),
+    async () => await activatePluginComposition(request, fetchPlugin, expectedEpoch),
+    async () => await activatePluginComposition(request, fetchPlugin, expectedEpoch),
   );
   pluginActivations.set(request.compositionId, activation);
   void activation.then(
@@ -334,6 +539,8 @@ function queuePluginActivation(
 }
 
 async function verifiedPluginResponse(request: Request): Promise<Response> {
+  const expectedEpoch = trustEpoch;
+  const host = await readActiveBundle();
   const url = new URL(request.url);
   const [compositionId, revisionText] = url.pathname.slice(VERIFIED_PLUGIN_PREFIX.length).split('/', 2);
   if (compositionId === undefined || revisionText === undefined) {
@@ -341,19 +548,23 @@ async function verifiedPluginResponse(request: Request): Promise<Response> {
   }
   const state = await readVerifiedPluginComposition(compositionId);
   if (
+    host === undefined ||
     state === undefined ||
+    state.signerPublicKey !== host.signerPublicKey ||
     String(state.revision) !== revisionText ||
     !url.pathname.startsWith(`${state.verifiedAssetBaseUrl}/`)
   ) {
     return new Response('That verified plugin asset is unavailable.', { status: 404 });
   }
   const cache = await caches.open(state.cacheName);
-  return (
-    (await cache.match(url.pathname)) ?? new Response('That verified plugin asset is unavailable.', { status: 404 })
-  );
+  const response = await cache.match(url.pathname);
+  return expectedEpoch === trustEpoch && response !== undefined
+    ? response
+    : new Response('That verified plugin asset is unavailable.', { status: 404 });
 }
 
-async function activateBundle(publicKey: string, minimumRevision: number): Promise<WorkerReply> {
+async function activateBundle(publicKey: string, minimumRevision: number, expectedEpoch: number): Promise<WorkerReply> {
+  if (expectedEpoch !== trustEpoch) return { ok: false, code: 'trust-reset', message: 'Bundle trust was reset.' };
   const previous = await readActiveBundle();
   if (previous !== undefined && previous.signerPublicKey !== publicKey) {
     return { ok: false, code: 'signer-mismatch', message: 'The host signing key does not match the pinned key.' };
@@ -371,58 +582,106 @@ async function activateBundle(publicKey: string, minimumRevision: number): Promi
   if (!verified.ok)
     return { ok: false, code: verified.failure.code, message: 'The signed bundle manifest was refused.' };
   const digest = await manifestDigest(verified.manifest);
-  if (previous?.revision === verified.manifest.revision) {
-    if (previous.manifestDigest !== digest) {
-      return {
-        ok: false,
-        code: 'revision-conflict',
-        message: 'The host reused a revision for different bundle bytes.',
-      };
-    }
-    if (await caches.has(previous.cacheName)) return { ok: true, revision: previous.revision };
+  if (previous?.revision === verified.manifest.revision && previous.manifestDigest !== digest) {
+    return {
+      ok: false,
+      code: 'revision-conflict',
+      message: 'The host reused a revision for different bundle bytes.',
+    };
   }
 
-  const cacheName = `${CACHE_PREFIX}${String(verified.manifest.revision)}-${digest.slice(0, 16)}`;
-  await caches.delete(cacheName);
+  const cacheName = `${CACHE_PREFIX}${String(verified.manifest.revision)}-${digest.slice(0, 16)}-${crypto.randomUUID()}`;
   const staging = await caches.open(cacheName);
+  const reusable =
+    previous !== undefined && (await caches.has(previous.cacheName))
+      ? await caches.open(previous.cacheName)
+      : undefined;
   try {
-    for (const asset of verified.manifest.assets) {
-      const source = `${RAW_BUNDLE_PREFIX}${String(verified.manifest.revision)}${asset.path}`;
-      const response = await fetch(source, {
-        credentials: 'include',
-        cache: 'no-store',
-        redirect: 'error',
-      });
-      if (!response.ok || response.redirected || new URL(response.url).origin !== worker.location.origin) {
-        throw new Error(`The raw bundle asset ${asset.path} was unavailable.`);
-      }
-      const bytes = await response.arrayBuffer();
-      const assetResult = await verifyBundleAsset(verified.manifest, asset.path, bytes);
-      if (!assetResult.ok) throw new Error(`The raw bundle asset ${asset.path} failed ${assetResult.failure.code}.`);
-      await staging.put(
-        asset.path,
-        new Response(bytes, {
-          status: 200,
-          headers: {
-            'Cache-Control': 'no-store',
-            'Content-Length': String(asset.byteLength),
-            'Content-Type': asset.contentType,
-            'X-Content-Type-Options': 'nosniff',
-          },
-        }),
-      );
+    const policyAsset = verified.manifest.assets.find((asset) => asset.path === BUNDLE_ASSET_POLICY_PATH);
+    let optionalAssetPaths: string[] = [];
+    if (policyAsset !== undefined) {
+      const policyBytes =
+        (await verifiedCachedBytes(reusable, verified.manifest, policyAsset)) ??
+        (await fetchRawAsset(verified.manifest, policyAsset));
+      await staging.put(policyAsset.path, assetResponse(policyAsset, policyBytes));
+      optionalAssetPaths = optionalPaths(verified.manifest, policyBytes);
     }
 
+    const optional = new Set(optionalAssetPaths);
+    const required = verified.manifest.assets.filter(
+      (asset) => asset.path !== BUNDLE_ASSET_POLICY_PATH && !optional.has(asset.path),
+    );
+    if (
+      previous?.revision === verified.manifest.revision &&
+      reusable !== undefined &&
+      (policyAsset === undefined || (await verifiedCachedBytes(reusable, verified.manifest, policyAsset)) !== undefined)
+    ) {
+      let complete = true;
+      await runBounded(required, async (asset) => {
+        if ((await verifiedCachedBytes(reusable, verified.manifest, asset)) === undefined) complete = false;
+      });
+      if (complete) {
+        if (expectedEpoch !== trustEpoch) throw new Error('Bundle trust was reset during activation.');
+        await commitActiveBundle({
+          ...previous,
+          manifest: verified.manifest,
+          signedManifest: envelope as SignedBundleManifest,
+          optionalAssetPaths,
+        });
+        try {
+          await caches.delete(cacheName);
+        } catch {
+          /* The active cache is untouched; staging cleanup is best effort. */
+        }
+        return { ok: true, revision: previous.revision };
+      }
+    }
+    await runBounded(required, async (asset) => {
+      const bytes =
+        (await verifiedCachedBytes(reusable, verified.manifest, asset)) ??
+        (await fetchRawAsset(verified.manifest, asset));
+      await staging.put(asset.path, assetResponse(asset, bytes));
+    });
+
+    // Reusable optional bytes improve offline updates, but a failed optional copy cannot block core activation.
+    await runBounded(
+      verified.manifest.assets.filter((asset) => optional.has(asset.path)),
+      async (asset) => {
+        try {
+          const bytes = await verifiedCachedBytes(reusable, verified.manifest, asset);
+          if (bytes !== undefined) await staging.put(asset.path, assetResponse(asset, bytes));
+        } catch {
+          // The optional asset remains lazy and can be fetched on demand.
+        }
+      },
+    );
+
+    if (expectedEpoch !== trustEpoch) throw new Error('Bundle trust was reset during activation.');
     const next: ActiveBundleState = {
       signerPublicKey: publicKey,
       manifestDigest: digest,
       revision: verified.manifest.revision,
       cacheName,
+      manifest: verified.manifest,
+      signedManifest: envelope as SignedBundleManifest,
+      optionalAssetPaths,
     };
     await commitActiveBundle(next);
-    for (const held of await caches.keys()) {
-      if (held.startsWith(CACHE_PREFIX) && held !== next.cacheName && held !== previous?.cacheName)
-        await caches.delete(held);
+    try {
+      for (const held of await caches.keys()) {
+        if (held.startsWith(CACHE_PREFIX) && held !== next.cacheName && held !== previous?.cacheName) {
+          await caches.delete(held);
+        }
+      }
+    } catch {
+      // The new core is committed. A later activation retries best-effort cleanup.
+    }
+    if (previous !== undefined && next.revision > previous.revision) {
+      try {
+        await announceRevision(next.revision, expectedEpoch);
+      } catch {
+        /* A closed client cannot roll back committed assets. */
+      }
     }
     return { ok: true, revision: next.revision };
   } catch (error) {
@@ -431,29 +690,47 @@ async function activateBundle(publicKey: string, minimumRevision: number): Promi
   }
 }
 
-async function handleMessage(request: WorkerRequest, port: MessagePort): Promise<WorkerReply> {
-  if (request.type === RESET_MESSAGE) {
-    for (const held of await caches.keys()) {
-      if (held.startsWith(CACHE_PREFIX) || held.startsWith(PLUGIN_CACHE_PREFIX)) await caches.delete(held);
-    }
+async function resetBundleTrust(): Promise<WorkerReply> {
+  await clearActiveBundle();
+  try {
     for (const plugin of await listVerifiedPluginCompositions()) {
       await clearVerifiedPluginComposition(plugin.compositionId);
     }
-    await clearActiveBundle();
-    return { ok: true };
+  } catch {
+    // Durable host trust is already cleared. Plugin record cleanup is best effort.
+  }
+  try {
+    for (const held of await caches.keys()) {
+      if (held.startsWith(CACHE_PREFIX) || held.startsWith(PLUGIN_CACHE_PREFIX)) await caches.delete(held);
+    }
+  } catch {
+    // Durable host trust is already cleared. Cache cleanup is best effort.
+  }
+  return { ok: true };
+}
+
+async function handleMessage(request: WorkerRequest, port: MessagePort): Promise<WorkerReply> {
+  if (request.type === RESET_MESSAGE) {
+    trustEpoch += 1;
+    for (const controller of assetControllers) controller.abort();
+    return await queueTrustOperation(async () => await resetBundleTrust());
   }
   if (request.type === ACTIVATE_MESSAGE) {
-    return await activateBundle(request.publicKey, request.minimumRevision);
+    return await queueTrustOperation(
+      async (epoch) => await activateBundle(request.publicKey, request.minimumRevision, epoch),
+    );
   }
   if (request.type === ACTIVATE_PLUGIN_MESSAGE) {
     const fetchPlugin = request.relayThroughClient
       ? (path: string) => fetchThroughClient(port, path)
       : fetchPluginDirect;
-    return await queuePluginActivation(request, fetchPlugin);
+    return await queueTrustOperation(async (epoch) => await queuePluginActivation(request, fetchPlugin, epoch));
   }
-  const current = await readActiveBundle();
-  if (current === undefined) return { ok: false, code: 'no-pin', message: 'No host signing key is pinned.' };
-  return await activateBundle(current.signerPublicKey, current.revision);
+  return await queueTrustOperation(async (epoch) => {
+    const current = await readActiveBundle();
+    if (current === undefined) return { ok: false, code: 'no-pin', message: 'No host signing key is pinned.' };
+    return await activateBundle(current.signerPublicKey, current.revision, epoch);
+  });
 }
 
 worker.addEventListener('install', (event) => {
@@ -497,10 +774,11 @@ worker.addEventListener('message', (event) => {
  */
 let revalidation: Promise<void> | undefined;
 
-async function announceRevision(revision: number): Promise<void> {
+async function announceRevision(revision: number, epoch: number): Promise<void> {
   const windows = await worker.clients.matchAll({ type: 'window' });
   for (const client of windows) {
-    client.postMessage({ type: BUNDLE_UPDATED_MESSAGE, revision } satisfies BundleUpdatedMessage);
+    if (epoch === trustEpoch)
+      client.postMessage({ type: BUNDLE_UPDATED_MESSAGE, revision } satisfies BundleUpdatedMessage);
   }
 }
 
@@ -516,10 +794,16 @@ async function announceRevision(revision: number): Promise<void> {
 function revalidatePinnedBundle(state: ActiveBundleState): Promise<void> {
   revalidation ??= (async () => {
     try {
-      const reply = await activateBundle(state.signerPublicKey, state.revision);
-      if (reply.ok && reply.revision !== undefined && reply.revision > state.revision) {
-        await announceRevision(reply.revision);
-      }
+      await queueTrustOperation(async (epoch) => {
+        const current = await readActiveBundle();
+        if (
+          current === undefined ||
+          current.cacheName !== state.cacheName ||
+          current.signerPublicKey !== state.signerPublicKey
+        )
+          return;
+        await activateBundle(current.signerPublicKey, current.revision, epoch);
+      });
     } catch {
       // A revalidation that throws leaves the pin and the cache untouched.
     } finally {

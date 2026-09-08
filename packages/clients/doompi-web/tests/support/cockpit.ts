@@ -116,6 +116,8 @@ interface CockpitOptions {
   spawnStub: 'ok' | 'fail';
   /** Which bundle to serve: the package's own dist, or the synced-style bundle global setup built. */
   assets: 'packaged' | 'synced';
+  /** Immutable package snapshot for production A/B tests, including its worker and executable. */
+  assetPackageRoot: string | null;
   /** Maximum frames buffered by a fake session while the hub is detached. */
   backlogLimit: number;
 }
@@ -132,6 +134,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
   spawnStub: ['ok', { option: true }],
   assets: ['packaged', { option: true }],
+  assetPackageRoot: [null, { option: true }],
   backlogLimit: [512, { option: true }],
   page: async ({ page, cockpit }, use) => {
     await page.goto(`${cockpit.url}/pair`);
@@ -140,7 +143,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     await page.goto('about:blank');
     await use(page);
   },
-  cockpit: async ({ sessionCount, spawnStub, assets, backlogLimit }, use) => {
+  cockpit: async ({ sessionCount, spawnStub, assets, assetPackageRoot, backlogLimit }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
     const syncedHome = process.env.DOOMPI_E2E_SYNCED_HOME;
@@ -205,15 +208,16 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       WORKFLOW_MCP_HOME: workflowHome,
       PI_CODING_AGENT_DIR: agentDir,
       DOOMPI_SYNC_COMMAND: syncStub,
+      DOOMPI_WEB_PACKAGE_ROOT: assetPackageRoot ?? packageRoot,
     };
     for (const key of Object.keys(env)) if (/_API_KEY$|_AUTH_TOKEN$|_OAUTH_TOKEN$/.test(key)) delete env[key];
     // Assets are always explicit: without this, the server would prefer the
     // developer's machine-wide ~/.doompi/web bundle over the freshly built one.
-    const assetsDir = assets === 'synced' ? (syncedDist as string) : path.join(packageRoot, 'dist', 'web');
+    const assetsDir = assets === 'synced' ? syncedDist : path.join(assetPackageRoot ?? packageRoot, 'dist', 'web');
     const child: ChildProcess = spawn(
       process.execPath,
       [
-        binary,
+        assetPackageRoot === null ? binary : path.join(assetPackageRoot, 'dist', 'bin', 'serve.mjs'),
         '--registry-dir',
         registryDir,
         '--state-dir',

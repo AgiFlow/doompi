@@ -28,6 +28,17 @@ describe('signed bundle publication', () => {
     expect(publication.current()?.signed.manifest.assets.map((asset) => asset.path)).toContain('/index.html');
   });
 
+  it('signs the v1 asset policy as an ordinary manifest v2 JSON asset', () => {
+    const paths = fixture();
+    fs.writeFileSync(path.join(paths.dir, 'bundle-asset-policy.json'), '{"version":1,"optional":[]}\n');
+    const asset = createBundlePublication(paths)
+      .current()
+      ?.signed.manifest.assets.find((candidate) => candidate.path === '/bundle-asset-policy.json');
+
+    expect(asset?.contentType).toBe('application/json');
+    expect(asset?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+  });
+
   it('advances the revision when sync replaces bundle bytes', () => {
     const paths = fixture();
     const publication = createBundlePublication(paths);

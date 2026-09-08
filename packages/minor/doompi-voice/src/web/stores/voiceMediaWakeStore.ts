@@ -1,4 +1,9 @@
-import { defineGlobalStore, defineSessionStore } from '@agimon-ai/doompi-web-contracts';
+import {
+  defineGlobalStore,
+  defineSessionStore,
+  type GlobalStore,
+  type SessionStore,
+} from '@agimon-ai/doompi-web-contracts';
 import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../../types/clientMedia.ts';
 import {
   VOICE_OWNERSHIP_FRAME_TYPE,
@@ -7,14 +12,46 @@ import {
 } from '../../types/voiceOwnership.ts';
 
 const MAX_EVENT_EPOCH_LENGTH = 200;
+const VOICE_MEDIA_PAGE_STATE_VERSION = 1;
+const VOICE_MEDIA_PAGE_STATE = Symbol.for('@agimon-ai/doompi-voice:web-media-page-state.v1');
 
-export const voiceMediaWakes = defineSessionStore<VoiceMediaWake | undefined>(undefined);
-export const activeVoiceSession = defineGlobalStore<string | null>(null);
 export interface VoiceMediaBrowserState {
   sessionId: string;
   phase: 'connecting' | 'connected' | 'conflict';
 }
-export const voiceMediaBrowserState = defineGlobalStore<VoiceMediaBrowserState | undefined>(undefined);
+
+interface VoiceMediaPageState {
+  version: typeof VOICE_MEDIA_PAGE_STATE_VERSION;
+  wakes: SessionStore<VoiceMediaWake | undefined>;
+  activeSession: GlobalStore<string | null>;
+  browserState: GlobalStore<VoiceMediaBrowserState | undefined>;
+  runtime: GlobalStore<unknown>;
+}
+
+function createVoiceMediaPageState(): VoiceMediaPageState {
+  return {
+    version: VOICE_MEDIA_PAGE_STATE_VERSION,
+    wakes: defineSessionStore<VoiceMediaWake | undefined>(undefined),
+    activeSession: defineGlobalStore<string | null>(null),
+    browserState: defineGlobalStore<VoiceMediaBrowserState | undefined>(undefined),
+    runtime: defineGlobalStore<unknown>(undefined),
+  };
+}
+
+function voiceMediaPageState(): VoiceMediaPageState {
+  const browser = globalThis as unknown as Record<PropertyKey, unknown>;
+  const existing = browser[VOICE_MEDIA_PAGE_STATE] as VoiceMediaPageState | undefined;
+  if (existing?.version === VOICE_MEDIA_PAGE_STATE_VERSION) return existing;
+  const created = createVoiceMediaPageState();
+  browser[VOICE_MEDIA_PAGE_STATE] = created;
+  return created;
+}
+
+const pageState = voiceMediaPageState();
+export const voiceMediaWakes = pageState.wakes;
+export const activeVoiceSession = pageState.activeSession;
+export const voiceMediaBrowserState = pageState.browserState;
+export const voiceMediaPageRuntime = pageState.runtime;
 
 export function parseVoiceMediaWakePayload(input: unknown): VoiceMediaWake | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
