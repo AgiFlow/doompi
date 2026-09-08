@@ -47,7 +47,8 @@
       "llms.txt",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -96,7 +97,8 @@
       "llms.txt",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -434,7 +436,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "src/web", "src/exports/webClient.ts"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "!src/web/**/*.stories.tsx"],
     "os": [],
     "cpu": []
   },
@@ -741,7 +743,8 @@
       "src/types/domain.ts",
       "src/types/webFiles.ts",
       "src/types/fileEditsApi.ts",
-      "LICENSE"
+      "LICENSE",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -783,7 +786,8 @@
       "src/types/goal.ts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -815,7 +819,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "src/web", "src/exports/webClient.ts"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "!src/web/**/*.stories.tsx"],
     "os": [],
     "cpu": []
   },
@@ -970,7 +974,14 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webMetrics.ts", "src/types/issueGrouping.ts"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "src/types/webMetrics.ts",
+      "src/types/issueGrouping.ts",
+      "!src/web/**/*.stories.tsx"
+    ],
     "os": [],
     "cpu": []
   },
@@ -1010,7 +1021,8 @@
       "src/types/loopView.ts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -1093,7 +1105,8 @@
       "src/prompts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -1208,7 +1221,8 @@
       "src/types/planSettings.ts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -1442,7 +1456,8 @@
       "llms.txt",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -1474,7 +1489,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "src/web", "src/exports/webClient.ts"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "!src/web/**/*.stories.tsx"],
     "os": [],
     "cpu": []
   },
@@ -1829,7 +1844,8 @@
       "src/types/webRunnerLog.ts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -2035,7 +2051,14 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webTasks.ts", "package.json"],
+    "files": [
+      "dist",
+      "src/web",
+      "src/exports/webClient.ts",
+      "src/types/webTasks.ts",
+      "package.json",
+      "!src/web/**/*.stories.tsx"
+    ],
     "os": [],
     "cpu": []
   },
@@ -2072,7 +2095,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webSubagents.ts"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "src/types/webSubagents.ts", "!src/web/**/*.stories.tsx"],
     "os": [],
     "cpu": []
   },
@@ -2140,7 +2163,8 @@
       "src/types/questionnaire.ts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -2312,7 +2336,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./themes/doom-pi-dark.json"],
-    "files": ["dist", "src/web", "src/exports/webClient.ts", "themes"],
+    "files": ["dist", "src/web", "src/exports/webClient.ts", "themes", "!src/web/**/*.stories.tsx"],
     "os": [],
     "cpu": []
   },
@@ -2367,7 +2391,8 @@
       "src/types/manualTranscription.ts",
       "README.md",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
@@ -2457,7 +2482,8 @@
       "src/web",
       "src/exports/webClient.ts",
       "src/types/webWorkflows.ts",
-      "src/types/webWorkflowTerminal.ts"
+      "src/types/webWorkflowTerminal.ts",
+      "!src/web/**/*.stories.tsx"
     ],
     "os": [],
     "cpu": []
