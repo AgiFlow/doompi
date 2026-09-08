@@ -39,6 +39,7 @@ import {
   selectThinkingLevel,
   useActiveSession,
 } from '../../stores/sessionStore.ts';
+import { setDockOpen, setDockTab } from '../../stores/uiStore.ts';
 import { sessionsStore } from '../../stores/sessionsStore.ts';
 
 // The known axes keep their mockup styling; a plugin-declared axis the host
@@ -218,11 +219,16 @@ function MinorModesPopup({ modes, onClose }: { modes: MinorMode[]; onClose: () =
             disabled={mode.availability === 'unavailable'}
             title={mode.availability === 'unavailable' ? mode.unavailableReason : `drive ${mode.name}`}
             onClick={() => {
-              // The runtime may answer with an opt-in picker; claiming the menu
-              // keeps that question on this chip, where it was asked, instead
-              // of throwing it to the middle of the screen.
-              setPendingMenu('minor');
-              runCommand(`/minor ${mode.id}`);
+              if (mode.activityGroup !== undefined) {
+                setDockOpen(true);
+                setDockTab('activity');
+              } else {
+                // The runtime may answer with an opt-in picker; claiming the menu
+                // keeps that question on this chip, where it was asked, instead
+                // of throwing it to the middle of the screen.
+                setPendingMenu('minor');
+                runCommand(`/minor ${mode.id}`);
+              }
               onClose();
             }}
             className={cn(

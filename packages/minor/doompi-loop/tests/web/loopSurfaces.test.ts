@@ -1,4 +1,5 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView.ts';
 import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection.tsx';
@@ -14,11 +15,15 @@ const loopsActivitySection = webPlugin.activitySections?.[0]?.component;
 if (!loopsActivitySection) throw new Error('Expected the Loop activity section.');
 
 describe('Loop web surfaces', () => {
-  it('declares the Loop mode, activity group, slots, and command bindings', () => {
-    expect(webPlugin.minorModes).toEqual([{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', order: 30 }]);
-    expect(webPlugin.activityGroups).toEqual([
-      { name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 },
+  it('declares the Loop mode, idle activity group, slots, and command bindings', () => {
+    expect(webPlugin.minorModes).toEqual([
+      { name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 },
     ]);
+    expect(webPlugin.activityGroups).toEqual([
+      expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }),
+    ]);
+    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(true);
+    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive(null)).toBe(false);
     expect(webPlugin.activitySections?.map(({ id }) => id)).toEqual(['loops']);
     expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.registration', 'loop.items']);
     expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([{ slot: 'loop.items', id: 'instances' }]);
@@ -55,10 +60,19 @@ describe('Loop web surfaces', () => {
     expect(html).toContain('loop status unavailable');
   });
 
-  it('keeps the manage action visible while idle and disables it without an active session', () => {
-    const rendered = renderPlugin(loopsActivitySection, slotPropsFixture().props);
+  it('keeps the idle activity section and both launcher surfaces available', () => {
+    const rendered = renderPlugin(
+      loopsActivitySection,
+      slotPropsFixture({
+        slotContent: {
+          'loop.registration': createElement('span', { 'data-testid': 'loop-extension-slot' }, 'Agiflow loop'),
+        },
+      }).props,
+    );
     expect(rendered.error).toBeUndefined();
     expect(rendered.html).toContain('data-testid="activity-loops-manage"');
+    expect(rendered.html).toContain('data-testid="activity-loop-default-launch"');
+    expect(rendered.html).toContain('Agiflow loop');
 
     const withoutSession = renderPlugin(
       loopsActivitySection,
