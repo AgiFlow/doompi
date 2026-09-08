@@ -1,0 +1,14 @@
+# Personas available in this repository.
+#
+# Each folder under agents/ holding profile.md, SOUL.md or AGENTS.md becomes a
+# profile named after the folder. Identity, avatar and spoken voice are declared
+# in that persona's own profile.md front-matter, so none of that belongs here.
+#
+# defaultProfile is the persona a run starts on when nothing names one, the same
+# way modes.yaml declares defaultMajorMode and domains.yaml declares
+# defaultDomains. Override for one run with `doompi --profile <name>`, or switch
+# mid-session with /profile.
+profiles:
+  roots: [agents]
+  entries: {}
+  defaultProfile: ponytail

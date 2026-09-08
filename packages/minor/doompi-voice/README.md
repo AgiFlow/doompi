@@ -69,6 +69,27 @@ transcription is required. Use the `whisper-cpp` engine for `whisper-cli`, `open
 `whisper`, or `mlx-whisper` for `mlx_whisper`. `utteranceIdleMs` accepts 1,500 to 10,000 ms and
 defaults to 3,000.
 
+A profile can give its persona its own voice. Front-matter in the persona's `profile.md` shadows
+`autoCapture.tts` per field, so a persona setting only `rate` keeps the voice configured here:
+
+```markdown
+---
+name: Rhea
+voice:
+  voice: Karen
+  rate: 175
+---
+```
+
+The `engine` is never overridable, because it selects the synthesiser rather than the persona. The
+spoken voice is read when autonomous voice activates, so a profile switch applies it through the
+reload that switch already performs.
+
+Autonomous voice can also change profile. The `profile` capability on the voice tool facade lists
+the configured personas and queues a switch, which reloads the session with the new persona, its
+voice, and its avatar. See
+[@agimon-ai/doompi-profile](../../core/doompi-profile/README.md) for authoring personas.
+
 When the agent is launched by `doompi-server`, capture and narration use the connected media client.
 The protocol is capability-driven rather than browser-specific. A client can own microphone capture,
 adaptive activity detection, endpoint decisions, autonomous capture phases, and playback while streaming

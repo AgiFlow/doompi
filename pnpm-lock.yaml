@@ -1044,6 +1044,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
+      typebox:
+        specifier: 1.3.25
+        version: 1.3.25
     devDependencies:
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*

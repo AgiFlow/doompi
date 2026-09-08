@@ -178,11 +178,14 @@ export function parseHarnessArgs(
   currentDirectory = process.cwd(),
   defaultMajorMode: string = DEFAULT_MAJOR_MODE,
   defaultDomains?: readonly string[],
+  defaultProfile?: string,
 ): ParsedHarnessArgs {
   const informational = parseInformationalArgs(args, currentDirectory);
   if (informational) return informational;
 
-  let profile = resolveInheritedProfile(environment);
+  // An inherited profile wins: a nested run stays on the persona its parent
+  // chose rather than snapping back to the repository default.
+  let profile = resolveInheritedProfile(environment) ?? defaultProfile;
   let profileProvided = false;
   let majorMode = resolveInheritedMajorMode(environment, defaultMajorMode);
   let majorModeProvided = false;

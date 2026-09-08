@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const configMocks = vi.hoisted(() => ({
   loadDomains: vi.fn(() => ({ defaultDomains: [] })),
   loadMajorModesConfig: vi.fn(() => ({ defaultMajorMode: 'minimal' })),
+  loadProfileCatalog: vi.fn(() => ({ profiles: [] }) as { profiles: []; defaultProfile?: string }),
 }));
 
 vi.mock('@agimon-ai/doompi-config/domains', async (importOriginal) => ({
@@ -15,6 +16,10 @@ vi.mock('@agimon-ai/doompi-config/domains', async (importOriginal) => ({
 vi.mock('@agimon-ai/doompi-config/majorModes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agimon-ai/doompi-config/majorModes')>()),
   loadMajorModesConfig: configMocks.loadMajorModesConfig,
+}));
+vi.mock('@agimon-ai/doompi-config/profiles', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agimon-ai/doompi-config/profiles')>()),
+  loadProfileCatalog: configMocks.loadProfileCatalog,
 }));
 
 const { resolveHarnessOptions } = await import('../../src/commands/cli/harnessOptions.ts');
@@ -56,5 +61,19 @@ describe('resolveHarnessOptions', () => {
     expect(options.cwd).toBe(cwd);
     expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(root);
     expect(configMocks.loadDomains).toHaveBeenCalledWith(root);
+  });
+
+  it('starts on the repository default profile, and lets a run override it', () => {
+    const cwd = temporaryDirectory();
+    configMocks.loadProfileCatalog.mockReturnValue({ profiles: [], defaultProfile: 'ponytail' });
+
+    expect(resolveHarnessOptions({ args: ['--cwd', cwd], environment: {}, cwd }).profile).toBe('ponytail');
+    expect(resolveHarnessOptions({ args: ['--cwd', cwd, '--profile', 'caveman'], environment: {}, cwd }).profile).toBe(
+      'caveman',
+    );
+    // A nested run stays on the persona its parent chose.
+    expect(
+      resolveHarnessOptions({ args: ['--cwd', cwd], environment: { DOOMPI_PROFILE: 'caveman' }, cwd }).profile,
+    ).toBe('caveman');
   });
 });

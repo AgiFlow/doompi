@@ -20,6 +20,7 @@ import type {
   VoiceTtsConfig,
   VoiceTtsEngine,
 } from '../types/config.ts';
+import type { PersonaVoiceOverride } from './personaFrontMatter.ts';
 
 const DEFAULT_PROJECT_TRUST: ProjectTrust = 'ask';
 const DEFAULT_VOICE_ENGINE: VoiceEngine = 'auto';
@@ -712,7 +713,20 @@ function mergeVoice(globalValue?: VoiceConfig, repositoryValue?: VoiceConfig): V
     ...(globalValue?.autoCapture ? { autoCapture: globalValue.autoCapture } : {}),
   };
 }
-export function resolveVoiceConfig(config: VoiceConfig): ResolvedVoiceConfig {
+/**
+ * Resolves voice settings, optionally shadowed by the active profile's override.
+ *
+ * The override is per field, so a persona that sets only `rate` keeps the voice
+ * from config.yaml. `engine` is deliberately not overridable: it selects the
+ * synthesiser binary, which is a machine-level fact rather than a persona's.
+ *
+ * The result is read once when autonomous voice activates, because
+ * `VoiceNarrationPlayback.config` is assigned in `activate()` and has no setter.
+ * That is sufficient today only because every profile switch reloads the
+ * session, which deactivates and reactivates voice. A future in-place profile
+ * switch would leave the spoken voice stale until the next activation.
+ */
+export function resolveVoiceConfig(config: VoiceConfig, ttsOverride?: PersonaVoiceOverride): ResolvedVoiceConfig {
   return {
     engine: config.engine ?? DEFAULT_VOICE_ENGINE,
     language: config.language ?? DEFAULT_VOICE_LANGUAGE,
@@ -733,7 +747,11 @@ export function resolveVoiceConfig(config: VoiceConfig): ResolvedVoiceConfig {
             composeUtteranceIdleMs: config.autoCapture.composeUtteranceIdleMs ?? DEFAULT_COMPOSE_UTTERANCE_IDLE_MS,
             composeNudgeMs: config.autoCapture.composeNudgeMs ?? DEFAULT_COMPOSE_NUDGE_MS,
             transcriptionTimeoutMs: config.autoCapture.transcriptionTimeoutMs ?? DEFAULT_TRANSCRIPTION_TIMEOUT_MS,
-            tts: { ...config.autoCapture.tts },
+            tts: {
+              ...config.autoCapture.tts,
+              ...(ttsOverride?.voice === undefined ? {} : { voice: ttsOverride.voice }),
+              ...(ttsOverride?.rate === undefined ? {} : { rate: ttsOverride.rate }),
+            },
           },
         }
       : {}),

@@ -1,5 +1,10 @@
 import type { DoomMcpProjection } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
 import type { IDoomConfigService as DoomConfigServiceContract } from '@agimon-ai/doompi-extension-contracts/config';
+import type { PersonaIdentity } from '../adapters/profiles.ts';
+import type { PersonaVoiceOverride } from '../services/personaFrontMatter.ts';
+
+export type { PersonaIdentity } from '../adapters/profiles.ts';
+export type { PersonaFrontMatter, PersonaVoiceOverride } from '../services/personaFrontMatter.ts';
 
 export { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
 
@@ -219,6 +224,14 @@ export interface HarnessState {
   mcpProjection?: DoomMcpProjection;
   mcpConfigPath?: string;
   personaFile?: string;
+  /**
+   * The active persona's presentation, carried here because the three surfaces
+   * that need it share no transport: the cockpit reads journalled entries, the
+   * voice worker reads config from disk, and the TUI reads the Cordis snapshot.
+   */
+  profileIdentity?: PersonaIdentity;
+  /** The active profile's TTS override, applied over `voice.autoCapture.tts`. */
+  profileVoice?: PersonaVoiceOverride;
   allowProtectedWrites: boolean;
   hooks: boolean;
   agents: boolean;

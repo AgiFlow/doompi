@@ -174,6 +174,17 @@ export const AGENT_MODEL_ENTRY_TYPE = 'doom-agent-model';
 export const CONTEXT_ENTRY_TYPE = 'doom-context';
 
 /**
+ * The custom session entry doompi-profile journals naming the persona the
+ * session speaks as. The shape mirrors ProfileIdentityProjection in
+ * doompi-extension-contracts.
+ *
+ * Unlike the entries above, this one is transcript rather than projection: it
+ * stays in journal order and is never collapsed to the latest record, because a
+ * message keeps the persona it was written under. Adding it to
+ * PROJECTION_ENTRY_TYPES would repaint the whole transcript on every switch.
+ */
+export const PROFILE_IDENTITY_ENTRY_TYPE = 'doom-profile-identity';
+/**
  * The custom session entry doompi-domain journals once Pi has rebuilt its
  * resource catalog for a reload; it mirrors DOOM_RESOURCE_CATALOG_ENTRY_TYPE in
  * doompi-extension-contracts.

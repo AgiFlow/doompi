@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
+import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { DEFAULT_TRANSCRIPTION_TIMEOUT_MS } from '../../services/turnTranscriber.ts';
@@ -133,7 +134,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
       const projectRoot = process.env.PI_PROJECT_ROOT ?? process.cwd();
       const loaded = this.configs.load(projectRoot).voice;
       if (!loaded) throw new Error('Voice is not configured in the Pi agent configuration.');
-      const config = resolveVoiceConfig(loaded);
+      const config = resolveVoiceConfig(loaded, getHarnessState().profileVoice);
       const captureId = identifier('capture');
       const turnId = identifier('turn');
       const client = this.client ?? this.createClient();

@@ -129,7 +129,14 @@ describe('Doom configuration', () => {
     // spawned process and every hook would otherwise copy in its environment.
     expect(readHarnessState(environment)).toEqual({ ...state, profileEnvironment: {}, pluginHooks: [] });
     expect(FILE_ONLY_STATE_FIELDS).toEqual(
-      new Set(['profileEnvironment', 'pluginHooks', 'mcpProjection', 'packageAttribution']),
+      new Set([
+        'profileEnvironment',
+        'pluginHooks',
+        'mcpProjection',
+        'packageAttribution',
+        'profileIdentity',
+        'profileVoice',
+      ]),
     );
 
     projectHarnessEnvironment({ personaFile: undefined, profile: undefined }, environment);
@@ -162,6 +169,27 @@ describe('Doom configuration', () => {
     expect(fs.statSync(filePath).mode & 0o777).toBe(0o600);
     resetHarnessStore();
     expect(loadHarnessState(environment).state).toEqual(state);
+  });
+
+  it('carries persona identity and voice through the file and never the environment', () => {
+    const directory = temporaryRoot('doom-state-identity-');
+    const environment: NodeJS.ProcessEnv = {};
+    const state = {
+      ...readHarnessState({}),
+      root: '/repo',
+      profile: 'rhea',
+      profileIdentity: { name: 'Rhea', icon: 'data:image/png;base64,AAAA' },
+      profileVoice: { voice: 'Karen', rate: 175 },
+    };
+
+    createHarnessSession(state, { directory, environment });
+    resetHarnessStore();
+
+    expect(loadHarnessState(environment).state).toEqual(state);
+    expect(environment[HARNESS_STATE_KEYS.profile]).toBe('rhea');
+    // The icon is a data URL: it must never land in front of an exec.
+    expect(Object.values(environment)).not.toContain('data:image/png;base64,AAAA');
+    expect(JSON.stringify(environment)).not.toContain('Karen');
   });
 
   it('restores an owned harness snapshot after a failed transition', () => {
@@ -591,6 +619,34 @@ describe('Doom configuration', () => {
       '/config.yaml',
     );
     expect(resolveVoiceConfig(parsed.voice!).autoCapture?.utteranceIdleMs).toBe(utteranceIdleMs);
+  });
+  it('lets a profile shadow the spoken voice per field, but never the engine', () => {
+    const parsed = parseDoomConfig(
+      'voice:\n  autoCapture:\n    model: openai/gpt-4.1\n    tts:\n      engine: macos-say\n      voice: Samantha\n      rate: 190\n',
+      '/config.yaml',
+    );
+
+    expect(resolveVoiceConfig(parsed.voice!).autoCapture?.tts).toEqual({
+      engine: 'macos-say',
+      voice: 'Samantha',
+      rate: 190,
+    });
+    expect(resolveVoiceConfig(parsed.voice!, { voice: 'Karen', rate: 175 }).autoCapture?.tts).toEqual({
+      engine: 'macos-say',
+      voice: 'Karen',
+      rate: 175,
+    });
+    // Only rate declared: the voice from config.yaml still applies.
+    expect(resolveVoiceConfig(parsed.voice!, { rate: 210 }).autoCapture?.tts).toEqual({
+      engine: 'macos-say',
+      voice: 'Samantha',
+      rate: 210,
+    });
+    expect(resolveVoiceConfig(parsed.voice!, {}).autoCapture?.tts).toEqual({
+      engine: 'macos-say',
+      voice: 'Samantha',
+      rate: 190,
+    });
   });
   it.each([
     ['string', '"3000"'],

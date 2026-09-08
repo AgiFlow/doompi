@@ -6,6 +6,11 @@ import { createHarnessSession, getHarnessState, resetHarnessStore } from '@agimo
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { HARNESS_STATE_KEYS, readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import {
+  createVoiceReloadHandoffStore,
+  type VoiceReloadHandoffStore,
+} from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
+import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerProfileCommand } from '../../src/commands/profileCommand.ts';
@@ -13,6 +18,8 @@ import type { ProfileTelemetry } from '../../src/types/telemetry.ts';
 import { bindStubCoordinator } from '../helpers/coordinator.ts';
 
 const OWNED_KEYS = Object.values(HARNESS_STATE_KEYS);
+const SESSION_ID = 'profile-entry-session';
+const HOST_GENERATION = 'profile-voice-host';
 let root: string;
 let disposeCoordinator: (() => void) | undefined;
 let runtimeContext: Context | undefined;
@@ -22,12 +29,19 @@ const telemetry: ProfileTelemetry = {
   recordEvent: async () => undefined,
 };
 
-function registerProfileHandler(): (args: string, context: never) => Promise<void> {
+function registerProfileHandler(
+  reloadHandoffs?: VoiceReloadHandoffStore,
+): (args: string, context: never) => Promise<void> {
   const registerCommand = vi.fn();
-  registerProfileCommand({ registerCommand, appendEntry: vi.fn() } as unknown as ExtensionAPI, telemetry, () => {
-    if (!runtimeContext) throw new Error('test runtime context is unavailable');
-    return runtimeContext;
-  });
+  registerProfileCommand(
+    { registerCommand, appendEntry: vi.fn() } as unknown as ExtensionAPI,
+    telemetry,
+    () => {
+      if (!runtimeContext) throw new Error('test runtime context is unavailable');
+      return runtimeContext;
+    },
+    reloadHandoffs,
+  );
   const command = registerCommand.mock.calls[0]?.[1] as {
     handler: (args: string, context: never) => Promise<void>;
   };
@@ -46,7 +60,7 @@ function commandContext(selected?: string) {
     reload,
     sessionManager: {
       getBranch: () => [],
-      getSessionId: () => 'profile-entry-session',
+      getSessionId: () => SESSION_ID,
     } as unknown as ExtensionContext['sessionManager'],
   };
   runtimeContext = new Context();
@@ -248,6 +262,47 @@ describe('profile command', () => {
     await handler('', context as never);
 
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('Profile transition was rejected'), 'warning');
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('switches to the profile a voice handoff parked, without asking the picker', async () => {
+    writeProfileConfig();
+    seedHarnessState({ profileEnvironment: {} });
+    const reloadHandoffs = createVoiceReloadHandoffStore({
+      now: () => Date.now(),
+      createToken: () => crypto.randomUUID(),
+    });
+    const handler = registerProfileHandler(reloadHandoffs);
+    // The picker answers undefined, so a loaded profile can only have come from
+    // the token: the name never rides the command text.
+    const { context, notify, reload } = commandContext();
+    runtimeContext?.provide(DOOM_VOICE_TOOLS_SERVICE, { readSession: () => ({ hostGeneration: HOST_GENERATION }) });
+    const { token } = reloadHandoffs.prepare(
+      { active: true, sessionId: SESSION_ID, hostGeneration: HOST_GENERATION },
+      { operationId: 'profile-voice-op', kind: 'profile-switch', profile: 'marketing-agiflow' },
+    );
+
+    await handler(`--voice-switch-token=${token}`, context as never);
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('Loaded marketing-agiflow'), 'info');
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a voice switch token when the session parked nothing', async () => {
+    writeProfileConfig();
+    seedHarnessState({ profileEnvironment: {} });
+    const reloadHandoffs = createVoiceReloadHandoffStore({
+      now: () => Date.now(),
+      createToken: () => crypto.randomUUID(),
+    });
+    const handler = registerProfileHandler(reloadHandoffs);
+    // No voice tools service on the context, so the session that issued the
+    // token is gone and the switch must not fall through to the picker.
+    const { context, reload } = commandContext('marketing-agiflow');
+
+    await expect(handler('--voice-switch-token=voice-reload:stale', context as never)).rejects.toThrow(
+      'The voice profile switch token is stale or belongs to another session.',
+    );
     expect(reload).not.toHaveBeenCalled();
   });
 });

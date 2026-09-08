@@ -5,9 +5,20 @@ import {
   prepareMinorModeReloadHandoff,
   requireDoomTransitionCoordinator,
 } from '@agimon-ai/doompi-extension-contracts/transition';
+import type {
+  VoiceReloadHandoff,
+  VoiceReloadHandoffStore,
+} from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
+import { readDoomVoiceToolsService } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Context } from '@deepseek-ai/cordis';
-import { profileItems, profileSummary, profileTitle } from '../services/profileText.ts';
+import {
+  PROFILE_SWITCH_HANDOFF_KIND,
+  profileItems,
+  profileSummary,
+  profileTitle,
+  voiceSwitchToken,
+} from '../services/profileText.ts';
 import { PROFILE_EVENT, type ProfileTelemetry } from '../types/telemetry.ts';
 
 const WARNING = 'warning';
@@ -65,17 +76,22 @@ export function registerProfileCommand(
   pi: ExtensionAPI,
   telemetry: ProfileTelemetry,
   cordisContext: () => Context,
+  reloadHandoffs?: VoiceReloadHandoffStore,
 ): void {
   const load = lazyModules();
 
   pi.registerCommand('profile', {
     description: 'Show profiles and load a different persona and environment',
-    handler: async (_args, ctx) => {
+    handler: async (args, ctx) => {
       const cordis = cordisContext();
       const state = requireDoomConfigContext(cordis).harness;
       const [{ requireHarnessRoot }, { loadProfiles }] = await Promise.all([load.harnessStore(), load.profiles()]);
       const root = requireHarnessRoot(state);
       const current = state.profile;
+      const sessionId = ctx.sessionManager.getSessionId();
+      // A voice switch arrives as a bare token: the name never rides the text.
+      const token = reloadHandoffs ? voiceSwitchToken(args) : undefined;
+      let voiceHandoff: VoiceReloadHandoff | undefined;
       let profiles: AgentProfile[];
       try {
         profiles = loadProfiles(root);
@@ -91,7 +107,19 @@ export function registerProfileCommand(
         return;
       }
 
-      const picked = await pickProfile(ctx, profiles, current, load.picker);
+      let picked: string | undefined;
+      if (token && reloadHandoffs) {
+        const voiceSession = readDoomVoiceToolsService(cordis)?.readSession(sessionId);
+        voiceHandoff = voiceSession
+          ? reloadHandoffs.accept(token, { sessionId, hostGeneration: voiceSession.hostGeneration })
+          : undefined;
+        if (voiceHandoff?.kind !== PROFILE_SWITCH_HANDOFF_KIND || !voiceHandoff.profile) {
+          throw new Error('The voice profile switch token is stale or belongs to another session.');
+        }
+        picked = voiceHandoff.profile;
+      } else {
+        picked = await pickProfile(ctx, profiles, current, load.picker);
+      }
       const profile = profiles.find((candidate) => candidate.name === picked);
       if (!profile) return;
       if (profile.name === current) {

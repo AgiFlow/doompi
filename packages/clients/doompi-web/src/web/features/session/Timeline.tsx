@@ -24,6 +24,7 @@ import { focusPrompt } from '../../lib/promptFocus.ts';
 import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
 import {
   isSupportedImageMimeType,
+  type ProfileIdentity,
   type SessionState,
   type TimelineEntry,
   type ToolEntry,
@@ -96,12 +97,23 @@ function Gutter({ label, tone, trailing = false }: { label: string; tone: string
   return <span className={`shrink-0 text-[10px] font-bold ${placement} ${tone}`}>{label}</span>;
 }
 
-function SpeakerAvatar({ speaker }: { speaker: 'assistant' | 'user' }) {
+/** Two letters from a persona name, so a profile without an icon is still distinct. */
+function personaInitials(name: string): string {
+  const words = name.trim().split(/\s+/u).filter(Boolean);
+  const letters = words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : (words[0]?.slice(0, 2) ?? '');
+  return letters.toUpperCase() || 'DP';
+}
+
+function SpeakerAvatar({ speaker, identity }: { speaker: 'assistant' | 'user'; identity?: ProfileIdentity }) {
   if (speaker === 'assistant') {
+    // The icon arrives as a bounded data URL on the journalled identity entry,
+    // so a persona without one, or with one that failed to load, still renders.
+    const label = identity?.name ?? identity?.profile ?? 'DoomPi';
+    const fallback = identity ? personaInitials(label) : 'DP';
     return (
-      <Avatar aria-label="DoomPi" className="h-8 w-8 border border-doom-border-soft bg-doom-deep p-1">
-        <AvatarImage src="/favicon.svg" alt="" />
-        <AvatarFallback className="text-doom-magenta">DP</AvatarFallback>
+      <Avatar aria-label={label} className="h-8 w-8 border border-doom-border-soft bg-doom-deep p-1">
+        <AvatarImage src={identity?.icon ?? '/favicon.svg'} alt="" />
+        <AvatarFallback className="text-doom-magenta">{fallback}</AvatarFallback>
       </Avatar>
     );
   }
@@ -312,7 +324,7 @@ const Entry = memo(function Entry({ entry, sessionId }: { entry: TimelineEntry; 
         data-streaming={entry.streaming}
         className="group/message flex flex-col gap-2 sm:flex-row sm:gap-3"
       >
-        <SpeakerAvatar speaker="assistant" />
+        <SpeakerAvatar speaker="assistant" identity={entry.identity} />
         <div className="relative min-w-0 flex-1">
           <div className="flex flex-col gap-2">
             {entry.thinking ? (

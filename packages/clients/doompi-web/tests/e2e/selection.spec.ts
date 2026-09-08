@@ -34,7 +34,7 @@ test('shows the profile the session publishes on its own axis', async ({ page, c
   cockpit.session.emit(status('doom-major-mode', WITH_PROFILE));
   cockpit.session.emit(status('doom-profile', 'reviewer'));
 
-  await expect(page.getByTestId('selection-profile')).toHaveText('*reviewer*');
+  await expect(page.getByTestId('selection-profile')).toHaveText('reviewer');
   await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
 });
 

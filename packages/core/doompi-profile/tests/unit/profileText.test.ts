@@ -7,6 +7,8 @@ import {
   profileStatus,
   profileSummary,
   profileTitle,
+  PROFILE_SWITCH_HANDOFF_KIND,
+  voiceSwitchToken,
 } from '../../src/services/profileText.ts';
 
 const marketing: AgentProfile = {
@@ -68,5 +70,26 @@ describe('profile axis status', () => {
     expect(profileStatus(undefined, false)).toBeUndefined();
     expect(profileStatus('', false)).toBeUndefined();
     expect(PROFILE_STATUS_KEY).toBe('doom-profile');
+  });
+});
+
+describe('voiceSwitchToken', () => {
+  it('ignores an ordinary invocation, so the picker still opens', () => {
+    expect(voiceSwitchToken('')).toBeUndefined();
+    expect(voiceSwitchToken('  ')).toBeUndefined();
+    expect(voiceSwitchToken('rhea')).toBeUndefined();
+  });
+
+  it('reads the token a voice switch queued', () => {
+    expect(voiceSwitchToken('  --voice-switch-token=voice-reload:abc ')).toBe('voice-reload:abc');
+  });
+
+  it('refuses anything beside the token', () => {
+    expect(() => voiceSwitchToken('--voice-switch-token=abc rhea')).toThrow('only command argument');
+    expect(() => voiceSwitchToken('--voice-switch-token=')).toThrow('token is missing');
+  });
+
+  it('names the handoff kind the contract validates', () => {
+    expect(PROFILE_SWITCH_HANDOFF_KIND).toBe('profile-switch');
   });
 });
