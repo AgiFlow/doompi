@@ -465,6 +465,7 @@
       "./notification": "tir",
       "./package-api": "tir",
       "./package-api-loader": "tir",
+      "./profile-identity": "tir",
       "./protocol": "tir",
       "./readiness": "tir",
       "./relaunch-handoff": "tir",
@@ -606,6 +607,11 @@
         "types": "./dist/packageApiLoader.d.mts",
         "import": "./dist/packageApiLoader.mjs",
         "require": "./dist/packageApiLoader.cjs"
+      },
+      "./profile-identity": {
+        "types": "./dist/profileIdentity.d.mts",
+        "import": "./dist/profileIdentity.mjs",
+        "require": "./dist/profileIdentity.cjs"
       },
       "./protocol": {
         "types": "./dist/protocol.d.mts",
