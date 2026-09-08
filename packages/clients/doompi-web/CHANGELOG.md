@@ -1,3 +1,44 @@
+## 0.0.1-alpha.30 (2026-09-08)
+
+### 🚀 Features
+
+- **doompi-profile:** give a profile a persona identity and a voice switch ([2ef16dae](https://github.com/AgiFlow/doompi/commit/2ef16dae))
+- **doompi-web-components:** render fenced code with syntax colour, mermaid and copy ([b3c4d8c7](https://github.com/AgiFlow/doompi/commit/b3c4d8c7))
+- **doompi-web:** reach a local dev server from a paired device ([00a1f797](https://github.com/AgiFlow/doompi/commit/00a1f797))
+- **doompi-web:** complete OAuth sign-in from a remote browser ([703e1532](https://github.com/AgiFlow/doompi/commit/703e1532))
+- **file-edit:** group the changed-files drawer by directory ([53f5d26a](https://github.com/AgiFlow/doompi/commit/53f5d26a))
+- **doompi-web:** open a menu from the composer plus control ([a0d00c99](https://github.com/AgiFlow/doompi/commit/a0d00c99))
+- **doompi-web:** react to server-initiated model and effort changes ([5f2a9433](https://github.com/AgiFlow/doompi/commit/5f2a9433))
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+- **doompi-desktop:** gate computer use behind global setting ([ef20d527](https://github.com/AgiFlow/doompi/commit/ef20d527))
+
+### 🩹 Fixes
+
+- **doompi-web:** refresh transient tabs after plugin handoff ([13a88a47](https://github.com/AgiFlow/doompi/commit/13a88a47))
+- build layered cockpit extensions in CI ([1cef376b](https://github.com/AgiFlow/doompi/commit/1cef376b))
+- **doompi-prompt:** improve web prompt library UX ([4f705d56](https://github.com/AgiFlow/doompi/commit/4f705d56))
+- **doompi-web-components:** close dialogs from nested select backdrops ([97373ec0](https://github.com/AgiFlow/doompi/commit/97373ec0))
+- update web client behavior and documentation ([fa613547](https://github.com/AgiFlow/doompi/commit/fa613547))
+- **doompi-web:** keep loopback plugin loading direct ([55d26db0](https://github.com/AgiFlow/doompi/commit/55d26db0))
+- **doompi-web:** load remote activity plugins securely ([669472a5](https://github.com/AgiFlow/doompi/commit/669472a5))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.28
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.62
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.29 (2026-09-08)
 
 ### 🚀 Features
