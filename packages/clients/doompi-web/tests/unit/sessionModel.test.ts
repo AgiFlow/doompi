@@ -533,6 +533,58 @@ describe('reduceSession', () => {
     expect(state.stats?.contextPercent).toBeNull();
   });
 
+  it('bills the streaming message on top of the last figure Pi reported', () => {
+    const reported = reduceSession(initialSessionState, {
+      type: 'response',
+      command: 'get_session_stats',
+      data: { tokens: { total: 105_000 }, cost: 0.84 },
+    });
+
+    const streaming = reduceSession(reported, {
+      type: 'message_update',
+      usage: { cost: { total: 0.07 } },
+    });
+
+    expect(streaming.stats?.cost).toBe(0.84);
+    expect(streaming.liveCost).toBe(0.07);
+  });
+
+  it('drops the streaming delta once Pi counts the message', () => {
+    const streaming = reduceSession(initialSessionState, {
+      type: 'message_update',
+      usage: { cost: { total: 0.07 } },
+    });
+    expect(streaming.liveCost).toBe(0.07);
+
+    const counted = reduceSession(streaming, {
+      type: 'response',
+      command: 'get_session_stats',
+      data: { tokens: { total: 105_000 }, cost: 0.91 },
+    });
+
+    // 0.91 already includes the 0.07; keeping the delta would bill it twice.
+    expect(counted.stats?.cost).toBe(0.91);
+    expect(counted.liveCost).toBe(0);
+  });
+
+  it('reads streaming usage even when the protocol owns the transcript', () => {
+    const state = reduceSession(
+      initialSessionState,
+      { type: 'message_update', usage: { cost: { total: 0.05 } } },
+      { transcriptFromProtocol: true },
+    );
+
+    expect(state.liveCost).toBe(0.05);
+  });
+
+  it('reports no live cost for a provider that prices only on completion', () => {
+    const state = reduceSession(initialSessionState, {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'hi' },
+    });
+
+    expect(state.liveCost).toBe(0);
+  });
   it('keeps only well-formed commands', () => {
     const state = reduceSession(initialSessionState, {
       type: 'response',

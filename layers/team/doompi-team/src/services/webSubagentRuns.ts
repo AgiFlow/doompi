@@ -118,6 +118,7 @@ export function parseSubagentRun(raw: string): SubagentRun | undefined {
       : { currentTool: asOptionalString(parsed.currentTool) }),
     ...(asOptionalNumber(parsed.toolCount) === undefined ? {} : { toolCount: asOptionalNumber(parsed.toolCount) }),
     ...(asOptionalNumber(parsed.tokens) === undefined ? {} : { tokens: asOptionalNumber(parsed.tokens) }),
+    ...(asOptionalNumber(parsed.cost) === undefined ? {} : { cost: asOptionalNumber(parsed.cost) }),
     ...(summary === undefined ? {} : { summary }),
     ...(error === undefined ? {} : { error }),
     tail,

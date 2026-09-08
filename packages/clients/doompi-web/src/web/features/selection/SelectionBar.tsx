@@ -64,6 +64,15 @@ const MENU_ACCENT: Readonly<Record<string, { border: string; title: string }>> =
 
 const DEFAULT_ACCENT = { border: 'border-doom-border', title: 'text-doom-hi' };
 
+/**
+ * Where the team package reports what its subagent runs have cost this
+ * session, as a plain decimal string. Those runs bill to sessions of their own,
+ * so their spend never reaches this session's stats and has to arrive as a
+ * status. Reading it by name is what keeps the cockpit free of a dependency on
+ * that package, and leaves the chip correct when the package is absent.
+ */
+const AGENT_COST_STATUS_KEY = 'doom-team-cost';
+
 const AVAILABILITY_TONE: Readonly<Record<MinorMode['availability'], string>> = {
   on: 'text-doom-hi',
   off: 'text-doom-dim',
@@ -384,6 +393,7 @@ export function SelectionBar() {
   const catalog = useActiveSession((state) => state.minorModes);
   const agent = useActiveSession((state) => state.agent);
   const stats = useActiveSession((state) => state.stats);
+  const liveCost = useActiveSession((state) => state.liveCost);
   const models = useActiveSession((state) => state.models);
   const thinkingLevels = useActiveSession((state) => state.thinkingLevels);
   const dialog = useActiveSession((state) => state.dialog);
@@ -396,6 +406,10 @@ export function SelectionBar() {
   const axes = selectionAxes(statuses);
   const modes = minorModes(statuses, widgets, catalog);
   const activeMinors = modes.filter((mode) => mode.availability === 'on');
+
+  const reportedAgentCost = Number(statuses[AGENT_COST_STATUS_KEY] ?? '');
+  const agentCost = Number.isFinite(reportedAgentCost) ? reportedAgentCost : 0;
+  const sessionCost = stats === null ? null : stats.cost + liveCost;
 
   /** The dialog this axis asked for, when the claim named it and it is still open. */
   const dialogFor = (name: string): DialogRequest | null =>
@@ -522,10 +536,16 @@ export function SelectionBar() {
       </span>
       <span
         data-testid="top-cost"
-        title={stats ? `${stats.totalTokens.toLocaleString()} tokens this session` : ''}
+        title={
+          stats === null || sessionCost === null
+            ? ''
+            : agentCost > 0
+              ? `$${sessionCost.toFixed(2)} session + $${agentCost.toFixed(2)} agents, ${stats.totalTokens.toLocaleString()} tokens this session`
+              : `${stats.totalTokens.toLocaleString()} tokens this session`
+        }
         className="shrink-0 text-[10px] text-doom-dim max-sm:hidden"
       >
-        {stats ? `$${stats.cost.toFixed(2)}` : ''}
+        {sessionCost === null ? '' : `$${(sessionCost + agentCost).toFixed(2)}`}
       </span>
     </footer>
   );

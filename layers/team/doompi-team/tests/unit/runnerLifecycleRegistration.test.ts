@@ -59,7 +59,7 @@ class FakeExecution implements RunnerExecutionContract {
   startCalls: Array<{ runId: string; handlers?: RunnerExecutionHandlers }> = [];
   completeCalls: Array<{ success: boolean; summary: string }> = [];
   activities: ActivityState[] = [];
-  progresses: Array<{ tokens?: number; currentTool?: string; toolCount?: number }> = [];
+  progresses: Array<{ tokens?: number; cost?: number; currentTool?: string; toolCount?: number }> = [];
   start(runId: string, handlers?: RunnerExecutionHandlers): () => void {
     this.startCalls.push({ runId, handlers });
     return () => {};
@@ -67,7 +67,7 @@ class FakeExecution implements RunnerExecutionContract {
   setActivity(activity: ActivityState): void {
     this.activities.push(activity);
   }
-  setProgress(progress: { tokens?: number; currentTool?: string; toolCount?: number }): void {
+  setProgress(progress: { tokens?: number; cost?: number; currentTool?: string; toolCount?: number }): void {
     this.progresses.push(progress);
   }
   complete(success: boolean, summary: string): void {
@@ -208,7 +208,7 @@ describe('registerRunnerLifecycle', () => {
     expect(fakes.execution.startCalls).toHaveLength(1);
   });
 
-  it('reports canonical total tokens once and streams a live activity trail', () => {
+  it('reports canonical total tokens and cost once and streams a live activity trail', () => {
     process.env[SUBAGENT_RUN_ID_ENV] = 'run-1';
     const fakes = makeFakes();
     const host = fakePi();
@@ -217,7 +217,14 @@ describe('registerRunnerLifecycle', () => {
     const message = {
       role: 'assistant',
       content: [{ type: 'thinking', thinking: 'Tracing the task state transition' }],
-      usage: { totalTokens: 37, input: 1000, output: 2000, cacheRead: 3000, cacheWrite: 4000 },
+      usage: {
+        totalTokens: 37,
+        input: 1000,
+        output: 2000,
+        cacheRead: 3000,
+        cacheWrite: 4000,
+        cost: { total: 0.0125 },
+      },
     };
     host.fire('message_end', { message });
     host.fire('session_start');
@@ -229,7 +236,7 @@ describe('registerRunnerLifecycle', () => {
 
     expect(fakes.execution.progresses).toEqual([
       { currentTool: 'working: Tracing the task state transition' },
-      { tokens: 37 },
+      { tokens: 37, cost: 0.0125 },
       { toolCount: 1, currentTool: 'Read (src/task.ts)' },
       { currentTool: 'working' },
     ]);

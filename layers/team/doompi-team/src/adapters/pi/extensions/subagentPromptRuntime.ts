@@ -99,6 +99,7 @@ import {
   type ChildTranscriptMessage,
   formatToolActivity,
   getMessageActivity,
+  getMessageUsageCost,
   getMessageUsageTokens,
 } from '../../process/childTranscript';
 import { resolveWatchPath } from '../../filesystem/configDir';
@@ -422,6 +423,7 @@ export function registerRunnerLifecycle(
 
   let resolved: { teamContext: TeamMemberContext | undefined } | undefined;
   let cumulativeTokens: number | undefined;
+  let cumulativeCost = 0;
   let toolCount = 0;
   const countedMessages = new WeakSet<object>();
 
@@ -481,7 +483,8 @@ export function registerRunnerLifecycle(
     const messageTokens = getMessageUsageTokens(event.message);
     if (messageTokens === undefined) return;
     cumulativeTokens = (cumulativeTokens ?? 0) + messageTokens;
-    execution.setProgress({ tokens: cumulativeTokens });
+    cumulativeCost += getMessageUsageCost(event.message) ?? 0;
+    execution.setProgress({ tokens: cumulativeTokens, cost: cumulativeCost });
   });
   onEvent<{ toolName?: string; tool?: { name?: string }; args?: Record<string, unknown> }>(
     pi,

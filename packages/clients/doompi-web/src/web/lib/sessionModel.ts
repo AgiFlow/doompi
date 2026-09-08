@@ -151,6 +151,14 @@ export interface SessionState {
   streaming: boolean;
   settled: boolean;
   stats: SessionStats | null;
+  /**
+   * Cost the assistant message now streaming has run up, on top of `stats`.
+   *
+   * Pi answers `get_session_stats` once per message at best, so without this
+   * the cost chip sits still for the length of a turn. Zero whenever no
+   * message is streaming or the provider has not reported yet.
+   */
+  liveCost: number;
   agent: AgentInfo | null;
   commands: CommandInfo[];
   /** Models the session offered, empty until the picker asks. */
@@ -210,6 +218,7 @@ export const initialSessionState: SessionState = {
   streaming: false,
   settled: false,
   stats: null,
+  liveCost: 0,
   agent: null,
   commands: [],
   models: [],
@@ -451,6 +460,11 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         contextTokens: usage ? asNumber(usage.tokens) : null,
         contextWindow: usage ? asNumber(usage.contextWindow) : null,
       },
+      // This answer already counts the message the delta was tracking, so
+      // keeping the delta would bill it twice. Clearing it here rather than at
+      // `message_end` is what stops the chip dipping while the answer is in
+      // flight.
+      liveCost: 0,
     };
   }
 
@@ -469,6 +483,24 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
   }
 
   return state;
+}
+
+/**
+ * Folds the streaming message's own cost into the view model.
+ *
+ * Pi builds `message_update.usage` from the in-progress message's usage, not
+ * from a session running total, so this is added to the last figure Pi
+ * reported rather than replacing it. Providers that only price a message once
+ * it completes report zero here, and the chip then steps at each message
+ * instead of streaming, which is the provider's granularity showing through
+ * rather than a fault.
+ */
+function applyLiveUsage(state: SessionState, frame: Frame): SessionState {
+  if (asString(frame.type) !== 'message_update') return state;
+  const usage = isRecord(frame.usage) ? frame.usage : undefined;
+  const cost = usage && isRecord(usage.cost) ? (asNumber(usage.cost.total) ?? 0) : 0;
+  if (state.liveCost === cost) return state;
+  return { ...state, liveCost: cost };
 }
 
 function applyStatus(state: SessionState, frame: Frame): SessionState {
@@ -731,6 +763,12 @@ export interface ReduceSessionOptions {
 }
 
 export function reduceSession(state: SessionState, frame: Frame, options: ReduceSessionOptions = {}): SessionState {
+  // Usage is read before the transcript filter below because a session whose
+  // transcript the protocol owns still bills for its messages.
+  return reduceFrame(applyLiveUsage(state, frame), frame, options);
+}
+
+function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOptions): SessionState {
   const type = asString(frame.type);
   if (options.transcriptFromProtocol && TRANSCRIPT_FRAMES.has(type)) {
     if (type === 'tool_execution_start') {

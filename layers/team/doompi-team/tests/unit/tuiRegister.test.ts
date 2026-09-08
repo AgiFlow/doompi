@@ -15,7 +15,7 @@ import {
   SUBAGENT_LIST_COMMAND,
 } from '../../src/adapters/pi/tui/register';
 import type { ManagementActionsContract } from '../../src/adapters/pi/extensions/managementActions';
-import { AGENT_PULSE_FRAMES, FLEET_STATUS_KEY } from '../../src/adapters/pi/tui/fleetStatus';
+import { AGENT_PULSE_FRAMES, COST_STATUS_KEY, FLEET_STATUS_KEY } from '../../src/adapters/pi/tui/fleetStatus';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
 import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
 
@@ -314,7 +314,7 @@ describe('registerAgentStatus', () => {
     dispose();
     expect(scheduler.unregister).toHaveBeenCalledOnce();
     expect(footerDispose).toHaveBeenCalledOnce();
-    expect(setStatus).toHaveBeenLastCalledWith(FLEET_STATUS_KEY, undefined);
+    expect(setStatus).toHaveBeenCalledWith(FLEET_STATUS_KEY, undefined);
   });
 
   it('publishes every pulse frame for actively working agents', async () => {
@@ -342,6 +342,61 @@ describe('registerAgentStatus', () => {
       .map(([value]) => (value as { compactText?: string } | undefined)?.compactText)
       .filter((value): value is string => Boolean(value));
     expect(new Set(frames)).toEqual(new Set(AGENT_PULSE_FRAMES.map((glyph) => `A ${glyph}`)));
+    dispose();
+  });
+
+  it('keeps the session cost total after the tracker evicts a finished run', async () => {
+    const handlers = new Map<string, (event: unknown, ctx: never) => void>();
+    const pi = {
+      on: (event: string, handler: (event: unknown, ctx: never) => void) => handlers.set(event, handler),
+    } as never;
+    const scheduler = new FakeScheduler();
+    const tracker = new FakeTracker();
+    tracker.jobs = [{ runId: 'run-1', status: 'running', cost: 0.5 }];
+    const setStatus = vi.fn();
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => 'session-under-test' },
+      ui: { setStatus },
+    } as never;
+    const publishedCosts = (): unknown[] =>
+      setStatus.mock.calls.filter(([key]) => key === COST_STATUS_KEY).map(([, value]) => value);
+
+    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker });
+    handlers.get('session_start')?.({}, ctx);
+    tracker.jobs = [{ runId: 'run-1', status: 'completed', cost: 0.57 }];
+    await scheduler.subscriptions[0]?.run();
+    expect(publishedCosts()).toEqual(['0.5', '0.57']);
+
+    // Retention window expired: the tracker dropped the finished run.
+    tracker.jobs = [];
+    await scheduler.subscriptions[0]?.run();
+    expect(publishedCosts()).toEqual(['0.5', '0.57']);
+
+    dispose();
+    expect(setStatus).toHaveBeenLastCalledWith(COST_STATUS_KEY, undefined);
+  });
+
+  it('publishes no cost chip for a session whose runs report nothing spent', async () => {
+    const handlers = new Map<string, (event: unknown, ctx: never) => void>();
+    const pi = {
+      on: (event: string, handler: (event: unknown, ctx: never) => void) => handlers.set(event, handler),
+    } as never;
+    const scheduler = new FakeScheduler();
+    const tracker = new FakeTracker();
+    tracker.jobs = [{ runId: 'run-1', status: 'running', cost: 0 }];
+    const setStatus = vi.fn();
+    const ctx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => 'session-under-test' },
+      ui: { setStatus },
+    } as never;
+
+    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker });
+    handlers.get('session_start')?.({}, ctx);
+    await scheduler.subscriptions[0]?.run();
+
+    expect(setStatus.mock.calls.filter(([key]) => key === COST_STATUS_KEY)).toEqual([]);
     dispose();
   });
 });

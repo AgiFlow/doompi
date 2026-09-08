@@ -5,6 +5,8 @@ import { type TrackedAsyncJobsContract, TERMINAL_ASYNC_JOB_STATES, type TrackedA
 import type { ActivityState } from '../../../types';
 
 export const FLEET_STATUS_KEY = 'doom-team-agents';
+/** Session cost total, published as a plain decimal string a consumer reads with `Number()`. */
+export const COST_STATUS_KEY = 'doom-team-cost';
 export const AGENT_PULSE_FRAMES = ['◐', '●', '◑'] as const;
 
 const FULL_PREFIX = 'Agents ';

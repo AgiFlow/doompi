@@ -30,6 +30,7 @@ export interface SubagentRun {
   currentTool?: string;
   toolCount?: number;
   tokens?: number;
+  cost?: number;
   /** Final report, present once the run finished. */
   summary?: string;
   /** Failure reason, present when the run failed. */

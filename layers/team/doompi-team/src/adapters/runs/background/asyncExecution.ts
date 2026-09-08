@@ -260,6 +260,8 @@ export interface AsyncRunStatus extends StatusWithRecentEntries {
   noTools?: boolean;
   /** Cumulative tokens observed from finalized child messages. */
   tokens?: number;
+  /** Cumulative cost observed from finalized child messages. */
+  cost?: number;
   /** Most recently started child tool. */
   currentTool?: string;
   /** Number of child tool executions observed so far. */

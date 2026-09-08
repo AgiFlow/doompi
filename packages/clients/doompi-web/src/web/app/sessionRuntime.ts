@@ -37,6 +37,7 @@ import {
   applyThreadFrame,
   dropSessionStore,
   refreshSessionFacts,
+  refreshSessionStats,
   resetSessionStore,
   seedHistoryCursor,
 } from '../stores/sessionStore.ts';
@@ -275,6 +276,12 @@ export function startSessionRuntime(): () => void {
             if (entry?.type === 'custom' && entry.customType === RESOURCE_CATALOG_ENTRY_TYPE) {
               refreshSessionFacts(frame.sessionId);
             }
+          }
+          // Cost and context both move when a message lands, and a turn can
+          // run many messages before it settles. Asking for the figures here
+          // is what keeps the status bar current mid-turn.
+          if (frame.frame.type === 'message_end') {
+            refreshSessionStats(frame.sessionId);
           }
           if (frame.frame.type === 'agent_settled') {
             clearPendingMenu();

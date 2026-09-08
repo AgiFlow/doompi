@@ -107,18 +107,19 @@ describe('RunnerExecution', () => {
   it('coalesces live progress fields and preserves observed zero values', () => {
     const { execution, statusWriter } = makeExecution();
 
-    execution.setProgress({ tokens: 0, currentTool: 'Read', toolCount: 0 });
+    execution.setProgress({ tokens: 0, cost: 0, currentTool: 'Read', toolCount: 0 });
 
-    expect(statusWriter.status).toMatchObject({ tokens: 0, currentTool: 'Read', toolCount: 0 });
+    expect(statusWriter.status).toMatchObject({ tokens: 0, cost: 0, currentTool: 'Read', toolCount: 0 });
     expect(statusWriter.updateMutators).toHaveLength(1);
   });
 
-  it('does not persist a token field when progress has no token observation', () => {
+  it('does not persist token or cost fields when progress has no usage observation', () => {
     const { execution, statusWriter } = makeExecution();
 
     execution.setProgress({ currentTool: 'Read', toolCount: 0 });
 
     expect(statusWriter.status).not.toHaveProperty('tokens');
+    expect(statusWriter.status).not.toHaveProperty('cost');
     expect(statusWriter.status).toMatchObject({ currentTool: 'Read', toolCount: 0 });
   });
 
