@@ -72,7 +72,7 @@ async function raiseToRegistryFloor(manifestPath) {
 async function publishedVersions(name) {
   // The abbreviated packument is the smaller read and still carries every version
   // key, which is what the floor is derived from.
-  const response = await fetch(`${REGISTRY}/${name.replace('/', '%2F')}`, {
+  const response = await fetch(`${REGISTRY}/${name.replaceAll('/', '%2F')}`, {
     headers: { accept: 'application/vnd.npm.install-v1+json' },
   });
   if (response.status === 404) {
