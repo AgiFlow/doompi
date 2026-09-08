@@ -220,6 +220,20 @@ describe('the hub bridge', () => {
     expect(JSON.stringify(frames)).not.toContain(session.token);
   });
 
+  it('answers a thread subscription for a session it does not know yet instead of dropping it', async () => {
+    const { server } = await bridge();
+    const { socket, frames } = await openSocket(server.url);
+
+    // A page that reconnects after the hub restarts can ask for a thread before
+    // the session is registered again. Refusing in silence left that thread
+    // frozen for the life of the tab, because the page only asks once per socket.
+    socket.send(JSON.stringify({ type: 'subscribe_thread', sessionId: 'not-registered-yet', threadId: 'run-1' }));
+    await waitFor(() => frames.some((frame) => frame.type === 'thread_backlog'), 'the thread backlog');
+
+    const backlog = frames.find((frame) => frame.type === 'thread_backlog');
+    expect(backlog).toMatchObject({ sessionId: 'not-registered-yet', threadId: 'run-1', frames: [] });
+  });
+
   it('routes commands to the session and its events back to subscribers', async () => {
     const { server, session } = await bridge();
     const { socket, frames } = await openSocket(server.url);
