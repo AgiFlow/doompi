@@ -1,3 +1,21 @@
+## 0.0.1-alpha.68 (2026-09-08)
+
+### 🚀 Features
+
+- wire the style-system across every web package ([56e0dd7d](https://github.com/AgiFlow/doompi/commit/56e0dd7d))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.30
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.67 (2026-09-08)
 
 ### 🧱 Updated Dependencies

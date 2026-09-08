@@ -1,3 +1,15 @@
+## 0.0.1-alpha.67 (2026-09-08)
+
+### 🚀 Features
+
+- **doompi-profile:** give a profile a persona identity and a voice switch ([2ef16dae](https://github.com/AgiFlow/doompi/commit/2ef16dae))
+- **doompi-web:** complete OAuth sign-in from a remote browser ([703e1532](https://github.com/AgiFlow/doompi/commit/703e1532))
+- **doompi-web:** react to server-initiated model and effort changes ([5f2a9433](https://github.com/AgiFlow/doompi/commit/5f2a9433))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.66 (2026-09-08)
 
 ### 🚀 Features
