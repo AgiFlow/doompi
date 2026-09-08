@@ -1,3 +1,26 @@
+## 0.0.1-alpha.66 (2026-09-08)
+
+### 🚀 Features
+
+- **doompi-web-components:** render fenced code with syntax colour, mermaid and copy ([b3c4d8c7](https://github.com/AgiFlow/doompi/commit/b3c4d8c7))
+- **file-edit:** group the changed-files drawer by directory ([53f5d26a](https://github.com/AgiFlow/doompi/commit/53f5d26a))
+- add author feedback and computer use ([ce47db2f](https://github.com/AgiFlow/doompi/commit/ce47db2f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.27
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.65 (2026-09-07)
 
 ### 🚀 Features
