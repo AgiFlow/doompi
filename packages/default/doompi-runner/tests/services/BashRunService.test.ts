@@ -91,14 +91,6 @@ class RecordingRegistry implements IRunnerRegistry {
     return undefined;
   }
 
-  async clearAlarm(): Promise<RunnerRecord | undefined> {
-    return undefined;
-  }
-
-  async markAlarmFired(): Promise<RunnerRecord | undefined> {
-    return undefined;
-  }
-
   async complete(): Promise<RunnerRecord | undefined> {
     return undefined;
   }

@@ -105,7 +105,6 @@ export class RunnerRegistry implements IRunnerRegistry {
       promoted: false,
       backend: input.backend,
       ...(input.backendTarget ? { backendTarget: input.backendTarget } : {}),
-      ...(input.alarmMs ? { alarm: { intervalMs: input.alarmMs, lastFiredAt: startedAt } } : {}),
       hostPid: process.pid,
     };
     this.writeRecord(record);
@@ -179,26 +178,6 @@ export class RunnerRegistry implements IRunnerRegistry {
     this.writeRecord(promoted);
     this.notify();
     return promoted;
-  }
-
-  async clearAlarm(id: string, sessionId?: string): Promise<RunnerRecord | undefined> {
-    const record = await this.get(id, sessionId);
-    if (!record) return undefined;
-    if (!record.alarm) return record;
-    const cleared: RunnerRecord = { ...record };
-    delete cleared.alarm;
-    this.writeRecord(cleared);
-    this.notify();
-    return cleared;
-  }
-
-  async markAlarmFired(id: string, firedAt: string): Promise<RunnerRecord | undefined> {
-    const record = await this.get(id);
-    if (!record?.alarm || record.state !== 'running') return undefined;
-    const fired: RunnerRecord = { ...record, alarm: { ...record.alarm, lastFiredAt: firedAt } };
-    this.writeRecord(fired);
-    this.notify();
-    return fired;
   }
 
   async complete(id: string, outcome: CompleteRunnerInput, sessionId?: string): Promise<RunnerRecord | undefined> {

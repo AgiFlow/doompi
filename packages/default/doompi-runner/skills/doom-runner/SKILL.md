@@ -54,7 +54,12 @@ Use the unique runner ID returned by `bash`:
 - **`input` needs `interactive: true`.** A normal runner does not expose stdin.
 - **Stop what you no longer need.** Everything still running is stopped when
   the session ends, but a forgotten dev server holds a port until then.
-- **Do not poll.** Check a runner when you have a reason to, not on a loop.
+- **You are told when a runner exits.** A completion message with the exit
+  status and log path arrives on its own. Never sleep, poll, or pgrep to wait
+  for one. Check a runner when you have a reason to, not on a loop.
+- **Do not pipe to head or tail.** Results are already bounded and the full log
+  is on disk. A tail pipe also leaves the live log empty until the command
+  exits, which blanks the log pane in Runner Space.
 
 ## Where things live
 

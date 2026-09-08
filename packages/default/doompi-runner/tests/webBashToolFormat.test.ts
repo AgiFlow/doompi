@@ -27,10 +27,9 @@ describe('the bash web call summary', () => {
 
   it('lists the modifiers in the widget idiom', () => {
     expect(formatBashFlags({})).toEqual([]);
-    expect(formatBashFlags({ background: true, interactive: true, alarm: 30, timeout: 5, name: 'dev' })).toEqual([
+    expect(formatBashFlags({ background: true, interactive: true, timeout: 5, name: 'dev' })).toEqual([
       'bg',
       'tty',
-      'alarm 30s',
       '5s',
       'dev',
     ]);

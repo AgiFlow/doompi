@@ -4,9 +4,6 @@ import { type Static, Type } from 'typebox';
 export const BASH_TOOL_NAME = 'bash';
 export const BASH_TOOL_LABEL = 'bash';
 
-/** Floor for `alarm`, so a short interval cannot flood the conversation. */
-export const MIN_ALARM_SECONDS = 10;
-
 /**
  * Built-in bash parameters plus the backgrounding controls.
  *
@@ -31,11 +28,6 @@ export const BashParamsSchema = Type.Object({
   name: Type.Optional(
     Type.String({
       description: 'Preferred runner name if the command ends up in the background. A name in use gets a suffix.',
-    }),
-  ),
-  alarm: Type.Optional(
-    Type.Number({
-      description: `Send you a snapshot of this runner every N seconds, so you never have to poll it. Implies background. Use it to watch a dev server or a long build, or to wake yourself on a schedule by backgrounding a sleep loop. Minimum ${MIN_ALARM_SECONDS} seconds. It stops on its own when the process exits, or early with doom-runner alarm stop <id>.`,
     }),
   ),
 });

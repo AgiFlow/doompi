@@ -44,7 +44,7 @@ function props(overrides: Record<string, unknown> = {}) {
     ...slots,
     toolCallId: 'call-1',
     toolName: 'bash',
-    args: { command: 'pnpm build', background: true, interactive: true, timeout: 10, alarm: 2, name: 'build' },
+    args: { command: 'pnpm build', background: true, interactive: true, timeout: 10, name: 'build' },
     statuses: {},
     result: {
       content: [],
@@ -80,7 +80,7 @@ describe('the bash timeline item', () => {
     expect(rendered.includes('full log · /logs/build.log')).toBe(true);
     expect(rendered.html).toContain('tool-result-bash-open-log');
     expect(rendered.html).toContain('tool-result-bash-stop');
-    expect(rendered.includes('bg · tty · alarm 2s · 10s · build')).toBe(true);
+    expect(rendered.includes('bg · tty · 10s · build')).toBe(true);
   });
 
   it('marks a pending stop and omits controls when the runner or session is unavailable', () => {

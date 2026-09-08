@@ -38,9 +38,10 @@ export const BASH_PROMPT_SNIPPET =
 /** Written at registration time so the stated threshold matches the configured one. */
 export function bashPromptGuidelines(thresholdMs = getBackgroundThresholdMs()): string[] {
   return [
-    `A command still running after ${Math.round(thresholdMs / MS_PER_SECOND)} seconds remains active as a background runner with an id and streaming log path.`,
+    `A command still running after ${Math.round(thresholdMs / MS_PER_SECOND)} seconds remains active as a background runner with an id and streaming log path. You are messaged automatically when it exits, so never sleep, poll, or pgrep to wait for one.`,
     'Pass background: true only for commands you know will remain active, such as dev servers, watchers, and tails.',
     'Pass interactive: true only when the command will prompt for input. Use Runner Space for terminal input; avoid interactive mode otherwise because its logs are noisier.',
+    'Results are already bounded and the full log is saved to disk. Do not pipe to head or tail: it adds nothing and leaves the live log empty while the command runs.',
     'On failure, use the returned output first. Inspect the saved log only when the result says output was truncated or no useful output was returned. Never retry an unchanged command merely to recover output.',
     'Stop background runners when they are no longer needed. Every runner is stopped automatically when the session ends.',
   ];

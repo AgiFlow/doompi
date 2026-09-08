@@ -143,7 +143,6 @@ export function formatBashFlags(args: BashParams): string[] {
   const flags: string[] = [];
   if (args.background === true) flags.push('bg');
   if (args.interactive === true) flags.push('tty');
-  if (args.alarm !== undefined) flags.push(`alarm ${args.alarm}s`);
   if (args.timeout !== undefined) flags.push(`${args.timeout}s`);
   if (args.name !== undefined && args.name.length > 0) flags.push(args.name);
   return flags;
