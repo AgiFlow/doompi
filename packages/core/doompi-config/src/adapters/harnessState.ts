@@ -30,6 +30,10 @@ export const FILE_ONLY_STATE_FIELDS: ReadonlySet<keyof HarnessState> = new Set([
   // and putting a map that size in front of every exec would cost far more
   // than the one surface that reads it is worth.
   'packageAttribution',
+  // The persona's presentation. The icon is a base64 data URL, which has no
+  // business in front of every exec, and nothing that spawns a process reads it.
+  'profileIdentity',
+  'profileVoice',
 ]);
 
 export type HarnessStateParseReporter = (key: string, error: unknown) => void;

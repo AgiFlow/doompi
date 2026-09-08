@@ -22,6 +22,33 @@ harness assembles them into one file in the run directory and records its path; 
 appends that file to the system prompt on every agent start, so the repository's own `AGENTS.md`
 keeps applying underneath it.
 
+## Persona identity
+
+A persona can say who it is in YAML front-matter at the top of its `profile.md`:
+
+```markdown
+---
+name: Rhea
+icon: avatar.png
+voice:
+  voice: Karen
+  rate: 175
+---
+
+You are Rhea, a blunt systems architect.
+```
+
+The cockpit shows `name` and `icon` beside each assistant message, and `voice` shadows the spoken
+voice from `config.yaml` for this persona only. Every field is optional, front-matter is stripped
+from the prompt, and a persona that declares none behaves exactly as before. Identity lives in the
+persona folder rather than in `profiles.yaml`, so discovered profiles get it too.
+
+Because a message keeps the identity it was written under, switching profiles mid-conversation
+leaves earlier replies attributed to the persona that produced them.
+
+See the [profiles contract](./src/prompts/doompi-author-profile/references/profiles-contract.md)
+for the icon rules and the exact precedence.
+
 ## What it registers
 
 | Entry                  | Surface                                                                                      |
@@ -44,7 +71,10 @@ before the reload and restored after it.
 
 Personal profiles load from `~/.pi/.doom/profiles.yaml`, then repository profiles load from
 `.doom/profiles.yaml`. Roots discover either one persona folder or direct-child persona folders.
-Explicit entries provide a persona path and optional string environment defaults. Resolution runs
+Explicit entries provide a persona path and optional string environment defaults. `defaultProfile`
+names the persona a run starts on when nothing else does, mirroring `defaultMajorMode` in
+`modes.yaml` and `defaultDomains` in `domains.yaml`; `--profile` and an inherited `DOOMPI_PROFILE`
+both override it. Resolution runs
 from personal discovery to repository discovery, then personal explicit entries to repository
 explicit entries. A later profile replaces an earlier profile with the same name.
 

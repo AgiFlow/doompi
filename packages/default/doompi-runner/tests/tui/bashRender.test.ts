@@ -105,9 +105,12 @@ describe('formatBashFlags', () => {
   });
 
   it('reports each modifier that is set', () => {
-    expect(
-      formatBashFlags({ command: 'ls', background: true, interactive: true, timeout: 30, alarm: 15, name: 'api' }),
-    ).toEqual(['bg', 'tty', 'alarm 15s', '30s', 'api']);
+    expect(formatBashFlags({ command: 'ls', background: true, interactive: true, timeout: 30, name: 'api' })).toEqual([
+      'bg',
+      'tty',
+      '30s',
+      'api',
+    ]);
   });
 
   it('omits an empty runner name', () => {

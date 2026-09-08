@@ -27,6 +27,7 @@ import {
   AGENT_MODEL_ENTRY_TYPE,
   CONTEXT_ENTRY_TYPE,
   MINOR_MODE_ENTRY_TYPE,
+  PROFILE_IDENTITY_ENTRY_TYPE,
   SESSION_BACKLOG_TYPE,
   type SessionBacklogFrame,
   type SessionGitStatus,
@@ -270,9 +271,10 @@ interface StartedChannel {
  * page arrived late". The journal is the session's own record, so replaying it
  * is the only honest way to show what came before.
  *
- * Two kinds survive the filter: the messages that are the transcript, and the
- * newest minor-mode catalog entry, which the runtime journals as a custom
- * entry and which a late hub would otherwise never see.
+ * Three kinds survive the filter: the messages that are the transcript, the
+ * persona identity entries interleaved with them, and the newest minor-mode
+ * catalog entry, which the runtime journals as a custom entry and which a late
+ * hub would otherwise never see.
  */
 function renderableJournalEntries(frame: SessionFrame, limit: number): Record<string, unknown>[] {
   const data = frame.data;
@@ -287,8 +289,13 @@ function renderableJournalEntries(frame: SessionFrame, limit: number): Record<st
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
     const candidate = entry as Record<string, unknown>;
-    if (candidate.type === 'message') messages.push(candidate);
-    else if (
+    // Identity entries ride with the messages rather than the projections: a
+    // message keeps the persona it was written under, so every occurrence has
+    // to survive, in order. Collapsing them would repaint the whole transcript
+    // as the current persona.
+    if (candidate.type === 'message' || candidate.customType === PROFILE_IDENTITY_ENTRY_TYPE) {
+      messages.push(candidate);
+    } else if (
       candidate.type === 'custom' &&
       (candidate.customType === MINOR_MODE_ENTRY_TYPE || candidate.customType === CONTEXT_ENTRY_TYPE)
     ) {
@@ -304,12 +311,19 @@ function renderableJournalEntries(frame: SessionFrame, limit: number): Record<st
 }
 
 /**
- * Every message a journal read carries, oldest first, with no tail limit.
+ * Every message a journal read carries, oldest first, with no tail limit,
+ * and the persona identity entries interleaved with them.
  *
  * This is what the page pages back through. The attach path publishes only the
  * newest slice, because the ring is bounded and the live stream has to fit
  * beside it, but a reader scrolling up wants what came before, and the session
  * already told the hub all of it.
+ *
+ * Identity rides along for the same reason it rides with the messages in
+ * `renderableJournalEntries`: a message keeps the persona it was written under,
+ * so a reader paging back to an older turn has to page back to the persona that
+ * wrote it. This is also the only durable copy the hub keeps, because the ring
+ * evicts identity long before it evicts anything else.
  */
 function journalMessages(frame: SessionFrame): Record<string, unknown>[] {
   const data = frame.data;
@@ -320,9 +334,57 @@ function journalMessages(frame: SessionFrame): Record<string, unknown>[] {
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
     const candidate = entry as Record<string, unknown>;
-    if (candidate.type === 'message') messages.push(candidate);
+    if (candidate.type === 'message' || candidate.customType === PROFILE_IDENTITY_ENTRY_TYPE) messages.push(candidate);
   }
   return messages;
+}
+
+/**
+ * Where the retained ring begins inside the journal, or undefined when the ring
+ * holds nothing the journal can place.
+ *
+ * `journal.length` means the ring carries no journalled entry at all, so every
+ * identity the journal knows is missing from the backlog.
+ */
+function retainedJournalBoundary(
+  journal: readonly Record<string, unknown>[],
+  retained: readonly SessionFrame[],
+): number | undefined {
+  for (const frame of retained) {
+    if (frame.type !== ENTRY_APPENDED_TYPE) continue;
+    const entry = (frame as { entry?: unknown }).entry;
+    if (typeof entry !== 'object' || entry === null) continue;
+    const id = (entry as Record<string, unknown>).id;
+    if (typeof id !== 'string') continue;
+    const at = indexOfEntry(journal, id);
+    return at < 0 ? undefined : at;
+  }
+  return journal.length;
+}
+
+/**
+ * The persona identity entries a reattaching page would otherwise never see.
+ *
+ * Identity is journalled once, at session start, so it is the oldest frame the
+ * ring holds and the first one the ring evicts. Nothing republishes it, so once
+ * the ring rolls past it every message renders as the default avatar for the
+ * life of the tab. The journal still holds it, so the backlog replays only the
+ * switches that predate whatever the ring still has; the ones inside the ring
+ * window are left alone, already sitting beside the messages they describe.
+ */
+function evictedIdentityFrames(
+  journal: readonly Record<string, unknown>[],
+  retained: readonly SessionFrame[],
+): SessionFrame[] {
+  const isIdentity = (entry: Record<string, unknown>): boolean => entry.customType === PROFILE_IDENTITY_ENTRY_TYPE;
+  if (!journal.some(isIdentity)) return [];
+
+  const boundary = retainedJournalBoundary(journal, retained);
+  // A ring the journal cannot place: replay the newest identity on its own,
+  // because one persona across the transcript still beats the default avatar.
+  const evicted =
+    boundary === undefined ? journal.filter(isIdentity).slice(-1) : journal.slice(0, boundary).filter(isIdentity);
+  return evicted.map((entry) => ({ type: ENTRY_APPENDED_TYPE, entry }));
 }
 
 /** Resolves a protocol transcript item back to Pi's durable session-tree entry id. */
@@ -943,7 +1005,11 @@ export function createSessionHub(options: SessionHubOptions): SessionHub {
       const managed = sessions.get(sessionId);
       if (!managed) return undefined;
       const { frames: transientFrames, dropped } = managed.ring.snapshot();
-      const frames = [...managed.uiProjections.values(), ...transientFrames];
+      const frames = [
+        ...evictedIdentityFrames(managed.journal, transientFrames),
+        ...managed.uiProjections.values(),
+        ...transientFrames,
+      ];
       emitTelemetry('web.session.backlog', { frames: frames.length, dropped });
       return { type: SESSION_BACKLOG_TYPE, sessionId, frames, dropped };
     },

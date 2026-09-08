@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { loadProfileCatalog } from '@agimon-ai/doompi-config/profiles';
 import { parseHarnessArgs } from './options.ts';
 import { readHarnessState } from '../../adapters/config/harnessState.ts';
 import { findRepositoryRoot } from '../../adapters/repository/repository.ts';
@@ -49,6 +50,7 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
     cwd,
     loadMajorModesConfig(repoRoot).defaultMajorMode,
     loadDomains(repoRoot).defaultDomains,
+    loadProfileCatalog(repoRoot).defaultProfile,
   );
   return { repoRoot, ...parsed.options };
 }

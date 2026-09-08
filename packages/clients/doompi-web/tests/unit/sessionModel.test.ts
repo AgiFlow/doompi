@@ -888,3 +888,71 @@ describe('paging back through the transcript', () => {
     expect(next.restoredIds).toContain('e1');
   });
 });
+
+describe('persona identity attribution', () => {
+  const identityFrame = (profile: string, name?: string, icon?: string) => ({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      id: `identity-${profile}`,
+      customType: 'doom-profile-identity',
+      data: { profile, ...(name === undefined ? {} : { name }), ...(icon === undefined ? {} : { icon }) },
+    },
+  });
+
+  const journalledAssistant = (id: string, text: string) => ({
+    type: 'entry_appended',
+    entry: { type: 'message', id, message: { role: 'assistant', content: [{ type: 'text', text }] } },
+  });
+
+  it('stamps a streaming message with the persona in force', () => {
+    const state = fold([
+      identityFrame('rhea', 'Rhea', 'data:image/png;base64,AAAA'),
+      { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'hello' } },
+    ]);
+
+    expect(assistant(state).identity).toEqual({
+      profile: 'rhea',
+      name: 'Rhea',
+      icon: 'data:image/png;base64,AAAA',
+    });
+  });
+
+  it('leaves messages written before a switch attributed to the persona that wrote them', () => {
+    const state = fold([
+      identityFrame('writer', 'Writer'),
+      journalledAssistant('a1', 'from the writer'),
+      identityFrame('rhea', 'Rhea'),
+      journalledAssistant('a2', 'from rhea'),
+    ]);
+
+    const assistants = state.entries.filter((entry) => entry.kind === 'assistant');
+    expect(assistants).toHaveLength(2);
+    expect(assistants[0]).toMatchObject({ text: 'from the writer', identity: { name: 'Writer' } });
+    expect(assistants[1]).toMatchObject({ text: 'from rhea', identity: { name: 'Rhea' } });
+  });
+
+  it('carries no identity before any persona is announced', () => {
+    const state = fold([journalledAssistant('a1', 'anonymous')]);
+
+    expect(assistant(state).identity).toBeUndefined();
+    expect(state.profileIdentity).toBeNull();
+  });
+
+  it('accepts a profile that declares no name or icon', () => {
+    const state = fold([identityFrame('writer'), journalledAssistant('a1', 'plain')]);
+
+    expect(assistant(state).identity).toEqual({ profile: 'writer' });
+  });
+
+  it('ignores an identity entry with no profile', () => {
+    const state = fold([
+      {
+        type: 'entry_appended',
+        entry: { type: 'custom', id: 'broken', customType: 'doom-profile-identity', data: { name: 'Ghost' } },
+      },
+    ]);
+
+    expect(state.profileIdentity).toBeNull();
+  });
+});

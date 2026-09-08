@@ -1,10 +1,25 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {
+  type PersonaFrontMatter,
+  parsePersonaFrontMatter,
+  type PersonaVoiceOverride,
+} from '../services/personaFrontMatter.ts';
 import { readDoomConfigSources } from './layeredConfig.ts';
+import { readPersonaIcon } from './personaIcon.ts';
 
 /** Files that make up one repository persona, concatenated in this order. */
 export const PERSONA_FILES = ['profile.md', 'SOUL.md', 'AGENTS.md'];
+
+/** The persona file that may carry an identity block; the others are prose only. */
+const PERSONA_IDENTITY_FILE = 'profile.md';
+
+/** A persona's resolved presentation: display name, and an icon already read into a data URL. */
+export interface PersonaIdentity {
+  name?: string;
+  icon?: string;
+}
 
 export interface AgentProfile {
   name: string;
@@ -17,6 +32,10 @@ export interface AgentProfile {
   personaRoot: string;
   /** Environment defaults. Values already exported by the caller win. */
   env: Record<string, string>;
+  /** Display name and avatar declared in the persona's own front-matter. */
+  identity?: PersonaIdentity;
+  /** Narrowly scoped TTS override declared alongside the identity. */
+  voice?: PersonaVoiceOverride;
 }
 
 interface ProfileConfigLayer {
@@ -24,10 +43,11 @@ interface ProfileConfigLayer {
   baseDirectory: string;
   roots: string[];
   entries: Record<string, unknown>;
+  defaultProfile?: string;
 }
 
 const PROFILE_KEYS = new Set(['persona', 'env']);
-const PROFILE_CATALOG_KEYS = new Set(['roots', 'entries']);
+const PROFILE_CATALOG_KEYS = new Set(['roots', 'entries', 'defaultProfile']);
 const PROFILES_FILE = 'profiles.yaml';
 const PROFILES_ROOT_KEY = 'profiles';
 const AGENTS_DIRECTORY = 'agents';
@@ -89,8 +109,14 @@ function parseProfileLayer(source: { filePath: string; baseDirectory: string; do
   const unsupportedCatalogKeys = Object.keys(profiles).filter((key) => !PROFILE_CATALOG_KEYS.has(key));
   if (unsupportedCatalogKeys.length > 0) {
     throw new Error(
-      `profiles in ${source.filePath} may only contain roots and entries; unsupported: ${unsupportedCatalogKeys.join(', ')}`,
+      `profiles in ${source.filePath} may only contain roots, entries and defaultProfile; unsupported: ${unsupportedCatalogKeys.join(', ')}`,
     );
+  }
+  if (
+    profiles.defaultProfile !== undefined &&
+    (typeof profiles.defaultProfile !== 'string' || profiles.defaultProfile.trim().length === 0)
+  ) {
+    throw new Error(`profiles.defaultProfile in ${source.filePath} must be a non-empty string`);
   }
   if (profiles.entries !== undefined && !isRecord(profiles.entries)) {
     throw new Error(`profiles.entries in ${source.filePath} must be a mapping`);
@@ -100,6 +126,7 @@ function parseProfileLayer(source: { filePath: string; baseDirectory: string; do
     baseDirectory: source.baseDirectory,
     roots: parseProfileRoots(profiles.roots, source.filePath, source.baseDirectory),
     entries: profiles.entries ?? {},
+    ...(profiles.defaultProfile === undefined ? {} : { defaultProfile: String(profiles.defaultProfile).trim() }),
   };
 }
 
@@ -142,10 +169,23 @@ function parseProfile(
   }
   assertProfileInsideAllowedRoot(name, personaPath, lexicalRoots);
   if (!buildPersonaPrompt(personaRoot, persona)) {
-    throw new Error(`Profile "${name}" persona has no readable persona files: ${persona}`);
+    // An identity block is not persona text, so a profile.md holding nothing else
+    // leaves the persona empty. Say that, rather than claiming the file is unreadable.
+    const declaresIdentity = readPersonaFrontMatter(personaRoot, persona) !== undefined;
+    throw new Error(
+      declaresIdentity
+        ? `Profile "${name}" persona declares identity front-matter but no persona text: ${persona}`
+        : `Profile "${name}" persona has no readable persona files: ${persona}`,
+    );
   }
 
-  return { name, persona, personaRoot, env: parseEnvironment(name, value.env) };
+  return {
+    name,
+    persona,
+    personaRoot,
+    env: parseEnvironment(name, value.env),
+    ...readPersonaPresentation(personaRoot, persona),
+  };
 }
 
 function containsPersonaFile(directory: string): boolean {
@@ -166,7 +206,13 @@ function discoverProfile(directory: string, configuredRoot: string, personaRoot:
     if (!isPathInside(realConfiguredRoot, realDirectory)) return undefined;
     const persona = path.relative(personaRoot, directory) || '.';
     if (!buildPersonaPrompt(personaRoot, persona)) return undefined;
-    return { name: path.basename(directory), persona, personaRoot, env: {} };
+    return {
+      name: path.basename(directory),
+      persona,
+      personaRoot,
+      env: {},
+      ...readPersonaPresentation(personaRoot, persona),
+    };
   } catch {
     // Automatic discovery ignores unreadable or unsafe candidates; explicit entries remain fatal.
     return undefined;
@@ -218,6 +264,32 @@ export function loadProfiles(repoRoot: string, homeDirectory: string = os.homedi
   return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+/**
+ * The profile catalog: every resolved profile, plus the name a launch starts on
+ * when the caller names none.
+ *
+ * `defaultProfile` mirrors `defaultMajorMode` in modes.yaml and `defaultDomains`
+ * in domains.yaml, so each selection axis declares its default in its own
+ * catalog. A repository declaration replaces a personal one. An unknown name is
+ * an error rather than a silent fallback: a typo that quietly starts the session
+ * with no persona is worse than a refused launch.
+ */
+export function loadProfileCatalog(
+  repoRoot: string,
+  homeDirectory: string = os.homedir(),
+): { profiles: AgentProfile[]; defaultProfile?: string } {
+  const layers = readDoomConfigSources<unknown>(PROFILES_FILE, repoRoot, homeDirectory).map(parseProfileLayer);
+  const profiles = loadProfiles(repoRoot, homeDirectory);
+  let defaultProfile: string | undefined;
+  for (const layer of layers) {
+    if (layer.defaultProfile !== undefined) defaultProfile = layer.defaultProfile;
+  }
+  if (defaultProfile !== undefined && !profiles.some((profile) => profile.name === defaultProfile)) {
+    throw new Error(`profiles.defaultProfile names an unknown profile: ${defaultProfile}`);
+  }
+  return { profiles, ...(defaultProfile === undefined ? {} : { defaultProfile }) };
+}
+
 /** Resolves one selected profile and fails clearly when its name is unknown. */
 export function resolveProfile(repoRoot: string, name: string, homeDirectory?: string): AgentProfile {
   const profile = loadProfiles(repoRoot, homeDirectory).find((candidate) => candidate.name === name);
@@ -229,6 +301,44 @@ export function listProfileNames(repoRoot: string, homeDirectory?: string): stri
   return loadProfiles(repoRoot, homeDirectory).map((profile) => profile.name);
 }
 
+/**
+ * Reads the identity block from a persona's `profile.md`.
+ *
+ * Separate from `buildPersonaPrompt` because the prompt is assembled on several
+ * paths that do not want the icon bytes, and because a persona that declares
+ * nothing must stay exactly as cheap as it is today.
+ */
+function readPersonaPresentation(
+  personaRoot: string,
+  personaDirectory: string,
+): { identity?: PersonaIdentity; voice?: PersonaVoiceOverride } {
+  const frontMatter = readPersonaFrontMatter(personaRoot, personaDirectory);
+  if (!frontMatter) return {};
+
+  const icon =
+    frontMatter.icon === undefined
+      ? undefined
+      : readPersonaIcon(path.join(personaRoot, personaDirectory), frontMatter.icon);
+  const identity: PersonaIdentity = {
+    ...(frontMatter.name === undefined ? {} : { name: frontMatter.name }),
+    ...(icon === undefined ? {} : { icon }),
+  };
+  return {
+    ...(identity.name === undefined && identity.icon === undefined ? {} : { identity }),
+    ...(frontMatter.voice === undefined ? {} : { voice: frontMatter.voice }),
+  };
+}
+
+function readPersonaFrontMatter(personaRoot: string, personaDirectory: string): PersonaFrontMatter | undefined {
+  try {
+    const personaPath = fs.realpathSync(path.join(personaRoot, personaDirectory));
+    const filePath = path.join(personaPath, PERSONA_IDENTITY_FILE);
+    if (!fs.existsSync(filePath)) return undefined;
+    return parsePersonaFrontMatter(fs.readFileSync(fs.realpathSync(filePath), TEXT_ENCODING)).frontMatter;
+  } catch {
+    return undefined;
+  }
+}
 /** Builds the persona system-prompt block, or undefined when nothing is readable. */
 export function buildPersonaPrompt(personaRoot: string, personaDirectory: string): string | undefined {
   const sections: string[] = [];
@@ -241,7 +351,9 @@ export function buildPersonaPrompt(personaRoot: string, personaDirectory: string
     if (relativeFilePath === PARENT_DIRECTORY || relativeFilePath.startsWith(`${PARENT_DIRECTORY}${path.sep}`)) {
       throw new Error(`Persona file must stay inside ${personaDirectory}: ${file}`);
     }
-    const content = fs.readFileSync(realFilePath, TEXT_ENCODING).trim();
+    const raw = fs.readFileSync(realFilePath, TEXT_ENCODING);
+    // Only profile.md may declare identity, so only profile.md is stripped.
+    const content = (file === PERSONA_IDENTITY_FILE ? parsePersonaFrontMatter(raw).body : raw).trim();
     if (content) sections.push(content);
   }
   if (sections.length === 0) return undefined;

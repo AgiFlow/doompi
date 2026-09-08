@@ -54,8 +54,6 @@ function harness(
     get: async (id, sessionId) =>
       records.find((entry) => entry.id === id && (!sessionId || entry.sessionId === sessionId)),
     markPromoted: async () => undefined,
-    clearAlarm: async () => undefined,
-    markAlarmFired: async () => undefined,
     complete: async (id) => {
       completed.push(id);
       return records.find((entry) => entry.id === id);

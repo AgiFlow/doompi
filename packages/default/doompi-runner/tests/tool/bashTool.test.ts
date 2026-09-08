@@ -2,6 +2,7 @@ import type { ExtensionAPI, Theme } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BashRunResult, IBashRunService } from '../../src/types/bashRunService';
 import { registerBashTool } from '../../src/exports/tool/bashTool';
+import { BashParamsSchema } from '../../src/exports/tool/schema';
 import type { BashParams } from '../../src/exports/tool/schema';
 
 interface RegisteredTool {
@@ -80,6 +81,9 @@ describe('registerBashTool', () => {
     expect(guidelines).toContain('Inspect the saved log only when');
     expect(guidelines).toContain('Never retry an unchanged command');
     expect(guidelines).not.toContain('retry once');
+    expect(guidelines).toContain('messaged automatically when it exits');
+    expect(guidelines).toContain('Do not pipe to head or tail');
+    expect(JSON.stringify(BashParamsSchema)).not.toContain('alarm');
   });
 
   it('returns one guarded instruction when execution fails before a result', async () => {

@@ -67,7 +67,14 @@ export async function applyProfile(profile: AgentProfile, state: DoomHarnessCont
   if (!appliedPersona) throw new Error(`Profile ${profile.name} has no readable persona files`);
 
   const profileEnvironment = replaceProfileEnvironment(process.env, state.profileEnvironment, profile.env);
-  updateHarnessState({ profile: profile.name, profileEnvironment });
+  // Written unconditionally, including as undefined, so switching to a profile
+  // that declares nothing clears the previous persona's name, icon, and voice.
+  updateHarnessState({
+    profile: profile.name,
+    profileEnvironment,
+    profileIdentity: profile.identity,
+    profileVoice: profile.voice,
+  });
 
   const environmentKeys = Object.keys(profile.env).sort();
   const environmentSummary = environmentKeys.length > 0 ? `; env defaults ${environmentKeys.join(', ')}` : '';

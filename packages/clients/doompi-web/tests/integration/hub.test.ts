@@ -543,6 +543,93 @@ describe('the session hub over a registry', () => {
     );
   });
 
+  it('replays every persona identity entry in order, so history keeps who wrote it', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    const harness = startHub(registryDir);
+    await session.waitForCommand('get_entries');
+
+    // Two personas across one transcript. Unlike a projection, both entries have
+    // to survive: the message between them was written by the first.
+    const writer = {
+      type: 'custom',
+      id: 'i1',
+      customType: 'doom-profile-identity',
+      data: { profile: 'writer', name: 'Writer' },
+    };
+    const early = {
+      type: 'message',
+      id: 'm1',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'from the writer' }] },
+    };
+    const rhea = {
+      type: 'custom',
+      id: 'i2',
+      customType: 'doom-profile-identity',
+      data: { profile: 'rhea', name: 'Rhea' },
+    };
+    const late = {
+      type: 'message',
+      id: 'm2',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'from rhea' }] },
+    };
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: [writer, early, rhea, late], leafId: 'm2' },
+    });
+
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 4,
+      'the restored journal',
+    );
+    expect(harness.framesFor('one').filter((frame) => frame.type === 'entry_appended')).toEqual([
+      { type: 'entry_appended', entry: writer },
+      { type: 'entry_appended', entry: early },
+      { type: 'entry_appended', entry: rhea },
+      { type: 'entry_appended', entry: late },
+    ]);
+  });
+
+  it('backlogs a persona identity the ring has already evicted', async () => {
+    const registryDir = freshRegistryDir();
+    const session = await startRegisteredSession(registryDir, { id: 'one' });
+    // A ring of one keeps only the newest frame, which is what a long session
+    // does to an identity published once at session start.
+    const harness = startHub(registryDir, undefined, [], undefined, { ringLimit: 1 });
+    await session.waitForCommand('get_entries');
+
+    const writer = {
+      type: 'custom',
+      id: 'i1',
+      customType: 'doom-profile-identity',
+      data: { profile: 'ponytail', name: 'Ponytail', icon: 'data:image/png;base64,AAAA' },
+    };
+    const answer = {
+      type: 'message',
+      id: 'm1',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'from ponytail' }] },
+    };
+    session.emit({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: [writer, answer], leafId: 'm1' },
+    });
+    await waitFor(
+      () => harness.framesFor('one').filter((frame) => frame.type === 'entry_appended').length === 2,
+      'the restored journal',
+    );
+
+    // The identity reached the page once. A page attaching later reads the
+    // backlog instead, and the ring no longer holds the identity frame.
+    const backlog = harness.hub.backlog('one');
+    expect(backlog?.frames).toEqual([
+      { type: 'entry_appended', entry: writer },
+      { type: 'entry_appended', entry: answer },
+    ]);
+  });
   it('restores the transcript and the newest catalog entry from the journal on attach', async () => {
     const registryDir = freshRegistryDir();
     const session = await startRegisteredSession(registryDir, { id: 'one' });

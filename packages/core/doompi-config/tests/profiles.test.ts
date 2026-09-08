@@ -6,6 +6,7 @@ import {
   applyProfileEnvironment,
   buildPersonaPrompt,
   listProfileNames,
+  loadProfileCatalog,
   loadProfiles,
   replaceProfileEnvironment,
   resolveProfile,
@@ -164,7 +165,7 @@ describe('profile configuration', () => {
     writeProfiles('profiles:\n  roots: []\n  entries: []\n');
     expect(() => loadProfiles(root, home)).toThrow('profiles.entries');
     writeProfiles('profiles:\n  roots: []\n  entries: {}\n  unexpected: true\n');
-    expect(() => loadProfiles(root, home)).toThrow('may only contain roots and entries');
+    expect(() => loadProfiles(root, home)).toThrow('may only contain roots, entries and defaultProfile');
     writeProfiles('profiles:\n  roots: [missing]\n  entries: {}\n');
     expect(() => loadProfiles(root, home)).toThrow('Configured profile root is not a directory');
   });
@@ -250,5 +251,173 @@ describe('profile configuration', () => {
       ),
     ).toEqual({ OLD: 'new-profile', ADDED: 'new-profile' });
     expect(replacement).toEqual({ OLD: 'new-profile', CALLER: 'caller', ADDED: 'new-profile' });
+  });
+
+  describe('persona identity front-matter', () => {
+    const PNG = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6300010000050001',
+      'hex',
+    );
+
+    const writePersona = (name: string, body: string): string => {
+      const directory = path.join(root, 'agents', 'acme', name);
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, 'profile.md'), body);
+      return directory;
+    };
+
+    it('reads name, icon, and voice, and keeps them out of the prompt', () => {
+      const directory = writePersona(
+        'rhea',
+        '---\nname: Rhea\nicon: avatar.png\nvoice:\n  voice: Karen\n  rate: 175\n---\nBe blunt.\n',
+      );
+      fs.writeFileSync(path.join(directory, 'avatar.png'), PNG);
+      writeProfiles('profiles:\n  entries:\n    rhea:\n      persona: agents/acme/rhea\n');
+
+      const [profile] = loadProfiles(root, home);
+      expect(profile?.identity?.name).toBe('Rhea');
+      expect(profile?.identity?.icon).toMatch(/^data:image\/png;base64,/u);
+      expect(profile?.voice).toEqual({ voice: 'Karen', rate: 175 });
+
+      const prompt = buildPersonaPrompt(root, 'agents/acme/rhea');
+      expect(prompt).toContain('Be blunt.');
+      expect(prompt).not.toContain('Rhea');
+      expect(prompt).not.toContain('avatar.png');
+    });
+
+    it('leaves a persona without front-matter byte-identical', () => {
+      writePersona('plain', 'Just prose.\n');
+      writeProfiles('profiles:\n  entries:\n    plain:\n      persona: agents/acme/plain\n');
+
+      const [profile] = loadProfiles(root, home);
+      expect(profile).toEqual({ name: 'plain', persona: 'agents/acme/plain', personaRoot: root, env: {} });
+      expect(buildPersonaPrompt(root, 'agents/acme/plain')).toContain('Just prose.');
+    });
+
+    it('preserves a leading rule that is not an identity block', () => {
+      writePersona('ruled', '---\nsome: yaml\n---\nBody.\n');
+      writePersona('prose', '---\nnot yaml at all\nBody.\n');
+      writeProfiles(
+        'profiles:\n  entries:\n    ruled:\n      persona: agents/acme/ruled\n    prose:\n      persona: agents/acme/prose\n',
+      );
+
+      const profiles = loadProfiles(root, home);
+      expect(profiles.every((profile) => profile.identity === undefined)).toBe(true);
+      expect(buildPersonaPrompt(root, 'agents/acme/ruled')).toContain('some: yaml');
+      expect(buildPersonaPrompt(root, 'agents/acme/prose')).toContain('not yaml at all');
+    });
+
+    it('never strips SOUL.md or AGENTS.md', () => {
+      const directory = writePersona('layered', 'Head.\n');
+      fs.writeFileSync(path.join(directory, 'SOUL.md'), '---\nname: NotStripped\n---\nSoul body.\n');
+      writeProfiles('profiles:\n  entries:\n    layered:\n      persona: agents/acme/layered\n');
+
+      const prompt = buildPersonaPrompt(root, 'agents/acme/layered');
+      expect(prompt).toContain('name: NotStripped');
+      expect(loadProfiles(root, home)[0]?.identity).toBeUndefined();
+    });
+
+    it('drops an icon that is missing, not an image, or escapes the persona directory', () => {
+      const outside = path.join(root, 'secret.png');
+      fs.writeFileSync(outside, PNG);
+
+      writePersona('gone', '---\nname: Gone\nicon: avatar.png\n---\nBody.\n');
+      const fake = writePersona('fake', '---\nname: Fake\nicon: avatar.png\n---\nBody.\n');
+      fs.writeFileSync(path.join(fake, 'avatar.png'), 'not an image');
+      const escaped = writePersona('escaped', '---\nname: Escaped\nicon: avatar.png\n---\nBody.\n');
+      fs.symlinkSync(outside, path.join(escaped, 'avatar.png'));
+
+      writeProfiles(
+        'profiles:\n  entries:\n    gone:\n      persona: agents/acme/gone\n    fake:\n      persona: agents/acme/fake\n    escaped:\n      persona: agents/acme/escaped\n',
+      );
+
+      for (const profile of loadProfiles(root, home)) {
+        expect(profile.identity?.icon, profile.name).toBeUndefined();
+        expect(profile.identity?.name, profile.name).toBeDefined();
+      }
+    });
+
+    it('carries identity onto profiles found by root discovery', () => {
+      const directory = path.join(root, 'personas', 'scout');
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, 'profile.md'), '---\nname: Scout\n---\nRecon.\n');
+      writeProfiles('profiles:\n  roots: [personas]\n  entries: {}\n');
+
+      expect(loadProfiles(root, home)[0]?.identity).toEqual({ name: 'Scout' });
+    });
+
+    it('says so when a persona declares identity but no persona text', () => {
+      writePersona('hollow', '---\nname: Hollow\n---\n');
+      writeProfiles('profiles:\n  entries:\n    hollow:\n      persona: agents/acme/hollow\n');
+
+      expect(() => loadProfiles(root, home)).toThrow(/declares identity front-matter but no persona text/u);
+    });
+
+    it('keeps a front-matter-only profile.md valid when another persona file carries the text', () => {
+      const directory = writePersona('split', '---\nname: Split\n---\n');
+      fs.writeFileSync(path.join(directory, 'SOUL.md'), 'All the prose lives here.');
+      writeProfiles('profiles:\n  entries:\n    split:\n      persona: agents/acme/split\n');
+
+      const [profile] = loadProfiles(root, home);
+      expect(profile?.identity).toEqual({ name: 'Split' });
+      expect(buildPersonaPrompt(root, 'agents/acme/split')).toContain('All the prose lives here.');
+    });
+  });
+
+  describe('defaultProfile', () => {
+    const writePersona = (name: string, body = '# persona'): void => {
+      const directory = path.join(root, 'agents', 'acme', name);
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, 'profile.md'), body);
+    };
+
+    it('is absent when no catalog declares one', () => {
+      writePersona('writer');
+      writeProfiles('profiles:\n  entries:\n    writer:\n      persona: agents/acme/writer\n');
+
+      const catalog = loadProfileCatalog(root, home);
+      expect(catalog.defaultProfile).toBeUndefined();
+      expect(catalog.profiles.map((profile) => profile.name)).toEqual(['writer']);
+    });
+
+    it('names the profile a run starts on', () => {
+      writePersona('writer');
+      writePersona('rhea');
+      writeProfiles(
+        'profiles:\n  entries:\n    writer:\n      persona: agents/acme/writer\n    rhea:\n      persona: agents/acme/rhea\n  defaultProfile: rhea\n',
+      );
+
+      expect(loadProfileCatalog(root, home).defaultProfile).toBe('rhea');
+    });
+
+    it('lets the repository replace a personal default', () => {
+      writePersona('writer');
+      writePersona('rhea');
+      const globalPersona = path.join(globalDoom, 'agents', 'writer');
+      fs.mkdirSync(globalPersona, { recursive: true });
+      fs.writeFileSync(path.join(globalPersona, 'profile.md'), '# global');
+      writeGlobalProfiles(
+        'profiles:\n  entries:\n    writer:\n      persona: agents/writer\n  defaultProfile: writer\n',
+      );
+      writeProfiles(
+        'profiles:\n  entries:\n    writer:\n      persona: agents/acme/writer\n    rhea:\n      persona: agents/acme/rhea\n  defaultProfile: rhea\n',
+      );
+
+      expect(loadProfileCatalog(root, home).defaultProfile).toBe('rhea');
+    });
+
+    it('refuses an unknown name rather than starting with no persona', () => {
+      writePersona('writer');
+      writeProfiles('profiles:\n  entries:\n    writer:\n      persona: agents/acme/writer\n  defaultProfile: ghost\n');
+
+      expect(() => loadProfileCatalog(root, home)).toThrow(/defaultProfile names an unknown profile: ghost/u);
+    });
+
+    it('refuses a non-string default', () => {
+      writePersona('writer');
+      writeProfiles('profiles:\n  roots: []\n  defaultProfile: 3\n');
+
+      expect(() => loadProfileCatalog(root, home)).toThrow(/defaultProfile.*must be a non-empty string/u);
+    });
   });
 });

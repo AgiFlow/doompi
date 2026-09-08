@@ -4,10 +4,17 @@ import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/confi
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
 import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-extension-contracts/transition';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
+import {
+  DOOM_VOICE_TOOLS_SERVICE,
+  requireDoomVoiceToolsService,
+} from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { registerProfileCommand } from '../../commands/profileCommand.ts';
 import { PROFILE_STATUS_KEY, profileStatus } from '../../services/profileText.ts';
+import { publishProfileIdentity } from './identityEntry.ts';
+import { registerProfileVoiceCapability, type ProfileVoiceView } from './voiceTool.ts';
 import { PROFILE_EVENT, type ProfileTelemetry } from '../../types/telemetry.ts';
 import { createProfileTelemetry } from '../telemetry/logSinkTelemetry.ts';
 
@@ -99,13 +106,47 @@ function profilePlugin(cordis: Context, config: ProfilePluginConfig): void {
     if (!activeContext) throw new Error('Doom profile runtime is waiting for the session config service.');
     return activeContext;
   };
+
+  // The store standing between the voice capability and the command handler:
+  // the tool cannot reload the session itself, so it parks the chosen profile
+  // here and hands the command an opaque token.
+  const reloadHandoffs = createVoiceReloadHandoffStore({
+    now: () => Date.now(),
+    createToken: () => crypto.randomUUID(),
+  });
+
+  const currentView = async (): Promise<ProfileVoiceView> => {
+    const state = requireDoomConfigContext(requireRuntimeContext()).harness;
+    const [{ requireHarnessRoot }, { loadProfiles }] = await Promise.all([
+      import('@agimon-ai/doompi-config/harnessStore'),
+      import('@agimon-ai/doompi-config/profiles'),
+    ]);
+    return {
+      ...(state.profile === undefined ? {} : { current: state.profile }),
+      profiles: loadProfiles(requireHarnessRoot(state)),
+    };
+  };
+
+  // A separate injection, so the command keeps working in a session that has no
+  // autonomous voice and the two-service inject above stays exactly as it was.
+  cordis.inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE, DOOM_VOICE_TOOLS_SERVICE], (voiceContext) =>
+    registerProfileVoiceCapability(
+      requireDoomVoiceToolsService(voiceContext),
+      config.pi,
+      currentView,
+      reloadHandoffs,
+      () => voiceContext,
+    ),
+  );
   cordis.effect(function* () {
-    registerProfileCommand(config.pi, config.telemetry, requireRuntimeContext);
+    let publishedIdentity: string | undefined;
+    registerProfileCommand(config.pi, config.telemetry, requireRuntimeContext, reloadHandoffs);
     config.pi.on('session_start', async (_event, ctx) => {
       await runtimeInjection.await();
       const state = requireDoomConfigContext(requireRuntimeContext()).harness;
       const status = profileStatus(state.profile, await profileCatalogueExists(state, config.telemetry));
       if (status !== undefined) ctx.ui.setStatus(PROFILE_STATUS_KEY, status);
+      publishedIdentity = publishProfileIdentity(config.pi, state.profile, state.profileIdentity, publishedIdentity);
     });
     yield () => undefined;
   }, PACKAGE_SOURCE);

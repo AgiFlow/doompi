@@ -445,7 +445,7 @@ export function SelectionBar() {
               axis.values.length > 0 ? (AXIS_TONE[axis.name] ?? 'text-doom-hi') : 'text-doom-faint'
             }`}
           >
-            {axis.values.length === 0 ? axis.emptyLabel : axis.multi ? axis.values.join(', ') : `*${axis.values[0]}*`}
+            {axis.values.length === 0 ? axis.emptyLabel : axis.values.join(', ')}
           </span>
         </AxisButton>
       ))}

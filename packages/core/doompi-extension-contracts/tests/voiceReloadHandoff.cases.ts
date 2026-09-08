@@ -72,6 +72,65 @@ describe('voice reload handoff store', () => {
     voice.dispose();
   });
 
+  it('carries a profile switch and keeps its payload exclusive', () => {
+    const clock = { now: 3_500 };
+    const voice = createDoomVoiceToolsService('voice-generation');
+    const session = voice.bindSession('profile-session');
+    session.setActive(true);
+    const store = createVoiceReloadHandoffStore(runtime('profile-switch', clock));
+
+    const pending = store.prepare(session, {
+      operationId: 'operation-profile',
+      kind: 'profile-switch',
+      profile: 'rhea',
+    });
+    expect(pending.commit()).toBe(true);
+    expect(store.consume(session.sessionId, pending.token)).toMatchObject({
+      kind: 'profile-switch',
+      profile: 'rhea',
+    });
+
+    expect(() => store.prepare(session, { operationId: 'operation-profile-2', kind: 'profile-switch' })).toThrow(
+      /require a profile/u,
+    );
+    expect(() =>
+      store.prepare(session, {
+        operationId: 'operation-profile-3',
+        kind: 'profile-switch',
+        profile: 'rhea',
+        majorMode: 'minimal',
+      }),
+    ).toThrow(/cannot include a major mode/u);
+    expect(() =>
+      store.prepare(session, {
+        operationId: 'operation-profile-4',
+        kind: 'profile-switch',
+        profile: 'rhea',
+        domains: ['development'],
+      }),
+    ).toThrow(/cannot include domains/u);
+    expect(() =>
+      store.prepare(session, { operationId: 'operation-profile-5', kind: 'domain-switch', profile: 'rhea' }),
+    ).toThrow(/Only profile reload handoffs can include a profile/u);
+    voice.dispose();
+  });
+
+  it('still accepts a domain switch unchanged after the profile kind was added', () => {
+    const clock = { now: 3_800 };
+    const voice = createDoomVoiceToolsService('voice-generation');
+    const session = voice.bindSession('compat-session');
+    session.setActive(true);
+    const store = createVoiceReloadHandoffStore(runtime('compat', clock));
+
+    const pending = store.prepare(session, { operationId: 'operation-compat', domains: ['alpha', 'beta'] });
+    expect(pending.commit()).toBe(true);
+    expect(store.consume(session.sessionId, pending.token)).toMatchObject({
+      kind: 'domain-switch',
+      domains: ['alpha', 'beta'],
+    });
+    voice.dispose();
+  });
+
   it('requires a valid clock, identity, request, and major-mode target', () => {
     const voice = createDoomVoiceToolsService('voice-generation');
     const session = voice.bindSession('validation-session');

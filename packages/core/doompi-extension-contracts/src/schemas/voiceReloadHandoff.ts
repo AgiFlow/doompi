@@ -18,6 +18,7 @@ const MAX_TOKEN_LENGTH = 512;
 export const VoiceReloadHandoffKindSchema = Type.Union([
   Type.Literal('domain-switch'),
   Type.Literal('major-mode-switch'),
+  Type.Literal('profile-switch'),
 ]);
 export type VoiceReloadHandoffKind = Static<typeof VoiceReloadHandoffKindSchema>;
 
@@ -40,6 +41,7 @@ export const VoiceReloadHandoffRequestSchema = Type.Object(
       }),
     ),
     majorMode: Type.Optional(Type.String({ minLength: 1, maxLength: VOICE_TOOL_MAX_IDENTIFIER_LENGTH })),
+    profile: Type.Optional(Type.String({ minLength: 1, maxLength: VOICE_TOOL_MAX_IDENTIFIER_LENGTH })),
   },
   { additionalProperties: false },
 );
@@ -48,6 +50,7 @@ export interface VoiceReloadHandoffRequest {
   readonly kind?: VoiceReloadHandoffKind;
   readonly domains?: readonly string[];
   readonly majorMode?: string;
+  readonly profile?: string;
 }
 
 export const VoiceReloadHandoffSchema = Type.Object(
@@ -61,6 +64,7 @@ export const VoiceReloadHandoffSchema = Type.Object(
       maxItems: VOICE_TOOL_MAX_DOMAIN_COUNT,
     }),
     majorMode: Type.Optional(Type.String({ minLength: 1, maxLength: VOICE_TOOL_MAX_IDENTIFIER_LENGTH })),
+    profile: Type.Optional(Type.String({ minLength: 1, maxLength: VOICE_TOOL_MAX_IDENTIFIER_LENGTH })),
     createdAt: Type.Integer({ minimum: 0 }),
     expiresAt: Type.Integer({ minimum: 1 }),
   },
@@ -173,11 +177,23 @@ export function createVoiceReloadHandoffStore(runtime: VoiceReloadHandoffRuntime
       if (kind === 'major-mode-switch' && request.majorMode === undefined) {
         throw new VoiceReloadHandoffError('Major-mode reload handoffs require a major mode.');
       }
+      if (kind === 'profile-switch' && request.profile === undefined) {
+        throw new VoiceReloadHandoffError('Profile reload handoffs require a profile.');
+      }
       if (kind === 'domain-switch' && request.majorMode !== undefined) {
         throw new VoiceReloadHandoffError('Domain reload handoffs cannot include a major mode.');
       }
       if (kind === 'major-mode-switch' && domains.length > 0) {
         throw new VoiceReloadHandoffError('Major-mode reload handoffs cannot include domains.');
+      }
+      if (kind !== 'profile-switch' && request.profile !== undefined) {
+        throw new VoiceReloadHandoffError('Only profile reload handoffs can include a profile.');
+      }
+      if (kind === 'profile-switch' && request.majorMode !== undefined) {
+        throw new VoiceReloadHandoffError('Profile reload handoffs cannot include a major mode.');
+      }
+      if (kind === 'profile-switch' && domains.length > 0) {
+        throw new VoiceReloadHandoffError('Profile reload handoffs cannot include domains.');
       }
       const token = `voice-reload:${runtime.createToken()}`;
       if (token.length > MAX_TOKEN_LENGTH || registry().records.has(token)) {
@@ -190,6 +206,7 @@ export function createVoiceReloadHandoffStore(runtime: VoiceReloadHandoffRuntime
         kind,
         domains,
         ...(request.majorMode === undefined ? {} : { majorMode: request.majorMode }),
+        ...(request.profile === undefined ? {} : { profile: request.profile }),
         createdAt: now,
         expiresAt: now + VOICE_RELOAD_HANDOFF_TTL_MS,
       };

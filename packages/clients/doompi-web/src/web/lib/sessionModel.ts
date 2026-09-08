@@ -6,6 +6,7 @@ import {
   DIALOG_ANSWERED_TYPE,
   MINOR_MODE_ENTRY_TYPE,
   type MinorModeProjection,
+  PROFILE_IDENTITY_ENTRY_TYPE,
 } from '../../types/hub.ts';
 import { parseDoomNotificationEntry } from '../../types/notification.ts';
 import { BUILTIN_COMMANDS } from './commands.ts';
@@ -30,6 +31,21 @@ export interface AssistantEntry {
   text: string;
   thinking: string;
   streaming: boolean;
+  /**
+   * The persona active when this message was written.
+   *
+   * Stamped at creation rather than read from current state, so a profile
+   * switch leaves earlier messages showing who actually wrote them. Replay
+   * reproduces it because the identity entry is folded in journal order.
+   */
+  identity?: ProfileIdentity;
+}
+
+/** Display name and avatar of the persona a message was written under. */
+export interface ProfileIdentity {
+  profile: string;
+  name?: string;
+  icon?: string;
 }
 
 export interface ToolEntry {
@@ -148,6 +164,12 @@ export interface SessionState {
   minorModes: MinorModeProjection | null;
   /** What the session is composed of, as last journaled, or null before it reports. */
   context: ContextProjection | null;
+  /**
+   * The persona most recently journaled, used to stamp assistant messages as
+   * they are created. Not a projection: folding it forward in journal order is
+   * what keeps a pre-switch message attributed to the persona that wrote it.
+   */
+  profileIdentity: ProfileIdentity | null;
   /** Tool calls seen since the current run began, reported when it settles. */
   toolsThisRun: number;
   /**
@@ -196,6 +218,7 @@ export const initialSessionState: SessionState = {
   editorTextRequest: null,
   minorModes: null,
   context: null,
+  profileIdentity: null,
   toolsThisRun: 0,
   restoredIds: [],
   pendingUserEntries: [],
@@ -273,6 +296,7 @@ function openAssistant(state: SessionState): { state: SessionState; entry: Assis
     text: '',
     thinking: '',
     streaming: true,
+    ...(state.profileIdentity === null ? {} : { identity: state.profileIdentity }),
   };
   return { state: withEntry(state, entry), entry };
 }
@@ -578,7 +602,14 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
     const thinking = thinkingFromContent(content);
     let next =
       text || thinking
-        ? withEntry(state, { kind: 'assistant', id: `a${state.nextId}`, text, thinking, streaming: false })
+        ? withEntry(state, {
+            kind: 'assistant',
+            id: `a${state.nextId}`,
+            text,
+            thinking,
+            streaming: false,
+            ...(state.profileIdentity === null ? {} : { identity: state.profileIdentity }),
+          })
         : state;
     for (const block of content) {
       if (block.type !== 'toolCall') continue;
@@ -829,6 +860,24 @@ export function reduceSession(state: SessionState, frame: Frame, options: Reduce
         const provider = asString(data.provider, '');
         if (id === '' || provider === '') return state;
         return { ...state, agent: { ...state.agent, model: id, provider } };
+      }
+      // Folded in journal order, never collapsed: assistant messages are stamped
+      // with whatever was current when they were created, so a switch leaves the
+      // messages before it attributed to the persona that wrote them.
+      if (entry.type === 'custom' && entry.customType === PROFILE_IDENTITY_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        const profile = asString(data?.profile, '');
+        if (profile === '') return state;
+        const name = asString(data?.name, '');
+        const icon = asString(data?.icon, '');
+        return {
+          ...state,
+          profileIdentity: {
+            profile,
+            ...(name === '' ? {} : { name }),
+            ...(icon === '' ? {} : { icon }),
+          },
+        };
       }
       // A journalled user message is a transcript entry the protocol already
       // publishes; the catalog above is DoomPi's own and always applies.

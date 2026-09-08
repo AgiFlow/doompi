@@ -8,6 +8,7 @@ import {
   repositoryDoomConfigPath,
   resolveVoiceConfig,
 } from '@agimon-ai/doompi-config/config';
+import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { type DoomConfig, type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
 import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-extension-contracts/ask-user';
 import {
@@ -998,7 +999,10 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         const root = process.env.PI_PROJECT_ROOT ?? process.cwd();
         const loaded = configs.load(root).voice;
         if (!loaded) throw new Error('Voice is not configured in the Pi agent configuration.');
-        return resolveVoiceConfig(loaded);
+        // Read on every enable(), so the profile's voice lands on the next
+        // activation. A profile switch reloads the session, which is what makes
+        // that soon enough to feel immediate.
+        return resolveVoiceConfig(loaded, getHarnessState().profileVoice);
       },
       resolveCommandCorrector: async (reference) => {
         if (!activeContext) throw new Error('No autonomous voice session is active');

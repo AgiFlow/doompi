@@ -159,6 +159,11 @@
       "import": "./dist/packageApiLoader.mjs",
       "require": "./dist/packageApiLoader.cjs"
     },
+    "./profile-identity": {
+      "types": "./dist/profileIdentity.d.mts",
+      "import": "./dist/profileIdentity.mjs",
+      "require": "./dist/profileIdentity.cjs"
+    },
     "./protocol": {
       "types": "./dist/protocol.d.mts",
       "import": "./dist/protocol.mjs",

@@ -26,7 +26,6 @@ export interface BashCallArgs {
   background?: unknown;
   interactive?: unknown;
   name?: unknown;
-  alarm?: unknown;
 }
 
 /** What formatRunResult reports, read only by the renderers. */
@@ -109,7 +108,6 @@ export function formatBashFlags(args: BashCallArgs): string[] {
   const flags: string[] = [];
   if (args.background === true) flags.push('bg');
   if (args.interactive === true) flags.push('tty');
-  if (typeof args.alarm === 'number') flags.push(`alarm ${args.alarm}s`);
   if (typeof args.timeout === 'number') flags.push(`${args.timeout}s`);
   if (typeof args.name === 'string' && args.name.length > 0) flags.push(args.name);
   return flags;

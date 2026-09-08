@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           test -n "$NODE_AUTH_TOKEN"
           readonly RECONCILE_ATTEMPTS=5
-          readonly RECONCILE_DELAY_SECONDS=10
+          readonly RECONCILE_DELAY_SECONDS=30
           readonly PENDING_FILE="${RUNNER_TEMP}/doompi-release-pending.tsv"
           readonly ROUND_FILE="${RUNNER_TEMP}/doompi-release-pending-round.tsv"
 
@@ -107,7 +107,9 @@ jobs:
 
           # nx release publish reports success for a project it silently skipped, so every release
           # version is verified here. The first and last rounds only observe, to let the registry
-          # catch up; the rounds between them publish or retag whatever is still unresolved.
+          # catch up; the rounds between them publish or retag whatever is still unresolved. A
+          # rejected republish is not fatal: a version npm has staged but not yet served reads as
+          # absent, and only the observation decides the verdict.
           for ((attempt = 1; attempt <= RECONCILE_ATTEMPTS; attempt += 1)); do
             : > "${ROUND_FILE}"
             while IFS=$'\t' read -r name version; do
@@ -116,7 +118,7 @@ jobs:
                 echo "$name@$version is absent from the registry (attempt $attempt/$RECONCILE_ATTEMPTS)"
                 if ((attempt > 1 && attempt < RECONCILE_ATTEMPTS)); then
                   echo "Publishing $name@$version on its own."
-                  pnpm nx release publish --projects "$name" --tag alpha
+                  pnpm nx release publish --projects "$name" --tag alpha || echo "Republish of $name@$version was rejected, the next round re-reads the registry."
                 fi
                 continue
               fi

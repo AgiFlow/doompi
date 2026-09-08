@@ -22,6 +22,7 @@ function harness(registerCommand = vi.fn()) {
   const eventHandlers = new Map<string, Set<(value: unknown) => void>>();
   const pi = {
     registerCommand,
+    appendEntry: vi.fn(),
     events: {
       emit(event: string, value: unknown) {
         for (const handler of eventHandlers.get(event) ?? []) handler(value);

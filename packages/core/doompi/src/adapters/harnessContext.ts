@@ -219,6 +219,8 @@ export async function buildHarnessContext(
         domains: options.domains,
         layers: selectedLayers,
         profile: profile?.name,
+        profileIdentity: profile?.identity,
+        profileVoice: profile?.voice,
         profileEnvironment,
         personaFile,
         skillDirectories: resources.skillDirectories,

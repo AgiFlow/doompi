@@ -17,13 +17,6 @@ export interface RunnerExit {
   finishedAt: string;
 }
 
-/** A recurring snapshot of a running runner, pushed to the model until it exits. */
-export interface RunnerAlarm {
-  intervalMs: number;
-  /** The last fire, or the runner's start time before the first one. */
-  lastFiredAt: string;
-}
-
 /** A command this extension supervises, retained after completion for CLI access. */
 export interface RunnerRecord {
   id: string;
@@ -43,8 +36,6 @@ export interface RunnerRecord {
   backend: RunnerBackend;
   backendTarget?: string;
   exit?: RunnerExit;
-  /** Present only while a runner is running with an alarm attached. */
-  alarm?: RunnerAlarm;
   /** pid of the pi process that launched it, for orphan detection. */
   hostPid: number;
 }
@@ -60,8 +51,6 @@ export interface RegisterRunnerInput {
   sessionId: string;
   backend: RunnerBackend;
   backendTarget?: string;
-  /** Arms a recurring snapshot at this interval. */
-  alarmMs?: number;
 }
 
 export interface CompleteRunnerInput {
@@ -86,17 +75,6 @@ export interface IRunnerRegistry {
   get(id: string, sessionId?: string): Promise<RunnerRecord | undefined>;
   markPromoted(id: string): Promise<RunnerRecord | undefined>;
   complete(id: string, outcome: CompleteRunnerInput, sessionId?: string): Promise<RunnerRecord | undefined>;
-  /** Disarms an alarm. Safe to call on a runner that has none. */
-  clearAlarm(id: string, sessionId?: string): Promise<RunnerRecord | undefined>;
-  /**
-   * Reschedules an alarm from `firedAt`, returning the record the caller may
-   * report on.
-   *
-   * Returns undefined when the alarm was disarmed or the runner finished since
-   * the caller read it, which is what stops a concurrent `alarm stop` from
-   * being overwritten by an in-flight fire.
-   */
-  markAlarmFired(id: string, firedAt: string): Promise<RunnerRecord | undefined>;
   /** Removes the active process entry while retaining run metadata. */
   release(id: string): Promise<void>;
   /** Marks entries whose process is gone as lost. Returns their ids. */
