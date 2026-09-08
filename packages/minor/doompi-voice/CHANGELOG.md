@@ -1,3 +1,13 @@
+## 0.0.1-alpha.69 (2026-09-08)
+
+### 🩹 Fixes
+
+- **root:** improve web performance and voice continuity ([165a76f1](https://github.com/AgiFlow/doompi/commit/165a76f1))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.68 (2026-09-08)
 
 ### 🚀 Features

@@ -1,3 +1,13 @@
+## 0.0.1-alpha.69 (2026-09-08)
+
+### 🩹 Fixes
+
+- tighten workflow dispatch and runtime caching ([45296d03](https://github.com/AgiFlow/doompi/commit/45296d03))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.68 (2026-09-08)
 
 ### 🚀 Features
