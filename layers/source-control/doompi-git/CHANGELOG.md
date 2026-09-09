@@ -1,3 +1,20 @@
+## 0.0.1-alpha.5 (2026-09-09)
+
+### 🩹 Fixes
+
+- **doompi-git:** make worktree spawn fast, cancellable and self-cleaning ([0661f8e4](https://github.com/AgiFlow/doompi/commit/0661f8e4))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.31
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.65
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.4 (2026-09-08)
 
 ### 🚀 Features

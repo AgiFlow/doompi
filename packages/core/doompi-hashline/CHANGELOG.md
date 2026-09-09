@@ -1,3 +1,7 @@
+## 0.0.1-alpha.39 (2026-09-09)
+
+This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.38 (2026-09-08)
 
 This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.

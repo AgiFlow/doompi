@@ -1,3 +1,20 @@
+## 0.0.1-alpha.68 (2026-09-09)
+
+### 🚀 Features
+
+- **root:** standardize CLI help, relax sync schema, add doompi doctor ([c7dc9eba](https://github.com/AgiFlow/doompi/commit/c7dc9eba))
+- **doompi-voice:** add opt-in browser live companion ([7ed065ee](https://github.com/AgiFlow/doompi/commit/7ed065ee))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.67
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.67 (2026-09-08)
 
 ### 🚀 Features

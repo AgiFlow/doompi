@@ -1,3 +1,7 @@
+## 0.0.1-alpha.65 (2026-09-09)
+
+This was a version bump only for @agimon-ai/doompi-runner-rtk-darwin-x64 to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.64 (2026-09-08)
 
 This was a version bump only for @agimon-ai/doompi-runner-rtk-darwin-x64 to align it with other projects, there were no code changes.
