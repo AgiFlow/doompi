@@ -1,3 +1,21 @@
+## 0.0.1-alpha.70 (2026-09-09)
+
+### 🩹 Fixes
+
+- resolve dependency audit and CI regressions ([341c0b3f](https://github.com/AgiFlow/doompi/commit/341c0b3f))
+- **root:** open loop launchers in activity ([9e802319](https://github.com/AgiFlow/doompi/commit/9e802319))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.31
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.69 (2026-09-08)
 
 ### 🩹 Fixes

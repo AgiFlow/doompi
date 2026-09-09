@@ -1,3 +1,27 @@
+## 0.0.1-alpha.70 (2026-09-09)
+
+### 🚀 Features
+
+- **doompi-voice:** add opt-in browser live companion ([7ed065ee](https://github.com/AgiFlow/doompi/commit/7ed065ee))
+
+### 🩹 Fixes
+
+- **doompi-voice:** relay settled agent results to live companion ([cdf751e3](https://github.com/AgiFlow/doompi/commit/cdf751e3))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.30
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.69 (2026-09-08)
 
 ### 🩹 Fixes

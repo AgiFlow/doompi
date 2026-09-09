@@ -1,3 +1,33 @@
+## 0.0.1-alpha.70 (2026-09-09)
+
+### 🚀 Features
+
+- **root:** standardize CLI help, relax sync schema, add doompi doctor ([c7dc9eba](https://github.com/AgiFlow/doompi/commit/c7dc9eba))
+
+### 🩹 Fixes
+
+- resolve dependency audit and CI regressions ([341c0b3f](https://github.com/AgiFlow/doompi/commit/341c0b3f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.35
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.46
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.69
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.69 (2026-09-08)
 
 ### 🚀 Features

@@ -1,3 +1,22 @@
+## 0.0.1-alpha.69 (2026-09-09)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.30
+
 ## 0.0.1-alpha.68 (2026-09-08)
 
 ### 🚀 Features

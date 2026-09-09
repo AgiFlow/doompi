@@ -1,3 +1,32 @@
+## 0.0.1-alpha.33 (2026-09-09)
+
+### 🚀 Features
+
+- **root:** standardize CLI help, relax sync schema, add doompi doctor ([c7dc9eba](https://github.com/AgiFlow/doompi/commit/c7dc9eba))
+
+### 🩹 Fixes
+
+- resolve dependency audit and CI regressions ([341c0b3f](https://github.com/AgiFlow/doompi/commit/341c0b3f))
+- **doompi-voice:** relay settled agent results to live companion ([cdf751e3](https://github.com/AgiFlow/doompi/commit/cdf751e3))
+- **root:** open loop launchers in activity ([9e802319](https://github.com/AgiFlow/doompi/commit/9e802319))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-server to 0.0.1-alpha.33
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.30
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.64
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.32 (2026-09-08)
 
 ### 🩹 Fixes

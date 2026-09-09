@@ -1,3 +1,13 @@
+## 0.0.1-alpha.31 (2026-09-09)
+
+### 🩹 Fixes
+
+- **root:** open loop launchers in activity ([9e802319](https://github.com/AgiFlow/doompi/commit/9e802319))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.30 (2026-09-08)
 
 ### 🚀 Features
