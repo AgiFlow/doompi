@@ -157,6 +157,7 @@ describe('commands from the dock', () => {
     expect(operations.spawn).toHaveBeenCalledWith(
       { cwd: repository, sessionId: 'parent-1' },
       { branch: 'wt/two', baseRef: 'main' },
+      expect.objectContaining({ onProgress: expect.any(Function) }),
     );
   });
 
@@ -197,6 +198,36 @@ describe('commands from the dock', () => {
     expect(published.at(-1)?.payload.pending).toBeUndefined();
   });
 
+  // One frozen label for a wait that runs into minutes reads as a hang. Each
+  // phase the operation reports replaces it, so the panel keeps moving.
+  it('republishes each phase the spawn reports', async () => {
+    let report: (label: string) => void = () => undefined;
+    let release: () => void = () => undefined;
+    const operations = fakeOperations({
+      spawn: vi.fn().mockImplementation(
+        (_context: unknown, _request: unknown, options?: { onProgress?: (label: string) => void }) =>
+          new Promise((resolve) => {
+            report = (label) => options?.onProgress?.(label);
+            release = () => {
+              resolve(record());
+            };
+          }),
+      ) as WorktreeOperations['spawn'],
+    });
+    const published: Published[] = [];
+    const { channel, source } = start(published, operations);
+    source.sessionAdded?.(OWNER);
+
+    channel.receive?.(OWNER, { action: 'create', branch: 'wt/two' }, { connectionId: 'c1' });
+    await settle();
+    report('starting session\u2026');
+    await settle();
+    expect(published.at(-1)?.payload.pending).toBe('starting session\u2026');
+
+    release();
+    await settle();
+    expect(published.at(-1)?.payload.pending).toBeUndefined();
+  });
   /** A create runs for minutes; a second click must not start a second worktree behind the first. */
   it('drops a second command while one is in flight', async () => {
     const operations = fakeOperations({

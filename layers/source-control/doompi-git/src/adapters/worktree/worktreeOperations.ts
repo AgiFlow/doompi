@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { installDependencies } from './dependencyInstall.ts';
+import { mirrorComposition } from './compositionMirror.ts';
 import { createWorktreeSession, HubUnavailableError, sessionIsLive, stopWorktreeSession } from '../hub/hubClient.ts';
 import { channelRoot, hubRegistryDir, registryFile, worktreesRoot } from '../filesystem/paths.ts';
 import { repositoryId, repositoryLabel, shortId } from './repositoryIdentity.ts';
@@ -25,8 +25,15 @@ export interface SpawnWorktreeRequest {
   name?: string;
 }
 
+export interface SpawnOptions {
+  /** Aborted when the caller gives up, so a spawn nobody is waiting for stops. */
+  signal?: AbortSignal;
+  /** Phase labels, for a caller that can show them while the work runs. */
+  onProgress?: (label: string) => void;
+}
+
 export interface WorktreeOperations {
-  spawn(context: WorktreeContext, request: SpawnWorktreeRequest): Promise<WorktreeRecord>;
+  spawn(context: WorktreeContext, request: SpawnWorktreeRequest, options?: SpawnOptions): Promise<WorktreeRecord>;
   close(context: WorktreeContext, id: string, force: boolean): Promise<WorktreeRecord>;
   list(context: WorktreeContext): Promise<WorktreeRecord[]>;
   status(context: WorktreeContext, id: string): Promise<{ record: WorktreeRecord; dirtyFiles: string[] }>;
@@ -40,9 +47,9 @@ export interface WorktreeOperationsDeps {
   git: WorktreeGit;
   /** Injected so tests never reach the network. */
   createSession?: typeof createWorktreeSession;
-  /** Injected so tests never run a package manager. */
-  install?: typeof installDependencies;
   stopSession?: typeof stopWorktreeSession;
+  /** Injected so a test never copies a real dependency tree. */
+  mirror?: typeof mirrorComposition;
   isSessionLive?: typeof sessionIsLive;
   homeDir?: string;
   registryDir?: string;
@@ -53,8 +60,8 @@ export interface WorktreeOperationsDeps {
 export function createWorktreeOperations(deps: WorktreeOperationsDeps): WorktreeOperations {
   const { git } = deps;
   const createSession = deps.createSession ?? createWorktreeSession;
-  const install = deps.install ?? installDependencies;
   const stopSession = deps.stopSession ?? stopWorktreeSession;
+  const mirror = deps.mirror ?? mirrorComposition;
   const isSessionLive = deps.isSessionLive ?? sessionIsLive;
   const registryDir = deps.registryDir ?? hubRegistryDir();
   const now = deps.now ?? (() => new Date());
@@ -119,7 +126,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
   };
 
   return {
-    async spawn(context, request) {
+    async spawn(context, request, options) {
       const { root, store, records } = await resolve(context);
       const refusal = refuseSpawn({ branch: request.branch, existing: records });
       if (refusal !== undefined) {
@@ -135,27 +142,44 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         shortId: id,
       });
 
+      // The worktree and the branch are made by one command, so they are undone
+      // by one too. `worktree remove` leaves the branch behind, and a branch
+      // nobody asked for is what a failed spawn used to leave on the floor.
+      const cancelled = (): boolean => options?.signal?.aborted === true;
+      const rollback = async (): Promise<string> => {
+        await git.removeWorktree({ repositoryRoot: root, path, force: true }).catch(() => undefined);
+        const deleted = await git.deleteBranch({ repositoryRoot: root, branch: request.branch }).catch(() => false);
+        return deleted ? '' : ` The branch ${request.branch} has work on it and was kept.`;
+      };
+
+      options?.onProgress?.(`creating branch ${request.branch}\u2026`);
       await git.addWorktree({ repositoryRoot: root, path, branch: request.branch, baseRef });
 
-      // Before the session, not after. The session resolves this repository's
-      // composition, and every workspace package path in it points at a
-      // directory that exists only once dependencies are linked. Starting the
-      // session first makes it fall back to the global bundle and quietly lose
-      // the repository's own packages.
-      const installed = await install(path);
-      if (installed.kind === 'failed') {
-        await git.removeWorktree({ repositoryRoot: root, path, force: true }).catch(() => undefined);
+      // Checked here rather than only inside the session call: this is the
+      // point where a checkout exists that nothing has recorded yet, which is
+      // exactly the state an interrupted spawn used to leave behind.
+      if (cancelled()) {
+        const kept = await rollback();
         throw new DoomGitExpectedError(
-          'install_failed',
-          `${installed.command} install failed in the new worktree (exit ${String(installed.code ?? 'unknown')}).`,
-          true,
-          'Run the install by hand in the repository to see what it reports, then try again.',
+          'spawn_cancelled',
+          `Cancelled before the session started.${kept}`,
+          false,
+          'The worktree was removed; run it again when you are ready.',
         );
       }
+
+      // Before the session, because the session composes the extensions this
+      // repository's config names and those live in build output git does not
+      // track. A worktree without it starts and dies on the first package it
+      // cannot resolve. Nothing here can fail the spawn: a repository with no
+      // build output to mirror simply has none.
+      options?.onProgress?.('mirroring build output\u2026');
+      mirror(root, path);
 
       // The worktree exists from here on, so every later failure has to leave
       // it removed or recorded. An unrecorded directory on disk is the one
       // outcome with no way back: nothing would ever list it again.
+      options?.onProgress?.('starting session\u2026');
       let sessionId: string;
       try {
         sessionId = await createSession({
@@ -163,11 +187,25 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
           name: request.name ?? request.branch,
           parentSessionId: context.sessionId,
           registryDir,
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
         });
       } catch (error) {
-        await git.removeWorktree({ repositoryRoot: root, path, force: true }).catch(() => undefined);
+        const kept = await rollback();
+        if (cancelled()) {
+          throw new DoomGitExpectedError(
+            'spawn_cancelled',
+            `Cancelled while the session was starting.${kept}`,
+            false,
+            'The worktree was removed; run it again when you are ready.',
+          );
+        }
         if (error instanceof HubUnavailableError) {
-          throw new DoomGitExpectedError('hub_unavailable', error.message, true, 'Start the cockpit and try again.');
+          throw new DoomGitExpectedError(
+            'hub_unavailable',
+            `${error.message}${kept}`,
+            true,
+            'Start the cockpit and try again.',
+          );
         }
         throw error;
       }
@@ -184,7 +222,21 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         status: 'running',
         createdAt: now().toISOString(),
       };
-      store.replace([...records, record]);
+      try {
+        store.replace([...records, record]);
+      } catch (error) {
+        // A live session with no record is the worst outcome available here:
+        // it runs, and no id anything can name points at it. The session goes
+        // back too, rather than being left for someone to find by hand.
+        await stopSession(registryDir, sessionId).catch(() => undefined);
+        const kept = await rollback();
+        throw new DoomGitExpectedError(
+          'registry_write_failed',
+          `The worktree was created but the registry could not be written (${(error as Error).message}).${kept}`,
+          true,
+          'Check the registry file for permissions or free space, then try again.',
+        );
+      }
       return record;
     },
 
@@ -289,6 +341,13 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       }
       for (const record of plan.remove) {
         await git.removeWorktree({ repositoryRoot: root, path: record.path, force: false });
+      }
+      // The checkout goes, so the branch it was made for goes with it. Safe
+      // delete only: git keeps anything holding commits, and the plan says
+      // which ones it kept rather than leaving the reader to notice later.
+      for (const record of [...plan.remove, ...plan.forget]) {
+        const deleted = await git.deleteBranch({ repositoryRoot: root, branch: record.branch }).catch(() => false);
+        if (!deleted) plan.keptBranches.push(record.branch);
       }
       const dropped = new Set([...plan.remove, ...plan.forget].map((record) => record.id));
       store.replace(reconciled.records.filter((record) => !dropped.has(record.id)));

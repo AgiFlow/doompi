@@ -40,7 +40,7 @@ const WORKTREES: WorktreeView[] = [
 worktreeActivity.update('s-live', () => ({ worktrees: WORKTREES, pending: undefined, error: undefined }));
 worktreeActivity.update('s-busy', () => ({
   worktrees: WORKTREES.slice(0, 1),
-  pending: 'creating wt/fix-auth: installing dependencies',
+  pending: 'starting session\u2026',
   error: undefined,
 }));
 

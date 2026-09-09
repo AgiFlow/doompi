@@ -23,7 +23,7 @@ function operations(overrides: Partial<WorktreeOperations> = {}): WorktreeOperat
     list: vi.fn().mockResolvedValue([RECORD]),
     status: vi.fn().mockResolvedValue({ record: RECORD, dirtyFiles: [] }),
     merge: vi.fn().mockResolvedValue(RECORD),
-    prune: vi.fn().mockResolvedValue({ remove: [], forget: [], untracked: [], keptDirty: [] }),
+    prune: vi.fn().mockResolvedValue({ remove: [], forget: [], untracked: [], keptDirty: [], keptBranches: [] }),
     send: vi.fn().mockResolvedValue(undefined),
     messages: vi.fn().mockResolvedValue([]),
     ...overrides,
@@ -70,7 +70,11 @@ describe('execute', () => {
     const ops = operations();
     const content = await call(ops, { action: 'spawn_worktree', branch: 'wt/one' });
 
-    expect(ops.spawn).toHaveBeenCalledWith({ cwd: '/repo', sessionId: 'parent-1' }, { branch: 'wt/one' });
+    expect(ops.spawn).toHaveBeenCalledWith(
+      { cwd: '/repo', sessionId: 'parent-1' },
+      { branch: 'wt/one' },
+      expect.objectContaining({ onProgress: expect.any(Function) }),
+    );
     expect(content).toContain('a1b2c3d4');
     expect(content).toContain(RECORD.path);
     expect(content).toContain('session-9');
@@ -79,13 +83,40 @@ describe('execute', () => {
   it('passes an explicit baseRef and name through', async () => {
     const ops = operations();
     await call(ops, { action: 'spawn_worktree', branch: 'wt/one', baseRef: 'v1', name: 'Auth' });
-    expect(ops.spawn).toHaveBeenCalledWith(expect.anything(), {
-      branch: 'wt/one',
-      baseRef: 'v1',
-      name: 'Auth',
-    });
+    expect(ops.spawn).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        branch: 'wt/one',
+        baseRef: 'v1',
+        name: 'Auth',
+      },
+      expect.anything(),
+    );
   });
 
+  // The host's answer to a call that takes minutes: an abort it can pull, and
+  // a channel to say what is happening. Dropping either is what made a spawn
+  // look hung and let an abandoned one run on.
+  it('hands the host signal and progress channel to spawn', async () => {
+    const ops = operations();
+    const tool = toolFor(ops);
+    const controller = new AbortController();
+    const updates: string[] = [];
+
+    await (tool.execute as unknown as (...args: unknown[]) => Promise<unknown>)(
+      'id',
+      { action: 'spawn_worktree', branch: 'wt/one' },
+      controller.signal,
+      (update: { content: { text: string }[] }) => updates.push(update.content[0]!.text),
+      CTX,
+    );
+
+    const [, , options] = (ops.spawn as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]!;
+    const { signal, onProgress } = options as { signal: AbortSignal; onProgress: (label: string) => void };
+    expect(signal).toBe(controller.signal);
+    onProgress('installing\u2026');
+    expect(updates).toEqual(['installing\u2026']);
+  });
   // force must never be implicit: the default has to reach the operation as
   // false, or a plain close would discard work.
   it('closes without force by default', async () => {
@@ -137,7 +168,9 @@ describe('execute', () => {
 
   it('reports what a prune kept for holding work', async () => {
     const ops = operations({
-      prune: vi.fn().mockResolvedValue({ remove: [], forget: [], untracked: [], keptDirty: [RECORD] }),
+      prune: vi
+        .fn()
+        .mockResolvedValue({ remove: [], forget: [], untracked: [], keptDirty: [RECORD], keptBranches: ['wt/one'] }),
     });
     const content = await call(ops, { action: 'prune' });
     expect(content).toContain('Kept, uncommitted work: a1b2c3d4');

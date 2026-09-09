@@ -10,9 +10,9 @@ const PROBE_TIMEOUT_MS = 1000;
  *
  * The hub validates, then runs `ensureSessionSynced`, then spawns. A cockpit
  * that has never synced the composition builds it first, which is minutes on a
- * cold cache, and a fresh worktree also installs its dependencies. A 30s
- * timeout was measured aborting a create that the hub then completed anyway,
- * leaving the caller told it failed while a session started behind it.
+ * cold cache. A 30s timeout was measured aborting a create that the hub then
+ * completed anyway, leaving the caller told it failed while a session started
+ * behind it.
  */
 const CREATE_TIMEOUT_MS = 600_000;
 /** Stopping is just a signal and a record removal, so it stays short. */
@@ -78,6 +78,8 @@ export interface CreateWorktreeSessionInput {
   /** The session asking for this one, so the rail can nest them. */
   parentSessionId: string;
   registryDir: string;
+  /** The caller's own abort, composed with the create timeout below. */
+  signal?: AbortSignal;
 }
 
 /** Reads the hub's published address, if it published one. */
@@ -145,9 +147,15 @@ export async function createWorktreeSession(input: CreateWorktreeSessionInput): 
         parentSessionId: input.parentSessionId,
         provenance: 'worktree',
       }),
-      signal: AbortSignal.timeout(CREATE_TIMEOUT_MS),
+      signal:
+        input.signal === undefined
+          ? AbortSignal.timeout(CREATE_TIMEOUT_MS)
+          : AbortSignal.any([input.signal, AbortSignal.timeout(CREATE_TIMEOUT_MS)]),
     });
   } catch (error) {
+    // A caller that gave up is not a broken cockpit, and saying so would send
+    // the reader to check a hub that is fine.
+    if (input.signal?.aborted === true) throw error;
     throw new HubUnavailableError(`Could not reach the cockpit: ${(error as Error).message}`);
   }
 

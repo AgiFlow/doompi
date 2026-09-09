@@ -22,6 +22,7 @@ function fakeGit(overrides: Partial<WorktreeGit> = {}): WorktreeGit {
     repositoryRoot: vi.fn().mockResolvedValue(repository),
     currentBranch: vi.fn().mockResolvedValue('main'),
     mergeBranch: vi.fn().mockResolvedValue(undefined),
+    deleteBranch: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
 }
@@ -31,24 +32,6 @@ function operations(git: WorktreeGit, createSession = vi.fn().mockResolvedValue(
     ops: createWorktreeOperations({ git, createSession, homeDir: home, registryDir: path.join(home, 'run') }),
     createSession,
   };
-}
-
-/**
- * A worktree whose install failed is worse than no worktree: the session that
- * opens in it silently falls back to the global bundle and loses the
- * repository's own packages. So the directory has to go back.
- */
-async function spawnWithFailedInstall(git: WorktreeGit) {
-  const install = vi.fn().mockResolvedValue({ kind: 'failed', command: 'pnpm', code: 1, stderrBytes: 42 });
-  const createSession = vi.fn();
-  const ops = createWorktreeOperations({
-    git,
-    createSession,
-    install,
-    homeDir: home,
-    registryDir: path.join(home, 'run'),
-  });
-  return { ops, install, createSession };
 }
 
 beforeEach(() => {
@@ -114,6 +97,7 @@ describe('spawn', () => {
     await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toThrow(/No cockpit is running/u);
 
     expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
     expect(await ops.list(CONTEXT)).toEqual([]);
   });
 
@@ -121,6 +105,69 @@ describe('spawn', () => {
     const createSession = vi.fn().mockRejectedValue(new HubUnavailableError('No cockpit is running.'));
     const { ops } = operations(fakeGit(), createSession);
     await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toThrow(/hub_unavailable/u);
+  });
+
+  // The branch outlives `worktree remove`, so a rollback that stops there
+  // leaves a branch nobody asked for. It is deleted only when git agrees it
+  // holds nothing, and the caller is told when it does not.
+  it('keeps a branch that holds work, and says so', async () => {
+    const git = fakeGit({ deleteBranch: vi.fn().mockResolvedValue(false) });
+    const createSession = vi.fn().mockRejectedValue(new HubUnavailableError('No cockpit is running.'));
+    const { ops } = operations(git, createSession);
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toThrow(
+      /branch wt\/one has work on it and was kept/u,
+    );
+  });
+
+  it('rolls the worktree back when the caller gives up before the session starts', async () => {
+    const git = fakeGit();
+    const createSession = vi.fn();
+    const { ops } = operations(git, createSession);
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/one' }, { signal: AbortSignal.abort() })).rejects.toMatchObject({
+      code: 'spawn_cancelled',
+    });
+
+    expect(createSession).not.toHaveBeenCalled();
+    expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
+    expect(await ops.list(CONTEXT)).toEqual([]);
+  });
+
+  it('reports each phase while it works', async () => {
+    const { ops } = operations(fakeGit());
+    const labels: string[] = [];
+
+    await ops.spawn(CONTEXT, { branch: 'wt/one' }, { onProgress: (label) => labels.push(label) });
+
+    expect(labels).toEqual(['creating branch wt/one\u2026', 'mirroring build output\u2026', 'starting session\u2026']);
+  });
+
+  // The session composes this repository's own packages from build output git
+  // does not track. Mirroring after the session starts would be too late.
+  it('mirrors the parent checkout into the worktree before the session starts', async () => {
+    const order: string[] = [];
+    const mirror = vi.fn().mockImplementation(() => {
+      order.push('mirror');
+      return { kind: 'mirrored', copied: 3, linked: 2 };
+    });
+    const createSession = vi.fn().mockImplementation(() => {
+      order.push('session');
+      return Promise.resolve('session-9');
+    });
+    const ops = createWorktreeOperations({
+      git: fakeGit(),
+      createSession,
+      mirror,
+      homeDir: home,
+      registryDir: path.join(home, 'run'),
+    });
+
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+
+    expect(mirror).toHaveBeenCalledWith(repository, record.path);
+    expect(order).toEqual(['mirror', 'session']);
   });
 });
 
@@ -273,9 +320,48 @@ describe('prune', () => {
     await reopened.prune(CONTEXT, false);
 
     expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ path: record.path, force: false }));
+    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
     expect(await reopened.list(CONTEXT)).toEqual([]);
   });
 
+  // The checkout goes with the prune; a branch holding commits does not.
+  it('names a branch git refused to delete', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    fs.mkdirSync(record.path, { recursive: true });
+    const git = fakeGit({
+      listWorktreePaths: vi.fn().mockResolvedValue([record.path]),
+      deleteBranch: vi.fn().mockResolvedValue(false),
+    });
+    const reopened = createWorktreeOperations({
+      git,
+      createSession: vi.fn(),
+      homeDir: home,
+      registryDir: path.join(home, 'run'),
+    });
+
+    const plan = await reopened.prune(CONTEXT, false);
+
+    expect(plan.keptBranches).toEqual(['wt/one']);
+  });
+
+  it('destroys nothing on a dry run, branches included', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    fs.mkdirSync(record.path, { recursive: true });
+    const git = fakeGit({ listWorktreePaths: vi.fn().mockResolvedValue([record.path]) });
+    const reopened = createWorktreeOperations({
+      git,
+      createSession: vi.fn(),
+      homeDir: home,
+      registryDir: path.join(home, 'run'),
+    });
+
+    const plan = await reopened.prune(CONTEXT, true);
+
+    expect(git.deleteBranch).not.toHaveBeenCalled();
+    expect(plan.keptBranches).toEqual([]);
+  });
   // An orphan is still the only pointer to a directory that may hold work.
   it('never deletes an orphan that still holds uncommitted work', async () => {
     const { ops } = operations(fakeGit());
@@ -326,25 +412,32 @@ describe('registry records', () => {
   });
 });
 
-describe('spawn when the install fails', () => {
-  it('removes the worktree and never starts a session', async () => {
-    const git = {
-      isRepository: vi.fn().mockResolvedValue(true),
-      repositoryRoot: vi.fn().mockResolvedValue(repository),
-      currentBranch: vi.fn().mockResolvedValue('main'),
-      addWorktree: vi.fn().mockResolvedValue(undefined),
-      removeWorktree: vi.fn().mockResolvedValue(undefined),
-    } as unknown as WorktreeGit;
-    const { ops, install, createSession } = await spawnWithFailedInstall(git);
+// A session nothing has a record for is unreachable: it runs, and no id names
+// it. The session goes back with the worktree rather than being left behind.
+describe('spawn when the registry cannot be written', () => {
+  it('stops the session it started and rolls the worktree back', async () => {
+    const git = fakeGit();
+    const stopSession = vi.fn().mockResolvedValue(undefined);
+    const createSession = vi.fn().mockResolvedValue('session-9');
+    const ops = createWorktreeOperations({
+      git,
+      createSession,
+      stopSession,
+      homeDir: home,
+      registryDir: path.join(home, 'run'),
+    });
+    const registry = path.join(home, '.pi', '.doom', 'git', 'registry');
+    fs.mkdirSync(path.dirname(registry), { recursive: true });
+    fs.writeFileSync(registry, 'not a directory');
 
-    await expect(ops.spawn({ cwd: repository, sessionId: 'parent' }, { branch: 'wt/x' })).rejects.toMatchObject({
-      code: 'install_failed',
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/one' })).rejects.toMatchObject({
+      code: 'registry_write_failed',
       retryable: true,
     });
 
-    expect(install).toHaveBeenCalledOnce();
-    expect(createSession).not.toHaveBeenCalled();
-    expect(git.removeWorktree).toHaveBeenCalledOnce();
+    expect(stopSession).toHaveBeenCalledWith(path.join(home, 'run'), 'session-9');
+    expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
+    expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
   });
 });
 

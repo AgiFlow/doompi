@@ -107,6 +107,13 @@ export interface PrunePlan {
   untracked: string[];
   /** Orphans left alone because they still hold uncommitted work. */
   keptDirty: WorktreeRecord[];
+  /**
+   * Branches git refused to delete because they hold commits.
+   *
+   * Filled by the prune itself, not by the plan: a dry run destroys nothing, so
+   * it has nothing to report here and leaves it empty.
+   */
+  keptBranches: string[];
 }
 
 /**
@@ -121,7 +128,7 @@ export function planPrune(input: {
   worktreesRoot: string;
   dirtyByPath: ReadonlyMap<string, readonly string[]>;
 }): PrunePlan {
-  const plan: PrunePlan = { remove: [], forget: [], untracked: [], keptDirty: [] };
+  const plan: PrunePlan = { remove: [], forget: [], untracked: [], keptDirty: [], keptBranches: [] };
   const known = new Set(input.records.map((record) => record.path));
   const listed = new Set(input.gitPaths);
   for (const record of input.records) {

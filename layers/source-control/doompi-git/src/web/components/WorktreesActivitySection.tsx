@@ -12,7 +12,7 @@
  * - Doing work here. This section reports and launches; the panel and the tool
  *   own everything else.
  */
-import { Button } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, Spinner, StatusBadge } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import type { WorktreeView } from '../../types/webWorktrees.ts';
@@ -45,19 +45,34 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
 
   return (
     <div data-testid="activity-git-worktrees" className="flex flex-col gap-0.5">
-      {session.pending === undefined ? null : <p className="px-1 text-xs text-doom-dim">{session.pending}</p>}
+      {session.pending === undefined ? null : (
+        <span className="flex min-w-0 items-center gap-1.5 px-1">
+          <Spinner className="h-3 w-3 shrink-0 text-doom-faint" label={session.pending} />
+          <span className="min-w-0 truncate text-xs text-doom-dim">{session.pending}</span>
+        </span>
+      )}
       {session.worktrees.map((worktree: WorktreeView) => (
-        <button
+        <Button
           key={worktree.id}
-          type="button"
+          variant="ghost"
+          size="card"
           data-testid={`activity-git-worktree-${worktree.id}`}
-          className="flex items-center gap-2 px-1 text-left text-sm text-doom-dim hover:text-doom-bright"
+          className="min-w-0 gap-1.5 px-1"
           onClick={() => openTransientTab(worktreesTab())}
         >
-          <span className="truncate">{worktree.branch}</span>
-          {worktree.orphaned ? <span className="text-xs text-doom-faint">orphaned</span> : null}
-          {worktree.unowned ? <span className="text-xs text-doom-faint">unowned</span> : null}
-        </button>
+          <Dot tone={worktree.orphaned ? 'red' : worktree.sessionId === null ? 'muted' : 'blue'} />
+          <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-doom-hi">{worktree.branch}</span>
+          {worktree.orphaned ? (
+            <StatusBadge tone="error" size="xs">
+              orphaned
+            </StatusBadge>
+          ) : null}
+          {worktree.unowned ? (
+            <StatusBadge tone="info" size="xs">
+              unowned
+            </StatusBadge>
+          ) : null}
+        </Button>
       ))}
     </div>
   );

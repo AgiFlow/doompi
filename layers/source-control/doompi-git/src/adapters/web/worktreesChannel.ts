@@ -195,10 +195,16 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): W
         const context = { cwd: scope.cwd, sessionId: scope.sessionId };
         if (command.action === 'create') {
           mark(scope, `creating ${command.branch}\u2026`, undefined);
-          await worktrees.spawn(context, {
-            branch: command.branch,
-            ...(command.baseRef === undefined ? {} : { baseRef: command.baseRef }),
-          });
+          await worktrees.spawn(
+            context,
+            {
+              branch: command.branch,
+              ...(command.baseRef === undefined ? {} : { baseRef: command.baseRef }),
+            },
+            // Each phase replaces the label, so the panel says what is
+            // happening instead of holding one line for the whole wait.
+            { onProgress: (label) => mark(scope, label, undefined) },
+          );
           return;
         }
         mark(scope, `closing ${command.id}\u2026`, undefined);
