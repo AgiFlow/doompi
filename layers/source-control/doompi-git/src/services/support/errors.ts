@@ -16,7 +16,8 @@ export type DoomGitErrorCode =
   | 'worktree_not_owned'
   | 'worktree_dirty'
   | 'hub_unavailable'
-  | 'install_failed'
+  | 'spawn_cancelled'
+  | 'registry_write_failed'
   | 'git_failed';
 
 export class DoomGitExpectedError extends Error {

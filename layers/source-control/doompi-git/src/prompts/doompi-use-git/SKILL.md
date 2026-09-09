@@ -17,11 +17,14 @@ the parent checkout and silently builds the wrong code.
 
 Use a worktree when work needs its own branch **and** its own checkout at the
 same time: a long refactor you want to leave half-finished, a risky migration,
-or two features that touch the same files. A worktree costs a full install in
-the new directory, so it is the wrong tool for a quick edit; just edit.
+or two features that touch the same files.
 
 Do not reach for it to parallelise work that shares a branch. Two sessions on
 one branch in two checkouts will fight, and git refuses the second worktree.
+
+The new checkout has no dependencies installed: `spawn_worktree` runs git and
+nothing else, whatever language the repository is in. Install them in the
+worktree before building or testing there.
 
 ## Actions
 

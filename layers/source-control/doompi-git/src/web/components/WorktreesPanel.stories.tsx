@@ -40,7 +40,7 @@ const WORKTREES: WorktreeView[] = [
 worktreeActivity.update('panel-live', () => ({ worktrees: WORKTREES, pending: undefined, error: undefined }));
 worktreeActivity.update('panel-busy', () => ({
   worktrees: WORKTREES.slice(0, 1),
-  pending: 'creating wt/fix-auth: installing dependencies',
+  pending: 'starting session\u2026',
   error: 'close refused: wt/split-hub has uncommitted changes',
 }));
 

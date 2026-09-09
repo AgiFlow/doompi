@@ -8,6 +8,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: [],
+    env: {
+      // Set by a running DoomPi session and inherited by a test run started
+      // inside one, where it turns the standalone host fallback the Pi entry
+      // contract relies on into a hard failure.
+      DOOMPI_CORDIS_HOST_REQUIRED: '',
+    },
     bail: 10,
     exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*'],
     coverage: {

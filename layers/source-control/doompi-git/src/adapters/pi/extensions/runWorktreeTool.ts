@@ -96,15 +96,20 @@ async function run(
   params: RunWorktreeToolParams,
   operations: WorktreeOperations,
   ctx: ExtensionContext,
+  host: { signal?: AbortSignal; onProgress?: (label: string) => void } = {},
 ): Promise<AgentToolResult<RunWorktreeToolDetails>> {
   const context = { cwd: ctx.cwd, sessionId: ctx.sessionManager.getSessionId() };
   switch (params.action) {
     case WORKTREE_ACTIONS.spawn_worktree: {
-      const record = await operations.spawn(context, {
-        branch: params.branch,
-        ...(params.baseRef === undefined ? {} : { baseRef: params.baseRef }),
-        ...(params.name === undefined ? {} : { name: params.name }),
-      });
+      const record = await operations.spawn(
+        context,
+        {
+          branch: params.branch,
+          ...(params.baseRef === undefined ? {} : { baseRef: params.baseRef }),
+          ...(params.name === undefined ? {} : { name: params.name }),
+        },
+        host,
+      );
       return {
         content: text(
           `Worktree ${record.id} created on ${record.branch} from ${record.baseRef}.`,
@@ -181,6 +186,9 @@ async function run(
         `Forget: ${plan.forget.length === 0 ? 'none' : plan.forget.map((record) => record.id).join(', ')}`,
         `Kept, uncommitted work: ${plan.keptDirty.length === 0 ? 'none' : plan.keptDirty.map((record) => record.id).join(', ')}`,
         `Untracked directories, left alone: ${plan.untracked.length === 0 ? 'none' : plan.untracked.join(', ')}`,
+        ...(plan.keptBranches.length === 0
+          ? []
+          : [`Branches kept, they hold commits: ${plan.keptBranches.join(', ')}`]),
       ];
       return { content: text(...lines), details: { action: params.action } };
     }
@@ -195,7 +203,17 @@ export function registerRunWorktreeTool(pi: ExtensionAPI, operations: WorktreeOp
     description: DESCRIPTION,
     parameters: RunWorktreeParams,
     prepareArguments: validateParams,
-    execute: async (_id, rawParams, _signal, _onUpdate, ctx) => run(validateParams(rawParams), operations, ctx),
+    // The signal and the progress callback are the host's two answers to a
+    // call that takes minutes. Dropping them is what let an interrupted spawn
+    // run on with nobody waiting for it, and left the caller staring at
+    // nothing while it did.
+    execute: async (_id, rawParams, signal, onUpdate, ctx) => {
+      const params = validateParams(rawParams);
+      return await run(params, operations, ctx, {
+        ...(signal === undefined ? {} : { signal }),
+        onProgress: (label) => onUpdate?.({ content: text(label), details: { action: params.action } }),
+      });
+    },
   };
   pi.registerTool(tool);
 }

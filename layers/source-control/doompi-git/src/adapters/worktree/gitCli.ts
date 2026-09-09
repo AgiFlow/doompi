@@ -89,6 +89,14 @@ export function createWorktreeGit(): WorktreeGit {
       throw failure('worktree remove', result);
     },
 
+    async deleteBranch({ repositoryRoot, branch }) {
+      // -d, never -D: git refuses a branch that still holds unmerged commits,
+      // and that refusal is the whole safety property. A rollback that could
+      // throw away work someone committed in the worktree is worse than a
+      // branch left behind.
+      const result = await git(repositoryRoot, ['branch', '-d', branch], READ_TIMEOUT_MS);
+      return result.code === 0;
+    },
     pruneWorktrees: prune,
 
     async listWorktreePaths(repositoryRoot) {

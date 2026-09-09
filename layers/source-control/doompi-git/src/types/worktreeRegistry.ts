@@ -55,6 +55,15 @@ export interface WorktreeRegistryStore {
 export interface WorktreeGit {
   addWorktree(input: { repositoryRoot: string; path: string; branch: string; baseRef: string }): Promise<void>;
   removeWorktree(input: { repositoryRoot: string; path: string; force: boolean }): Promise<void>;
+  /**
+   * Safe branch delete, reporting refusal rather than throwing.
+   *
+   * `worktree remove` leaves the branch behind, so undoing a spawn needs this
+   * too. It is always the safe form: git refuses a branch holding unmerged
+   * work, and false says the branch is still there rather than pretending it
+   * went.
+   */
+  deleteBranch(input: { repositoryRoot: string; branch: string }): Promise<boolean>;
   pruneWorktrees(repositoryRoot: string): Promise<void>;
   /** Paths git currently lists for the repository, used to find orphans. */
   listWorktreePaths(repositoryRoot: string): Promise<string[]>;

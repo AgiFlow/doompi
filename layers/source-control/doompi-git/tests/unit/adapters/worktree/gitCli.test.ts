@@ -100,6 +100,27 @@ describe('addWorktree', () => {
   });
 });
 
+describe('deleteBranch', () => {
+  it('deletes a branch that holds nothing the base ref does not', async () => {
+    const worktree = path.join(root, 'wt-del');
+    await worktreeGit.addWorktree({ repositoryRoot: repository, path: worktree, branch: 'wt/del', baseRef: 'main' });
+    await worktreeGit.removeWorktree({ repositoryRoot: repository, path: worktree, force: true });
+
+    expect(await worktreeGit.deleteBranch({ repositoryRoot: repository, branch: 'wt/del' })).toBe(true);
+    expect(git(repository, 'branch', '--list', 'wt/del').trim()).toBe('');
+  });
+
+  // The whole safety property: a rollback must never take commits with it.
+  it('refuses a branch holding unmerged work, and says so by returning false', async () => {
+    const worktree = path.join(root, 'wt-keep');
+    await worktreeGit.addWorktree({ repositoryRoot: repository, path: worktree, branch: 'wt/keep', baseRef: 'main' });
+    commit(worktree, 'kept.md', '# kept\n', 'work in the worktree');
+    await worktreeGit.removeWorktree({ repositoryRoot: repository, path: worktree, force: true });
+
+    expect(await worktreeGit.deleteBranch({ repositoryRoot: repository, branch: 'wt/keep' })).toBe(false);
+    expect(git(repository, 'branch', '--list', 'wt/keep').trim()).toContain('wt/keep');
+  });
+});
 describe('removeWorktree', () => {
   it('removes a clean worktree', async () => {
     const worktree = path.join(root, 'wt-clean');
