@@ -5,6 +5,10 @@ import {
   DOOM_VOICE_AUTO_MODE_ID,
   DOOM_VOICE_SOURCE,
 } from '@agimon-ai/doompi-extension-contracts/narration';
+import {
+  type DoomToolSurfaceService,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -19,7 +23,6 @@ const extensionMocks = vi.hoisted(() => {
   return {
     handoffs,
     registerTool: vi.fn((_pi: unknown, _cordis: unknown, _dependencies: unknown) => undefined),
-    registerReconciler: vi.fn((_pi: unknown, _isActive: unknown) => undefined),
     runTuiQuestionnaire: vi.fn(async () => ({ answers: [], cancelled: false })),
     createVoiceHandoff: vi.fn((_modes: unknown, _narration: unknown) => {
       const handoff = { handoff: vi.fn(async () => undefined) };
@@ -33,10 +36,6 @@ vi.mock('../src/adapters/pi/askUserQuestionAdapter.ts', async (importOriginal) =
   ...(await importOriginal<typeof import('../src/adapters/pi/askUserQuestionAdapter.ts')>()),
   registerAskUserQuestionTool: extensionMocks.registerTool,
 }));
-vi.mock('../src/adapters/pi/reconcileAdapter.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/adapters/pi/reconcileAdapter.ts')>()),
-  registerAskUserQuestionReconciler: extensionMocks.registerReconciler,
-}));
 vi.mock('../src/adapters/doom/voiceQuestionHandoff.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/adapters/doom/voiceQuestionHandoff.ts')>()),
   createVoiceQuestionHandoff: extensionMocks.createVoiceHandoff,
@@ -49,9 +48,9 @@ import { userFeedbackExtension } from '../src/adapters/pi/extension.js';
 
 type PiHandler = (event: unknown, context: ExtensionContext) => unknown;
 
-function context(sessionId: string): ExtensionContext {
+function context(sessionId: string, hasUI = true): ExtensionContext {
   return {
-    hasUI: true,
+    hasUI,
     mode: 'tui',
     sessionManager: { getSessionId: () => sessionId },
     ui: {},
@@ -59,23 +58,20 @@ function context(sessionId: string): ExtensionContext {
 }
 
 interface HarnessOptions {
-  activeTools?: string[];
+  tools?: string[];
 }
 
 function createHarness(options: HarnessOptions = {}) {
   const handlers = new Map<string, PiHandler[]>();
   const eventHandlers = new Map<string, Set<(payload: unknown) => void>>();
-  let activeTools = options.activeTools ? [...options.activeTools] : undefined;
-  const toolRegistry = activeTools
-    ? {
-        getActiveTools: () => [...(activeTools ?? [])],
-        setActiveTools: (names: string[]) => {
-          activeTools = [...names];
-        },
-      }
-    : {};
+  const tools = options.tools ? [...options.tools] : [];
+  let activeTools = [...tools];
   const pi = {
-    ...toolRegistry,
+    getAllTools: () => tools.map((name) => ({ name })),
+    getActiveTools: () => [...activeTools],
+    setActiveTools: (names: string[]) => {
+      activeTools = [...names];
+    },
     events: {
       emit(event: string, payload: unknown) {
         for (const handler of eventHandlers.get(event) ?? []) handler(payload);
@@ -96,7 +92,7 @@ function createHarness(options: HarnessOptions = {}) {
   const dispatch = async (event: string, activeContext: ExtensionContext): Promise<void> => {
     for (const handler of handlers.get(event) ?? []) await handler({}, activeContext);
   };
-  return { pi, handlers, dispatch, activeTools: () => [...(activeTools ?? [])] };
+  return { pi, handlers, dispatch, activeTools: () => [...activeTools] };
 }
 
 function voiceRecord(activation: 'active' | 'inactive'): MinorModeRecord {
@@ -150,15 +146,19 @@ function dependencies(): AskUserQuestionToolDependencies {
   return extensionMocks.registerTool.mock.calls.at(-1)?.[2] as AskUserQuestionToolDependencies;
 }
 
-function reconciliationGuard(): (context: ExtensionContext) => boolean {
-  return extensionMocks.registerReconciler.mock.calls.at(-1)?.[1] as (context: ExtensionContext) => boolean;
+/** Reads the session-scoped surface the host provides, so a test can model a rival owner. */
+async function waitForToolSurface(pi: ExtensionAPI): Promise<DoomToolSurfaceService> {
+  const connection = await connectDoomCordisHost(pi, '@test/user-feedback-tool-surface');
+  try {
+    return await vi.waitFor(() => requireDoomToolSurface(connection.root));
+  } finally {
+    await connection.dispose();
+  }
 }
-
 beforeEach(() => {
   vi.clearAllMocks();
   extensionMocks.handoffs.length = 0;
   extensionMocks.registerTool.mockImplementation(() => undefined);
-  extensionMocks.registerReconciler.mockImplementation(() => undefined);
   extensionMocks.runTuiQuestionnaire.mockImplementation(async () => ({ answers: [], cancelled: false }));
   extensionMocks.createVoiceHandoff.mockImplementation(() => {
     const handoff = { handoff: vi.fn(async () => undefined) };
@@ -182,7 +182,6 @@ describe('standard User Feedback extension', () => {
     expect(extensionMocks.createVoiceHandoff).toHaveBeenCalledOnce();
     const toolDependencies = dependencies();
     expect(toolDependencies.isActive?.(activeContext)).toBe(true);
-    expect(reconciliationGuard()(activeContext)).toBe(true);
     const completed: QuestionnaireResult = { answers: [], cancelled: false };
     await expect(
       toolDependencies.enqueue(async ({ reportProgress }) => {
@@ -210,7 +209,6 @@ describe('standard User Feedback extension', () => {
     expect(extensionMocks.createVoiceHandoff).toHaveBeenCalledOnce();
     expect(dependencies().isActive?.(activeContext)).toBe(false);
     expect(dependencies().tryVoice?.({ questions: [] })).toBeUndefined();
-    expect(reconciliationGuard()(activeContext)).toBe(false);
     await releaseVoiceServices();
   });
 
@@ -256,8 +254,6 @@ describe('standard User Feedback extension', () => {
 
     expect(toolDependencies.isActive?.(firstContext)).toBe(false);
     expect(toolDependencies.isActive?.(nextContext)).toBe(true);
-    expect(reconciliationGuard()(firstContext)).toBe(false);
-    expect(reconciliationGuard()(nextContext)).toBe(true);
     expect(extensionMocks.createVoiceHandoff).toHaveBeenCalledOnce();
     await harness.dispatch('session_shutdown', nextContext);
     await releaseVoiceServices();
@@ -325,39 +321,84 @@ describe('standard User Feedback extension', () => {
     await harness.dispatch('session_start', activeContext);
 
     expect(extensionMocks.registerTool).toHaveBeenCalledTimes(2);
-    expect(extensionMocks.registerReconciler).toHaveBeenCalledTimes(2);
     expect(extensionMocks.createVoiceHandoff).not.toHaveBeenCalled();
     await harness.dispatch('session_shutdown', activeContext);
   });
 
   it('hides ask_user_question while autonomous voice is active and restores it after', async () => {
-    const harness = createHarness({ activeTools: ['read', ASK_USER_QUESTION_TOOL_NAME, 'bash'] });
+    const tools = ['read', ASK_USER_QUESTION_TOOL_NAME, 'bash'];
+    const harness = createHarness({ tools });
     const catalog = createModeCatalog();
     const activeContext = context('session-a');
     await userFeedbackExtension(harness.pi);
     const releaseVoiceServices = await installVoiceServices(harness.pi, catalog);
 
-    // Pi's active-tool accessors throw before a session runtime is bound.
+    // The tool surface is session-scoped, so there is nothing to restrict before session start.
     catalog.setVoiceActive(true);
-    expect(harness.activeTools()).toEqual(['read', ASK_USER_QUESTION_TOOL_NAME, 'bash']);
+    expect(harness.activeTools()).toEqual(tools);
 
     await harness.dispatch('session_start', activeContext);
-    expect(harness.activeTools()).toEqual(['read', 'bash']);
+    await vi.waitFor(() => expect(harness.activeTools()).toEqual(['read', 'bash']));
 
     catalog.setVoiceActive(false);
-    expect(harness.activeTools()).toEqual(['read', 'bash', ASK_USER_QUESTION_TOOL_NAME]);
+    expect(harness.activeTools()).toEqual(tools);
 
     await harness.dispatch('session_shutdown', activeContext);
     await releaseVoiceServices();
   });
 
-  it('restores the tool when the runtime shuts down while voice is still active', async () => {
-    const harness = createHarness({ activeTools: [ASK_USER_QUESTION_TOOL_NAME] });
+  it('leaves a tool another owner hid alone while restoring its own', async () => {
+    const harness = createHarness({ tools: ['read', ASK_USER_QUESTION_TOOL_NAME, 'bash'] });
     const catalog = createModeCatalog();
     const activeContext = context('session-a');
     await userFeedbackExtension(harness.pi);
     const releaseVoiceServices = await installVoiceServices(harness.pi, catalog);
     await harness.dispatch('session_start', activeContext);
+    const surface = await waitForToolSurface(harness.pi);
+    const rival = surface.register({
+      source: 'rival',
+      restrict: (incoming) => incoming.filter((name) => name !== 'bash'),
+    });
+
+    catalog.setVoiceActive(true);
+    await vi.waitFor(() => expect(harness.activeTools()).toEqual(['read']));
+
+    catalog.setVoiceActive(false);
+    expect(harness.activeTools()).toEqual(['read', ASK_USER_QUESTION_TOOL_NAME]);
+
+    rival.dispose();
+    await harness.dispatch('session_shutdown', activeContext);
+    await releaseVoiceServices();
+  });
+
+  it('hides ask_user_question for an agent run without UI', async () => {
+    const tools = ['read', ASK_USER_QUESTION_TOOL_NAME];
+    const harness = createHarness({ tools });
+    const activeContext = context('session-a');
+    await userFeedbackExtension(harness.pi);
+    await harness.dispatch('session_start', activeContext);
+
+    await harness.dispatch('before_agent_start', context('session-a', false));
+    await vi.waitFor(() => expect(harness.activeTools()).toEqual(['read']));
+
+    await harness.dispatch('before_agent_start', activeContext);
+    expect(harness.activeTools()).toEqual(tools);
+
+    // A run belonging to another session must not move this session's surface.
+    await harness.dispatch('before_agent_start', context('session-b', false));
+    expect(harness.activeTools()).toEqual(tools);
+
+    await harness.dispatch('session_shutdown', activeContext);
+  });
+
+  it('restores the tool when the runtime shuts down while voice is still active', async () => {
+    const harness = createHarness({ tools: [ASK_USER_QUESTION_TOOL_NAME] });
+    const catalog = createModeCatalog();
+    const activeContext = context('session-a');
+    await userFeedbackExtension(harness.pi);
+    const releaseVoiceServices = await installVoiceServices(harness.pi, catalog);
+    await harness.dispatch('session_start', activeContext);
+    await waitForToolSurface(harness.pi);
 
     catalog.setVoiceActive(true);
     expect(harness.activeTools()).toEqual([]);
@@ -369,12 +410,12 @@ describe('standard User Feedback extension', () => {
 
   it('rolls back the Cordis runtime when installation fails partway through', async () => {
     const shutdown = vi.spyOn(QuestionnaireCoordinator.prototype, 'shutdown');
-    extensionMocks.registerReconciler.mockImplementationOnce(() => {
-      throw new Error('reconciler failed');
+    extensionMocks.registerTool.mockImplementationOnce(() => {
+      throw new Error('tool registration failed');
     });
     const harness = createHarness();
 
-    await expect(userFeedbackExtension(harness.pi)).rejects.toThrow('reconciler failed');
+    await expect(userFeedbackExtension(harness.pi)).rejects.toThrow('tool registration failed');
 
     expect(shutdown).toHaveBeenCalledOnce();
     // The standalone host's fenced shutdown listener remains in Pi's table;

@@ -33,6 +33,11 @@ import {
   VOICE_MODE_TOOL_NAMES,
 } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+  createDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlanningModeConfig, PlanningThinkingLevel } from '../src/exports/config';
@@ -49,7 +54,7 @@ import {
   parseDebugEvidencePacket,
   parsePersistedPlanState,
   planModeExtension,
-  planModeTools,
+  planToolRestriction,
   planningSubagentModel,
   planSessionIdentifier,
   planTitleSlug,
@@ -87,7 +92,9 @@ interface FixtureOptions extends PlanModeExtensionOptions {
 interface HarnessExtensionFixture {
   pi: ExtensionAPI;
   ctx: ExtensionContext;
+  toolSurface: DoomToolSurfaceService;
   activeTools: () => string[];
+  allToolNames: () => string[];
   currentModel: () => FixtureModel;
   thinkingLevel: () => PlanningThinkingLevel;
   appendedEntries: Array<{ customType: string; data: unknown }>;
@@ -118,6 +125,19 @@ interface HarnessExtensionFixture {
   setModel: ReturnType<typeof vi.fn>;
   setThinkingLevel: ReturnType<typeof vi.fn>;
   widgets: ReturnType<typeof vi.fn>;
+}
+
+const PLAN_OWN_TOOL_NAMES = ['complete_plan', 'write_plan', 'record_debug_evidence', 'run_fable_plan'];
+const PLAN_MODE_HIDDEN_TOOL_NAMES = ['edit', 'write', 'mcp', 'record_debug_evidence', 'run_fable_plan'];
+
+/** What the surface answers once plan mode is off: everything except plan's own tools. */
+function restoredTools(fixture: { allToolNames: () => string[] }): string[] {
+  return fixture.allToolNames().filter((name) => !PLAN_OWN_TOOL_NAMES.includes(name));
+}
+
+/** What the surface answers inside the normal plan flavor. */
+function planNormalTools(fixture: { allToolNames: () => string[] }): string[] {
+  return fixture.allToolNames().filter((name) => !PLAN_MODE_HIDDEN_TOOL_NAMES.includes(name));
 }
 
 function createExtensionFixture(
@@ -157,7 +177,26 @@ function createExtensionFixture(
     thinkingLevel = level;
   });
   const askUserTools = extensionOptions.askUserEnabled === false ? [] : ['ask_user_question'];
-  let activeTools = ['read', 'bash', 'edit', 'write', 'subagent', ...askUserTools, 'mcp'];
+  const builtinToolNames = [
+    'read',
+    'bash',
+    'edit',
+    'write',
+    'grep',
+    'find',
+    'ls',
+    'subagent',
+    'task',
+    ...askUserTools,
+    'mcp',
+    MINOR_MODE_TOOL_NAME,
+    'open_authoring_file',
+    ...AUTHOR_FACADE_TOOL_NAMES,
+    ...VOICE_MODE_TOOL_NAMES,
+    UNRELATED_TOOL_NAME,
+  ];
+  let activeTools = [...builtinToolNames];
+  let refreshToolSurface: () => void = () => undefined;
   let toolCallSequence = 0;
 
   const piShape = {
@@ -165,26 +204,7 @@ function createExtensionFixture(
       appendedEntries.push({ customType, data });
     },
     getActiveTools: () => [...activeTools],
-    getAllTools: () =>
-      [
-        'read',
-        'bash',
-        'edit',
-        'write',
-        'grep',
-        'find',
-        'ls',
-        'subagent',
-        'task',
-        ...askUserTools,
-        'mcp',
-        MINOR_MODE_TOOL_NAME,
-        'open_authoring_file',
-        ...AUTHOR_FACADE_TOOL_NAMES,
-        ...VOICE_MODE_TOOL_NAMES,
-        UNRELATED_TOOL_NAME,
-        ...registeredTools.keys(),
-      ].map((name) => ({ name })),
+    getAllTools: () => [...builtinToolNames, ...registeredTools.keys()].map((name) => ({ name })),
     setActiveTools(tools: string[]) {
       activeTools = [...tools];
     },
@@ -197,6 +217,7 @@ function createExtensionFixture(
     registerTool(tool: { name: string; parameters?: unknown; execute(...args: unknown[]): Promise<unknown> }) {
       registeredTools.set(tool.name, tool);
       activeTools = [...new Set([...activeTools, tool.name])];
+      refreshToolSurface();
     },
     on(name: string, callback: (event: unknown, ctx: ExtensionContext) => Promise<unknown>) {
       handlers.set(name, [...(handlers.get(name) ?? []), callback]);
@@ -366,6 +387,13 @@ function createExtensionFixture(
   cordis.provide(DOOM_SUBAGENT_POLICY_SERVICE, subagentPolicyService);
   cordis.provide(DOOM_UI_HUB_SERVICE, uiHub);
   cordis.provide(DOOM_VOICE_TOOLS_SERVICE, voiceTools);
+  const toolSurface = createDoomToolSurface({
+    generation: 'plan-test',
+    allTools: () => pi.getAllTools().map((tool) => tool.name),
+    setActiveTools: (names) => pi.setActiveTools([...names]),
+  });
+  cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
+  refreshToolSurface = () => toolSurface.refresh();
   cordis.effect(() => () => voiceTools.dispose(), 'plan-test-voice-tools');
   planModeExtension(
     cordis,
@@ -392,7 +420,10 @@ function createExtensionFixture(
   return {
     pi,
     ctx,
+    toolSurface,
     activeTools: () => activeTools,
+    /** Every registered tool, which is also what the arbiter answers with no restriction. */
+    allToolNames: () => pi.getAllTools().map(({ name }) => name),
     currentModel: () => currentModel,
     thinkingLevel: () => thinkingLevel,
     appendedEntries,
@@ -655,22 +686,21 @@ describe('plan mode entry', () => {
     expect(fixture.thinkingLevel()).toBe(initialSnapshot.thinking);
   });
 
-  it('restores an empty off-thinking snapshot transactionally after a model restore failure', async () => {
+  it('keeps plan tools visible when a model restore failure aborts the exit', async () => {
     const fixture = createExtensionFixture();
-    fixture.pi.setActiveTools([]);
     fixture.pi.setThinkingLevel('off');
     await fixture.handler('session_start')({}, fixture.ctx);
 
     await fixture.invokeLeaderAction('plan.normal');
-    expect(fixture.activeTools()).not.toEqual([]);
+    expect(fixture.activeTools()).toContain('write_plan');
 
     fixture.setModel.mockImplementationOnce(async () => false);
     await fixture.invokeLeaderAction('plan.exit');
-    expect(fixture.activeTools()).not.toEqual([]);
+    expect(fixture.activeTools()).toContain('write_plan');
     expect(fixture.appendedEntries.at(-1)?.data).toMatchObject({ version: 2, activeFlavor: 'normal' });
 
     await fixture.invokeLeaderAction('plan.exit');
-    expect(fixture.activeTools()).toEqual([]);
+    expect(fixture.activeTools()).toEqual(restoredTools(fixture));
     expect(fixture.thinkingLevel()).toBe('off');
   });
 
@@ -903,40 +933,57 @@ describe('plan mode entry', () => {
     expect(JSON.stringify(blocked)).not.toContain('/plan');
   });
 
-  it('keeps Bash, explicit read-only exploration, and subagent tools', () => {
-    expect(
-      planModeTools(
-        ['read', 'bash', 'edit', 'write', 'subagent', 'ask_user_question', 'mcp'],
-        [
-          'read',
-          'bash',
-          'edit',
-          'write',
-          'grep',
-          'find',
-          'ls',
-          'subagent',
-          'task',
-          'ask_user_question',
-          'mcp',
-          'complete_plan',
-          'write_plan',
-        ],
-      ),
-    ).toEqual([
+  it('hides writes and off-flavor plan tools, and restores them when plan mode ends', () => {
+    const available = [
       'read',
       'bash',
-      'subagent',
-      'ask_user_question',
+      'edit',
+      'write',
       'grep',
       'find',
       'ls',
-      'complete_plan',
+      'subagent',
       'task',
+      'ask_user_question',
+      'mcp',
+      'complete_plan',
+      'write_plan',
+      'record_debug_evidence',
+      'run_fable_plan',
+    ];
+    const diagnostics = new Set(['playwright']);
+
+    expect(planToolRestriction('normal', diagnostics)([...available, 'playwright'], available)).toEqual([
+      'read',
+      'bash',
+      'grep',
+      'find',
+      'ls',
+      'subagent',
+      'task',
+      'ask_user_question',
+      'complete_plan',
       'write_plan',
     ]);
-    expect(planModeTools(['read'], ['read', 'ask_user_question'])).toEqual(['read']);
-    expect(planModeTools(['read', 'ask_user_question'], ['read'])).toEqual(['read']);
+    expect(planToolRestriction('debug', diagnostics)([...available, 'playwright'], available)).toContain(
+      'record_debug_evidence',
+    );
+    expect(planToolRestriction('debug', diagnostics)([...available, 'playwright'], available)).toContain('playwright');
+    expect(planToolRestriction('fable', diagnostics)(available, available)).toContain('run_fable_plan');
+    expect(planToolRestriction(undefined, diagnostics)([...available, 'playwright'], available)).toEqual([
+      'read',
+      'bash',
+      'edit',
+      'write',
+      'grep',
+      'find',
+      'ls',
+      'subagent',
+      'task',
+      'ask_user_question',
+      'mcp',
+      'playwright',
+    ]);
   });
 
   it('preserves structured feedback only while it is active and registered', async () => {
@@ -963,9 +1010,13 @@ describe('plan mode entry', () => {
     await liveFixture.invokeLeaderAction('plan.normal');
     expect(liveFixture.activeTools()).toContain('ask_user_question');
 
-    liveFixture.pi.setActiveTools(liveFixture.activeTools().filter((name) => name !== 'ask_user_question'));
+    const askUserOwner = liveFixture.toolSurface.register({
+      source: 'ask-user-owner',
+      restrict: (incoming) => incoming.filter((name) => name !== 'ask_user_question'),
+    });
     await liveFixture.invokeLeaderAction('plan.exit');
     expect(liveFixture.activeTools()).not.toContain('ask_user_question');
+    askUserOwner.dispose();
   });
 
   it('builds a configured model without mutating non-run subagent actions', () => {
@@ -1132,20 +1183,25 @@ describe('plan mode entry', () => {
     expect(isBlockedSubagentManagementAction(undefined)).toBe(false);
   });
 
-  it('preserves live autonomous-voice catalog access without restoring stale access', async () => {
+  it('never re-adds a tool another owner is hiding, in any flavor', async () => {
     const fixture = createExtensionFixture();
     await fixture.handler('session_start')({}, fixture.ctx);
-    fixture.pi.setActiveTools([...fixture.activeTools(), MINOR_MODE_TOOL_NAME]);
 
     await fixture.invokeLeaderAction('plan.normal');
     expect(fixture.activeTools()).toContain(MINOR_MODE_TOOL_NAME);
 
-    fixture.pi.setActiveTools(fixture.activeTools().filter((name) => name !== MINOR_MODE_TOOL_NAME));
+    const catalogOwner = fixture.toolSurface.register({
+      source: 'catalog-owner',
+      restrict: (incoming) => incoming.filter((name: string) => name !== MINOR_MODE_TOOL_NAME),
+    });
     await fixture.invokeLeaderAction('plan.debug');
     expect(fixture.activeTools()).not.toContain(MINOR_MODE_TOOL_NAME);
 
     await fixture.invokeLeaderAction('plan.exit');
     expect(fixture.activeTools()).not.toContain(MINOR_MODE_TOOL_NAME);
+
+    catalogOwner.dispose();
+    expect(fixture.activeTools()).toContain(MINOR_MODE_TOOL_NAME);
   });
 
   it('routes catalog actions through the provider-owned Plan mode handle', async () => {
@@ -1197,7 +1253,7 @@ describe('plan mode entry', () => {
       { active: true, flavor: 'fable', changed: true },
       { active: false, flavor: null, changed: true },
     ]);
-    expect(fixture.activeTools()).toEqual(['read', 'bash', 'edit', 'write', 'subagent', 'ask_user_question', 'mcp']);
+    expect(fixture.activeTools()).toEqual(restoredTools(fixture));
     expect(
       fixture.telemetryRecords.some(({ attributes }) => attributes?.[PLAN_TRIGGER_ATTRIBUTE] === 'voice_tool'),
     ).toBe(true);
@@ -1245,7 +1301,6 @@ describe('plan mode entry', () => {
     const facadeToolNames = ['open_authoring_file', ...AUTHOR_FACADE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES];
     const facadeToolSet = new Set<string>(facadeToolNames);
     await fixture.handler('session_start')({}, fixture.ctx);
-    fixture.pi.setActiveTools([...fixture.activeTools(), unrelatedTool, ...facadeToolNames]);
 
     await fixture.invokeLeaderAction('plan.normal');
     expect(fixture.activeTools()).toEqual(expect.arrayContaining([...facadeToolNames, unrelatedTool]));
@@ -1253,7 +1308,10 @@ describe('plan mode entry', () => {
       fixture.handler('tool_call')({ toolName: 'narrate', input: { text: 'Planning update.' } }, fixture.ctx),
     ).resolves.toBeUndefined();
 
-    fixture.pi.setActiveTools(fixture.activeTools().filter((name) => !facadeToolSet.has(name)));
+    const facadeOwner = fixture.toolSurface.register({
+      source: 'facade-owner',
+      restrict: (incoming) => incoming.filter((name) => !facadeToolSet.has(name)),
+    });
     await fixture.invokeLeaderAction('plan.debug');
     expect(fixture.activeTools()).not.toEqual(expect.arrayContaining(facadeToolNames));
     expect(fixture.activeTools()).not.toContain('narrate');
@@ -1263,7 +1321,7 @@ describe('plan mode entry', () => {
     expect(fixture.activeTools()).toContain(unrelatedTool);
     expect(fixture.activeTools()).not.toEqual(expect.arrayContaining(facadeToolNames));
 
-    fixture.pi.setActiveTools([...fixture.activeTools(), ...facadeToolNames]);
+    facadeOwner.dispose();
     await fixture.invokeLeaderAction('plan.fable');
     expect(fixture.activeTools()).toEqual(expect.arrayContaining(facadeToolNames));
     await fixture.invokeLeaderAction('plan.exit');
@@ -1275,18 +1333,7 @@ describe('plan mode entry', () => {
     await fixture.handler('session_start')({}, fixture.ctx);
 
     await fixture.invokeLeaderAction('plan.normal');
-    expect(fixture.activeTools()).toEqual([
-      'read',
-      'bash',
-      'subagent',
-      'ask_user_question',
-      'grep',
-      'find',
-      'ls',
-      'complete_plan',
-      'task',
-      'write_plan',
-    ]);
+    expect(fixture.activeTools()).toEqual(planNormalTools(fixture));
     expect(fixture.appendedEntries.at(-1)?.data).toMatchObject({ version: 2, activeFlavor: 'normal' });
     expect(fixture.latestModeState()).toMatchObject({ activation: 'active', modelContextVariant: 'normal' });
     expect(fixture.latestModeItem()).toMatchObject({ label: 'Plan', detail: 'normal - read only' });
@@ -1348,7 +1395,7 @@ describe('plan mode entry', () => {
     );
 
     await fixture.invokeLeaderAction('plan.exit');
-    expect(fixture.activeTools()).toEqual(['read', 'bash', 'edit', 'write', 'subagent', 'ask_user_question', 'mcp']);
+    expect(fixture.activeTools()).toEqual(restoredTools(fixture));
     expect(fixture.appendedEntries.at(-1)?.data).toMatchObject({ version: 2 });
     expect(fixture.appendedEntries.at(-1)?.data).not.toHaveProperty('activeFlavor');
     // Exiting takes the label off the shared line rather than clearing a widget.
@@ -1540,11 +1587,9 @@ describe('plan mode entry', () => {
         throw new Error('invalid persisted Doom config');
       },
     );
-    const toolsBeforeAttempt = fixture.activeTools();
-
     await expect(fixture.handler('session_start')({}, fixture.ctx)).rejects.toThrow('invalid persisted Doom config');
 
-    expect(fixture.activeTools()).toEqual(toolsBeforeAttempt);
+    expect(fixture.activeTools()).toEqual(restoredTools(fixture));
     await expect(fixture.completePlan()).resolves.toMatchObject({
       content: [{ text: 'Plan mode is already disabled.' }],
       details: { exited: false },
@@ -1741,7 +1786,7 @@ describe('plan mode entry', () => {
 
       await fixture.handler('session_start')({}, fixture.ctx);
 
-      expect(fixture.activeTools()).toEqual(['read', 'bash', 'edit', 'write', 'subagent', 'ask_user_question', 'mcp']);
+      expect(fixture.activeTools()).toEqual(restoredTools(fixture));
       await expect(
         fixture.handler('before_agent_start')({ systemPrompt: 'base prompt' }, fixture.ctx),
       ).resolves.toBeUndefined();
@@ -1825,7 +1870,7 @@ describe('plan mode entry', () => {
         properties: { decision: { enum: ['exit', 'continue'] } },
       });
       expect(fixture.registeredTool('complete_plan')?.parameters).not.toHaveProperty('required');
-      expect(fixture.activeTools()).toEqual(['read', 'bash', 'edit', 'write', 'subagent', 'ask_user_question', 'mcp']);
+      expect(fixture.activeTools()).toEqual(restoredTools(fixture));
       expect(fixture.appendedEntries.at(-1)?.data).toMatchObject({ version: 2 });
       expect(fixture.appendedEntries.at(-1)?.data).not.toHaveProperty('activeFlavor');
     });
@@ -1869,7 +1914,7 @@ describe('plan mode entry', () => {
       await expect(fixture.completePlan()).rejects.toThrow('waiting for an explicit exit or continue decision');
       await expect(fixture.completePlan('exit')).resolves.toMatchObject({ details: { exited: true } });
       expect(fixture.narrationRequests).toHaveLength(1);
-      expect(fixture.activeTools()).toEqual(['read', 'bash', 'edit', 'write', 'subagent', 'ask_user_question', 'mcp']);
+      expect(fixture.activeTools()).toEqual(restoredTools(fixture));
     });
   });
 
@@ -2031,17 +2076,7 @@ describe('plan mode entry', () => {
     await fixture.handler('session_start')({}, fixture.ctx);
     expect(fixture.currentModel()).toEqual({ provider: 'anthropic', id: 'planner' });
     expect(fixture.thinkingLevel()).toBe('max');
-    expect(fixture.activeTools()).toEqual([
-      'read',
-      'bash',
-      'subagent',
-      'grep',
-      'find',
-      'ls',
-      'complete_plan',
-      'task',
-      'write_plan',
-    ]);
+    expect(fixture.activeTools()).toEqual(planNormalTools(fixture));
     await expect(fixture.handler('context')({ messages: [] }, fixture.ctx)).resolves.toEqual({ messages: [] });
     await expect(fixture.handler('tool_call')({ toolName: 'read', input: {} }, fixture.ctx)).resolves.toBeUndefined();
 
@@ -2059,7 +2094,7 @@ describe('plan mode entry', () => {
     });
 
     await fixture.invokeLeaderAction('plan.exit');
-    expect(fixture.activeTools()).toEqual(['read', 'bash', 'edit', 'write', 'subagent']);
+    expect(fixture.activeTools()).toEqual(restoredTools(fixture));
     expect(fixture.currentModel()).toEqual({ provider: 'openai-codex', id: 'original' });
     expect(fixture.thinkingLevel()).toBe('low');
     expect(fixture.statuses).toHaveBeenLastCalledWith('plan-mode', undefined);

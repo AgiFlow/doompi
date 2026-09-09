@@ -1,5 +1,9 @@
 import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-extension-contracts/background-work';
 import type {
+  DoomToolRestrictionHandle,
+  DoomToolSurfaceService,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import type {
   AgentToolResult,
   ExtensionAPI,
   ExtensionCommandContext,
@@ -35,8 +39,9 @@ import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData } from '../../types
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../types/goalView.ts';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../../types/history.ts';
 import { GoalHistoryStore } from '../node/historyStore.ts';
-import { canExecuteGoalTools, reconcileGoalTools, removeGoalTools } from './toolVisibility.ts';
+import { goalToolRestriction, goalToolsUsable } from './toolVisibility.ts';
 
+const GOAL_TOOL_SOURCE = '@agimon-ai/doompi-goal';
 const COMPLETE_TOOL = 'goal_complete';
 const BLOCKED_TOOL = 'goal_blocked';
 const STATUS_KEY = 'goal';
@@ -110,6 +115,8 @@ export class GoalPiManager {
   private readonly runtime: GoalRuntimeModel;
   private readonly dependencies?: GoalExtensionDependencies;
   private readonly legacyCommandService?: GoalExtensionService;
+  private toolSurface?: DoomToolSurfaceService;
+  private toolRestriction?: DoomToolRestrictionHandle;
   private context?: ExtensionContext;
   private sessionId?: string;
   private generation = 0;
@@ -168,6 +175,26 @@ export class GoalPiManager {
     };
   }
 
+  /**
+   * Hands Goal's tool visibility to the arbiter for the life of the binding.
+   *
+   * Until this runs, Goal has no way to hide its tools and refuses to activate
+   * them, which is the same answer it used to give a host without the setters.
+   */
+  public bindToolSurface(surface: DoomToolSurfaceService): () => void {
+    this.toolSurface = surface;
+    const handle = surface.register({
+      source: GOAL_TOOL_SOURCE,
+      restrict: goalToolRestriction(this.runtime.snapshot().goal),
+    });
+    this.toolRestriction = handle;
+    return () => {
+      if (this.toolRestriction !== handle) return;
+      this.toolRestriction = undefined;
+      this.toolSurface = undefined;
+      handle.dispose();
+    };
+  }
   public backgroundWorkChanged(service: DoomBackgroundWorkService): void {
     const binding = this.backgroundWork;
     if (!binding || binding.service !== service || binding.serviceGeneration !== service.generation) return;
@@ -271,7 +298,7 @@ export class GoalPiManager {
       if (!this.isCurrent(ctx)) return undefined;
       const goal = this.runtime.snapshot().goal;
       if (!goal || goal.status !== 'active') return undefined;
-      if (!canExecuteGoalTools(this.pi, goal)) {
+      if (!this.canExecuteGoalTools(goal)) {
         this.pauseForToolPolicyDrift(ctx, goal);
         return undefined;
       }
@@ -406,13 +433,11 @@ export class GoalPiManager {
   }
 
   private activateTools(goal: ActiveGoal): boolean {
-    if (typeof this.pi.getActiveTools !== 'function' || typeof this.pi.setActiveTools !== 'function') return false;
-    const previous = this.pi.getActiveTools();
-    const result = reconcileGoalTools(this.pi, goal);
-    const required = goal.status === 'budget_limited' ? [COMPLETE_TOOL] : [COMPLETE_TOOL, BLOCKED_TOOL];
-    const available = required.every((name) => result.activeTools.includes(name));
-    if (!available) {
-      this.pi.setActiveTools(previous);
+    const restriction = this.toolRestriction;
+    if (!restriction) return false;
+    restriction.update(goalToolRestriction(goal));
+    if (!this.canExecuteGoalTools(goal)) {
+      restriction.update(goalToolRestriction(undefined));
       return false;
     }
     this.executionGeneration += 1;
@@ -422,12 +447,15 @@ export class GoalPiManager {
   }
 
   private deactivateTools(): void {
-    if (typeof this.pi.getActiveTools === 'function' && typeof this.pi.setActiveTools === 'function') {
-      removeGoalTools(this.pi);
-    }
+    this.toolRestriction?.update(goalToolRestriction(undefined));
     this.executionGeneration += 1;
     this.lastToolCallGoalId = undefined;
     this.lastToolCallGeneration = undefined;
+  }
+
+  /** Whether the tools this goal needs actually reached the host. */
+  private canExecuteGoalTools(goal: ActiveGoal | undefined): boolean {
+    return goalToolsUsable(this.toolSurface?.active() ?? [], goal);
   }
 
   private fenceExecution(): void {
@@ -837,7 +865,7 @@ export class GoalPiManager {
       return;
     }
     if (this.backgroundWorkBlocks(lease)) return;
-    if (!canExecuteGoalTools(this.pi, goal)) {
+    if (!this.canExecuteGoalTools(goal)) {
       this.pauseForToolPolicyDrift(ctx, goal);
       return;
     }
@@ -989,7 +1017,7 @@ export class GoalPiManager {
       (this.lastToolCallGoalId !== goal.id || this.lastToolCallGeneration !== this.executionGeneration)
     )
       return false;
-    return canExecuteGoalTools(this.pi, goal);
+    return this.canExecuteGoalTools(goal);
   }
 
   private async archiveAll(goals: readonly ActiveGoal[], reason: string): Promise<boolean> {

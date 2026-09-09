@@ -15,6 +15,11 @@ import {
   type MinorModeCatalogService,
   type MinorModeRecord,
 } from '@agimon-ai/doompi-extension-contracts/mode';
+import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -744,11 +749,13 @@ describe('voice session controller', () => {
       },
     });
     let activeTools = ['read'];
+    let toolSurface: DoomToolSurfaceService | undefined;
     const registeredTools = new Map<string, unknown>();
     const pi = {
       events,
       registerTool: (tool: { name: string }) => {
         registeredTools.set(tool.name, tool);
+        toolSurface?.refresh();
       },
       registerCommand: (name: string, command: { handler: (...args: unknown[]) => unknown }) => {
         commands.set(name, command);
@@ -917,6 +924,14 @@ describe('voice session controller', () => {
       dispose: vi.fn(),
     };
     const cordis = new Context();
+    toolSurface = createDoomToolSurface({
+      generation: 'voice-setup-test',
+      allTools: () => pi.getAllTools().map((tool) => tool.name),
+      setActiveTools: (names) => {
+        activeTools = [...names];
+      },
+    });
+    cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
     const catalogFiber = cordis.plugin((catalogContext) =>
       catalogContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, modeService),
     );

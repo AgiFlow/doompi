@@ -92,6 +92,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./reconcile": {
       "types": "./dist/reconcile.d.mts",
       "import": "./dist/reconcile.mjs",
@@ -384,6 +389,13 @@
       "entry": "./src/exports/sessionApi.ts",
       "dist": "./dist/sessionApi.mjs"
     }
+  },
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiWeb": {
     "pluginId": "runner",

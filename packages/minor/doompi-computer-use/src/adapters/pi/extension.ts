@@ -6,6 +6,12 @@ import {
   registerMinorModeOwner,
   requireMinorModeCatalog,
 } from '@agimon-ai/doompi-extension-contracts/mode';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  type DoomToolRestrictionHandle,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { registerComputerUseCommand } from '../../commands/computerUseCommand.ts';
@@ -64,12 +70,15 @@ export function modeState(state?: ComputerUseSessionView, enabled = false): Mino
   };
 }
 
-export function reconcileTools(pi: Pick<ExtensionAPI, 'getActiveTools' | 'setActiveTools'>, active: boolean): void {
+/**
+ * Hides the computer-use tools while the mode is off.
+ *
+ * The arbiter starts from every registered tool, so an active mode only has to
+ * return the list untouched: nothing has to add the tools back.
+ */
+export function computerUseRestriction(active: boolean): DoomToolRestriction {
   const owned = new Set<string>(COMPUTER_USE_TOOL_NAMES);
-  const current = pi.getActiveTools();
-  const next = current.filter((name) => !owned.has(name));
-  if (active) next.push(...COMPUTER_USE_TOOL_NAMES);
-  if (next.length !== current.length || next.some((name, index) => name !== current[index])) pi.setActiveTools(next);
+  return (incoming) => (active ? incoming : incoming.filter((name) => !owned.has(name)));
 }
 
 export function installComputerUseRuntime(
@@ -80,6 +89,8 @@ export function installComputerUseRuntime(
   const client = dependencies.client;
   let state: ComputerUseSessionView | undefined;
   let enabled = false;
+  let toolRestriction: DoomToolRestrictionHandle | undefined;
+  const reconcileTools = (active: boolean): void => toolRestriction?.update(computerUseRestriction(active));
   let globallyEnabled = false;
   let mode: MinorModeOwnerHandle | undefined;
   let syncModeOwner = (): void => undefined;
@@ -125,23 +136,23 @@ export function installComputerUseRuntime(
         }
         enabled = false;
         state = undefined;
-        reconcileTools(pi, false);
+        reconcileTools(false);
       }
       syncModeOwner();
     }
     if (!globallyEnabled || client === undefined) {
       state = undefined;
-      reconcileTools(pi, false);
+      reconcileTools(false);
       publish();
       return;
     }
     try {
       state = await client.state();
-      reconcileTools(pi, state.phase === 'active');
+      reconcileTools(state.phase === 'active');
       publish();
     } catch {
       state = undefined;
-      reconcileTools(pi, false);
+      reconcileTools(false);
       publish();
     }
   };
@@ -300,9 +311,20 @@ export function installComputerUseRuntime(
       ? { systemPrompt: `${event.systemPrompt}\n\n${COMPUTER_USE_GUIDANCE}` }
       : undefined,
   );
+  cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+    const handle = requireDoomToolSurface(surfaceContext).register({
+      source: PACKAGE_SOURCE,
+      restrict: computerUseRestriction(false),
+    });
+    toolRestriction = handle;
+    return () => {
+      toolRestriction = undefined;
+      handle.dispose();
+    };
+  });
   pi.on('session_start', (_event, context) => {
     activeContext = context;
-    reconcileTools(pi, false);
+    reconcileTools(false);
     void refresh();
     if (timer) clearInterval(timer);
     timer = setInterval(() => void refresh(), 250);
@@ -312,7 +334,7 @@ export function installComputerUseRuntime(
     () => () => {
       if (timer) clearInterval(timer);
       timer = undefined;
-      reconcileTools(pi, false);
+      reconcileTools(false);
       activeContext?.ui.setStatus(COMPUTER_USE_MODE_STATUS_KEY, undefined);
       activeContext?.ui.setStatus(COMPUTER_USE_STATUS_KEY, undefined);
       activeContext = undefined;

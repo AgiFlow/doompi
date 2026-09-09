@@ -38,6 +38,12 @@ import {
   type VoiceToolSessionHandle,
 } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  type DoomToolRestrictionHandle,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -113,7 +119,11 @@ import { createMinorModeVoiceTool, createVoiceMinorModeCatalog } from './minorMo
 import { isNarrationRuntimeActive, type NarrationToolRuntime, registerNarrationTool } from './narrationTool.ts';
 import { collectVoiceCommandContext } from './voiceCommandContext.ts';
 import { registerVoiceToolFacades } from './voiceTools.ts';
-import { createTransferVoiceToolLifecycle } from './transferVoiceTool.ts';
+import {
+  createTransferVoiceToolLifecycle,
+  transferVoiceToolRestriction,
+  transferVoiceToolVisible,
+} from './transferVoiceTool.ts';
 import {
   registerSessionVoiceOwnership,
   SessionVoiceOwnershipBridge,
@@ -135,6 +145,8 @@ interface VoiceSessionContextLike {
 }
 
 const VOICE_SOURCE = DOOM_VOICE_SOURCE;
+/** The handoff tool has its own visibility clock, so it owns its own restriction. */
+const TRANSFER_VOICE_SOURCE = `${DOOM_VOICE_SOURCE}#transfer-voice`;
 const COMMAND_NAME = 'voice';
 const AUTO_COMMAND_NAME = DOOM_VOICE_AUTO_MODE_ID;
 const STATUS_KEY = 'doom-voice';
@@ -914,17 +926,23 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
   };
 }
 
-export function reconcileVoiceModeTools(pi: ExtensionAPI, enabled: boolean, narrationEnabled = true): void {
-  const activeTools = pi.getActiveTools();
-  const voiceToolNames = new Set<string>(VOICE_MODE_TOOL_NAMES);
-  const registeredNames = new Set(pi.getAllTools().map((tool) => tool.name));
-  const nextTools = activeTools.filter((name) => !voiceToolNames.has(name));
-  if (enabled && VOICE_MODE_TOOL_NAMES.every((name) => registeredNames.has(name))) {
-    nextTools.push(...VOICE_MODE_TOOL_NAMES.filter((name) => narrationEnabled || name !== VOICE_NARRATE_TOOL_NAME));
-  }
-  if (nextTools.length !== activeTools.length || nextTools.some((name, index) => name !== activeTools[index])) {
-    pi.setActiveTools(nextTools);
-  }
+/**
+ * Hides the Voice-owned tools whenever they cannot be used.
+ *
+ * They are registered for the whole session, so the surface would otherwise
+ * offer them while autonomous voice is off. The all-or-nothing gate on
+ * `available` is deliberate: a partially registered facade is not usable, so
+ * the model should not see any part of it.
+ */
+export function voiceToolRestriction(enabled: boolean, narrationEnabled = true): DoomToolRestriction {
+  const owned = new Set<string>(VOICE_MODE_TOOL_NAMES);
+  return (incoming, available) => {
+    const visible = enabled && VOICE_MODE_TOOL_NAMES.every((name) => available.includes(name));
+    return incoming.filter((name) => {
+      if (!owned.has(name)) return true;
+      return visible && (narrationEnabled || name !== VOICE_NARRATE_TOOL_NAME);
+    });
+  };
 }
 
 export interface VoiceExtensionOptions {
@@ -973,7 +991,33 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       narrationToolRuntime = undefined;
     };
 
-    const transferVoiceTool = typeof pi.registerTool === 'function' ? createTransferVoiceToolLifecycle(pi) : undefined;
+    let voiceToolsVisible = false;
+    let narrationToolVisible = true;
+    let toolRestriction: DoomToolRestrictionHandle | undefined;
+    let transferToolRestriction: DoomToolRestrictionHandle | undefined;
+    const currentVoiceRestriction = (): DoomToolRestriction =>
+      voiceToolRestriction(voiceToolsVisible, narrationToolVisible);
+    cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+      const surface = requireDoomToolSurface(surfaceContext);
+      const voiceHandle = surface.register({ source: VOICE_SOURCE, restrict: currentVoiceRestriction() });
+      const transferHandle = surface.register({
+        source: TRANSFER_VOICE_SOURCE,
+        restrict: transferVoiceToolRestriction(transferVoiceToolVisible()),
+      });
+      toolRestriction = voiceHandle;
+      transferToolRestriction = transferHandle;
+      return () => {
+        if (toolRestriction === voiceHandle) toolRestriction = undefined;
+        if (transferToolRestriction === transferHandle) transferToolRestriction = undefined;
+        voiceHandle.dispose();
+        transferHandle.dispose();
+      };
+    });
+
+    const transferVoiceTool =
+      typeof pi.registerTool === 'function'
+        ? createTransferVoiceToolLifecycle(pi, (restrict) => transferToolRestriction?.update(restrict))
+        : undefined;
     if (transferVoiceTool) yield () => transferVoiceTool.dispose();
 
     const waitUntilSelectedModeReady = async (context: ExtensionContext, signal?: AbortSignal): Promise<void> => {
@@ -1001,7 +1045,9 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
         voiceToolSession !== undefined &&
         contextSessionId === voiceToolSession.sessionId;
       voiceToolSession?.setActive(enabled);
-      reconcileVoiceModeTools(pi, enabled, autoController.selectedMode !== 'live');
+      voiceToolsVisible = enabled;
+      narrationToolVisible = autoController.selectedMode !== 'live';
+      toolRestriction?.update(currentVoiceRestriction());
       voiceToolFacades?.refresh();
     };
     const configuredMode = (): 'legacy' | 'live' =>

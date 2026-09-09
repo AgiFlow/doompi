@@ -1,5 +1,10 @@
 import type { McpStatusSnapshot } from '@agimon-ai/doompi-extension-contracts/mcp-status';
 import type { DoomMcpResolvedToolSelection } from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
+import type {
+  DoomToolRestriction,
+  DoomToolRestrictionHandle,
+  DoomToolSurfaceService,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { McpClientManagerService, McpServerStateChange, TokenStore } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { type CatalogTool, McpCatalog } from '../../services/mcpCatalog.ts';
@@ -9,7 +14,8 @@ import { buildMcpConfigGroups } from '../node/configSources.ts';
 import { type McpRuntimeOwner, readCachedCatalog } from '../node/mcpRuntime.ts';
 import { readDirectToolFilter } from '../process/directToolsEnvironment.ts';
 import { readSessionConfig } from '../process/sessionConfig.ts';
-import { applyActiveTools, registerNewTools } from './mcpTools.ts';
+import { PACKAGE_SOURCE } from './mcpConstants.ts';
+import { mcpToolRestriction, registerNewTools } from './mcpTools.ts';
 
 /** Raised by anything needing a live container before one has been built. */
 const RUNTIME_NOT_STARTED = 'The MCP runtime has not started yet.';
@@ -98,6 +104,8 @@ export class McpSession {
   private readonly registeredToolFingerprints = new Map<string, string>();
   private readonly historicallyOwnedNames = new Set<string>();
   private readonly incompatibleNames = new Set<string>();
+  /** The session's slot in the tool surface, held only while a session fiber is up. */
+  private toolRestriction: DoomToolRestrictionHandle | undefined;
 
   /** Resolved per tool call, so a registration outlives the container it was made under. */
   private readonly clientManager = (): McpClientManagerService | undefined =>
@@ -110,14 +118,22 @@ export class McpSession {
   }
 
   /**
-   * Applies the tool set to Pi. Runs on session start, never during install.
+   * Puts this session's tool visibility under the Doom tool surface.
    *
-   * Pi's active-list calls throw until the runtime is bound, so the tools
-   * registered at install stay at Pi's default visibility until this runs, which
-   * is the first point the session can express that nothing has connected yet.
+   * Registering applies the current restriction immediately, which is the first
+   * point the session can express that nothing has connected yet: the surface
+   * only exists once a session fiber is up, while the cached tools were
+   * registered back at install. Dropping the handle restores every wrapper, so
+   * nothing here keeps a snapshot of the tool list.
    */
-  activate(): void {
-    this.applyActiveTools();
+  bindToolSurface(surface: DoomToolSurfaceService): () => void {
+    const handle = surface.register({ source: PACKAGE_SOURCE, restrict: this.currentRestriction() });
+    this.toolRestriction = handle;
+    return () => {
+      if (this.toolRestriction !== handle) return;
+      this.toolRestriction = undefined;
+      handle.dispose();
+    };
   }
 
   private createCatalog(): McpCatalog {
@@ -152,7 +168,7 @@ export class McpSession {
     this.authorizationUrls.clear();
     this.browserAuthorizationRequests.clear();
     this.bindConfiguration(configuration);
-    this.applyActiveTools();
+    this.updateToolVisibility();
     this.emitChange();
     this.startDetached();
   }
@@ -205,12 +221,22 @@ export class McpSession {
     );
   }
 
-  private applyActiveTools(): void {
+  /**
+   * What this extension hides right now.
+   *
+   * Rebuilt from scratch every time, so a server that failed drops out and one
+   * that reconnected comes back.
+   */
+  private currentRestriction(): DoomToolRestriction {
     const unavailable = new Set(this.incompatibleNames);
     for (const tool of this.catalog.allTools()) {
       if (this.disconnectedServers.has(tool.serverName)) unavailable.add(tool.piName);
     }
-    applyActiveTools(this.pi, this.catalog, this.historicallyOwnedNames, unavailable);
+    return mcpToolRestriction(this.catalog, this.historicallyOwnedNames, unavailable);
+  }
+
+  private updateToolVisibility(): void {
+    this.toolRestriction?.update(this.currentRestriction());
   }
 
   private startDetached(): void {
@@ -308,7 +334,7 @@ export class McpSession {
     this.authorizationUrls.delete(serverName);
     this.browserAuthorizationRequests.delete(serverName);
     this.catalog.applyStateChange({ serverName, state: 'closed' }, []);
-    this.applyActiveTools();
+    this.updateToolVisibility();
     this.emitChange();
   }
 
@@ -371,11 +397,11 @@ export class McpSession {
    * on only that server's tools rather than on an aggregate proxy group.
    *
    * Nothing is re-registered on the way back: Pi 0.84 cannot unregister a tool, so
-   * every tool is still registered and only its place in the active list moved.
+   * every tool stays registered and only the restriction moves.
    */
   setEnabled(serverName: string, enabled: boolean): void {
     this.catalog.setDisabled(serverName, !enabled);
-    this.applyActiveTools();
+    this.updateToolVisibility();
     this.emitChange();
   }
 
@@ -487,7 +513,7 @@ export class McpSession {
           return;
         const added = this.catalog.applyStateChange(change, tools);
         this.registerTools(added);
-        this.applyActiveTools();
+        this.updateToolVisibility();
         this.emitChange();
       });
   }

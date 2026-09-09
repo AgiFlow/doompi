@@ -1,0 +1,39 @@
+/**
+ * {{ restrictionDescription }}
+ *
+ * DESIGN PATTERNS:
+ * - A restriction is a pure function of state. It receives the tool list the
+ *   restrictions before it produced and returns a narrower one. The Doom tool
+ *   surface is the only writer of the host's active tool list.
+ * - Removal is inherent. Nothing snapshots the previous list, because dropping
+ *   the restriction makes the surface recompute from every registered tool.
+ *
+ * CODING STANDARDS:
+ * - Export the factory so a unit test can call it without a host.
+ * - Filter `incoming`. `available` is every registered tool and is only there
+ *   for the rare check that a tool exists at all.
+ *
+ * AVOID:
+ * - Calling pi.setActiveTools anywhere. The no-direct-tool-activation lint rule
+ *   rejects it, because a whole-list write silently restores whatever another
+ *   package had hidden.
+ * - Appending a name that is not already in `incoming`. A restriction that adds
+ *   is a tool registration in the wrong place: register the tool unconditionally
+ *   with pi.registerTool and hide it here instead.
+ * - Reading Date.now, process.env or any host state in the returned closure.
+ */
+import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+
+/** Tools this package hides while it is active. */
+export const {{ restrictionName | upperCase }}_RESTRICTED_TOOLS: ReadonlySet<string> = new Set(['edit', 'write']);
+
+/**
+ * {{ restrictionDescription }}
+ *
+ * `active` is the package's own state, passed in rather than read, so the same
+ * arguments always produce the same tool list.
+ */
+export function {{ restrictionName | camelCase }}ToolRestriction(active: boolean): DoomToolRestriction {
+  if (!active) return (incoming) => incoming;
+  return (incoming) => incoming.filter((name) => !{{ restrictionName | upperCase }}_RESTRICTED_TOOLS.has(name));
+}

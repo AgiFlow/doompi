@@ -121,6 +121,8 @@ function registerExtension(options: RegisterExtensionOptions | TestBus = {}): Re
     registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
     registerTool: vi.fn((definition: { name: string }) => registeredTools.push(definition.name)),
     getActiveTools: vi.fn(() => [...active]),
+    // The inventory the tool surface recomputes from.
+    getAllTools: vi.fn(() => ['read', ...registeredTools].map((name) => ({ name }))),
     setActiveTools: vi.fn((names: string[]) => {
       active = [...names];
     }),

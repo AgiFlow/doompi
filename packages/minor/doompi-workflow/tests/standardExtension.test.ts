@@ -1,5 +1,13 @@
-import { childProcessContextEnvironment } from '@agimon-ai/doompi-extension-contracts/child-process';
+import {
+  childProcessContextEnvironment,
+  SUBAGENT_ROOT_SESSION_ENV,
+} from '@agimon-ai/doompi-extension-contracts/child-process';
 import { createPiTestHost, type PiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
+import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -62,13 +70,28 @@ function notified(host: PiTestHost, sessionId: string): string[] {
 }
 
 let host: PiTestHost;
+let toolSurface: DoomToolSurfaceService | undefined;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A real subagent shell exports this, and it would otherwise decide the root
+  // session these tests are asserting on.
+  vi.stubEnv(SUBAGENT_ROOT_SESSION_ENV, '');
   host = createPiTestHost({ cwd: '/repo' });
+  toolSurface = undefined;
   mocks.createCordisRoot = () => {
     const root = new Context();
     root.provide(DOOM_UI_HUB_SERVICE, {} as DoomUiHubService);
+    // The surface is the session's, not the package's, so the fixture owns it
+    // exactly the way the composed host does.
+    const surface = createDoomToolSurface({
+      generation: 'workflow-test',
+      allTools: () => host.pi.getAllTools().map((entry) => entry.name),
+      setActiveTools: (names) => host.pi.setActiveTools([...names]),
+    });
+    toolSurface = surface;
+    root.provide(DOOM_TOOL_SURFACE_SERVICE, surface);
+    root.effect(() => () => surface.dispose(), 'workflow-test-tool-surface');
     cordisRoots.push(root);
     return root;
   };
@@ -209,9 +232,6 @@ describe('standard workflow factory lifecycle', () => {
     expect(notified(host, 'fenced')).toEqual([]);
     expect(update).not.toHaveBeenCalled();
     installedPi.registerTool(tool('late-tool'));
-    installedPi.setActiveTools(['late-tool']);
-
-    expect(installedPi.getActiveTools()).toEqual([]);
     await expect(installedPi.exec('late-command', [])).resolves.toMatchObject({
       code: 1,
       stderr: expect.stringContaining('no longer active'),
@@ -237,13 +257,17 @@ describe('standard workflow factory lifecycle', () => {
         ),
       );
       pi.registerTool(tool('workflow_run'));
-      pi.setActiveTools(['list_workflows', 'launch_workflow', 'workflow_run']);
       return { dispose: vi.fn().mockResolvedValue(undefined) };
     });
 
     await workflowExtension(host.pi);
 
     expect(host.tools.map(({ name }) => name)).toEqual(['list_workflows', 'launch_workflow']);
+    // Registered behind the bridge's back, so only the restriction can hide it.
+    host.pi.registerTool(tool('workflow_run'));
+    await vi.waitFor(() => expect(toolSurface?.active()).toContain('list_workflows'));
+    toolSurface?.refresh();
+    expect(toolSurface?.active()).toEqual(['list_workflows', 'launch_workflow']);
     expect(mocks.registerLeader).not.toHaveBeenCalled();
     expect(mocks.install).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ initialMode: true }));
     const launch = host.tool('launch_workflow');

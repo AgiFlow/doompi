@@ -20,14 +20,13 @@ describe('the standard Pi entry contract', () => {
 });
 
 describe('doompi-computer-use Pi extension', () => {
-  it('waits for session start before reconciling its registered tools', async () => {
+  it('keeps its registered tools off the surface until the grant is active', async () => {
     const host = createPiTestHost();
-    const getActiveTools = vi.spyOn(host.pi, 'getActiveTools');
+    const setActiveTools = vi.spyOn(host.pi, 'setActiveTools');
     await activateComputerUseExtension(host.pi);
     expect(host.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([...COMPUTER_USE_TOOL_NAMES]));
-    expect(getActiveTools).not.toHaveBeenCalled();
     await host.emit('session_start', {});
-    await vi.waitFor(() => expect(getActiveTools).toHaveBeenCalled());
+    await vi.waitFor(() => expect(setActiveTools).toHaveBeenCalled());
     expect(host.activeTools()).not.toEqual(expect.arrayContaining([...COMPUTER_USE_TOOL_NAMES]));
     await host.dispose();
   });
@@ -45,8 +44,7 @@ describe('doompi-computer-use Pi extension', () => {
   });
 
   it('exposes tools and guidance only while the session grant is active', async () => {
-    const host = createPiTestHost();
-    host.pi.setActiveTools(['read']);
+    const host = createPiTestHost({ builtinTools: ['read'] });
     let phase: 'active' | 'inactive' | 'awaiting_confirmation' = 'inactive';
     let globallyEnabled = true;
     const client: ComputerUseSessionClient = {

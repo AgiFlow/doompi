@@ -26,6 +26,11 @@ import {
   type DoomReadinessNotification,
   readDoomReadinessCoordinator,
 } from '@agimon-ai/doompi-extension-contracts/readiness';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestrictionHandle,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
@@ -78,7 +83,7 @@ import {
 import {
   createWorkflowLaunchExecutor,
   registerWorkflowPiTools,
-  WORKFLOW_PI_TOOL_NAMES,
+  workflowToolRestriction,
   type WorkflowLaunchExecutor,
   type WorkflowLaunchInput,
 } from './piTools';
@@ -729,6 +734,20 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     let workflowMode = false;
     let publishedWorkflowState: string | undefined;
     let modeContribution: MinorModeOwnerHandle | undefined;
+    let toolRestriction: DoomToolRestrictionHandle | undefined;
+    options.cordis?.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+      // Resolved after this factory returns, so the restriction is built from
+      // whatever the mode is by then rather than from the mode at install time.
+      const handle = requireDoomToolSurface(surfaceContext).register({
+        source: PACKAGE_SOURCE,
+        restrict: workflowToolRestriction(workflowMode),
+      });
+      toolRestriction = handle;
+      return () => {
+        if (toolRestriction === handle) toolRestriction = undefined;
+        handle.dispose();
+      };
+    });
     options.cordis?.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (modeContext) => {
       const initialState = workflowModeState(workflowMode, sessionRunCount);
       const contribution = registerMinorModeOwner<ExtensionContext>(requireMinorModeCatalog(modeContext), {
@@ -2122,9 +2141,9 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     /**
      * Turn workflow mode on or off.
      *
-     * `setActiveTools` is a whole-list setter, so this is always a
-     * read-modify-write against `getActiveTools()`. Passing a bare literal would
-     * silently deactivate every other extension's tools.
+     * The tools are registered for the whole session, so the mode is a tool
+     * surface restriction rather than a registration: dropping it is what makes
+     * them visible again, and no other owner's tools are touched either way.
      *
      * Activating also injects each tool's `promptSnippet` and `promptGuidelines`
      * into the system prompt, and deactivating strips them: in Pi, tool gating
@@ -2132,13 +2151,8 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
      */
     const setWorkflowMode = (enabled: boolean): void => {
       if (!isRuntimeActive()) return;
-      const active = new Set(pi.getActiveTools());
-      for (const name of WORKFLOW_PI_TOOL_NAMES) {
-        if (enabled) active.add(name);
-        else active.delete(name);
-      }
-      pi.setActiveTools([...active]);
       workflowMode = enabled;
+      toolRestriction?.update(workflowToolRestriction(enabled));
       // Published here rather than in refreshStatus so the label lands with the
       // toggle: the status refresh is an async registry read, and a label that
       // waits for it looks like the command did nothing.

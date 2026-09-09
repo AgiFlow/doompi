@@ -11,7 +11,11 @@ const telemetryMocks = vi.hoisted(() => ({ createHarnessTelemetry: vi.fn(() => (
 const utilsMocks = vi.hoisted(() => ({ piCliPath: vi.fn(() => '/pi/cli.js') }));
 
 vi.mock('@agimon-ai/doompi/cli', () => ({ resolveHarnessOptions: doompiMocks.resolveHarnessOptions }));
-vi.mock('@agimon-ai/doompi/services', () => doompiMocks);
+// The launcher also reads a constant from this module; the mock must carry it.
+vi.mock('@agimon-ai/doompi/services', () => ({
+  ...doompiMocks,
+  LAUNCHER_COMPOSITION_REQUEST_ENV: 'DOOMPI_COMPOSITION_RECORD',
+}));
 vi.mock('@agimon-ai/doompi/logSinkTelemetry', () => telemetryMocks);
 vi.mock('@agimon-ai/doompi/utils', () => utilsMocks);
 
@@ -176,6 +180,37 @@ describe('createDoomAgentLauncher', () => {
 
     expect(launch.command).toBe('doompi');
     expect(launch.args).toEqual(BASE_ARGS);
+  });
+
+  it('asks the delegated launcher to reuse the composition record', async () => {
+    const callerEnvironment = { DOOMPI_AGENT_COMMAND: '/global/dist/bin/cli.mjs' };
+    const launcher = createDoomAgentLauncher({
+      agentArgs: BASE_ARGS,
+      compositionRecordPath: '/generations/abc/state.json',
+      cwd: CWD,
+      environment: callerEnvironment,
+      resolvePinnedCli: noPin,
+    });
+
+    const launch = await launcher.resolve();
+
+    expect(launch.env?.DOOMPI_COMPOSITION_RECORD).toBe('/generations/abc/state.json');
+    // The caller's environment defaults to process.env, so it must be copied.
+    expect(callerEnvironment).not.toHaveProperty('DOOMPI_COMPOSITION_RECORD');
+  });
+
+  it('leaves the delegated environment untouched without a composition record', async () => {
+    const callerEnvironment = { DOOMPI_AGENT_COMMAND: '/global/dist/bin/cli.mjs' };
+    const launcher = createDoomAgentLauncher({
+      agentArgs: BASE_ARGS,
+      cwd: CWD,
+      environment: callerEnvironment,
+      resolvePinnedCli: noPin,
+    });
+
+    const launch = await launcher.resolve();
+
+    expect(launch.env).toBe(callerEnvironment);
   });
 });
 

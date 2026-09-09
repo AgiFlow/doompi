@@ -35,6 +35,7 @@ The root package carries the fixed host foundation:
 - [`@agimon-ai/doompi-autostop`][pkg-doompi-autostop] shuts down an interactive automation session after the agent settles when `--auto-stop` is active.
 - [`@agimon-ai/doompi-notification`][pkg-doompi-notification] owns desktop notifications and the terminal-tab title. `--mute` disables it for one launch.
 - [`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] defines the shared Cordis services, events, lifecycle host, and serialization contracts.
+- [`@agimon-ai/doompi-kernel`][pkg-doompi-kernel] holds the layer-gated contribution registry that recomposes a host surface without a reload.
 - [`@agimon-ai/doompi-ui`][pkg-doompi-ui] provides the shared TUI and Leader services.
 - [`@agimon-ai/doompi-telemetry`][pkg-doompi-telemetry] is the library-level telemetry adapter. Export requires a configured or discovered endpoint, unless local file fallback is explicitly enabled.
 
@@ -237,6 +238,7 @@ available, and the same model continues to provide bounded command correction.
 [pkg-doompi-skill]: https://www.npmjs.com/package/@agimon-ai/doompi-skill
 [pkg-doompi-ui]: https://www.npmjs.com/package/@agimon-ai/doompi-ui
 [pkg-doompi-hashline]: https://www.npmjs.com/package/@agimon-ai/doompi-hashline
+[pkg-doompi-kernel]: https://www.npmjs.com/package/@agimon-ai/doompi-kernel
 [pkg-doompi-hook]: https://www.npmjs.com/package/@agimon-ai/doompi-hook
 [pkg-doompi-prompt]: https://www.npmjs.com/package/@agimon-ai/doompi-prompt
 [pkg-doompi-read]: https://www.npmjs.com/package/@agimon-ai/doompi-read

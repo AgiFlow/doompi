@@ -43,6 +43,10 @@ export default defineConfig({
         replacement: `${doomExtensionContractsExports}uiHub.ts`,
       },
       {
+        find: '@agimon-ai/doompi-extension-contracts/server-facet',
+        replacement: `${doomExtensionContractsExports}serverFacet.ts`,
+      },
+      {
         find: /^@agimon-ai\/doompi-extension-contracts\/(.*)$/,
         replacement: `${doomExtensionContractsExports}$1.ts`,
       },

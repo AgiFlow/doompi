@@ -1,3 +1,8 @@
+import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +26,7 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
   const tools = new Map<string, { name: string; execute(...args: unknown[]): unknown }>();
   const branch: ReturnType<ExtensionContext['sessionManager']['getBranch']> = [];
   let activeTools = ['read'];
+  let toolSurface: DoomToolSurfaceService | undefined;
   const context = {
     hasUI: true,
     isIdle: () => true,
@@ -37,9 +43,12 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
         await handler(value, ctx);
       });
     },
-    registerTool: (tool: { name: string; execute(...args: unknown[]): unknown }) => tools.set(tool.name, tool),
-    getActiveTools: () => activeTools,
+    registerTool: (tool: { name: string; execute(...args: unknown[]): unknown }) => {
+      tools.set(tool.name, tool);
+      toolSurface?.refresh();
+    },
     getAllTools: () => [...tools.values()],
+    getActiveTools: () => activeTools,
     setActiveTools: vi.fn((names: string[]) => {
       activeTools = names;
     }),
@@ -84,6 +93,16 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
   };
   const signIn = vi.fn(async (_signal: AbortSignal) => attempt);
   const waitUntilConfigured = vi.fn(async () => undefined);
+  toolSurface = createDoomToolSurface({
+    generation: 'voice-live-test',
+    // 'read' stands in for the host's own tools: the surface only removes, so it
+    // has to start from the whole registered inventory.
+    allTools: () => ['read', ...tools.keys()],
+    setActiveTools: (names) => {
+      activeTools = [...names];
+    },
+  });
+  cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
   installVoiceRuntime(cordis, pi, { container, liveHost: host, liveSignIn: signIn, waitUntilConfigured });
   disposers.push(async () => {
     await cordis.fiber.dispose();

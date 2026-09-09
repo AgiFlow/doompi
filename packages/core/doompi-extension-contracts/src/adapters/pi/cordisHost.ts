@@ -2,8 +2,10 @@ import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, SessionStartEvent } from '@earendil-works/pi-coding-agent';
 import { DOOM_CONTEXT_CONTRIBUTIONS_SERVICE } from '../../schemas/contextContributions.ts';
 import { DOOM_TOOL_OVERRIDES_SERVICE } from '../../schemas/toolOverrides.ts';
+import { DOOM_TOOL_SURFACE_SERVICE } from '../../schemas/toolSurface.ts';
 import { createDoomContextContributionsService } from '../../services/contextContributions.ts';
 import { createDoomToolOverridesService } from '../../services/toolOverrides.ts';
+import { createDoomToolSurface } from '../../services/toolSurface.ts';
 
 export const DOOM_CORDIS_HOST_ABI_VERSION = 1 as const;
 export const DOOM_CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';
@@ -161,9 +163,17 @@ function runtimeProvider(ctx: Context, service: DoomCordisRuntimeService): void 
   ctx.provide(DOOM_TOOL_OVERRIDES_SERVICE, createDoomToolOverridesService(service.generation));
 }
 
-function sessionProvider(ctx: Context, service: DoomCordisSessionService): void {
+function sessionProvider(ctx: Context, service: DoomCordisSessionService, pi: ExtensionAPI): void {
   ctx.provide(DOOM_CORDIS_SESSION_SERVICE, service);
   ctx.provide(DOOM_CONTEXT_CONTRIBUTIONS_SERVICE, createDoomContextContributionsService(service.generation));
+  ctx.provide(
+    DOOM_TOOL_SURFACE_SERVICE,
+    createDoomToolSurface({
+      generation: service.generation,
+      allTools: () => pi.getAllTools().map((tool) => tool.name),
+      setActiveTools: (names) => pi.setActiveTools(names),
+    }),
+  );
 }
 
 /**
@@ -260,7 +270,9 @@ export async function installDoomCordisHost(
             reason: event.reason,
             context,
           });
-          sessionFiber = root.plugin(sessionProvider, service);
+          sessionFiber = root.plugin((ctx: Context, value: DoomCordisSessionService) => {
+            sessionProvider(ctx, value, pi);
+          }, service);
           await sessionFiber.await();
         });
       return sessionQueue;

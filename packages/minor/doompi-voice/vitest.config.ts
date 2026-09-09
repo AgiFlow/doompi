@@ -70,6 +70,10 @@ export default defineConfig({
         replacement: source('../../core/doompi-extension-contracts/src/exports/voiceReloadHandoff.ts'),
       },
       {
+        find: '@agimon-ai/doompi-extension-contracts/tool-surface',
+        replacement: source('../../core/doompi-extension-contracts/src/exports/toolSurface.ts'),
+      },
+      {
         find: '@agimon-ai/doompi-extension-contracts/ui-hub',
         replacement: source('../../core/doompi-extension-contracts/src/exports/uiHub.ts'),
       },

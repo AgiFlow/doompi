@@ -7,6 +7,7 @@ import {
   buildHarnessContext,
   ensureLayerPackages,
   type HarnessContext,
+  LAUNCHER_COMPOSITION_REQUEST_ENV,
   resolveLaunchPlan,
 } from '@agimon-ai/doompi/services';
 import { piCliPath } from '@agimon-ai/doompi/utils';
@@ -135,12 +136,20 @@ export function createDoomAgentLauncher(options: DoomAgentLauncherOptions): Agen
       const args = majorMode === undefined ? [...options.agentArgs] : relaunchAgentArgs(options.agentArgs, majorMode);
       // The delegated launcher owns composition for its own version, so it is
       // handed the arguments unchanged and does the work in its own process.
+      // The composition-record request still travels, because without it that
+      // launcher freezes Pi's extension list and a mode switch needs a new
+      // process. A launcher too old to read the variable ignores it.
       if (delegate !== undefined) {
         return {
           command: delegate.command,
           args: [...delegate.prefixArgs, ...args],
           cwd: options.cwd,
-          env: environment,
+          // Copied rather than mutated: `environment` defaults to process.env,
+          // and the server must not inherit the child's request.
+          env:
+            options.compositionRecordPath === undefined
+              ? environment
+              : { ...environment, [LAUNCHER_COMPOSITION_REQUEST_ENV]: options.compositionRecordPath },
         };
       }
       const harnessOptions = resolveHarnessOptions({ args, environment, cwd: options.cwd });

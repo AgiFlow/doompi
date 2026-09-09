@@ -56,6 +56,7 @@ export {
   type PiLaunchPlan,
   resolveLaunchPlan,
 } from '../../adapters/launchPlan';
+export { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_REQUEST_ENV } from '../../types/interfaces/launcherComposition';
 export {
   buildRuntimeBundle,
   createRuntimeExtensionPlan,
@@ -118,3 +119,6 @@ export {
   syncStatePath,
   writeSyncState,
 } from '../../adapters/syncState';
+// The route and facet module names, so a host loading a synced generation and
+// the sync that wrote it never disagree about the filename.
+export { apiRoutesFile, serverFacetsFile } from '../../adapters/apiRoutesSync';

@@ -4,6 +4,7 @@ import {
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
+import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { createDoomVoiceToolsService, VOICE_MODE_TOOL_NAMES } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -12,11 +13,11 @@ import {
   type AutoCapturePiEventController,
   createVoiceNarrationService,
   extractTerminalAssistantText,
-  reconcileVoiceModeTools,
   registerAutoCaptureCordisEventHandlers,
   registerSessionVoiceNarrationService,
   registerVoiceTurnFallback,
   type VoiceTurnFallbackRuntime,
+  voiceToolRestriction,
 } from '../src/exports';
 import type { NarrationToolRuntime } from '../src/adapters/pi/narrationTool.ts';
 import { deliverAutoCaptureInput } from '../src/adapters/pi/voice.ts';
@@ -39,36 +40,36 @@ describe('autonomous prompt delivery', () => {
   });
 });
 
-describe('Voice-owned tool reconciliation', () => {
+describe('Voice-owned tool restriction', () => {
   function fixture(registered = [...VOICE_MODE_TOOL_NAMES]) {
-    let active = ['read', ...VOICE_MODE_TOOL_NAMES, 'write'];
-    const setActiveTools = vi.fn((names: string[]) => {
-      active = [...names];
+    const all = ['read', 'write', ...registered];
+    const surface = createDoomToolSurface({
+      generation: 'voice-test',
+      allTools: () => all,
+      setActiveTools: () => undefined,
     });
-    const pi = {
-      getActiveTools: () => [...active],
-      getAllTools: () => ['read', 'write', ...registered].map((name) => ({ name })),
-      setActiveTools,
-    } as unknown as ExtensionAPI;
-    return { pi, active: () => [...active], setActiveTools };
+    const handle = surface.register({ source: 'voice', restrict: voiceToolRestriction(false) });
+    return { handle, visible: () => surface.active() };
   }
 
-  it('removes every stale Voice-owned name while preserving unrelated tool order', () => {
+  it('hides every Voice-owned tool until autonomous voice is on', () => {
     const h = fixture();
-    reconcileVoiceModeTools(h.pi, false);
-    expect(h.active()).toEqual(['read', 'write']);
+    expect(h.visible()).toEqual(['read', 'write']);
+    h.handle.update(voiceToolRestriction(true));
+    expect(h.visible()).toEqual(['read', 'write', ...VOICE_MODE_TOOL_NAMES]);
   });
 
-  it('re-adds all three names only when every Voice-owned tool is registered', () => {
-    const enabled = fixture();
-    reconcileVoiceModeTools(enabled.pi, false);
-    reconcileVoiceModeTools(enabled.pi, true);
-    expect(enabled.active()).toEqual(['read', 'write', ...VOICE_MODE_TOOL_NAMES]);
-
+  it('shows the facade only when every Voice-owned tool reached the host', () => {
     const incomplete = fixture(['describe_voice_tools', 'use_voice_tools']);
-    reconcileVoiceModeTools(incomplete.pi, true);
-    expect(incomplete.active()).toEqual(['read', 'write']);
-    expect(incomplete.active()).not.toContain('narrate');
+    incomplete.handle.update(voiceToolRestriction(true));
+    expect(incomplete.visible()).toEqual(['read', 'write']);
+  });
+
+  it('keeps narrate hidden while live mode owns narration', () => {
+    const live = fixture();
+    live.handle.update(voiceToolRestriction(true, false));
+    expect(live.visible()).toContain('use_voice_tools');
+    expect(live.visible()).not.toContain('narrate');
   });
 });
 

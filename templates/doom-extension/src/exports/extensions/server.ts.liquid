@@ -1,0 +1,5 @@
+// A Doom server host loads the module's default export as its facet entry contract.
+export {
+  {{ facetName | camelCase }}ServerFacet,
+  {{ facetName | camelCase }}ServerFacet as default,
+} from '../../adapters/server/facet.ts';

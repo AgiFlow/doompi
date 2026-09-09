@@ -2,7 +2,7 @@ import type { McpClientManagerService, McpToolInfo } from '@agimon-ai/mcp-proxy'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyActiveTools, registerMcpTool, registerNewTools } from '../src/adapters/pi/mcpTools.ts';
+import { mcpToolRestriction, registerMcpTool, registerNewTools } from '../src/adapters/pi/mcpTools.ts';
 import { McpCatalog } from '../src/services/mcpCatalog.ts';
 
 function mcpTool(name: string, inputSchema: Record<string, unknown> = { type: 'object' }): McpToolInfo {
@@ -226,110 +226,76 @@ describe('registerNewTools', () => {
   });
 });
 
-describe('applyActiveTools', () => {
-  it('exposes cached tools before their server has reported', () => {
+describe('mcpToolRestriction', () => {
+  // The surface starts from Pi's whole inventory, so a restriction is handed every
+  // registered name and answers with the ones that stay.
+  const HOST_TOOLS = ['read', 'bash', 'tasks'];
+  const surviving = (restrict: ReturnType<typeof mcpToolRestriction>, ...owned: string[]): readonly string[] =>
+    restrict([...HOST_TOOLS, ...owned], [...HOST_TOOLS, ...owned]);
+
+  it('keeps cached tools visible before their server has reported', () => {
     const catalog = new McpCatalog();
     catalog.seed({ servers: [{ name: 'pencil', tools: [mcpTool('get_screenshot')] }] });
-    const { pi, activeTools } = fakePi(['read']);
-    registerNewTools(pi, () => clientManager, catalog.allTools());
 
-    applyActiveTools(pi, catalog);
-
-    expect(activeTools()).toEqual(['read', 'pencil_get_screenshot']);
+    expect(surviving(mcpToolRestriction(catalog), 'pencil_get_screenshot')).toEqual([
+      ...HOST_TOOLS,
+      'pencil_get_screenshot',
+    ]);
   });
 
   it('withholds tools whose server is known to be unusable', () => {
     const catalog = new McpCatalog();
     catalog.seed({ servers: [{ name: 'pencil', tools: [mcpTool('get_screenshot')] }] });
-    const { pi, activeTools } = fakePi(['read']);
-    registerNewTools(pi, () => clientManager, catalog.allTools());
     catalog.applyStateChange({ serverName: 'pencil', state: 'needs-auth' });
 
-    applyActiveTools(pi, catalog);
-
-    expect(activeTools()).toEqual(['read']);
+    expect(surviving(mcpToolRestriction(catalog), 'pencil_get_screenshot')).toEqual(HOST_TOOLS);
   });
 
-  it('activates a server tools when it connects, without re-registering them', () => {
+  it('drops a failed server tools and restores them when it reconnects', () => {
     const catalog = new McpCatalog();
-    catalog.seed({ servers: [{ name: 'pencil', tools: [mcpTool('get_screenshot')] }] });
-    const { pi, activeTools } = fakePi(['read']);
-    registerNewTools(pi, () => clientManager, catalog.allTools());
-
-    registerNewTools(pi, () => clientManager, catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }));
-    applyActiveTools(pi, catalog);
-
-    expect(pi.registerTool).toHaveBeenCalledOnce();
-    expect(activeTools()).toEqual(['read', 'pencil_get_screenshot']);
-  });
-
-  it('registers and activates a tool the cache did not know about', () => {
-    const catalog = new McpCatalog();
-    const { pi, registered, activeTools } = fakePi([]);
-
-    const added = catalog.applyStateChange({ serverName: 'boomlink', state: 'connected' }, [mcpTool('search')]);
-    registerNewTools(pi, () => clientManager, added);
-    applyActiveTools(pi, catalog);
-
-    expect([...registered.keys()]).toEqual(['boomlink_search']);
-    expect(activeTools()).toEqual(['boomlink_search']);
-  });
-
-  it('drops a failed server tools from the active list', () => {
-    const catalog = new McpCatalog();
-    const { pi, activeTools } = fakePi(['read']);
-    registerNewTools(
-      pi,
-      () => clientManager,
-      catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]),
-    );
-    applyActiveTools(pi, catalog);
+    catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]);
+    const owned = new Set(['pencil_get_screenshot']);
 
     catalog.applyStateChange({ serverName: 'pencil', state: 'failed' });
-    applyActiveTools(pi, catalog);
+    expect(surviving(mcpToolRestriction(catalog, owned), 'pencil_get_screenshot')).toEqual(HOST_TOOLS);
 
-    expect(activeTools()).toEqual(['read']);
+    catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]);
+    expect(surviving(mcpToolRestriction(catalog, owned), 'pencil_get_screenshot')).toEqual([
+      ...HOST_TOOLS,
+      'pencil_get_screenshot',
+    ]);
   });
 
-  // The active list is global, so rebuilding it from MCP alone would hide Pi's own
-  // tools and every other extension's.
-  it('leaves tools this extension does not own alone', () => {
+  // The surface hands over every owner's list, so a restriction that added a name
+  // back would resurrect a tool another owner had deliberately hidden.
+  it('leaves tools this extension does not own alone, and never adds one', () => {
     const catalog = new McpCatalog();
-    const { pi, activeTools } = fakePi(['read', 'bash', 'tasks']);
     catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]);
 
-    applyActiveTools(pi, catalog);
-
-    expect(activeTools()).toEqual(['read', 'bash', 'tasks', 'pencil_get_screenshot']);
+    expect(mcpToolRestriction(catalog)(['read', 'bash'], ['read', 'bash', 'pencil_get_screenshot'])).toEqual([
+      'read',
+      'bash',
+    ]);
   });
 
   it('removes historically owned wrappers that the current catalog no longer contains', () => {
     const catalog = new McpCatalog();
-    const { pi, activeTools } = fakePi(['read', 'pencil_get_screenshot']);
 
-    applyActiveTools(pi, catalog, new Set(['pencil_get_screenshot']));
+    const restrict = mcpToolRestriction(catalog, new Set(['pencil_get_screenshot']));
 
-    expect(activeTools()).toEqual(['read']);
+    expect(surviving(restrict, 'pencil_get_screenshot')).toEqual(HOST_TOOLS);
   });
 
   it('withholds a current tool whose retained wrapper has incompatible schema', () => {
     const catalog = new McpCatalog();
     catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]);
-    const { pi, activeTools } = fakePi(['read']);
 
-    applyActiveTools(pi, catalog, new Set(['pencil_get_screenshot']), new Set(['pencil_get_screenshot']));
+    const restrict = mcpToolRestriction(
+      catalog,
+      new Set(['pencil_get_screenshot']),
+      new Set(['pencil_get_screenshot']),
+    );
 
-    expect(activeTools()).toEqual(['read']);
-  });
-
-  it('does not duplicate an MCP tool that is already active', () => {
-    const catalog = new McpCatalog();
-    const { pi, activeTools } = fakePi(['read']);
-    catalog.applyStateChange({ serverName: 'pencil', state: 'connected' }, [mcpTool('get_screenshot')]);
-    applyActiveTools(pi, catalog);
-
-    applyActiveTools(pi, catalog);
-
-    expect(activeTools()).toEqual(['read', 'pencil_get_screenshot']);
+    expect(surviving(restrict, 'pencil_get_screenshot')).toEqual(HOST_TOOLS);
   });
 });

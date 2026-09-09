@@ -172,6 +172,110 @@ features:
       - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
     patterns:
       - src/services/**/*.ts
+  - name: scaffold-doom-tool-restriction
+    description: Add a Doom tool-surface restriction that hides tools while the package is active, with its cordis binding and unit test.
+    variables_schema:
+      type: object
+      properties:
+        restrictionName:
+          type: string
+          description: camelCase name of the state that hides tools, used for the module and function names
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: voiceMode
+        restrictionDescription:
+          type: string
+          description: Which tools this hides and while what is true, in one line
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          minLength: 1
+          maxLength: 240
+          example: Hide file writes while voice mode is speaking
+        packageName:
+          type: string
+          description: This package's npm name, used as the restriction owner label
+          pattern: "^@[a-z0-9-]+/[a-z0-9-]+$"
+          maxLength: 64
+          example: "@agimon-ai/doompi-voice"
+      required:
+        - restrictionName
+        - restrictionDescription
+        - packageName
+      additionalProperties: false
+    includes:
+      - src/services/toolRestriction.ts->src/services/{{ restrictionName | camelCase }}Tools.ts
+      - src/adapters/pi/toolSurfaceBinding.ts->src/adapters/pi/{{ restrictionName | camelCase }}ToolSurface.ts
+      - tests/unit/services/toolRestriction.test.ts->tests/unit/services/{{ restrictionName | camelCase }}Tools.test.ts
+    instruction: |-
+      Generate a tool-surface restriction. The Doom tool surface, a session-scoped Cordis service from @agimon-ai/doompi-extension-contracts/tool-surface, is the only writer of the host's active tool list. Packages never call pi.setActiveTools: that is a whole-list write, so the last writer silently restores whatever another package had deliberately hidden. The no-direct-tool-activation lint rule rejects the call in src.
+
+      A restriction is a pure function (incoming, available) => names that only ever REMOVES. Removal is inherent: dropping the restriction makes the surface recompute from every registered tool, so nothing snapshots the previous list and no restore path can go stale.
+
+      Complete the package integration after generation:
+      - Replace the placeholder tool names in {{ restrictionName | upperCase }}_RESTRICTED_TOOLS and the boolean `active` parameter with the package's real state. Keep the function pure: pass state in, never read Date.now, process.env or a host.
+      - Call bind{{ restrictionName | pascalCase }}ToolSurface from the package's Pi adapter, inside its own plugin fiber, so host disposal unwinds the registration. cordis.inject resolves asynchronously, after the extension factory returns, so nothing may assume the restriction is applied during setup.
+      - Call the returned apply(active) on every state change. Never mutate the closure a previous restriction captured.
+      - A restriction cannot add a tool. If a tool must be conditionally invisible, register it unconditionally with pi.registerTool and hide it here.
+      - Model rival owners in tests as another surface.register call, never as a direct setActiveTools call, or the test proves nothing about arbitration.
+      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    patterns:
+      - src/services/**/*.ts
+      - src/adapters/pi/**/*.ts
+  - name: scaffold-doom-server-facet
+    description: Add the package's server facet, the Cordis object plugin a session server or the cockpit hub installs to mount its HTTP API, with its unit test.
+    variables_schema:
+      type: object
+      properties:
+        facetName:
+          type: string
+          description: camelCase prefix for the exported facet, usually the package's short name
+          pattern: "^[a-z][a-zA-Z0-9]*$"
+          maxLength: 48
+          example: runner
+        apiModule:
+          type: string
+          description: Path of the adapter exporting the DoomApi, relative to src/adapters/server/
+          pattern: "^\\.\\./[A-Za-z0-9_./-]+\\.ts$"
+          maxLength: 120
+          example: ../runnerLogApi.ts
+        scope:
+          type: string
+          description: Which host installs this facet
+          enum:
+            - session
+            - hub
+          example: session
+        scopeReason:
+          type: string
+          description: Why the surface belongs to that scope, in one line and lower case
+          pattern: "^[a-z][A-Za-z0-9 .,;:!?()/'-]*$"
+          minLength: 1
+          maxLength: 200
+          example: the runner log belongs to the session that owns the runners
+      required:
+        - facetName
+        - apiModule
+        - scope
+        - scopeReason
+      additionalProperties: false
+    includes:
+      - src/adapters/server/facet.ts
+      - src/exports/extensions/server.ts
+      - tests/unit/adapters/serverFacet.test.ts
+    instruction: |-
+      Generate the package's server facet. A package ships two facets: the Pi extension the agent process installs, and this one, installed by the headless host that serves the package's HTTP API. The facet is where the API is registered, so the API and the server are one declaration rather than two.
+
+      The facet MUST be a Cordis object plugin, `{ inject: [...], apply(context) {} }`, never a bare function calling context.inject inside itself. Only the object form declares its own inject, so the host mounts one fiber and `fiber.await()` settles once apply has run. A nested inject mounts a child fiber the host holds no handle on, and the host decides whether to open a listener from a mount table it must know is complete. The doom-server-facet-shape lint rule rejects the other forms.
+
+      Complete the package integration after generation:
+      - Add the manifest declaration. `exports["./extensions/server"]` pointing at ./dist/extensions/server.mjs with types, import and require conditions, and a top-level `doompiServer` block naming entry, dist and scopes. Sync reads that block; a package without it contributes no facet.
+      - Keep the DoomApi in its adapter. The facet reads the host, registers the api and returns the disposer; it never builds routes or holds state.
+      - Do nothing else in apply. A facet that opens a socket, reads a file or starts a timer at install has the same problem an eager Pi extension has, and a server has no reload to recover from it.
+      - A base path already claimed by another facet is refused with a notice, so pick one that is globally unique across loaded packages.
+      - Update the package's contract test: the exports map and the doompiServer block are both part of the published shape.
+      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    patterns:
+      - src/adapters/server/**/*.ts
+      - src/exports/extensions/**/*.ts
   - name: scaffold-doom-command
     description: Add one Pi command under src/commands with its integration test.
     variables_schema:

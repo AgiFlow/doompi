@@ -1,19 +1,24 @@
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-extension-contracts/mode';
 import { DOOM_NARRATION_SERVICE, requireDoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  type DoomToolRestrictionHandle,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { AskUserToolGate } from '../../services/askUserToolGate.js';
+import { askUserToolRestriction } from '../../services/askUserToolGate.js';
 import { isAutonomousVoiceActive } from '../../services/autonomousVoiceMode.js';
 import { QuestionnaireCoordinator, type QuestionnaireRunner } from '../../services/questionnaireCoordinator.js';
 import type { QuestionnaireResult } from '../../types/questionnaire.js';
 import { createVoiceQuestionHandoff, type VoiceQuestionHandoff } from '../doom/voiceQuestionHandoff.js';
-import { readActiveToolRegistry } from './activeToolRegistry.js';
 import { ASK_USER_QUESTION_TOOL_NAME, registerAskUserQuestionTool } from './askUserQuestionAdapter.js';
-import { registerAskUserQuestionReconciler } from './reconcileAdapter.js';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-user-feedback';
 const SESSION_START_EVENT = 'session_start';
+const BEFORE_AGENT_START_EVENT = 'before_agent_start';
 
 function cancelledResult(): QuestionnaireResult {
   return { answers: [], cancelled: true };
@@ -27,9 +32,12 @@ export function installUserFeedbackRuntime(cordis: Context, pi: ExtensionAPI): v
   let sessionReady = false;
   let coordinator = new QuestionnaireCoordinator();
   let voiceHandoff: VoiceQuestionHandoff | undefined;
-  const registry = readActiveToolRegistry(pi);
-  const toolGate = registry ? new AskUserToolGate(registry, ASK_USER_QUESTION_TOOL_NAME) : undefined;
-  let syncToolGate = (): void => undefined;
+  let voiceActive = false;
+  let hasUI = true;
+  let toolRestriction: DoomToolRestrictionHandle | undefined;
+  const currentRestriction = (): DoomToolRestriction =>
+    askUserToolRestriction(ASK_USER_QUESTION_TOOL_NAME, hasUI && !voiceActive);
+  const syncToolRestriction = (): void => toolRestriction?.update(currentRestriction());
   let lifecycleQueue: Promise<void> = Promise.resolve();
   const pendingOperations = new Set<Promise<unknown>>();
 
@@ -48,10 +56,6 @@ export function installUserFeedbackRuntime(cordis: Context, pi: ExtensionAPI): v
 
   const shutdownRuntime = async (): Promise<void> => {
     if (!active) return;
-    // Released before the flags drop, so a runtime torn down while Voice is still active
-    // cannot leave the tool hidden: Pi re-activates a refreshed tool only when its name is
-    // new to the registry, and after a reload this one is not.
-    toolGate?.release();
     const ownedCoordinator = coordinator;
     ownedCoordinator.shutdown();
     active = false;
@@ -77,20 +81,31 @@ export function installUserFeedbackRuntime(cordis: Context, pi: ExtensionAPI): v
   // Separate from the handoff binding above: the gate needs only the mode catalog, so it
   // still applies to a Voice build that publishes modes without providing narration.
   cordis.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (modeContext) => {
-    if (!toolGate) return undefined;
     const modes = requireMinorModeCatalog(modeContext);
     const apply = (): void => {
-      // Pi binds the active-tool accessors to a started session runtime and throws before
-      // that, so nothing is applied until the session is ready.
-      if (active && sessionReady) toolGate.sync(isAutonomousVoiceActive(modes.list()));
+      voiceActive = isAutonomousVoiceActive(modes.list());
+      syncToolRestriction();
     };
-    syncToolGate = apply;
     const unsubscribe = modes.subscribe(apply);
     apply();
     return () => {
       unsubscribe();
-      if (syncToolGate === apply) syncToolGate = (): void => undefined;
-      toolGate.release();
+      voiceActive = false;
+      syncToolRestriction();
+    };
+  });
+
+  // The surface is session-scoped, so this re-registers per session and picks up the
+  // gate state in force at that moment.
+  cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+    const handle = requireDoomToolSurface(surfaceContext).register({
+      source: PACKAGE_SOURCE,
+      restrict: currentRestriction(),
+    });
+    toolRestriction = handle;
+    return () => {
+      toolRestriction = undefined;
+      handle.dispose();
     };
   });
 
@@ -129,7 +144,12 @@ export function installUserFeedbackRuntime(cordis: Context, pi: ExtensionAPI): v
     },
     tryVoice: (params) => (active && sessionReady ? voiceHandoff?.handoff(params) : undefined),
   });
-  registerAskUserQuestionReconciler(pi, isContextActive);
+
+  pi.on(BEFORE_AGENT_START_EVENT, (_event, context) => {
+    if (!isContextActive(context)) return;
+    hasUI = context.hasUI;
+    syncToolRestriction();
+  });
 
   pi.on(SESSION_START_EVENT, (_event, context) => {
     if (!active) return;
@@ -146,8 +166,8 @@ export function installUserFeedbackRuntime(cordis: Context, pi: ExtensionAPI): v
       await previousCoordinator.waitForIdle();
       if (!ownsGeneration(generation, activeSessionId)) return;
       sessionReady = true;
-      // A session can start with Voice already active, for example across a Voice reload.
-      syncToolGate();
+      // The surface is re-registered per session from the gate state in force, so a session
+      // that starts with Voice already active needs nothing extra here.
     };
 
     const operation = lifecycleQueue.then(initializeSession, initializeSession);

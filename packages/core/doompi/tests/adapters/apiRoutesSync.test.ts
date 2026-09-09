@@ -145,3 +145,52 @@ describe('generating the package API routes', () => {
     expect(notices.join('\n')).toMatch(/is unreadable/u);
   });
 });
+
+describe('generating the server facet modules', () => {
+  const facetBlock = {
+    entry: './src/exports/extensions/server.ts',
+    dist: './dist/extensions/server.mjs',
+  };
+
+  function readFacets(directory: string, scope: 'session' | 'hub'): string {
+    return fs.readFileSync(path.join(directory, `${scope}.facets.mjs`), 'utf8');
+  }
+
+  it('writes a facet per declared scope and leaves the other scope empty', () => {
+    const runner = installedPackage({ name: 'runner', doompiServer: { ...facetBlock, scopes: ['session'] } });
+    const outputDirectory = path.join(temporary('doompi-api-out-'), 'api');
+
+    const result = syncApiRoutes({ resolvedEntries: { runner: runner.entry }, outputDirectory });
+
+    const specifier = pathToFileURL(path.join(runner.root, 'dist/extensions/server.mjs')).href;
+    expect(readFacets(outputDirectory, 'session')).toContain(`import facet0 from '${specifier}';`);
+    expect(readFacets(outputDirectory, 'session')).toContain('export const facets = [facet0];');
+    expect(readFacets(outputDirectory, 'hub')).toContain('export const facets = [];');
+    expect(result.facets).toEqual({ session: ['runner'], hub: [] });
+  });
+
+  it('installs a facet into both scopes when the package names neither', () => {
+    const shared = installedPackage({ name: 'shared', doompiServer: facetBlock });
+    const outputDirectory = path.join(temporary('doompi-api-out-'), 'api');
+
+    const result = syncApiRoutes({ resolvedEntries: { shared: shared.entry }, outputDirectory });
+
+    expect(result.facets).toEqual({ session: ['shared'], hub: ['shared'] });
+  });
+
+  it('reports a malformed facet block and still writes the modules', () => {
+    const broken = installedPackage({ name: 'broken', doompiServer: { entry: './src/e.ts' } });
+    const notices: string[] = [];
+    const outputDirectory = path.join(temporary('doompi-api-out-'), 'api');
+
+    const result = syncApiRoutes({
+      resolvedEntries: { broken: broken.entry },
+      outputDirectory,
+      onNotice: (message) => notices.push(message),
+    });
+
+    expect(notices[0]).toContain('dist is required');
+    expect(result.facets).toEqual({ session: [], hub: [] });
+    expect(readFacets(outputDirectory, 'session')).toContain('export const facets = [];');
+  });
+});

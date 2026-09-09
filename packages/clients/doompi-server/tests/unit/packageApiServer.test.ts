@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { serveSessionApis } from '../../src/adapters/packageApiServer.ts';
 import type { ServerTelemetry } from '../../src/adapters/serverTelemetry.ts';
 
@@ -262,5 +263,52 @@ describe('serving a session package APIs', () => {
 
     await server.close();
     expect(fs.existsSync(socketPath)).toBe(false);
+  });
+  it('serves an API a session server facet registers', async () => {
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host || host.scope !== 'session') return undefined;
+            const registration = host.registerApi(echoApi('runner'));
+            return () => registration.dispose();
+          },
+        },
+      ],
+      onNotice: () => undefined,
+    });
+    cleanups.push(() => server.close());
+
+    const response = await request(server.socketPath!, '/api/plugin/runner/log');
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({ path: '/log' });
+  });
+
+  it('opens no socket when a facet registers nothing for this scope', async () => {
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            return host?.scope === 'hub' ? () => undefined : undefined;
+          },
+        },
+      ],
+      onNotice: () => undefined,
+    });
+
+    expect(server.socketPath).toBeUndefined();
+    await server.close();
   });
 });

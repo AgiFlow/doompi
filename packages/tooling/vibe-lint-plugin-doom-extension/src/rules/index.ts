@@ -7,6 +7,7 @@ export {
   doomCleanArchitectureBoundary,
   doomFolderLayout,
   doomLayerBoundary,
+  doomServerFacetShape,
   noInternalPublicImport,
   noLegacyCordisAccess,
   publicExportBoundary,
@@ -16,6 +17,7 @@ export {
 export {
   disposeExternalSubscriptions,
   doomPackageShape,
+  noDirectToolActivation,
   noLiveGlobalRegistry,
   noProtocolChannelLiterals,
   noRawPiEvents,

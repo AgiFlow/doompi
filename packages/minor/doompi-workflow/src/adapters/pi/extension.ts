@@ -13,6 +13,11 @@ import {
   DOOM_SKILL_SOURCES_SERVICE,
   requireDoomSkillSourcesService,
 } from '@agimon-ai/doompi-extension-contracts/skills';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -29,6 +34,7 @@ const CLEANUP_SCOPE = Symbol('doom-workflow-cleanup');
 
 const DISPATCHER_TOOL_NAMES = new Set(['list_workflows', 'launch_workflow']);
 const ROOT_SCOPED_TOOL_NAMES = new Set(['launch_workflow']);
+const WORKFLOW_RUN_TOOL_NAME = 'workflow_run';
 
 type RegisteredTool = Parameters<ExtensionAPI['registerTool']>[0];
 type CommandOptions = Parameters<ExtensionAPI['registerCommand']>[1];
@@ -64,6 +70,14 @@ function withParentSession(ctx: ExtensionContext, parentSessionId: string): Exte
   });
 }
 
+/**
+ * A dispatcher child launches workflows for its root session and never runs one
+ * itself, so `workflow_run` stays off its surface even if something registers it.
+ */
+export function dispatcherToolRestriction(): DoomToolRestriction {
+  return (incoming) => incoming.filter((name) => name !== WORKFLOW_RUN_TOOL_NAME);
+}
+
 /** Restrict a dispatcher child to discovery and root-owned launch. */
 export function createDispatcherBridge(
   pi: ExtensionAPI,
@@ -73,9 +87,6 @@ export function createDispatcherBridge(
   const rootSessionId = parentSessionId ? resolveRootSessionId(parentSessionId, environment) : undefined;
   return new Proxy(pi, {
     get(target, property) {
-      if (property === 'setActiveTools') {
-        return (names: string[]): void => target.setActiveTools(names.filter((name) => name !== 'workflow_run'));
-      }
       if (property !== 'registerTool') return boundValue(target, property);
       return (tool: RegisteredTool): void => {
         if (!DISPATCHER_TOOL_NAMES.has(tool.name)) return;
@@ -236,14 +247,6 @@ function createWorkflowFence(host: ExtensionAPI): WorkflowFence {
       if (property === 'registerTool') return registerTool;
       if (property === 'registerCommand') return registerCommand;
       if (property === 'registerShortcut') return registerShortcut;
-      if (property === 'getActiveTools') {
-        return (): string[] => (isCurrentInvocation() ? target.getActiveTools() : []);
-      }
-      if (property === 'setActiveTools') {
-        return (names: string[]): void => {
-          if (isCurrentInvocation()) target.setActiveTools(names);
-        };
-      }
       if (property === 'sendMessage') {
         return (...args: Parameters<ExtensionAPI['sendMessage']>): void => {
           if (isCurrentInvocation()) target.sendMessage(...args);
@@ -306,6 +309,13 @@ export function installWorkflowRuntime(
   });
 
   if (dispatcher) {
+    cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+      const handle = requireDoomToolSurface(surfaceContext).register({
+        source: `${PACKAGE_SOURCE}/dispatcher`,
+        restrict: dispatcherToolRestriction(),
+      });
+      return () => handle.dispose();
+    });
     runtime = installWorkflowPiRuntime({ cordis, initialMode: true, isActive: isCurrentInvocation })(runtimePi);
     return;
   }

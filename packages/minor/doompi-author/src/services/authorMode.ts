@@ -6,6 +6,12 @@ import {
   registerMinorModeOwner,
   requireMinorModeCatalog,
 } from '@agimon-ai/doompi-extension-contracts/mode';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  type DoomToolRestrictionHandle,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { AuthorCatalog } from './authorCatalog.ts';
@@ -48,17 +54,19 @@ function state(active: boolean, catalogReady: boolean): MinorModeState {
   };
 }
 
-function reconcileTools(
-  pi: Pick<ExtensionAPI, 'getActiveTools' | 'setActiveTools'>,
-  active: boolean,
-  catalogReady: boolean,
-): void {
-  const owned = new Set<string>([OPEN_AUTHORING_FILE_TOOL_NAME, ...AUTHOR_FACADE_TOOL_NAMES]);
-  const current = pi.getActiveTools();
-  const next = current.filter((name) => !owned.has(name));
-  if (active) next.push(OPEN_AUTHORING_FILE_TOOL_NAME);
-  if (active && catalogReady) next.push(...AUTHOR_FACADE_TOOL_NAMES);
-  if (next.length !== current.length || next.some((name, index) => name !== current[index])) pi.setActiveTools(next);
+/**
+ * Hides the author tools until the mode is on, and the facade tools until the
+ * catalog has answered.
+ *
+ * The arbiter starts from every registered tool, so an active mode only removes
+ * what is not ready yet: nothing has to add tools back.
+ */
+export function authorToolRestriction(active: boolean, catalogReady: boolean): DoomToolRestriction {
+  const hidden = new Set<string>([
+    ...(active ? [] : [OPEN_AUTHORING_FILE_TOOL_NAME]),
+    ...(active && catalogReady ? [] : AUTHOR_FACADE_TOOL_NAMES),
+  ]);
+  return (incoming) => (hidden.size === 0 ? incoming : incoming.filter((name) => !hidden.has(name)));
 }
 
 export function installAuthorMode(
@@ -76,7 +84,8 @@ export function installAuthorMode(
   let monitorGeneration = 0;
   const facades = registerFacades(pi, catalog, () => active);
   const publish = (): void => owner?.publish(state(active, catalogSnapshot !== undefined));
-  const reconcile = (): void => reconcileTools(pi, active, catalogSnapshot !== undefined);
+  let toolRestriction: DoomToolRestrictionHandle | undefined;
+  const reconcile = (): void => toolRestriction?.update(authorToolRestriction(active, catalogSnapshot !== undefined));
   const setCatalog = (snapshot: AuthorViewportCatalogSnapshot | undefined): void => {
     const previous = catalogSnapshot;
     catalogSnapshot = snapshot;
@@ -185,6 +194,17 @@ export function installAuthorMode(
   pi.on('before_agent_start', (event) =>
     active ? { systemPrompt: `${event.systemPrompt}\n\n${AUTHOR_GUIDANCE}` } : undefined,
   );
+  cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+    const handle = requireDoomToolSurface(surfaceContext).register({
+      source: PACKAGE_SOURCE,
+      restrict: authorToolRestriction(active, catalogSnapshot !== undefined),
+    });
+    toolRestriction = handle;
+    return () => {
+      toolRestriction = undefined;
+      handle.dispose();
+    };
+  });
   cordis.effect(
     () => () => {
       controller.deactivate();

@@ -6,6 +6,7 @@ import {
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-extension-contracts/mode';
+import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { type LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
 import type { Context } from '@deepseek-ai/cordis';
@@ -92,6 +93,9 @@ function goalPlugin(cordis: Context, { pi, dependencies }: GoalPluginConfig): vo
     yield () => activation.dispose();
 
     const manager = activation.manager;
+    cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) =>
+      manager.bindToolSurface(requireDoomToolSurface(surfaceContext)),
+    );
     cordis.inject([DOOM_BACKGROUND_WORK_SERVICE], (backgroundContext) => {
       const service = readDoomBackgroundWorkService(backgroundContext);
       if (!service) return undefined;

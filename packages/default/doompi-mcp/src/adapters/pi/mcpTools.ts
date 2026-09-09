@@ -1,3 +1,4 @@
+import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { McpClientManagerService } from '@agimon-ai/mcp-proxy';
 import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -95,7 +96,7 @@ const ALWAYS_AVAILABLE: McpToolAvailability = () => true;
  * Registers one downstream tool with Pi.
  *
  * Registration is permanent for the session: Pi 0.84 has no `unregisterTool`, so
- * visibility is controlled through the active list instead. The connection is
+ * visibility is controlled through a tool-surface restriction instead. The connection is
  * resolved at execution time rather than captured, so a server that reconnects
  * underneath keeps working.
  */
@@ -141,10 +142,10 @@ export function registerMcpTool(
 /**
  * Registers tools that are new to Pi.
  *
- * Separate from the active list because Pi allows `registerTool` during extension
- * loading but not `getActiveTools`/`setActiveTools`, which throw until the runtime
- * is bound. This half is therefore safe to run at install; `applyActiveTools` is
- * not, and waits for the session to start.
+ * Separate from visibility because Pi allows `registerTool` during extension
+ * loading, while the tool surface only exists once a session has started. This
+ * half is therefore safe to run at install; the restriction is not, and waits
+ * for the session fiber to hand the surface over.
  */
 export function registerNewTools(
   pi: ExtensionAPI,
@@ -156,22 +157,21 @@ export function registerNewTools(
 }
 
 /**
- * Recomputes which of this extension's tools Pi exposes.
+ * Hides every wrapper this extension owns that the catalog does not currently offer.
  *
- * Rebuilt from scratch every time, so a server that failed drops out and one that
- * reconnected comes back. Only valid once the session has started.
+ * The surface recomputes from the whole registered inventory, so this only ever
+ * removes: a server that reconnected is already in `incoming` and nothing has to
+ * put it back. Historical ownership matters after reconfiguration because Pi
+ * cannot unregister a wrapper the new domain no longer selects.
+ *
+ * The visible set is read once, here, so the returned function stays pure and a
+ * later re-apply by another owner cannot see half a catalog change.
  */
-export function applyActiveTools(
-  pi: ExtensionAPI,
+export function mcpToolRestriction(
   catalog: McpCatalog,
   historicallyOwnedNames: ReadonlySet<string> = new Set(catalog.allTools().map((tool) => tool.piName)),
   incompatibleNames: ReadonlySet<string> = new Set(),
-): void {
-  // Tools this extension does not own are carried through untouched: the active
-  // list is global, and rebuilding it from MCP alone would hide everything else.
-  // Historical ownership matters after reconfiguration because Pi cannot unregister
-  // a wrapper that the new domain no longer selects.
-  const others = pi.getActiveTools().filter((name) => !historicallyOwnedNames.has(name));
-  const active = catalog.activeToolNames().filter((name) => !incompatibleNames.has(name));
-  pi.setActiveTools([...others, ...active]);
+): DoomToolRestriction {
+  const visible = new Set(catalog.activeToolNames().filter((name) => !incompatibleNames.has(name)));
+  return (incoming) => incoming.filter((name) => !historicallyOwnedNames.has(name) || visible.has(name));
 }

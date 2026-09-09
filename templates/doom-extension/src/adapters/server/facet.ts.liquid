@@ -1,0 +1,36 @@
+/**
+ * {{ facetName | camelCase }}'s server facet.
+ *
+ * DESIGN PATTERNS:
+ * - Object plugin. `inject` is declared on the facet itself, so the host mounts
+ *   one fiber and knows the API is registered the moment it settles. A bare
+ *   function calling context.inject spawns a child fiber the host holds no
+ *   handle on, and the host reads the mount table to decide whether to listen.
+ * - Thin host adapter. It registers the package's API and returns the
+ *   disposer; the surface itself stays in its own adapter.
+ * - Scope-aware. {{ scopeReason }}, so the other scope registers nothing rather
+ *   than mounting an API with no owner behind it.
+ *
+ * AVOID:
+ * - Starting work in apply. A facet that opens a socket, reads a file or starts
+ *   a timer at install has the same problem an eager Pi extension has, and a
+ *   server has no reload to recover from it.
+ */
+
+import {
+  DOOM_SERVER_HOST_SERVICE,
+  type DoomServerFacet,
+  requireDoomServerHost,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type { Context } from '@deepseek-ai/cordis';
+import { api } from '{{ apiModule }}';
+
+export const {{ facetName | camelCase }}ServerFacet: DoomServerFacet = {
+  inject: [DOOM_SERVER_HOST_SERVICE],
+  apply(context: Context) {
+    const host = requireDoomServerHost(context);
+    if (host.scope !== '{{ scope }}') return undefined;
+    const registration = host.registerApi(api);
+    return () => registration.dispose();
+  },
+};

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   disposeExternalSubscriptions,
   doomPackageShape,
+  noDirectToolActivation,
   noLiveGlobalRegistry,
   noProtocolChannelLiterals,
   noRawPiEvents,
@@ -435,5 +436,28 @@ describe('Doom package convention rules', () => {
     expect(providerOwnedPolicy.check?.(objectMutation, root, boundaryContext())).toContain('Do not mutate');
     expect(providerOwnedPolicy.check?.(semanticPolicy, root, boundaryContext())).toBeNull();
     expect(providerOwnedPolicy.check?.(path.join(root, 'missing.ts'), root, boundaryContext())).toBeNull();
+  });
+
+  it('rejects direct setActiveTools calls outside the tool-surface owner', () => {
+    writeManifest({ name: '@agimon-ai/doompi-plan' });
+    const direct = write('src/services/planMode.ts', 'pi.setActiveTools([...names]);');
+    const restriction = write(
+      'src/services/planRestriction.ts',
+      'toolSurface.register({ source: PLAN_LEADER_SOURCE, restrict });',
+    );
+
+    expect(noDirectToolActivation.check?.(direct, root, boundaryContext())).toContain('DOOM_TOOL_SURFACE_SERVICE');
+    expect(noDirectToolActivation.check?.(restriction, root, boundaryContext())).toBeNull();
+  });
+
+  it('allows the contracts package arbiter and its fake host to drive the setter', () => {
+    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    const arbiter = write('src/services/toolSurface.ts', 'options.setActiveTools(next);');
+    const fakeHost = write('src/adapters/testing/piHost.ts', 'host.setActiveTools(names);');
+    const other = write('src/services/other.ts', 'pi.setActiveTools(names);');
+
+    expect(noDirectToolActivation.check?.(arbiter, root, boundaryContext())).toBeNull();
+    expect(noDirectToolActivation.check?.(fakeHost, root, boundaryContext())).toBeNull();
+    expect(noDirectToolActivation.check?.(other, root, boundaryContext())).toContain('setActiveTools');
   });
 });

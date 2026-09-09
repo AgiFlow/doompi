@@ -71,11 +71,14 @@ interface ExtensionHarness {
 async function extensionHarness(context: ExtensionContext): Promise<ExtensionHarness> {
   const listeners = new Map<string, SessionListener[]>();
   let activeTools = ['read'];
+  const registeredTools: string[] = [];
   const pi = {
     events: new TestBus(),
     registerCommand: vi.fn(),
-    registerTool: vi.fn(),
+    registerTool: vi.fn((definition: { name: string }) => registeredTools.push(definition.name)),
     getActiveTools: vi.fn(() => [...activeTools]),
+    // The inventory the tool surface recomputes from.
+    getAllTools: vi.fn(() => ['read', ...registeredTools].map((name) => ({ name }))),
     setActiveTools: vi.fn((tools: string[]) => {
       activeTools = [...tools];
     }),

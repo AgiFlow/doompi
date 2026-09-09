@@ -14,6 +14,7 @@ import {
   DOOM_MCP_PROJECTION_SERVICE,
   readDoomMcpProjectionService,
 } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -122,6 +123,12 @@ function mcpPlugin(cordis: Context, { pi, mode }: McpPluginOptions): void {
     },
   });
   cordis.inject([DOOM_UI_HUB_SERVICE], (uiContext) => registerLeaderContribution(requireDoomUiHub(uiContext)));
+  // The surface lives on the session fiber, so this resolves after install has
+  // already registered the cached wrappers: binding is what first hides the ones
+  // no server has confirmed.
+  cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) =>
+    session.bindToolSurface(requireDoomToolSurface(surfaceContext)),
+  );
   cordis.effect(
     () => async () => {
       disposed = true;

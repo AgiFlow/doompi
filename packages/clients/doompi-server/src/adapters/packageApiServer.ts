@@ -6,8 +6,9 @@ import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApi,
   type DoomApiContext,
-  type DoomApiHandler,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { createDoomServerHost, type DoomServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { installServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { validatedTraceContext } from '../services/traceContext.ts';
 import { observe, type ServerTelemetry } from './serverTelemetry.ts';
@@ -30,6 +31,8 @@ export interface PackageApiServerOptions {
   internalToken?: string;
   hubToken?: string;
   apis: readonly DoomApi[];
+  /** Server facets to install; each registers its own APIs through the host. */
+  facets?: readonly DoomServerFacet[];
   telemetry?: ServerTelemetry;
   onNotice: (message: string) => void;
 }
@@ -90,7 +93,10 @@ function responseWithCompletion(response: Response, complete: () => void): Respo
  * prefix stripped, so a package declares routes relative to itself.
  */
 export async function serveSessionApis(options: PackageApiServerOptions): Promise<PackageApiServer> {
-  if (options.apis.length === 0) return { socketPath: undefined, close: () => Promise.resolve() };
+  const facets = options.facets ?? [];
+  if (options.apis.length === 0 && facets.length === 0) {
+    return { socketPath: undefined, close: () => Promise.resolve() };
+  }
 
   const context: DoomApiContext = {
     scope: 'session',
@@ -100,19 +106,14 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
     onNotice: options.onNotice,
   };
-  const handlers = new Map<string, DoomApiHandler>();
-  for (const api of options.apis) {
-    if (handlers.has(api.basePath)) {
-      options.onNotice(`package API '${api.basePath}' is already mounted; the first one keeps it`);
-      continue;
-    }
-    try {
-      handlers.set(api.basePath, api.start(context));
-    } catch (error) {
-      options.onNotice(`package API '${api.basePath}' did not start (${describeError(error)}); it stays unmounted`);
-    }
+  const host = createDoomServerHost({ scope: 'session', context });
+  for (const api of options.apis) host.registerApi(api);
+  const installed = await installServerFacets({ host, facets, onNotice: options.onNotice });
+  if (host.mounted().length === 0) {
+    await installed.dispose();
+    host.dispose();
+    return { socketPath: undefined, close: () => Promise.resolve() };
   }
-  if (handlers.size === 0) return { socketPath: undefined, close: () => Promise.resolve() };
 
   const dispatch = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
@@ -121,7 +122,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     const rest = url.pathname.slice(DOOM_API_ROUTE_PREFIX.length + 1);
     const slash = rest.indexOf('/');
     const basePath = slash === -1 ? rest : rest.slice(0, slash);
-    const handler = handlers.get(basePath);
+    const handler = host.handlerFor(basePath);
     if (handler === undefined)
       return Response.json({ error: `No API '${basePath}' in this session.` }, { status: 404 });
     url.pathname = slash === -1 ? '/' : rest.slice(slash);
@@ -182,14 +183,16 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
 
   return {
     socketPath,
-    close: () =>
-      new Promise<void>((resolve) => {
-        for (const handler of handlers.values()) handler.close();
-        server.closeAllConnections();
+    close: async () => {
+      await installed.dispose();
+      host.dispose();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
         server.close(() => {
           fs.rmSync(socketPath, { force: true });
           resolve();
         });
-      }),
+      });
+    },
   };
 }

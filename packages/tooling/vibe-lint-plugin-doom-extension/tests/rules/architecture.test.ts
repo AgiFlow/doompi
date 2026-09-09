@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   compatibilityWrapperOnly,
   cordisContextInPiAdapter,
+  doomServerFacetShape,
   cordisFeaturePlugin,
   cordisHostOrder,
   cordisServiceInjection,
@@ -332,6 +333,26 @@ describe('Doom deterministic architecture rules', () => {
     );
   });
 
+  it('lets the kernel package export its own vocabulary and still bans it elsewhere', () => {
+    const abiViolation = (file: string): string =>
+      doomCleanArchitectureBoundary.check?.(file, root, boundaryContext()) ?? '';
+
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-kernel' }));
+    const owned = write(
+      'src/exports/index.ts',
+      "export type { DoomKernel, KernelSlotSink } from '../types/kernel.ts';",
+    );
+    expect(abiViolation(owned)).not.toContain('public source exports native/Cordis ABI');
+
+    // The owner is exempt for 'kernel' only, never for the rest of the ABI.
+    const stillBanned = write('src/exports/index.ts', "export type { CordisRoot } from '../types/cordis.ts';");
+    expect(abiViolation(stillBanned)).toContain('public source exports native/Cordis ABI');
+
+    write('package.json', JSON.stringify({ name: '@scope/package' }));
+    const borrowed = write('src/exports/index.ts', 'export interface KernelSlot { name: string }');
+    expect(abiViolation(borrowed)).toContain('public source exports native/Cordis ABI');
+  });
+
   it('allows only the contracts package to publish the shared Cordis host boundary', () => {
     const contractsManifest = write(
       'package.json',
@@ -533,10 +554,14 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   describe('cordis Context ownership', () => {
-    it('allows exactly one Context in the shared host and rejects every package-local root', () => {
+    it('allows exactly one Context in each shared host and rejects every package-local root', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
       const host = write(
         'src/adapters/pi/cordisHost.ts',
+        "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
+      );
+      const serverHost = write(
+        'src/adapters/serverFacetLoader.ts',
         "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
       );
       const container = write(
@@ -549,6 +574,7 @@ describe('Doom deterministic architecture rules', () => {
       );
 
       expect(cordisContextInPiAdapter.check?.(host, root, boundaryContext())).toBeNull();
+      expect(cordisContextInPiAdapter.check?.(serverHost, root, boundaryContext())).toBeNull();
       expect(cordisContextInPiAdapter.check?.(manifest, root, boundaryContext())).toBeNull();
       expect(cordisContextInPiAdapter.check?.(container, root, boundaryContext())).toContain(
         'package-local Cordis root',
@@ -556,8 +582,31 @@ describe('Doom deterministic architecture rules', () => {
       expect(cordisContextInPiAdapter.check?.(test, root, boundaryContext())).toBeNull();
     });
 
+    it('reports a server facet loader that owns no Context or more than one', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+      write(
+        'src/adapters/pi/cordisHost.ts',
+        "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
+      );
+
+      expect(cordisContextInPiAdapter.check?.(manifest, root, boundaryContext())).toContain(
+        'src/adapters/serverFacetLoader.ts; found 0',
+      );
+
+      const serverHost = write(
+        'src/adapters/serverFacetLoader.ts',
+        "import { Context } from '@deepseek-ai/cordis';\nconst first = new Context();\nconst second = new Context();",
+      );
+      expect(cordisContextInPiAdapter.check?.(serverHost, root, boundaryContext())).toContain('exactly one');
+      expect(cordisContextInPiAdapter.check?.(manifest, root, boundaryContext())).toContain('found 2');
+    });
+
     it('requires the shared host cardinality and ignores non-Doom packages', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+      write(
+        'src/adapters/serverFacetLoader.ts',
+        "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
+      );
       const host = write(
         'src/adapters/pi/cordisHost.ts',
         "import { Context } from '@deepseek-ai/cordis';\nconst first = new Context();\nconst second = new Context();",
@@ -936,6 +985,65 @@ describe('Doom deterministic architecture rules', () => {
       expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
+    it('accepts an object plugin that declares its own inject', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/adapters/server/facet.ts',
+        [
+          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';`,
+          `export const facet = {`,
+          `  inject: [DOOM_SERVER_HOST_SERVICE],`,
+          `  apply(context: unknown) {`,
+          `    const host = requireDoomServerHost(context);`,
+          `    const registration = host.registerApi(api);`,
+          `    return () => registration.dispose();`,
+          `  },`,
+          `};`,
+        ].join('\n'),
+      );
+
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
+
+    it('accepts an object plugin whose apply is an arrow property', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/adapters/server/facet.ts',
+        [
+          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';`,
+          `export const facet = {`,
+          `  inject: [DOOM_SERVER_HOST_SERVICE],`,
+          `  apply: (context: unknown) => {`,
+          `    const host = requireDoomServerHost(context);`,
+          `    const registration = host.registerApi(api);`,
+          `    return () => registration.dispose();`,
+          `  },`,
+          `};`,
+        ].join('\n'),
+      );
+
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
+
+    it('rejects an object plugin that uses a service it never injected', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/adapters/server/facet.ts',
+        [
+          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';`,
+          `export const facet = {`,
+          `  apply(context: unknown) {`,
+          `    const host = requireDoomServerHost(context);`,
+          `    return () => host.dispose();`,
+          `  },`,
+          `};`,
+        ].join('\n'),
+      );
+
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain(
+        'has no owning ctx.inject dependency',
+      );
+    });
     it('requires providers to publish from a mounted plugin or injection-owned context', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
       write(
@@ -1244,6 +1352,64 @@ describe('Doom deterministic architecture rules', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi', dependencies: {} }));
       const violations = doomCleanArchitectureBoundary.check?.(manifest, root, boundaryContext());
       expect(violations ?? '').not.toContain('fixed core packages missing');
+    });
+  });
+
+  describe('server facet shape', () => {
+    const facet = (body: string): string =>
+      `import { DOOM_SERVER_HOST_SERVICE, type DoomServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';\n${body}`;
+
+    it('accepts an object plugin that declares the host injection', () => {
+      const file = write(
+        'src/adapters/server/facet.ts',
+        facet(
+          'export const gitServerFacet: DoomServerFacet = {\n  inject: [DOOM_SERVER_HOST_SERVICE],\n  apply(context) {\n    const host = requireDoomServerHost(context);\n    return () => host.dispose();\n  },\n};',
+        ),
+      );
+
+      expect(doomServerFacetShape.check?.(file, root, boundaryContext())).toBeNull();
+    });
+
+    it('rejects a function facet, whose inject the host cannot read', () => {
+      const file = write(
+        'src/adapters/server/facet.ts',
+        facet('export const gitServerFacet: DoomServerFacet = (context) => undefined;'),
+      );
+
+      expect(doomServerFacetShape.check?.(file, root, boundaryContext())).toContain('not an object literal');
+    });
+
+    it('rejects an injection nested inside apply, which mounts a fiber the host cannot await', () => {
+      const file = write(
+        'src/adapters/server/facet.ts',
+        facet(
+          'export const gitServerFacet: DoomServerFacet = {\n  inject: [DOOM_SERVER_HOST_SERVICE],\n  apply(context) {\n    context.inject([DOOM_SERVER_HOST_SERVICE], () => undefined);\n  },\n};',
+        ),
+      );
+
+      expect(doomServerFacetShape.check?.(file, root, boundaryContext())).toContain('inside apply');
+    });
+
+    it('rejects a facet that injects something other than the server host', () => {
+      const file = write(
+        'src/adapters/server/facet.ts',
+        facet(
+          "export const gitServerFacet: DoomServerFacet = {\n  inject: ['other/service'],\n  apply() {\n    return undefined;\n  },\n};",
+        ),
+      );
+
+      expect(doomServerFacetShape.check?.(file, root, boundaryContext())).toContain(
+        'does not inject DOOM_SERVER_HOST_SERVICE',
+      );
+    });
+
+    it('ignores files outside the server adapter directory', () => {
+      const file = write(
+        'src/adapters/other.ts',
+        facet('export const gitServerFacet: DoomServerFacet = (context) => undefined;'),
+      );
+
+      expect(doomServerFacetShape.check?.(file, root, boundaryContext())).toBeNull();
     });
   });
 });

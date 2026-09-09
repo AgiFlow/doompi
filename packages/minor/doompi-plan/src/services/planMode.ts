@@ -44,6 +44,12 @@ import {
   VOICE_MODE_TOOL_NAMES,
   type VoiceToolDefinition,
 } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  type DoomToolRestrictionHandle,
+  readDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from '@earendil-works/pi-coding-agent';
@@ -210,16 +216,6 @@ const PLAN_VOICE_RESULT_SCHEMA = {
   required: ['active', 'flavor', 'changed'],
   additionalProperties: false,
 } as const;
-const PLAN_TRANSIENT_TOOL_NAMES = new Set([
-  COMPLETE_PLAN_TOOL,
-  WRITE_PLAN_TOOL,
-  RECORD_DEBUG_EVIDENCE_TOOL,
-  RUN_FABLE_PLAN_TOOL,
-  MINOR_MODE_TOOL_NAME,
-  ...AUTHOR_MODE_TOOL_NAMES,
-  ...VOICE_MODE_TOOL_NAMES,
-]);
-
 export type { PlanningFlavor } from './prompts.ts';
 
 export interface ModelIdentity {
@@ -575,64 +571,25 @@ export function parseDebugEvidencePacket(value: unknown): DebugEvidencePacket {
   return packet;
 }
 
-export function planModeTools(activeTools: string[], availableTools: string[]): string[] {
-  const available = new Set(availableTools);
-  const retained = activeTools.filter((name) => PLAN_MODE_PARENT_TOOLS.has(name) && available.has(name));
-  const unrelated = activeTools.filter(
-    (name) =>
-      !PLAN_MODE_PARENT_TOOLS.has(name) &&
-      !PLAN_MODE_EXCLUDED_TOOLS.has(name) &&
-      !PLAN_TRANSIENT_TOOL_NAMES.has(name) &&
-      available.has(name),
-  );
-  const exploration = PLAN_MODE_EXPLORATION_TOOLS.filter((name) => available.has(name));
-  const planTools = [COMPLETE_PLAN_TOOL, TASK_TOOL, WRITE_PLAN_TOOL].filter((name) => available.has(name));
-  return [...new Set([...retained, ...unrelated, ...exploration, ...planTools])];
-}
-
-function planningToolsForFlavor(
-  snapshotTools: string[],
-  liveTools: string[],
-  availableTools: string[],
-  flavor: PlanningFlavor,
+/**
+ * The only thing plan mode does to the tool surface: hide what planning must not touch.
+ *
+ * `flavor` undefined means plan mode is off, which still hides plan's own tools
+ * because they are registered for the whole session and only mean something inside it.
+ */
+export function planToolRestriction(
+  flavor: PlanningFlavor | undefined,
   diagnosticTools: ReadonlySet<string>,
-): string[] {
-  const available = new Set(availableTools);
-  const liveUnrelatedTools = liveTools.filter(
-    (name) =>
-      !PLAN_MODE_PARENT_TOOLS.has(name) && !PLAN_MODE_EXCLUDED_TOOLS.has(name) && !PLAN_TRANSIENT_TOOL_NAMES.has(name),
-  );
-  const activeTools = [...new Set([...snapshotTools, ...liveUnrelatedTools])];
-  const base = planModeTools(
-    activeTools.filter((name) => !PLAN_TRANSIENT_TOOL_NAMES.has(name)),
-    availableTools,
-  );
-  const extras =
-    flavor === 'debug' ? [RECORD_DEBUG_EVIDENCE_TOOL, ...diagnosticTools].filter((name) => available.has(name)) : [];
-  if (flavor === 'fable' && available.has(RUN_FABLE_PLAN_TOOL)) extras.push(RUN_FABLE_PLAN_TOOL);
-  for (const name of [MINOR_MODE_TOOL_NAME, ...AUTHOR_MODE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES]) {
-    if (liveTools.includes(name) && available.has(name)) extras.push(name);
-  }
-  return [...new Set([...base, ...extras])];
-}
-
-function restoreSnapshotTools(snapshotTools: string[], liveTools: string[], availableTools: string[]): string[] {
-  const available = new Set(availableTools);
-  const live = new Set(liveTools);
-  const restored = snapshotTools.filter(
-    (name) => !PLAN_TRANSIENT_TOOL_NAMES.has(name) && available.has(name) && (name !== ASK_USER_TOOL || live.has(name)),
-  );
-  const unrelatedLiveTools = liveTools.filter(
-    (name) =>
-      !PLAN_MODE_PARENT_TOOLS.has(name) &&
-      !PLAN_MODE_EXCLUDED_TOOLS.has(name) &&
-      !PLAN_TRANSIENT_TOOL_NAMES.has(name) &&
-      available.has(name),
-  );
-  const liveToolsToRestore = [MINOR_MODE_TOOL_NAME, ...AUTHOR_MODE_TOOL_NAMES, ...VOICE_MODE_TOOL_NAMES].filter(
-    (name) => live.has(name) && available.has(name),
-  );
-  return [...new Set([...restored, ...unrelatedLiveTools, ...liveToolsToRestore])];
+): DoomToolRestriction {
+  return (incoming) =>
+    incoming.filter((name) => {
+      if (name === COMPLETE_PLAN_TOOL || name === WRITE_PLAN_TOOL) return flavor !== undefined;
+      if (name === RUN_FABLE_PLAN_TOOL) return flavor === 'fable';
+      if (name === RECORD_DEBUG_EVIDENCE_TOOL) return flavor === 'debug';
+      if (diagnosticTools.has(name)) return flavor === undefined || flavor === 'debug';
+      if (flavor === undefined) return true;
+      return !PLAN_MODE_EXCLUDED_TOOLS.has(name);
+    });
 }
 
 function disableStepOutput(step: MutableSubagentStep): void {
@@ -819,6 +776,23 @@ export function planModeExtension(
   const doomIntegrations = options.doomIntegrations ?? true;
   const planPointers: PlanPointerPort = options.planPointers ?? new NodePlanPointerAdapter();
   const diagnosticTools = new Set(options.debugDiagnosticTools ?? DEBUG_DIAGNOSTIC_TOOLS);
+  let toolRestriction: DoomToolRestrictionHandle | undefined;
+  const currentToolRestriction = (): DoomToolRestriction =>
+    planToolRestriction(enabled ? activeFlavor : undefined, diagnosticTools);
+  const applyToolRestriction = (): void => {
+    toolRestriction?.update(currentToolRestriction());
+  };
+  cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+    const surface = readDoomToolSurface(surfaceContext);
+    if (!surface) return undefined;
+    const handle = surface.register({ source: PLAN_LEADER_SOURCE, restrict: currentToolRestriction() });
+    toolRestriction = handle;
+    return () => {
+      if (toolRestriction !== handle) return;
+      toolRestriction = undefined;
+      handle.dispose();
+    };
+  });
   const runtimeAbortController = new AbortController();
   cordis.effect(() => () => shutdownPlanRuntime(), `${PLAN_LEADER_SOURCE}/runtime`);
   const fableBroker: FablePlanBroker = options.fableBroker ?? {
@@ -1053,13 +1027,7 @@ export function planModeExtension(
         try {
           const restored = await restoreMainAgent(cleanupContext, cleanupSnapshot, true);
           if (restored) {
-            pi.setActiveTools(
-              restoreSnapshotTools(
-                cleanupSnapshot.tools,
-                pi.getActiveTools(),
-                pi.getAllTools().map((tool) => tool.name),
-              ),
-            );
+            toolRestriction?.update(planToolRestriction(undefined, diagnosticTools));
           }
         } catch (error) {
           cleanupErrors.push(error);
@@ -1383,15 +1351,7 @@ export function planModeExtension(
       assertRuntimeActive(generation);
       activeFlavor = flavor;
       updateCapabilityCeiling();
-      pi.setActiveTools(
-        planningToolsForFlavor(
-          planSnapshot?.tools ?? [],
-          pi.getActiveTools(),
-          pi.getAllTools().map((tool) => tool.name),
-          flavor,
-          diagnosticTools,
-        ),
-      );
+      applyToolRestriction();
       updateStatus(ctx);
       persistState();
       void telemetry.recordEvent(PLAN_EVENT.modeEnabled, {
@@ -1428,15 +1388,7 @@ export function planModeExtension(
     };
     enabled = true;
     activeFlavor = flavor;
-    pi.setActiveTools(
-      planningToolsForFlavor(
-        planSnapshot.tools,
-        pi.getActiveTools(),
-        pi.getAllTools().map((tool) => tool.name),
-        flavor,
-        diagnosticTools,
-      ),
-    );
+    applyToolRestriction();
     updateCapabilityCeiling();
     await applyMainPlanningConfig(ctx);
     assertRuntimeActive(generation);
@@ -1476,13 +1428,7 @@ export function planModeExtension(
     }
 
     const hadPlan = Boolean(currentPlan);
-    pi.setActiveTools(
-      restoreSnapshotTools(
-        snapshot?.tools ?? [],
-        pi.getActiveTools(),
-        pi.getAllTools().map((tool) => tool.name),
-      ),
-    );
+    toolRestriction?.update(planToolRestriction(undefined, diagnosticTools));
     capabilityCeiling?.dispose();
     capabilityCeiling = undefined;
     enabled = false;
@@ -2160,30 +2106,10 @@ export function planModeExtension(
     } else {
       const snapshotToRestore = state?.originalSnapshot ?? snapshotFromPreviousSession;
       if (snapshotToRestore) {
-        const restored = await restoreMainAgent(ctx, snapshotToRestore);
+        await restoreMainAgent(ctx, snapshotToRestore);
         assertRuntimeActive(generation);
-        if (restored) {
-          pi.setActiveTools(
-            restoreSnapshotTools(
-              snapshotToRestore.tools,
-              pi.getActiveTools(),
-              pi.getAllTools().map((tool) => tool.name),
-            ),
-          );
-        }
-      } else {
-        pi.setActiveTools(
-          pi
-            .getActiveTools()
-            .filter(
-              (name) =>
-                name !== COMPLETE_PLAN_TOOL &&
-                name !== WRITE_PLAN_TOOL &&
-                name !== RECORD_DEBUG_EVIDENCE_TOOL &&
-                name !== RUN_FABLE_PLAN_TOOL,
-            ),
-        );
       }
+      applyToolRestriction();
       assertRuntimeActive(generation);
       planSnapshot = undefined;
       updateStatus(ctx);

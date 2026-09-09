@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext, ToolDefinition, ToolInfo } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';
 import { connectDoomCordisHost, type DoomCordisHostConnection } from '../pi/cordisHost.ts';
 
@@ -57,6 +57,27 @@ type ExecutionResult = Awaited<ReturnType<ExtensionAPI['exec']>>;
 type ExecutionOptions = Parameters<ExtensionAPI['exec']>[2];
 type ThinkingLevelValue = ReturnType<ExtensionAPI['getThinkingLevel']>;
 type WidgetContent = Parameters<ExtensionContext['ui']['setWidget']>[1];
+
+/** Inventory entry for a host-owned tool this harness cannot execute. */
+function builtinToolInfo(name: string): ToolInfo {
+  return {
+    name,
+    description: `Built-in ${name}`,
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    sourceInfo: { type: 'builtin' },
+  } as unknown as ToolInfo;
+}
+
+/** Inventory view of a tool an extension registered with this host. */
+function registeredToolInfo(tool: RegisteredTool): ToolInfo {
+  return {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    promptGuidelines: (tool as { promptGuidelines?: unknown }).promptGuidelines,
+    sourceInfo: { type: 'extension' },
+  } as unknown as ToolInfo;
+}
 
 export interface RecordedCommand {
   name: string;
@@ -137,6 +158,13 @@ export interface PiTestContextOptions {
 export interface PiTestHostOptions extends PiTestContextOptions {
   /** Answers `pi.exec`; the default reports a command that ran and printed nothing. */
   exec?: (command: string, args: string[]) => ExecutionResult | Promise<ExecutionResult>;
+  /**
+   * Tool names Pi would already own before any extension loads.
+   *
+   * They join the inventory and start active, which is how the tool surface
+   * arbiter learns that a name like `read` exists without a definition for it.
+   */
+  builtinTools?: readonly string[];
 }
 
 export interface PiTestHost {
@@ -213,6 +241,7 @@ const DISMISSED: PiTestDialogAnswers = {
  * every extension already installs.
  */
 export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
+  const builtinTools: readonly string[] = options.builtinTools ?? [];
   const tools: RegisteredTool[] = [];
   const commands: RecordedCommand[] = [];
   const shortcuts: RecordedShortcut[] = [];
@@ -232,7 +261,7 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
 
   const lifecycle = new Map<string, LifecycleHandler[]>();
   const channels = new Map<string, Set<(data: unknown) => void>>();
-  let activeToolNames: string[] = [];
+  let activeToolNames: string[] = [...builtinTools];
   let sessionName: string | undefined;
   let thinkingLevel: ThinkingLevelValue = 'off';
   let cordisConnection: DoomCordisHostConnection | undefined;
@@ -299,9 +328,10 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
     getActiveTools(): string[] {
       return [...activeToolNames];
     },
-    getAllTools(): never[] {
-      // Pi's inventory folds in built-in and MCP tools this host has none of.
-      return [];
+    getAllTools(): ToolInfo[] {
+      // Pi's inventory folds in built-in and MCP tools, which this host models
+      // as names only: a test asserts on the surface, never on their behaviour.
+      return [...builtinTools.map(builtinToolInfo), ...tools.map(registeredToolInfo)];
     },
     setActiveTools(toolNames: string[]): void {
       activeToolNames = [...toolNames];

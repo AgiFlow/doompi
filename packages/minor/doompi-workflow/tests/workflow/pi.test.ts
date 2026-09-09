@@ -24,6 +24,7 @@ import {
   DOOM_READINESS_SERVICE,
   type DoomReadinessCoordinator,
 } from '@agimon-ai/doompi-extension-contracts/readiness';
+import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import {
   createEmbeddedWorkflowFeature,
@@ -277,8 +278,10 @@ function createHarness(
       this.hidden = true;
     },
   };
-  // Pi auto-activates tools as they register, so the fake mirrors that.
+  // Pi auto-activates tools as they register, so the fake mirrors that until
+  // the tool surface recomputes the list from its restrictions.
   let activeTools: string[] = [FOREIGN_TOOL];
+  let refreshToolSurface: (() => void) | undefined;
   const realFeature = createEmbeddedWorkflowFeature();
   const runTool = realFeature.runTool;
   const runToolExecute = vi
@@ -315,6 +318,7 @@ function createHarness(
     registerTool: vi.fn((tool: ToolDefinition) => {
       tools.set(tool.name, tool);
       activeTools = [...new Set([...activeTools, tool.name])];
+      refreshToolSurface?.();
     }),
     sendMessage,
     sendUserMessage,
@@ -374,6 +378,15 @@ function createHarness(
   cordis.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWorkService);
   cordis.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, modeCatalog);
   cordis.provide(DOOM_UI_HUB_SERVICE, uiHub);
+  // The session owns the surface; the package only ever registers restrictions.
+  const toolSurface = createDoomToolSurface({
+    generation: 'workflow-test',
+    allTools: () => [FOREIGN_TOOL, ...tools.keys()],
+    setActiveTools: (names) => pi.setActiveTools([...names]),
+  });
+  refreshToolSurface = () => toolSurface.refresh();
+  cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
+  cordis.effect(() => () => toolSurface.dispose(), `${WORKFLOW_PACKAGE}/test-tool-surface`);
   let narrationProvider: { dispose(): Promise<void> } | undefined;
   const provideNarration = async (generation: string): Promise<void> => {
     const service: DoomNarrationService = {
@@ -918,8 +931,8 @@ describe('workflow-mcp Pi extension', () => {
     expect(harness.activeTools()).toContain(FOREIGN_TOOL);
 
     await harness.toggle('off');
-    // The foreign tool surviving is the regression guard: setActiveTools is a
-    // whole-list setter, so a bare literal here would silently disable it.
+    // The foreign tool surviving is the regression guard: the restriction only
+    // ever removes this package's own names from the surface.
     expect(harness.activeTools()).toEqual([FOREIGN_TOOL]);
   });
 

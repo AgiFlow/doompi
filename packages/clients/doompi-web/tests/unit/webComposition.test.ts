@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type { SyncRegistration } from '@agimon-ai/doompi/services';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveWebComposition } from '../../src/adapters/webComposition.ts';
@@ -132,9 +131,9 @@ describe('live cockpit composition resolution', () => {
       expect.objectContaining({ pluginRoots: [pluginA, pluginB].sort((left, right) => left.localeCompare(right)) }),
     );
     expect(secondResolution).toEqual(firstResolution);
-    const hubRoutes = fs.readFileSync(path.join(firstResolution!.apiDirectory, 'hub.routes.mjs'), 'utf8');
-    expect(hubRoutes).toContain(pathToFileURL(path.join(first.apiDirectory, 'hub.routes.mjs')).href);
-    expect(hubRoutes).toContain(pathToFileURL(path.join(second.apiDirectory, 'hub.routes.mjs')).href);
+    // A union bundle merges the SPA, never the server surfaces: each repository's
+    // hub routes stay its own mount table, loaded per root at runtime.
+    expect(firstResolution?.apiDirectory).toBeUndefined();
   });
 
   it('builds from synchronized state when the repository did not publish a web bundle', async () => {

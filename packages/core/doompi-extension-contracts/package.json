@@ -184,6 +184,16 @@
       "import": "./dist/sandboxHarness.mjs",
       "require": "./dist/sandboxHarness.cjs"
     },
+    "./server-facet": {
+      "types": "./dist/serverFacet.d.mts",
+      "import": "./dist/serverFacet.mjs",
+      "require": "./dist/serverFacet.cjs"
+    },
+    "./server-facet-loader": {
+      "types": "./dist/serverFacetLoader.d.mts",
+      "import": "./dist/serverFacetLoader.mjs",
+      "require": "./dist/serverFacetLoader.cjs"
+    },
     "./session-protocol": {
       "types": "./dist/sessionProtocol.d.mts",
       "import": "./dist/sessionProtocol.mjs",
@@ -213,6 +223,11 @@
       "types": "./dist/toolOverrides.d.mts",
       "import": "./dist/toolOverrides.mjs",
       "require": "./dist/toolOverrides.cjs"
+    },
+    "./tool-surface": {
+      "types": "./dist/toolSurface.d.mts",
+      "import": "./dist/toolSurface.mjs",
+      "require": "./dist/toolSurface.cjs"
     },
     "./transition": {
       "types": "./dist/transition.d.mts",
@@ -247,6 +262,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
+    "@agimon-ai/doompi-kernel": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/chord": "0.85.1",
     "typebox": "1.3.25"

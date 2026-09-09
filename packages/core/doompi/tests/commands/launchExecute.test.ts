@@ -151,6 +151,25 @@ describe('LaunchCommand.execute', () => {
     expect(context.environment.ELICITATION_SESSION_ID).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it('writes the composition record its caller asked for and points Pi at it', async () => {
+    const child = new FakeChild(false);
+    spawnMock.mockReturnValue(child);
+    const telemetry = createTelemetry();
+    const context = createContext();
+    const recordPath = path.join(repoRoot, 'composition.json');
+    // doompi-server sets this so a mode switch reloads in place.
+    context.environment.DOOMPI_COMPOSITION_RECORD = recordPath;
+
+    const promise = new LaunchCommand().execute(context, telemetry);
+    await waitForSpawn();
+    child.emit('exit', 0, null);
+
+    expect(await promise).toBe(0);
+    const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { env: NodeJS.ProcessEnv }];
+    expect(spawnOptions.env.DOOMPI_LAUNCHER_COMPOSITION).toBe(recordPath);
+    expect(JSON.parse(fs.readFileSync(recordPath, 'utf8')).root).toBe(repoRoot);
+  });
+
   it('adapts canonical activation order to Pi CLI arguments at the launch boundary', async () => {
     const child = new FakeChild(false);
     spawnMock.mockReturnValue(child);

@@ -25,11 +25,21 @@ import {
   DOOM_HUB_API_SESSION_QUERY_PARAM,
   type DoomApi,
   type DoomApiCaller,
-  type DoomApiHandler,
+  type DoomApiContext,
   type DoomOAuthRedirect,
   type DoomRepositorySyncView,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
+import {
+  createDoomServerHost,
+  type DoomServerFacet,
+  type DoomServerHost,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
+import {
+  type InstalledServerFacets,
+  installServerFacets,
+  loadServerFacets,
+} from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import { findRepositoryRoot, resolveDoomConfigurationRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
@@ -393,10 +403,15 @@ export function createSettingsRepositoryRegistry(hub: SessionHub): {
  * declares its routes relative to its own mount and never repeats where a host
  * put it. An API that throws answers 500 for its own routes alone; one bad
  * package never takes the cockpit down with it.
+ *
+ * Each bundle owns a server host of its own. The cockpit serves several
+ * composition roots at once and a base path is only unique inside one of them,
+ * so one shared mount table would let the first root loaded shadow the rest.
  */
 export function mountHubApis(
   app: Hono,
   initialApis: readonly DoomApi[],
+  initialFacets: readonly DoomServerFacet[],
   notice: (message: string) => void,
   resolveRepository: (repositoryId: string) => string | undefined,
   readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
@@ -405,47 +420,44 @@ export function mountHubApis(
   /** Lends the hub's OAuth redirect to hub APIs that broker third-party sign-in. */
   oauthRedirect?: () => DoomOAuthRedirect | undefined,
 ): {
-  handlers: DoomApiHandler[];
-  add: (apis: readonly DoomApi[], bundleKey?: string) => void;
-  remove: (bundleKey: string) => void;
+  add: (apis: readonly DoomApi[], facets?: readonly DoomServerFacet[], bundleKey?: string) => Promise<void>;
+  remove: (bundleKey: string) => Promise<void>;
+  close: () => Promise<void>;
 } {
-  const handlers: DoomApiHandler[] = [];
-  const mounted = new Map<string, Map<string, DoomApiHandler>>();
-  const add = (apis: readonly DoomApi[], bundleKey = initialBundleKey): void => {
-    const bundle = mounted.get(bundleKey) ?? new Map<string, DoomApiHandler>();
-    mounted.set(bundleKey, bundle);
-    for (const api of apis) {
-      if (bundle.has(api.basePath)) continue;
-      let handler: DoomApiHandler;
-      try {
-        handler = api.start({
-          scope: 'hub',
-          onNotice: notice,
-          resolveRepository,
-          readRepositorySync,
-          ...(oauthRedirect ? { oauthRedirect } : {}),
-        });
-      } catch (error) {
-        notice(`hub API '${api.basePath}' did not start (${describeError(error)}); its routes stay unmounted`);
-        continue;
-      }
-      bundle.set(api.basePath, handler);
-      handlers.push(handler);
+  const bundles = new Map<string, { host: DoomServerHost; installed?: InstalledServerFacets }>();
+  const apiContext: DoomApiContext = {
+    scope: 'hub',
+    onNotice: notice,
+    resolveRepository,
+    readRepositorySync,
+    ...(oauthRedirect ? { oauthRedirect } : {}),
+  };
+  const add = async (
+    apis: readonly DoomApi[],
+    facets: readonly DoomServerFacet[] = [],
+    bundleKey = initialBundleKey,
+  ): Promise<void> => {
+    let bundle = bundles.get(bundleKey);
+    if (bundle === undefined) {
+      bundle = { host: createDoomServerHost({ scope: 'hub', context: apiContext }) };
+      bundles.set(bundleKey, bundle);
+    }
+    for (const api of apis) bundle.host.registerApi(api);
+    if (facets.length > 0 && bundle.installed === undefined) {
+      bundle.installed = await installServerFacets({ host: bundle.host, facets, onNotice: notice });
     }
   };
-  const remove = (bundleKey: string): void => {
-    const bundle = mounted.get(bundleKey);
+  const remove = async (bundleKey: string): Promise<void> => {
+    const bundle = bundles.get(bundleKey);
     if (bundle === undefined) return;
-    mounted.delete(bundleKey);
-    for (const handler of bundle.values()) {
-      handler.close();
-      const index = handlers.indexOf(handler);
-      if (index >= 0) handlers.splice(index, 1);
-    }
+    bundles.delete(bundleKey);
+    await bundle.installed?.dispose();
+    bundle.host.dispose();
   };
 
-  add(initialApis);
+  const ready = add(initialApis, initialFacets);
   app.all(`${DOOM_API_ROUTE_PREFIX}/:basePath/*`, async (context, next) => {
+    await ready;
     const sessionApi = context.req.query(API_SESSION_QUERY_PARAM);
     const hubSession = context.req.query(DOOM_HUB_API_SESSION_QUERY_PARAM);
     if (sessionApi !== undefined && hubSession !== undefined) {
@@ -455,7 +467,7 @@ export function mountHubApis(
     const bundleKey = hubSession === undefined ? initialBundleKey : resolveBundleKey(hubSession);
     if (bundleKey === undefined) return context.notFound();
     const basePath = context.req.param('basePath');
-    const handler = mounted.get(bundleKey)?.get(basePath);
+    const handler = bundles.get(bundleKey)?.host.handlerFor(basePath);
     if (handler === undefined) return next();
     const mount = `${DOOM_API_ROUTE_PREFIX}/${basePath}`;
     const url = new URL(context.req.url);
@@ -468,7 +480,13 @@ export function mountHubApis(
       return context.json({ error: `The '${basePath}' API failed.` }, 500);
     }
   });
-  return { handlers, add, remove };
+  return {
+    add,
+    remove,
+    close: async () => {
+      for (const bundleKey of Array.from(bundles.keys())) await remove(bundleKey);
+    },
+  };
 }
 
 /**
@@ -1067,9 +1085,14 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     defaultApiDirectory === undefined
       ? []
       : await loadPackageApis('hub', { apiDirectory: defaultApiDirectory, env: {}, onNotice: notice });
+  const hubFacets =
+    defaultApiDirectory === undefined
+      ? []
+      : await loadServerFacets('hub', { apiDirectory: defaultApiDirectory, env: {}, onNotice: notice });
   const pluginApis = mountHubApis(
     app,
     hubApis,
+    hubFacets,
     notice,
     resolveRepository,
     readRepositorySync,
@@ -1086,15 +1109,15 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     bundleKey === defaultApiBundleKey ||
     selectedRegistration(cockpitRoot)?.apiDirectory === bundleKey ||
     hub.snapshot().some((session) => selectedRegistration(compositionRoot(session.cwd))?.apiDirectory === bundleKey);
-  const removeUnusedApiBundle = (bundleKey: string | undefined): void => {
-    if (bundleKey !== undefined && !apiBundleInUse(bundleKey)) pluginApis.remove(bundleKey);
+  const removeUnusedApiBundle = async (bundleKey: string | undefined): Promise<void> => {
+    if (bundleKey !== undefined && !apiBundleInUse(bundleKey)) await pluginApis.remove(bundleKey);
   };
   registerRootHubApis = async (root: string): Promise<void> => {
     const previousBundleKey = registeredApiBundles.get(root);
     const registration = selectedRegistration(root);
     if (registration === undefined) {
       registeredApiBundles.delete(root);
-      removeUnusedApiBundle(previousBundleKey);
+      await removeUnusedApiBundle(previousBundleKey);
       return;
     }
     const apis = await loadPackageApis('hub', {
@@ -1102,9 +1125,14 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       env: {},
       onNotice: notice,
     });
-    pluginApis.add(apis, registration.apiDirectory);
+    const facets = await loadServerFacets('hub', {
+      apiDirectory: registration.apiDirectory,
+      env: {},
+      onNotice: notice,
+    });
+    await pluginApis.add(apis, facets, registration.apiDirectory);
     registeredApiBundles.set(root, registration.apiDirectory);
-    if (previousBundleKey !== registration.apiDirectory) removeUnusedApiBundle(previousBundleKey);
+    if (previousBundleKey !== registration.apiDirectory) await removeUnusedApiBundle(previousBundleKey);
   };
   const sessionApiRoots = new Map(hub.snapshot().map((session) => [session.id, compositionRoot(session.cwd)]));
   const disconnectApiBundleCleanup = hub.onEvent((event) => {
@@ -1118,7 +1146,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     if (root === undefined || root === cockpitRoot || [...sessionApiRoots.values()].includes(root)) return;
     const bundleKey = registeredApiBundles.get(root);
     registeredApiBundles.delete(root);
-    removeUnusedApiBundle(bundleKey);
+    void removeUnusedApiBundle(bundleKey);
   });
   await Promise.all([...new Set([cockpitRoot, ...initialRoots])].map(registerRootHubApis));
   mountSessionApiProxy(app, hub, notice, telemetry, (context) => guard.callerOf(context));
@@ -1764,7 +1792,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
           hub.close();
           recordingArtifacts.close();
           providerAuth.close();
-          for (const handler of pluginApis.handlers) handler.close();
+          void pluginApis.close();
           pluginPublication.close();
           // An upgraded socket leaves the HTTP server's connection tracking,
           // so only the WebSocket server can let go of it. Without this the
@@ -1792,7 +1820,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       recordingArtifacts.close();
       providerAuth.close();
       void remote.close();
-      for (const handler of pluginApis.handlers) handler.close();
+      void pluginApis.close();
       pluginPublication.close();
       void telemetry.shutdown();
       reject(error);

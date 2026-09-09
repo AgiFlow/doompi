@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createDoomToolSurface, type DoomToolSurfaceService } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,10 @@ let listResources: ReturnType<typeof vi.fn>;
 let disconnectServer: ReturnType<typeof vi.fn>;
 let ensureConnected: ReturnType<typeof vi.fn>;
 let runtimeDisposals: Array<ReturnType<typeof vi.fn>>;
+let surfaces: DoomToolSurfaceService[];
+
+/** What Pi owns before any extension loads, so the surface knows the name exists. */
+const BUILTIN_TOOLS = ['read'];
 
 function fakePi() {
   const registered: string[] = [];
@@ -29,7 +34,7 @@ function fakePi() {
     string,
     { name: string; execute?: (toolCallId: string, params: unknown) => Promise<unknown> }
   >();
-  let active: string[] = ['read'];
+  let active: string[] = [...BUILTIN_TOOLS];
   const pi = {
     registerTool: vi.fn(
       (definition: { name: string; execute?: (toolCallId: string, params: unknown) => Promise<unknown> }) => {
@@ -38,6 +43,9 @@ function fakePi() {
       },
     ),
     getActiveTools: vi.fn(() => [...active]),
+    // The inventory the surface recomputes from: built-ins plus everything
+    // registered, whether or not it is currently visible.
+    getAllTools: vi.fn(() => [...BUILTIN_TOOLS, ...registered].map((name) => ({ name }))),
     setActiveTools: vi.fn((names: string[]) => {
       active = [...names];
     }),
@@ -57,7 +65,7 @@ function configuration(overrides: Partial<McpSessionConfig> = {}): McpSessionCon
   };
 }
 
-function session(pi: ExtensionAPI): McpSession {
+function newSession(pi: ExtensionAPI): McpSession {
   return new McpSession({
     pi,
     environment: {
@@ -65,6 +73,33 @@ function session(pi: ExtensionAPI): McpSession {
     },
     tokenStore: { read: vi.fn(), write: vi.fn(), clear: vi.fn() },
   });
+}
+
+/** The one arbiter of this host's active list, as the session fiber provides it. */
+function toolSurfaceFor(pi: ExtensionAPI): DoomToolSurfaceService {
+  const surface = createDoomToolSurface({
+    generation: 'mcp-session-test',
+    allTools: () => pi.getAllTools().map((tool) => tool.name),
+    setActiveTools: (names) => pi.setActiveTools([...names]),
+  });
+  surfaces.push(surface);
+  return surface;
+}
+
+/** A session already bound to its own tool surface, as the session fiber binds it. */
+function sessionWithSurface(pi: ExtensionAPI): {
+  active: McpSession;
+  surface: DoomToolSurfaceService;
+  unbind: () => void;
+} {
+  const active = newSession(pi);
+  const surface = toolSurfaceFor(pi);
+  const unbind = active.bindToolSurface(surface);
+  return { active, surface, unbind };
+}
+
+function session(pi: ExtensionAPI): McpSession {
+  return sessionWithSurface(pi).active;
 }
 
 beforeEach(() => {
@@ -78,6 +113,7 @@ beforeEach(() => {
   // read has to go through ensureConnected; getClient would still be empty.
   ensureConnected = vi.fn().mockResolvedValue({ callTool: vi.fn(), listTools, listResources });
   runtimeDisposals = [];
+  surfaces = [];
 
   createProxyContainer.mockImplementation(() => {
     const dispose = vi.fn().mockResolvedValue(undefined);
@@ -99,6 +135,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const surface of surfaces) surface.dispose();
   fs.rmSync(repoRoot, { recursive: true, force: true });
 });
 
@@ -237,7 +274,6 @@ describe('McpSession', () => {
       const { pi, registered, activeTools } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
 
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -251,7 +287,6 @@ describe('McpSession', () => {
       const { pi, activeTools } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
 
       emitState({ serverName: 'pencil', state: 'failed', error: 'spawn ENOENT' });
@@ -266,7 +301,6 @@ describe('McpSession', () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
 
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -281,7 +315,6 @@ describe('McpSession', () => {
       const { pi, registered } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
       const staleEmit = emitState;
 
@@ -298,7 +331,6 @@ describe('McpSession', () => {
       const { pi, registered } = fakePi();
       const active = session(pi);
       active.install(configuration({ allowlist: { servers: ['pencil', 'boomlink'] } }));
-      active.activate();
       await active.start();
 
       await active.reconfigure(configuration({ allowlist: { servers: ['boomlink', 'pencil'] } }));
@@ -313,7 +345,6 @@ describe('McpSession', () => {
       const { pi, activeTools } = fakePi();
       const active = session(pi);
       active.install(configuration());
-      active.activate();
       await active.start();
 
       await active.reconfigure(
@@ -334,7 +365,6 @@ describe('McpSession', () => {
       const { pi, registered, activeTools } = fakePi();
       const active = session(pi);
       active.install(configuration());
-      active.activate();
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
       await vi.waitFor(() => expect(activeTools()).toEqual(['read', 'pencil_get_screenshot']));
@@ -354,7 +384,6 @@ describe('McpSession', () => {
       const { pi, registered, definitions, activeTools } = fakePi();
       const active = session(pi);
       active.install(configuration());
-      active.activate();
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
       await vi.waitFor(() => expect(registered).toEqual(['pencil_get_screenshot']));
@@ -381,7 +410,6 @@ describe('McpSession', () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install(configuration());
-      active.activate();
       await active.start();
       const staleAuthorization = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl as
         | ((url: URL, serverName: string) => void)
@@ -399,7 +427,6 @@ describe('McpSession', () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
       const store = createProxyContainer.mock.calls[0]?.[0]?.auth.tokenStore;
 
@@ -464,7 +491,6 @@ describe('McpSession', () => {
       const fake = fakePi();
       const active = session(fake.pi);
       active.install();
-      active.activate();
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
       await vi.waitFor(() => expect(fake.activeTools()).toEqual(['read', 'pencil_get_screenshot']));
@@ -500,12 +526,54 @@ describe('McpSession', () => {
     });
   });
 
+  describe('the tool surface', () => {
+    // MCP owns its wrappers and nothing else. The rival registers first, so a
+    // restriction that rebuilt the list from the whole inventory instead of
+    // filtering what it was handed would hand the rival's tool back.
+    it('never restores a tool another owner is hiding', async () => {
+      const fake = fakePi();
+      const surface = toolSurfaceFor(fake.pi);
+      const rival = surface.register({
+        source: 'rival',
+        restrict: (incoming) => incoming.filter((name) => name !== 'read'),
+      });
+      const active = newSession(fake.pi);
+      active.bindToolSurface(surface);
+      active.install();
+      await active.start();
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(fake.activeTools()).toEqual(['pencil_get_screenshot']));
+
+      active.setEnabled('pencil', false);
+      expect(fake.activeTools()).toEqual([]);
+      active.setEnabled('pencil', true);
+      expect(fake.activeTools()).toEqual(['pencil_get_screenshot']);
+
+      rival.dispose();
+      expect(fake.activeTools()).toEqual(['read', 'pencil_get_screenshot']);
+    });
+
+    // Nothing is snapshotted, so letting the restriction go is the whole restore.
+    it('gives every wrapper back when the session unbinds', async () => {
+      const fake = fakePi();
+      const { active, unbind } = sessionWithSurface(fake.pi);
+      active.install();
+      await active.start();
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(fake.activeTools()).toContain('pencil_get_screenshot'));
+      active.setEnabled('pencil', false);
+      expect(fake.activeTools()).toEqual(['read']);
+
+      unbind();
+
+      expect(fake.activeTools()).toEqual(['read', 'pencil_get_screenshot']);
+    });
+  });
   describe('listResources', () => {
     async function startedSession() {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
       return active;
     }
@@ -571,7 +639,6 @@ describe('McpSession', () => {
       const active = session(pi);
       const listener = vi.fn();
       active.install();
-      active.activate();
       await active.start();
       const unsubscribe = active.onChange(listener);
 
@@ -589,7 +656,6 @@ describe('McpSession', () => {
       const { pi, activeTools } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
       active.onChange(() => {
         throw new Error('render failed');
@@ -604,7 +670,6 @@ describe('McpSession', () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
       active.onChange(() => {
         throw new Error('render failed');
@@ -621,7 +686,6 @@ describe('McpSession', () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
       active.onChange(() => {
         throw new Error('render failed');
@@ -641,7 +705,6 @@ describe('McpSession', () => {
       const { pi } = fakePi();
       const active = session(pi);
       active.install();
-      active.activate();
       await active.start();
 
       await active.dispose();

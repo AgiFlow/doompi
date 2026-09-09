@@ -1,0 +1,67 @@
+/**
+ * Binds {{ restrictionName | camelCase }}ToolRestriction to the session tool surface.
+ *
+ * DESIGN PATTERNS:
+ * - The surface is a session-scoped Cordis service, so it is injected, never
+ *   imported from a host global. cordis.inject resolves asynchronously, after
+ *   the extension factory returns: never read surface.active() during setup and
+ *   expect your own restriction to be applied yet.
+ * - The inject callback returns a disposer. Session teardown and pi-reload both
+ *   unwind it, which drops the restriction and restores the tools by itself.
+ *
+ * CODING STANDARDS:
+ * - `source` is the package name. It is the owner label in diagnostics and the
+ *   tie-breaker for ordering, so keep it unique and stable.
+ * - State changes call handle.update(...) with a freshly built restriction.
+ *   Never mutate the closure a previous restriction captured.
+ *
+ * AVOID:
+ * - Calling pi.setActiveTools. The no-direct-tool-activation lint rule rejects
+ *   it, and a whole-list write silently restores what another package hid.
+ * - Keeping a snapshot of the tool list to restore later. There is nothing to
+ *   restore: dispose the handle.
+ */
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestrictionHandle,
+  requireDoomToolSurface,
+} from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import type { Context } from '@deepseek-ai/cordis';
+import { {{ restrictionName | camelCase }}ToolRestriction } from '../../services/{{ restrictionName | camelCase }}Tools.ts';
+
+const {{ restrictionName | upperCase }}_RESTRICTION_SOURCE = '{{ packageName }}';
+
+export interface {{ restrictionName | pascalCase }}ToolSurfaceBinding {
+  /** Re-derive the restriction after the package's own state changed. */
+  readonly apply: (active: boolean) => void;
+  readonly dispose: () => void;
+}
+
+/**
+ * {{ restrictionDescription }}
+ *
+ * Call from the package's Pi adapter, inside its own plugin fiber, so host
+ * disposal unwinds the registration.
+ */
+export function bind{{ restrictionName | pascalCase }}ToolSurface(
+  cordis: Context,
+  isActive: () => boolean,
+): {{ restrictionName | pascalCase }}ToolSurfaceBinding {
+  let handle: DoomToolRestrictionHandle | undefined;
+
+  const fiber = cordis.inject([DOOM_TOOL_SURFACE_SERVICE], (surfaceContext) => {
+    handle = requireDoomToolSurface(surfaceContext).register({
+      source: {{ restrictionName | upperCase }}_RESTRICTION_SOURCE,
+      restrict: {{ restrictionName | camelCase }}ToolRestriction(isActive()),
+    });
+    return () => {
+      handle?.dispose();
+      handle = undefined;
+    };
+  });
+
+  return {
+    apply: (active) => handle?.update({{ restrictionName | camelCase }}ToolRestriction(active)),
+    dispose: () => void fiber.dispose(),
+  };
+}

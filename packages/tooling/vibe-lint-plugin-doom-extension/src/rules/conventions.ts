@@ -703,6 +703,37 @@ export const disposeExternalSubscriptions: RuleDefinition = {
   },
 };
 
+/**
+ * Files that are allowed to call the host setter, because they are the arbiter
+ * itself or the fake host tests drive it with.
+ */
+const TOOL_SURFACE_OWNER_PATHS = new Set([
+  CORDIS_HOST_ADAPTER_PATH,
+  'src/services/toolSurface.ts',
+  'src/adapters/testing/piHost.ts',
+]);
+
+export const noDirectToolActivation: RuleDefinition = {
+  preflight: true,
+  rule: 'Tool visibility is a Doom tool-surface restriction, not a direct setActiveTools call',
+  rationale:
+    'Several packages hide tools at once. A direct setActiveTools call replaces the whole list, so the last writer silently restores what another owner had removed. The surface merges ordered restrictions and re-applies them, which makes removal reversible without a snapshot.',
+  check(filePath, configRoot) {
+    if (!isDoomProductionSource(filePath, configRoot)) return null;
+    const manifest = readManifest(path.join(configRoot, PACKAGE_MANIFEST_NAME));
+    const relativePath = projectPath(filePath, configRoot);
+    if (
+      manifest?.name === CORDIS_CONTRACTS_PACKAGE &&
+      relativePath !== null &&
+      TOOL_SURFACE_OWNER_PATHS.has(relativePath)
+    ) {
+      return null;
+    }
+    const text = readText(filePath);
+    if (!text || !/\.setActiveTools\s*\(/.test(text)) return null;
+    return `Register a DoomToolRestriction on DOOM_TOOL_SURFACE_SERVICE from ${CORDIS_CONTRACTS_PACKAGE}/tool-surface instead of calling setActiveTools.`;
+  },
+};
 export const providerOwnedPolicy: RuleDefinition = {
   preflight: true,
   rule: 'Consumers register semantic subagent policy and must not mutate foreign tool calls',

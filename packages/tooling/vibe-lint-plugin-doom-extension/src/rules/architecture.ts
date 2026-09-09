@@ -125,6 +125,8 @@ const DEFAULT_PACKAGE_LAYER_ORDER = ['contracts', 'platform', 'integration', 'ex
 const DEFAULT_PACKAGE_LAYER_FALLBACK = 'extension';
 const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-extension-contracts': 'contracts',
+  '@agimon-ai/doompi-hashline': 'contracts',
+  '@agimon-ai/doompi-kernel': 'contracts',
   '@agimon-ai/doompi-telemetry': 'contracts',
   '@agimon-ai/doompi-web-contracts': 'contracts',
   '@agimon-ai/doompi-web-components': 'contracts',
@@ -134,12 +136,26 @@ const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-mcp': 'integration',
   '@agimon-ai/doompi': 'host',
 };
-const DEFAULT_INFRASTRUCTURE_PACKAGES = ['@agimon-ai/doompi-extension-contracts', '@agimon-ai/doompi-telemetry'];
+const DEFAULT_INFRASTRUCTURE_PACKAGES = [
+  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-hashline',
+  '@agimon-ai/doompi-kernel',
+  '@agimon-ai/doompi-telemetry',
+];
 const DEFAULT_FEATURE_PACKAGE_PREFIXES = ['@agimon-ai/doompi-'];
-const DEFAULT_FOUNDATION_PACKAGES = ['@agimon-ai/doompi-extension-contracts'];
+const DEFAULT_FOUNDATION_PACKAGES = [
+  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-hashline',
+  '@agimon-ai/doompi-kernel',
+];
 const DEFAULT_FOUNDATION_PACKAGE_PREFIXES = ['@agimon-ai/foundation-'];
 const DEFAULT_PI_PACKAGE_PREFIXES = ['@agimon-ai/doompi-'];
-const DEFAULT_NON_PI_PACKAGES = ['@agimon-ai/doompi-extension-contracts', '@agimon-ai/doompi-telemetry'];
+const DEFAULT_NON_PI_PACKAGES = [
+  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-hashline',
+  '@agimon-ai/doompi-kernel',
+  '@agimon-ai/doompi-telemetry',
+];
 const DEFAULT_NON_PI_PACKAGE_PREFIXES = ['@agimon-ai/doompi-runner-rmux-', '@agimon-ai/doompi-runner-rtk-'];
 const DEFAULT_FIXED_FEATURE_IDENTIFIERS = [
   'curatedComposition',
@@ -169,7 +185,16 @@ const PACKAGE_MANIFEST_PATH = 'package.json';
 const DOOM_PACKAGE_NAME = '@agimon-ai/doompi';
 const DOOM_PACKAGE_PREFIX = `${DOOM_PACKAGE_NAME}-`;
 const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
+/**
+ * The reserved ABI vocabulary keeps internal wiring out of public exports. A
+ * package that owns one of those words as its whole public subject is exempt
+ * for that word only, so the ban still holds for every other package.
+ */
+const ABI_VOCABULARY_OWNERS = new Map<string, RegExp>([['@agimon-ai/doompi-kernel', /kernel/i]]);
 const CORDIS_HOST_ADAPTER_PATH = 'src/adapters/pi/cordisHost.ts';
+/** The server's own host runner: one Context per headless server process. */
+const SERVER_FACET_LOADER_PATH = 'src/adapters/serverFacetLoader.ts';
+const CORDIS_HOST_ADAPTER_PATHS = [CORDIS_HOST_ADAPTER_PATH, SERVER_FACET_LOADER_PATH];
 const CORDIS_HOST_EXPORT = '@agimon-ai/doompi-extension-contracts/cordis-host';
 const LEGACY_SESSION_CONTEXT_EXPORT = '@agimon-ai/doompi-extension-contracts/session-context';
 const LEGACY_SESSION_CONTEXT_PATHS = new Set(['src/exports/sessionContext.ts', 'src/schemas/sessionContext.ts']);
@@ -854,8 +879,15 @@ function cordisActivationOrderViolations(sourceFile: ts.SourceFile): string[] {
   return violations;
 }
 
+/**
+ * The shapes that can carry an injected Cordis body: the callback passed to
+ * `ctx.inject`, and the `apply` of an object plugin, which is the only form
+ * that can declare its own `inject` and therefore settle as a single fiber.
+ */
+type CordisInjectionBody = ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration;
+
 interface CordisInjectionFact {
-  readonly callback: ts.ArrowFunction | ts.FunctionExpression;
+  readonly callback: CordisInjectionBody;
   readonly services: ReadonlySet<string>;
   readonly ownsLifecycle: boolean;
   readonly ownsStableBinding: boolean;
@@ -988,7 +1020,7 @@ function returnedCleanupFunctions(
   return cleanups;
 }
 
-function injectionCleanupFunctions(callback: ts.ArrowFunction | ts.FunctionExpression): ts.FunctionLikeDeclaration[] {
+function injectionCleanupFunctions(callback: CordisInjectionBody): ts.FunctionLikeDeclaration[] {
   const bindings = localFunctionBindings(callback);
   const cleanups = returnedCleanupFunctions(callback, bindings);
   const visit = (node: ts.Node): void => {
@@ -1081,13 +1113,13 @@ function identityGuardsClear(
   return false;
 }
 
-function injectionOwnership(callback: ts.ArrowFunction | ts.FunctionExpression): {
+function injectionOwnership(callback: CordisInjectionBody): {
   ownsLifecycle: boolean;
   ownsStableBinding: boolean;
 } {
   const cleanups = injectionCleanupFunctions(callback);
   const cleanupSet = new Set<ts.Node>(cleanups);
-  let ownsLifecycle = !ts.isBlock(callback.body) || cleanups.length > 0;
+  let ownsLifecycle = callback.body === undefined || !ts.isBlock(callback.body) || cleanups.length > 0;
   const assigned = new Map<string, string>();
   const visitActivation = (node: ts.Node): void => {
     if (node !== callback && ts.isFunctionLike(node)) return;
@@ -1117,7 +1149,7 @@ function injectionOwnership(callback: ts.ArrowFunction | ts.FunctionExpression):
     }
     ts.forEachChild(node, visitActivation);
   };
-  visitActivation(callback.body);
+  if (callback.body) visitActivation(callback.body);
 
   const ownsStableBinding = cleanups.some((cleanup) => {
     const clears = new Map<string, ts.BinaryExpression[]>();
@@ -1341,6 +1373,34 @@ function isAccessorDefinition(node: ts.Node): boolean {
   );
 }
 
+/**
+ * A Cordis object plugin literal: `{ inject: [...], apply(ctx) {} }`.
+ *
+ * Both an `apply` method and an `apply` property holding a function count,
+ * because Cordis accepts either. Anything without both an inject array and an
+ * apply body is not a plugin and is left alone.
+ */
+function cordisObjectPlugin(
+  node: ts.ObjectLiteralExpression,
+): { inject: ts.ArrayLiteralExpression; apply: CordisInjectionBody } | undefined {
+  let inject: ts.ArrayLiteralExpression | undefined;
+  let apply: CordisInjectionBody | undefined;
+  for (const property of node.properties) {
+    const name = property.name && ts.isIdentifier(property.name) ? property.name.text : undefined;
+    if (name === 'inject' && ts.isPropertyAssignment(property) && ts.isArrayLiteralExpression(property.initializer)) {
+      inject = property.initializer;
+    }
+    if (name !== 'apply') continue;
+    if (ts.isMethodDeclaration(property)) apply = property;
+    if (
+      ts.isPropertyAssignment(property) &&
+      (ts.isArrowFunction(property.initializer) || ts.isFunctionExpression(property.initializer))
+    ) {
+      apply = property.initializer;
+    }
+  }
+  return inject && apply ? { inject, apply } : undefined;
+}
 function isDirectInjectionUse(node: ts.Node, injection: CordisInjectionFact): boolean {
   for (let current = node.parent; current && current !== injection.callback; current = current.parent) {
     if (ts.isFunctionLike(current)) return false;
@@ -1358,6 +1418,12 @@ function cordisServiceFacts(
   const injections: CordisInjectionFact[] = [];
   const invalidProviders: string[] = [];
   const uses: CordisServiceUse[] = [];
+  const servicesOf = (elements: ts.NodeArray<ts.Expression>): Set<string> =>
+    new Set(
+      elements.flatMap((element) =>
+        ts.isExpression(element) ? (cordisServiceExpression(element, serviceConstants) ?? []) : [],
+      ),
+    );
   const collectInjections = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const method = methodName(node.expression);
@@ -1366,15 +1432,24 @@ function cordisServiceFacts(
         if (method === 'inject' && ts.isArrayLiteralExpression(firstArgument)) {
           const callback = node.arguments[1];
           if (callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) {
-            const services = new Set(
-              firstArgument.elements.flatMap((element) =>
-                ts.isExpression(element) ? (cordisServiceExpression(element, serviceConstants) ?? []) : [],
-              ),
-            );
+            const services = servicesOf(firstArgument.elements);
             const ownership = injectionOwnership(callback);
             injections.push({ callback, services, ...ownership });
           }
         }
+      }
+    }
+    // A Cordis object plugin carries its dependencies on itself, so its `apply`
+    // owns the injected services exactly as an `ctx.inject` callback does.
+    if (ts.isObjectLiteralExpression(node)) {
+      const objectPlugin = cordisObjectPlugin(node);
+      if (objectPlugin) {
+        const ownership = injectionOwnership(objectPlugin.apply);
+        injections.push({
+          callback: objectPlugin.apply,
+          services: servicesOf(objectPlugin.inject.elements),
+          ...ownership,
+        });
       }
     }
     ts.forEachChild(node, collectInjections);
@@ -1905,10 +1980,12 @@ function publicSourcePath(relativePath: string): boolean {
   return /^src\/(?:index|exports\/)/.test(relativePath);
 }
 
-function publicSourceAbiReferences(sourceFile: ts.SourceFile): string[] {
+function publicSourceAbiReferences(sourceFile: ts.SourceFile, packageName: string | undefined): string[] {
+  const owned = packageName === undefined ? undefined : ABI_VOCABULARY_OWNERS.get(packageName);
   const references = collectSpecifiers(sourceFile).filter(isForbiddenAbiReference);
   references.push(...exportedDeclarationNames(sourceFile).filter((name) => PUBLIC_ABI_NAME_PATTERN.test(name)));
-  return [...new Set(references)].sort();
+  const remaining = owned === undefined ? references : references.filter((reference) => !owned.test(reference));
+  return [...new Set(remaining)].sort();
 }
 
 function sourceTargetExists(configRoot: string, stem: string): boolean {
@@ -2119,7 +2196,7 @@ function sourceArchitectureViolations(
   }
 
   if (publicSourcePath(relativePath)) {
-    const abiReferences = publicSourceAbiReferences(sourceFile);
+    const abiReferences = publicSourceAbiReferences(sourceFile, packageName);
     if (abiReferences.length > 0) {
       violations.push(`public source exports native/Cordis ABI: ${abiReferences.join(', ')}`);
     }
@@ -2433,20 +2510,23 @@ export const noForwardingModule: RuleDefinition = {
 
 export const cordisContextInPiAdapter: RuleDefinition = {
   preflight: true,
-  rule: 'Exactly one production Cordis Context is constructed by the shared Doom host adapter',
+  rule: 'Production Cordis Contexts are constructed only by the shared Doom host adapters',
   rationale:
-    'One application Context belongs to each Pi runner. The extension-contracts host adapter owns it, publishes the runtime and session services, and recursively disposes the plugin tree. A package-local Context splits service discovery and creates a competing lifecycle.',
+    "One application Context belongs to each host runner. The extension-contracts Pi host adapter owns the agent runner's Context, and the server facet loader owns the headless server's, publishing that host's services and recursively disposing its plugin tree. A package-local Context splits service discovery and creates a competing lifecycle.",
   check(filePath, configRoot) {
     const relativePath = projectPath(filePath, configRoot);
     const manifest = readPackageManifest(configRoot);
     if (!relativePath || !isDoomPackageName(manifest?.name)) return null;
 
     if (relativePath === PACKAGE_MANIFEST_PATH && manifest?.name === CORDIS_CONTRACTS_PACKAGE) {
-      const hostSource = readSource(path.join(configRoot, CORDIS_HOST_ADAPTER_PATH));
-      const count = hostSource ? cordisContextConstructionCount(hostSource) : 0;
-      return count === 1
-        ? null
-        : `The shared host must contain exactly one Cordis Context construction at ${CORDIS_HOST_ADAPTER_PATH}; found ${count}.`;
+      for (const hostPath of CORDIS_HOST_ADAPTER_PATHS) {
+        const hostSource = readSource(path.join(configRoot, hostPath));
+        const count = hostSource ? cordisContextConstructionCount(hostSource) : 0;
+        if (count !== 1) {
+          return `The shared host must contain exactly one Cordis Context construction at ${hostPath}; found ${count}.`;
+        }
+      }
+      return null;
     }
 
     // Tests build their own Context to drive an extension under a harness.
@@ -2456,7 +2536,7 @@ export const cordisContextInPiAdapter: RuleDefinition = {
 
     const count = cordisContextConstructionCount(sourceFile);
     const isSharedHost =
-      manifest?.name === '@agimon-ai/doompi-extension-contracts' && relativePath === CORDIS_HOST_ADAPTER_PATH;
+      manifest?.name === CORDIS_CONTRACTS_PACKAGE && CORDIS_HOST_ADAPTER_PATHS.includes(relativePath);
     if (isSharedHost) {
       return count === 1 ? null : `The shared host adapter must construct exactly one Cordis Context; found ${count}.`;
     }
@@ -2713,5 +2793,75 @@ export const doomCleanArchitectureBoundary: RuleDefinition = {
 
     const unique = [...new Set(violations)];
     return unique.length > 0 ? `Clean architecture boundary violations: ${unique.join('; ')}` : null;
+  },
+};
+
+const SERVER_FACET_TYPE = 'DoomServerFacet';
+const SERVER_FACET_HOST_CONSTANT = 'DOOM_SERVER_HOST_SERVICE';
+const SERVER_FACET_DIRECTORY = 'src/adapters/server/';
+
+/** Declarations annotated `: DoomServerFacet`, the only shape a host will install. */
+function serverFacetDeclarations(sourceFile: ts.SourceFile): ts.VariableDeclaration[] {
+  const declarations: ts.VariableDeclaration[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.type !== undefined &&
+      ts.isTypeReferenceNode(node.type) &&
+      node.type.typeName.getText(sourceFile) === SERVER_FACET_TYPE
+    ) {
+      declarations.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  return declarations;
+}
+
+function serverFacetViolations(declaration: ts.VariableDeclaration, sourceFile: ts.SourceFile): string[] {
+  const name = declaration.name.getText(sourceFile);
+  const initializer = declaration.initializer;
+  if (!initializer || !ts.isObjectLiteralExpression(initializer)) {
+    return [`${name} is not an object literal; a host cannot read inject off a function facet`];
+  }
+  const plugin = cordisObjectPlugin(initializer);
+  if (!plugin) return [`${name} needs both an inject array and an apply body`];
+  const violations: string[] = [];
+  const injected = plugin.inject.elements.map((element) => element.getText(sourceFile));
+  if (!injected.includes(SERVER_FACET_HOST_CONSTANT)) {
+    violations.push(`${name} does not inject ${SERVER_FACET_HOST_CONSTANT}`);
+  }
+  const nested: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'inject'
+    ) {
+      nested.push(node.expression.getText(sourceFile));
+    }
+    ts.forEachChild(node, visit);
+  };
+  if (plugin.apply.body) ts.forEachChild(plugin.apply.body, visit);
+  if (nested.length > 0) {
+    violations.push(`${name} calls ${[...new Set(nested)].join(', ')} inside apply`);
+  }
+  return violations;
+}
+
+export const doomServerFacetShape: RuleDefinition = {
+  preflight: true,
+  rule: 'A server facet is a Cordis object plugin that declares its own inject',
+  rationale:
+    'A host mounts one fiber per facet and reads the mount table the moment it settles, so it can decide whether to open a listener at all. Only the object form declares inject where the host can see it; a facet that injects from inside apply spawns a child fiber the host holds no handle on, and the host then reads a mount table that is still filling.',
+  check(filePath, configRoot) {
+    const relativePath = projectPath(filePath, configRoot);
+    if (!relativePath?.startsWith(SERVER_FACET_DIRECTORY)) return null;
+    const sourceFile = readSource(filePath);
+    if (!sourceFile) return null;
+    const declarations = serverFacetDeclarations(sourceFile);
+    if (declarations.length === 0) return null;
+    const violations = declarations.flatMap((declaration) => serverFacetViolations(declaration, sourceFile));
+    return violations.length > 0 ? `Server facet shape violations: ${violations.join('; ')}` : null;
   },
 };

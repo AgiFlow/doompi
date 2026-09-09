@@ -5,6 +5,7 @@ import { hasProjectTrustOption } from '../services/config/projectTrust';
 import type { HarnessContext } from '../adapters/harnessContext';
 import type { HarnessOptions } from '../types/interfaces/harness';
 import { resolveLaunchPlan } from '../adapters/launchPlan.ts';
+import { LAUNCHER_COMPOSITION_REQUEST_ENV } from '../types/interfaces/launcherComposition';
 import { piCliPath } from '../adapters/modules/moduleResolution';
 import { isRecord } from '../adapters/serialization/json';
 import { BaseCommand } from './baseCommand.ts';
@@ -95,7 +96,11 @@ export class LaunchCommand extends BaseCommand {
 
   async execute(context: HarnessContext, telemetry: HarnessTelemetry): Promise<number> {
     const { options } = context;
-    const plan = await resolveLaunchPlan(context, telemetry);
+    // A caller that owns this process's lifetime, such as doompi-server, asks
+    // for a composition record so a mode switch reloads in place instead of
+    // needing a new process. Absent, the session composes as it always has.
+    const compositionRecordPath = context.environment[LAUNCHER_COMPOSITION_REQUEST_ENV]?.trim();
+    const plan = await resolveLaunchPlan(context, telemetry, compositionRecordPath ? { compositionRecordPath } : {});
     const environment = plan.environment;
     let piArgs = plan.piArgs;
     const launchExtensions = plan.extensions;

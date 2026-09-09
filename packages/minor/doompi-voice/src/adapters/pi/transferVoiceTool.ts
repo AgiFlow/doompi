@@ -1,3 +1,4 @@
+import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { VoiceToolDescribeInputSchema } from '@agimon-ai/doompi-extension-contracts/voice-tools';
 import type { AgentToolResult, ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { sessionVoiceOwnership } from '../../services/sessionVoiceOwnership.ts';
@@ -70,13 +71,14 @@ export function registerTransferVoiceTool(pi: Pick<ExtensionAPI, 'registerTool'>
 }
 
 export function createTransferVoiceToolLifecycle(
-  pi: Pick<ExtensionAPI, 'registerTool' | 'getActiveTools' | 'setActiveTools'>,
+  pi: Pick<ExtensionAPI, 'registerTool'>,
+  applyRestriction: (restrict: DoomToolRestriction) => void,
 ): TransferVoiceToolLifecycle {
   const registration = registerTransferVoiceTool(pi);
   let timer: ReturnType<typeof setInterval> | undefined;
   const reconcile = (): void => {
     registration.refresh();
-    reconcileTransferVoiceTool(pi);
+    applyRestriction(transferVoiceToolRestriction(transferVoiceToolVisible()));
   };
   return {
     sessionStarted() {
@@ -92,12 +94,18 @@ export function createTransferVoiceToolLifecycle(
   };
 }
 
-export function reconcileTransferVoiceTool(pi: Pick<ExtensionAPI, 'getActiveTools' | 'setActiveTools'>): void {
+/** The tool means something only while this session holds voice and the server lists a target. */
+export function transferVoiceToolVisible(): boolean {
   const snapshot = sessionVoiceOwnership.snapshot();
-  const visible = snapshot.registration?.active === true && snapshot.targets.length > 0;
-  const current = pi.getActiveTools();
-  const active = current.filter((name) => name !== TRANSFER_VOICE_TOOL_NAME);
-  if (visible) active.push(TRANSFER_VOICE_TOOL_NAME);
-  if (active.length !== current.length || active.some((name, index) => name !== current[index]))
-    pi.setActiveTools(active);
+  return snapshot.registration?.active === true && snapshot.targets.length > 0;
+}
+
+/**
+ * Hides the handoff tool until a handoff is actually possible.
+ *
+ * The tool stays registered for the whole session; the surface recomputes from
+ * the registered set, so becoming visible again needs no bookkeeping here.
+ */
+export function transferVoiceToolRestriction(visible: boolean): DoomToolRestriction {
+  return (incoming) => (visible ? incoming : incoming.filter((name) => name !== TRANSFER_VOICE_TOOL_NAME));
 }

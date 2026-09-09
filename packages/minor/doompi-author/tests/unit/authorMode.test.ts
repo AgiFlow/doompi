@@ -3,6 +3,7 @@ import type {
   MinorModeOwnerDefinition,
   MinorModeOwnerHandle,
 } from '@agimon-ai/doompi-extension-contracts/mode';
+import { DOOM_TOOL_SURFACE_SERVICE, createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,8 @@ import type { AuthorCatalog } from '../../src/services/authorCatalog.ts';
 function fixture() {
   let definition: MinorModeOwnerDefinition<ExtensionContext> | undefined;
   let cleanup: (() => void) | undefined;
-  let activeTools = ['read', 'open_authoring_file', 'describe_author_tools', 'use_author_tools'];
+  const allTools = ['read', 'open_authoring_file', 'describe_author_tools', 'use_author_tools'];
+  let activeTools = [...allTools];
   let viewportFocused = false;
   let sessionStart: (() => void) | undefined;
   const handle: MinorModeOwnerHandle = {
@@ -26,20 +28,23 @@ function fixture() {
       return handle;
     },
   } as MinorModeCatalogService;
+  const surface = createDoomToolSurface({
+    generation: 'test',
+    allTools: () => allTools,
+    setActiveTools: (next) => {
+      activeTools = next;
+    },
+  });
   const cordis = {
-    inject(_services: readonly string[], callback: (context: Context) => (() => void) | void) {
-      callback({ get: () => modeCatalog } as unknown as Context);
+    inject(services: readonly string[], callback: (context: Context) => (() => void) | void) {
+      const service = services.includes(DOOM_TOOL_SURFACE_SERVICE) ? surface : modeCatalog;
+      callback({ get: () => service } as unknown as Context);
     },
     effect(factory: () => () => void) {
       cleanup = factory();
     },
   } as unknown as Context;
-  const getActiveTools = vi.fn(() => activeTools);
   const pi = {
-    getActiveTools,
-    setActiveTools: vi.fn((tools: string[]) => {
-      activeTools = tools;
-    }),
     on: vi.fn((event: string, listener: () => void) => {
       if (event === 'session_start') sessionStart = listener;
     }),
@@ -71,7 +76,7 @@ function fixture() {
     handle,
     facade,
     catalog,
-    getActiveTools,
+    surface,
     startSession: () => sessionStart?.(),
     focus: (focused: boolean) => {
       viewportFocused = focused;
@@ -94,7 +99,9 @@ describe('Author minor mode', () => {
 
     expect(definition.descriptor).toMatchObject({ id: 'author', label: 'Author' });
     expect(definition.initialState).toMatchObject({ activation: 'inactive', condition: 'ready' });
-    expect(value.getActiveTools).not.toHaveBeenCalled();
+    // The arbiter hides an inactive mode's tools as soon as it registers, so
+    // the surface is already narrowed before the first session starts.
+    expect(value.activeTools()).toEqual(['read']);
     value.startSession();
     expect(value.activeTools()).toEqual(['read']);
 

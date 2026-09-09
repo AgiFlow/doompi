@@ -55,6 +55,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -110,6 +115,13 @@
       "entry": "./src/exports/hubApi.ts",
       "dist": "./dist/hubApi.mjs"
     }
+  },
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "hub"
+    ]
   },
   "doompiWeb": {
     "pluginId": "git",

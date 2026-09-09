@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createDispatcherBridge,
+  dispatcherToolRestriction,
   isWorkflowDispatcherProcess,
   resolveDispatcherParentSession,
   workflowExtension,
@@ -50,13 +51,11 @@ describe('doom workflow extension', () => {
           return () => listeners.delete(listener);
         },
       },
-      getActiveTools: vi.fn(() => []),
       registerCommand,
       registerMessageRenderer: vi.fn(),
       registerShortcut: vi.fn(),
       registerTool: vi.fn(),
       on,
-      setActiveTools: vi.fn(),
     } as unknown as ExtensionAPI;
 
     await workflowExtension(pi);
@@ -236,19 +235,25 @@ describe('workflow dispatcher bridge', () => {
 
   it('keeps dispatcher tools limited to list_workflows and launch_workflow', () => {
     const registerTool = vi.fn();
-    const setActiveTools = vi.fn();
-    const bridge = createDispatcherBridge(
-      { registerTool, setActiveTools } as unknown as ExtensionAPI,
-      'parent-session',
-    );
+    const bridge = createDispatcherBridge({ registerTool } as unknown as ExtensionAPI, 'parent-session');
 
     bridge.registerTool({ name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0]);
     bridge.registerTool({ name: 'launch_workflow' } as Parameters<ExtensionAPI['registerTool']>[0]);
     bridge.registerTool({ name: 'workflow_run' } as Parameters<ExtensionAPI['registerTool']>[0]);
-    bridge.setActiveTools(['foreign_tool', 'list_workflows', 'launch_workflow', 'workflow_run']);
 
     expect(registerTool.mock.calls.map(([tool]) => tool.name)).toEqual(['list_workflows', 'launch_workflow']);
-    expect(setActiveTools).toHaveBeenCalledWith(['foreign_tool', 'list_workflows', 'launch_workflow']);
+  });
+
+  // The bridge drops the registration, and this drops the name: a dispatcher
+  // must not see `workflow_run` even if another owner puts it on the surface.
+  it('hides workflow_run from the dispatcher surface and leaves other owners alone', () => {
+    const available = ['foreign_tool', 'list_workflows', 'launch_workflow', 'workflow_run'];
+
+    expect(dispatcherToolRestriction()(available, available)).toEqual([
+      'foreign_tool',
+      'list_workflows',
+      'launch_workflow',
+    ]);
   });
 });
 

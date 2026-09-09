@@ -1,7 +1,8 @@
 import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-extension-contracts/background-work';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { activateGoalExtension } from '../../src/adapters/pi/runtimeActivation.ts';
+import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { activateGoalRuntime } from '../../src/adapters/pi/runtimeActivation.ts';
 import type { GoalHistoryPort } from '../../src/types/history.ts';
 
 interface HandlerRecord {
@@ -9,7 +10,7 @@ interface HandlerRecord {
   handler: (event: never, context: ExtensionContext) => unknown;
 }
 
-function createFixture(options: { autoActivateRegisteredTools?: boolean } = {}) {
+function createFixture() {
   const handlers: HandlerRecord[] = [];
   const commands = new Map<string, { handler: (args: string, context: ExtensionContext) => Promise<void> }>();
   const tools: ToolDefinition[] = [];
@@ -57,7 +58,8 @@ function createFixture(options: { autoActivateRegisteredTools?: boolean } = {}) 
     },
     registerTool(tool: ToolDefinition) {
       tools.push(tool);
-      if (options.autoActivateRegisteredTools) activeTools = [...new Set([...activeTools, tool.name])];
+      activeTools = [...new Set([...activeTools, tool.name])];
+      surface.refresh();
     },
     getActiveTools: () => [...activeTools],
     setActiveTools: (names: string[]) => {
@@ -66,8 +68,32 @@ function createFixture(options: { autoActivateRegisteredTools?: boolean } = {}) 
     appendEntry,
     sendUserMessage,
   } as unknown as ExtensionAPI;
+  const surface = createDoomToolSurface({
+    generation: 'goal-test',
+    allTools: () => [...new Set(['read', ...tools.map((tool) => tool.name)])],
+    setActiveTools: (names) => {
+      activeTools = [...names];
+    },
+  });
   return {
     pi,
+    surface,
+    /** Activates the runtime the way the plugin does: runtime first, then the arbiter binding. */
+    activateRuntime() {
+      const activation = activateGoalRuntime(pi, {
+        service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
+        history,
+      });
+      const unbindSurface = activation.manager.bindToolSurface(surface);
+      return {
+        manager: activation.manager,
+        unbindSurface,
+        dispose() {
+          unbindSurface();
+          activation.dispose();
+        },
+      };
+    },
     context,
     handlers,
     commands,
@@ -142,13 +168,10 @@ async function finishGoalTurn(fixture: ReturnType<typeof createFixture>): Promis
 }
 describe('Goal Pi manager activation', () => {
   it('keeps a fresh session dormant and activates only after an objective is accepted', async () => {
-    const fixture = createFixture({ autoActivateRegisteredTools: true });
-    const dispose = activateGoalExtension(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const fixture = createFixture();
+    const activation = fixture.activateRuntime();
 
-    expect(fixture.activeTools()).toEqual(['read', 'goal_complete', 'goal_blocked']);
+    expect(fixture.activeTools()).toEqual(['read']);
     await dispatch(fixture, 'session_start');
     expect(fixture.activeTools()).toEqual(['read']);
     expect(fixture.context.ui.setStatus).not.toHaveBeenCalledWith('goal', expect.any(String));
@@ -177,16 +200,13 @@ describe('Goal Pi manager activation', () => {
     await dispatch(fixture, 'agent_settled');
     await vi.waitFor(() => expect(fixture.sendUserMessage).toHaveBeenCalledTimes(2));
     expect(fixture.sendUserMessage).toHaveBeenLastCalledWith('[goal]\nContinue.', { deliverAs: 'followUp' });
-    dispose();
+    activation.dispose();
   });
 
   it('rejects stale completion ids and fully deactivates only after valid completion', async () => {
     const fixture = createFixture();
     const archive = vi.spyOn(fixture.history, 'archive');
-    activateGoalExtension(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     const tool = fixture.tools.find((candidate) => candidate.name === 'goal_complete');
@@ -226,10 +246,7 @@ describe('Goal Pi manager activation', () => {
 describe('Goal Doom leader operations', () => {
   it('seeds exactly /goal and preserves a cancelled draft', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await activation.manager.startFromLeader(fixture.context);
     expect(fixture.context.ui.setEditorText).toHaveBeenCalledWith('/goal ');
 
@@ -242,10 +259,7 @@ describe('Goal Doom leader operations', () => {
 
   it('shows the current goal without changing the editor', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     (fixture.context.ui.notify as unknown as ReturnType<typeof vi.fn>).mockClear();
@@ -259,10 +273,7 @@ describe('Goal Doom leader operations', () => {
 
   it('archives before end and never turns end into pause', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     const archive = vi.spyOn(fixture.history, 'archive');
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
@@ -288,10 +299,7 @@ describe('Goal lifecycle safety and fencing', () => {
 
   it('pauses and fences an automatic run at the automatic response limit', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     configureSettings(activation.manager, safetySettings(1, null));
@@ -316,10 +324,7 @@ describe('Goal lifecycle safety and fencing', () => {
 
   it('pauses repeated tool-free output at the no-progress limit', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     configureSettings(activation.manager, safetySettings(null, 1));
@@ -344,10 +349,7 @@ describe('Goal lifecycle safety and fencing', () => {
 
   it('retains a usage-limited state for provider quota failures', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     await dispatch(fixture, 'agent_start');
@@ -369,10 +371,7 @@ describe('Goal lifecycle safety and fencing', () => {
 
   it('classifies non-quota provider failures as blocked', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     await dispatch(fixture, 'agent_start');
@@ -394,10 +393,7 @@ describe('Goal lifecycle safety and fencing', () => {
 
   it('fences owned continuation work across compaction and avoids duplicate overflow delivery', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     await dispatch(fixture, 'agent_start');
@@ -412,13 +408,13 @@ describe('Goal lifecycle safety and fencing', () => {
 
   it('pauses instead of injecting a prompt after external tool-policy drift', async () => {
     const fixture = createFixture();
-    const activation = (await import('../../src/adapters/pi/runtimeActivation.ts')).activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
-    fixture.pi.setActiveTools?.(['read']);
+    const rival = fixture.surface.register({
+      source: 'rival',
+      restrict: (incoming) => incoming.filter((name) => !name.startsWith('goal_')),
+    });
     const beforeStart = fixture.handlers.find((candidate) => candidate.event === 'before_agent_start');
     const result = (await beforeStart?.handler({ systemPrompt: 'base' } as never, fixture.context)) as
       | { systemPrompt?: string }
@@ -427,17 +423,14 @@ describe('Goal lifecycle safety and fencing', () => {
     expect(result).toBeUndefined();
     expect(activation.manager.snapshot().goal?.status).toBe('paused');
     expect(fixture.activeTools()).toEqual(['read']);
+    rival.dispose();
     activation.dispose();
   });
 });
 
 describe('Goal background-work coordination', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
-    const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
-    const activation = runtime.activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await fixture.commands.get('goal')?.handler('ship it', fixture.context);
     return activation;
@@ -568,11 +561,7 @@ describe('Goal background-work coordination', () => {
 });
 describe('Goal manager command and restore branches', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
-    const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
-    const activation = runtime.activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await new Promise((resolve) => setTimeout(resolve, 50));
     return activation;
@@ -595,12 +584,10 @@ describe('Goal manager command and restore branches', () => {
     const fixture = createFixture();
     const activation = await activate(fixture);
     await fixture.commands.get('goal')?.handler('', fixture.context);
-    const pi = fixture.pi as unknown as { setActiveTools: (names: string[]) => void };
-    pi.setActiveTools(['read']);
-    pi.setActiveTools = () => undefined;
+    activation.unbindSurface();
     await fixture.commands.get('goal')?.handler('cannot start', fixture.context);
     expect(activation.manager.snapshot().goal).toBeUndefined();
-    expect(fixture.activeTools()).toEqual(['read']);
+    expect(fixture.activeTools()).toEqual(['read', 'goal_complete', 'goal_blocked']);
     activation.dispose();
   });
 
@@ -703,11 +690,7 @@ describe('Goal manager command and restore branches', () => {
     };
     session.getBranch = () => [{ type: 'custom', customType: 'goal-state', data: serializeGoalState(restored) }];
     session.getEntries = session.getBranch;
-    const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
-    const activation = runtime.activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(activation.manager.snapshot().goal?.text).toBe('restored');
@@ -760,11 +743,7 @@ describe('Goal manager command and restore branches', () => {
 
 describe('Goal manager completion and archive branches', () => {
   async function activate(fixture: ReturnType<typeof createFixture>) {
-    const runtime = await import('../../src/adapters/pi/runtimeActivation.ts');
-    const activation = runtime.activateGoalRuntime(fixture.pi, {
-      service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
-      history: fixture.history,
-    });
+    const activation = fixture.activateRuntime();
     await dispatch(fixture, 'session_start');
     await new Promise((resolve) => setTimeout(resolve, 50));
     return activation;

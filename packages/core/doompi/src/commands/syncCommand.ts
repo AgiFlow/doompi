@@ -640,7 +640,8 @@ export class SyncCommand {
         outputDirectory: path.join(directory, 'api'),
         onNotice: (message) => progress.line(API_LABEL, message),
       });
-      apiProgress(`routes written to ${api.directory}`);
+      const facetCount = new Set([...api.facets.session, ...api.facets.hub]).size;
+      apiProgress(`routes and ${facetCount} server facet(s) written to ${api.directory}`);
 
       publishSyncRegistration(
         location.root,

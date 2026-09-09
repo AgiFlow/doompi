@@ -10,6 +10,7 @@ import {
   DOOM_HUB_API_SESSION_QUERY_PARAM,
   type DoomApi,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountHubApis, serveWeb } from '../../src/adapters/httpServer.ts';
@@ -113,6 +114,7 @@ describe('hub-scoped package APIs', () => {
     const mounted = mountHubApis(
       app,
       [],
+      [],
       () => undefined,
       () => undefined,
       () => undefined,
@@ -126,11 +128,78 @@ describe('hub-scoped package APIs', () => {
     };
 
     expect((await app.request('/api/plugin/metrics/report')).status).toBe(404);
-    mounted.add([api]);
+    await mounted.add([api]);
 
     const response = await app.request('/api/plugin/metrics/report');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ path: '/report' });
+  });
+
+  it('mounts an API a hub server facet registers', async () => {
+    const app = new Hono();
+    mountHubApis(
+      app,
+      [],
+      [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host || host.scope !== 'hub') return undefined;
+            const registration = host.registerApi({
+              basePath: 'worktrees',
+              start: () => ({ fetch: () => Response.json({ from: 'facet' }), close: () => undefined }),
+            });
+            return () => registration.dispose();
+          },
+        },
+      ],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+    );
+
+    const response = await app.request('/api/plugin/worktrees/list');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ from: 'facet' });
+  });
+
+  it('drops a facet registration when its bundle is retired', async () => {
+    const app = new Hono();
+    const close = vi.fn();
+    const mounted = mountHubApis(
+      app,
+      [],
+      [],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      () => 'retired',
+    );
+    await mounted.add(
+      [],
+      [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi({
+              basePath: 'worktrees',
+              start: () => ({ fetch: () => Response.json({ ok: true }), close }),
+            });
+            return () => registration.dispose();
+          },
+        },
+      ],
+      'retired',
+    );
+
+    expect((await app.request('/api/plugin/worktrees/list?hubSession=session')).status).toBe(200);
+    await mounted.remove('retired');
+
+    expect((await app.request('/api/plugin/worktrees/list?hubSession=session')).status).toBe(404);
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('isolates duplicate hub APIs by the bundle selected for a session', async () => {
@@ -148,14 +217,15 @@ describe('hub-scoped package APIs', () => {
     const mounted = mountHubApis(
       app,
       [api('metrics', 'global')],
+      [],
       () => undefined,
       () => undefined,
       () => undefined,
       (sessionId) => ({ repository: 'repo', fallback: 'global', missing: 'repo-without-metrics' })[sessionId],
       'global',
     );
-    mounted.add([api('metrics', 'repository')], 'repo');
-    mounted.add([api('other', 'repository')], 'repo-without-metrics');
+    await mounted.add([api('metrics', 'repository')], [], 'repo');
+    await mounted.add([api('other', 'repository')], [], 'repo-without-metrics');
 
     const repository = await app.request(
       `/api/plugin/metrics/report?keep=yes&${DOOM_HUB_API_SESSION_QUERY_PARAM}=repository`,
@@ -185,24 +255,26 @@ describe('hub-scoped package APIs', () => {
     const mounted = mountHubApis(
       app,
       [],
+      [],
       () => undefined,
       () => undefined,
       () => undefined,
       () => 'retired',
     );
-    mounted.add(
+    await mounted.add(
       [
         {
           basePath: 'metrics',
           start: () => ({ fetch: () => Response.json({ ok: true }), close }),
         },
       ],
+      [],
       'retired',
     );
 
     expect((await app.request('/api/plugin/metrics/report?hubSession=session')).status).toBe(200);
-    mounted.remove('retired');
-    mounted.remove('retired');
+    await mounted.remove('retired');
+    await mounted.remove('retired');
 
     expect((await app.request('/api/plugin/metrics/report?hubSession=session')).status).toBe(404);
     expect(close).toHaveBeenCalledOnce();

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
+import { loadServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
 import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { createHarnessTelemetry } from '@agimon-ai/doompi/logSinkTelemetry';
@@ -130,6 +131,10 @@ async function main(): Promise<number> {
           apiDirectory === undefined && !hasApiOverride
             ? []
             : await loadPackageApis('session', { apiDirectory, onNotice: notice }),
+        facets:
+          apiDirectory === undefined && !hasApiOverride
+            ? []
+            : await loadServerFacets('session', { apiDirectory, onNotice: notice }),
         telemetry,
         onNotice: notice,
       });

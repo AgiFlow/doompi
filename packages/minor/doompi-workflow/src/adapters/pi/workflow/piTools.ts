@@ -1,4 +1,5 @@
 import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import {
   createEmbeddedWorkflowFeature,
   type EmbeddedWorkflowFeature,
@@ -40,6 +41,18 @@ const PI_LAUNCH_FIELDS = {
 
 export const WORKFLOW_PI_TOOL_NAMES = ['list_workflows', 'launch_workflow', 'workflow_run'] as const;
 const [LIST_WORKFLOWS_TOOL_NAME, LAUNCH_WORKFLOW_TOOL_NAME, WORKFLOW_RUN_TOOL_NAME] = WORKFLOW_PI_TOOL_NAMES;
+
+/**
+ * What workflow mode does to the tool surface: nothing but hide its own tools.
+ *
+ * The tools are registered for the whole session because Pi has no other way to
+ * add one later, so the mode is expressed as a restriction rather than as a
+ * registration.
+ */
+export function workflowToolRestriction(enabled: boolean): DoomToolRestriction {
+  const hidden = new Set<string>(WORKFLOW_PI_TOOL_NAMES);
+  return (incoming) => (enabled ? incoming : incoming.filter((name) => !hidden.has(name)));
+}
 
 type WorkflowRunSelector = Pick<WorkflowRunInput, 'runKey' | 'workspace'>;
 
