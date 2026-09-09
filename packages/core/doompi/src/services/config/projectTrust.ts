@@ -1,5 +1,8 @@
-import { loadDoomConfig as loadSharedDoomConfig } from '@agimon-ai/doompi-config/config';
-import type { DoomSelectionConfig, ProjectTrust } from '@agimon-ai/doompi-config/types';
+import {
+  loadDoomConfig as loadSharedDoomConfig,
+  loadDoomConfigLenient as loadSharedDoomConfigLenient,
+} from '@agimon-ai/doompi-config/config';
+import type { ConfigDiagnostic, DoomSelectionConfig, ProjectTrust } from '@agimon-ai/doompi-config/types';
 
 const APPROVE_OPTION = '--approve';
 const APPROVE_SHORT_OPTION = '-a';
@@ -19,6 +22,19 @@ export interface DoomConfig {
 export function loadDoomConfig(repoRoot: string): DoomConfig {
   const config = loadSharedDoomConfig(repoRoot);
   return { projectTrust: config.projectTrust, selection: config.selection };
+}
+
+/**
+ * Reads the config the way `doompi sync` needs it: an unknown key is reported
+ * rather than fatal, so a config written for a different version cannot break
+ * a build. `doompi doctor` runs the strict read above.
+ */
+export function loadDoomConfigLenient(
+  repoRoot: string,
+  homeDirectory?: string,
+): { config: DoomConfig; diagnostics: ConfigDiagnostic[] } {
+  const { config, diagnostics } = loadSharedDoomConfigLenient(repoRoot, homeDirectory);
+  return { config: { projectTrust: config.projectTrust, selection: config.selection }, diagnostics };
 }
 
 export function hasProjectTrustOption(piArgs: string[]): boolean {

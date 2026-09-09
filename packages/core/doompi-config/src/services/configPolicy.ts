@@ -4,9 +4,12 @@ import type {
   AutocompactOverrideConfig,
   ComputerUseConfig,
   AutocompactThresholdConfig,
+  ConfigDiagnostic,
   DoomConfig,
   DoomSelectionConfig,
   EditorConfig,
+  LenientParseOptions,
+  LenientParseResult,
   PlanningAgentConfig,
   PlanningModeConfig,
   PlanningThinkingLevel,
@@ -138,10 +141,32 @@ type ConfigObject = Record<string, unknown>;
 function isObject(value: unknown): value is ConfigObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+/**
+ * Where a lenient parse collects unknown keys instead of throwing.
+ *
+ * Module scope rather than a parameter threaded through the twelve nested
+ * parsers: `assertKeys` is the only reader, parsing is synchronous end to end,
+ * and `parseDoomConfig` owns the whole window in a try/finally. Threading would
+ * touch every parser to change behaviour in one of them.
+ */
+let unknownKeySink: ConfigDiagnostic[] | undefined;
+
 function assertKeys(value: ConfigObject, allowed: readonly string[], location: string, filePath: string): void {
   const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unknown.length > 0)
-    throw new Error(`Doom config at ${filePath} has unsupported ${location} field(s): ${unknown.join(', ')}`);
+  if (unknown.length === 0) return;
+  if (unknownKeySink !== undefined) {
+    // Left on the object rather than deleted: every parser reads the fields it
+    // knows by name, so an unknown sibling is already inert.
+    for (const key of unknown) {
+      unknownKeySink.push({
+        filePath,
+        path: location === 'root' ? key : `${location}.${key}`,
+        message: `unsupported ${location} field`,
+      });
+    }
+    return;
+  }
+  throw new Error(`Doom config at ${filePath} has unsupported ${location} field(s): ${unknown.join(', ')}`);
 }
 function optionalString(value: unknown, location: string, filePath: string): string | undefined {
   if (value === undefined) return undefined;
@@ -599,7 +624,34 @@ function parseComputerUse(value: unknown, filePath: string): ComputerUseConfig |
   const enabled = parseFlexibleBoolean(value.enabled, 'computerUse.enabled', filePath);
   return enabled === undefined ? {} : { enabled };
 }
-export function parseDoomConfig(content: string, filePath: string): DoomConfig {
+/**
+ * Reads one Doom config file.
+ *
+ * The two-argument form is the strict contract every harness-launch consumer
+ * relies on: an unknown key is a hard error. `doompi sync` opts into the
+ * lenient form so a config written for a different version cannot break a
+ * build; `doompi doctor` is the strict check that still reports those keys.
+ * Invalid values for known keys throw in both modes.
+ */
+export function parseDoomConfig(content: string, filePath: string): DoomConfig;
+export function parseDoomConfig(content: string, filePath: string, options: LenientParseOptions): LenientParseResult;
+export function parseDoomConfig(
+  content: string,
+  filePath: string,
+  options?: LenientParseOptions,
+): DoomConfig | LenientParseResult {
+  if (options?.lenient !== true) return parseStrict(content, filePath);
+  const diagnostics: ConfigDiagnostic[] = [];
+  const previous = unknownKeySink;
+  unknownKeySink = diagnostics;
+  try {
+    return { config: parseStrict(content, filePath), diagnostics };
+  } finally {
+    unknownKeySink = previous;
+  }
+}
+
+function parseStrict(content: string, filePath: string): DoomConfig {
   let parsed: unknown;
   try {
     parsed = parseYaml(content) ?? {};

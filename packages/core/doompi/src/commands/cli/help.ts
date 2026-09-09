@@ -8,6 +8,82 @@ const PACKAGE_MANIFEST = '@agimon-ai/doompi/package.json';
 
 export const HARNESS_VERSION = (require(PACKAGE_MANIFEST) as { version: string }).version;
 
+/** Shared so the root help and `compat --help` cannot describe different flags. */
+const COMPATIBILITY_MATRIX_OPTIONS = `Compatibility matrix options:
+  --profile <name>          Persona and env from .doom/profiles.yaml
+  --domains <names>         Comma-separated content domains
+  --major-mode <name>       Named major mode from .doom/modes.yaml
+  --skip-permissions        Disable the launched frontend's approval prompts
+                            for this run. Off by default; the run warns when on.
+  --                        Pass following matrix-named flags to the provider
+`;
+
+/** Matrix flags `doompi sync` reads when resolving what to publish. */
+const SYNC_MATRIX_OPTIONS = `Matrix options:
+  --major-mode <name>       Named major mode from .doom/modes.yaml
+  --profile <name>          Persona and env from .doom/profiles.yaml
+  --domains <names>         Comma-separated content domains
+  --no-domains              Select no domains
+`;
+
+export function initHelp(): string {
+  return `Usage: doompi init [--force]
+
+Fills missing files in ~/.pi/.doom and registers the DoomPi extension alias and
+theme in Pi user settings.
+
+Options:
+  --force                   Replace the four personal .doom files with current
+                            templates instead of only filling missing ones
+  -h, --help                Show this help
+`;
+}
+
+export function syncHelp(): string {
+  return `Usage: doompi sync [matrix options] [--check] [--force]
+
+Installs required packages, builds, resolves the composition, and publishes
+synchronized state under ~/.pi/.doom/sync.
+
+Unsupported keys in .doom/config.yaml and .doom/modes.yaml are reported and
+ignored rather than treated as errors, so a config written for a different
+version cannot break a build. Run doompi doctor for the strict check.
+
+Options:
+  --check                   Report drift and exit non-zero without writing
+  --force                   Publish a new generation even without drift
+  -h, --help                Show this help
+
+${SYNC_MATRIX_OPTIONS}`;
+}
+
+export function compatHelp(): string {
+  return `Usage: doompi compat <codex|claude|antigravity> [matrix options] [provider arguments]
+
+Resolves the DoomPi matrix and launches the named compatibility frontend.
+
+${COMPATIBILITY_MATRIX_OPTIONS}
+Options:
+  -h, --help                Show this help
+
+All other compatibility arguments pass to the provider unchanged.
+`;
+}
+
+export function doctorHelp(): string {
+  return `Usage: doompi doctor
+
+Checks the DoomPi installation and reports what is wrong without changing
+anything. Validates .doom/config.yaml and .doom/modes.yaml strictly, including
+the unsupported keys doompi sync ignores, then reports everything
+doompi sync --check reports.
+
+Exits non-zero when any check fails.
+
+Options:
+  -h, --help                Show this help
+`;
+}
 export function printHelp(): void {
   process.stdout.write(`doompi
 
@@ -34,14 +110,7 @@ After a sync, run pi directly. The synced session accepts --major-mode,
 without a restart. Selection defaults come from the selection block in
 .doom/config.yaml.
 
-Compatibility matrix options:
-  --profile <name>          Persona and env from .doom/profiles.yaml
-  --domains <names>         Comma-separated content domains
-  --major-mode <name>       Named major mode from .doom/modes.yaml
-  --skip-permissions        Disable the launched frontend's approval prompts
-                            for this run. Off by default; the run warns when on.
-  --                        Pass following matrix-named flags to the provider
-
+${COMPATIBILITY_MATRIX_OPTIONS}
 All other compatibility arguments pass to the provider unchanged.
 
 Harness options:

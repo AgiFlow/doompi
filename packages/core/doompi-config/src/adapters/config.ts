@@ -10,7 +10,7 @@ import {
   parseDoomConfig,
   valueAtKeyPath,
 } from '../services/configPolicy.ts';
-import type { DoomConfig } from '../types/config.ts';
+import type { ConfigDiagnostic, DoomConfig, LenientParseResult } from '../types/config.ts';
 import type { ConfigValueOrigin, DoomConfigLayer, DoomConfigLayers } from '../types/config.ts';
 
 const DOOM_DIR = '.doom';
@@ -64,6 +64,27 @@ export function loadDoomConfig(repoRoot: string, homeDirectory = os.homedir()): 
     readConfig(globalDoomConfigPath(homeDirectory)),
     readConfig(repositoryDoomConfigPath(repoRoot)),
   );
+}
+
+/**
+ * Loads the merged config, tolerating unknown keys in either file.
+ *
+ * Only `doompi sync` uses this. Everything that runs during a session keeps
+ * `loadDoomConfig`, because a key a running extension cannot understand is
+ * better reported than silently ignored; a build that refuses to start over
+ * the same key is not.
+ */
+export function loadDoomConfigLenient(repoRoot: string, homeDirectory = os.homedir()): LenientParseResult {
+  const read = (filePath: string): LenientParseResult =>
+    fs.existsSync(filePath)
+      ? parseDoomConfig(fs.readFileSync(filePath, 'utf8'), filePath, { lenient: true })
+      : { config: { projectTrust: 'ask' }, diagnostics: [] };
+  const globalConfig = read(globalDoomConfigPath(homeDirectory));
+  const repositoryConfig = read(repositoryDoomConfigPath(repoRoot));
+  const diagnostics: ConfigDiagnostic[] = [...globalConfig.diagnostics, ...repositoryConfig.diagnostics];
+  // mergeDoomConfigs stays strict on purpose: its errors are cross-file scope
+  // violations on known keys, which is a different fault from an unknown key.
+  return { config: mergeDoomConfigs(globalConfig.config, repositoryConfig.config), diagnostics };
 }
 
 export async function loadDoomConfigAsync(repoRoot: string, homeDirectory = os.homedir()): Promise<DoomConfig> {

@@ -1,3 +1,5 @@
+import { type ParseArgsOptionsConfig, parseArgs } from 'node:util';
+
 export interface ServeOptions {
   /** Registry override; the default is resolved by the caller. */
   registryDir?: string;
@@ -31,10 +33,19 @@ function requireValue(flag: string, value: string | undefined): string {
   return value;
 }
 
-function inlineValue(flag: string, prefix: string): string | undefined {
-  if (!flag.startsWith(prefix)) return undefined;
-  return requireValue(prefix.slice(0, -1), flag.slice(prefix.length));
-}
+/** Every flag takes a value except help and version, both of which have the usual short form. */
+const OPTIONS = {
+  dir: { type: 'string' },
+  'registry-dir': { type: 'string' },
+  'spawn-command': { type: 'string' },
+  port: { type: 'string' },
+  host: { type: 'string' },
+  assets: { type: 'string' },
+  'state-dir': { type: 'string' },
+  cloudflared: { type: 'string' },
+  help: { type: 'boolean', short: 'h' },
+  version: { type: 'boolean', short: 'v' },
+} as const satisfies ParseArgsOptionsConfig;
 
 /**
  * Parses the doompi-web command line.
@@ -44,77 +55,54 @@ function inlineValue(flag: string, prefix: string): string | undefined {
  * meant to be run; nothing here is required to get a working cockpit.
  */
 export function parseServeOptions(argv: readonly string[]): ServeOptions {
-  let registryDir: string | undefined;
-  let spawnCommand: string | undefined;
-  let port = DEFAULT_PORT;
-  let host = DEFAULT_HOST;
-  let assetsDir: string | undefined;
-  let stateDir: string | undefined;
-  let directory: string | undefined;
-  let cloudflaredPath: string | undefined;
+  // Non-strict with tokens rather than strict: parseArgs' own errors for an
+  // unknown flag read nothing like the rest of this CLI, and the tokens carry
+  // everything needed to report them in our own words.
+  const { tokens } = parseArgs({
+    args: [...argv],
+    options: OPTIONS,
+    strict: false,
+    tokens: true,
+    allowPositionals: true,
+  });
+
+  const values = new Map<string, string>();
   let help = false;
   let version = false;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const flag = argv[index];
-    const inlineDirectory = inlineValue(flag, '--dir=');
-    if (inlineDirectory !== undefined) {
-      directory = inlineDirectory;
+  for (const token of tokens) {
+    if (token.kind === 'positional') throw new Error(`Unknown option "${token.value}".`);
+    if (token.kind !== 'option') continue;
+    if (token.name === 'help') {
+      help = true;
       continue;
     }
-    switch (flag) {
-      case '--registry-dir':
-        registryDir = requireValue(flag, argv[++index]);
-        break;
-      case '--spawn-command':
-        spawnCommand = requireValue(flag, argv[++index]);
-        break;
-      case '--port': {
-        const raw = requireValue(flag, argv[++index]);
-        const parsed = Number.parseInt(raw, 10);
-        if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-          throw new Error(`--port expects a port number, received "${raw}".`);
-        }
-        port = parsed;
-        break;
-      }
-      case '--host':
-        host = requireValue(flag, argv[++index]);
-        break;
-      case '--assets':
-        assetsDir = requireValue(flag, argv[++index]);
-        break;
-      case '--state-dir':
-        stateDir = requireValue(flag, argv[++index]);
-        break;
-      case '--dir':
-        directory = requireValue(flag, argv[++index]);
-        break;
-      case '--cloudflared':
-        cloudflaredPath = requireValue(flag, argv[++index]);
-        break;
-      case '--help':
-      case '-h':
-        help = true;
-        break;
-      case '--version':
-      case '-v':
-        version = true;
-        break;
-      default:
-        throw new Error(`Unknown option "${flag}".`);
+    if (token.name === 'version') {
+      version = true;
+      continue;
     }
+    if (!Object.hasOwn(OPTIONS, token.name)) throw new Error(`Unknown option "${token.rawName}".`);
+    values.set(token.name, requireValue(`--${token.name}`, token.value));
+  }
+
+  let port = DEFAULT_PORT;
+  const rawPort = values.get('port');
+  if (rawPort !== undefined) {
+    const parsed = Number.parseInt(rawPort, 10);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
+      throw new Error(`--port expects a port number, received "${rawPort}".`);
+    }
+    port = parsed;
   }
 
   return {
-    registryDir,
-    spawnCommand,
+    registryDir: values.get('registry-dir'),
+    spawnCommand: values.get('spawn-command'),
     port,
-    host,
-    assetsDir,
-    stateDir,
-    directory,
-    cloudflaredPath,
+    host: values.get('host') ?? DEFAULT_HOST,
+    assetsDir: values.get('assets'),
+    stateDir: values.get('state-dir'),
+    directory: values.get('dir'),
+    cloudflaredPath: values.get('cloudflared'),
     help,
     version,
   };

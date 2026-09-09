@@ -13,6 +13,7 @@ import { readSyncState, type SyncState } from '@agimon-ai/doompi/services/syncSt
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { DOOM_COCKPIT_SERVER_ID } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
+import { packagedVersion } from './packageVersion.ts';
 import { createPiHubService } from './piHubService.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
@@ -250,36 +251,7 @@ function packagedPwaDir(): string {
   return packagedDirectory('pwa');
 }
 
-/**
- * The version of the package this process is running from.
- *
- * Published on `/api/health` so a second `doompi-web` start can tell an
- * upgrade apart from a duplicate launch. An upgraded CLI that silently hands
- * back to an older running hub serves the older cockpit forever, because a
- * long-lived process signs its asset directory once and never revisits it.
- */
-export function packagedVersion(): string {
-  const configuredRoot = process.env[WEB_PACKAGE_ROOT_ENV];
-  let dir =
-    configuredRoot !== undefined && configuredRoot !== ''
-      ? configuredRoot
-      : path.dirname(fileURLToPath(import.meta.url));
-  for (;;) {
-    const manifest = path.join(dir, 'package.json');
-    if (fs.existsSync(manifest)) {
-      try {
-        const parsed: unknown = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-        const version = isRecord(parsed) ? parsed.version : undefined;
-        return typeof version === 'string' ? version : 'unknown';
-      } catch {
-        return 'unknown';
-      }
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) return 'unknown';
-    dir = parent;
-  }
-}
+export { packagedVersion };
 
 /** The assets to serve, with explicit overrides ahead of this hub's registration. */
 function resolveAssetsDir(

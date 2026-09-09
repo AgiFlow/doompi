@@ -10,7 +10,10 @@ Configure runtime policy in `config.yaml` and consume one immutable session snap
 ## Workflow
 
 1. Read both `~/.pi/.doom/config.yaml` and the repository's `.doom/config.yaml` before changing effective settings.
-2. Check the `DoomConfig` types and parser before adding or editing a field. Unknown keys and invalid values fail early.
+2. Check the `DoomConfig` types and parser before adding or editing a field. Unknown keys and invalid values fail early
+   everywhere a session reads config. `doompi sync` is the one exception: it reports an unknown key and carries on, so a
+   config written for another version cannot break a build. Invalid values for known keys still fail there too. Run
+   `doompi doctor` for the strict check.
 3. Preserve field-specific source policy. Repository settings do not uniformly replace every personal setting.
 4. Consume live state only inside an owning `cordis.inject([DOOM_CONFIG_SERVICE], ...)` callback, using `requireDoomConfigContext(cordis)`.
 5. Treat `settings`, `harness`, `pendingSelection`, and nested values as immutable. Do not mutate or cache a snapshot across session replacement.

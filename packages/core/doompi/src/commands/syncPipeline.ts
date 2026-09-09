@@ -9,6 +9,8 @@ import { readSyncDrift } from '../adapters/syncDrift.ts';
 import { BuildCommand } from './buildCommand.ts';
 import { SyncCommand, type SyncSettingsMode } from './syncCommand.ts';
 import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
+import { syncHelp } from './cli/help.ts';
+import { wantsHelp } from './cli/router.ts';
 
 const CHECK_OPTION = '--check';
 /** Rebuilds and republishes even when nothing drifted. */
@@ -52,6 +54,12 @@ export class SyncPipeline {
     currentDirectory = process.cwd(),
     output: SyncProgressOutput = process.stdout,
   ): Promise<number> {
+    // Before the --check split, so both `sync --help` and `sync --check --help`
+    // print instead of running a sync nobody asked for.
+    if (wantsHelp(args)) {
+      output.write(syncHelp());
+      return 0;
+    }
     if (args.includes(CHECK_OPTION)) {
       return new SyncCommand({ settingsMode: this.settingsMode }).execute(args, environment, currentDirectory, output);
     }

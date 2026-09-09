@@ -172,6 +172,7 @@ model calls, voice, and telemetry behavior.
 | `doompi init`         | Seeds personal config, writes integration resources, and registers them in Pi user settings.      |
 | `doompi sync`         | Rebuilds synchronized state using the integration created by `doompi init`.                       |
 | `doompi sync --check` | Checks drift and exits non-zero without writing when state is stale.                              |
+| `doompi doctor`       | Reports configuration, package, sync-state, and drift problems without changing anything.         |
 | `doompi --explain`    | Prints the resolved matrix and estimated prompt cost without launching Pi.                        |
 
 See the [CLI reference](docs/cli-reference.md) for more commands, options, and direct-use guidance.

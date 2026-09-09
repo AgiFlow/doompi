@@ -110,6 +110,10 @@ export class CliApp {
       const [{ SyncPipeline }, telemetry] = await Promise.all([import('../syncPipeline.ts'), this.getTelemetry()]);
       return new SyncPipeline({ telemetry }).execute(args);
     }
+    if (args[0] === 'doctor') {
+      const { DoctorCommand } = await import('../doctorCommand.ts');
+      return new DoctorCommand().execute(args);
+    }
     if (args[0] === 'compat') {
       const [{ CompatibilityCommand }, telemetry] = await Promise.all([
         import('../compatibilityCommand.ts'),
