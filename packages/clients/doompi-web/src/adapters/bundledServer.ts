@@ -47,7 +47,7 @@ export function defaultServerLaunch(
   exists: FileExists = fs.existsSync,
 ): BundledServerLaunch {
   const configuredServer = environment[SERVER_COMMAND_ENV];
-  const server = configuredServer || packageFile('@agimon-ai/doompi-server', ['dist', 'bin', 'serve.mjs'], parentUrl);
+  const server = configuredServer || packageFile('@agimon-ai/doompi', ['dist', 'bin', 'serve.mjs'], parentUrl);
   const configuredAgent = environment[AGENT_COMMAND_ENV];
   const localAgent = repositoryDoomPiCli(cwd, exists);
   const agentEnvironment =

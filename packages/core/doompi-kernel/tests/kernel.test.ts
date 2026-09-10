@@ -121,6 +121,42 @@ describe('createDoomKernel', () => {
     expect(healthy.pushes.at(-1)).toEqual(['fleet']);
   });
 
+  it('recovers the serialized queue and retries the same values after a sink failure', async () => {
+    const kernel = createDoomKernel({ activeLayers: ['a'] });
+    const applied: string[][] = [];
+    let fail = true;
+    const slot = kernel.defineSlot<string>('tools', (active) => {
+      if (fail) throw new Error('host refused');
+      applied.push([...active]);
+    });
+    slot.contribute({ source: 'one', layer: 'a', value: 'a-tool' });
+    slot.contribute({ source: 'two', layer: 'b', value: 'b-tool' });
+
+    await expect(kernel.setActiveLayers(['b'])).rejects.toThrow(/tools: host refused/);
+    fail = false;
+    await kernel.setActiveLayers(['b']);
+
+    expect(applied).toEqual([['b-tool']]);
+    expect(kernel.activeValues('tools')).toEqual(['b-tool']);
+  });
+
+  it('continues with a later queued switch after an earlier application rejects', async () => {
+    const kernel = createDoomKernel({ activeLayers: ['a'] });
+    const applied: string[][] = [];
+    let calls = 0;
+    const slot = kernel.defineSlot<string>('tools', (active) => {
+      calls += 1;
+      if (calls === 1) throw new Error('first refused');
+      applied.push([...active]);
+    });
+    slot.contribute({ source: 'one', layer: 'a', value: 'a-tool' });
+    slot.contribute({ source: 'two', layer: 'b', value: 'b-tool' });
+
+    await expect(kernel.setActiveLayers(['a'])).rejects.toThrow(/first refused/);
+    await kernel.setActiveLayers(['b']);
+
+    expect(applied).toEqual([['b-tool']]);
+  });
   it('coalesces rapid axis switches and converges on the last one', async () => {
     const kernel = createDoomKernel({ activeLayers: ['a'] });
     const seen: string[][] = [];

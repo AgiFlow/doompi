@@ -27,12 +27,12 @@ activates all facets once. Packages declare contributions to a kernel registry
 tagged by owning layer instead of registering directly with a host. Any axis
 change recomputes the active union and pushes it down.
 
-| Axis | Applied by | Reload? |
-|---|---|---|
-| minor mode | contribution registry, already live today | no |
-| profile | `systemPrompt` closure re-read per turn | no |
-| domains | `setResources` | no |
-| major mode | recompute union, `setTools` + `setResources` + hook toggles + command table | no |
+| Axis       | Applied by                                                                  | Reload? |
+| ---------- | --------------------------------------------------------------------------- | ------- |
+| minor mode | contribution registry, already live today                                   | no      |
+| profile    | `systemPrompt` closure re-read per turn                                     | no      |
+| domains    | `setResources`                                                              | no      |
+| major mode | recompute union, `setTools` + `setResources` + hook toggles + command table | no      |
 
 This works because the harness setters are whole-list replacements, so removal
 is inherent:
@@ -98,14 +98,14 @@ rejects the other forms. `scaffold-doom-server-facet` in
     "./extensions/server": {
       "types": "./dist/extensions/server.d.mts",
       "import": "./dist/extensions/server.mjs",
-      "require": "./dist/extensions/server.cjs"
-    }
+      "require": "./dist/extensions/server.cjs",
+    },
   },
   "doompiServer": {
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
-    "scopes": ["session"]
-  }
+    "scopes": ["session"],
+  },
 }
 ```
 
@@ -118,10 +118,10 @@ There is no union of server surfaces. Only the SPA needs Vite to merge
 compositions; server routes are `import()`ed at runtime from absolute file URLs,
 so each composition keeps its own mount table.
 
-| Level | Selector | Where it runs | Where the modules come from |
-|---|---|---|---|
-| global / hub | no query, or `?hubSession=<id>` | the cockpit process | that repository's synced generation, loaded per root when the root is admitted and disposed when no session uses it |
-| session | `?session=<id>` | that session's own server process, proxied over its API socket | the session repository's own synced generation |
+| Level        | Selector                        | Where it runs                                                  | Where the modules come from                                                                                         |
+| ------------ | ------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| global / hub | no query, or `?hubSession=<id>` | the cockpit process                                            | that repository's synced generation, loaded per root when the root is admitted and disposed when no session uses it |
+| session      | `?session=<id>`                 | that session's own server process, proxied over its API socket | the session repository's own synced generation                                                                      |
 
 The hub keeps one `DoomServerHost` per composition bundle. A base path is only
 unique within one composition, so a single shared table would let the first root
@@ -129,9 +129,11 @@ shadow the rest.
 
 ### Failure posture
 
-Matches the API loader's. A missing module is ordinary state. A broken module or
-a throwing facet costs its own surface and never the host's start; every failure
-becomes a notice.
+Matches the API loader's. A missing module is ordinary state. A throwing facet
+costs only its own surface and becomes a notice, never a host startup failure.
+A broken static import is broader today: because each scope is one generated
+aggregate module, it makes that scope's whole facet list unavailable. Phase 4
+must replace that aggregate before load failures are isolated per package.
 
 ## 3. Agent mesh
 
@@ -146,10 +148,10 @@ model, not the proxy.
 ```ts
 interface CatalogEntry {
   version: 1;
-  hubId: string;        // new; SessionRecord has no notion of "whose"
-  agentId: string;      // SessionRecord.id
+  hubId: string; // new; SessionRecord has no notion of "whose"
+  agentId: string; // SessionRecord.id
   name: string;
-  project: string;      // derived label, NOT cwd
+  project: string; // derived label, NOT cwd
   createdAt: string;
   status: 'live';
 }
@@ -163,11 +165,11 @@ probe `hubProbe.ts` already trusts.
 
 One protocol, one carrier, already proven for two of three targets.
 
-| Target | Transport | Status |
-|---|---|---|
-| web | WebSocket, `binaryType='arraybuffer'` | shipping |
-| desktop | identical, loads the same bundle | shipping |
-| native | same protocol, needs its own transport factory | new |
+| Target  | Transport                                      | Status   |
+| ------- | ---------------------------------------------- | -------- |
+| web     | WebSocket, `binaryType='arraybuffer'`          | shipping |
+| desktop | identical, loads the same bundle               | shipping |
+| native  | same protocol, needs its own transport factory | new      |
 
 The codec is portable by construction: `pi-protocol` depends only on
 `@earendil-works/chord` and `typebox`, and the CBOR path touches only
@@ -177,21 +179,22 @@ hooks, not a protocol port.
 
 ## Phases
 
-| # | Phase | Requirement | Reversible |
-|---|---|---|---|
-| 0 | Tactical state-loss fix | keeps the product working | yes |
-| 1 | `doompi-kernel` plus contribution registry | 1 | yes |
-| 2 | Package remediation: lazy activation | 1 | yes |
-| 3 | `./extensions/server`, pilot two, migrate the rest | 2 | yes |
-| 4 | `serverBundleSync`, delete `apiRoutesSync` | 2 | yes |
-| 5 | Harness-driven session server | **1 lands here** | **no** |
-| 6 | Delete `doompi-server` | 2 | yes |
-| 7 | Client core extraction, native transport | 4 | yes |
-| 8 | Agent catalog and hub federation | 3 | yes |
+| #   | Phase                                              | Requirement               | Reversible |
+| --- | -------------------------------------------------- | ------------------------- | ---------- |
+| 0   | Tactical state-loss fix                            | keeps the product working | yes        |
+| 1   | `doompi-kernel` plus contribution registry         | 1                         | yes        |
+| 2   | Package remediation: lazy activation               | 1                         | yes        |
+| 3   | `./extensions/server`, pilot two, migrate the rest | 2                         | yes        |
+| 4   | `serverBundleSync`, delete `apiRoutesSync`         | 2                         | yes        |
+| 5   | Harness-driven session server                      | **1 lands here**          | **no**     |
+| 6   | Delete `doompi-server`                             | 2                         | yes        |
+| 7   | Client core extraction, native transport           | 4                         | yes        |
+| 8   | Agent catalog and hub federation                   | 3                         | yes        |
 
-Phase 5 is the only irreversible phase: it flips the on-disk format to Pi format
-4. The format-3 export view ships **in** Phase 5, not after, so `pi --resume`
-works before the flip is permanent.
+Phase 5 is the only irreversible phase: it flips the on-disk format to Pi format 4. The format-3 export view ships **in** Phase 5, not after, so `pi --resume`
+works before the flip is permanent. Migration operates on a verified copy and preserves the original v3 bytes; opening the only original for a writable upstream commit is forbidden.
+
+Before Phase 4 starts, three verified baseline defects must be closed: tool restrictions must reconcile against the host's actual active tools, a rejected kernel sink must remain retryable, and packed-install must include the kernel as a nonselectable core foundation.
 
 ## Costs that are not hidden
 
@@ -229,9 +232,10 @@ and `webauthn` authenticate a human; a peer hub is not a human.
 Per phase, in order:
 
 1. `pnpm vibe-lint check --rules-only <paths>` before editing governed files.
-2. `npx oxfmt <changed paths>`.
+2. `pnpm exec oxfmt <changed paths>`.
 3. `pnpm lint:vibe --preflight-only`.
 4. The affected Nx `lint`, `typecheck`, `build` and `test` targets.
 5. Packed-install system tests before any release change.
 
-Nx and vitest runs need `env -u DOOMPI_AGENT_COMMAND -u DOOMPI_CORDIS_HOST_REQUIRED`.
+Use `scripts/run-clean-tests.mjs` for Nx and Vitest runs. Some subprocess tests
+also require a clean `HOME`; do not combine that with macOS keychain tests.

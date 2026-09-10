@@ -1,3 +1,4 @@
+export { logHeadlessFacet } from '../adapters/headless/facet.ts';
 export type { PiTelemetryExtensionOptions } from '../adapters/pi/extension.ts';
 export {
   installDoomLogRuntime,

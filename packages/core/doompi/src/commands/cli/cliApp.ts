@@ -121,6 +121,10 @@ export class CliApp {
       ]);
       return new CompatibilityCommand(telemetry).execute(args);
     }
+    if (args[0] === 'history-export') {
+      const { HistoryExportCommand } = await import('../historyExportCommand.ts');
+      return new HistoryExportCommand().execute(args);
+    }
 
     // The first pass resolves --cwd without touching repository configuration,
     // which keeps help and version available even when modes.yaml is malformed.

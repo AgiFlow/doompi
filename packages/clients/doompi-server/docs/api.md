@@ -7,11 +7,11 @@ This guide also covers the package's TypeScript exports. They are a separate sur
 ## The design
 
 ```text
-package.json doompiApi declaration
+package.json doompiServer declaration
                 |
                 v
        doompi sync generation
-         session.routes.mjs
+         server.bundle.json
                 |
                 v
          doompi-server
@@ -25,7 +25,7 @@ package.json doompiApi declaration
               browser
 ```
 
-The generated route module is part of the synchronized composition. That matters for two reasons:
+The descriptor and its pinned facet modules are part of the synchronized composition. That matters for two reasons:
 
 - the API implementation follows the same repository and package selection as the agent
 - discovery and validation happen during sync instead of by scanning arbitrary modules at request time
@@ -42,27 +42,25 @@ Hub-wide APIs are a different scope and run in DoomPi Web. See the web package A
 
 ## Declare a session API
 
-A package declares `doompiApi` in `package.json`:
+A package declares one `doompiServer` facet in `package.json`:
 
 ```json
 {
-  "doompiApi": {
-    "basePath": "runner",
-    "session": {
-      "entry": "./src/api/session.ts",
-      "dist": "./dist/api/session.mjs"
-    }
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": ["session"]
   }
 }
 ```
 
-The field can also contain an array of declarations. `basePath` is kebab-case. `entry` and `dist` are package-relative paths without `..`; `dist` is required because the server imports built JavaScript, not package source.
+Publish a default-exported `DoomServerFacet` object plugin through that entry. In its `apply`, use `requireDoomServerHost(context).registerApi(api)` and return a disposer that calls the registration's `dispose()`. Declare the host service in `inject` and check scope before registering. The API implementation owns its base path; no separate legacy API manifest field is needed.
 
-A package without session API metadata contributes nothing to this surface. A declaration is available only when it belongs to the synchronized package composition selected for the session.
+Paths are package-relative and cannot escape the package. The host filters scope and effective package ownership before importing any facet. See the [complete facet example](../../doompi-web/docs/package-apis.md#declare-an-api).
 
 ## Implement the handler
 
-The generated registry exports an `apis` array. Each entry implements the same lifecycle:
+Each API registered by a facet implements this lifecycle:
 
 ```ts
 interface DoomApi {
@@ -76,15 +74,15 @@ interface DoomApi {
 
 `start()` creates session-owned resources once. `fetch()` handles requests relative to the package mount. `close()` must release timers, watchers, streams, and other resources created during startup.
 
-A typical package exports one named `api` value through its built entry. The generated registry collects those exports for the server.
+Keep the API adapter reusable and have the server facet import it. The facet's disposer closes the registration.
 
 ## Selecting the API composition
 
-The server resolves the synchronized repository containing the session working directory. Its `session.routes.mjs` is the API composition for that agent. If no repository registration is available, the server falls back to the installation that launched it. `DOOMPI_API_DIR` is an explicit operator override.
+The server resolves the synchronized repository containing the session working directory and loads its `server.bundle.json` descriptor. If no repository registration is available, it checks the installation that launched it. `DOOMPI_API_DIR` is an explicit operator override. A selected malformed descriptor fails admission, never silently falls back. Read-only aggregate compatibility is limited to explicitly admitted older generations.
 
 This keeps APIs aligned with the agent instead of borrowing handlers from another live repository. A running server loads its API registry at startup; rebuild and restart the session after changing a server-side API.
 
-No route module is a valid no-API state. If no handler starts successfully, the server does not create `api.sock` and the registry record has no `apiSocketPath`.
+An empty descriptor is a valid no-API state. Without mounted APIs, the server does not create `api.sock` and the registry record has no `apiSocketPath`. This is distinct from a failed required facet, which prevents readiness.
 
 ## Routing
 
@@ -98,7 +96,7 @@ The host removes `/api/plugin/<basePath>` before calling the handler. A request 
 
 A path outside `/api/plugin/` returns `404`. An unknown base path returns a JSON `404`. A handler exception becomes a generic JSON `500`; the other APIs remain mounted.
 
-When two loaded APIs claim the same base path, the first keeps it and the later declaration is skipped. Invalid registry values, modules without an `apis` array, and handlers whose `start()` throws are reported as notices rather than process failures.
+When two eligible APIs claim the same base path, the first keeps it and the later registration is skipped. Optional import and installation failures receive package-attributed notices; required facet failures prevent readiness. Disabled candidates are not imported and do not reserve mount paths.
 
 ## Host context and authority
 

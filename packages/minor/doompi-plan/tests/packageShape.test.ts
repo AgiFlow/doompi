@@ -10,6 +10,7 @@ interface PackageManifest {
   type?: string;
   files?: string[];
   exports?: Record<string, unknown>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   pi?: { extensions?: string[] };
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -69,6 +70,16 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     }
     expect(exportsMap['.']).toMatchObject({ import: './dist/index.mjs' });
     expect(exportsMap['./extensions/pi']).toMatchObject({ import: './dist/extensions/pi.mjs' });
+    expect(exportsMap['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
+    expect(packageJson.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
     expect(packageJson.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 });

@@ -1,3 +1,4 @@
+export { domainHeadlessFacet } from '../adapters/headless/facet.ts';
 export { createDomainCatalog, type DomainCatalog } from '../adapters/domainCatalog.ts';
 export {
   createDomainSwitchHandoffStore,

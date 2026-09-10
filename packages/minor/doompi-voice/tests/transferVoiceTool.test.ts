@@ -12,10 +12,14 @@ import { VOICE_OWNERSHIP_PROTOCOL_VERSION, type VoiceOwnershipCommand } from '..
 
 function surfaceFixture() {
   const all = ['read', TRANSFER_VOICE_TOOL_NAME];
+  let activeTools = [...all];
   const surface = createDoomToolSurface({
     generation: 'transfer-voice-test',
     allTools: () => all,
-    setActiveTools: () => undefined,
+    activeTools: () => activeTools,
+    setActiveTools: (names) => {
+      activeTools = [...names];
+    },
   });
   const handle = surface.register({
     source: 'voice#transfer-voice',

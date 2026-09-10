@@ -1199,6 +1199,46 @@ describe('Doom deterministic architecture rules', () => {
     });
   });
 
+  it('recognizes only the core-owned HeadlessHost service and minor catalog providers', () => {
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi' }));
+    const source = [
+      `import { Context, Service } from '@deepseek-ai/cordis';`,
+      `import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';`,
+      `import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-extension-contracts/mode';`,
+      `export class HeadlessHost extends Service<unknown> {`,
+      `  constructor(context: Context) {`,
+      `    super(context, DOOM_HEADLESS_HOST_SERVICE);`,
+      `    context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);`,
+      `  }`,
+      `}`,
+    ].join('\n');
+    const native = write('src/adapters/server/headlessHost.ts', source);
+
+    expect(cordisServiceInjection.check?.(path.join(root, 'package.json'), root, boundaryContext())).toBeNull();
+
+    fs.rmSync(native);
+    const wrongPath = write('src/adapters/server/otherHost.ts', source);
+    const wrongPathResult = cordisServiceInjection.check?.(path.join(root, 'package.json'), root, boundaryContext());
+    expect(wrongPathResult).toContain('DOOM_HEADLESS_HOST_SERVICE Service is constructed outside');
+    expect(wrongPathResult).toContain('DOOM_MINOR_MODE_CATALOG_SERVICE is provided outside');
+
+    fs.rmSync(wrongPath);
+    write(
+      'src/adapters/server/headlessHost.ts',
+      source
+        .replaceAll('DOOM_HEADLESS_HOST_SERVICE', 'DOOM_OTHER_SERVICE')
+        .replaceAll('DOOM_MINOR_MODE_CATALOG_SERVICE', 'DOOM_OTHER_SERVICE'),
+    );
+    const wrongService = cordisServiceInjection.check?.(path.join(root, 'package.json'), root, boundaryContext());
+    expect(wrongService).toContain('DOOM_OTHER_SERVICE Service is constructed outside');
+    expect(wrongService).toContain('DOOM_OTHER_SERVICE is provided outside');
+
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-host' }), 'utf8');
+    fs.writeFileSync(path.join(root, 'src/adapters/server/headlessHost.ts'), source, 'utf8');
+    const wrongPackage = cordisServiceInjection.check?.(path.join(root, 'package.json'), root, boundaryContext());
+    expect(wrongPackage).toContain('DOOM_HEADLESS_HOST_SERVICE Service is constructed outside');
+  });
+
   describe('legacy Cordis access', () => {
     it('rejects the legacy export, imports, modules, and reflection in Doom production source', () => {
       const manifest = write(

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { buildHarnessContext } from '../adapters/harnessContext.ts';
 import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../adapters/layerPackageInstaller.ts';
@@ -36,11 +37,12 @@ import {
   type SyncPackageRegistration,
 } from '../adapters/syncRegistration.ts';
 import { readSyncDrift } from '../adapters/syncDrift.ts';
-import { syncApiRoutes } from '../adapters/apiRoutesSync.ts';
+import { syncServerBundle } from '../adapters/serverBundleSync.ts';
 import { syncWebBundle } from '../adapters/webBundleSync.ts';
 import {
   computeInputsHash,
   computeWebSourcesHash,
+  computeServerSourcesHash,
   readLocatedSyncState,
   readMcpServerNames,
   recordResolvedEntries,
@@ -81,8 +83,6 @@ const PERSONA_FILE_ENV = 'DOOMPI_PERSONA_FILE';
 const HOOK_EMITTER = path.join('tools', 'harness', 'emit-hooks.mjs');
 const NONE = '(none)';
 const PRIVATE_DIRECTORY_MODE = 0o700;
-/** Published generations kept behind the current one, so a running hub mid-read survives a prune. */
-const RETAINED_GENERATIONS = 1;
 const SYNC_LABEL = 'sync';
 const RUNTIME_LABEL = 'runtime';
 const WEB_LABEL = 'web';
@@ -297,6 +297,11 @@ export function collectDrift(
       drift.push('synced theme location is out of date');
     }
   }
+  if (
+    readSyncDrift({ repoRoot, homeDirectory: environment.HOME ?? os.homedir() }).reasons.includes('server-bundle-stale')
+  ) {
+    drift.push('server bundle is missing or stale');
+  }
   return drift;
 }
 
@@ -371,49 +376,6 @@ function packageRegistrationFor(repoRoot: string): SyncPackageRegistration {
     manifestPath,
     entry: fs.realpathSync(path.resolve(root, extension)),
   };
-}
-
-/**
- * Removes generations the published one replaced.
- *
- * Each generation holds a full cockpit bundle and runtime, so keeping every one
- * ever built grows without bound. One superseded generation is retained because
- * a hub that resolved its assets a moment ago may still be reading them; older
- * ones have no reader left. Ordered by directory name, whose leading timestamp
- * makes publication order recoverable without reading each state file.
- */
-function pruneSupersededGenerations(
-  generationsDirectory: string,
-  published: string,
-  onNotice: (message: string) => void,
-): void {
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(generationsDirectory, { withFileTypes: true });
-  } catch (error) {
-    // Nothing to prune is indistinguishable from an unreadable directory here,
-    // and neither is worth failing a sync that already published.
-    onNotice(`could not list generations to prune: ${describeError(error)}`);
-    return;
-  }
-  const superseded = entries
-    .filter((entry) => entry.isDirectory() && entry.name !== published)
-    .map((entry) => entry.name)
-    .sort();
-  const removable = superseded.slice(0, Math.max(0, superseded.length - RETAINED_GENERATIONS));
-  for (const name of removable) {
-    try {
-      fs.rmSync(path.join(generationsDirectory, name), { recursive: true, force: true });
-    } catch (error) {
-      // A generation still held open elsewhere stays; the next sync retries it.
-      onNotice(`could not remove superseded generation ${name}: ${describeError(error)}`);
-    }
-  }
-  if (removable.length > 0) onNotice(`pruned ${String(removable.length)} superseded generation(s)`);
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** Resolves the matrix, stages it into home-scoped worktree storage, and publishes one generation. */
@@ -616,12 +578,6 @@ export class SyncCommand {
       const precompiled = progress.start(RUNTIME_LABEL, 'precompiling the mode bundles');
       const synced = await buildSyncedRuntime(location.root, environment, homeDirectory, { state, directory });
       precompiled(`${String(Object.keys(synced.bundles).length)} mode bundles`);
-      const statePath = await writeSyncState(
-        location.root,
-        synced.state,
-        homeDirectory,
-        path.join(directory, 'state.json'),
-      );
 
       const webProgress = progress.start(WEB_LABEL, 'bundling the web cockpit plugins');
       const web = await syncWebBundle({
@@ -634,15 +590,49 @@ export class SyncCommand {
       if (web.status === 'failed') throw new Error(`Cockpit bundle failed: ${web.reason}`);
       webProgress(web.status === 'bundled' ? `cockpit bundled with plugins: ${web.pluginIds.join(', ')}` : web.reason);
 
-      const apiProgress = progress.start(API_LABEL, 'generating the package API routes');
-      const api = syncApiRoutes({
-        resolvedEntries: synced.state.resolved,
-        outputDirectory: path.join(directory, 'api'),
-        onNotice: (message) => progress.line(API_LABEL, message),
+      const apiProgress = progress.start(API_LABEL, 'compiling the server bundle');
+      const apiDirectory = path.join(directory, 'api');
+      const fingerprint = crypto
+        .createHash('sha256')
+        .update(JSON.stringify([...new Set(synced.compositions.map((composition) => composition.fingerprint))]))
+        .digest('hex');
+      const server = await syncServerBundle({
+        repositoryRoot: location.root,
+        generation,
+        fingerprint,
+        compositions: synced.compositions,
+        outputDirectory: apiDirectory,
+        cacheDirectory: path.join(directory, 'cache'),
+        sharedCacheDirectory: location.sharedCacheDirectory,
       });
-      const facetCount = new Set([...api.facets.session, ...api.facets.hub]).size;
-      apiProgress(`routes and ${facetCount} server facet(s) written to ${api.directory}`);
+      const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
+      const finalState: SyncState = {
+        ...synced.state,
+        serverBundle: {
+          descriptorPath,
+          fingerprint,
+          compilerManifests: server.compilerManifests,
+          sourcesHash: computeServerSourcesHash(synced.state.resolved),
+        },
+      };
+      const statePath = await writeSyncState(
+        location.root,
+        finalState,
+        homeDirectory,
+        path.join(directory, 'state.json'),
+      );
+      apiProgress(`${server.descriptor.entries.length} server facet(s) compiled`);
 
+      const projectSettingsPath =
+        this.settingsMode === 'persisted' ? writeProjectPiSettings(location.root, homeDirectory) : undefined;
+      const result: SyncResult = {
+        statePath,
+        ...(projectSettingsPath ? { projectSettingsPath } : {}),
+        selection,
+        mcpServers: synced.state.baseline.mcpConfigPath ? readMcpServerNames(synced.state.baseline.mcpConfigPath) : [],
+        skillCount: context.resources.skillCount,
+        agentCount: context.resources.agentCount,
+      };
       publishSyncRegistration(
         location.root,
         {
@@ -654,24 +644,15 @@ export class SyncCommand {
           statePath,
           stateSha256: syncStateSha256(statePath),
           webDirectory: web.status === 'bundled' ? web.assetsDir : null,
-          apiDirectory: api.directory,
+          apiDirectory,
+          serverBundle: { path: descriptorPath, fingerprint, sha256: syncStateSha256(descriptorPath) },
           package: packageRegistrationFor(location.root),
         },
         homeDirectory,
       );
-      pruneSupersededGenerations(location.generationsDirectory, generation, (message) =>
-        progress.line(SYNC_LABEL, message),
-      );
-      const projectSettingsPath = this.settingsMode === 'persisted' ? writeProjectPiSettings(location.root) : undefined;
-
-      return {
-        statePath,
-        ...(projectSettingsPath ? { projectSettingsPath } : {}),
-        selection,
-        mcpServers: synced.state.baseline.mcpConfigPath ? readMcpServerNames(synced.state.baseline.mcpConfigPath) : [],
-        skillCount: context.resources.skillCount,
-        agentCount: context.resources.agentCount,
-      };
+      // ponytail: retain generations until host-owned drain evidence can prove no session uses them.
+      // Directory age and an open-file check cannot establish that a lazy import is finished.
+      return result;
     } catch (error) {
       await fs.promises.rm(directory, { recursive: true, force: true });
       throw error;

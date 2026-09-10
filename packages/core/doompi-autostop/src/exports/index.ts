@@ -1,3 +1,4 @@
+export { autoStopHeadlessFacet } from '../adapters/headless/facet.ts';
 export { autoStopExtension } from '../adapters/pi/extension.ts';
 export { registerIdleShutdown } from '../adapters/pi/idleShutdown.ts';
 export {

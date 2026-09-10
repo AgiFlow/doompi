@@ -1,5 +1,5 @@
 export { taskExtension } from '../adapters/pi/extension';
-export * from '../commands/task/responseEnvelope';
+export * from '../services/taskResult';
 export * from '../commands/task/taskTool';
 export * from '../schemas/task';
 export * from '../services/delegation/manager';

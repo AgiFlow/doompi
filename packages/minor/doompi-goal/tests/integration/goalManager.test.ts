@@ -71,6 +71,7 @@ function createFixture() {
   const surface = createDoomToolSurface({
     generation: 'goal-test',
     allTools: () => [...new Set(['read', ...tools.map((tool) => tool.name)])],
+    activeTools: () => activeTools,
     setActiveTools: (names) => {
       activeTools = [...names];
     },

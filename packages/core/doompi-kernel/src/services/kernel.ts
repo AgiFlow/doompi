@@ -71,31 +71,34 @@ export function createDoomKernel(options: CreateDoomKernelOptions = {}): DoomKer
     if (slot.disposed) return;
     const active = activeOf(slot);
     if (!force && sameList(slot.pushed, active)) return;
-    slot.pushed = active;
     try {
       await slot.sink(active);
+      slot.pushed = active;
     } catch (error) {
-      // The slot keeps the value it pushed: the sink saw it, and reverting
-      // here would make the next recompute skip a slot the host never took.
+      // Cache only an acknowledged application. A sink may be retried with the
+      // same active values after it recovers.
       failures.push(`${slot.name}: ${describe(error)}`);
     }
   };
 
   const flush = (): Promise<void> => {
-    tail = tail.then(async () => {
-      if (dirty.size === 0) return;
-      const pending = [...dirty];
-      const pendingForced = new Set(forced);
-      dirty.clear();
-      forced.clear();
-      const failures: string[] = [];
-      for (const name of pending) {
-        const slot = slots.get(name);
-        if (slot) await pushOne(slot, pendingForced.has(name), failures);
-      }
-      if (failures.length > 0) throw new Error(`Kernel slots failed to apply: ${failures.join('; ')}`);
-    });
-    return tail;
+    const run = tail
+      .catch(() => undefined)
+      .then(async () => {
+        if (dirty.size === 0) return;
+        const pending = [...dirty];
+        const pendingForced = new Set(forced);
+        dirty.clear();
+        forced.clear();
+        const failures: string[] = [];
+        for (const name of pending) {
+          const slot = slots.get(name);
+          if (slot) await pushOne(slot, pendingForced.has(name), failures);
+        }
+        if (failures.length > 0) throw new Error(`Kernel slots failed to apply: ${failures.join('; ')}`);
+      });
+    tail = run;
+    return run;
   };
 
   const schedule = (): void => {

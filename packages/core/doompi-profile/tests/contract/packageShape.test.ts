@@ -66,10 +66,16 @@ describe('doompi-profile package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/persona', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './extensions/persona',
+      './extensions/pi',
+      './extensions/headless',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/persona', './extensions/pi']) {
+    for (const subpath of ['.', './extensions/persona', './extensions/pi', './extensions/headless']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     // Only the command entry is discovered by a bare package name. Detached

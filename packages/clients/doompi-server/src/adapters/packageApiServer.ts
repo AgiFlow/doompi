@@ -8,7 +8,7 @@ import {
   type DoomApiContext,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { createDoomServerHost, type DoomServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { installServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import { installServerFacets, type LoadedServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { validatedTraceContext } from '../services/traceContext.ts';
 import { observe, type ServerTelemetry } from './serverTelemetry.ts';
@@ -32,7 +32,7 @@ export interface PackageApiServerOptions {
   hubToken?: string;
   apis: readonly DoomApi[];
   /** Server facets to install; each registers its own APIs through the host. */
-  facets?: readonly DoomServerFacet[];
+  facets?: readonly (DoomServerFacet | LoadedServerFacet)[];
   telemetry?: ServerTelemetry;
   onNotice: (message: string) => void;
 }

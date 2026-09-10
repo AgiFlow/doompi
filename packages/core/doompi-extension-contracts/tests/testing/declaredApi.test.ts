@@ -39,7 +39,29 @@ function api(basePath: string): DoomApi {
   };
 }
 
-describe('a package API measured against the manifest that mounts it', () => {
+describe('a supplied API and its server facet declaration', () => {
+  const server = { entry: './src/exports/extensions/server.ts', dist: './dist/extensions/server.mjs', scopes: ['hub'] };
+  it('reports the API-owned base path and built facet entry', () => {
+    const root = packageRoot({ name: 'demo', doompiServer: server });
+    expect(assertDeclaredApi({ packageRoot: root, api: api('routes'), scope: 'hub' })).toEqual({
+      basePath: 'routes',
+      scope: 'hub',
+      dist: server.dist,
+    });
+    expect(() => assertDeclaredApi({ packageRoot: root, api: api('routes'), scope: 'session' })).toThrow(
+      /no session server facet/,
+    );
+  });
+  it('does not fall back to legacy declarations after a malformed server declaration', () => {
+    const root = packageRoot({
+      doompiServer: { entry: './server.ts' },
+      doompiApi: { basePath: 'demo', hub: { entry: './hub.ts', dist: './hub.mjs' } },
+    });
+    expect(() => assertDeclaredApi({ packageRoot: root, api: api('demo'), scope: 'hub' })).toThrow(/dist is required/);
+  });
+});
+
+describe('legacy API manifest compatibility', () => {
   it('reports the base path and built module a host would mount', () => {
     const report = assertDeclaredApi({ packageRoot: packageRoot(), api: api('demo'), scope: 'hub' });
 
@@ -47,8 +69,7 @@ describe('a package API measured against the manifest that mounts it', () => {
   });
 
   it('catches a base path the routes and the manifest disagree about', () => {
-    // The failure this exists for. Vibe-Lint reads the manifest statically and
-    // cannot see the value, so nothing else in the repository notices.
+    // Supported old generations retain their explicit manifest base-path check.
     expect(() => assertDeclaredApi({ packageRoot: packageRoot(), api: api('renamed'), scope: 'hub' })).toThrow(
       "serves 'renamed' but its manifest mounts the hub API at 'demo'",
     );

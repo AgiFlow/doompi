@@ -20,7 +20,7 @@ describe('default Server command', () => {
 
     expect(launch.command).toBe(process.execPath);
     expect(launch.args).toHaveLength(1);
-    expect(launch.args[0]).toMatch(/doompi-server[/\\]dist[/\\]bin[/\\]serve\.mjs$/);
+    expect(launch.args[0]).toMatch(/doompi[/\\]dist[/\\]bin[/\\]serve\.mjs$/);
   });
 
   it('preserves an explicitly configured agent command', () => {
@@ -39,7 +39,7 @@ describe('default Server command', () => {
     const launch = defaultServerLaunch(
       '/workspace/project',
       {
-        DOOMPI_SERVER_COMMAND: '/artifact/doompi-server/dist/bin/serve.mjs',
+        DOOMPI_SERVER_COMMAND: '/artifact/doompi/dist/bin/serve.mjs',
         DOOMPI_AGENT_COMMAND: '/artifact/doompi/dist/bin/cli.mjs',
         DOOMPI_WEB_MODULE: 'file:///artifact/doompi-web/dist/index.mjs',
       },
@@ -47,7 +47,7 @@ describe('default Server command', () => {
       () => false,
     );
 
-    expect(launch.args).toEqual(['/artifact/doompi-server/dist/bin/serve.mjs']);
+    expect(launch.args).toEqual(['/artifact/doompi/dist/bin/serve.mjs']);
     expect(launch.environment.DOOMPI_AGENT_COMMAND).toBe('/artifact/doompi/dist/bin/cli.mjs');
     expect(launch.environment.DOOMPI_WEB_MODULE).toBe('file:///artifact/doompi-web/dist/index.mjs');
   });

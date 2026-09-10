@@ -51,6 +51,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/headless": {
+      "types": "./dist/extensions/headless.d.mts",
+      "import": "./dist/extensions/headless.mjs",
+      "require": "./dist/extensions/headless.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -99,6 +104,13 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiServer": {
+    "entry": "./src/exports/extensions/headless.ts",
+    "dist": "./dist/extensions/headless.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiWeb": {
     "pluginId": "ask-user",

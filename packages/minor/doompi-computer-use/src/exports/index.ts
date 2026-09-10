@@ -1,3 +1,4 @@
+export { computerUseHeadlessFacet } from '../adapters/headless/facet.ts';
 export {
   activateComputerUseExtension,
   COMPUTER_USE_GUIDANCE,

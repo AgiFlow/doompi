@@ -23,7 +23,7 @@ describe('createDoomServerHost', () => {
   it('mounts an api and hands its handler to the router', async () => {
     const host = createDoomServerHost({ scope: 'session', context: contextWith(vi.fn()) });
 
-    host.registerApi(apiNamed('runner'));
+    expect(host.registerApi(apiNamed('runner')).mounted).toBe(true);
 
     expect(host.mounted()).toEqual(['runner']);
     const response = await host.handlerFor('runner')?.fetch(new Request('http://host/log'));
@@ -45,7 +45,7 @@ describe('createDoomServerHost', () => {
     const host = createDoomServerHost({ scope: 'session', context: contextWith((m) => notices.push(m)) });
 
     host.registerApi(apiNamed('runner'));
-    host.registerApi(apiNamed('runner'));
+    expect(host.registerApi(apiNamed('runner')).mounted).toBe(false);
 
     expect(host.mounted()).toEqual(['runner']);
     expect(notices).toEqual(["package API 'runner' is skipped: another facet already claims it."]);
@@ -55,13 +55,15 @@ describe('createDoomServerHost', () => {
     const notices: string[] = [];
     const host = createDoomServerHost({ scope: 'session', context: contextWith((m) => notices.push(m)) });
 
-    host.registerApi({
-      basePath: 'broken',
-      start: () => {
-        throw new Error('no socket');
-      },
-    });
-    host.registerApi(apiNamed('runner'));
+    expect(
+      host.registerApi({
+        basePath: 'broken',
+        start: () => {
+          throw new Error('no socket');
+        },
+      }).mounted,
+    ).toBe(false);
+    expect(host.registerApi(apiNamed('runner')).mounted).toBe(true);
 
     expect(host.mounted()).toEqual(['runner']);
     expect(notices[0]).toContain("package API 'broken' did not start");

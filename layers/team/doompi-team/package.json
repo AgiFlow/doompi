@@ -42,6 +42,16 @@
     "./api/team-snapshot": "./dist/api/teamSnapshot.mjs",
     "./env": "./dist/env.mjs",
     "./extensions/pi": "./dist/extensions/pi.mjs",
+    "./extensions/headless": {
+      "types": "./dist/extensions/headless.d.mts",
+      "import": "./dist/extensions/headless.mjs",
+      "require": "./dist/extensions/headless.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./web-hub": {
       "types": "./dist/webHub.d.mts",
       "import": "./dist/webHub.mjs",
@@ -111,12 +121,12 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "team",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
-    }
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiWeb": {
     "pluginId": "subagents",

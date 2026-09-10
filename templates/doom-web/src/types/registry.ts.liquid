@@ -4,10 +4,8 @@ export const SESSION_RECORD_VERSION = 1;
 /**
  * One running doompi-server, announced by a JSON file in the registry directory.
  *
- * The authoritative writer is @agimon-ai/doompi-server; this package only reads
- * records. The shape is declared in both packages, mirroring the duplicated
- * framing helpers, and a contract test in doompi-server keeps the two
- * declarations assignable both ways.
+ * The authoritative writer is the DoomPi core server; this package only reads
+ * records. The shape is declared here to mirror the server's framing helpers.
  */
 export interface SessionRecord {
   version: typeof SESSION_RECORD_VERSION;

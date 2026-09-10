@@ -26,6 +26,7 @@ export default defineConfig({
     'bin/cli': 'src/bin/cli.ts',
     'bin/doomRunner': 'src/bin/doomRunner.ts',
     'bin/dpi': 'src/bin/dpi.ts',
+    'bin/serve': 'src/bin/serve.ts',
     // Keyed with the src/ prefix on purpose. Unbundled chunks are emitted
     // under dist/src, and ownEntry() locates sibling entries relative to its
     // own compiled path, so an entry keyed without the prefix lands outside

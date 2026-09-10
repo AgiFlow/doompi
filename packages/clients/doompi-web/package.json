@@ -66,7 +66,6 @@
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
-    "@agimon-ai/doompi-server": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",

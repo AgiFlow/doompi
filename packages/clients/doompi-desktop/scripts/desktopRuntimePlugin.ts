@@ -76,7 +76,6 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
     writeBundle() {
       copyWebAssets(options.workspaceRoot, options.outDir);
       copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/clients/doompi-web', 'doompi-web');
-      copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/clients/doompi-server', 'doompi-server');
       copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/core/doompi', 'doompi');
       copyPackageManifest(
         options.workspaceRoot,

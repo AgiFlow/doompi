@@ -2,7 +2,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { filterHookDisabledLayers, loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { PERSONA_ENTRY, resolveExtensionComposition } from '../services/extensionAssembler.ts';
+import {
+  PERSONA_ENTRY,
+  resolveExtensionComposition,
+  type ExtensionComposition,
+} from '../services/extensionAssembler.ts';
 import { compileExtensionSet, extensionSetManifestPath } from './extensionCompiler.ts';
 import { ownEntry } from './modules/moduleResolution.ts';
 import { compileModeExtension, type ModeBuildSelection } from './runtimeBundle.ts';
@@ -19,6 +23,7 @@ export interface SyncedRuntimeBuild {
   bundles: Record<string, string>;
   bundleManifests: Record<string, string>;
   state: SyncState;
+  compositions: ExtensionComposition[];
 }
 
 export interface SyncedRuntimeBuildOptions {
@@ -91,7 +96,7 @@ export async function buildSyncedRuntime(
   const outputDirectory = path.join(directory, MODE_DIST_DIRECTORY);
   const bundles: Record<string, string> = {};
   const bundleManifests: Record<string, string> = {};
-
+  const compositions: ExtensionComposition[] = [];
   for (const [majorMode, definition] of Object.entries(majorModesConfig.majorMode)) {
     const selectedLayers = filterHookDisabledLayers(majorModesConfig, definition.layers, harness.hooks);
     for (const mute of [false, true]) {
@@ -101,6 +106,7 @@ export async function buildSyncedRuntime(
         layers: selectedLayers,
         mute,
       });
+      compositions.push(composition);
       const extensionPaths = [...composition.parentActivation];
       const childExtensionPaths = [...composition.childActivation];
       const outputName = `${majorMode}${mute ? '.mute' : ''}`;
@@ -166,5 +172,6 @@ export async function buildSyncedRuntime(
     bundles,
     bundleManifests,
     state: nextState,
+    compositions,
   };
 }

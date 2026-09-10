@@ -14,6 +14,7 @@ interface PackageManifest {
   publishConfig?: { access?: string };
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   pi?: { extensions?: string[] };
 }
 
@@ -82,10 +83,23 @@ describe('doompi-computer-use package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './session-api', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './extensions/pi',
+      './extensions/server',
+      './session-api',
+      './extensions/headless',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
+    expect(manifest.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 

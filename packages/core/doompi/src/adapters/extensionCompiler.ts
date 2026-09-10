@@ -12,6 +12,7 @@ import {
   materializeSharedBuild,
   publishSharedBuild,
   type ResolvedSharedBuild,
+  type SharedBuildAsset,
   type SharedBuildInput,
   withSharedBuildLock,
 } from './sharedBuildCache.ts';
@@ -27,10 +28,12 @@ import {
  * remain separate content-addressed chunks so their evaluation semantics survive
  * compilation.
  *
- * Mode artifacts bundle their JavaScript dependencies. Node built-ins, native
- * packages, and Pi's shared runtime stay external; those imports are rewritten
- * to absolute paths so a worktree-local artifact never relies on its
- * generated directory having its own `node_modules` tree. Immutable build objects
+ * Direct module artifacts bundle ordinary JavaScript dependencies. Node built-ins and
+ * Pi's shared runtime stays external; native or resource-bearing dependencies fail
+ * explicitly because the current artifact publisher does not copy those files.
+ * Pi set artifacts retain the installed graph for native and startup-sensitive packages.
+ * Those imports are rewritten to absolute paths so a worktree-local artifact never relies
+ * on its generated directory having its own `node_modules` tree. Immutable build objects
  * may be shared by linked worktrees, but materialized output stays worktree-local.
  */
 
@@ -123,7 +126,7 @@ const NATIVE_PACKAGES = new Set([
 ]);
 
 /**
- * Dependency-heavy ESM runtimes that should retain their installed graph.
+ * Dependency-heavy ESM runtimes that Pi set artifacts should retain in their installed graph.
  *
  * Folding these packages into the aggregate creates dozens of generated chunks
  * that Node must parse and link before any extension factory can register. Node
@@ -154,6 +157,46 @@ const STARTUP_EXTERNAL_PACKAGES = new Set([
 ]);
 const NODE_BUILTINS = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
 
+type CompilationKind = 'pi-set' | 'module';
+
+/**
+ * Direct modules may bundle ordinary JavaScript, but these packages carry runtime
+ * files or native bindings that the compiled artifact does not currently publish.
+ */
+const DIRECT_RESOURCE_PACKAGES = new Set([
+  '@agimon-ai/doompi-runner-rmux-darwin-arm64',
+  '@agimon-ai/doompi-runner-rmux-darwin-x64',
+  '@agimon-ai/doompi-runner-rmux-linux-arm64',
+  '@agimon-ai/doompi-runner-rmux-linux-x64',
+  '@tursodatabase/database',
+  '@tursodatabase/database-common',
+  'onnxruntime-web',
+  'ruvector-onnx-embeddings-wasm',
+  'sherpa-onnx-node',
+  'sqlite-vec',
+  'open',
+]);
+
+/**
+ * @rmux/sdk only looks up the caller-provided `rmux` executable by name and has
+ * no package-owned executable or resource lookup. Its JavaScript graph is safe
+ * to bundle; the RMUX binary remains an intentional host capability.
+ */
+function directModuleDependencyIsUnbundlable(root: string): boolean {
+  return (
+    NATIVE_PACKAGES.has(root) ||
+    DIRECT_RESOURCE_PACKAGES.has(root) ||
+    root.startsWith('@tursodatabase/database-') ||
+    root.startsWith('sherpa-onnx-')
+  );
+}
+
+function directModuleDependencyError(root: string): Error {
+  return new Error(
+    `Cannot compile direct extension module because dependency "${root}" has native bindings or package-owned resources that are not part of the compiled artifact`,
+  );
+}
+
 interface CompiledExtensionManifest {
   version: string;
   output: string;
@@ -174,6 +217,18 @@ interface ExtensionSetManifest extends CompiledExtensionManifest {
   artifactInputs?: InputFingerprint[];
 }
 
+export interface CompileExtensionResourcePackage {
+  readonly packageName: string;
+  readonly packageDirectory: string;
+  readonly files: readonly { path: string; mode?: number }[];
+}
+
+export interface CompileExtensionResourceBinding {
+  readonly ownerPackageName: string;
+  readonly ownerDirectory: string;
+  readonly packages: readonly CompileExtensionResourcePackage[];
+}
+
 export interface CompileExtensionSetOptions {
   /** Persistent worktree artifact directory. Compiler manifests remain local. */
   outputDirectory?: string;
@@ -183,6 +238,8 @@ export interface CompileExtensionSetOptions {
   repositoryRoot?: string;
   /** Repository-level immutable cache shared by linked worktrees. */
   sharedCacheDirectory?: string;
+  /** Package-owned files that must live beside a retained direct module. */
+  resources?: readonly CompileExtensionResourceBinding[];
 }
 
 function safeOutputName(value: string): string {
@@ -307,15 +364,16 @@ function readSetManifest(manifestPath: string): ExtensionSetManifest | undefined
   return parsed && Array.isArray(parsed.entries) && Array.isArray(parsed.inputs) ? parsed : undefined;
 }
 
-function writeAtomic(target: string, contents: string | Uint8Array): void {
+function writeAtomic(target: string, contents: string | Uint8Array, mode = 0o600): void {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const temporary = `${target}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, contents);
+  fs.writeFileSync(temporary, contents, { mode });
   try {
     fs.renameSync(temporary, target);
+    fs.chmodSync(target, mode);
   } catch (error) {
     fs.rmSync(temporary, { force: true });
-    if (!fs.existsSync(target)) throw error;
+    throw error;
   }
 }
 
@@ -372,6 +430,118 @@ function writeCompiledGraph(generated: RolldownOutput, outputDirectory: string):
     artifacts: generated.output.map((artifact) => artifactTarget(root, artifact)).sort(),
   };
 }
+function resourceInputPaths(resources: readonly CompileExtensionResourceBinding[] = []): string[] {
+  return resources.flatMap((resource) =>
+    resource.packages.map((pkg) => pkg.files.map((file) => path.resolve(pkg.packageDirectory, file.path))).flat(),
+  );
+}
+
+function validateResourcePackageName(name: string): void {
+  if (!/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u.test(name)) {
+    throw new Error(`Invalid resource package name: ${name}`);
+  }
+}
+
+function resourceArtifacts(resources: readonly CompileExtensionResourceBinding[] = []): Map<string, SharedBuildAsset> {
+  const artifacts = new Map<string, SharedBuildAsset>();
+  const owners = new Set<string>();
+  for (const resource of resources) {
+    validateResourcePackageName(resource.ownerPackageName);
+    const owner = canonicalPath(resource.ownerDirectory);
+    if (owners.has(owner)) throw new Error(`Duplicate resource owner: ${owner}`);
+    owners.add(owner);
+    for (const pkg of resource.packages) {
+      validateResourcePackageName(pkg.packageName);
+      for (const file of pkg.files) {
+        if (
+          !file.path ||
+          file.path.includes('\\') ||
+          path.isAbsolute(file.path) ||
+          file.path.split('/').some((part) => !part || part === '.' || part === '..')
+        ) {
+          throw new Error(`Invalid resource path: ${file.path}`);
+        }
+        if (file.mode !== undefined && (!Number.isInteger(file.mode) || file.mode < 0 || file.mode > 0o777)) {
+          throw new Error(`Invalid resource mode: ${file.mode}`);
+        }
+        const source = canonicalPath(path.resolve(pkg.packageDirectory, file.path));
+        if (!isInside(canonicalPath(pkg.packageDirectory), source))
+          throw new Error(`Resource escapes package: ${file.path}`);
+        const stat = fs.statSync(source);
+        if (!stat.isFile()) throw new Error(`Resource is not a file: ${source}`);
+        const artifact = `node_modules/${pkg.packageName}/${file.path}`;
+        if (artifacts.has(artifact)) throw new Error(`Duplicate resource artifact: ${artifact}`);
+        artifacts.set(artifact, { contents: fs.readFileSync(source), mode: file.mode ?? stat.mode & 0o777 });
+      }
+    }
+  }
+  return artifacts;
+}
+
+/** Bind resource layout and permissions as well as input bytes to the cache identity. */
+function resourceCacheKey(
+  resources: readonly CompileExtensionResourceBinding[] = [],
+  artifacts: ReadonlyMap<string, SharedBuildAsset>,
+  repositoryRoot?: string,
+): string {
+  if (resources.length === 0) return '';
+  const identity = (directory: string) =>
+    repositoryRoot ? logicalInput(directory, repositoryRoot).logicalPath : canonicalPath(directory);
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        resources: resources.map((resource) => ({
+          ownerPackageName: resource.ownerPackageName,
+          ownerDirectory: identity(resource.ownerDirectory),
+          packages: resource.packages.map((pkg) => ({ ...pkg, packageDirectory: identity(pkg.packageDirectory) })),
+        })),
+        modes: [...artifacts].map(([name, asset]) => [name, asset.mode]),
+      }),
+    )
+    .digest('hex');
+}
+
+function validateResourceOutputPaths(outputDirectory: string, artifacts: ReadonlyMap<string, SharedBuildAsset>): void {
+  for (const artifact of artifacts.keys()) {
+    let target = canonicalPath(outputDirectory);
+    for (const segment of artifact.split('/')) {
+      target = path.join(target, segment);
+      try {
+        if (fs.lstatSync(target).isSymbolicLink()) throw new Error(`Resource output contains a symlink: ${artifact}`);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+  }
+}
+
+function resourceArtifactsAreFresh(outputDirectory: string, artifacts: ReadonlyMap<string, SharedBuildAsset>): boolean {
+  for (const [artifact, asset] of artifacts) {
+    const target = path.join(outputDirectory, artifact);
+    try {
+      if (
+        !isInside(canonicalPath(outputDirectory), canonicalPath(target)) ||
+        !artifactMatches(target, asset.contents) ||
+        (fs.statSync(target).mode & 0o777) !== asset.mode
+      )
+        return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resourceModuleUrl(
+  id: string,
+  outputDirectory: string,
+  resources: readonly CompileExtensionResourceBinding[] = [],
+): string | undefined {
+  const resource = resources.find((candidate) => isInside(canonicalPath(candidate.ownerDirectory), canonicalPath(id)));
+  if (!resource) return undefined;
+  const relative = path.relative(canonicalPath(resource.ownerDirectory), canonicalPath(id));
+  return pathToFileURL(path.join(outputDirectory, 'node_modules', resource.ownerPackageName, relative)).href;
+}
 
 function sharedLookupKey(entries: readonly LogicalInput[], outputName: string): string {
   return createHash('sha256')
@@ -423,15 +593,19 @@ function tokenizedInputs(inputs: ReadonlySet<string>, repositoryRoot: string): T
 function tokenizedArtifactContents(
   generated: RolldownOutput,
   tokens: ReadonlyMap<string, string>,
-): Map<string, string | Uint8Array> {
-  const artifacts = new Map<string, string | Uint8Array>();
+  outputDirectory: string,
+): Map<string, string | Uint8Array | SharedBuildAsset> {
+  const artifacts = new Map<string, string | Uint8Array | SharedBuildAsset>();
+  const outputToken = `${SHARED_PATH_TOKEN_PREFIX}OUTPUT__`;
   const replacements = [...tokens.entries()].sort(([left], [right]) => right.length - left.length);
   for (const artifact of generated.output) {
     if (artifact.type === 'asset') {
       artifacts.set(artifact.fileName, typeof artifact.source === 'string' ? artifact.source : artifact.source);
       continue;
     }
-    let source = artifact.code;
+    let source = artifact.code
+      .replaceAll(pathToFileURL(outputDirectory).href, `${outputToken}:url`)
+      .replaceAll(outputDirectory, outputToken);
     for (const [target, token] of replacements) {
       source = source
         .replaceAll(pathToFileURL(target).href, `${token}:url`)
@@ -545,7 +719,7 @@ function pathToImportSpecifier(target: string): string {
   return path.resolve(target).split(path.sep).join('/');
 }
 
-function setExternalResolver(inputs: Set<string>, entry?: string) {
+function setExternalResolver(inputs: Set<string>, kind: CompilationKind, entry?: string) {
   return {
     name: 'doom-set-external',
     async resolveId(
@@ -562,7 +736,15 @@ function setExternalResolver(inputs: Set<string>, entry?: string) {
       if (path.isAbsolute(specifier)) {
         if (!importer && entry && path.resolve(specifier) === path.resolve(entry)) return null;
         const root = packageRootFromPath(specifier);
-        if (root && (HOSTED_PACKAGES.has(root) || NATIVE_PACKAGES.has(root) || STARTUP_EXTERNAL_PACKAGES.has(root))) {
+        if (root && kind === 'module' && directModuleDependencyIsUnbundlable(root)) {
+          throw directModuleDependencyError(root);
+        }
+        if (
+          root &&
+          (HOSTED_PACKAGES.has(root) ||
+            NATIVE_PACKAGES.has(root) ||
+            (kind === 'pi-set' && STARTUP_EXTERNAL_PACKAGES.has(root)))
+        ) {
           inputs.add(specifier);
           return { id: specifier, external: true };
         }
@@ -583,10 +765,13 @@ function setExternalResolver(inputs: Set<string>, entry?: string) {
         const typebox = piExtensionDependencyEntry(renamed);
         if (typebox) {
           inputs.add(typebox);
-          return { id: typebox, external: true };
+          return { id: typebox, external: kind === 'pi-set' };
         }
       }
-      if (root && (NATIVE_PACKAGES.has(root) || STARTUP_EXTERNAL_PACKAGES.has(root))) {
+      if (root && kind === 'module' && directModuleDependencyIsUnbundlable(root)) {
+        throw directModuleDependencyError(root);
+      }
+      if (root && kind === 'pi-set' && (NATIVE_PACKAGES.has(root) || STARTUP_EXTERNAL_PACKAGES.has(root))) {
         const resolved = await this.resolve(renamed, importer, options);
         if (resolved) {
           inputs.add(resolved.id);
@@ -653,7 +838,7 @@ function collectImportMetaUrlRanges(value: unknown, ranges: SourceRange[]): void
 }
 
 /** Keeps package-owned resource lookup anchored to each original source file. */
-function preserveImportMetaUrl() {
+function preserveImportMetaUrl(outputDirectory: string, resources: readonly CompileExtensionResourceBinding[] = []) {
   return {
     name: 'doom-original-import-meta-url',
     transform(
@@ -669,7 +854,9 @@ function preserveImportMetaUrl() {
       const ranges: SourceRange[] = [];
       collectImportMetaUrlRanges(this.parse(source, { lang }), ranges);
       if (ranges.length === 0) return null;
-      const replacement = javascriptStringLiteral(pathToFileURL(id).href);
+      const replacement = javascriptStringLiteral(
+        resourceModuleUrl(id, outputDirectory, resources) ?? pathToFileURL(id).href,
+      );
       let transformed = source;
       for (const range of ranges.sort((left, right) => right.start - left.start)) {
         transformed = `${transformed.slice(0, range.start)}${replacement}${transformed.slice(range.end)}`;
@@ -708,6 +895,38 @@ export async function compileExtensionSet(
   cacheDirectory: string,
   options: CompileExtensionSetOptions = {},
 ): Promise<string> {
+  return compileGraph(entries, cacheDirectory, options, 'pi-set');
+}
+
+/** Exact compiler receipt used by sync to validate a direct module without importing it. */
+export function extensionModuleManifestPath(
+  entry: string,
+  cacheDirectory: string,
+  options: CompileExtensionSetOptions = {},
+): string {
+  const root = options.repositoryRoot ? canonicalPath(options.repositoryRoot) : undefined;
+  const resourceKey = resourceCacheKey(options.resources, resourceArtifacts(options.resources), root);
+  const base = `${extensionSetManifestPath([entry], cacheDirectory, options)}.module.json`;
+  return resourceKey ? `${base}.${resourceKey}.json` : base;
+}
+
+/** Preserve a module's exports instead of wrapping its default in a Pi factory.
+ * External dependency and resource policies remain those of the shared compiler.
+ */
+export async function compileExtensionModule(
+  entry: string,
+  cacheDirectory: string,
+  options: CompileExtensionSetOptions = {},
+): Promise<string> {
+  return compileGraph([entry], cacheDirectory, options, 'module');
+}
+
+async function compileGraph(
+  entries: readonly string[],
+  cacheDirectory: string,
+  options: CompileExtensionSetOptions,
+  kind: 'pi-set' | 'module',
+): Promise<string> {
   if (entries.length === 0) throw new Error('Cannot compile an empty extension set');
   const normalized = entries.map((entry) => path.resolve(entry));
   const setDirectory = path.join(cacheDirectory, SET_DIRECTORY);
@@ -715,13 +934,29 @@ export async function compileExtensionSet(
   const outputDirectory = path.resolve(options.outputDirectory ?? setDirectory);
   const outputName = safeOutputName(options.outputName ?? DEFAULT_SET_OUTPUT_NAME);
   fs.mkdirSync(outputDirectory, { recursive: true });
-  const manifestPath = extensionSetManifestPath(normalized, cacheDirectory, options);
+  const repositoryRoot = options.repositoryRoot ? canonicalPath(options.repositoryRoot) : undefined;
+  const resources = resourceArtifacts(options.resources);
+  validateResourceOutputPaths(outputDirectory, resources);
+  const resourceKey = resourceCacheKey(options.resources, resources, repositoryRoot);
+  const setManifestPath = extensionSetManifestPath(normalized, cacheDirectory, options);
+  const manifestPath =
+    kind === 'module'
+      ? extensionModuleManifestPath(normalized[0], cacheDirectory, options)
+      : resourceKey
+        ? `${setManifestPath}.${resourceKey}.json`
+        : setManifestPath;
   const previous = readSetManifest(manifestPath);
-  if (previous && manifestIsFresh(previous, normalized)) return previous.output;
+  if (previous && manifestIsFresh(previous, normalized) && resourceArtifactsAreFresh(outputDirectory, resources))
+    return previous.output;
 
+  const resourceInputs = resourceInputPaths(options.resources);
   const generate = async (): Promise<{ generated: RolldownOutput; inputs: Set<string> }> => {
-    const inputs = new Set(normalized);
-    const source = extensionSetSource(normalized);
+    const inputs = new Set([...normalized, ...resourceInputs]);
+    const moduleSpecifier = javascriptStringLiteral(pathToImportSpecifier(normalized[0]));
+    const source =
+      kind === 'module'
+        ? `export * from ${moduleSpecifier};\nexport { default } from ${moduleSpecifier};\n`
+        : extensionSetSource(normalized);
     const { rolldown } = await import('rolldown');
     const build = await rolldown({
       input: VIRTUAL_SET_ENTRY,
@@ -736,8 +971,8 @@ export async function compileExtensionSet(
             return id === VIRTUAL_SET_ENTRY ? source : null;
           },
         },
-        setExternalResolver(inputs),
-        preserveImportMetaUrl(),
+        setExternalResolver(inputs, kind),
+        preserveImportMetaUrl(outputDirectory, options.resources),
         inputCollector(inputs),
       ],
       onLog: failUnresolvedImport,
@@ -752,11 +987,13 @@ export async function compileExtensionSet(
     }
   };
 
-  const repositoryRoot = options.repositoryRoot ? canonicalPath(options.repositoryRoot) : undefined;
-
   if (repositoryRoot && options.sharedCacheDirectory) {
-    const logicalEntries = normalized.map((entry) => logicalInput(entry, repositoryRoot));
-    const lookupKey = sharedLookupKey(logicalEntries, outputName);
+    const logicalEntries = [...normalized, ...resourceInputs].map((entry) => logicalInput(entry, repositoryRoot));
+    const setLookupKey = sharedLookupKey(logicalEntries, outputName);
+    const lookupKey =
+      kind === 'module' || resourceKey
+        ? createHash('sha256').update(kind).update(':').update(setLookupKey).update(resourceKey).digest('hex')
+        : setLookupKey;
     const resolveInput = (input: SharedBuildInput): string | undefined =>
       resolveLogicalInputPath(input, repositoryRoot);
     return withSharedBuildLock(options.sharedCacheDirectory, lookupKey, async () => {
@@ -765,7 +1002,11 @@ export async function compileExtensionSet(
 
       const { generated, inputs } = await generate();
       const tokenized = tokenizedInputs(inputs, repositoryRoot);
-      const artifacts = tokenizedArtifactContents(generated, tokenized.byTarget);
+      const artifacts = tokenizedArtifactContents(generated, tokenized.byTarget, outputDirectory);
+      for (const [artifactPath, asset] of resources) {
+        if (artifacts.has(artifactPath)) throw new Error(`Duplicate resource artifact: ${artifactPath}`);
+        artifacts.set(artifactPath, asset);
+      }
       if (
         [...artifacts.values()].some((contents) => typeof contents === 'string' && contents.includes(repositoryRoot))
       ) {
@@ -788,6 +1029,15 @@ export async function compileExtensionSet(
 
   const { generated, inputs } = await generate();
   const compiled = writeCompiledGraph(generated, outputDirectory);
-  writeLocalSetManifest(manifestPath, normalized, compiled.entry, compiled.artifacts, inputs);
+  const resourceFiles: string[] = [];
+  for (const [artifact, asset] of resources) {
+    const target = path.resolve(canonicalPath(outputDirectory), artifact);
+    if (!isInside(canonicalPath(outputDirectory), canonicalPath(target)))
+      throw new Error(`Resource escapes output: ${artifact}`);
+    fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+    writeAtomic(target, asset.contents, asset.mode ?? 0o600);
+    resourceFiles.push(target);
+  }
+  writeLocalSetManifest(manifestPath, normalized, compiled.entry, [...compiled.artifacts, ...resourceFiles], inputs);
   return compiled.entry;
 }

@@ -31,6 +31,7 @@ function fixture() {
   const surface = createDoomToolSurface({
     generation: 'test',
     allTools: () => allTools,
+    activeTools: () => activeTools,
     setActiveTools: (next) => {
       activeTools = next;
     },

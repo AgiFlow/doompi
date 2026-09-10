@@ -7,7 +7,8 @@ import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { Server } from '@earendil-works/pi-server';
-import { readSyncDrift, readSyncRegistration } from '@agimon-ai/doompi/services';
+import { readSyncDrift, readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi/services';
+import { layerHookGroups, loadMajorModesConfig, readHarnessState, resolveLayers } from '@agimon-ai/doompi/config';
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
 import { readSyncState, type SyncState } from '@agimon-ai/doompi/services/syncState';
 import type { DoomTelemetry } from '@agimon-ai/doompi-telemetry';
@@ -38,11 +39,16 @@ import {
 import {
   type InstalledServerFacets,
   installServerFacets,
+  type LoadedServerFacet,
+  loadServerBundle,
   loadServerFacets,
+  resolveServerBundleSource,
 } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
 import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
 import { findRepositoryRoot, resolveDoomConfigurationRoot } from '@agimon-ai/doompi/utils/repository';
 import { sessionFileHeaders } from '../services/fileMedia.ts';
+import { sessionBundleSelection, sessionBundleKey } from './sessionBundleSelection.ts';
+import type { SessionRecord } from '../types/registry.ts';
 import { createOAuthRedirectRegistry } from '../services/oauthRedirectRegistry.ts';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
 import {
@@ -322,6 +328,51 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+type HubServerFacet = DoomServerFacet | LoadedServerFacet;
+
+export async function loadHubApis(
+  registration: SyncRegistration | undefined,
+  directoryOverride: string | undefined,
+  notice: (message: string) => void,
+  composition?: NonNullable<SessionRecord['serverComposition']>,
+): Promise<{ apis: DoomApi[]; facets: HubServerFacet[]; key?: string }> {
+  const source =
+    composition === undefined
+      ? resolveServerBundleSource({ registration, directoryOverride })
+      : {
+          kind: 'descriptor' as const,
+          directory: composition.apiDirectory,
+          generation: composition.generation,
+          fingerprint: composition.fingerprint,
+        };
+  if (source.kind === 'empty') return { apis: [], facets: [] };
+  if (source.kind === 'legacy')
+    return {
+      apis: await loadPackageApis('hub', { apiDirectory: source.directory, env: {}, onNotice: notice }),
+      facets: await loadServerFacets('hub', { apiDirectory: source.directory, env: {}, onNotice: notice }),
+      key: source.directory,
+    };
+  let selection = composition;
+  if (selection === undefined) {
+    if (registration === undefined) throw new Error('A descriptor override requires an admitted repository selection');
+    const state = readSyncState(registration.root);
+    if (state === undefined) throw new Error(`No sync state is available for ${registration.root}`);
+    const config = loadMajorModesConfig(registration.root);
+    const harness = readHarnessState(state.env);
+    const layers = resolveLayers(config, state.selection.majorMode);
+    selection = {
+      root: registration.root,
+      apiDirectory: source.directory,
+      generation: source.generation,
+      fingerprint: source.fingerprint,
+      majorMode: state.selection.majorMode,
+      activeLayers: harness.hooks ? layers : layers.filter((layer) => layerHookGroups(config, [layer]).length === 0),
+    };
+  }
+  const bundle = await loadServerBundle('hub', { ...source, ...selection, onNotice: notice });
+  return { apis: [], facets: [...bundle.facets], key: sessionBundleKey(selection) };
+}
+
 /** One page's hold on one thread; a session id never contains a newline, so the pair cannot collide. */
 function threadKey(sessionId: string, threadId: string): string {
   return `${sessionId}\n${threadId}`;
@@ -411,20 +462,23 @@ export function createSettingsRepositoryRegistry(hub: SessionHub): {
 export function mountHubApis(
   app: Hono,
   initialApis: readonly DoomApi[],
-  initialFacets: readonly DoomServerFacet[],
+  initialFacets: readonly HubServerFacet[],
   notice: (message: string) => void,
   resolveRepository: (repositoryId: string) => string | undefined,
   readRepositorySync: (repositoryId: string) => DoomRepositorySyncView | undefined,
-  resolveBundleKey: (sessionId: string) => string | undefined = () => 'default',
+  resolveBundleKey: (sessionId: string) => string | undefined | Promise<string | undefined> = () => 'default',
   initialBundleKey = 'default',
   /** Lends the hub's OAuth redirect to hub APIs that broker third-party sign-in. */
   oauthRedirect?: () => DoomOAuthRedirect | undefined,
 ): {
-  add: (apis: readonly DoomApi[], facets?: readonly DoomServerFacet[], bundleKey?: string) => Promise<void>;
+  ready: Promise<void>;
+  add: (apis: readonly DoomApi[], facets?: readonly HubServerFacet[], bundleKey?: string) => Promise<void>;
   remove: (bundleKey: string) => Promise<void>;
   close: () => Promise<void>;
 } {
   const bundles = new Map<string, { host: DoomServerHost; installed?: InstalledServerFacets }>();
+  const pending = new Map<string, Promise<void>>();
+  let closed = false;
   const apiContext: DoomApiContext = {
     scope: 'hub',
     onNotice: notice,
@@ -434,20 +488,38 @@ export function mountHubApis(
   };
   const add = async (
     apis: readonly DoomApi[],
-    facets: readonly DoomServerFacet[] = [],
+    facets: readonly HubServerFacet[] = [],
     bundleKey = initialBundleKey,
   ): Promise<void> => {
-    let bundle = bundles.get(bundleKey);
-    if (bundle === undefined) {
-      bundle = { host: createDoomServerHost({ scope: 'hub', context: apiContext }) };
-      bundles.set(bundleKey, bundle);
-    }
-    for (const api of apis) bundle.host.registerApi(api);
-    if (facets.length > 0 && bundle.installed === undefined) {
-      bundle.installed = await installServerFacets({ host: bundle.host, facets, onNotice: notice });
-    }
+    if (closed) throw new Error('Hub package APIs are closed');
+    const previous = pending.get(bundleKey);
+    if (previous !== undefined) return previous;
+    const installing = Promise.resolve()
+      .then(async () => {
+        let bundle = bundles.get(bundleKey);
+        if (bundle === undefined) {
+          bundle = { host: createDoomServerHost({ scope: 'hub', context: apiContext }) };
+          bundles.set(bundleKey, bundle);
+        }
+        try {
+          for (const api of apis) bundle.host.registerApi(api);
+          if (facets.length > 0 && bundle.installed === undefined) {
+            bundle.installed = await installServerFacets({ host: bundle.host, facets, onNotice: notice });
+          }
+        } catch (error) {
+          bundles.delete(bundleKey);
+          bundle.host.dispose();
+          throw error;
+        }
+      })
+      .finally(() => {
+        pending.delete(bundleKey);
+      });
+    pending.set(bundleKey, installing);
+    return installing;
   };
   const remove = async (bundleKey: string): Promise<void> => {
+    await pending.get(bundleKey);
     const bundle = bundles.get(bundleKey);
     if (bundle === undefined) return;
     bundles.delete(bundleKey);
@@ -464,7 +536,7 @@ export function mountHubApis(
       return context.json({ error: 'A package API request cannot select both a session API and a hub bundle.' }, 400);
     }
     if (sessionApi !== undefined) return next();
-    const bundleKey = hubSession === undefined ? initialBundleKey : resolveBundleKey(hubSession);
+    const bundleKey = hubSession === undefined ? initialBundleKey : await resolveBundleKey(hubSession);
     if (bundleKey === undefined) return context.notFound();
     const basePath = context.req.param('basePath');
     const handler = bundles.get(bundleKey)?.host.handlerFor(basePath);
@@ -481,9 +553,12 @@ export function mountHubApis(
     }
   });
   return {
+    ready,
     add,
     remove,
     close: async () => {
+      closed = true;
+      await Promise.allSettled(pending.values());
       for (const bundleKey of Array.from(bundles.keys())) await remove(bundleKey);
     },
   };
@@ -579,24 +654,21 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const cockpitSyncGuard = createSyncGuard({ repoRoot: cockpitRoot, onNotice: notice });
   let registerRootHubApis = async (_root: string): Promise<void> => {};
   const rootsUsingGlobalFallback = new Set<string>();
-  const readyRegistration = (root: string): ReturnType<typeof readSyncRegistration> => {
-    try {
-      const registration = readSyncRegistration(root);
-      if (registration?.webDirectory === null || registration?.webDirectory === undefined) return undefined;
-      const bundleRoot = path.dirname(registration.webDirectory);
-      const complete =
-        fs.existsSync(path.join(registration.webDirectory, INDEX_FILE)) &&
-        fs.existsSync(path.join(bundleRoot, 'plugins', 'composition.js')) &&
-        fs.existsSync(path.join(bundleRoot, 'plugins', 'manifest.json')) &&
-        fs.existsSync(registration.apiDirectory);
-      return complete ? registration : undefined;
-    } catch {
-      return undefined;
-    }
+  const readRegistration = (root: string): SyncRegistration | undefined => readSyncRegistration(root);
+  const selectedRegistration = (root: string): SyncRegistration | undefined => {
+    const selectedRoot = root !== cockpitRoot && rootsUsingGlobalFallback.has(root) ? cockpitRoot : root;
+    const registration = readRegistration(selectedRoot);
+    return registration ?? (selectedRoot === cockpitRoot ? undefined : readRegistration(cockpitRoot));
   };
-  const selectedRegistration = (root: string): ReturnType<typeof readSyncRegistration> => {
-    if (root !== cockpitRoot && rootsUsingGlobalFallback.has(root)) return readyRegistration(cockpitRoot);
-    return readyRegistration(root) ?? (root === cockpitRoot ? undefined : readyRegistration(cockpitRoot));
+  const readyRegistration = (root: string): SyncRegistration | undefined => {
+    const registration = selectedRegistration(root);
+    if (registration?.webDirectory === null || registration?.webDirectory === undefined) return undefined;
+    const bundleRoot = path.dirname(registration.webDirectory);
+    const complete =
+      fs.existsSync(path.join(registration.webDirectory, INDEX_FILE)) &&
+      fs.existsSync(path.join(bundleRoot, 'plugins', 'composition.js')) &&
+      fs.existsSync(path.join(bundleRoot, 'plugins', 'manifest.json'));
+    return complete ? registration : undefined;
   };
 
   const ensureRootSynced = async (root: string): Promise<void> => {
@@ -1076,63 +1148,63 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // here; session-scoped ones live in each session's own server and are proxied.
   const apiDirectory = served.apiDirectory;
   const overriddenApiDirectory = process.env[PACKAGE_API_DIR_ENV];
-  const defaultApiDirectory =
+  const apiDirectoryOverride =
     apiDirectory ??
-    (overriddenApiDirectory === undefined || overriddenApiDirectory === '' ? undefined : overriddenApiDirectory) ??
-    readyRegistration(cockpitRoot)?.apiDirectory;
-  const defaultApiBundleKey = defaultApiDirectory ?? 'default';
-  const hubApis =
-    defaultApiDirectory === undefined
-      ? []
-      : await loadPackageApis('hub', { apiDirectory: defaultApiDirectory, env: {}, onNotice: notice });
-  const hubFacets =
-    defaultApiDirectory === undefined
-      ? []
-      : await loadServerFacets('hub', { apiDirectory: defaultApiDirectory, env: {}, onNotice: notice });
+    (overriddenApiDirectory === undefined || overriddenApiDirectory === '' ? undefined : overriddenApiDirectory);
+  const defaultRegistration = readRegistration(cockpitRoot);
+  const sessionApiBundles = new Map<string, string>();
+  const defaultBundle = await loadHubApis(defaultRegistration, apiDirectoryOverride, notice);
+  const defaultApiBundleKey = defaultBundle.key ?? 'default';
   const pluginApis = mountHubApis(
     app,
-    hubApis,
-    hubFacets,
+    defaultBundle.apis,
+    defaultBundle.facets,
     notice,
     resolveRepository,
     readRepositorySync,
-    (sessionId) => {
-      const session = hub.snapshot().find((candidate) => candidate.id === sessionId);
-      if (session === undefined) return undefined;
-      return selectedRegistration(compositionRoot(session.cwd))?.apiDirectory;
+    async (sessionId) => {
+      const record = hub.records().find((candidate) => candidate.id === sessionId);
+      if (record === undefined) return undefined;
+      const root = compositionRoot(record.cwd);
+      const registration = readRegistration(root);
+      if (registration === undefined) return undefined;
+      const composition = sessionBundleSelection(record, registration);
+      if (composition === undefined) {
+        // Old hosts do not prove a selection for a new candidate descriptor.
+        return registration.serverBundle === undefined ? registeredApiBundles.get(root) : undefined;
+      }
+      const loaded = await loadHubApis(registration, undefined, notice, composition);
+      const key = loaded.key!;
+      await pluginApis.add(loaded.apis, loaded.facets, key);
+      const previous = sessionApiBundles.get(sessionId);
+      sessionApiBundles.set(sessionId, key);
+      if (previous !== key) await removeUnusedApiBundle(previous);
+      return key;
     },
     defaultApiBundleKey,
     oauthRedirect,
   );
+  await pluginApis.ready;
   const registeredApiBundles = new Map<string, string>();
   const apiBundleInUse = (bundleKey: string): boolean =>
     bundleKey === defaultApiBundleKey ||
-    selectedRegistration(cockpitRoot)?.apiDirectory === bundleKey ||
-    hub.snapshot().some((session) => selectedRegistration(compositionRoot(session.cwd))?.apiDirectory === bundleKey);
+    [...registeredApiBundles.values(), ...sessionApiBundles.values()].includes(bundleKey);
   const removeUnusedApiBundle = async (bundleKey: string | undefined): Promise<void> => {
     if (bundleKey !== undefined && !apiBundleInUse(bundleKey)) await pluginApis.remove(bundleKey);
   };
   registerRootHubApis = async (root: string): Promise<void> => {
     const previousBundleKey = registeredApiBundles.get(root);
-    const registration = selectedRegistration(root);
-    if (registration === undefined) {
+    const registration = readRegistration(root);
+    if (registration === undefined || (root !== cockpitRoot && registration.serverBundle !== undefined)) {
       registeredApiBundles.delete(root);
       await removeUnusedApiBundle(previousBundleKey);
       return;
     }
-    const apis = await loadPackageApis('hub', {
-      apiDirectory: registration.apiDirectory,
-      env: {},
-      onNotice: notice,
-    });
-    const facets = await loadServerFacets('hub', {
-      apiDirectory: registration.apiDirectory,
-      env: {},
-      onNotice: notice,
-    });
-    await pluginApis.add(apis, facets, registration.apiDirectory);
-    registeredApiBundles.set(root, registration.apiDirectory);
-    if (previousBundleKey !== registration.apiDirectory) await removeUnusedApiBundle(previousBundleKey);
+    const loaded = await loadHubApis(registration, apiDirectoryOverride, notice);
+    const bundleKey = loaded.key ?? defaultApiBundleKey;
+    if (bundleKey !== defaultApiBundleKey) await pluginApis.add(loaded.apis, loaded.facets, bundleKey);
+    registeredApiBundles.set(root, bundleKey);
+    if (previousBundleKey !== bundleKey) await removeUnusedApiBundle(previousBundleKey);
   };
   const sessionApiRoots = new Map(hub.snapshot().map((session) => [session.id, compositionRoot(session.cwd)]));
   const disconnectApiBundleCleanup = hub.onEvent((event) => {
@@ -1141,6 +1213,9 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       return;
     }
     if (event.kind !== 'removed') return;
+    const sessionBundle = sessionApiBundles.get(event.sessionId);
+    sessionApiBundles.delete(event.sessionId);
+    void removeUnusedApiBundle(sessionBundle);
     const root = sessionApiRoots.get(event.sessionId);
     sessionApiRoots.delete(event.sessionId);
     if (root === undefined || root === cockpitRoot || [...sessionApiRoots.values()].includes(root)) return;

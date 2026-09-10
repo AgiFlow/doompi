@@ -14,7 +14,8 @@ const CONFIG_FILES = ['tsdown.config.ts', 'tsconfig.json', 'vitest.config.ts', '
 const EXPORT_SUBPATHS = [
   '.',
   './extensions/pi',
-  // The hub-scoped metrics API the cockpit host imports; declared in doompiApi.
+  './extensions/server',
+  // Useful API export retained; the server facet owns its hub registration.
   './hub-api',
   './metrics',
   './metricsSource',
@@ -72,5 +73,15 @@ describe('@agimon-ai/doompi-log package shape', () => {
 
     const pi = objectValue(PACKAGE_MANIFEST.pi);
     expect(pi.extensions).toEqual([PI_ENTRY]);
+    expect(PACKAGE_MANIFEST.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['hub'],
+    });
+    expect(objectValue(exports)['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
   });
 });

@@ -1,3 +1,4 @@
+export { uiHeadlessFacet } from '../adapters/headless/facet.ts';
 export {
   type ConfigChoice,
   type ConfigField,

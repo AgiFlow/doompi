@@ -92,7 +92,7 @@ describe('doompi-git package contract', () => {
     const exportsMap = manifest.exports ?? {};
 
     // './api/git' is the hub-scoped package API the cockpit's worktrees panel
-    // calls; './extensions/server' is the facet a hub installs to mount it;
+    // calls; './extensions/server' is the facet the hub and session host install;
     // 'src/web' and the web client entry ship as source because the cockpit
     // bundles the browser half itself.
     expect(Object.keys(exportsMap)).toEqual([
@@ -111,7 +111,7 @@ describe('doompi-git package contract', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub'],
+      scopes: ['hub', 'session'],
     });
   });
 

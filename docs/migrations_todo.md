@@ -37,61 +37,111 @@ the line in "Landed" is verified by a run, not by reading source.
   hardcoded `undefined` and the hub loads per-composition bundles. Composition
   cache version bumped to 4.
 
-## Phase 3, remaining
+- **Phase 3 package migration.** All 11 former `doompiApi`-only packages now
+  publish a scope-gated `./extensions/server` facet while retaining their legacy
+  declarations. Their 44 facet cases pass, all 11 built ESM, CJS and declaration
+  targets exist, and every built default facet imports successfully.
+- **Phase 3 host baselines.** `doompi-server` and `doompi-web` now freeze their
+  package entry surfaces and exercise facet-only routing, legacy-first dual
+  registration, throwing-facet isolation, handler failure isolation, scope
+  context and disposal. Their full suites pass with 142 and 1,499 tests.
+- **Phase 3 generated path.** A sync smoke test loads, installs and disposes a
+  generated facet beside its legacy route. The compatibility baseline passes 49
+  cases and includes all new server exports.
+- **Phase 3 browser path.** The native Chromium E2E suite passes 190 cases with one
+  skip. An isolated built cockpit also created a real repository session, reached
+  the session-scoped context API through the hub, and removed the session record
+  and all three session sockets through the browser UI. Hub and session logs show
+  facets yielding to the retained legacy first owner.
 
-### Migrate the 11 packages that still declare only `doompiApi`
+## Prerequisite baseline repairs, landed
 
-Each needs a facet, an export barrel, a manifest `exports["./extensions/server"]`
-entry, a top-level `doompiServer` block, a unit test from the scaffold, a
-`vitest.config.ts` alias for `@agimon-ai/doompi-extension-contracts/server-facet`
-where the package aliases contracts subpaths, and its contract or package-shape
-test updated.
-
-| Package | Scope | API adapter |
-|---|---|---|
-| `layers/team/doompi-team` | session | `src/adapters/teamCatalogApi.ts` |
-| `packages/core/doompi` | session | `src/adapters/contextApi.ts` |
-| `packages/default/doompi-file-edit` | session | `src/adapters/fileEditsApi.ts` |
-| `packages/default/doompi-log` | hub | `src/adapters/hubApi.ts` |
-| `packages/default/doompi-mcp` | hub | `src/adapters/web/mcpHubApi.ts`, exported as `mcpHubApi` |
-| `packages/default/doompi-prompt` | hub | `src/adapters/hubApi.ts` |
-| `packages/minor/doompi-author` | session | `src/adapters/authorApi.ts` |
-| `packages/minor/doompi-computer-use` | session | `src/adapters/computerUseApi.ts` |
-| `packages/minor/doompi-plan` | session | `src/adapters/planApi.ts` |
-| `packages/minor/doompi-voice` | session | `src/adapters/voiceSessionApi.ts` |
-| `packages/minor/doompi-workflow` | hub | `src/adapters/workflowHubApi.ts` |
-
-If a package's `DoomApi` lives in `src/exports/` rather than an adapter, move the
-implementation to `src/adapters/` with `git mv` and leave a forwarding barrel.
-`doompi-git` is the worked example: importing `../../exports/hubApi.ts` from a
-facet trips `boundary-import-allowlist`, `no-internal-public-import` and
-`doom-layer-boundary` at once.
-
-### Contract tests still owed
-
-`doompi-server` and `doompi-web` have no compatibility baseline. Phase 3 is not
-closed until both have one.
+- **Tool surface reconciliation.** The arbiter now reads the host's active list,
+  removes newly auto-activated denied tools, repairs external resets and retries a
+  failed setter without caching it as applied. Its focused suite passes 14 cases.
+  Attribution of every tool in the reported screenshot remains a runtime gate.
+- **Kernel retry recovery.** The serialized queue recovers after rejection and caches
+  only acknowledged sink applications. Its 17 cases cover same-selection recovery
+  and a later queued switch after failure.
+- **Packed-install closure.** Kernel is now a nonselectable core foundation in the
+  owned package inventory, which asserts every owned `workspace:*` runtime edge has
+  a tarball. The compatibility baseline passes 50 cases and packed installation
+  passes 299 cases with one skip.
 
 ## Phase 4
 
-- Write `serverBundleSync`, replacing the generated `session.routes.mjs` and
-  `hub.routes.mjs` pair.
-- Delete `packages/core/doompi/src/adapters/apiRoutesSync.ts` and its test.
-- Update the consumers: `doompi-web/src/adapters/webComposition.ts`,
-  `doompi-extension-contracts/tests/packageApi.test.ts`, and the desktop copies
-  under `packages/clients/doompi-desktop/build/runtime/` and
-  `packages/clients/doompi-desktop/build/hub/`.
+- **Producer and transitional consumers verified.** Fresh sync writes one versioned
+  `server.bundle.json` with independently compiled, generation-pinned modules.
+  State/registration linkage and compiler receipts detect descriptor, dependency,
+  declaration and artifact drift. Failed publication preserves the old registration.
+  The focused producer group passes 90 tests. Both consumers enforce pre-import
+  eligibility, generation/root confinement and explicit legacy admission without
+  fallback. Their complete native gates passed: web 1,508 tests and server 143.
+- **Obsolete authoring removed.** Deleted `src/adapters/apiRoutesSync.ts` and its
+  tests; retained read-only compatibility filename helpers. All 13 owned API
+  manifests now declare only `doompiServer`. Templates and lint rules reject
+  legacy authoring; useful API exports remain. The declaration test helper validates
+  API shape and declared scope, not actual facet registration. Facet lifecycle tests
+  separately cover registration and disposal. Focused contracts tests pass 29 cases;
+  full contracts, 12 non-core API owners and tooling native gates pass
+  (`mtumxi9u-4xd3`, `mtumxxwl-btXE`).
+- **Final core acceptance pending.** Latest full core tests pass 1,108 cases and
+  fail three (`mtuv33p4-JwgY`): two bundle/compiler tests reject the newly reached
+  native `@tursodatabase/database` dependency, and native-v4 metadata export loses
+  session-info/label expectations without protected-import provenance. These are
+  migration defects, not external registry blockers. Earlier passes do not establish
+  current acceptance; no coverage threshold reductions or exclusions are permitted.
+- Regenerate desktop staging through its producers during the distribution cutover,
+  not by hand-editing ignored `build/runtime/` or `build/hub/` outputs.
 
-## Phase 5, irreversible
+## Phase 5, gated on protected history
 
-- Drive `@earendil-works/pi-agent-core` `AgentHarness` directly from the session
-  server.
-- Flip the on-disk format to Pi format 4, and ship the lossy format-3 export
-  view in the same phase so `pi --resume` keeps working.
-- This is where requirement 1 actually lands: `setTools`, `setResources`, hook
-  toggles and a replaceable command table.
-- The headless host surface must omit `setWidget`, `editor` and `custom` so a
-  miscall fails at typecheck.
+- **Checkpoint, not production cutover.** Core owns copied session-host sources and
+  a direct `AgentHarness` adapter behind `DOOMPI_TEST_DIRECT_HEADLESS=1`. Normal
+  sessions still use the RPC host; the retired server package still exists. The
+  pinned `pi-agent-core` dependency does not authorize normal v4 writes.
+- **Focused host evidence.** Fifteen runtime, host, startup and client tests pass,
+  including actual deterministic-provider tool removal/restoration, resource
+  re-reading, prompt-hook composition, failed preparation recovery and shutdown
+  (`mtuti43t-r5-d`). This does not prove executable/socket/browser parity or all
+  four selection axes.
+- **Recovered package checkpoints.** Config, profile, domain and major-mode pass
+  lint, typecheck, build and full tests (`mtutxp10-gGqL`). Profile tests cover a
+  synthetic env secret, selected persona re-reading and unknown-profile rejection.
+  Raw config notification paths were removed. Runner and Task pass the same native
+  gates with unchanged coverage thresholds (`mtuuh084-rBpP`); five added headless
+  bash tests cover ownership, streaming modes, timeout and pre-aborted dispatch.
+  Mocked retained-activity tests are not real running-job acceptance.
+- **Checkpoint gates remain distinct.** Full history recovery, real Pi resume,
+  combined live selection, browser/desktop, packed installation and package
+  retirement remain outstanding. Existing focused passes do not satisfy them.
+- Ship protected-copy import, interruption recovery and resumable v3 export before
+  enabling normal v4 writes. Preserve every v3-representable record and branch;
+  disclose nonrepresentable v4 data in a machine-readable report while retaining
+  canonical data. Pi continuation is a separate history, never a second writer.
+- **Isolated upstream probes passed.** On pinned 0.85.1, intact v3 open preserves
+  source bytes but remints retained entry IDs and projects labels/session metadata
+  into values. The first mutation upgrades that same path to v4. Opening a torn v4
+  journal rewrites its tail. Preserve original and damaged bytes before upstream
+  open, not merely before the first explicit commit.
+- **Write-failure containment is required.** An injected partial ENOSPC rejects
+  without changing in-memory state. Immediate close/reopen recovers the intact
+  prefix. A subsequent accepted commit before close causes the next reopen to fail
+  with invalid JSONL. Block further writes after storage failure, preserve the
+  journal, and recover under exclusive ownership. These are temporary-root public
+  API probes, not completed production safeguards or real Pi resume evidence.
+- **History drafts are not accepted.** Review identified destructive exclusive-write
+  `EEXIST` cleanup, incomplete import-proof and resumable-state validation, export
+  ownership races, and unproven branch/unknown-record fidelity. Implementation and
+  full failure/restart coverage remain required. Normal v4 writes stay disabled.
+- Implement live tools, resources, prompt sources, hooks, commands, client actions
+  and optional activity through typed headless contributions. The headless surface
+  must reject `setWidget`, `editor` and `custom` at typecheck.
+- **Source inventory complete, behavior still unverified.** The packing matrix
+  covers 46 packages; a deterministic manifest scan identified three omitted
+  selectable layers: model-guidance, sandbox and git. Their contributions are also
+  inventoried. Include all 49 in migration coverage, preserve unrelated
+  model-guidance edits, and close matrix/baseline gaps during distribution work.
 
 ## Phase 6
 
@@ -118,6 +168,9 @@ closed until both have one.
   Pi host.
 - 9 unguarded `pi.on` handlers are classified safe only because they live in
   always-on core packages.
+- Legacy scope aggregates remain only for explicitly admitted older generations.
+  New descriptor consumers and obsolete authoring removal are implemented and
+  tested; final core acceptance is blocked by unfinished history draft gates.
 - React Native WebSocket binary framing, `sealedProtocolSession` crypto
   portability and Chord's CJS bundle under Metro all need a spike.
 

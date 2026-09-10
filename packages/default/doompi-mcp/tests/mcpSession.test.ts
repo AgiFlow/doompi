@@ -80,6 +80,7 @@ function toolSurfaceFor(pi: ExtensionAPI): DoomToolSurfaceService {
   const surface = createDoomToolSurface({
     generation: 'mcp-session-test',
     allTools: () => pi.getAllTools().map((tool) => tool.name),
+    activeTools: () => pi.getActiveTools(),
     setActiveTools: (names) => pi.setActiveTools([...names]),
   });
   surfaces.push(surface);

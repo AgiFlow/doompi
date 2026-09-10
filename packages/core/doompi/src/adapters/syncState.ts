@@ -81,6 +81,13 @@ export interface SyncPrecompileState {
   bundleManifests: Record<string, string>;
 }
 
+export interface SyncServerBundleState {
+  descriptorPath: string;
+  fingerprint: string;
+  compilerManifests: Record<string, string>;
+  sourcesHash: string;
+}
+
 export interface SyncState {
   version: number;
   root: string;
@@ -126,6 +133,8 @@ export interface SyncState {
   bootstrap?: string;
   /** Inputs used to validate generated artifacts without loading the compiler. */
   precompile?: SyncPrecompileState;
+  /** Absent only in generations produced before the server descriptor cutover. */
+  serverBundle?: SyncServerBundleState;
   baseline: SyncBaseline;
 }
 
@@ -284,6 +293,17 @@ export function computeWebSourcesHash(resolved: Record<string, string>): string 
   }
   for (const [name, entry] of Object.entries(resolved).sort(([left], [right]) => left.localeCompare(right))) {
     updateFramedHash(hash, 'entry', `${name} ${entry}`);
+  }
+  return hash.digest('hex');
+}
+
+/** Include declaration changes even for packages that did not previously expose a server facet. */
+export function computeServerSourcesHash(resolved: Record<string, string>): string {
+  const hash = crypto.createHash('sha256');
+  const roots = [...new Set(Object.values(resolved).flatMap((entry) => owningPackageRoot(entry) ?? []))].sort();
+  for (const root of roots) updateFileInputHash(hash, path.join(root, PACKAGE_MANIFEST_FILE));
+  for (const [name, entry] of Object.entries(resolved).sort(([left], [right]) => left.localeCompare(right))) {
+    updateFramedHash(hash, 'entry', JSON.stringify([name, entry]));
   }
   return hash.digest('hex');
 }
@@ -477,6 +497,32 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
   if (precompile && !precompileMatchesBundles(precompile, bundles)) {
     throw new Error(`Doom sync state at ${statePath} has an invalid precompile record`);
   }
+  let serverBundle: SyncServerBundleState | undefined;
+  if (parsed.serverBundle !== undefined) {
+    const value = parsed.serverBundle;
+    if (
+      !isRecord(value) ||
+      typeof value.descriptorPath !== 'string' ||
+      typeof value.fingerprint !== 'string' ||
+      !COMPOSITION_FINGERPRINT.test(value.fingerprint) ||
+      typeof value.sourcesHash !== 'string' ||
+      !COMPOSITION_FINGERPRINT.test(value.sourcesHash)
+    ) {
+      throw new Error(`Doom sync state at ${statePath} has an invalid server bundle record`);
+    }
+    const compilerManifests = stringRecord(value.compilerManifests, 'server compiler manifests', statePath);
+    if (
+      [value.descriptorPath, ...Object.values(compilerManifests)].some((entry) => !isInside(generatedDirectory, entry))
+    ) {
+      throw new Error(`Doom sync state at ${statePath} references server material outside ${generatedDirectory}`);
+    }
+    serverBundle = {
+      descriptorPath: value.descriptorPath,
+      fingerprint: value.fingerprint,
+      compilerManifests,
+      sourcesHash: value.sourcesHash,
+    };
+  }
   const bootstrap = typeof parsed.bootstrap === 'string' ? parsed.bootstrap : undefined;
   const generatedPaths = [bootstrap, ...Object.values(compiled ?? {}), ...Object.values(bundles ?? {})].filter(
     (entry): entry is string => entry !== undefined,
@@ -510,6 +556,7 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
     bundles,
     bootstrap,
     precompile,
+    ...(serverBundle ? { serverBundle } : {}),
     baseline: parsed.baseline as unknown as SyncBaseline,
   };
 }

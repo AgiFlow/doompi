@@ -4,7 +4,7 @@ import type { ILogReader } from '../../types/logReader';
 import type { IRmuxBackend } from '../../types/rmuxBackend';
 import type { IRunnerRegistry, RunnerRecord } from '../../types/runnerRegistry';
 import { inheritedSessionId, requiredSessionId } from '../../services/runs/session.ts';
-import { formatRunnerLine } from '../bash/responseEnvelope.ts';
+import { formatRunnerLine } from '../../services/bashResult.ts';
 
 const DEFAULT_LOG_LINES = 200;
 const FOLLOW_INTERVAL_MS = 250;
@@ -190,7 +190,7 @@ async function requiredRecord(
 }
 
 function formatRecord(record: RunnerRecord): string {
-  const active = formatRunnerLine(record);
+  const active = formatRunnerLine(record, Date.now());
   return `${record.id}  ${record.state}  ${record.backend}  ${active}`;
 }
 

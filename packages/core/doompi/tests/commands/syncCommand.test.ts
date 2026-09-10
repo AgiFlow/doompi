@@ -2,10 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { computeServerSourcesHash } from '../../src/adapters/syncState.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/adapters/piExtensionAlias';
 import { PI_DISPATCHER_VERSION } from '../../src/adapters/piExtensionDispatcher';
 import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/adapters/projectPiSettings';
+import * as projectPiSettings from '../../src/adapters/projectPiSettings';
+import * as serverBundleSync from '../../src/adapters/serverBundleSync.ts';
 import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
 import {
   publishSyncRegistration,
@@ -49,6 +53,7 @@ const mocks = vi.hoisted(() => ({
       bundles: {},
       bundleManifests: {},
       state: options.state,
+      compositions: [],
     }),
   ),
   ensureLayerPackages: vi.fn(async () => [] as string[]),
@@ -213,6 +218,15 @@ async function writeMatchingState(root: string): Promise<SyncState> {
     resolved: recordResolvedEntries(loadMajorModesConfig(root, homeDirectory), createLayerResolvers(root)),
     baseline: { themePath, themeName: DEFAULT_THEME_NAME },
   };
+  const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
+  const fingerprint = 'a'.repeat(64);
+  fs.writeFileSync(descriptorPath, JSON.stringify({ version: 1, generation, fingerprint, entries: [] }));
+  state.serverBundle = {
+    descriptorPath,
+    fingerprint,
+    compilerManifests: {},
+    sourcesHash: computeServerSourcesHash(state.resolved),
+  };
   const statePath = await writeSyncState(root, state, homeDirectory, path.join(generationRoot, 'state.json'));
   const packageRoot = fs.realpathSync(path.resolve(import.meta.dirname, '../..'));
   const manifestPath = path.join(packageRoot, 'package.json');
@@ -232,6 +246,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
       stateSha256: syncStateSha256(statePath),
       webDirectory: null,
       apiDirectory,
+      serverBundle: { path: descriptorPath, fingerprint, sha256: syncStateSha256(descriptorPath) },
       package: {
         root: packageRoot,
         version: manifest.version,
@@ -703,7 +718,64 @@ export async function bundleCockpitWeb({ outDir }) {
     expect(mocks.buildSyncedRuntime.mock.calls.length - buildsBefore).toBe(1);
   });
 
-  it('prunes generations the published one replaced', async () => {
+  it('preserves the previous registration if project settings preparation fails', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    await new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const location = resolveSyncLocation(root, homeFor(root));
+    const previous = fs.readFileSync(location.registrationPath);
+    const registration = readSyncRegistration(root, homeFor(root))!;
+    const settings = vi.spyOn(projectPiSettings, 'writeProjectPiSettings').mockImplementationOnce(() => {
+      throw new Error('settings write failed');
+    });
+    try {
+      await expect(new SyncCommand().execute(['sync', '--force'], environment, root, capture().output)).rejects.toThrow(
+        'settings write failed',
+      );
+      expect(fs.readFileSync(location.registrationPath)).toEqual(previous);
+      expect(fs.existsSync(registration.statePath)).toBe(true);
+      expect(fs.readdirSync(location.generationsDirectory)).toEqual([registration.generation]);
+    } finally {
+      settings.mockRestore();
+    }
+  });
+
+  it('publishes only the descriptor and binds it to registration and state', async () => {
+    const root = makeRepository();
+    await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output);
+    const registration = readSyncRegistration(root, homeFor(root))!;
+    const state = readSyncState(root, homeFor(root))!;
+    expect(fs.readdirSync(registration.apiDirectory)).toEqual([DOOM_SERVER_BUNDLE_FILE]);
+    expect(registration.serverBundle?.path).toBe(state.serverBundle?.descriptorPath);
+    expect(registration.serverBundle?.fingerprint).toBe(state.serverBundle?.fingerprint);
+    expect(registration.serverBundle?.sha256).toBe(syncStateSha256(state.serverBundle!.descriptorPath));
+    fs.appendFileSync(state.serverBundle!.descriptorPath, ' ');
+    expect(() => readSyncRegistration(root, homeFor(root))).toThrow(/server descriptor hash/);
+    expect(await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, capture().output)).toBe(1);
+  });
+
+  it('preserves the selected generation when server bundle compilation fails', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    await new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const location = resolveSyncLocation(root, homeFor(root));
+    const previous = fs.readFileSync(location.registrationPath);
+    const generations = fs.readdirSync(location.generationsDirectory);
+    const compile = vi
+      .spyOn(serverBundleSync, 'syncServerBundle')
+      .mockRejectedValueOnce(new Error('server compilation failed'));
+    try {
+      await expect(new SyncCommand().execute(['sync', '--force'], environment, root, capture().output)).rejects.toThrow(
+        'server compilation failed',
+      );
+      expect(fs.readFileSync(location.registrationPath)).toEqual(previous);
+      expect(fs.readdirSync(location.generationsDirectory)).toEqual(generations);
+    } finally {
+      compile.mockRestore();
+    }
+  });
+
+  it('retains earlier generations that may still serve pinned sessions', async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);
     const generations: string[] = [];
@@ -713,11 +785,11 @@ export async function bundleCockpitWeb({ outDir }) {
       if (registration) generations.push(registration.generationRoot);
     }
 
-    // The published generation and the one before it survive, because a hub
-    // that resolved its assets a moment ago may still be reading them.
-    expect(fs.existsSync(generations[2] ?? '')).toBe(true);
-    expect(fs.existsSync(generations[1] ?? '')).toBe(true);
-    expect(fs.existsSync(generations[0] ?? '')).toBe(false);
+    expect(generations).toHaveLength(3);
+    for (const generation of generations) {
+      expect(fs.existsSync(generation)).toBe(true);
+      expect(fs.existsSync(path.join(generation, 'state.json'))).toBe(true);
+    }
   });
 
   it('keeps concurrent repositories isolated across a repeated sync', async () => {

@@ -55,7 +55,7 @@ describe('doompi-help package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/headless', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);

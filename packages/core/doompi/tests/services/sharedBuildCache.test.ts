@@ -54,6 +54,30 @@ describe('shared build cache', () => {
     expect(fs.statSync(path.join(cacheDirectory, 'objects', manifest.key, 'manifest.json')).mode & 0o777).toBe(0o600);
   });
 
+  it('retains executable mode when a binary asset is cached and materialized', () => {
+    const directory = temporaryDirectory();
+    const cacheDirectory = path.join(directory, 'shared-cache');
+    const sourcePath = path.join(directory, 'binary-source');
+    fs.writeFileSync(sourcePath, Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+    const lookupKey = digest('executable');
+    const manifest = publishSharedBuild({
+      cacheDirectory,
+      lookupKey,
+      entry: 'entry.mjs',
+      inputs: [
+        { logicalPath: 'external/binary', sha256: contentSha256(fs.readFileSync(sourcePath)), token: '', sourcePath },
+      ],
+      artifacts: new Map<string, string | { contents: Uint8Array; mode: number }>([
+        ['entry.mjs', 'export default true;'],
+        ['vendor/bin/rmux', { contents: fs.readFileSync(sourcePath), mode: 0o755 }],
+      ]),
+    });
+    const found = findSharedBuild(cacheDirectory, lookupKey, (input) => input.sourcePath);
+    expect(found?.manifest.key).toBe(manifest.key);
+    materializeSharedBuild(found!, path.join(directory, 'dist'));
+    expect(fs.statSync(path.join(directory, 'dist', 'vendor/bin/rmux')).mode & 0o777).toBe(0o755);
+    expect(fs.statSync(path.join(cacheDirectory, 'objects', manifest.key, 'vendor/bin/rmux')).mode & 0o777).toBe(0o755);
+  });
   it('verifies external inputs from their canonical source path without assuming an installation layout', () => {
     const directory = temporaryDirectory();
     const cacheDirectory = path.join(directory, 'shared-cache');

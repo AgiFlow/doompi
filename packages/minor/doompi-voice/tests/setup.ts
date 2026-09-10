@@ -927,6 +927,7 @@ describe('voice session controller', () => {
     toolSurface = createDoomToolSurface({
       generation: 'voice-setup-test',
       allTools: () => pi.getAllTools().map((tool) => tool.name),
+      activeTools: () => activeTools,
       setActiveTools: (names) => {
         activeTools = [...names];
       },

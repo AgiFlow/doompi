@@ -84,8 +84,7 @@ For the selected package roots, the web bundler scans each `doompiWeb` manifest 
   webPlugins.server.json     built hub entry paths, not a public browser asset
   pluginRoots.json           roots used by the development server
   api/
-    hub.routes.mjs           generated hub API registry
-    session.routes.mjs       generated session API registry
+    server.bundle.json       authoritative server facet descriptor
 ```
 
 The current runtime serves the package-owned shell by default. The synchronized `web/` directory remains part of the generated contract and can be selected explicitly, but it is not automatically substituted for the shell. The session-specific output is `plugins/`, `webPlugins.server.json`, and the API directory.
@@ -132,7 +131,7 @@ A failed verification, download, or required cache write leaves the previous ver
 
 ### Package APIs
 
-`hub.routes.mjs` runs package APIs in the web hub. `session.routes.mjs` is loaded by `doompi-server`. A request with `hubSession=<session-id>` selects the hub API registry belonging to that session's web composition. A request with `session=<session-id>` is proxied to that session server. See [Package APIs](package-apis.md) for the routing contract.
+`server.bundle.json` names independently compiled, generation-pinned server facets. The hub and session host select eligible entries for their scope before importing them. A request with `hubSession=<session-id>` selects the owning repository, pinned generation and effective selection recorded for that session. A request with `session=<session-id>` is proxied to its session server. Explicitly admitted older generations retain read-only aggregate compatibility, with no fallback from a selected malformed descriptor. See [Package APIs](package-apis.md) for the routing contract.
 
 ## Local and remote serving
 

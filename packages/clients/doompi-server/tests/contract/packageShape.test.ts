@@ -61,7 +61,14 @@ describe('doompi-server package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './package.json']);
+    expect(exportsMap).toEqual({
+      '.': {
+        types: './dist/index.d.mts',
+        import: './dist/index.mjs',
+        require: './dist/index.cjs',
+      },
+      './package.json': './package.json',
+    });
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi).toBeUndefined();

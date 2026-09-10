@@ -51,11 +51,9 @@ describe('the API surface', () => {
     mounted.close();
   });
 
-  it('serves the base path the manifest mounts it at', () => {
-    // Vibe-Lint checks the manifest statically and cannot read the value, so
-    // this is the only place the two are compared.
+  it('declares a hub facet for the API-owned base path', () => {
     const report = assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'hub' });
 
-    expect(report).toMatchObject({ basePath: 'workflow', dist: './dist/hubApi.mjs' });
+    expect(report).toMatchObject({ basePath: 'workflow', dist: './dist/extensions/server.mjs' });
   });
 });

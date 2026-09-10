@@ -18,7 +18,15 @@ const PROMPTS_ROOT = 'src/prompts';
 const SKILL_EXPORT = `./${RECOVERY_SKILL}`;
 // The web plugin is not an export: the cockpit's bundler compiles it from the
 // source the doompiWeb manifest names; './web-hub' is the built hub channel entry.
-const EXPORT_SUBPATHS = ['.', './extensions/pi', './package.json', './web-hub', SKILL_EXPORT];
+const EXPORT_SUBPATHS = [
+  '.',
+  './extensions/pi',
+  './extensions/server',
+  './extensions/headless',
+  './package.json',
+  './web-hub',
+  SKILL_EXPORT,
+];
 const STANDARD_ENTRY = './dist/extensions/pi.mjs';
 
 function objectValue(value: unknown): JsonRecord {
@@ -65,6 +73,7 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
       expect.objectContaining({
         '.': expect.anything(),
         './extensions/pi': expect.anything(),
+        './extensions/server': expect.anything(),
         './package.json': expect.anything(),
       }),
     );
@@ -86,6 +95,16 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
 
     const pi = objectValue(PACKAGE_MANIFEST.pi);
     expect(pi.extensions).toEqual([STANDARD_ENTRY]);
+    expect(PACKAGE_MANIFEST.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['hub', 'session'],
+    });
+    expect(exports['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
     expect(exports).not.toHaveProperty('./extensions/dispatcher');
     expect(readFileSync(resolve(PACKAGE_ROOT, 'tsdown.config.ts'), 'utf8')).not.toContain('extensions/dispatcher');
     expect(readFileSync(resolve(PACKAGE_ROOT, 'src/exports/index.ts'), 'utf8')).not.toMatch(

@@ -1381,10 +1381,21 @@ function hasTool(pi: ExtensionAPI, name: string): boolean {
 // Runtime
 // ---------------------------------------------------------------------------
 
+export interface NativeTeamTransport {
+  sendMessage: ExtensionAPI['sendMessage'];
+  sendUserMessage: ExtensionAPI['sendUserMessage'];
+}
+
 export interface NativeTeamRuntime {
   bindMainSession(rootSessionId: string): TeamMemberContext;
   bindChildFromEnvironment(): TeamMemberContext | undefined;
   current(): TeamMemberContext | undefined;
+  execute(
+    operationId: string,
+    rawParams: unknown,
+    signal?: AbortSignal,
+    onUpdate?: (result: AgentToolResult<Record<string, unknown>>) => void,
+  ): Promise<AgentToolResult<Record<string, unknown>>>;
   /** Messages given up on after `MAX_DELIVERY_ATTEMPTS`, most recent last. */
   undeliverable(): readonly UndeliverableTeamMessage[];
   dispose(): void;
@@ -1415,16 +1426,18 @@ class TeamChannelRuntime implements NativeTeamRuntime {
   private outboundSeq = 0;
 
   constructor(
-    private readonly pi: ExtensionAPI,
+    private readonly transport: NativeTeamTransport,
     private readonly options: TeamRuntimeOptions,
+    registerTool = true,
   ) {
-    if (hasTool(pi, NATIVE_TEAM_TOOL_NAME)) {
+    if (!registerTool) return;
+    if (hasTool(transport as ExtensionAPI, NATIVE_TEAM_TOOL_NAME)) {
       throw new Error(
         `[tool_conflict] A foreign '${NATIVE_TEAM_TOOL_NAME}' tool is already registered. ` +
           'Recovery: disable the competing extension and reload Doom Team.',
       );
     }
-    pi.registerTool(this.buildTool());
+    (transport as ExtensionAPI).registerTool(this.buildTool());
   }
 
   current(): TeamMemberContext | undefined {
@@ -1433,6 +1446,15 @@ class TeamChannelRuntime implements NativeTeamRuntime {
 
   undeliverable(): readonly UndeliverableTeamMessage[] {
     return this.undeliverableMessages;
+  }
+
+  execute(
+    operationId: string,
+    rawParams: unknown,
+    signal?: AbortSignal,
+    onUpdate?: (result: AgentToolResult<Record<string, unknown>>) => void,
+  ): Promise<AgentToolResult<Record<string, unknown>>> {
+    return this.buildTool().execute(operationId, rawParams, signal, onUpdate, undefined as never);
   }
 
   bindMainSession(rootSessionId: string): TeamMemberContext {
@@ -1537,10 +1559,10 @@ class TeamChannelRuntime implements NativeTeamRuntime {
     if (context.role === 'subagent') {
       // A subagent is mid-task, so the message is steered into the running turn
       // rather than starting a new one.
-      this.pi.sendUserMessage(content, { deliverAs: 'steer' });
+      this.transport.sendUserMessage(content, { deliverAs: 'steer' });
       return;
     }
-    this.pi.sendMessage(
+    this.transport.sendMessage(
       {
         customType: TEAM_MESSAGE_CUSTOM_TYPE,
         content,
@@ -1581,7 +1603,7 @@ class TeamChannelRuntime implements NativeTeamRuntime {
     });
     while (this.undeliverableMessages.length > UNDELIVERABLE_HISTORY_LIMIT) this.undeliverableMessages.shift();
     try {
-      this.pi.sendMessage(
+      this.transport.sendMessage(
         {
           customType: TEAM_UNDELIVERABLE_CUSTOM_TYPE,
           content: `Native team message ${envelope.id} from ${envelope.fromMemberId} could not be delivered after ${attempts} attempts: ${record.reason}`,
@@ -1595,7 +1617,7 @@ class TeamChannelRuntime implements NativeTeamRuntime {
       // The notice travels over the transport that just refused the message, so
       // it can fail for the same reason. `undeliverable()` is then the only
       // record, and rethrowing here would abort the poll and stall every other
-      // sender's messages behind this one.
+      // sender's messages behind it.
       return false;
     }
   }
@@ -1861,8 +1883,10 @@ class TeamChannelRuntime implements NativeTeamRuntime {
 }
 
 export type NativeTeamChannelContract = {
-  /** Create (or reuse) the runtime bound to one host instance. */
+  /** Create (or reuse) the runtime bound to one Pi host instance. */
   createRuntime(pi: ExtensionAPI): NativeTeamRuntime;
+  /** Create a runtime against a real headless message transport. */
+  createHeadlessRuntime(transport: NativeTeamTransport): NativeTeamRuntime;
   /** Bind this process as a team member when its environment says it is one. */
   registerClient(pi: ExtensionAPI): void;
 };
@@ -1907,6 +1931,22 @@ export class NativeTeamChannelService implements NativeTeamChannelContract {
       this.runtimes.get(pi)?.dispose();
     });
     return runtime;
+  }
+
+  createHeadlessRuntime(transport: NativeTeamTransport): NativeTeamRuntime {
+    return new TeamChannelRuntime(
+      transport,
+      {
+        pollIntervalMs: this.pollIntervalMs,
+        replyPollIntervalMs: this.replyPollIntervalMs,
+        heartbeatIntervalMs: this.heartbeatIntervalMs,
+        gcIntervalMs: this.gcIntervalMs,
+        askTimeoutMs: this.askTimeoutMs,
+        maxDeliveryAttempts: this.maxDeliveryAttempts,
+        now: () => this.now(),
+      },
+      false,
+    );
   }
 
   registerClient(pi: ExtensionAPI): void {

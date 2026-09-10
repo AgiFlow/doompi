@@ -52,6 +52,16 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/headless": {
+      "types": "./dist/extensions/headless.d.mts",
+      "import": "./dist/extensions/headless.mjs",
+      "require": "./dist/extensions/headless.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./projection": {
       "types": "./dist/projection.d.mts",
       "import": "./dist/projection.mjs",
@@ -112,12 +122,13 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "mcp",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "hub",
+      "session"
+    ]
   },
   "doompiWeb": {
     "pluginId": "mcp",

@@ -21,7 +21,7 @@ export default defineConfig({
         'doompi-web/dist/bin/serve': source('packages/clients/doompi-web/src/bin/serve.ts'),
         'doompi-web/dist/index': source('packages/clients/doompi-web/src/exports/index.ts'),
         'doompi-web/dist/bundler': source('packages/clients/doompi-web/src/exports/bundler.ts'),
-        'doompi-server/dist/bin/serve': source('packages/clients/doompi-server/src/bin/serve.ts'),
+        'doompi/dist/bin/serve': source('packages/core/doompi/src/bin/serve.ts'),
         'doompi/dist/bin/cli': source('packages/core/doompi/src/bin/cli.ts'),
         'doompi/dist/bin/doomRunner': source('packages/core/doompi/src/bin/doomRunner.ts'),
         'doompi/dist/bin/dpi': source('packages/core/doompi/src/bin/dpi.ts'),

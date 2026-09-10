@@ -26,7 +26,7 @@ const hub = { entry: './src/exports/hubApi.ts', dist: './dist/hubApi.mjs' };
 const declare = (block: Record<string, unknown>, dir = '/a'): ReturnType<typeof declaredApisOf> =>
   declaredApisOf(dir, { name: 'demo', doompiApi: { basePath: 'demo', ...block } });
 
-describe('the doompiApi manifest vocabulary', () => {
+describe('legacy doompiApi vocabulary for explicitly selected old generations', () => {
   it('is absent for a package that declares nothing', () => {
     expect(declaredApisOf('/a', { name: 'demo' })).toEqual([]);
   });
@@ -118,6 +118,28 @@ describe('the doompiApi manifest vocabulary', () => {
   });
 });
 
+describe('owned HTTP package authoring', () => {
+  it('uses server facets without separate legacy API manifest declarations', () => {
+    const repositoryRoot = new URL('../../../../', import.meta.url);
+    const packages = [
+      'packages/core/doompi',
+      ...['file-edit', 'log', 'mcp', 'prompt', 'runner'].map((name) => `packages/default/doompi-${name}`),
+      ...['author', 'computer-use', 'plan', 'voice', 'workflow'].map((name) => `packages/minor/doompi-${name}`),
+      'layers/source-control/doompi-git',
+      'layers/team/doompi-team',
+    ];
+    for (const directory of packages) {
+      const manifest = JSON.parse(fs.readFileSync(new URL(`${directory}/package.json`, repositoryRoot), 'utf8'));
+      expect(manifest.doompiApi, directory).toBeUndefined();
+      expect(manifest.doompiServer, directory).toMatchObject({
+        entry: './src/exports/extensions/server.ts',
+        dist: './dist/extensions/server.mjs',
+      });
+      expect(declaredApisOf(directory, manifest)).toEqual([]);
+    }
+  });
+});
+
 describe('narrowing a module export to an API', () => {
   it('accepts only a non-empty base path paired with a start function', () => {
     expect(isDoomApi({ basePath: 'demo', start: () => undefined })).toBe(true);
@@ -180,7 +202,7 @@ function generated(source: string): { homeDir: string; apiDirectory: string } {
 const validApi = (basePath: string): string =>
   `{ basePath: '${basePath}', start: () => ({ fetch: () => new Response('ok'), close() {} }) }`;
 
-describe('loading the generated route module', () => {
+describe('reading explicitly selected legacy route modules', () => {
   it('names the module a host of each scope imports', () => {
     expect(packageApiModulePath('session', {}, '/home/x')).toBe('/home/x/.doompi/api/current/session.routes.mjs');
     expect(packageApiModulePath('hub', {}, '/home/x')).toBe('/home/x/.doompi/api/current/hub.routes.mjs');

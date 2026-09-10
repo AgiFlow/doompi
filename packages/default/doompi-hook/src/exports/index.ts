@@ -1,3 +1,4 @@
+export { hookHeadlessFacet } from '../adapters/headless/facet.ts';
 export { createHookDocumentReader, type HookDocumentReaderOptions } from '../adapters/hookDocuments.ts';
 export { type BashHookRunnerOptions, createBashHookRunner } from '../adapters/hookRunner.ts';
 export { type HookExtensionOptions, hookExtension } from '../adapters/pi/extension.ts';

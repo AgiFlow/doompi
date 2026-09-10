@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { DOOM_SERVER_BUNDLE_FILE, parseDoomServerBundle } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { DOOM_PACKAGE_NAME } from './doomPackage.ts';
 import { isRecord, writeFileAtomic } from './serialization/json.ts';
 import {
@@ -24,6 +25,12 @@ export interface SyncPackageRegistration {
   entry: string;
 }
 
+export interface SyncServerBundleRegistration {
+  path: string;
+  sha256: string;
+  fingerprint: string;
+}
+
 export interface SyncRegistration {
   version: number;
   root: string;
@@ -34,6 +41,8 @@ export interface SyncRegistration {
   stateSha256: string;
   webDirectory: string | null;
   apiDirectory: string;
+  /** Missing only for explicitly supported pre-cutover generations. */
+  serverBundle?: SyncServerBundleRegistration;
   package: SyncPackageRegistration;
 }
 
@@ -141,6 +150,40 @@ export function validateSyncRegistration(registration: SyncRegistration, locatio
   if (!SHA256.test(registration.stateSha256) || sha256File(registration.statePath) !== registration.stateSha256) {
     throw new Error(`Doom sync registration at ${recordPath} has a mismatched state hash`);
   }
+  let state: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(registration.statePath, 'utf8'));
+    if (isRecord(parsed)) state = parsed;
+  } catch (error) {
+    // Legacy state validation remains the state reader's responsibility. New
+    // descriptor generations require their state identity during admission.
+    if (registration.serverBundle !== undefined) throw error;
+  }
+  if (registration.serverBundle !== undefined) {
+    const bundle = registration.serverBundle;
+    if (
+      !isInside(registration.generationRoot, bundle.path) ||
+      canonicalPath(bundle.path) !== canonicalPath(path.join(registration.apiDirectory, DOOM_SERVER_BUNDLE_FILE))
+    ) {
+      throw new Error(`Doom sync registration at ${recordPath} has an invalid server descriptor path`);
+    }
+    if (!SHA256.test(bundle.sha256) || sha256File(bundle.path) !== bundle.sha256) {
+      throw new Error(`Doom sync registration at ${recordPath} has a mismatched server descriptor hash`);
+    }
+    const descriptor = parseDoomServerBundle(JSON.parse(fs.readFileSync(bundle.path, 'utf8')));
+    const recorded = state.serverBundle;
+    if (
+      descriptor.generation !== registration.generation ||
+      descriptor.fingerprint !== bundle.fingerprint ||
+      !isRecord(recorded) ||
+      recorded.fingerprint !== bundle.fingerprint ||
+      recorded.descriptorPath !== bundle.path
+    ) {
+      throw new Error(`Doom sync registration at ${recordPath} has mismatched server bundle identity`);
+    }
+  } else if (state.serverBundle !== undefined) {
+    throw new Error(`Doom sync registration at ${recordPath} is missing its server bundle record`);
+  }
   validatePackage(registration.package, recordPath);
   return registration;
 }
@@ -157,7 +200,17 @@ function parseRegistration(value: unknown, recordPath: string): SyncRegistration
     stateSha256: requiredString(value.stateSha256, 'state hash', recordPath),
     webDirectory: value.webDirectory === null ? null : requiredString(value.webDirectory, 'web directory', recordPath),
     apiDirectory: requiredString(value.apiDirectory, 'API directory', recordPath),
+    ...(value.serverBundle === undefined ? {} : { serverBundle: serverBundleFrom(value.serverBundle, recordPath) }),
     package: packageFrom(value.package, recordPath),
+  };
+}
+
+function serverBundleFrom(value: unknown, recordPath: string): SyncServerBundleRegistration {
+  if (!isRecord(value)) throw new Error(`Doom sync registration at ${recordPath} has an invalid server bundle record`);
+  return {
+    path: requiredString(value.path, 'server descriptor path', recordPath),
+    sha256: requiredString(value.sha256, 'server descriptor hash', recordPath),
+    fingerprint: requiredString(value.fingerprint, 'server descriptor fingerprint', recordPath),
   };
 }
 

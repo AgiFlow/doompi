@@ -100,7 +100,7 @@ boilerplate:
 
       Pi packages use version 0.85.1 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
 
-      An HTTP API and a cockpit (web) presence are not generated here. Both halves live under src and leave through src/exports: add the API with scaffold-doom-package-api (src/types, src/adapters, src/exports/sessionApi.ts) and the cockpit with scaffold-doom-web-plugin, then one scaffold-doom-web-tool-card per Pi tool the package registers. The cockpit's browser code sits in src/web, published through src/exports/webClient.ts, and is governed by the web-plugin-* rules on top of the folder vocabulary.
+      An HTTP API and a cockpit (web) presence are not generated here. Both halves live under src and leave through src/exports: add the API with scaffold-doom-package-api (src/types, src/adapters, src/exports/sessionApi.ts), register its DoomApi through an existing or newly scaffolded DoomServerFacet, and add the cockpit with scaffold-doom-web-plugin, then one scaffold-doom-web-tool-card per Pi tool the package registers. The cockpit's browser code sits in src/web, published through src/exports/webClient.ts, and is governed by the web-plugin-* rules on top of the folder vocabulary.
 features:
   - name: scaffold-doom-prompt
     description: Add one package-owned DoomPi Help prompt under src/prompts for either extension authoring or user guidance.
@@ -267,7 +267,7 @@ features:
       The facet MUST be a Cordis object plugin, `{ inject: [...], apply(context) {} }`, never a bare function calling context.inject inside itself. Only the object form declares its own inject, so the host mounts one fiber and `fiber.await()` settles once apply has run. A nested inject mounts a child fiber the host holds no handle on, and the host decides whether to open a listener from a mount table it must know is complete. The doom-server-facet-shape lint rule rejects the other forms.
 
       Complete the package integration after generation:
-      - Add the manifest declaration. `exports["./extensions/server"]` pointing at ./dist/extensions/server.mjs with types, import and require conditions, and a top-level `doompiServer` block naming entry, dist and scopes. Sync reads that block; a package without it contributes no facet.
+      - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and a `scopes` array containing only the supported `session` and/or `hub` hosts. Sync reads that block; a package without it contributes no facet.
       - Keep the DoomApi in its adapter. The facet reads the host, registers the api and returns the disposer; it never builds routes or holds state.
       - Do nothing else in apply. A facet that opens a socket, reads a file or starts a timer at install has the same problem an eager Pi extension has, and a server has no reload to recover from it.
       - A base path already claimed by another facet is refused with a notice, so pick one that is globally unique across loaded packages.
@@ -419,21 +419,21 @@ features:
       - src/exports/sessionApi.ts
       - tests/unit/topicApi.test.ts->tests/unit/{{ topic | camelCase }}Api.test.ts
     instruction: |-
-      Generate the package's HTTP API: src/types/{{ topic | camelCase }}Api.ts with the base path, the route paths, and the view types both halves share; src/adapters/{{ topic | camelCase }}Api.ts with the Hono app and the `api` export; src/exports/sessionApi.ts as the built entry a host imports.
+      Generate the package's HTTP API: src/types/{{ topic | camelCase }}Api.ts with the base path, the route paths, and the view types both halves share; src/adapters/{{ topic | camelCase }}Api.ts with the Hono app and the `api` export; src/exports/sessionApi.ts as a useful barrel for the API helpers and `api` value. Keep this source barrel, but do not generate separate session or hub aggregate modules.
 
       The rules: a host mounts the API under /api/plugin/{{ pluginId }} and strips that prefix, so routes are declared relative and nothing repeats the mount. The scope decides the host: a session-scoped API is served by that session's own doompi-server and its context names the session; a hub-scoped one is served by the cockpit hub and names none. Keep the adapter free of ambient filesystem, clock, and process access the way every other adapter here is: take those as options. Route paths and query building live in src/types so the browser half can import them; a page never appends its own query to a URL this module built.
 
       Complete the package integration after generation:
-      - Add the doompiApi block to package.json: basePath "{{ pluginId }}", and the scopes this package serves. Use session { entry "./src/exports/sessionApi.ts", dist "./dist/sessionApi.mjs" } for per-session data, hub { entry "./src/exports/hubApi.ts", dist "./dist/hubApi.mjs" } for machine-wide data, or both. Only declare a scope the package actually serves.
-      - Add a "./session-api" export pointing at dist/sessionApi.d.mts, dist/sessionApi.mjs, dist/sessionApi.cjs (tsdown builds it from src/exports), and the matching subpath for any hub entry.
+      - Register `api` through an existing or newly scaffolded DoomServerFacet. Its `apiModule` points at `../{{ topic | camelCase }}Api.ts` relative to `src/adapters/server/`, and its host-scope handling must match the scopes this package serves.
+      - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and `scopes` set to `['session']`, `['hub']`, or `['session', 'hub']` as supported. Do not add the legacy `doompiApi` field or separate per-scope manifest entries.
+      - Keep `src/exports/sessionApi.ts` as the useful API barrel. Do not add separate scope aggregate modules or exports solely for session and hub.
       - Add hono and @agimon-ai/doompi-extension-contracts (workspace:*) to dependencies.
-      - `doompi sync` generates the route modules a host imports, so a package that changed its API needs a build and a sync before a host sees it; a running host imports the built entry, never the source.
-      - Run pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/types, src/adapters, src/exports, and package.json.
+      - `doompi sync` discovers the built server facet named by `doompiServer`, so build and sync before a host sees it; a running host imports the built facet, never the source.
+      - Run pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/types, src/adapters, src/adapters/server, src/exports, src/exports/extensions, and package.json.
     patterns:
       - src/types/*Api.ts
       - src/adapters/*Api.ts
       - src/exports/sessionApi.ts
-      - src/exports/hubApi.ts
   - name: scaffold-doom-web-plugin
     description: Add this package's cockpit (web) plugin under web/ with its per-session store, hub data channel, shared view types, and store test.
     variables_schema:

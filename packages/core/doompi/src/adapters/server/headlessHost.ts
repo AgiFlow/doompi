@@ -1,0 +1,351 @@
+import { Context, Service } from '@deepseek-ai/cordis';
+import { createDoomKernel } from '@agimon-ai/doompi-kernel';
+import type { TSchema } from 'typebox';
+import {
+  DOOM_HEADLESS_HOST_SERVICE,
+  readDoomHeadlessOwner,
+  type DoomHeadlessActivity,
+  type DoomHeadlessCommand,
+  type DoomHeadlessEventName,
+  type DoomHeadlessExecutionContext,
+  type DoomHeadlessHook,
+  type DoomHeadlessHostService,
+  type DoomHeadlessRegistration,
+  type DoomHeadlessResource,
+  type DoomHeadlessSelection,
+  type DoomHeadlessTool,
+  type DoomHeadlessCondition,
+  type DoomHeadlessToolRestriction,
+  type DoomHeadlessMinorMode,
+} from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type {
+  HeadlessHostOptions,
+  HeadlessSelectionStatus,
+  ResolvedHeadlessResource,
+} from '../../types/server/headlessHost';
+import {
+  DOOM_MINOR_MODE_CATALOG_SERVICE,
+  type MinorModeCatalogService,
+  type MinorModeOwnerHandle,
+} from '@agimon-ai/doompi-extension-contracts/mode';
+import { createMinorModeCatalogHost } from '../../services/modeCatalog';
+
+type Owned<T> = { source: string; value: T };
+type StopActivity = () => void | Promise<void>;
+
+/** Retains facets and their state; only kernel-computed active contributions change. */
+export class HeadlessHost extends Service<DoomHeadlessHostService> implements DoomHeadlessHostService {
+  private readonly kernel = createDoomKernel();
+  readonly catalog: MinorModeCatalogService;
+  private restrictions: readonly DoomHeadlessToolRestriction[] = [];
+  private readonly options: HeadlessHostOptions;
+  private applied: DoomHeadlessSelection;
+  private requested: DoomHeadlessSelection;
+  private applying: DoomHeadlessSelection;
+  private requestedRevision = 0;
+  private appliedRevision = 0;
+  private ready = false;
+  private disposed = false;
+  private failure: unknown;
+  private tail: Promise<void> = Promise.resolve();
+  private activeSources = new Set<string>();
+  private availableSources = new Set<string>();
+  private tools = new Map<string, Owned<DoomHeadlessTool>>();
+  private resources: readonly Owned<DoomHeadlessResource>[] = [];
+  private commands = new Map<string, Owned<DoomHeadlessCommand>>();
+  private hooks: readonly Owned<DoomHeadlessHook>[] = [];
+  private readonly activities = new Map<Owned<DoomHeadlessActivity>, StopActivity>();
+
+  constructor(context: Context, options: HeadlessHostOptions) {
+    super(context, DOOM_HEADLESS_HOST_SERVICE);
+    this.options = options;
+    this.applied = structuredClone(options.selection);
+    this.requested = this.applied;
+    this.applying = this.applied;
+    this.catalog = createMinorModeCatalogHost({
+      sessionKind: 'headless',
+      context: { sessionManager: { getSessionId: () => this.context.sessionId } },
+      routeInvocation: async (_request, _source, invoke) => {
+        this.assertReady();
+        return invoke();
+      },
+    });
+    context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, this.catalog);
+    context.effect(() => () => this.close(), 'headless host lifetime');
+    this.kernel.defineSlot<Owned<DoomHeadlessToolRestriction>>('restrictions', (entries) => {
+      this.restrictions = entries
+        .map((entry) => entry.value)
+        .filter((restriction) => this.applying.minorModes.includes(restriction.minorMode));
+    });
+    this.kernel.defineSlot<Owned<DoomHeadlessTool>>('tools', async (entries) => {
+      const allowed = this.options.allowedTools?.(this.applying);
+      const next = new Map<string, Owned<DoomHeadlessTool>>();
+      for (const entry of this.selected(entries)) {
+        if (allowed !== undefined && !allowed.includes(entry.value.name)) continue;
+        if (this.restrictions.some((restriction) => !restriction.allowedTools.includes(entry.value.name))) continue;
+        if (!next.has(entry.value.name)) next.set(entry.value.name, entry);
+      }
+      const tools = [...next.values()].map((entry): DoomHeadlessTool => ({
+        ...entry.value,
+        execute: async (id, parameters, signal, onUpdate) => {
+          this.assertReady();
+          if (this.tools.get(entry.value.name) !== entry || !this.activeSources.has(entry.source)) {
+            throw new Error(`Tool '${entry.value.name}' is no longer active`);
+          }
+          return entry.value.execute(id, parameters, signal, onUpdate, this.context);
+        },
+      }));
+      await this.options.applyTools(tools);
+      this.tools = next;
+    });
+    this.kernel.defineSlot<Owned<DoomHeadlessResource>>('resources', async (entries) => {
+      this.resources = this.selected(entries);
+      await this.options.applyResources(await this.resolveResources(this.applying));
+    });
+    this.kernel.defineSlot<Owned<DoomHeadlessCommand>>('commands', (entries) => {
+      const next = new Map<string, Owned<DoomHeadlessCommand>>();
+      for (const entry of this.selected(entries)) if (!next.has(entry.value.name)) next.set(entry.value.name, entry);
+      this.commands = next;
+    });
+    this.kernel.defineSlot<Owned<DoomHeadlessHook>>('hooks', (entries) => {
+      this.hooks = this.selected(entries);
+    });
+    this.kernel.defineSlot<Owned<DoomHeadlessActivity>>('activities', async (entries) => {
+      const desired = new Set(this.selected(entries));
+      for (const [entry, stop] of [...this.activities].reverse()) {
+        if (desired.has(entry)) continue;
+        await stop();
+        this.activities.delete(entry);
+      }
+      for (const entry of desired) {
+        if (this.activities.has(entry)) continue;
+        try {
+          const stop = await entry.value.start(this.options.context(this.applying));
+          this.activities.set(entry, stop);
+        } catch (error) {
+          if (this.options.candidates.some((candidate) => candidate.packageName === entry.source && candidate.required))
+            throw error;
+          this.options.onError?.(error);
+        }
+      }
+    });
+  }
+
+  get context(): DoomHeadlessExecutionContext {
+    return this.options.context(this.applied);
+  }
+
+  get status(): HeadlessSelectionStatus {
+    return {
+      requestedRevision: this.requestedRevision,
+      appliedRevision: this.appliedRevision,
+      ready: this.ready,
+      ...(this.failure === undefined
+        ? {}
+        : {
+            error:
+              this.failure instanceof Error
+                ? this.failure.message
+                : typeof this.failure === 'string'
+                  ? this.failure
+                  : 'Headless selection failed',
+          }),
+    };
+  }
+
+  setAvailableSources(sources: readonly string[]): void {
+    this.availableSources = new Set(sources);
+  }
+
+  private selected<T extends { when?: DoomHeadlessCondition }>(entries: readonly Owned<T>[]): readonly Owned<T>[] {
+    return entries.filter(
+      ({ value }) =>
+        (value.when?.minorMode === undefined || this.applying.minorModes.includes(value.when.minorMode)) &&
+        (value.when?.domain === undefined || this.applying.domains.includes(value.when.domain)),
+    );
+  }
+
+  registerMinorMode(mode: DoomHeadlessMinorMode): MinorModeOwnerHandle {
+    const owner = readDoomHeadlessOwner(this.ctx);
+    if (!owner) throw new Error('A minor mode must have descriptor-owned package identity');
+    const handle = this.catalog.registerOwner({
+      ...mode,
+      handleAction: (id, args, execution) => {
+        this.assertReady();
+        if (!this.activeSources.has(owner.packageName))
+          throw new Error(`Minor-mode owner '${owner.packageName}' is inactive`);
+        return mode.handleAction(id, args, { ...execution, context: this.context });
+      },
+    });
+    this.ctx.effect(() => () => handle.dispose(), 'headless minor-mode owner');
+    return handle;
+  }
+
+  registerToolRestriction(restriction: DoomHeadlessToolRestriction): DoomHeadlessRegistration {
+    return this.add('restrictions', restriction);
+  }
+
+  private eligible(entry: DoomServerBundleEntry, selection: DoomHeadlessSelection): boolean {
+    return (
+      entry.scopes.includes('session') &&
+      entry.owners.some(
+        (owner) => owner.majorMode === selection.majorMode && selection.activeLayers.includes(owner.layer),
+      )
+    );
+  }
+
+  async select(patch: Partial<DoomHeadlessSelection>): Promise<void> {
+    if (this.disposed) throw new Error('The headless host is disposed');
+    const selection = structuredClone({ ...this.requested, ...patch });
+    this.requested = selection;
+    const revision = ++this.requestedRevision;
+    this.ready = false;
+    const apply = async (): Promise<void> => {
+      if (this.disposed) throw new Error('The headless host is disposed');
+      await this.options.validateSelection?.(selection);
+      const eligible = this.options.candidates.filter((entry) => this.eligible(entry, selection));
+      const missing = eligible.find((entry) => entry.required && !this.availableSources.has(entry.packageName));
+      if (missing) throw new Error(`Required headless package '${missing.packageName}' is unavailable`);
+      // The kernel's layer key here is the precomputed package eligibility key.
+      // Minor tool restrictions run in the tools sink only after this owner gate.
+      this.applying = selection;
+      await this.kernel.setActiveLayers(eligible.map((entry) => entry.packageName));
+      await this.kernel.refresh();
+      if (this.disposed) throw new Error('The headless host is disposed');
+      await this.options.onApplied?.(selection, revision);
+      this.activeSources = new Set(eligible.map((entry) => entry.packageName));
+      this.applied = selection;
+      this.appliedRevision = revision;
+      this.failure = undefined;
+      this.ready = revision === this.requestedRevision;
+    };
+    const result = this.tail.catch(() => undefined).then(apply);
+    this.tail = result.catch((error: unknown) => {
+      this.failure = error;
+      this.ready = false;
+      this.options.onError?.(error);
+    });
+    return result;
+  }
+
+  private assertReady(): void {
+    if (this.disposed || !this.ready)
+      throw new Error('Headless dispatch is blocked until selection is coherently applied');
+  }
+
+  private add<T>(slot: string, value: T): DoomHeadlessRegistration {
+    const owner = readDoomHeadlessOwner(this.ctx);
+    if (!owner) throw new Error('A headless contribution must have descriptor-owned package identity');
+    this.ready = false;
+    const registration = this.kernel.contribute(slot, {
+      source: owner.packageName,
+      layer: owner.packageName,
+      value: { source: owner.packageName, value } satisfies Owned<T>,
+    });
+    let disposed = false;
+    const dispose = (): void => {
+      if (disposed) return;
+      disposed = true;
+      this.ready = false;
+      registration.dispose();
+      if (!this.disposed) void this.select({}).catch(() => undefined);
+    };
+    this.ctx.effect(() => dispose, `headless ${slot} contribution`);
+    // Initial registration is reconciled once the caller has installed all facets.
+    if (this.appliedRevision > 0) void this.select({}).catch(() => undefined);
+    return { dispose };
+  }
+
+  registerTool<TParameters extends TSchema>(tool: DoomHeadlessTool<TParameters>): DoomHeadlessRegistration {
+    return this.add('tools', tool);
+  }
+  registerResource(resource: DoomHeadlessResource): DoomHeadlessRegistration {
+    return this.add('resources', resource);
+  }
+  registerCommand(command: DoomHeadlessCommand): DoomHeadlessRegistration {
+    return this.add('commands', command);
+  }
+  registerHook(hook: DoomHeadlessHook): DoomHeadlessRegistration {
+    return this.add('hooks', hook);
+  }
+  registerActivity(activity: DoomHeadlessActivity): DoomHeadlessRegistration {
+    return this.add('activities', activity);
+  }
+
+  async dispatchCommand(name: string, args: string): Promise<void> {
+    this.assertReady();
+    const command = this.commands.get(name);
+    if (!command) throw new Error(`Command '${name}' is inactive or unknown`);
+    await command.value.execute(args, this.context);
+  }
+
+  async dispatchHook(event: DoomHeadlessEventName, payload: Readonly<Record<string, unknown>>): Promise<unknown[]> {
+    this.assertReady();
+    const results: unknown[] = [];
+    const revision = this.appliedRevision;
+    let current = payload;
+    for (const hook of this.hooks.filter((entry) => entry.value.event === event)) {
+      this.assertReady();
+      if (!this.hooks.includes(hook)) continue;
+      const result = await hook.value.handle(current, this.context);
+      results.push(result);
+      if (
+        event === 'before_agent_start' &&
+        result &&
+        typeof result === 'object' &&
+        'systemPrompt' in result &&
+        typeof result.systemPrompt === 'string'
+      ) {
+        current = { ...current, systemPrompt: result.systemPrompt };
+      }
+    }
+    if (event === 'before_agent_start') {
+      this.assertReady();
+      if (revision !== this.appliedRevision) throw new Error('Selection changed while preparing the system prompt');
+    }
+    return results;
+  }
+
+  private async resolveResources(selection: DoomHeadlessSelection): Promise<readonly ResolvedHeadlessResource[]> {
+    const context = this.options.context(selection);
+    const result: ResolvedHeadlessResource[] = [];
+    for (const resource of this.resources) {
+      result.push({
+        source: resource.source,
+        name: resource.value.name,
+        kind: resource.value.kind,
+        text: await resource.value.read(context),
+      });
+    }
+    return result;
+  }
+
+  async readResources(): Promise<readonly ResolvedHeadlessResource[]> {
+    this.assertReady();
+    const revision = this.appliedRevision;
+    const result = await this.resolveResources(this.applied);
+    this.assertReady();
+    if (revision !== this.appliedRevision) throw new Error('Selection changed while reading resources');
+    return result;
+  }
+
+  async close(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.ready = false;
+    this.catalog.dispose();
+    await this.tail.catch(() => undefined);
+    const failures: unknown[] = [];
+    for (const stop of [...this.activities.values()].reverse()) {
+      try {
+        await stop();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    this.activities.clear();
+    this.kernel.dispose();
+    if (failures.length) throw new AggregateError(failures, 'Headless activities failed to stop');
+  }
+}

@@ -42,7 +42,7 @@ describe('the runtime handed to the cockpit', () => {
 
   it('points dynamic commands and native tools at the runtime artifact', () => {
     const environment = hubEnvironment({}, '/runtime/doompi-web/dist/bin/serve.mjs');
-    expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi-server', 'dist', 'bin', 'serve.mjs'));
+    expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'serve.mjs'));
     expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_SYNC_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi', 'dist', 'src'));

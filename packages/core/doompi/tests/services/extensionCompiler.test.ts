@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -6,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileExtensionSet } from '../../src/adapters/extensionCompiler.ts';
+import { compileExtensionModule, compileExtensionSet } from '../../src/adapters/extensionCompiler.ts';
 
 const temporaryDirectories: string[] = [];
 
@@ -48,7 +49,281 @@ afterEach(() => {
   }
 });
 
+describe('compiled direct modules', () => {
+  it('preserves the server object default and bundles its static dependencies', async () => {
+    const directory = temporaryDirectory();
+    const dependency = writeModule(directory, 'dependency', 'export const value = "original";');
+    const entry = writeModule(
+      directory,
+      'facet',
+      'import { value } from "./dependency.mjs"; export const marker = "facet"; export default { apply() { return value; } };',
+    );
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      outputDirectory: path.join(directory, 'generation'),
+    });
+    fs.rmSync(dependency);
+    fs.rmSync(entry);
+    const loaded = (await import(pathToFileURL(output).href)) as { default: { apply(): string }; marker: string };
+    expect(typeof loaded.default).toBe('object');
+    expect(loaded.default.apply()).toBe('original');
+    expect(loaded.marker).toBe('facet');
+  });
+
+  it('bundles bare JavaScript dependencies so materialized output survives package removal', async () => {
+    const directory = temporaryDirectory();
+    const packageDirectory = path.join(directory, 'node_modules', 'yaml');
+    fs.mkdirSync(packageDirectory, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDirectory, 'package.json'),
+      JSON.stringify({ name: 'yaml', type: 'module', exports: './index.mjs' }),
+    );
+    const dependency = writeModule(packageDirectory, 'index', 'export const value = "installed";');
+    const entry = writeModule(
+      directory,
+      'facet',
+      'import { value } from "yaml"; export default { apply() { return value; } };',
+    );
+
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      outputDirectory: path.join(directory, 'generation'),
+    });
+    fs.writeFileSync(dependency, 'export const value = "mutated";');
+    fs.rmSync(path.join(directory, 'node_modules'), { recursive: true, force: true });
+
+    const loaded = (await import(pathToFileURL(output).href)) as { default: { apply(): string } };
+    expect(loaded.default.apply()).toBe('installed');
+    expect(readCompiledSource(output)).not.toContain(packageDirectory);
+  });
+
+  it.each(['local', 'shared'])('retains executable resources in the %s compiler path', async (cache) => {
+    const directory = temporaryDirectory();
+    const owner = path.join(directory, 'owner');
+    const native = path.join(directory, 'native');
+    fs.mkdirSync(owner);
+    fs.mkdirSync(native);
+    fs.writeFileSync(path.join(native, 'package.json'), JSON.stringify({ name: 'fixture-native' }));
+    fs.writeFileSync(path.join(native, 'binary'), '#!/bin/sh\nprintf retained-resource', { mode: 0o700 });
+    const entry = writeModule(
+      owner,
+      'facet',
+      'import { createRequire } from "node:module"; import path from "node:path"; export default () => path.join(path.dirname(createRequire(import.meta.url).resolve("fixture-native/package.json")), "binary");',
+    );
+    const options = {
+      repositoryRoot: directory,
+      ...(cache === 'shared' ? { sharedCacheDirectory: path.join(directory, 'shared') } : {}),
+      outputDirectory: path.join(directory, 'generation'),
+      resources: [
+        {
+          ownerPackageName: 'fixture-owner',
+          ownerDirectory: owner,
+          packages: [
+            {
+              packageName: 'fixture-native',
+              packageDirectory: native,
+              files: [{ path: 'package.json' }, { path: 'binary' }],
+            },
+          ],
+        },
+      ],
+    };
+    let output = await compileExtensionModule(entry, path.join(directory, 'cache'), options);
+    if (cache === 'shared') {
+      output = await compileExtensionModule(entry, path.join(directory, 'second-cache'), {
+        ...options,
+        outputDirectory: path.join(directory, 'second-generation'),
+      });
+      fs.rmSync(options.outputDirectory, { recursive: true });
+    }
+    fs.rmSync(owner, { recursive: true });
+    fs.rmSync(native, { recursive: true });
+    const loaded = (await import(pathToFileURL(output).href)) as { default: () => string };
+    const binary = loaded.default();
+    expect(binary.startsWith(`${fs.realpathSync(path.dirname(output))}${path.sep}`)).toBe(true);
+    expect(execFileSync(binary, { encoding: 'utf8' })).toBe('retained-resource');
+  });
+
+  it.each(['local', 'shared'])(
+    'invalidates changed resource declarations and permissions in %s builds',
+    async (cache) => {
+      const directory = temporaryDirectory();
+      const entry = writeModule(directory, 'facet', 'export default import.meta.url;');
+      const binary = path.join(directory, 'binary');
+      fs.writeFileSync(binary, 'resource', { mode: 0o700 });
+      const options = {
+        repositoryRoot: directory,
+        ...(cache === 'shared' ? { sharedCacheDirectory: path.join(directory, 'shared') } : {}),
+        outputDirectory: path.join(directory, 'generation'),
+      };
+      const cacheDirectory = path.join(directory, 'cache');
+      await compileExtensionModule(entry, cacheDirectory, options);
+      const resource = {
+        ownerPackageName: 'fixture-owner',
+        ownerDirectory: directory,
+        packages: [{ packageName: 'fixture-native', packageDirectory: directory, files: [{ path: 'binary' }] }],
+      };
+      const build = (binding = resource) =>
+        compileExtensionModule(entry, cacheDirectory, { ...options, resources: [binding] });
+      const artifact = path.join(options.outputDirectory, 'node_modules', 'fixture-native', 'binary');
+      await build();
+      expect(fs.statSync(artifact).mode & 0o777).toBe(0o700);
+      fs.chmodSync(binary, 0o755);
+      await build();
+      expect(fs.statSync(artifact).mode & 0o777).toBe(0o755);
+      fs.chmodSync(artifact, 0o600);
+      await build();
+      expect(fs.statSync(artifact).mode & 0o777).toBe(0o755);
+      const renamed = { ...resource, ownerPackageName: 'renamed-owner' };
+      const output = await build(renamed);
+      expect(readCompiledSource(output)).toContain('renamed-owner');
+      const override = {
+        ...resource,
+        packages: [{ ...resource.packages[0], files: [{ path: 'binary', mode: 0o500 }] }],
+      };
+      await build(override);
+      expect(fs.statSync(artifact).mode & 0o777).toBe(0o500);
+      fs.writeFileSync(binary, 'replacement');
+      await build(override);
+      expect(fs.readFileSync(artifact, 'utf8')).toBe('replacement');
+      fs.writeFileSync(binary, 'unpublished');
+      const rename = fs.renameSync;
+      const failure = vi.spyOn(fs, 'renameSync').mockImplementation((source, target) => {
+        if (String(target).endsWith('/fixture-native/binary')) throw new Error('resource publication failed');
+        return rename(source, target);
+      });
+      try {
+        await expect(build(override)).rejects.toThrow('resource publication failed');
+        expect(fs.readFileSync(artifact, 'utf8')).toBe('replacement');
+      } finally {
+        failure.mockRestore();
+      }
+      const outside = temporaryDirectory();
+      fs.rmSync(path.join(options.outputDirectory, 'node_modules'), { recursive: true });
+      fs.symlinkSync(outside, path.join(options.outputDirectory, 'node_modules'), 'dir');
+      await expect(build(override)).rejects.toThrow(/resource output contains a symlink/i);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    },
+  );
+
+  it('rejects escaping and colliding resource declarations before writing output', async () => {
+    const directory = temporaryDirectory();
+    const entry = writeModule(directory, 'facet', 'export default {};');
+    const resource = {
+      ownerPackageName: 'fixture-owner',
+      ownerDirectory: directory,
+      packages: [{ packageName: 'fixture-native', packageDirectory: directory, files: [{ path: 'facet.mjs' }] }],
+    };
+    const build = (binding: typeof resource) =>
+      compileExtensionModule(entry, path.join(directory, 'cache'), { resources: [binding] });
+    await expect(build({ ...resource, ownerPackageName: '../escape' })).rejects.toThrow(/resource package name/i);
+    await expect(
+      build({ ...resource, packages: [{ ...resource.packages[0], packageName: '../escape' }] }),
+    ).rejects.toThrow(/resource package name/i);
+    await expect(
+      build({ ...resource, packages: [{ ...resource.packages[0], files: [{ path: '../outside' }] }] }),
+    ).rejects.toThrow(/resource path/i);
+    await expect(build({ ...resource, packages: [resource.packages[0], resource.packages[0]] })).rejects.toThrow(
+      /duplicate resource/i,
+    );
+    const invalidMode = {
+      ...resource,
+      packages: [{ ...resource.packages[0], files: [{ path: 'facet.mjs', mode: 0o1000 }] }],
+    };
+    await expect(build(invalidMode)).rejects.toThrow(/invalid resource mode/i);
+    const outside = temporaryDirectory();
+    const source = writeModule(outside, 'outside', 'export default {};');
+    fs.symlinkSync(source, path.join(directory, 'linked.mjs'));
+    await expect(
+      build({ ...resource, packages: [{ ...resource.packages[0], files: [{ path: 'linked.mjs' }] }] }),
+    ).rejects.toThrow(/resource escapes package/i);
+  });
+
+  it('rejects direct modules with package-owned resources that are not published as artifacts', async () => {
+    const directory = temporaryDirectory();
+    const packageDirectory = path.join(directory, 'node_modules', 'open');
+    fs.mkdirSync(packageDirectory, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDirectory, 'package.json'),
+      JSON.stringify({ name: 'open', type: 'module', exports: './index.mjs' }),
+    );
+    fs.writeFileSync(
+      path.join(packageDirectory, 'index.mjs'),
+      'export default () => new URL("./xdg-open", import.meta.url).href;',
+    );
+    const entry = writeModule(directory, 'resource-runtime', 'import open from "open"; export default open;');
+
+    await expect(compileExtensionModule(entry, path.join(directory, 'cache'))).rejects.toThrow(
+      /dependency "open" has native bindings or package-owned resources/u,
+    );
+  });
+
+  it('rebuilds changed inputs without altering an earlier materialized generation', async () => {
+    const directory = temporaryDirectory();
+    const dependency = writeModule(directory, 'dependency', 'export const value = "before";');
+    const entry = writeModule(
+      directory,
+      'facet',
+      'import { value } from "./dependency.mjs"; export default { apply() { return value; } };',
+    );
+    const options = { repositoryRoot: directory, sharedCacheDirectory: path.join(directory, 'shared') };
+    const before = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      ...options,
+      outputDirectory: path.join(directory, 'first'),
+    });
+    fs.writeFileSync(dependency, 'export const value = "after";');
+    const after = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      ...options,
+      outputDirectory: path.join(directory, 'second'),
+    });
+    const oldModule = (await import(pathToFileURL(before).href)) as { default: { apply(): string } };
+    const newModule = (await import(pathToFileURL(after).href)) as { default: { apply(): string } };
+    expect(oldModule.default.apply()).toBe('before');
+    expect(newModule.default.apply()).toBe('after');
+  });
+
+  it('keeps direct-module cache records separate from Pi factory records', async () => {
+    const directory = temporaryDirectory();
+    const entry = writeModule(directory, 'facet', 'export default { apply() {} };');
+    const cache = path.join(directory, 'cache');
+    const options = {
+      repositoryRoot: directory,
+      sharedCacheDirectory: path.join(directory, 'shared'),
+      outputDirectory: path.join(directory, 'dist'),
+      outputName: 'same-name',
+    };
+    const piOutput = await compileExtensionSet([entry], cache, options);
+    const moduleOutput = await compileExtensionModule(entry, cache, options);
+    expect(moduleOutput).not.toBe(piOutput);
+    expect(typeof (await import(pathToFileURL(piOutput).href)).default).toBe('function');
+    expect(typeof (await import(pathToFileURL(moduleOutput).href)).default).toBe('object');
+    expect(await compileExtensionModule(entry, cache, options)).toBe(moduleOutput);
+    fs.rmSync(cache, { recursive: true, force: true });
+    expect(await compileExtensionModule(entry, cache, options)).toBe(moduleOutput);
+    expect(fs.readdirSync(path.join(options.sharedCacheDirectory, 'objects'))).toHaveLength(2);
+  });
+});
 describe('compiled extension sets', () => {
+  it('keeps bare native package imports outside Pi bundles', async () => {
+    const directory = temporaryDirectory();
+    const packageDirectory = path.join(directory, 'node_modules', '@napi-rs', 'keyring');
+    fs.mkdirSync(packageDirectory, { recursive: true });
+    fs.writeFileSync(
+      path.join(packageDirectory, 'package.json'),
+      JSON.stringify({ name: '@napi-rs/keyring', main: 'index.cjs' }),
+    );
+    fs.writeFileSync(path.join(packageDirectory, 'index.cjs'), 'module.exports = require("./binding.node");');
+    fs.writeFileSync(path.join(packageDirectory, 'binding.node'), Buffer.from([0xff, 0xfe, 0x00]));
+    const entry = writeModule(
+      directory,
+      'native-extension',
+      'import keyring from "@napi-rs/keyring"; export default () => keyring;',
+    );
+    const output = await compileExtensionSet([entry], path.join(directory, 'cache'));
+    expect(readCompiledSource(output)).toContain(path.join(packageDirectory, 'index.cjs'));
+    await expect(compileExtensionModule(entry, path.join(directory, 'direct-cache'))).rejects.toThrow(
+      /dependency "@napi-rs\/keyring"/u,
+    );
+  });
+
   it('reuses a relocatable shared object across worktree roots', async () => {
     const directory = temporaryDirectory();
     const sharedCache = path.join(directory, 'shared-cache');
@@ -611,5 +886,33 @@ describe('compiled extension sets', () => {
     expect(fs.readdirSync(path.join(cache, 'sets'))).toContainEqual(expect.stringMatching(/\.json$/));
     expect(fs.readdirSync(dist).sort()).toEqual(['chunks', path.basename(output)].sort());
     expect(fs.readdirSync(path.join(dist, 'chunks'))).not.toHaveLength(0);
+  });
+  it('compiles and loads every declared server graph without package-local dependency paths', async () => {
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
+    const serverPackages = ['packages/minor/doompi-voice', 'packages/default/doompi-runner', 'packages/core/doompi'];
+
+    for (const relativeRoot of serverPackages) {
+      const packageRoot = path.join(repositoryRoot, relativeRoot);
+      const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
+        name: string;
+        doompiServer: { dist: string };
+      };
+      const entry = path.resolve(packageRoot, manifest.doompiServer.dist);
+      const directory = temporaryDirectory();
+      const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+        repositoryRoot,
+        outputDirectory: path.join(directory, 'generation'),
+      });
+      const loaded = (await import(`${pathToFileURL(output).href}?server-graph=${Date.now()}`)) as { default: unknown };
+      const source = readCompiledSource(output);
+      const externalImports = [...source.matchAll(/(?:from|import)\s*["']([^"']+)["']/gu)].map((match) => match[1]);
+
+      expect(typeof loaded.default, manifest.name).toBe('object');
+      expect(
+        externalImports.filter((specifier) => !specifier.startsWith('node:') && !specifier.startsWith('${')),
+        manifest.name,
+      ).toEqual([]);
+      expect(source, manifest.name).not.toContain('node_modules');
+    }
   });
 });

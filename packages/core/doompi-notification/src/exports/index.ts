@@ -1,3 +1,4 @@
+export { notificationHeadlessFacet } from '../adapters/headless/facet.ts';
 export { notificationExtension, type NotificationExtensionOptions } from '../adapters/pi/extension.ts';
 export { createMainThreadTitleController, createWorkerTitleController } from '../adapters/shellTitleController.ts';
 export { sendSystemNotification } from '../adapters/systemNotification.ts';

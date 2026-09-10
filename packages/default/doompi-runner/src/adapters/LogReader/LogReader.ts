@@ -1,6 +1,17 @@
 import fs from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import type { ILogReader, LogQuery, LogSlice } from '../../types/logReader';
+import {
+  boundExcerpt,
+  composeExcerpt,
+  countLines,
+  createErrorScanner,
+  formatSize,
+  type Excerpt,
+  type LogSummary,
+  type TruncatedOutput,
+} from '../../services/bashResult.ts';
+import { getResultMaxBytes, getResultMaxLines, getResultMaxTokens } from '../../types/config.ts';
 
 const DEFAULT_LINES = 200;
 const READ_CHUNK_BYTES = 64 * 1024;
@@ -152,4 +163,148 @@ export function filterLogText(text: string, query: Pick<LogQuery, 'grep' | 'igno
     }
   }
   return merged.flatMap((range) => lines.slice(range.start, range.end + 1)).join('\n');
+}
+
+/** Reads a bounded head and tail plus exact metadata after the writer has flushed. */
+export function summarizeLog(
+  path: string,
+  maxLines = getResultMaxLines(),
+  maxBytes = getResultMaxBytes(),
+  maxTokens = getResultMaxTokens(),
+): LogSummary {
+  let handle: number | undefined;
+  try {
+    const size = fs.statSync(path).size;
+    handle = fs.openSync(path, 'r');
+    const readBuffer = Buffer.alloc(READ_CHUNK_BYTES);
+    // Both ends are captured at the full budget; the line trim decides the split.
+    const endLimit = Math.max(1, maxBytes + 1);
+    let headBuffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+    let tailBuffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+    let newlineCount = 0;
+    let lastByte: number | undefined;
+    const decoder = new StringDecoder('utf8');
+    const scanned = createErrorScanner();
+    let pending = '';
+    for (;;) {
+      const bytesRead = fs.readSync(handle, readBuffer, 0, readBuffer.byteLength, null);
+      if (bytesRead === 0) break;
+      const chunk = readBuffer.subarray(0, bytesRead);
+      for (const byte of chunk) if (byte === 0x0a) newlineCount += 1;
+      lastByte = chunk.at(-1);
+      if (headBuffer.byteLength < endLimit) {
+        headBuffer = Buffer.concat([headBuffer, chunk.subarray(0, endLimit - headBuffer.byteLength)]);
+      }
+      tailBuffer = appendBufferTail(tailBuffer, chunk, endLimit);
+      pending += decoder.write(chunk);
+      let newline = pending.indexOf('\n');
+      while (newline >= 0) {
+        scanned.push(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf('\n');
+      }
+    }
+    pending += decoder.end();
+    if (pending.length > 0) scanned.push(pending);
+    const lines = newlineCount + (size > 0 && lastByte !== 0x0a ? 1 : 0);
+    // The tail capture holds the whole file only while the file fits inside one
+    // buffer. Past that the start is already gone from it, so the two ends have
+    // to be composed instead.
+    const excerpt =
+      size <= tailBuffer.byteLength
+        ? boundExcerpt(utf8Tail(tailBuffer, tailBuffer.byteLength), maxLines, maxBytes, maxTokens)
+        : composeExcerpt(
+            headBuffer.toString('utf8'),
+            utf8Tail(tailBuffer, tailBuffer.byteLength),
+            lines,
+            maxLines,
+            maxBytes,
+            scanned.entries(),
+            maxTokens,
+          );
+    return { tail: excerpt.text, bytes: size, lines, tailLines: excerpt.lines };
+  } catch {
+    return { tail: '', bytes: 0, lines: 0, tailLines: 0 };
+  } finally {
+    if (handle !== undefined) fs.closeSync(handle);
+  }
+}
+
+/**
+ * Keeps both ends of an oversized result and points at the file holding the rest.
+ *
+ * The notice states the file's real size and line count so the model does not
+ * guess at offsets when it goes on to read the file, which is the failure this
+ * whole policy exists to prevent.
+ */
+export function truncateForResult(
+  text: string,
+  fullOutputPath: string,
+  maxBytes = getResultMaxBytes(),
+  maxLines = getResultMaxLines(),
+): TruncatedOutput {
+  const excerpt = boundExcerpt(text, maxLines, maxBytes);
+  if (!excerpt.truncated) return { text, truncated: false, outputLines: excerpt.lines };
+
+  return {
+    text: `${excerpt.text}\n${truncationNotice(excerpt, fullOutputPath, text)}`,
+    truncated: true,
+    outputLines: excerpt.lines,
+  };
+}
+
+function truncationNotice(excerpt: Excerpt, fullOutputPath: string, text: string): string {
+  // Counted from the file, never from `text`. What the caller holds in memory
+  // is itself capped, so using it here would understate the file by orders of
+  // magnitude and send the reader looking past the end of a much longer file.
+  const file = measureFile(fullOutputPath);
+  const totalLines = file?.lines ?? countLines(text);
+  const fileSize = file?.bytes ?? Buffer.byteLength(text, 'utf8');
+
+  return [
+    `[output truncated: showing ${excerpt.lines.toLocaleString('en-US')} of ${totalLines.toLocaleString('en-US')} lines,`,
+    `${excerpt.elidedLines.toLocaleString('en-US')} elided from the middle.`,
+    `Full output is at ${fullOutputPath} (${formatSize(fileSize)}, ${totalLines.toLocaleString('en-US')} lines).`,
+    `Inspect it with doom-runner logs, or read the file with an offset near line ${totalLines.toLocaleString('en-US')}.]`,
+  ].join(' ');
+}
+
+/** Real size and line count of the file the notice points at. */
+function measureFile(path: string): { bytes: number; lines: number } | undefined {
+  let handle: number | undefined;
+  try {
+    const bytes = fs.statSync(path).size;
+    handle = fs.openSync(path, 'r');
+    const buffer = Buffer.alloc(READ_CHUNK_BYTES);
+    let newlineCount = 0;
+    let lastByte: number | undefined;
+    for (;;) {
+      const bytesRead = fs.readSync(handle, buffer, 0, buffer.byteLength, null);
+      if (bytesRead === 0) break;
+      const chunk = buffer.subarray(0, bytesRead);
+      for (const byte of chunk) if (byte === 0x0a) newlineCount += 1;
+      lastByte = chunk.at(-1);
+    }
+    return { bytes, lines: newlineCount + (bytes > 0 && lastByte !== 0x0a ? 1 : 0) };
+  } catch {
+    return undefined;
+  } finally {
+    if (handle !== undefined) fs.closeSync(handle);
+  }
+}
+
+function utf8Tail(encoded: Buffer<ArrayBufferLike>, maxBytes: number): string {
+  let start = Math.max(0, encoded.byteLength - maxBytes);
+  while (start < encoded.byteLength && (encoded[start]! & 0xc0) === 0x80) start += 1;
+  return encoded.subarray(start).toString('utf8');
+}
+
+function appendBufferTail(
+  current: Buffer<ArrayBufferLike>,
+  chunk: Buffer<ArrayBufferLike>,
+  limit: number,
+): Buffer<ArrayBufferLike> {
+  if (chunk.byteLength >= limit) return Buffer.from(chunk.subarray(chunk.byteLength - limit));
+  const combined = Buffer.concat([current, chunk]);
+  return combined.byteLength > limit ? Buffer.from(combined.subarray(combined.byteLength - limit)) : combined;
 }

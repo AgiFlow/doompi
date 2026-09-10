@@ -41,7 +41,9 @@ export interface CreateDoomToolSurfaceOptions {
   readonly generation: string;
   /** Every tool registered with the host, in host order. */
   readonly allTools: () => readonly string[];
-  /** The host's whole-list setter. Called only when the result changed. */
+  /** The tools the host currently exposes, in host order. */
+  readonly activeTools: () => readonly string[];
+  /** The host's whole-list setter. Called only when actual activation differs. */
   readonly setActiveTools: (names: string[]) => void;
   /** Layers active at creation. */
   readonly activeLayers?: readonly string[];
@@ -49,8 +51,8 @@ export interface CreateDoomToolSurfaceOptions {
   readonly onError?: (source: string, error: unknown) => void;
 }
 
-function sameList(left: readonly string[] | undefined, right: readonly string[]): boolean {
-  if (left === undefined || left.length !== right.length) return false;
+function sameList(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
   return left.every((name, index) => name === right[index]);
 }
 
@@ -71,12 +73,13 @@ export function createDoomToolSurface(options: CreateDoomToolSurfaceOptions): Do
         options.onError?.(holder.source, error);
       }
     }
-    // Before the first push the host already has every registered tool active,
-    // so an unrestricted surface must stay silent rather than echo the list back.
-    const previous = pushed ?? available;
-    pushed = current;
-    if (sameList(previous, current)) return;
+    const actual = options.activeTools();
+    if (sameList(actual, current)) {
+      pushed = current;
+      return;
+    }
     options.setActiveTools([...current]);
+    pushed = current;
   };
 
   const slot = kernel.defineSlot<RestrictionHolder>(SLOT, apply);
@@ -115,7 +118,7 @@ export function createDoomToolSurface(options: CreateDoomToolSurfaceOptions): Do
       applyNow();
     },
     active(): readonly string[] {
-      return pushed ?? [];
+      return disposed ? [] : (pushed ?? options.activeTools());
     },
     dispose(): void {
       if (disposed) return;

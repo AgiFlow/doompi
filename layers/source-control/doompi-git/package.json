@@ -109,18 +109,12 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "git",
-    "hub": {
-      "entry": "./src/exports/hubApi.ts",
-      "dist": "./dist/hubApi.mjs"
-    }
-  },
   "doompiServer": {
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "hub"
+      "hub",
+      "session"
     ]
   },
   "doompiWeb": {

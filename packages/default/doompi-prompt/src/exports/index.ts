@@ -1,3 +1,4 @@
+export { promptHeadlessFacet } from '../adapters/headless/facet.ts';
 export { activatePromptExtension, installPromptRuntime } from '../adapters/pi/extension.ts';
 export { createNodeSavedPromptStore, resolvePromptsDirectory } from '../adapters/node/promptStore.ts';
 export { createPromptContainer } from '../container/index.ts';

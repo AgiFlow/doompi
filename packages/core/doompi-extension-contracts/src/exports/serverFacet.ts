@@ -20,3 +20,11 @@ export {
   type CreateDoomServerHostOptions,
   type DoomServerHost,
 } from '../services/serverFacet.ts';
+export {
+  DOOM_SERVER_BUNDLE_FILE,
+  DOOM_SERVER_BUNDLE_VERSION,
+  type DoomServerBundle,
+  type DoomServerBundleEntry,
+  type DoomServerBundleOwner,
+  parseDoomServerBundle,
+} from '../schemas/serverBundle.ts';

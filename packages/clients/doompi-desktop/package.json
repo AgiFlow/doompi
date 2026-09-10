@@ -38,7 +38,6 @@
   "devDependencies": {
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-server": "workspace:*",
     "@agimon-ai/doompi-web": "workspace:*",
     "@playwright/test": "1.62.1",
     "@types/node": "26.4.1",

@@ -1,3 +1,4 @@
+export { cacheHeadlessFacet } from '../adapters/headless/facet.ts';
 export { sha256Base64Url } from '../adapters/node/digest.ts';
 export {
   DOOM_PROMPT_CACHE_TELEMETRY_SERVICE,

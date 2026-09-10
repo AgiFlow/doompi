@@ -1,9 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readBootstrapStatus } from './bootstrapLocator.ts';
-import { computeInputsHash, computeWebSourcesHash, readSyncState, type SyncState } from './syncState.ts';
-import { readSyncRegistration } from './syncRegistration.ts';
+import { parseDoomServerBundle } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { readBootstrapStatus, inputsAreFresh, parseInputFingerprint } from './bootstrapLocator.ts';
+import {
+  computeInputsHash,
+  computeWebSourcesHash,
+  computeServerSourcesHash,
+  readSyncState,
+  type SyncState,
+} from './syncState.ts';
+import { readSyncRegistration, type SyncRegistration } from './syncRegistration.ts';
 
 export type SyncDriftReason =
   | 'never-synced'
@@ -11,7 +18,8 @@ export type SyncDriftReason =
   | 'code-changed'
   | 'runtime-stale'
   | 'cockpit-bundle-missing'
-  | 'package-apis-missing';
+  | 'package-apis-missing'
+  | 'server-bundle-stale';
 
 export interface SyncDrift {
   /** True when nothing needs syncing before a session starts. */
@@ -29,6 +37,53 @@ export interface ReadSyncDriftOptions {
   homeDirectory?: string;
   /** Web hosts cannot reuse a CLI-only generation without plugin artifacts. */
   requireWebBundle?: boolean;
+}
+
+/** Validate direct-module receipts without importing candidates or loading the compiler. */
+export function serverBundleIsFresh(
+  state: Pick<SyncState, 'serverBundle' | 'resolved'>,
+  registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'serverBundle'>,
+): boolean {
+  const bundle = state.serverBundle;
+  if (!bundle || !registration.serverBundle || bundle.sourcesHash !== computeServerSourcesHash(state.resolved))
+    return false;
+  try {
+    const descriptor = parseDoomServerBundle(JSON.parse(fs.readFileSync(bundle.descriptorPath, 'utf8')));
+    if (descriptor.generation !== registration.generation || descriptor.fingerprint !== bundle.fingerprint)
+      return false;
+    if (Object.keys(bundle.compilerManifests).length !== descriptor.entries.length) return false;
+    const root = fs.realpathSync(registration.generationRoot);
+    const inside = (target: string) => {
+      const relative = path.relative(root, fs.realpathSync(target));
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    };
+    for (const entry of descriptor.entries) {
+      const manifestPath = bundle.compilerManifests[entry.packageName];
+      if (!manifestPath || !inside(manifestPath)) return false;
+      const receipt = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+      if (
+        typeof receipt.output !== 'string' ||
+        !inside(receipt.output) ||
+        fs.realpathSync(receipt.output) !==
+          fs.realpathSync(path.resolve(path.dirname(bundle.descriptorPath), entry.module)) ||
+        !Array.isArray(receipt.artifacts) ||
+        !receipt.artifacts.every((file) => typeof file === 'string' && inside(file))
+      )
+        return false;
+      for (const value of [receipt.inputs, receipt.artifactInputs]) {
+        if (!Array.isArray(value) || value.length === 0) return false;
+        const inputs = value.map(parseInputFingerprint);
+        if (
+          inputs.some((input) => input === undefined) ||
+          !inputsAreFresh(inputs.filter((input) => input !== undefined))
+        )
+          return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -100,6 +155,7 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
     reasons.push('cockpit-bundle-missing');
   }
   if (!fs.existsSync(registration.apiDirectory)) reasons.push('package-apis-missing');
+  if (!serverBundleIsFresh(state, registration)) reasons.push('server-bundle-stale');
 
   return {
     fresh: reasons.length === 0,
@@ -119,6 +175,7 @@ export function describeSyncDrift(drift: SyncDrift): string {
     'runtime-stale': 'its precompiled runtime is out of date',
     'cockpit-bundle-missing': 'the cockpit bundle is missing',
     'package-apis-missing': 'the package API routes are missing',
+    'server-bundle-stale': 'its server bundle is missing or out of date',
   };
   return drift.reasons.map((reason) => detail[reason]).join(', ');
 }

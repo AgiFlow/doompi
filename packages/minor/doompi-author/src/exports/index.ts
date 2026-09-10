@@ -1,3 +1,4 @@
+export { authorHeadlessFacet } from '../adapters/headless/facet.ts';
 export { activateAuthorExtension, installAuthorRuntime } from '../adapters/pi/extension.ts';
 export { registerAuthorToolFacades } from '../adapters/pi/authorTools.ts';
 export { createAuthorContainer } from '../container/index.ts';

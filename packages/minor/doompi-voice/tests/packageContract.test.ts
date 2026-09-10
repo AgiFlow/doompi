@@ -18,6 +18,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   doompiWeb?: { channels?: string[] };
 }
 
@@ -88,6 +89,21 @@ describe('doom voice package boundary', () => {
     const manifest = await readManifest();
 
     expect(manifest.doompiWeb?.channels).toEqual(['voice_media_wake', 'voice_ownership']);
+  });
+
+  it('declares its session server facet without replacing the legacy API', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.exports?.['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
+    expect(manifest.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
   });
 
   it('does not depend on private rig packages from package-local configuration', async () => {

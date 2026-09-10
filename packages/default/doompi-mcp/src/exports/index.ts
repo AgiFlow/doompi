@@ -1,3 +1,4 @@
+export { mcpHeadlessFacet } from '../adapters/headless/facet.ts';
 export { buildMcpConfigGroups, PROXY_SERVER_NAME } from '../adapters/node/configSources.ts';
 export { definitionsCachePath, readCachedCatalog } from '../adapters/node/mcpRuntime.ts';
 export { registerMcpExtension } from '../adapters/pi/extension.ts';

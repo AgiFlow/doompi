@@ -36,7 +36,7 @@ import {
 } from './conventions.js';
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
 import { doomPromptShape } from './prompts.js';
-import { packageApiEntry, packageApiManifest } from './packageApi.js';
+import { packageApiManifest } from './packageApi.js';
 import {
   webPluginEntry,
   webPluginImportAllowlist,
@@ -80,7 +80,6 @@ export const rules: Record<string, RuleDefinition> = {
   'no-protocol-channel-literals': noProtocolChannelLiterals,
   'dispose-external-subscriptions': disposeExternalSubscriptions,
   'provider-owned-policy': providerOwnedPolicy,
-  'package-api-entry': packageApiEntry,
   'package-api-manifest': packageApiManifest,
   'web-plugin-entry': webPluginEntry,
   'web-plugin-import-allowlist': webPluginImportAllowlist,

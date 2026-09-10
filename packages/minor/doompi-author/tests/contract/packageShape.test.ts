@@ -14,6 +14,7 @@ interface PackageManifest {
   exports?: Record<string, unknown>;
   publishConfig?: { access?: string };
   doompiApi?: { basePath?: string; session?: { entry?: string } };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   doompiWeb?: { pluginId?: string; channels?: string[]; client?: string; hub?: { entry?: string } };
   pi?: { extensions?: string[] };
 }
@@ -43,8 +44,10 @@ describe('doompi-author package contract', () => {
     expect(Object.keys(value.exports ?? {})).toEqual([
       '.',
       './extensions/pi',
+      './extensions/server',
       './session-api',
       './web-hub',
+      './extensions/headless',
       './package.json',
     ]);
     expect(value.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
@@ -52,9 +55,11 @@ describe('doompi-author package contract', () => {
 
   it('declares matching package API and web entries', async () => {
     const value = await manifest();
-    expect(value.doompiApi).toEqual({
-      basePath: 'author',
-      session: { entry: './src/exports/sessionApi.ts', dist: './dist/sessionApi.mjs' },
+    expect(value.doompiApi).toBeUndefined();
+    expect(value.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
     });
     expect(value.doompiWeb).toMatchObject({
       pluginId: 'author',

@@ -383,13 +383,6 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "runner",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
-    }
-  },
   "doompiServer": {
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",

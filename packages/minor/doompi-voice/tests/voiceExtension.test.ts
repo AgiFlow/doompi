@@ -43,10 +43,14 @@ describe('autonomous prompt delivery', () => {
 describe('Voice-owned tool restriction', () => {
   function fixture(registered = [...VOICE_MODE_TOOL_NAMES]) {
     const all = ['read', 'write', ...registered];
+    let activeTools = [...all];
     const surface = createDoomToolSurface({
       generation: 'voice-test',
       allTools: () => all,
-      setActiveTools: () => undefined,
+      activeTools: () => activeTools,
+      setActiveTools: (names) => {
+        activeTools = [...names];
+      },
     });
     const handle = surface.register({ source: 'voice', restrict: voiceToolRestriction(false) });
     return { handle, visible: () => surface.active() };

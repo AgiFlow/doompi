@@ -22,7 +22,7 @@ import {
   formatAssignmentResults,
   formatUpsertFailureText,
   type ToolResult,
-} from './responseEnvelope.ts';
+} from '../../services/taskResult.ts';
 
 export { DEFAULT_PROMPT_GUIDELINES } from './promptGuidelines.ts';
 

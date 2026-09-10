@@ -1,1 +1,1 @@
-export * from '../../commands/task/responseEnvelope';
+export * from '../../services/taskResult.ts';

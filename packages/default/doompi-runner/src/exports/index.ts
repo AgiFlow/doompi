@@ -1,4 +1,5 @@
 export { createRunnerContainer } from '../container';
+export { createHeadlessBashTool, createHeadlessRunnersCommand } from '../adapters/headless.ts';
 export type { IRmuxBackend, RmuxLaunchRequest } from '../types/rmuxBackend';
 export { RmuxBackend } from '../adapters/RmuxBackend/RmuxBackend';
 export { rtkPackageForTarget } from '../adapters/RtkProcessor/RtkProcessor';

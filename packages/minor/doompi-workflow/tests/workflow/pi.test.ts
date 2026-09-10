@@ -382,6 +382,7 @@ function createHarness(
   const toolSurface = createDoomToolSurface({
     generation: 'workflow-test',
     allTools: () => [FOREIGN_TOOL, ...tools.keys()],
+    activeTools: () => activeTools,
     setActiveTools: (names) => pi.setActiveTools([...names]),
   });
   refreshToolSurface = () => toolSurface.refresh();

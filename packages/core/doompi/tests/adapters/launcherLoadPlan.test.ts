@@ -1,14 +1,43 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveLauncherLoadPlan } from '../../src/adapters/launcherComposition.ts';
 import {
   LAUNCHER_COMPOSITION_VERSION,
   type LauncherCompositionState,
 } from '../../src/types/interfaces/launcherComposition';
 
-/** This repository is a configured DoomPi root, so its real modes.yaml drives the composition. */
+const configMocks = vi.hoisted(() => ({
+  loadMajorModesConfig: vi.fn(() => ({
+    layers: {
+      team: {
+        baseDirectory: '/launcher-load-plan-fixture',
+        packages: ['@agimon-ai/doompi-team'],
+      },
+      'ask-user': {
+        baseDirectory: '/launcher-load-plan-fixture',
+        packages: ['@agimon-ai/doompi-user-feedback'],
+      },
+      task: {
+        baseDirectory: '/launcher-load-plan-fixture',
+        packages: ['@agimon-ai/doompi-task'],
+      },
+    },
+    defaultMajorMode: 'copilot',
+    majorMode: {
+      minimal: { description: 'Minimal launcher fixture.', layers: ['team', 'task'] },
+      copilot: { description: 'Copilot launcher fixture.', layers: ['team', 'ask-user', 'task'] },
+    },
+  })),
+}));
+
+vi.mock('@agimon-ai/doompi-config/majorModes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agimon-ai/doompi-config/majorModes')>()),
+  loadMajorModesConfig: configMocks.loadMajorModesConfig,
+}));
+
+/** The launcher still resolves fixed core entries from the workspace root. */
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
 
 function state(overrides: Partial<LauncherCompositionState> = {}): LauncherCompositionState {

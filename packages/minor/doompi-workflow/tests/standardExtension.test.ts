@@ -87,6 +87,7 @@ beforeEach(() => {
     const surface = createDoomToolSurface({
       generation: 'workflow-test',
       allTools: () => host.pi.getAllTools().map((entry) => entry.name),
+      activeTools: () => host.pi.getActiveTools(),
       setActiveTools: (names) => host.pi.setActiveTools([...names]),
     });
     toolSurface = surface;

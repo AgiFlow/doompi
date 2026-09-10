@@ -50,11 +50,21 @@ describe('doompi-web package contract', () => {
   it('publishes exactly one executable with a closed export surface', async () => {
     const manifest = await readManifest();
 
-    // One package, one command. A second bin here shadowed the one
-    // @agimon-ai/doompi-server publishes under the same name; the hub now
-    // resolves its Server from this dependency tree instead.
+    // The web package owns its command name and resolves the core server separately.
     expect(manifest.bin).toEqual({ 'doompi-web': './dist/bin/serve.mjs' });
-    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './bundler', './package.json']);
+    expect(manifest.exports).toEqual({
+      '.': {
+        types: './dist/index.d.mts',
+        import: './dist/index.mjs',
+        require: './dist/index.cjs',
+      },
+      './bundler': {
+        types: './dist/bundler.d.mts',
+        import: './dist/bundler.mjs',
+        require: './dist/bundler.cjs',
+      },
+      './package.json': './package.json',
+    });
   });
 
   it('builds computer-use before the browser fixture syncs the default composition', async () => {
@@ -80,7 +90,6 @@ describe('doompi-web package contract', () => {
       '@agimon-ai/doompi',
       '@agimon-ai/doompi-config',
       '@agimon-ai/doompi-extension-contracts',
-      '@agimon-ai/doompi-server',
       '@agimon-ai/doompi-telemetry',
       '@agimon-ai/doompi-web-components',
       '@agimon-ai/doompi-web-contracts',
@@ -116,7 +125,6 @@ describe('doompi-web package contract', () => {
       'ws',
     ]);
     expect(manifest.dependencies?.['@agimon-ai/doompi']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@agimon-ai/doompi-server']).toBe('workspace:*');
     expect(manifest.dependencies?.['@agimon-ai/doompi-telemetry']).toBe('workspace:*');
     // The bundler compiles src/web from the installed package, so the source
     // has to ship with it.

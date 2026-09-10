@@ -1,0 +1,223 @@
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { getRequestListener } from '@hono/node-server';
+import {
+  DOOM_API_ROUTE_PREFIX,
+  type DoomApi,
+  type DoomApiContext,
+} from '@agimon-ai/doompi-extension-contracts/package-api';
+import { createDoomServerHost, type DoomServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import {
+  installServerFacets,
+  type LoadedServerFacet,
+  type InstalledServerFacets,
+  type InstallServerFacetsOptions,
+} from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
+import { validatedTraceContext } from '../../services/server/traceContext.ts';
+import { observe, type ServerTelemetry } from './serverTelemetry.ts';
+
+/** The socket name beside the session's own, so one directory holds the pair. */
+export const API_SOCKET_NAME = 'api.sock';
+
+/**
+ * A body that keeps streaming well after its headers went out is worth its own span. A fast
+ * one is not: the request span already carries the duration and outcome, so emitting a second
+ * span per call made package API traffic 99.65% of all spans recorded in a two hour sample.
+ */
+export const COMPLETION_SPAN_MIN_DURATION_MS = 1000;
+
+export interface PackageApiServerOptions {
+  /** Directory the session's sockets live in; the API socket joins them there. */
+  socketDir: string;
+  sessionId: string;
+  cwd: string;
+  internalToken?: string;
+  hubToken?: string;
+  apis: readonly DoomApi[];
+  /** Server facets to install; each registers its own APIs through the host. */
+  facets?: readonly (DoomServerFacet | LoadedServerFacet)[];
+  prepareFacets?: InstallServerFacetsOptions['prepare'];
+  activateFacets?: (installed: InstalledServerFacets) => Promise<void>;
+  canDispatch?: () => boolean;
+  telemetry?: ServerTelemetry;
+  onNotice: (message: string) => void;
+}
+
+export interface PackageApiServer {
+  /** Absolute path of the socket, for the registry record; undefined when nothing mounted. */
+  readonly socketPath: string | undefined;
+  close(): Promise<void>;
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function responseWithCompletion(response: Response, complete: () => void): Response {
+  if (response.body === null) {
+    complete();
+    return response;
+  }
+  const reader = response.body.getReader();
+  let completed = false;
+  const finish = (): void => {
+    if (completed) return;
+    completed = true;
+    complete();
+  };
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          finish();
+          controller.close();
+        } else controller.enqueue(result.value);
+      } catch (error) {
+        finish();
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      finish();
+      await reader.cancel(reason);
+    },
+  });
+  return new Response(body, response);
+}
+
+/**
+ * Serves this session's package APIs over HTTP on a unix socket.
+ *
+ * A socket rather than a port: the session server is one of many on a machine,
+ * ports are a finite shared namespace, and the only client is the hub, which
+ * already knows this session's directory. Nothing here is reachable from the
+ * network, so the surface adds no way to reach a session that did not exist
+ * before.
+ *
+ * Each API is mounted under its own base path and sees requests with that
+ * prefix stripped, so a package declares routes relative to itself.
+ */
+export async function serveSessionApis(options: PackageApiServerOptions): Promise<PackageApiServer> {
+  const facets = options.facets ?? [];
+  if (options.apis.length === 0 && facets.length === 0 && !options.prepareFacets) {
+    return { socketPath: undefined, close: () => Promise.resolve() };
+  }
+
+  const context: DoomApiContext = {
+    scope: 'session',
+    sessionId: options.sessionId,
+    cwd: options.cwd,
+    ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
+    ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
+    onNotice: options.onNotice,
+  };
+  const host = createDoomServerHost({ scope: 'session', context });
+  for (const api of options.apis) host.registerApi(api);
+  let installed: InstalledServerFacets;
+  try {
+    installed = await installServerFacets({ host, facets, onNotice: options.onNotice, prepare: options.prepareFacets });
+    try {
+      await options.activateFacets?.(installed);
+    } catch (error) {
+      await installed.dispose();
+      throw error;
+    }
+  } catch (error) {
+    host.dispose();
+    throw error;
+  }
+  if (host.mounted().length === 0 && !options.prepareFacets) {
+    await installed.dispose();
+    host.dispose();
+    return { socketPath: undefined, close: () => Promise.resolve() };
+  }
+
+  const dispatch = async (request: Request): Promise<Response> => {
+    if (options.canDispatch?.() === false)
+      return Response.json({ error: 'Session selection is not ready.' }, { status: 503 });
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith(`${DOOM_API_ROUTE_PREFIX}/`))
+      return Response.json({ error: 'Not found.' }, { status: 404 });
+    const rest = url.pathname.slice(DOOM_API_ROUTE_PREFIX.length + 1);
+    const slash = rest.indexOf('/');
+    const basePath = slash === -1 ? rest : rest.slice(0, slash);
+    const handler = host.handlerFor(basePath);
+    if (handler === undefined)
+      return Response.json({ error: `No API '${basePath}' in this session.` }, { status: 404 });
+    url.pathname = slash === -1 ? '/' : rest.slice(slash);
+    const startedAt = performance.now();
+    const parent = validatedTraceContext(request.headers.get('traceparent'));
+    let childContext: DoomTraceContext | undefined;
+    let response: Response;
+    try {
+      const invoke = async (context?: DoomTraceContext): Promise<Response> => {
+        if (options.canDispatch?.() === false || host.handlerFor(basePath) !== handler) {
+          return Response.json({ error: 'Session selection changed before dispatch.' }, { status: 503 });
+        }
+        childContext = context;
+        return handler.fetch(new Request(url, request));
+      };
+      response = options.telemetry
+        ? await options.telemetry.runInSpan(
+            'doompi_server.package_api.request',
+            { api: basePath, method: request.method },
+            invoke,
+            parent,
+          )
+        : await invoke();
+    } catch (error) {
+      options.onNotice(`package API '${basePath}' failed on ${url.pathname} (${describeError(error)})`);
+      response = Response.json({ error: `The '${basePath}' API failed.` }, { status: 500 });
+    }
+    return responseWithCompletion(response, () => {
+      if (!options.telemetry) return;
+      const durationMs = Math.round(performance.now() - startedAt);
+      // Keep this span only where it says something the request span cannot: a failing status,
+      // or a body that took real time to flush after the headers were sent.
+      if (response.status < 400 && durationMs < COMPLETION_SPAN_MIN_DURATION_MS) return;
+      observe(
+        options.telemetry.runInSpan(
+          'doompi_server.package_api.complete',
+          {
+            api: basePath,
+            method: request.method,
+            status_code: response.status,
+            duration_ms: durationMs,
+          },
+          async () => undefined,
+          childContext ?? parent,
+        ),
+        options.onNotice,
+      );
+    });
+  };
+
+  const socketPath = path.resolve(options.socketDir, API_SOCKET_NAME);
+  fs.rmSync(socketPath, { force: true });
+  const server = http.createServer(getRequestListener(dispatch));
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(socketPath, () => {
+      server.removeListener('error', reject);
+      resolve();
+    });
+  });
+
+  return {
+    socketPath,
+    close: async () => {
+      await installed.dispose();
+      host.dispose();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          fs.rmSync(socketPath, { force: true });
+          resolve();
+        });
+      });
+    },
+  };
+}

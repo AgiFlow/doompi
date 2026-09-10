@@ -1,4 +1,4 @@
-import { formatUptime } from '../commands/bash/responseEnvelope.ts';
+import { formatUptime } from '../services/bashResult.ts';
 import type { RunnerRecord } from '../types/runnerRegistry';
 
 export const WIDGET_KEY = 'doom-runners';

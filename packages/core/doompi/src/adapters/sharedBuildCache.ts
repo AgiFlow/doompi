@@ -15,7 +15,7 @@ const LOCK_RETRY_MS = 25;
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
-
+const OUTPUT_ROOT_TOKEN = '__DOOMPI_PATH_OUTPUT__';
 export interface SharedBuildInput {
   logicalPath: string;
   sha256: string;
@@ -24,9 +24,15 @@ export interface SharedBuildInput {
   sourcePath?: string;
 }
 
+export interface SharedBuildAsset {
+  contents: string | Uint8Array;
+  mode?: number;
+}
+
 export interface SharedBuildArtifact {
   path: string;
   sha256: string;
+  mode?: number;
 }
 
 export interface SharedBuildManifest {
@@ -54,7 +60,7 @@ export interface PublishSharedBuildOptions {
   lookupKey: string;
   entry: string;
   inputs: SharedBuildInput[];
-  artifacts: ReadonlyMap<string, string | Uint8Array>;
+  artifacts: ReadonlyMap<string, string | Uint8Array | SharedBuildAsset>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,12 +116,21 @@ function parseManifest(value: unknown): SharedBuildManifest | undefined {
       !isRecord(artifact) ||
       typeof artifact.path !== 'string' ||
       typeof artifact.sha256 !== 'string' ||
-      !SHA256_PATTERN.test(artifact.sha256)
+      !SHA256_PATTERN.test(artifact.sha256) ||
+      (artifact.mode !== undefined &&
+        (typeof artifact.mode !== 'number' ||
+          !Number.isInteger(artifact.mode) ||
+          artifact.mode < 0 ||
+          artifact.mode > 0o777))
     ) {
       return undefined;
     }
     if (!safeRelativePath(artifact.path)) return undefined;
-    artifacts.push({ path: artifact.path, sha256: artifact.sha256 });
+    artifacts.push({
+      path: artifact.path,
+      sha256: artifact.sha256,
+      ...(typeof artifact.mode === 'number' ? { mode: artifact.mode } : {}),
+    });
   }
   if (!safeRelativePath(value.entry)) return undefined;
   return {
@@ -136,13 +151,13 @@ function readJson(target: string): unknown {
   }
 }
 
-function writeAtomic(target: string, contents: string | Uint8Array): void {
+function writeAtomic(target: string, contents: string | Uint8Array, mode = PRIVATE_FILE_MODE): void {
   fs.mkdirSync(path.dirname(target), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
   const temporary = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
-    fs.writeFileSync(temporary, contents, { mode: PRIVATE_FILE_MODE });
+    fs.writeFileSync(temporary, contents, { mode });
     fs.renameSync(temporary, target);
-    fs.chmodSync(target, PRIVATE_FILE_MODE);
+    fs.chmodSync(target, mode);
   } catch (error) {
     fs.rmSync(temporary, { force: true });
     throw error;
@@ -278,10 +293,16 @@ export function publishSharedBuild(options: PublishSharedBuildOptions): SharedBu
     throw new Error('Shared build external source paths must be absolute');
   }
   const artifacts = [...options.artifacts.entries()]
-    .map(([artifactPath, contents]) => {
+    .map(([artifactPath, value]) => {
+      const asset: SharedBuildAsset =
+        typeof value === 'string' || value instanceof Uint8Array ? { contents: value } : value;
       const relative = safeRelativePath(artifactPath);
       if (!relative) throw new Error(`Shared build artifact escapes its object: ${artifactPath}`);
-      return { path: relative, sha256: contentSha256(contents) };
+      return {
+        path: relative,
+        sha256: contentSha256(asset.contents),
+        ...(asset.mode === undefined ? {} : { mode: asset.mode }),
+      };
     })
     .sort((left, right) => left.path.localeCompare(right.path));
   const inputs = [...options.inputs].sort((left, right) => left.logicalPath.localeCompare(right.logicalPath));
@@ -302,12 +323,15 @@ export function publishSharedBuild(options: PublishSharedBuildOptions): SharedBu
     const temporaryDirectory = `${finalDirectory}.${process.pid}.${crypto.randomUUID()}.tmp`;
     try {
       fs.mkdirSync(temporaryDirectory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-      for (const [artifactPath, contents] of options.artifacts) {
+      for (const [artifactPath, value] of options.artifacts) {
+        const asset: SharedBuildAsset =
+          typeof value === 'string' || value instanceof Uint8Array ? { contents: value } : value;
         const relative = safeRelativePath(artifactPath);
         if (!relative) throw new Error(`Shared build artifact escapes its object: ${artifactPath}`);
         const target = path.join(temporaryDirectory, relative);
         fs.mkdirSync(path.dirname(target), { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-        fs.writeFileSync(target, contents, { mode: PRIVATE_FILE_MODE });
+        fs.writeFileSync(target, asset.contents, { mode: asset.mode ?? PRIVATE_FILE_MODE });
+        fs.chmodSync(target, asset.mode ?? PRIVATE_FILE_MODE);
       }
       fs.writeFileSync(path.join(temporaryDirectory, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, {
         mode: PRIVATE_FILE_MODE,
@@ -334,6 +358,9 @@ export function materializeSharedBuild(build: ResolvedSharedBuild, outputDirecto
     let contents: string | Uint8Array = bytes;
     if (artifact.path.endsWith('.mjs')) {
       let source = bytes.toString('utf8');
+      source = source
+        .replaceAll(`${OUTPUT_ROOT_TOKEN}:url`, pathToFileURL(outputDirectory).href)
+        .replaceAll(OUTPUT_ROOT_TOKEN, outputDirectory);
       for (const [token, target] of replacements) {
         source = source.replaceAll(`${token}:url`, pathToFileURL(target).href).replaceAll(token, target);
       }
@@ -341,7 +368,7 @@ export function materializeSharedBuild(build: ResolvedSharedBuild, outputDirecto
         throw new Error(`Shared build left unresolved path tokens in ${artifact.path}`);
       contents = source;
     }
-    writeAtomic(path.join(outputDirectory, artifact.path), contents);
+    writeAtomic(path.join(outputDirectory, artifact.path), contents, artifact.mode ?? PRIVATE_FILE_MODE);
   }
   return path.join(outputDirectory, build.manifest.entry);
 }

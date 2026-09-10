@@ -98,6 +98,7 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
     // 'read' stands in for the host's own tools: the surface only removes, so it
     // has to start from the whole registered inventory.
     allTools: () => ['read', ...tools.keys()],
+    activeTools: () => activeTools,
     setActiveTools: (names) => {
       activeTools = [...names];
     },

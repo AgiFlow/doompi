@@ -184,6 +184,11 @@
       "import": "./dist/sandboxHarness.mjs",
       "require": "./dist/sandboxHarness.cjs"
     },
+    "./headless": {
+      "types": "./dist/headless.d.mts",
+      "import": "./dist/headless.mjs",
+      "require": "./dist/headless.cjs"
+    },
     "./server-facet": {
       "types": "./dist/serverFacet.d.mts",
       "import": "./dist/serverFacet.mjs",

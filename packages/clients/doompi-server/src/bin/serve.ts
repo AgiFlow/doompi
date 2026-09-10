@@ -6,12 +6,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
-import { loadServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import {
+  loadServerBundle,
+  loadServerFacets,
+  resolveServerBundleSource,
+} from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
 import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { resolveHarnessOptions } from '@agimon-ai/doompi/cli';
+import { layerHookGroups, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi/config';
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { createHarnessTelemetry } from '@agimon-ai/doompi/logSinkTelemetry';
-import { readSyncRegistration } from '@agimon-ai/doompi/services';
 import { findRepositoryRoot } from '@agimon-ai/doompi/utils/repository';
+import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi/services';
 import { superviseAgentRelaunches } from '../adapters/agentSupervisor.ts';
 import { createDoomAgentLauncher } from '../adapters/doomAgentLauncher.ts';
 import { createAgentServerService } from '../adapters/piSessionRuntime.ts';
@@ -22,7 +28,6 @@ import { removeStaleSocket, serveSessionSocket } from '../adapters/socketServer.
 import { createServerTelemetry } from '../adapters/serverTelemetry.ts';
 import { startWebCockpit } from '../adapters/webCockpit.ts';
 import { REGISTRY_DIR_ENV, resolveRegistryDir } from '../services/registryPaths.ts';
-import { resolveSessionApiDirectory } from '../services/sessionApiDirectory.ts';
 import { parseServeOptions, resolveSessionIdentity } from '../services/serveOptions.ts';
 import { SESSION_RECORD_VERSION } from '../types/registry.ts';
 
@@ -45,12 +50,29 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
   }
 }
 
-function registeredApiDirectory(from: string): string | undefined {
+function registeredSync(from: string): SyncRegistration | undefined {
+  let repositoryRoot: string;
   try {
-    return readSyncRegistration(findRepositoryRoot(from))?.apiDirectory;
+    repositoryRoot = findRepositoryRoot(from);
   } catch {
     return undefined;
   }
+  return readSyncRegistration(repositoryRoot);
+}
+
+function currentServerBundleSelection(agentArgs: readonly string[]): {
+  root: string;
+  majorMode: string;
+  activeLayers: string[];
+} {
+  const options = resolveHarnessOptions({ args: agentArgs, cwd: process.cwd(), environment: process.env });
+  const config = loadMajorModesConfig(options.repoRoot, options.homeDirectory);
+  const layers = resolveLayers(config, options.majorMode);
+  return {
+    root: options.repoRoot,
+    majorMode: options.majorMode,
+    activeLayers: options.hooks ? layers : layers.filter((layer) => layerHookGroups(config, [layer]).length === 0),
+  };
 }
 
 async function main(): Promise<number> {
@@ -115,12 +137,17 @@ async function main(): Promise<number> {
       socket = serveSessionSocket({ socketPath: options.socketPath, token, agent, telemetry, onNotice: notice });
       process.stderr.write(`[doompi-server] listening on ${options.socketPath}\n`);
 
-      const apiDirectory = resolveSessionApiDirectory({
-        cwd: process.cwd(),
-        installationDir: path.dirname(fileURLToPath(import.meta.url)),
-        registeredApiDirectory,
+      const installationDir = path.dirname(fileURLToPath(import.meta.url));
+      const selectedRegistration = registeredSync(process.cwd()) ?? registeredSync(installationDir);
+      const source = resolveServerBundleSource({
+        registration: selectedRegistration,
+        directoryOverride: process.env[PACKAGE_API_DIR_ENV],
       });
-      const hasApiOverride = Boolean(process.env[PACKAGE_API_DIR_ENV]);
+      const selection = source.kind === 'descriptor' ? currentServerBundleSelection(resolved.agentArgs) : undefined;
+      const loadedBundle =
+        source.kind === 'descriptor' && selection !== undefined
+          ? await loadServerBundle('session', { ...source, ...selection, onNotice: notice })
+          : undefined;
       apis = await serveSessionApis({
         socketDir: path.dirname(path.resolve(options.socketPath)),
         sessionId: resolved.identity.sessionId,
@@ -128,13 +155,14 @@ async function main(): Promise<number> {
         internalToken: apiInternalToken,
         hubToken: token,
         apis:
-          apiDirectory === undefined && !hasApiOverride
-            ? []
-            : await loadPackageApis('session', { apiDirectory, onNotice: notice }),
+          source.kind === 'legacy'
+            ? await loadPackageApis('session', { apiDirectory: source.directory, env: {}, onNotice: notice })
+            : [],
         facets:
-          apiDirectory === undefined && !hasApiOverride
-            ? []
-            : await loadServerFacets('session', { apiDirectory, onNotice: notice }),
+          loadedBundle?.facets ??
+          (source.kind === 'legacy'
+            ? await loadServerFacets('session', { apiDirectory: source.directory, env: {}, onNotice: notice })
+            : []),
         telemetry,
         onNotice: notice,
       });
@@ -164,6 +192,16 @@ async function main(): Promise<number> {
         ...(apis.socketPath === undefined ? {} : { apiSocketPath: apis.socketPath }),
         protocolSocketPath: protocol.socketPath,
         protocolServerId: protocol.serverId,
+        ...(source.kind === 'descriptor' && selection !== undefined
+          ? {
+              serverComposition: {
+                ...selection,
+                apiDirectory: source.directory,
+                generation: source.generation,
+                fingerprint: source.fingerprint,
+              },
+            }
+          : {}),
         pid: process.pid,
         createdAt: new Date().toISOString(),
       });

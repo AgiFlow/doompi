@@ -4,8 +4,8 @@
  * DESIGN PATTERNS:
  * - One mount table. Every facet registers through this service, so the host
  *   process has a single ordered record of what is mounted and under what.
- * - Base paths are first-come. A collision is a notice and a no-op handle, not
- *   a crash: one misdeclared package must not take a server down.
+ * - Base paths are first-come. A collision is reported and skipped, so one
+ *   misdeclared package cannot take a server down.
  * - Handlers are started lazily on first mount and closed on dispose, so a
  *   facet that registers and immediately unwinds leaves nothing running.
  *
@@ -46,7 +46,7 @@ export function createDoomServerHost(options: CreateDoomServerHostOptions): Doom
 
   const changed = (): void => options.onChange?.(mounts.map((mount) => mount.basePath));
 
-  const noop: DoomServerRegistration = { dispose: () => undefined };
+  const noop: DoomServerRegistration = { mounted: false, dispose: () => undefined };
 
   const registerApi = (api: DoomApi): DoomServerRegistration => {
     if (disposed) {
@@ -70,6 +70,7 @@ export function createDoomServerHost(options: CreateDoomServerHostOptions): Doom
     changed();
     let released = false;
     return {
+      mounted: true,
       dispose: () => {
         if (released) return;
         released = true;

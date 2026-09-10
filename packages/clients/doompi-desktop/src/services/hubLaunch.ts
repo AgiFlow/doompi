@@ -35,7 +35,7 @@ export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.P
     // Resolve the staged DoomPi package before native-only shims so sync can
     // register its real Pi extension entry instead of the minimal native manifest.
     NODE_PATH: [artifact('node_modules'), artifact('native', 'node_modules')].join(path.delimiter),
-    DOOMPI_SERVER_COMMAND: artifact('doompi-server', 'dist', 'bin', 'serve.mjs'),
+    DOOMPI_SERVER_COMMAND: artifact('doompi', 'dist', 'bin', 'serve.mjs'),
     // Desktop owns an isolated DPI composition rather than changing the user's
     // persisted Pi integration. Sync and sessions must use that same entry point.
     DOOMPI_AGENT_COMMAND: artifact('doompi', 'dist', 'bin', 'dpi.mjs'),

@@ -73,13 +73,22 @@ describe('doompi-domain package contract', () => {
       '.',
       './apply',
       './extensions/pi',
+      './extensions/headless',
       './mcp',
       './plugins',
       './resources',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './apply', './extensions/pi', './mcp', './plugins', './resources']) {
+    for (const subpath of [
+      '.',
+      './apply',
+      './extensions/pi',
+      './extensions/headless',
+      './mcp',
+      './plugins',
+      './resources',
+    ]) {
       expect(conditions(exportsMap[subpath]), subpath).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);

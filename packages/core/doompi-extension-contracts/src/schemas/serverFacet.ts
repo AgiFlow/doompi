@@ -20,6 +20,8 @@ import type { DoomApi, DoomApiContext, DoomApiScope } from './packageApi.ts';
 export const DOOM_SERVER_HOST_SERVICE = 'doom/server-host';
 
 export interface DoomServerRegistration {
+  /** Whether the API was mounted. A refused registration is a no-op handle. */
+  readonly mounted?: boolean;
   /** Unmount the surface and close its handler. Idempotent. */
   dispose(): void;
 }
@@ -37,8 +39,8 @@ export interface DoomServerHostService {
   readonly context: DoomApiContext;
   /**
    * Mount an API under its own base path. A base path already claimed by an
-   * earlier facet is refused with a notice, matching how every other shared
-   * name is settled.
+   * earlier facet is refused with a notice and a no-op handle. The same
+   * failure posture applies when the API cannot start or the host is disposed.
    */
   registerApi(api: DoomApi): DoomServerRegistration;
   /** Base paths currently mounted, in mount order. */
@@ -94,6 +96,8 @@ export interface DeclaredServerFacet {
   dist: string;
   /** Scopes this facet is installed into; both when the package names neither. */
   scopes: readonly DoomApiScope[];
+  /** A selected host cannot be ready without this package's runtime capability. */
+  required?: boolean;
 }
 
 export class DoomServerFacetManifestError extends Error {
@@ -154,6 +158,9 @@ export function declaredServerFacetsOf(packageDir: string, manifest: Record<stri
     );
   }
   const dist = normalizePath(packageDir, 'dist', declared.dist);
+  if (declared.required !== undefined && typeof declared.required !== 'boolean') {
+    throw new DoomServerFacetManifestError(packageDir, 'required must be a boolean.');
+  }
   return [
     {
       packageName: typeof manifest.name === 'string' ? manifest.name : packageDir,
@@ -161,6 +168,7 @@ export function declaredServerFacetsOf(packageDir: string, manifest: Record<stri
       entry,
       dist,
       scopes: normalizeScopes(packageDir, declared.scopes),
+      ...(typeof declared.required === 'boolean' ? { required: declared.required } : {}),
     },
   ];
 }

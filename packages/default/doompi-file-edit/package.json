@@ -50,6 +50,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./session-api": {
       "types": "./dist/sessionApi.d.mts",
       "import": "./dist/sessionApi.mjs",
@@ -117,12 +122,12 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "file-edits",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
-    }
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiWeb": {
     "pluginId": "files",

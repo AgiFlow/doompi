@@ -26,6 +26,28 @@ export function isRecordFileName(name: string): boolean {
   return name.endsWith(RECORD_EXTENSION);
 }
 
+function parseServerComposition(value: unknown): SessionRecord['serverComposition'] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  for (const key of ['root', 'apiDirectory', 'generation', 'fingerprint', 'majorMode']) {
+    if (typeof record[key] !== 'string' || record[key].trim() === '' || record[key].includes('\0')) return undefined;
+  }
+  if (!/^[a-f0-9]{64}$/u.test(record.fingerprint as string)) return undefined;
+  if (
+    !Array.isArray(record.activeLayers) ||
+    record.activeLayers.some((layer) => typeof layer !== 'string' || layer === '')
+  )
+    return undefined;
+  return {
+    root: record.root as string,
+    apiDirectory: record.apiDirectory as string,
+    generation: record.generation as string,
+    fingerprint: record.fingerprint as string,
+    majorMode: record.majorMode as string,
+    activeLayers: [...record.activeLayers] as string[],
+  };
+}
+
 /**
  * Validates one record file's content.
  *
@@ -48,6 +70,8 @@ export function parseSessionRecord(raw: string): SessionRecord | undefined {
   }
   if (typeof record.name !== 'string') return undefined;
   if (typeof record.pid !== 'number' || !Number.isInteger(record.pid) || record.pid <= 0) return undefined;
+  const serverComposition = parseServerComposition(record.serverComposition);
+  if (record.serverComposition !== undefined && serverComposition === undefined) return undefined;
   return {
     version: SESSION_RECORD_VERSION,
     id: record.id as string,
@@ -68,6 +92,7 @@ export function parseSessionRecord(raw: string): SessionRecord | undefined {
     ...(typeof record.protocolServerId === 'string' && record.protocolServerId !== ''
       ? { protocolServerId: record.protocolServerId }
       : {}),
+    ...(serverComposition === undefined ? {} : { serverComposition }),
     pid: record.pid,
     createdAt: record.createdAt as string,
   };

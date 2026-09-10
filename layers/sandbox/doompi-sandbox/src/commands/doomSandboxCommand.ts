@@ -1,9 +1,8 @@
 // @scaffold-generated
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { COMMAND_DESCRIPTION, COMMAND_NAME } from '../schemas/sandboxCommands.ts';
+export { COMMAND_DESCRIPTION, COMMAND_NAME };
 import type { SandboxExtensionService } from '../types/extension.ts';
-
-export const COMMAND_NAME = 'doom-sandbox';
-export const COMMAND_DESCRIPTION = 'Show sandbox container status for this session';
 
 export function registerSandboxCommand(
   pi: Pick<ExtensionAPI, 'registerCommand'>,

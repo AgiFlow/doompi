@@ -390,6 +390,7 @@ function createExtensionFixture(
   const toolSurface = createDoomToolSurface({
     generation: 'plan-test',
     allTools: () => pi.getAllTools().map((tool) => tool.name),
+    activeTools: () => activeTools,
     setActiveTools: (names) => pi.setActiveTools([...names]),
   });
   cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);

@@ -192,6 +192,8 @@ const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
  */
 const ABI_VOCABULARY_OWNERS = new Map<string, RegExp>([['@agimon-ai/doompi-kernel', /kernel/i]]);
 const CORDIS_HOST_ADAPTER_PATH = 'src/adapters/pi/cordisHost.ts';
+const NATIVE_HOST_PACKAGE = '@agimon-ai/doompi';
+const NATIVE_HEADLESS_HOST_PATH = 'src/adapters/server/headlessHost.ts';
 /** The server's own host runner: one Context per headless server process. */
 const SERVER_FACET_LOADER_PATH = 'src/adapters/serverFacetLoader.ts';
 const CORDIS_HOST_ADAPTER_PATHS = [CORDIS_HOST_ADAPTER_PATH, SERVER_FACET_LOADER_PATH];
@@ -933,6 +935,13 @@ function productionSourceFiles(configRoot: string): string[] {
   return files.sort();
 }
 
+function isNativeHeadlessHost(filePath: string, configRoot: string): boolean {
+  return (
+    readPackageManifest(configRoot)?.name === NATIVE_HOST_PACKAGE &&
+    projectPath(filePath, configRoot) === NATIVE_HEADLESS_HOST_PATH
+  );
+}
+
 function cordisImportBindings(sourceFile: ts.SourceFile): {
   requiredHelpers: Map<string, string>;
   serviceConstants: Map<string, string>;
@@ -1343,6 +1352,38 @@ function isOwnedCordisExpression(expression: ts.Expression, use: ts.Node, owned:
   return false;
 }
 
+function isNativeHeadlessHostProvider(
+  node: ts.CallExpression,
+  method: string | undefined,
+  receiver: ts.Expression | undefined,
+  service: string,
+): boolean {
+  const hostClass = ts.findAncestor(node, ts.isClassDeclaration);
+  const constructor = ts.findAncestor(node, ts.isConstructorDeclaration);
+  const isHeadlessHost =
+    hostClass?.name?.text === 'HeadlessHost' &&
+    hostClass.heritageClauses?.some(
+      (clause) =>
+        clause.token === ts.SyntaxKind.ExtendsKeyword &&
+        clause.types.some((type) => ts.isIdentifier(type.expression) && type.expression.text === 'Service'),
+    );
+  if (!isHeadlessHost || !constructor) return false;
+  if (method === 'provide') {
+    return (
+      receiver !== undefined &&
+      ts.isIdentifier(receiver) &&
+      receiver.text === 'context' &&
+      service === 'DOOM_MINOR_MODE_CATALOG_SERVICE'
+    );
+  }
+  return (
+    node.expression.kind === ts.SyntaxKind.SuperKeyword &&
+    ts.isIdentifier(node.arguments[0]) &&
+    node.arguments[0].text === 'context' &&
+    service === 'DOOM_HEADLESS_HOST_SERVICE'
+  );
+}
+
 function methodName(expression: ts.LeftHandSideExpression): string | undefined {
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
   if (
@@ -1418,6 +1459,7 @@ function cordisServiceFacts(
   const injections: CordisInjectionFact[] = [];
   const invalidProviders: string[] = [];
   const uses: CordisServiceUse[] = [];
+  const nativeHeadlessHost = isNativeHeadlessHost(filePath, configRoot);
   const servicesOf = (elements: ts.NodeArray<ts.Expression>): Set<string> =>
     new Set(
       elements.flatMap((element) =>
@@ -1485,7 +1527,14 @@ function cordisServiceFacts(
             ),
           });
         }
-        if (method === 'provide' && service && !isOwnedCordisExpression(receiver, node, owned)) {
+        if (
+          method === 'provide' &&
+          service &&
+          !(
+            isOwnedCordisExpression(receiver, node, owned) ||
+            (nativeHeadlessHost && isNativeHeadlessHostProvider(node, method, receiver, service))
+          )
+        ) {
           invalidProviders.push(
             `${service} is provided outside a mounted plugin or injection-owned context at ${projectPath(filePath, configRoot) ?? filePath}`,
           );
@@ -1495,7 +1544,13 @@ function cordisServiceFacts(
         const context = node.arguments[0];
         for (const argument of node.arguments.slice(1)) {
           const service = cordisServiceExpression(argument, serviceConstants);
-          if (service && (!context || !isOwnedCordisExpression(context, node, owned))) {
+          if (
+            service &&
+            !(
+              (context && isOwnedCordisExpression(context, node, owned)) ||
+              (nativeHeadlessHost && isNativeHeadlessHostProvider(node, undefined, undefined, service))
+            )
+          ) {
             invalidProviders.push(
               `${service} Service is constructed outside a mounted plugin or injection-owned context`,
             );

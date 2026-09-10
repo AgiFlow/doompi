@@ -1,3 +1,4 @@
+export { voiceHeadlessFacet } from '../adapters/headless/facet.ts';
 export * from '../adapters/audio/infrastructure';
 export * from '../adapters/audio/clientMedia';
 export * from '../adapters/pi/voice';

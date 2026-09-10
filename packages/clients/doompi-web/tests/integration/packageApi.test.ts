@@ -9,6 +9,7 @@ import {
   DOOM_API_CALLER_STEP_UP_HEADER,
   DOOM_HUB_API_SESSION_QUERY_PARAM,
   type DoomApi,
+  type DoomApiContext,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { Hono } from 'hono';
@@ -162,6 +163,173 @@ describe('hub-scoped package APIs', () => {
     const response = await app.request('/api/plugin/worktrees/list');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ from: 'facet' });
+  });
+
+  it('keeps the legacy API as the first owner during dual registration', async () => {
+    const app = new Hono();
+    const notices: string[] = [];
+    const legacy: DoomApi = {
+      basePath: 'shared',
+      start: () => ({ fetch: () => Response.json({ owner: 'legacy' }), close: () => undefined }),
+    };
+    mountHubApis(
+      app,
+      [legacy],
+      [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi({
+              basePath: 'shared',
+              start: () => ({ fetch: () => Response.json({ owner: 'facet' }), close: () => undefined }),
+            });
+            return () => registration.dispose();
+          },
+        },
+      ],
+      (message) => notices.push(message),
+      () => undefined,
+      () => undefined,
+    );
+
+    await expect((await app.request('/api/plugin/shared/status')).json()).resolves.toEqual({ owner: 'legacy' });
+    expect(notices.join('\n')).toMatch(/another facet already claims it/u);
+  });
+
+  it('isolates a throwing facet and still serves a healthy sibling', async () => {
+    const app = new Hono();
+    const notices: string[] = [];
+    mountHubApis(
+      app,
+      [],
+      [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply() {
+            throw new Error('facet failed');
+          },
+        },
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi({
+              basePath: 'healthy',
+              start: () => ({ fetch: () => Response.json({ ok: true }), close: () => undefined }),
+            });
+            return () => registration.dispose();
+          },
+        },
+      ],
+      (message) => notices.push(message),
+      () => undefined,
+      () => undefined,
+    );
+
+    const response = await app.request('/api/plugin/healthy/status');
+    expect(response.status).toBe(200);
+    expect(notices.join('\n')).toMatch(/server facet did not install.*facet failed/u);
+  });
+
+  it('lends hub-only context to a facet', async () => {
+    const app = new Hono();
+    let seen: DoomApiContext | undefined;
+    mountHubApis(
+      app,
+      [],
+      [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            seen = host.context;
+            const registration = host.registerApi({
+              basePath: 'context',
+              start: () => ({ fetch: () => Response.json({ ok: true }), close: () => undefined }),
+            });
+            return () => registration.dispose();
+          },
+        },
+      ],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+    );
+
+    expect((await app.request('/api/plugin/context/status')).status).toBe(200);
+    expect(seen).toMatchObject({ scope: 'hub' });
+    expect(seen).not.toHaveProperty('sessionId');
+    expect(seen).not.toHaveProperty('cwd');
+    expect(seen).not.toHaveProperty('internalToken');
+    expect(seen).not.toHaveProperty('hubToken');
+  });
+
+  it('contains a throwing hub handler and keeps another API available', async () => {
+    const app = new Hono();
+    const notices: string[] = [];
+    const api = (basePath: string, fails: boolean): DoomApi => ({
+      basePath,
+      start: () => ({
+        fetch: () => {
+          if (fails) throw new Error('handler failed');
+          return Response.json({ ok: true });
+        },
+        close: () => undefined,
+      }),
+    });
+    mountHubApis(
+      app,
+      [api('broken', true), api('healthy', false)],
+      [],
+      (message) => notices.push(message),
+      () => undefined,
+      () => undefined,
+    );
+
+    expect((await app.request('/api/plugin/broken/status')).status).toBe(500);
+    expect(notices.join('\n')).toMatch(/hub API 'broken' failed/u);
+    expect((await app.request('/api/plugin/healthy/status')).status).toBe(200);
+  });
+
+  it('closes the initial bundle and removes its routes', async () => {
+    const app = new Hono();
+    const handlerClose = vi.fn();
+    const facetDispose = vi.fn();
+    const mounted = mountHubApis(
+      app,
+      [],
+      [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi({
+              basePath: 'initial',
+              start: () => ({ fetch: () => Response.json({ ok: true }), close: handlerClose }),
+            });
+            return () => {
+              facetDispose();
+              registration.dispose();
+            };
+          },
+        },
+      ],
+      () => undefined,
+      () => undefined,
+      () => undefined,
+    );
+
+    expect((await app.request('/api/plugin/initial/status')).status).toBe(200);
+    await mounted.close();
+
+    expect((await app.request('/api/plugin/initial/status')).status).toBe(404);
+    expect(facetDispose).toHaveBeenCalledOnce();
+    expect(handlerClose).toHaveBeenCalledOnce();
   });
 
   it('drops a facet registration when its bundle is retired', async () => {

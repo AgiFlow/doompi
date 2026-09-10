@@ -171,6 +171,7 @@ function sessionProvider(ctx: Context, service: DoomCordisSessionService, pi: Ex
     createDoomToolSurface({
       generation: service.generation,
       allTools: () => pi.getAllTools().map((tool) => tool.name),
+      activeTools: () => pi.getActiveTools(),
       setActiveTools: (names) => pi.setActiveTools(names),
     }),
   );

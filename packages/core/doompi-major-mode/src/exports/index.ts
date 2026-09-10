@@ -1,3 +1,4 @@
+export { majorModeHeadlessFacet } from '../adapters/headless/facet.ts';
 export { majorModeExtension } from '../adapters/pi/extension.ts';
 export { registerMajorModeVoiceCapability } from '../adapters/pi/voiceTool.ts';
 export { createMajorModeTelemetry, type MajorModeTelemetryOptions } from '../adapters/telemetry/logSinkTelemetry.ts';

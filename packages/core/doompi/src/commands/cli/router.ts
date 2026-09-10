@@ -9,7 +9,7 @@
  */
 
 /** Subcommands that parse their own arguments instead of passing them to Pi. */
-export const KNOWN_COMMANDS = ['init', 'sync', 'compat', 'doctor'] as const;
+export const KNOWN_COMMANDS = ['init', 'sync', 'compat', 'doctor', 'history-export'] as const;
 
 export type KnownCommand = (typeof KNOWN_COMMANDS)[number];
 

@@ -42,7 +42,7 @@ export interface DoomToolSurfaceService {
   refresh(): void;
   /** Layers currently active; restrictions owned by other layers stay dormant. */
   setActiveLayers(layers: readonly string[]): void;
-  /** The list most recently pushed to the host. */
+  /** The list most recently reconciled with the host. */
   active(): readonly string[];
   dispose(): void;
 }

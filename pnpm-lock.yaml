@@ -441,9 +441,6 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-server':
-        specifier: workspace:*
-        version: link:../doompi-server
       '@agimon-ai/doompi-web':
         specifier: workspace:*
         version: link:../doompi-web
@@ -538,9 +535,6 @@ importers:
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../../core/doompi-extension-contracts
-      '@agimon-ai/doompi-server':
-        specifier: workspace:*
-        version: link:../doompi-server
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -686,6 +680,9 @@ importers:
       '@agimon-ai/doompi-extension-contracts':
         specifier: workspace:*
         version: link:../doompi-extension-contracts
+      '@agimon-ai/doompi-kernel':
+        specifier: workspace:*
+        version: link:../doompi-kernel
       '@agimon-ai/doompi-major-mode':
         specifier: workspace:*
         version: link:../doompi-major-mode
@@ -707,12 +704,24 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
+      '@earendil-works/chord':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@earendil-works/pi-agent-core':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-protocol':
+        specifier: 0.85.1
+        version: 0.85.1
       '@earendil-works/pi-server':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.7)
       cross-spawn:
         specifier: 7.0.6
         version: 7.0.6
@@ -741,6 +750,9 @@ importers:
       '@earendil-works/pi-ai':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-client':
+        specifier: 0.85.1
+        version: 0.85.1
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -753,6 +765,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
       typescript:
         specifier: 7.0.2
         version: 7.0.2

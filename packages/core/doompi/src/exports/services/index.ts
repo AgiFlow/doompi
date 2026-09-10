@@ -119,6 +119,5 @@ export {
   syncStatePath,
   writeSyncState,
 } from '../../adapters/syncState';
-// The route and facet module names, so a host loading a synced generation and
-// the sync that wrote it never disagree about the filename.
-export { apiRoutesFile, serverFacetsFile } from '../../adapters/apiRoutesSync';
+// Read-only compatibility filenames, not a legacy generation writer.
+export { apiRoutesFile, serverFacetsFile } from '../../services/legacyApiFiles.ts';

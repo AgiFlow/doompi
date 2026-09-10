@@ -1,36 +1,17 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { BASH_TOOL_LABEL, BASH_TOOL_NAME, type BashParams, BashParamsSchema } from '../../schemas/bashTool.ts';
-import { stripAnsi } from '../../services/AnsiScrub/ansiScrub';
-import type { BashRunResult, CompletedRun, IBashRunService } from '../../types/bashRunService';
+import type { BashRunResult, IBashRunService } from '../../types/bashRunService';
 import { renderBashCall, renderBashResult } from '../../tui/bashRender.ts';
+import { getBackgroundThresholdMs } from '../../types/config.ts';
 import {
-  getBackgroundThresholdMs,
-  getResultMaxBytes,
-  getResultMaxLines,
-  getResultMaxTokens,
-  getSuccessResultMaxBytes,
-  getSuccessResultMaxTokens,
-} from '../../types/config.ts';
-import {
-  boundExcerpt,
-  boundResultText,
-  composeExcerpt,
+  formatRunResult,
   parseResultPragma,
-  type ResultBudget,
-  countLines,
-  formatSize,
-  summarizeLog,
-  type ToolResult,
   textResult,
-} from './responseEnvelope.ts';
+  type LogSummarizer,
+  type ToolResult,
+} from '../../services/bashResult.ts';
 
 const MS_PER_SECOND = 1000;
-
-const PROMOTION_REASONS: Record<'requested' | 'threshold' | 'interactive', string> = {
-  requested: 'Started in the background',
-  threshold: 'Still running after the background threshold',
-  interactive: 'Started interactively',
-};
 
 export const BASH_PROMPT_SNIPPET =
   'Execute shell commands with bounded foreground output and supervised background runners';
@@ -52,6 +33,7 @@ export interface BashToolDependencies {
   getSessionId(): string | Promise<string>;
   /** Called after a runner is promoted, so UI state can refresh. */
   onRunnerStarted(id: string): void;
+  summarizeLog?: LogSummarizer;
 }
 
 /**
@@ -108,7 +90,7 @@ export function registerBashTool(pi: ExtensionAPI, dependencies: BashToolDepende
       }
 
       if (result.kind === 'promoted') dependencies.onRunnerStarted(result.id);
-      return formatRunResult(result, parseResultPragma(params.command));
+      return formatRunResult(result, parseResultPragma(params.command), dependencies.summarizeLog);
     },
 
     // Without these, pi falls back to echoing the raw command and the tail end of
@@ -121,139 +103,4 @@ export function registerBashTool(pi: ExtensionAPI, dependencies: BashToolDepende
       return renderBashResult(result, { ...options, isError: context.isError }, theme);
     },
   });
-}
-
-function completionFailed(result: CompletedRun): boolean {
-  return result.timedOut === true || result.signal !== null || (result.exitCode !== null && result.exitCode !== 0);
-}
-
-function completionStatus(result: CompletedRun): string | undefined {
-  if (result.timedOut === true) return 'Timed out: exceeded the requested timeout.';
-  if (result.signal !== null) return `Signal: ${result.signal}`;
-  if (result.exitCode === null) return 'Exit status unavailable.';
-  if (result.exitCode !== 0) return `Exit: ${result.exitCode}`;
-  return undefined;
-}
-
-export function formatRunResult(result: BashRunResult, budget: ResultBudget = {}): ToolResult {
-  if (result.kind === 'failed') {
-    throw new Error(
-      [
-        `Could not start runner "${result.name}": ${result.error}`,
-        'Next: correct the reported launch or supervision problem. Retry only after changing the command or environment.',
-      ].join('\n'),
-    );
-  }
-
-  if (result.kind === 'promoted') {
-    const reason = PROMOTION_REASONS[result.reason];
-    const body = [
-      `${reason}: runner "${result.name}" (${result.id}).`,
-      `Streaming log: ${result.logPath}`,
-      `Inspect: doom-runner logs ${result.id}`,
-    ].join('\n');
-
-    return textResult(body, {
-      id: result.id,
-      runner: result.name,
-      pid: result.pid,
-      logPath: result.logPath,
-      promoted: true,
-      reason: result.reason,
-    });
-  }
-
-  // Same shape either way; a success just buys less of it. Exiting 0 has already
-  // reported the outcome, so its output is worth a fraction of a failure's.
-  const succeeded = !completionFailed(result);
-  const maxLines = budget.maxLines ?? getResultMaxLines();
-  // An explicit pragma still wins: asking for a wider result is the point of it.
-  const maxBytes = budget.maxBytes ?? (succeeded ? getSuccessResultMaxBytes() : getResultMaxBytes());
-  const maxTokens = budget.maxTokens ?? (succeeded ? getSuccessResultMaxTokens() : getResultMaxTokens());
-  const log = summarizeLog(result.logPath, maxLines, maxBytes, maxTokens);
-  const useCapturedOutput = !result.rtkOutput && log.tail.length === 0 && result.output.length > 0;
-  let tail: string;
-  let tailLines: number;
-  let outputLines: number;
-  let outputBytes: number;
-  let truncated: boolean;
-  if (result.rtkOutput) {
-    const clipped = Buffer.byteLength(result.rtkOutput.output, 'utf8') < result.rtkOutput.bytes;
-    const bounded = clipped
-      ? composeExcerpt(
-          result.rtkOutput.head,
-          result.rtkOutput.output,
-          result.rtkOutput.lines,
-          maxLines,
-          maxBytes,
-          [],
-          maxTokens,
-        )
-      : boundExcerpt(result.rtkOutput.output, maxLines, maxBytes, maxTokens);
-    tail = bounded.text;
-    tailLines = bounded.lines;
-    outputLines = result.rtkOutput.lines;
-    outputBytes = result.rtkOutput.bytes;
-    truncated = outputLines > tailLines || outputBytes > Buffer.byteLength(tail, 'utf8');
-  } else {
-    tail = useCapturedOutput ? result.output : log.tail;
-    tailLines = useCapturedOutput ? countLines(tail) : log.tailLines;
-    outputLines = Math.max(log.lines, tailLines);
-    outputBytes = useCapturedOutput ? Buffer.byteLength(tail, 'utf8') : log.bytes;
-    truncated = !useCapturedOutput && (outputLines > tailLines || outputBytes > Buffer.byteLength(tail, 'utf8'));
-  }
-  const plainTail = stripAnsi(tail).replace(/\r?\n$/, '');
-  const failed = completionFailed(result);
-  const status = completionStatus(result);
-  const textLines: string[] = [];
-
-  if (plainTail.length === 0) {
-    textLines.push(status === undefined ? 'Completed with no output.' : 'No output.');
-  } else if (truncated) {
-    const label = result.rtkOutput ? `RTK ${result.rtkOutput.filter} excerpt` : 'Log excerpt';
-    textLines.push(
-      `${label} (${tailLines.toLocaleString('en-US')} of ${outputLines.toLocaleString('en-US')} lines):\n${plainTail}`,
-    );
-  } else {
-    textLines.push(plainTail);
-  }
-  if (status !== undefined) textLines.push(status);
-  if (result.rtkWarning) textLines.push(result.rtkWarning);
-
-  if (truncated) {
-    const label = result.rtkOutput ? 'Complete raw log' : 'Full log';
-    textLines.push(
-      `${label}: ${result.logPath} (${formatSize(log.bytes)}, ${log.lines.toLocaleString('en-US')} lines); inspect with doom-runner logs ${result.id}`,
-    );
-  } else if (failed && plainTail.length === 0) {
-    textLines.push(
-      `Log: ${result.logPath}`,
-      'Next: run one read-only diagnostic; retry only after correcting the cause.',
-    );
-  }
-
-  const text = boundResultText(textLines.join('\n'), maxBytes);
-  const details = {
-    id: result.id,
-    runner: result.name,
-    exitCode: result.exitCode,
-    logPath: result.logPath,
-    backend: result.backend,
-    fileSize: log.bytes,
-    lines: useCapturedOutput ? tailLines : log.lines,
-    tail,
-    tailLines,
-    ...(result.rtkOutput
-      ? {
-          rtkFilter: result.rtkOutput.filter,
-          rtkOutputBytes: result.rtkOutput.bytes,
-          rtkOutputLines: result.rtkOutput.lines,
-        }
-      : {}),
-    ...(result.rtkWarning ? { rtkWarning: result.rtkWarning } : {}),
-    ...(result.timedOut ? { timedOut: true } : {}),
-  };
-
-  if (failed) throw new Error(text);
-  return textResult(text, details);
 }

@@ -5,7 +5,7 @@ import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import type { ByteTransport, ByteTransportHandlers } from '@earendil-works/pi-client';
-import { createAgentServerService, type ProtocolSocket, serveProtocolSocket } from '@agimon-ai/doompi-server';
+import { createAgentServerService, type ProtocolSocket, serveProtocolSocket } from '@agimon-ai/doompi/server';
 import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,

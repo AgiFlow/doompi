@@ -32,12 +32,12 @@ The typed contract lives in [@agimon-ai/doompi-web-contracts](https://www.npmjs.
 
 Use a client-only plugin when Pi RPC or an existing host action already supplies the data. Add a hub channel when the browser needs live host-side state that is not part of Pi RPC. Add a [package API](package-apis.md) when the operation is naturally request-response or belongs beside session-owned resources.
 
-| Need                                               | Contract                             |
-| -------------------------------------------------- | ------------------------------------ |
-| Render a tab, tool call, setting, badge, or action | `webPlugin` contribution             |
-| Maintain a live session-scoped stream or snapshot  | client channel plus `webHubChannels` |
-| Read or mutate data through HTTP semantics         | `doompiApi` package API              |
-| Change the base cockpit lifecycle or transport     | host code, not a plugin              |
+| Need                                               | Contract                                       |
+| -------------------------------------------------- | ---------------------------------------------- |
+| Render a tab, tool call, setting, badge, or action | `webPlugin` contribution                       |
+| Maintain a live session-scoped stream or snapshot  | client channel plus `webHubChannels`           |
+| Read or mutate data through HTTP semantics         | `DoomApi` registered by a `doompiServer` facet |
+| Change the base cockpit lifecycle or transport     | host code, not a plugin                        |
 
 This separation prevents panels from opening private sockets or inventing their own authorization path.
 

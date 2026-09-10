@@ -1,3 +1,4 @@
+export { skillHeadlessFacet } from '../adapters/headless/facet.ts';
 export { skillsExtension } from '../adapters/pi/extension.ts';
 export { skillInvocation } from '../services/skillText.ts';
 export { openSkillsOverlay, type SkillsOverlayResult } from '../tui/skillsOverlay.ts';

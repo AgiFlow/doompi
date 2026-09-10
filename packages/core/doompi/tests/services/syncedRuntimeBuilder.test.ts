@@ -107,6 +107,12 @@ describe('buildSyncedRuntime', () => {
     const result = await buildSyncedRuntime('/repo', { DOOMPI_MCP: '0' });
 
     expect(mocks.compileModeExtension).toHaveBeenCalledTimes(4);
+    expect(result.compositions.map((composition) => composition.fingerprint)).toEqual([
+      'fingerprint:copilot:loud',
+      'fingerprint:copilot:mute',
+      'fingerprint:minimal:loud',
+      'fingerprint:minimal:mute',
+    ]);
     expect(result.bundles).toEqual({
       'fingerprint:copilot:loud': '/dist/copilot.mjs',
       'fingerprint:copilot:mute': '/dist/copilot.mute.mjs',

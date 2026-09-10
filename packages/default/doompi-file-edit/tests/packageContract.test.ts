@@ -13,6 +13,7 @@ interface PackageManifest {
   publishConfig?: { access?: string };
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 interface ProjectConfiguration {
@@ -105,6 +106,16 @@ describe('doom file edit package boundary', () => {
 
       for (const output of targetPaths(target)) await expectFile(output);
     }
+    expect(exportsMap['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
+    expect(manifest.doompiServer).toEqual({
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
   });
 
   it('keeps exports closed and resolves every allowlisted package resource', async () => {

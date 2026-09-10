@@ -19,6 +19,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { registerBashTool } from '../../commands/bash/bashTool.ts';
 import { createRunnerContainer } from '../../container/index.ts';
+import { summarizeLog } from '../../adapters/LogReader/LogReader.ts';
 import type { IBashRunService } from '../../types/bashRunService';
 import type { RunnerRecord } from '../../types/runnerRegistry';
 import { registerRunnerCompactionRecovery } from '../../services/runs/compaction.ts';
@@ -472,6 +473,7 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
       publishBackgroundWork();
       scheduleRefresh(false);
     },
+    summarizeLog,
   });
 
   registerRunnerCompactionRecovery(pi, {

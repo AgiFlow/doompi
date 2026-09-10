@@ -46,9 +46,9 @@ Package-owned Help prompts live at `src/prompts/<prompt-name>/SKILL.md`. The `do
 
 ### HTTP APIs
 
-A package that serves HTTP declares `doompiApi` in `package.json`. The declaration names a base path and an entry for each supported scope: `session` for the session server and `hub` for the cockpit hub.
+A package that serves HTTP exports a `DoomApi` from its server adapter and registers it through a `DoomServerFacet`. Declare one `doompiServer` block in `package.json` with the built facet entry, its dist path, and the supported `session` and/or `hub` scopes. The facet owns registration and disposal through the host lifecycle.
 
-`package-api-manifest` checks the base path, each declared entry, and the publish allowlist for the built module imported by the host. `package-api-entry` checks that the entry exports the named `api` value expected by generated route modules. Installation does not validate this manifest, so an invalid published path may not surface until a host loads the package.
+The `package-api-manifest` rule rejects the legacy `doompiApi` field. Use the canonical server-facet scaffold and keep the API's useful adapter and barrel exports under `src`.
 
 ### Cordis and runtime ownership
 

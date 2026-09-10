@@ -1,24 +1,17 @@
-import { formatFileHeader, formatTaggedLine, splitLines } from '@agimon-ai/doompi-hashline';
-import {
-  computeFileTag,
-  decodeUtf8,
-  displayPath,
-  isWritableFile,
-  resolveReadInputPath,
-} from '@agimon-ai/doompi-hashline/files';
-import { renderHashlineCall, renderHashlineResult } from '@agimon-ai/doompi-ui/hashlineRendering';
+import { displayPath, isWritableFile, resolveReadInputPath } from '@agimon-ai/doompi-hashline/files';
 import { readFile } from 'node:fs/promises';
+import { renderHashlineCall, renderHashlineResult } from '@agimon-ai/doompi-ui/hashlineRendering';
 import {
   createReadToolDefinition,
   DEFAULT_MAX_BYTES,
   formatSize,
-  truncateHead,
-  truncateLine,
+  type AgentToolResult,
   type ExtensionAPI,
-  type ReadToolDetails,
 } from '@earendil-works/pi-coding-agent';
 import { ReadParamsSchema, type ReadParams } from '../../schemas/readTool.ts';
 import { applyImageLimits, imageLimits } from './readImage.ts';
+import { assertNotAborted, createTaggedReadResult, isImageRead } from '../readTool.ts';
+export { assertNotAborted, createTaggedReadResult, isImageRead } from '../readTool.ts';
 
 type WritableCheck = (path: string) => Promise<boolean>;
 
@@ -65,7 +58,11 @@ export function registerHashlineReadTool(
       if (!canEdit) return nativeResult;
       const bytes = await readFile(absolutePath);
       assertNotAborted(signal);
-      return createTaggedReadResult(bytes, displayPath(absolutePath, ctx.cwd), input);
+      return createTaggedReadResult(
+        bytes,
+        displayPath(absolutePath, ctx.cwd),
+        input,
+      ) as unknown as AgentToolResult<unknown>;
     },
     renderCall(args, theme) {
       const input = args as ReadParams;
@@ -79,59 +76,4 @@ export function registerHashlineReadTool(
       return renderHashlineResult(result, options, theme, context, 'read');
     },
   });
-}
-
-export function createTaggedReadResult(
-  bytes: Buffer,
-  path: string,
-  params: ReadParams,
-): { content: [{ type: 'text'; text: string }]; details: ReadToolDetails | undefined } {
-  const lines = splitLines(decodeUtf8(bytes, path));
-  const startIndex = params.offset === undefined ? 0 : params.offset - 1;
-  if (startIndex >= lines.length) {
-    throw new Error(`Offset ${params.offset} is beyond end of file (${lines.length} lines total).`);
-  }
-
-  const endIndex = params.limit === undefined ? lines.length : Math.min(lines.length, startIndex + params.limit);
-  const selected = lines.slice(startIndex, endIndex);
-  const header = formatFileHeader(path, computeFileTag(bytes));
-  const compactedLines: number[] = [];
-  const headerBytes = Buffer.byteLength(header, 'utf8') + 1;
-  const tagged = selected.map((line, index) => {
-    const lineNumber = startIndex + index + 1;
-    const full = formatTaggedLine(line, lineNumber);
-    if (Buffer.byteLength(full, 'utf8') <= DEFAULT_MAX_BYTES - headerBytes) return full;
-    compactedLines.push(lineNumber);
-    return formatTaggedLine(truncateLine(line).text, lineNumber, '', line);
-  });
-  const truncation = truncateHead([header, ...tagged].join('\n'));
-  let text = truncation.content;
-  let details: ReadToolDetails | undefined;
-
-  if (truncation.truncated) {
-    const shownLines = Math.max(0, truncation.outputLines - 1);
-    const nextOffset = startIndex + shownLines + 1;
-    const reason = truncation.truncatedBy === 'bytes' ? `, ${formatSize(DEFAULT_MAX_BYTES)} limit` : '';
-    text += `\n\n[Showing ${shownLines} anchored lines${reason}. Use offset=${nextOffset} to continue.]`;
-    details = { truncation };
-  } else {
-    const notices: string[] = [];
-    if (compactedLines.length > 0) {
-      notices.push(`Lines ${compactedLines.join(', ')} shown compactly. Their anchors hash the full original lines`);
-    }
-    if (endIndex < lines.length) {
-      notices.push(`${lines.length - endIndex} more lines in file. Use offset=${endIndex + 1} to continue`);
-    }
-    if (notices.length > 0) text += `\n\n[${notices.join('. ')}.]`;
-  }
-
-  return { content: [{ type: 'text', text }], details };
-}
-
-export function isImageRead(content: readonly { readonly type: string; readonly text?: string }[]): boolean {
-  return content.some((part) => part.type === 'image' || part.text?.startsWith('Read image file') === true);
-}
-
-export function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw new Error('Operation aborted');
 }

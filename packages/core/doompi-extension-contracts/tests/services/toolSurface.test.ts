@@ -2,13 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDoomToolSurface } from '../../src/services/toolSurface.ts';
 
 function harness(tools: string[] = ['read', 'write', 'bash', 'task']) {
-  const setActiveTools = vi.fn<(names: string[]) => void>();
+  let activeTools = [...tools];
+  const setActiveTools = vi.fn<(names: string[]) => void>((names) => {
+    activeTools = [...names];
+  });
   const surface = createDoomToolSurface({
     generation: 'test',
     allTools: () => tools,
+    activeTools: () => activeTools,
     setActiveTools,
   });
-  return { setActiveTools, surface, tools };
+  return {
+    activeTools: () => activeTools,
+    resetActiveTools: (names: string[]) => {
+      activeTools = [...names];
+    },
+    setActiveTools,
+    surface,
+    tools,
+  };
 }
 
 describe('createDoomToolSurface', () => {
@@ -54,10 +66,15 @@ describe('createDoomToolSurface', () => {
   it('skips a throwing restriction and keeps the rest', () => {
     const onError = vi.fn();
     const setActiveTools = vi.fn<(names: string[]) => void>();
+    let activeTools = ['read', 'write'];
     const surface = createDoomToolSurface({
       generation: 'test',
       allTools: () => ['read', 'write'],
-      setActiveTools,
+      activeTools: () => activeTools,
+      setActiveTools: (names) => {
+        activeTools = [...names];
+        setActiveTools(names);
+      },
       onError,
     });
     surface.register({
@@ -78,21 +95,66 @@ describe('createDoomToolSurface', () => {
     expect(setActiveTools).toHaveBeenLastCalledWith(['read', 'write', 'task']);
   });
 
-  it('picks up tools registered after the restriction', () => {
+  it('removes a denied tool that the host auto-activates after registration', () => {
     const tools = ['read'];
-    const setActiveTools = vi.fn<(names: string[]) => void>();
-    const surface = createDoomToolSurface({ generation: 'test', allTools: () => tools, setActiveTools });
+    let activeTools = [...tools];
+    const setActiveTools = vi.fn<(names: string[]) => void>((names) => {
+      activeTools = [...names];
+    });
+    const surface = createDoomToolSurface({
+      generation: 'test',
+      allTools: () => tools,
+      activeTools: () => activeTools,
+      setActiveTools,
+    });
     surface.register({ source: 'plan', restrict: (incoming) => incoming.filter((n) => n !== 'write') });
     tools.push('write', 'bash');
+    activeTools.push('write', 'bash');
     surface.refresh();
     expect(setActiveTools).toHaveBeenLastCalledWith(['read', 'bash']);
+    expect(activeTools).toEqual(['read', 'bash']);
   });
 
-  it('gates a restriction on its owning layer', () => {
-    const setActiveTools = vi.fn<(names: string[]) => void>();
+  it('repairs an external host reset even when the desired surface is unchanged', () => {
+    const { resetActiveTools, setActiveTools, surface } = harness();
+    surface.register({ source: 'plan', restrict: (incoming) => incoming.filter((n) => n !== 'write') });
+    setActiveTools.mockClear();
+    resetActiveTools(['read', 'write', 'bash', 'task']);
+    surface.refresh();
+    expect(setActiveTools).toHaveBeenCalledWith(['read', 'bash', 'task']);
+  });
+
+  it('does not cache a failed host application', () => {
+    let activeTools = ['read', 'write'];
+    let fail = true;
+    const setActiveTools = vi.fn<(names: string[]) => void>((names) => {
+      if (fail) throw new Error('setter failed');
+      activeTools = [...names];
+    });
     const surface = createDoomToolSurface({
       generation: 'test',
       allTools: () => ['read', 'write'],
+      activeTools: () => activeTools,
+      setActiveTools,
+    });
+    expect(() =>
+      surface.register({ source: 'plan', restrict: (incoming) => incoming.filter((n) => n !== 'write') }),
+    ).toThrow('setter failed');
+    fail = false;
+    surface.refresh();
+    expect(setActiveTools).toHaveBeenLastCalledWith(['read']);
+    expect(surface.active()).toEqual(['read']);
+  });
+
+  it('gates a restriction on its owning layer', () => {
+    let activeTools = ['read', 'write'];
+    const setActiveTools = vi.fn<(names: string[]) => void>((names) => {
+      activeTools = [...names];
+    });
+    const surface = createDoomToolSurface({
+      generation: 'test',
+      allTools: () => ['read', 'write'],
+      activeTools: () => activeTools,
       setActiveTools,
       activeLayers: ['base'],
     });

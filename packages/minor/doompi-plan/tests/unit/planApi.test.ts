@@ -253,10 +253,7 @@ describe('the plans API as a host mounts it', () => {
     mounted.close();
   });
 
-  it('serves the base path the manifest mounts it at', () => {
-    // Vibe-Lint reads the manifest statically and cannot see this value, so
-    // nothing else compares the two. A rename on one side alone means no
-    // client URL ever lands.
+  it('declares a session facet for the API-owned base path', () => {
     expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' })).toMatchObject({
       basePath: API_BASE_PATH,
     });

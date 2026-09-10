@@ -1,3 +1,4 @@
+export { loopHeadlessFacet } from '../adapters/headless/facet.ts';
 export { installLoopRuntime } from '../adapters/pi/extension.ts';
 export type {
   DoomLoopLaunchersService,

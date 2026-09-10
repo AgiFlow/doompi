@@ -1,3 +1,4 @@
+export { profileHeadlessFacet } from '../adapters/headless/facet.ts';
 export { createProfileTelemetry, type ProfileTelemetryOptions } from '../adapters/telemetry/logSinkTelemetry.ts';
 export { personaExtension } from '../adapters/pi/persona.ts';
 export { profileExtension } from '../adapters/pi/extension.ts';

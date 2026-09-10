@@ -58,6 +58,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./client-media": {
       "types": "./dist/clientMedia.d.mts",
       "import": "./dist/clientMedia.mjs",
@@ -67,6 +72,11 @@
       "types": "./dist/sessionApi.d.mts",
       "import": "./dist/sessionApi.mjs",
       "require": "./dist/sessionApi.cjs"
+    },
+    "./extensions/headless": {
+      "types": "./dist/extensions/headless.d.mts",
+      "import": "./dist/extensions/headless.mjs",
+      "require": "./dist/extensions/headless.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -113,12 +123,12 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "voice-media",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
-    }
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ]
   },
   "doompiWeb": {
     "pluginId": "voice",

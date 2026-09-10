@@ -77,9 +77,9 @@ doompiWeb
   +-- browser webPlugin ------> compiled client composition
   +-- webHubChannels ---------> modules loaded in the hub
 
-doompiApi
-  +-- hub API ----------------> handler running in the hub
-  +-- session API ------------> handler running beside the agent
+doompiServer (one generation-pinned descriptor)
+  +-- eligible hub facet -----> handler running in the hub
+  +-- eligible session facet -> handler running beside the agent
 ```
 
 A browser plugin controls presentation and page state. A hub channel maintains live host-side data for that presentation. A package API handles request-response work in the process that owns the required resources.

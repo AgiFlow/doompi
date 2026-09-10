@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { serveSessionApis } from '../../src/adapters/packageApiServer.ts';
@@ -288,6 +288,138 @@ describe('serving a session package APIs', () => {
     const response = await request(server.socketPath!, '/api/plugin/runner/log');
     expect(response.status).toBe(200);
     expect(JSON.parse(response.body)).toMatchObject({ path: '/log' });
+  });
+  it('installs an attributed server bundle facet before serving its API', async () => {
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      facets: [
+        {
+          declaration: {
+            packageName: 'runner',
+            entry: './src/exports/extensions/server.ts',
+            module: './modules/runner.mjs',
+            scopes: ['session'] as const,
+            owners: [{ majorMode: 'coding', layer: 'tools' }],
+            required: false,
+          },
+          facet: {
+            inject: [DOOM_SERVER_HOST_SERVICE],
+            apply(context) {
+              const host = context.get(DOOM_SERVER_HOST_SERVICE);
+              if (!host || host.scope !== 'session') return undefined;
+              const registration = host.registerApi(echoApi('runner'));
+              return () => registration.dispose();
+            },
+          },
+        },
+      ],
+      onNotice: () => undefined,
+    });
+    cleanups.push(() => server.close());
+
+    expect((await request(server.socketPath!, '/api/plugin/runner/log')).status).toBe(200);
+  });
+
+  it('keeps the legacy API as the first owner during dual registration', async () => {
+    const notices: string[] = [];
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [echoApi('shared')],
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi({
+              basePath: 'shared',
+              start: () => ({ fetch: () => Response.json({ owner: 'facet' }), close: () => undefined }),
+            });
+            return () => registration.dispose();
+          },
+        },
+      ],
+      onNotice: (message) => notices.push(message),
+    });
+    cleanups.push(() => server.close());
+
+    expect(JSON.parse((await request(server.socketPath!, '/api/plugin/shared/status')).body)).toMatchObject({
+      basePath: 'shared',
+    });
+    expect(notices.join('\n')).toMatch(/another facet already claims it/u);
+  });
+
+  it('isolates a throwing facet and still serves a healthy sibling', async () => {
+    const notices: string[] = [];
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply() {
+            throw new Error('facet failed');
+          },
+        },
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi(echoApi('healthy'));
+            return () => registration.dispose();
+          },
+        },
+      ],
+      onNotice: (message) => notices.push(message),
+    });
+    cleanups.push(() => server.close());
+
+    expect(notices.join('\n')).toMatch(/server facet did not install.*facet failed/u);
+    expect((await request(server.socketPath!, '/api/plugin/healthy/status')).status).toBe(200);
+  });
+
+  it('closes facet handlers and runs facet disposers on shutdown', async () => {
+    const handlerClose = vi.fn();
+    const facetDispose = vi.fn();
+    const server = await serveSessionApis({
+      socketDir: socketDir(),
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host) return undefined;
+            const registration = host.registerApi({
+              basePath: 'owned',
+              start: () => ({ fetch: () => Response.json({ ok: true }), close: handlerClose }),
+            });
+            return () => {
+              facetDispose();
+              registration.dispose();
+            };
+          },
+        },
+      ],
+      onNotice: () => undefined,
+    });
+    const socketPath = server.socketPath!;
+
+    await server.close();
+
+    expect(facetDispose).toHaveBeenCalledOnce();
+    expect(handlerClose).toHaveBeenCalledOnce();
+    expect(fs.existsSync(socketPath)).toBe(false);
   });
 
   it('opens no socket when a facet registers nothing for this scope', async () => {

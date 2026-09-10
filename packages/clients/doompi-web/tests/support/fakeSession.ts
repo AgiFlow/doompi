@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { createAgentServerService, serveProtocolSocket } from '@agimon-ai/doompi-server';
+import { createAgentServerService, serveProtocolSocket } from '@agimon-ai/doompi/server';
 import type { SessionSnapshot, TranscriptItem } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 export type Frame = Record<string, unknown>;
 type ToolContent = Extract<TranscriptItem, { role: 'tool' }>['content'];

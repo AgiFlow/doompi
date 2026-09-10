@@ -210,6 +210,22 @@ describe('Doom package convention rules', () => {
     expect(noRawPiEvents.check?.(path.join(root, 'missing.ts'), root, boundaryContext())).toBeNull();
   });
 
+  it('recognizes only the core-owned direct AgentHarness event boundary', () => {
+    writeManifest({ name: '@agimon-ai/doompi' });
+    const native = write('src/adapters/server/directHarnessRuntime.ts', "harness.events.on('run_start', handler);");
+    const wrongPath = write('src/adapters/server/runtime.ts', "harness.events.on('run_start', handler);");
+
+    expect(noRawPiEvents.check?.(native, root, boundaryContext())).toBeNull();
+    expect(noRawPiEvents.check?.(wrongPath, root, boundaryContext())).toContain('Raw Pi EventBus access');
+
+    fs.writeFileSync(native, "pi.events.on('run_start', handler);", 'utf8');
+    expect(noRawPiEvents.check?.(native, root, boundaryContext())).toContain('Raw Pi EventBus access');
+
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-host' }), 'utf8');
+    fs.writeFileSync(native, "harness.events.on('run_start', handler);", 'utf8');
+    expect(noRawPiEvents.check?.(native, root, boundaryContext())).toContain('Raw Pi EventBus access');
+  });
+
   it('rejects same-runner protocol runtimes and legacy host/client helpers while preserving types and schemas', () => {
     writeManifest({ name: '@agimon-ai/doompi-ui' });
     const runtime = write(
@@ -418,6 +434,35 @@ describe('Doom package convention rules', () => {
     expect(disposeExternalSubscriptions.check?.(write('src/services/safe.ts', 'run();'), root)).toBeNull();
   });
 
+  it('recognizes retained direct-harness subscriptions disposed by the native runtime', () => {
+    writeManifest({ name: '@agimon-ai/doompi' });
+    const native = write(
+      'src/adapters/server/directHarnessRuntime.ts',
+      [
+        'const unsubscribe = EVENT_TYPES.map((type) => harness.events.on(type, handler));',
+        'const dispose = async (): Promise<void> => {',
+        '  for (const unsubscribeEvent of unsubscribe) unsubscribeEvent();',
+        '};',
+        'dispose();',
+      ].join('\n'),
+    );
+    expect(disposeExternalSubscriptions.check?.(native, root, boundaryContext())).toBeNull();
+
+    fs.writeFileSync(native, "harness.events.on('run_start', handler);", 'utf8');
+    expect(disposeExternalSubscriptions.check?.(native, root, boundaryContext())).toContain(
+      'Retain the external subscription disposer',
+    );
+
+    fs.writeFileSync(
+      native,
+      ["const unsubscribe = harness.events.on('run_start', handler);", 'const dispose = async () => {};'].join('\n'),
+      'utf8',
+    );
+    expect(disposeExternalSubscriptions.check?.(native, root, boundaryContext())).toContain(
+      'Retain the external subscription disposer',
+    );
+  });
+
   it('rejects foreign tool-call mutation while allowing semantic policy', () => {
     const assignment = write(
       'src/extensions/assignment.ts',
@@ -459,5 +504,21 @@ describe('Doom package convention rules', () => {
     expect(noDirectToolActivation.check?.(arbiter, root, boundaryContext())).toBeNull();
     expect(noDirectToolActivation.check?.(fakeHost, root, boundaryContext())).toBeNull();
     expect(noDirectToolActivation.check?.(other, root, boundaryContext())).toContain('setActiveTools');
+  });
+
+  it('allows only the direct harness lane to set tools in the native host runtime', () => {
+    writeManifest({ name: '@agimon-ai/doompi' });
+    const native = write('src/adapters/server/directHarnessRuntime.ts', 'lane.setActiveTools(names);');
+    const wrongPath = write('src/adapters/server/toolRuntime.ts', 'lane.setActiveTools(names);');
+
+    expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toBeNull();
+    expect(noDirectToolActivation.check?.(wrongPath, root, boundaryContext())).toContain('setActiveTools');
+
+    fs.writeFileSync(native, 'host.setActiveTools(names);', 'utf8');
+    expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toContain('setActiveTools');
+
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-host' }), 'utf8');
+    fs.writeFileSync(native, 'lane.setActiveTools(names);', 'utf8');
+    expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toContain('setActiveTools');
   });
 });

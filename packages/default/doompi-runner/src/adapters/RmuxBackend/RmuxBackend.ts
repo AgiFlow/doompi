@@ -342,19 +342,23 @@ export function rmuxPackageForTarget(platform: string, architecture: string): st
   return packageName;
 }
 
-function bundledBinary(): string | undefined {
+export function resolveBundledRmuxBinary(moduleUrl = import.meta.url): string | undefined {
   const configured = process.env[RMUX_BINARY_ENV];
   if (configured !== undefined && configured !== '') return configured;
   const packageName = rmuxPackageForTarget(process.platform, process.arch);
   if (!packageName) return undefined;
   try {
-    const require = createRequire(import.meta.url);
+    const require = createRequire(moduleUrl);
     const manifest = require.resolve(`${packageName}/package.json`);
     return path.join(path.dirname(manifest), 'vendor', 'bin', 'rmux');
   } catch (error) {
     process.emitWarning(`Bundled RMUX binary is unavailable for ${packageName}: ${errorMessage(error)}`);
     return undefined;
   }
+}
+
+function bundledBinary(): string | undefined {
+  return resolveBundledRmuxBinary();
 }
 
 function socketName(repositoryPath: string): string {

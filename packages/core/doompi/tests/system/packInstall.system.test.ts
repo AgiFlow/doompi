@@ -1199,6 +1199,22 @@ describe('packed package identity and closure', () => {
     expect(path.basename(packageRootFor(entry.name))).toBe(path.basename(entry.relativeDirectory));
   });
 
+  it('packs every owned workspace runtime dependency instead of falling through to npm', () => {
+    const missing = PACKAGE_MATRIX.flatMap(({ name }) => {
+      const manifest = packed(name).sourceManifest;
+      const dependencies = {
+        ...manifest.dependencies,
+        ...manifest.optionalDependencies,
+        ...manifest.peerDependencies,
+      };
+      return Object.entries(dependencies)
+        .filter(([dependency, version]) => version.startsWith('workspace:') && !packedPackages.has(dependency))
+        .map(([dependency]) => `${name} -> ${dependency}`);
+    });
+
+    expect(missing).toEqual([]);
+  });
+
   it.each(PACKAGE_MATRIX)('$name contains only declared files and resolvable exports', (entry) => {
     const result = packed(entry.name);
     const files = listPackageFiles(result.unpackedRoot);
@@ -1660,7 +1676,7 @@ describe('consumer ownership boundaries', () => {
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
     const names = PACKAGE_MATRIX.map((entry) => entry.name);
-    expect(PACKAGE_MATRIX).toHaveLength(45);
+    expect(PACKAGE_MATRIX).toHaveLength(46);
     expect(standardPackageSet.size).toBe(30);
     expect(standardPackageSet).toContain('@agimon-ai/doompi-author');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-computer-use');

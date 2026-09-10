@@ -43,6 +43,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-log': 'packages/default/doompi-log',
   '@agimon-ai/doompi-loop': 'packages/minor/doompi-loop',
   '@agimon-ai/doompi-major-mode': 'packages/core/doompi-major-mode',
+  '@agimon-ai/doompi-kernel': 'packages/core/doompi-kernel',
   '@agimon-ai/doompi-mcp': 'packages/default/doompi-mcp',
   '@agimon-ai/doompi-notification': 'packages/core/doompi-notification',
   '@agimon-ai/doompi-plan': 'packages/minor/doompi-plan',

@@ -52,6 +52,6 @@ describe('the API surface', () => {
   it('serves the base path the manifest mounts it at', () => {
     const report = assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' });
 
-    expect(report).toMatchObject({ basePath: 'runner', dist: './dist/sessionApi.mjs' });
+    expect(report).toMatchObject({ basePath: 'runner', dist: './dist/extensions/server.mjs' });
   });
 });

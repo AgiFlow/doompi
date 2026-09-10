@@ -2,7 +2,7 @@
 
 **A browser cockpit for your DoomPi sessions.**
 
-DoomPi Web finds running [`doompi-server`](../doompi-server) sessions, keeps their attach credentials on the host, and presents them through one browser connection. It is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`.
+DoomPi Web finds running [`doompi-server`](https://www.npmjs.com/package/@agimon-ai/doompi) sessions, keeps their attach credentials on the host, and presents them through one browser connection. It is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`.
 
 ## Install
 
@@ -28,7 +28,7 @@ DoomPi first resolves repository configuration into the ordered extension compos
 Packages extend the cockpit in two ways:
 
 - `doompiWeb` adds browser UI and optional hub channels. See [Web plugins](docs/plugins.md).
-- `doompiApi` adds HTTP handlers in the hub or session server. See [Package APIs](docs/package-apis.md).
+- `doompiServer` declares a server facet that registers HTTP handlers in the hub or session host. See [Package APIs](docs/package-apis.md).
 
 See [Composition and runtime bundling](../../../docs/bundling.md) for the TUI path. [Web bundling and serving](docs/bundle.md) explains why the shell and plugins are separate, what sync builds, how a session selects its artifacts, and how the hub serves them.
 

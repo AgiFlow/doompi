@@ -2,7 +2,7 @@ import os from 'node:os';
 import { DoomToolCall, renderToolBadge } from '@agimon-ai/doompi-ui/toolChrome';
 import { highlightCode, type Theme, type ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
-import { formatSize } from '../commands/bash/responseEnvelope.ts';
+import { formatSize } from '../services/bashResult.ts';
 import type { BashParams } from '../schemas/bashTool.ts';
 
 const ELLIPSIS = '…';
