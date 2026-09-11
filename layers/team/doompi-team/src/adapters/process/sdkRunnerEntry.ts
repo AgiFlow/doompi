@@ -176,6 +176,7 @@ export async function runSdkChild(): Promise<void> {
           recordNonBlockingExtensionError(childTelemetry, failure);
         },
       });
+      writeAtomicJson(launchConfig.handshakePath, { state: 'ready' });
       await session.prompt(config.task);
     } finally {
       stopWatchdog?.();

@@ -299,6 +299,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
   const attachWaiters: Array<() => void> = [];
   const commandWaiters: Array<{ type: string; resolve: (frame: Frame) => void }> = [];
   const protocolListeners: Array<(frame: Frame) => void> = [];
+  const protocolInitialization = new Set(['get_state', 'get_entries']);
   const recordCommand = (frame: Frame): void => {
     const { id: _id, ...command } = frame;
     received.push(command);
@@ -329,18 +330,10 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
     service: createAgentServerService({
       agent: {
         send: (frame: Frame) => {
-          // Initialization is transport plumbing; exposed commands match the old scriptable fixture shape.
-          if (
-            ![
-              'get_state',
-              'get_entries',
-              'get_session_stats',
-              'get_commands',
-              'get_available_models',
-              'get_available_thinking_levels',
-            ].includes(String(frame.type))
-          )
-            recordCommand(frame);
+          // The routed host initializes itself with one state and transcript read.
+          // Ignore only those two transport calls so later browser commands retain
+          // the old scriptable fixture shape and remain observable to assertions.
+          if (!protocolInitialization.delete(String(frame.type))) recordCommand(frame);
           respond(frame);
         },
         onFrame: (listener: (frame: Frame) => void) => protocolListeners.push(listener),

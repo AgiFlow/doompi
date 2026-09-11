@@ -85,7 +85,9 @@ export interface QueuedEntry {
   images?: UserImage[];
 }
 
-export type TimelineEntry = UserEntry | AssistantEntry | ToolEntry | NoticeEntry | SettledEntry | QueuedEntry;
+export type TimelineEntry = (UserEntry | AssistantEntry | ToolEntry | NoticeEntry | SettledEntry | QueuedEntry) & {
+  timestamp?: number;
+};
 
 export interface SessionStats {
   cost: number;
@@ -290,6 +292,20 @@ export function summariseArgs(args: unknown): string {
 
 function withEntry(state: SessionState, entry: TimelineEntry): SessionState {
   return { ...state, entries: [...state.entries, entry], nextId: state.nextId + 1 };
+}
+
+function withChronologicalEntry(state: SessionState, entry: TimelineEntry): SessionState {
+  const timestamp = entry.timestamp;
+  if (timestamp === undefined) return withEntry(state, entry);
+  const index = state.entries.findIndex(
+    (existing) => existing.timestamp !== undefined && existing.timestamp > timestamp,
+  );
+  if (index === -1) return withEntry(state, entry);
+  return {
+    ...state,
+    entries: [...state.entries.slice(0, index), entry, ...state.entries.slice(index)],
+    nextId: state.nextId + 1,
+  };
 }
 
 function replaceEntry(state: SessionState, id: string, next: TimelineEntry): SessionState {
@@ -889,11 +905,13 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
       const notification = parseDoomNotificationEntry(frame);
       if (notification) {
         if (state.restoredIds.includes(notification.entryId)) return state;
-        const next = withEntry(state, {
+        const timestamp = asNumber(entry.timestamp) ?? undefined;
+        const next = withChronologicalEntry(state, {
           kind: 'notice',
           id: `n${state.nextId}`,
           text: notification.data.body,
           tone: notification.data.level === 'error' ? 'error' : 'info',
+          ...(timestamp === undefined ? {} : { timestamp }),
         });
         return { ...next, restoredIds: [...next.restoredIds, notification.entryId] };
       }

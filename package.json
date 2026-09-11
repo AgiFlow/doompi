@@ -44,6 +44,7 @@
     "@agimon-ai/style-system": "0.1.1",
     "@agimon-ai/vibe-lint": "0.0.1-alpha.29",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
+    "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
     "@agimon-ai/workflow-mcp": "0.23.19",
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",

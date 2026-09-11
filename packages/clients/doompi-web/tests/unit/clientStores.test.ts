@@ -261,6 +261,33 @@ describe('transcript ownership', () => {
     ]);
   });
 
+  it('restores journal notices in timestamp order beside protocol transcript entries', () => {
+    applyProtocolTranscript(
+      's1',
+      [
+        { kind: 'assistant', id: 'before', text: 'before', thinking: '', streaming: false, timestamp: 100 },
+        { kind: 'assistant', id: 'after', text: 'after', thinking: '', streaming: false, timestamp: 300 },
+      ],
+      false,
+    );
+    applySessionFrame('s1', {
+      type: 'entry_appended',
+      entry: {
+        id: 'notice-1',
+        type: 'custom',
+        customType: 'doom-notification',
+        timestamp: 200,
+        data: { version: 1, title: '', subtitle: '', body: 'between', level: 'info' },
+      },
+    });
+
+    expect(sessionStoreFor('s1').state.entries.map((entry) => ('text' in entry ? entry.text : undefined))).toEqual([
+      'before',
+      'between',
+      'after',
+    ]);
+  });
+
   it('preserves a protocol transcript through a legacy backlog reset', () => {
     applyProtocolTranscript(
       's1',

@@ -39,12 +39,11 @@ export function createHubProtocol(events: WSEvents, disconnect: () => void): { s
       }
       sizes.push(size);
       bytes += size;
-      const next = [...state.state.events, { sequence: ++sequence, frame }];
-      while (next.length > MAX_EVENTS || bytes > MAX_BYTES) {
-        next.shift();
+      state.state.events.push({ sequence: ++sequence, frame });
+      while (state.state.events.length > MAX_EVENTS || bytes > MAX_BYTES) {
+        state.state.events.shift();
         bytes -= sizes.shift() ?? 0;
       }
-      state.state.events = next;
       state.publish(BACKGROUND_CONTEXT);
     },
     close: terminate,

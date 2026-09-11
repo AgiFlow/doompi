@@ -75,6 +75,9 @@ importers:
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-extension
+      '@agimon-ai/vibe-lint-plugin-doom-web':
+        specifier: workspace:*
+        version: link:packages/tooling/vibe-lint-plugin-doom-web
       '@agimon-ai/workflow-mcp':
         specifier: 0.23.19
         version: 0.23.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.5.4)

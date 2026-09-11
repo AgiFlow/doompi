@@ -20,23 +20,30 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function userEntry(item: UserTranscriptItem): UserEntry {
+function userEntry(item: UserTranscriptItem): UserEntry & { timestamp: number } {
   const text = item.content
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('');
   const images = imagesFromContent(item.content);
-  return { kind: 'user', id: item.id, text, ...(images.length > 0 ? { images } : {}) };
+  return { kind: 'user', id: item.id, text, timestamp: item.timestamp, ...(images.length > 0 ? { images } : {}) };
 }
 
-function assistantEntry(item: AssistantTranscriptItem): AssistantEntry {
+function assistantEntry(item: AssistantTranscriptItem): AssistantEntry & { timestamp: number } {
   let text = '';
   let thinking = '';
   for (const part of item.content) {
     if (part.type === 'text') text += part.text;
     else if (part.type === 'thinking') thinking += part.thinking;
   }
-  return { kind: 'assistant', id: item.id, text, thinking, streaming: item.status === 'streaming' };
+  return {
+    kind: 'assistant',
+    id: item.id,
+    text,
+    thinking,
+    streaming: item.status === 'streaming',
+    timestamp: item.timestamp,
+  };
 }
 
 /**
@@ -46,7 +53,7 @@ function assistantEntry(item: AssistantTranscriptItem): AssistantEntry {
  * where a DoomPi tool's own payload travels; handing it back whole is what
  * lets the owning plugin render its call the way it does in the terminal.
  */
-function toolEntry(item: ToolTranscriptItem): ToolEntry {
+function toolEntry(item: ToolTranscriptItem): ToolEntry & { timestamp: number } {
   const output = item.content
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
@@ -66,6 +73,7 @@ function toolEntry(item: ToolTranscriptItem): ToolEntry {
     output,
     isError: item.isError,
     running: item.status === 'running',
+    timestamp: item.timestamp,
   };
 }
 
@@ -106,5 +114,8 @@ export function createProtocolTimeline(): (state: SessionServiceState) => Timeli
 
 /** Projects the protocol's authoritative pending steer queue onto composer rows. */
 export function toQueuedEntries(queue: readonly UserTranscriptItem[]): QueuedEntry[] {
-  return queue.map((item) => ({ ...userEntry(item), kind: 'queued', delivery: 'steer' }));
+  return queue.map((item) => {
+    const { timestamp: _timestamp, ...entry } = userEntry(item);
+    return { ...entry, kind: 'queued', delivery: 'steer' };
+  });
 }

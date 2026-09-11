@@ -267,7 +267,7 @@ features:
       The facet MUST be a Cordis object plugin, `{ inject: [...], apply(context) {} }`, never a bare function calling context.inject inside itself. Only the object form declares its own inject, so the host mounts one fiber and `fiber.await()` settles once apply has run. A nested inject mounts a child fiber the host holds no handle on, and the host decides whether to open a listener from a mount table it must know is complete. The doom-server-facet-shape lint rule rejects the other forms.
 
       Complete the package integration after generation:
-      - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and a `scopes` array containing only the supported `session` and/or `hub` hosts. Sync reads that block; a package without it contributes no facet.
+      - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and a `scopes` array containing only the supported `session` and/or `hub` hosts. Add the matching `./extensions/server` export with `types: './dist/extensions/server.d.mts'`, `import: './dist/extensions/server.mjs'`, and `require: './dist/extensions/server.cjs'`. Sync reads that block; a package without it contributes no facet.
       - Keep the DoomApi in its adapter. The facet reads the host, registers the api and returns the disposer; it never builds routes or holds state.
       - Do nothing else in apply. A facet that opens a socket, reads a file or starts a timer at install has the same problem an eager Pi extension has, and a server has no reload to recover from it.
       - A base path already claimed by another facet is refused with a notice, so pick one that is globally unique across loaded packages.
@@ -424,10 +424,10 @@ features:
       The rules: a host mounts the API under /api/plugin/{{ pluginId }} and strips that prefix, so routes are declared relative and nothing repeats the mount. The scope decides the host: a session-scoped API is served by that session's own doompi-server and its context names the session; a hub-scoped one is served by the cockpit hub and names none. Keep the adapter free of ambient filesystem, clock, and process access the way every other adapter here is: take those as options. Route paths and query building live in src/types so the browser half can import them; a page never appends its own query to a URL this module built.
 
       Complete the package integration after generation:
-      - Register `api` through an existing or newly scaffolded DoomServerFacet. Its `apiModule` points at `../{{ topic | camelCase }}Api.ts` relative to `src/adapters/server/`, and its host-scope handling must match the scopes this package serves.
+      - Register `api` through an existing or newly scaffolded DoomServerFacet. Its `apiModule` points at `../{{ topic | camelCase }}Api.ts` relative to `src/adapters/server/`, and its host-scope handling must match the scopes this package serves. Add the matching `./extensions/server` export with `types: './dist/extensions/server.d.mts'`, `import: './dist/extensions/server.mjs'`, and `require: './dist/extensions/server.cjs'`.
+      - Keep `src/exports/sessionApi.ts` as the useful source barrel, but do not add a package export or separate scope aggregate modules solely for session and hub.
       - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and `scopes` set to `['session']`, `['hub']`, or `['session', 'hub']` as supported. Do not add the legacy `doompiApi` field or separate per-scope manifest entries.
-      - Keep `src/exports/sessionApi.ts` as the useful API barrel. Do not add separate scope aggregate modules or exports solely for session and hub.
-      - Add hono and @agimon-ai/doompi-extension-contracts (workspace:*) to dependencies.
+      - Add @agimon-ai/doompi-extension-contracts (workspace:*) to dependencies; Hono is already included by the base package template.
       - `doompi sync` discovers the built server facet named by `doompiServer`, so build and sync before a host sees it; a running host imports the built facet, never the source.
       - Run pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/types, src/adapters, src/adapters/server, src/exports, src/exports/extensions, and package.json.
     patterns:

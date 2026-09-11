@@ -205,6 +205,34 @@ describe('protocol attachment recovery', () => {
     state.publish(BACKGROUND_CONTEXT);
     expect(fake.order).toEqual(['begin', 'reset', 'transcript', 'queue', 'frame', 'end']);
   });
+  it('delivers changed presentation projections without requiring a replay', async () => {
+    await start();
+    state.state.presentation = {
+      revision: 1,
+      dropped: 0,
+      projections: [],
+      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    fake.order = [];
+    fake.applyFrame.mockClear();
+    const frame = {
+      type: 'extension_ui_request' as const,
+      method: 'setStatus' as const,
+      statusKey: 'doom-profile',
+      statusText: 'reviewer',
+    };
+    state.state.presentation = {
+      revision: 2,
+      dropped: 0,
+      projections: [{ sequence: 2, frame }],
+      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    expect(fake.order).toEqual(['transcript', 'queue', 'frame']);
+    expect(fake.applyFrame).toHaveBeenCalledExactlyOnceWith('session-1', frame, { replay: false });
+  });
+
   it('replays when the presentation revision regresses even without a ring gap', async () => {
     await start();
     state.state.presentation = {

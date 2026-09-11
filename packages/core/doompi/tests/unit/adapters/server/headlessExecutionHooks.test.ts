@@ -88,6 +88,11 @@ describe('active headless execution hooks', () => {
           'toolUse',
         ),
         response([{ type: 'text', text: 'disabled done' }], 'stop'),
+        response(
+          [{ type: 'toolCall', id: 'reported-error-1', name: 'fixture_tool', arguments: { value: 'reported-error' } }],
+          'toolUse',
+        ),
+        response([{ type: 'text', text: 'reported error done' }], 'stop'),
         response([{ type: 'toolCall', id: 'denied-1', name: 'fixture_tool', arguments: { value: 'deny' } }], 'toolUse'),
         response([{ type: 'text', text: 'denied done' }], 'stop'),
         response([{ type: 'text', text: 'failed hook continued' }], 'stop'),
@@ -127,8 +132,13 @@ describe('active headless execution hooks', () => {
               description: 'Fixture tool',
               parameters: Type.Object({ value: Type.String() }),
               execute: async (_toolCallId, parameters) => {
-                executed.push(String(parameters.value));
-                return { content: [{ type: 'text', text: `raw:${parameters.value}` }], details: { raw: true } };
+                const value = String(parameters.value);
+                executed.push(value);
+                return {
+                  content: [{ type: 'text', text: `raw:${value}` }],
+                  details: { raw: true },
+                  ...(value === 'reported-error' ? { isError: true } : {}),
+                };
               },
             });
             host.registerHook({
@@ -336,21 +346,33 @@ describe('active headless execution hooks', () => {
         expect(toolCallEvents).toHaveLength(1);
         expect(toolResultEvents).toHaveLength(1);
 
+        const reportedFrames: Record<string, unknown>[] = [];
+        session.agent.onFrame((frame) => reportedFrames.push(frame));
+        await session.runtime.prompt('reported tool error');
+        expect(executed).toEqual(['guarded:checked', 'deny', 'reported-error']);
+        expect(reportedFrames).toContainEqual(
+          expect.objectContaining({
+            type: 'tool_execution_end',
+            toolCallId: 'reported-error-1',
+            isError: true,
+          }),
+        );
+
         await session.host!.select({ majorMode: 'development', activeLayers: ['tools'], domains: ['hooks'] });
         await session.runtime.prompt('denied hook');
-        expect(executed).toEqual(['guarded:checked', 'deny']);
+        expect(executed).toEqual(['guarded:checked', 'deny', 'reported-error']);
         expect(toolCallEvents).toHaveLength(2);
         expect(secondToolCallEvents).toHaveLength(1);
         expect(toolResultEvents).toHaveLength(1);
 
         contextFailure = true;
         await session.runtime.prompt('failed context').catch(() => undefined);
-        expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 7 : 6);
-        if (failure === 'throws') expect(contexts[6]?.systemPrompt).toBe('base twice');
+        expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 9 : 8);
+        if (failure === 'throws') expect(contexts[8]?.systemPrompt).toBe('base twice');
         contextFailure = false;
         await session.runtime.prompt('recovered context');
-        expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 8 : 7);
-        expect(contexts[failure === 'throws' ? 7 : 6]?.systemPrompt).toBe('base transformed twice');
+        expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 10 : 9);
+        expect(contexts[failure === 'throws' ? 9 : 8]?.systemPrompt).toBe('base transformed twice');
       } finally {
         await session?.dispose().catch(() => undefined);
         await apis?.close().catch(() => undefined);

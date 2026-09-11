@@ -109,6 +109,11 @@ export function startProtocolRuntime(
         const presentation = state.presentation;
         if (!presentation) throw new Error('Session server does not support the unified presentation protocol.');
         const first = presentation.events[0]?.sequence ?? presentation.revision + 1;
+        const frames = [
+          ...new Map(
+            [...presentation.projections, ...presentation.events].map((event) => [event.sequence, event]),
+          ).values(),
+        ].sort((a, b) => a.sequence - b.sequence);
         const replay =
           !initialized ||
           revision < first - 1 ||
@@ -122,11 +127,7 @@ export function startProtocolRuntime(
             resetSessionStore(sessionId);
             applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
             applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
-            const events = new Map(
-              [...presentation.projections, ...presentation.events].map((event) => [event.sequence, event]),
-            );
-            for (const event of [...events.values()].sort((a, b) => a.sequence - b.sequence))
-              onFrame(sessionId, event.frame, true);
+            for (const event of frames) onFrame(sessionId, event.frame, true);
           } finally {
             endSessionReplay(sessionId);
           }
@@ -134,8 +135,7 @@ export function startProtocolRuntime(
         } else {
           applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
           applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
-          for (const event of presentation.events)
-            if (event.sequence > revision) onFrame(sessionId, event.frame, false);
+          for (const event of frames) if (event.sequence > revision) onFrame(sessionId, event.frame, false);
         }
         revision = presentation.revision;
       };

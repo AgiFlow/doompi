@@ -79,7 +79,7 @@ export async function buildSyncedRuntime(
 
   const runtimeEnvironment = mergedEnvironment(state.env, environment);
   const harness = readHarnessState(runtimeEnvironment);
-  const majorModesConfig = loadMajorModesConfig(repoRoot);
+  const majorModesConfig = loadMajorModesConfig(repoRoot, homeDirectory);
   const resolvers = createMapResolvers(state.resolved);
   const base = {
     agents: harness.agents,

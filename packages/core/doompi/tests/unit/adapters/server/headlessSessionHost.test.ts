@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { loadMajorModesConfig, resolveLayers, filterHookDisabledLayers } from '@agimon-ai/doompi-config/majorModes';
+import { profileHeadlessFacet } from '@agimon-ai/doompi-profile/extensions/headless';
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -78,6 +79,14 @@ describe('gated headless startup', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-headless-startup-'));
     vi.stubEnv('PI_CODING_AGENT_DIR', path.join(root, 'agent'));
     fs.mkdirSync(path.join(root, '.doom'));
+    fs.mkdirSync(path.join(root, 'agents', 'writer'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'agents', 'reviewer'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'agents', 'writer', 'profile.md'), '# Writer');
+    fs.writeFileSync(path.join(root, 'agents', 'reviewer', 'profile.md'), '# Reviewer');
+    fs.writeFileSync(
+      path.join(root, '.doom/profiles.yaml'),
+      'profiles:\n  entries:\n    writer:\n      persona: agents/writer\n      env: {}\n    reviewer:\n      persona: agents/reviewer\n      env: {}\n',
+    );
     fs.writeFileSync(
       path.join(root, '.doom/modes.yaml'),
       JSON.stringify({
@@ -195,6 +204,7 @@ describe('gated headless startup', () => {
         },
       },
     };
+    const modeAction = vi.fn();
     const control: LoadedServerFacet = {
       retained: true,
       initiallyEligible: true,
@@ -225,7 +235,7 @@ describe('gated headless startup', () => {
               ],
             },
             initialState: { activation: 'active', condition: 'ready', actions: [{ id: 'toggle', enabled: true }] },
-            handleAction: async () => undefined,
+            handleAction: modeAction,
           });
           host.registerCommand({
             name: 'mode',
@@ -234,6 +244,19 @@ describe('gated headless startup', () => {
           });
         },
       },
+    };
+    const profile: LoadedServerFacet = {
+      retained: true,
+      initiallyEligible: true,
+      declaration: {
+        packageName: '@agimon-ai/doompi-profile',
+        entry: './src/exports/extensions/headless.ts',
+        module: './dist/extensions/headless.mjs',
+        scopes: ['session'],
+        required: true,
+        owners: ['development', 'review'].map((majorMode) => ({ majorMode, layer: 'default' })),
+      },
+      facet: profileHeadlessFacet,
     };
     let session: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;
     let apis: Awaited<ReturnType<typeof serveSessionApis>> | undefined;
@@ -244,7 +267,7 @@ describe('gated headless startup', () => {
         sessionId: 'startup-test',
         sessionName: 'Test',
         agentArgs: ['--session-dir', root],
-        candidates: [facet.declaration, control.declaration],
+        candidates: [facet.declaration, control.declaration, profile.declaration],
         resolveSelection: (requested) => {
           const config = loadMajorModesConfig(root, path.join(root, 'home'));
           return {
@@ -252,7 +275,13 @@ describe('gated headless startup', () => {
             activeLayers: filterHookDisabledLayers(config, resolveLayers(config, requested.majorMode), false),
           };
         },
-        selection: { majorMode: 'development', activeLayers: ['tools'], domains: [], minorModes: ['fixture-mode'] },
+        selection: {
+          majorMode: 'development',
+          activeLayers: ['tools'],
+          domains: [],
+          minorModes: ['fixture-mode'],
+          profile: 'writer',
+        },
       });
       const frames: unknown[] = [];
       session.agent.onFrame((frame) => frames.push(frame));
@@ -274,7 +303,7 @@ describe('gated headless startup', () => {
         internalToken: 'test-internal-token',
         hubToken: 'test-hub-token',
         apis: [],
-        facets: [facet, control],
+        facets: [facet, control, profile],
         prepareFacets: session.prepareFacets,
         activateFacets: session.activateFacets,
         canDispatch: session.canDispatch,
@@ -287,7 +316,7 @@ describe('gated headless startup', () => {
             type: 'extension_ui_request',
             method: 'setStatus',
             statusKey: 'doom-major-mode',
-            statusText: '[development]',
+            statusText: '*writer*:[development]',
           }),
           expect.objectContaining({
             type: 'extension_ui_request',
@@ -299,7 +328,7 @@ describe('gated headless startup', () => {
             type: 'extension_ui_request',
             method: 'setStatus',
             statusKey: 'doom-profile',
-            statusText: undefined,
+            statusText: 'writer',
           }),
         ]),
       );
@@ -316,7 +345,7 @@ describe('gated headless startup', () => {
             type: 'custom',
             customType: 'doom-context',
             data: expect.objectContaining({
-              selection: { majorMode: 'development', domains: [] },
+              selection: { majorMode: 'development', profile: 'writer', domains: [] },
               groups: expect.arrayContaining([
                 expect.objectContaining({
                   id: 'development',
@@ -354,9 +383,19 @@ describe('gated headless startup', () => {
           commands: [
             { name: 'fixture', description: 'Fixture command', source: 'extension' },
             { name: 'mode', description: 'Change mode', source: 'extension' },
+            {
+              name: 'profile',
+              description: 'Show or change the active DoomPi profile.',
+              source: 'extension',
+            },
+            { name: 'minor', description: 'Toggle or drive minor modes', source: 'extension' },
           ],
         },
       });
+
+      expect(await request('prompt', { message: '/minor fixture-mode toggle' })).toMatchObject({ success: true });
+      expect(modeAction).toHaveBeenCalledOnce();
+
       expect(await request('prompt', { message: '/fixture hello world' })).toMatchObject({ success: true });
       expect(executeCommand).toHaveBeenLastCalledWith('hello world', expect.objectContaining({ repoRoot: root }));
       expect(await request('prompt', { message: '/fixture fail' })).toMatchObject({
@@ -374,7 +413,7 @@ describe('gated headless startup', () => {
       expect(streamSimple.mock.calls[0]?.[1].tools?.map((tool) => tool.name)).toEqual(['fixture_tool']);
       expect(started).toHaveBeenCalledTimes(1);
       expect(streamSimple.mock.calls[0]?.[1].systemPrompt).toBe(
-        'Fixture context\n\nStartup context\nFirst patch\nSecond patch',
+        'Fixture context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).\n\n# Writer\n\nStartup context\nFirst patch\nSecond patch',
       );
       expect(await request('prompt', { message: '/mode review' })).toMatchObject({ success: true });
       expect(session.host!.context.selection.activeLayers).toEqual([]);
@@ -383,7 +422,20 @@ describe('gated headless startup', () => {
         reviewEntries.filter((entry) => entry.type === 'custom' && entry.customType === 'doom-context'),
       ).toHaveLength(2);
       expect(readContextDetail('startup-test')).toMatchObject({ revision: 2 });
-      expect(await request('get_commands')).toMatchObject({ success: true, data: { commands: [{ name: 'mode' }] } });
+      expect(await request('get_commands')).toMatchObject({
+        success: true,
+        data: {
+          commands: [
+            { name: 'mode', description: 'Change mode', source: 'extension' },
+            {
+              name: 'profile',
+              description: 'Show or change the active DoomPi profile.',
+              source: 'extension',
+            },
+            { name: 'minor', description: 'Toggle or drive minor modes', source: 'extension' },
+          ],
+        },
+      });
       await expect(session.host!.dispatchCommand('fixture', 'stale')).rejects.toThrow('inactive or unknown');
       expect(executeCommand).toHaveBeenCalledTimes(2);
       await session.runtime.prompt('Disabled');
@@ -396,7 +448,7 @@ describe('gated headless startup', () => {
       resourceText = 'Updated context';
       await session.runtime.prompt('Reenabled');
       expect(streamSimple.mock.calls[2]?.[1].systemPrompt).toBe(
-        'Updated context\n\nStartup context\nFirst patch\nSecond patch',
+        'Updated context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).\n\n# Writer\n\nStartup context\nFirst patch\nSecond patch',
       );
       resourceFailure = true;
       await session.runtime.prompt('Resource failure').catch(() => undefined);
@@ -428,6 +480,23 @@ describe('gated headless startup', () => {
       append.mockRestore();
       await session.host!.select({ domains: [] });
       expect(session.host!.status.ready).toBe(true);
+
+      const pickerFrame = new Promise<Record<string, unknown>>((resolve) => {
+        session!.agent.onFrame((frame) => {
+          if (frame.type === 'extension_ui_request' && frame.method === 'select') resolve(frame);
+        });
+      });
+      const profileRequest = request('prompt', { message: '/profile' });
+      const picker = await pickerFrame;
+      expect(picker).toMatchObject({
+        title: 'Profile (current: writer)',
+        options: ['reviewer', 'writer'],
+      });
+      expect(typeof picker.id).toBe('string');
+      session.agent.send({ type: 'extension_ui_response', id: picker.id as string, value: 'reviewer' });
+      await expect(profileRequest).resolves.toMatchObject({ success: true });
+      expect(session.host!.context.selection.profile).toBe('reviewer');
+      expect(frames).toContainEqual({ type: 'extension_ui_answered', id: picker.id });
 
       await session.dispose();
       expect(shutdown).toHaveBeenCalledOnce();

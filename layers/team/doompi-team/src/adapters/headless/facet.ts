@@ -16,6 +16,7 @@ import {
   type SubagentToolParams,
 } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
 import { createBackgroundWorkService } from '../../services/backgroundWorkService.ts';
+import { toModelInfo } from '../../services/models/modelInfo.ts';
 import { createSubagentPolicyService } from '../../services/subagentPolicyService.ts';
 import { createTeamExtensionRuntime } from '../pi/teamRuntime.ts';
 import { createDelegationBridge } from '../pi/extensions/delegationBridge.ts';
@@ -54,11 +55,12 @@ type HeadlessTeamServicesConfig = {
 
 /** Mount Team's session services under a Cordis-owned plugin fiber. */
 function headlessTeamServicesPlugin(ctx: Context, config: HeadlessTeamServicesConfig): void {
+  const availableModels = config.execution.model ? [toModelInfo(config.execution.model)] : [];
   ctx.provide(
     DOOM_DELEGATION_SERVICE,
     config.bridge.createService(ctx, {
       sessionId: config.execution.sessionId,
-      availableModels: [],
+      availableModels,
       ...(config.execution.model ? { parentModel: config.execution.model } : {}),
     }),
   );
@@ -71,6 +73,7 @@ function subagentTool(
   execution: DoomHeadlessExecutionContext,
 ): DoomHeadlessTool<typeof SubagentParams> {
   const jobs = runtime.asyncJobTracker.forSession(execution.sessionId);
+  const availableModels = execution.model ? [toModelInfo(execution.model)] : [];
   return {
     name: 'subagent',
     label: 'Subagent',
@@ -129,7 +132,7 @@ function subagentTool(
               parentSessionId: execution.sessionId,
               ...(params.concurrency === undefined ? {} : { concurrency: params.concurrency }),
               ...(params.artifacts === undefined ? {} : { artifacts: params.artifacts }),
-              availableModels: [],
+              availableModels,
               ...(execution.model ? { parentModel: execution.model } : {}),
             },
             loadConfig().config,
@@ -174,7 +177,7 @@ function subagentTool(
             agentScope: 'both',
             runtime: 'pi',
             parentSessionId: execution.sessionId,
-            availableModels: [],
+            availableModels,
           },
           loadConfig().config,
         );

@@ -4,17 +4,29 @@ import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
+  DoomHeadlessMinorMode,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { helpHeadlessFacet } from '../../src/adapters/headless/facet.ts';
 
 describe('help headless facet', () => {
-  it('reads help resources and sends them through the help command', async () => {
+  it('registers activation-gated resources and sends them through the help command', async () => {
     const resources: DoomHeadlessResource[] = [];
     let command: DoomHeadlessCommand | undefined;
+    let mode: DoomHeadlessMinorMode | undefined;
+    const minorModes: string[] = [];
     const dispose = vi.fn();
+    const publish = vi.fn();
     const host = {
+      context: { selection: { minorModes } },
+      select: vi.fn(async ({ minorModes: selected }: { minorModes?: readonly string[] }) => {
+        minorModes.splice(0, minorModes.length, ...(selected ?? []));
+      }),
+      registerMinorMode: (registered: DoomHeadlessMinorMode) => {
+        mode = registered;
+        return { dispose, publish };
+      },
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return { dispose };
@@ -25,7 +37,7 @@ describe('help headless facet', () => {
       },
     } as unknown as DoomHeadlessHostService;
     const close = helpHeadlessFacet.apply({ get: () => host } as unknown as Context);
-    if (!command) throw new Error('Help command was not registered');
+    if (!command || !mode) throw new Error('Help contributions were not registered');
     const execution = {
       client: { notify: vi.fn() },
     } as unknown as DoomHeadlessExecutionContext;
@@ -33,6 +45,9 @@ describe('help headless facet', () => {
     const help = resources.find(({ name }) => name === 'doompi-help');
     const skill = resources.find(({ name }) => name === 'doompi-use-help');
     if (!help || !skill) throw new Error('Help resources were not registered');
+    expect(mode.initialState.activation).toBe('inactive');
+    expect(help.when).toEqual({ minorMode: 'help' });
+    expect(skill.when).toEqual({ minorMode: 'help' });
     expect(await help.read(execution)).toBe(await readFile(new URL('../../llms.txt', import.meta.url), 'utf8'));
     expect(await skill.read(execution)).toContain('help');
 
@@ -43,7 +58,20 @@ describe('help headless facet', () => {
       level: 'info',
     });
 
+    const actionExecution = {
+      context: execution,
+      operationId: 'help-test',
+      sessionKind: 'headless' as const,
+      signal: new AbortController().signal,
+    };
+    await mode.handleAction('activate', {}, actionExecution);
+    expect(minorModes).toEqual(['help']);
+    expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'active' }));
+    await mode.handleAction('deactivate', {}, actionExecution);
+    expect(minorModes).toEqual([]);
+    expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'inactive' }));
+
     close();
-    expect(dispose).toHaveBeenCalledTimes(3);
+    expect(dispose).toHaveBeenCalledTimes(4);
   });
 });

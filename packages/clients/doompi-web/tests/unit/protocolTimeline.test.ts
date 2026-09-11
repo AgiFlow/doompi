@@ -92,7 +92,7 @@ describe('protocol transcript projection', () => {
       { id: 'u1', role: 'user', content: [{ type: 'text', text: 'do the thing' }], timestamp: 1 },
     ];
 
-    expect(toTimelineEntries(items)).toEqual([{ kind: 'user', id: 'u1', text: 'do the thing' }]);
+    expect(toTimelineEntries(items)).toEqual([{ kind: 'user', id: 'u1', text: 'do the thing', timestamp: 1 }]);
   });
 
   it('retains supported user images and drops image content with unsupported MIME types', () => {
@@ -110,7 +110,13 @@ describe('protocol transcript projection', () => {
     ];
 
     expect(toTimelineEntries(items)).toEqual([
-      { kind: 'user', id: 'u1', text: 'review this', images: [{ data: 'cG5n', mimeType: 'image/png' }] },
+      {
+        kind: 'user',
+        id: 'u1',
+        text: 'review this',
+        timestamp: 1,
+        images: [{ data: 'cG5n', mimeType: 'image/png' }],
+      },
     ]);
   });
 
@@ -130,7 +136,7 @@ describe('protocol transcript projection', () => {
     ];
 
     expect(toTimelineEntries(items)).toEqual([
-      { kind: 'assistant', id: 'a1', text: 'here is why', thinking: 'weighing it', streaming: true },
+      { kind: 'assistant', id: 'a1', text: 'here is why', thinking: 'weighing it', streaming: true, timestamp: 2 },
     ]);
   });
 
@@ -178,6 +184,7 @@ describe('protocol transcript projection', () => {
       output: 'file body',
       isError: false,
       running: false,
+      timestamp: 3,
     });
   });
 

@@ -24,6 +24,7 @@ function fixture() {
     cwd: process.cwd(),
     repoRoot: process.cwd(),
     sessionId,
+    model: { provider: 'openai-codex', id: 'gpt-5.6-luna' },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],
@@ -203,6 +204,10 @@ describe('teamHeadlessFacet', () => {
           onUpdate,
         ),
       ).toMatchObject({ details: { outcomes: [{ runId: 'mock-run' }] } });
+      expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+        availableModels: [{ provider: 'openai-codex', id: 'gpt-5.6-luna', fullId: 'openai-codex/gpt-5.6-luna' }],
+        parentModel: { provider: 'openai-codex', id: 'gpt-5.6-luna' },
+      });
       expect(onUpdate).toHaveBeenCalledOnce();
       expect(await invoke({ action: 'status' })).toMatchObject({ details: { runs: [{ runId: 'mock-run' }] } });
       expect(await invoke({ action: 'status', id: 'mock-run' })).toMatchObject({ details: { runId: 'mock-run' } });

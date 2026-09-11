@@ -194,6 +194,47 @@ describe('hub protocol endpoint', () => {
     expect(session.state.value!.snapshot).toMatchObject({ id: SESSION_ID, phase: 'idle' });
   });
 
+  it('publishes a picker and accepts its answer while the command is still pending', async () => {
+    const { session } = await connect();
+    const send = agent.send;
+    let command: SessionFrame | undefined;
+    vi.spyOn(agent, 'send').mockImplementation((frame) => {
+      if (frame.type === 'prompt') {
+        command = frame;
+        agent.emit({
+          type: 'extension_ui_request',
+          id: 'profile-picker',
+          method: 'select',
+          title: 'Profile',
+          options: ['reviewer'],
+        });
+      } else if (frame.type === 'extension_ui_response') {
+        agent.emit({ type: 'extension_ui_answered', id: frame.id });
+        agent.emit({ type: 'response', id: command!.id, command: 'prompt', success: true });
+      } else send(frame);
+    });
+    const prompting = session.prompt({ text: '/profile', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    try {
+      await vi.waitFor(() =>
+        expect(session.state.value?.presentation?.projections).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ frame: expect.objectContaining({ id: 'profile-picker', method: 'select' }) }),
+          ]),
+        ),
+      );
+      await session.extensionUiResponse({ id: 'profile-picker', value: 'reviewer' }, BACKGROUND_CONTEXT);
+      await prompting;
+      await vi.waitFor(() =>
+        expect(
+          session.state.value?.presentation?.projections.some((event) => event.frame.id === 'profile-picker'),
+        ).toBe(false),
+      );
+    } finally {
+      if (command) agent.emit({ type: 'response', id: command.id, command: 'prompt', success: true });
+      await prompting.catch(() => undefined);
+    }
+  });
+
   it('carries a turn from the agent to the client across both hops', async () => {
     const { session } = await connect();
 

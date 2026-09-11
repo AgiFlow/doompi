@@ -20,6 +20,11 @@ import type { DirectHarnessRuntime } from '../../types/server/directHarnessRunti
 import { buildContextDetail } from '../../services/contextDetail.ts';
 import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../services/contextProjection.ts';
 import { projectMinorModes } from '../../services/minorModeProjection.ts';
+import {
+  executeMinorModeCommand,
+  MINOR_MODE_COMMAND,
+  MINOR_MODE_COMMAND_DESCRIPTION,
+} from '../../services/minorModeCommand.ts';
 import { writeContextDetail } from '../contextDetailStore.ts';
 import {
   getAgentDir,
@@ -279,6 +284,7 @@ function mapResources(resources: readonly ResolvedHeadlessResource[]): {
 function toolAdapter(
   tool: HeadlessTool,
   executionContext: () => DoomHeadlessExecutionContext,
+  reportedErrors: Set<string>,
 ): AgentHarnessTool<object | undefined> {
   return {
     name: tool.name,
@@ -295,19 +301,11 @@ function toolAdapter(
         toolCallId,
         parameters,
         context.abortSignal,
-        (partial) =>
-          onUpdate({
-            content: partial.content,
-            details: partial.details,
-            ...(partial.isError ? { isError: true } : {}),
-          }),
+        (partial) => onUpdate({ content: partial.content, details: partial.details }),
         executionContext(),
       );
-      return {
-        content: result.content,
-        details: result.details,
-        ...(result.isError ? { isError: true } : {}),
-      };
+      if (result.isError === true) reportedErrors.add(toolCallId);
+      return { content: result.content, details: result.details };
     },
   };
 }
@@ -416,6 +414,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const resolved = await resolveModel(parsed, modelRuntime, settings);
   if (parsed.apiKey !== undefined) await modelRuntime.setRuntimeApiKey(resolved.model.provider, parsed.apiKey);
 
+  const reportedToolErrors = new Set<string>();
   let promptPreparationFailed = false;
   let headlessReady = false;
   const initialSystemPrompt = [parsed.systemPrompt, ...(parsed.appendSystemPrompt ?? [])].filter(Boolean).join('\n\n');
@@ -483,11 +482,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     },
     afterTool: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-      const patches = await headlessHost.dispatchHook('tool_result', event);
-      let content = event.content;
-      let details = event.details;
-      let isError = event.isError;
-      let usage = event.usage;
+      const reportedError = reportedToolErrors.delete(event.toolCallId);
+      const original = reportedError ? { ...event, isError: true } : event;
+      const patches = await headlessHost.dispatchHook('tool_result', original);
+      let content = original.content;
+      let details = original.details;
+      let isError = original.isError;
+      let usage = original.usage;
       let terminate: boolean | undefined;
       for (const patch of patches) {
         if (!isRecord(patch)) continue;
@@ -570,15 +571,46 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     },
     listCommands: () => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-      return headlessHost.listCommands();
+      const commands = headlessHost.listCommands();
+      return commands.some(({ name }) => name === MINOR_MODE_COMMAND)
+        ? commands
+        : [...commands, { name: MINOR_MODE_COMMAND, description: MINOR_MODE_COMMAND_DESCRIPTION }];
     },
     dispatchCommand: async (text) => {
       const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text);
       if (!match) return false;
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
       const name = match[1]!;
+      const args = match[2] ?? '';
+      if (name === MINOR_MODE_COMMAND) {
+        const executionClient = headlessHost.context.client;
+        await executeMinorModeCommand(args, {
+          catalog: headlessHost.catalog,
+          kind: 'headless',
+          ui: {
+            async select(title, options) {
+              const selected = await executionClient.request({
+                kind: 'select',
+                title,
+                options: options.map((label) => ({ label, value: label })),
+              });
+              return typeof selected === 'string' ? selected : undefined;
+            },
+            async input(title, message) {
+              const entered = await executionClient.request({ kind: 'input', title, message });
+              return typeof entered === 'string' ? entered : undefined;
+            },
+            async confirm(title, message) {
+              const confirmed = await executionClient.request({ kind: 'confirm', title, message });
+              return typeof confirmed === 'boolean' ? confirmed : undefined;
+            },
+            notify: (message, level) => executionClient.notify({ body: message, level }),
+          },
+        });
+        return true;
+      }
       if (!headlessHost.listCommands().some((entry) => entry.name === name)) return false;
-      await headlessHost.dispatchCommand(name, match[2] ?? '');
+      await headlessHost.dispatchCommand(name, args);
       return true;
     },
     guardModelRequest: () => {
@@ -675,7 +707,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       context: executionContext,
       resolveSelection: options.resolveSelection,
       applyTools: async (tools) =>
-        runtime.replaceTools(tools.map((tool) => toolAdapter(tool, () => headlessHost!.context))),
+        runtime.replaceTools(tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors))),
       applyResources: async (next) => {
         const mapped = mapResources(next);
         await runtime.replaceResources(mapped.harness);
