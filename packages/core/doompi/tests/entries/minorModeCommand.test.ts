@@ -58,12 +58,13 @@ function harness(records: MinorModeRecord[], selectAnswers: Array<string | undef
   const notify = vi.fn();
   const select = vi.fn(async () => selectAnswers.shift());
   const input = vi.fn(async () => 'typed');
+  const confirm = vi.fn(async () => true);
   const ctx = {
     mode: 'rpc',
     hasUI: false,
-    ui: { notify, select, input, confirm: vi.fn() },
+    ui: { notify, select, input, confirm },
   } as unknown as ExtensionContext;
-  return { command: registered as RegisteredCommand, ctx, notify, select, input, invoke };
+  return { command: registered as RegisteredCommand, ctx, notify, select, input, confirm, invoke };
 }
 
 describe('the /minor command', () => {
@@ -153,6 +154,44 @@ describe('the /minor command', () => {
     expect(invoke.mock.calls[0]?.[0]).toMatchObject({ actionId: 'start', arguments: { launcherId: 'typed' } });
   });
 
+  it('uses typed boolean and enum prompts before rejecting an invalid number', async () => {
+    const entry = record({
+      id: 'loop.active',
+      label: 'Loop',
+      actions: [
+        {
+          id: 'configure',
+          label: 'Configure',
+          description: 'Configure a loop.',
+          contexts: ['headless'],
+          parameters: [
+            { name: 'enabled', label: 'Enabled', kind: 'boolean', required: true },
+            {
+              name: 'profile',
+              label: 'Profile',
+              kind: 'enum',
+              required: true,
+              choices: [
+                { value: 'fast', label: 'Fast' },
+                { value: 'safe', label: 'Safe' },
+              ],
+            },
+            { name: 'limit', label: 'Limit', kind: 'number', required: true },
+          ],
+        },
+      ],
+    });
+    const { command, ctx, confirm, select, input, notify, invoke } = harness([entry], ['Safe']);
+    input.mockResolvedValueOnce('not-a-number');
+
+    await command.handler('loop configure', ctx);
+
+    expect(confirm).toHaveBeenCalledWith('Configure: Enabled', '');
+    expect(select).toHaveBeenCalledWith('Configure: Profile', ['Fast', 'Safe']);
+    expect(input).toHaveBeenCalledWith('Configure: Limit', '');
+    expect(notify).toHaveBeenCalledWith('Limit must be a number.', 'warning');
+    expect(invoke).not.toHaveBeenCalled();
+  });
   it('says why a mode has nothing to run, in the mode own words', async () => {
     const voice = record({
       id: 'voice-auto',

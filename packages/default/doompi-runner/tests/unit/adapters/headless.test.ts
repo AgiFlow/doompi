@@ -10,7 +10,14 @@ function execution(): DoomHeadlessExecutionContext {
     sessionId: 'owned-session',
     selection: { majorMode: 'copilot', activeLayers: ['runner'], domains: [], minorModes: [] },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
-    session: { entries: () => [], appendCustomEntry: vi.fn(), prompt: vi.fn(), abort: vi.fn(), compact: vi.fn() },
+    session: {
+      entries: () => [],
+      appendCustomEntry: vi.fn(),
+      prompt: vi.fn(),
+      abort: vi.fn(),
+      compact: vi.fn(),
+      activity: vi.fn(async () => ({ hasPendingMessages: false, isIdle: true })),
+    },
     shutdown: vi.fn(),
   };
 }

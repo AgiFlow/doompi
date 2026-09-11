@@ -21,16 +21,30 @@ const SESSION_ID = 'session-under-test';
 function fakeAgent(): AgentProcess & { emit(frame: SessionFrame): void; readonly sent: SessionFrame[] } {
   const listeners: Array<(frame: SessionFrame) => void> = [];
   const sent: SessionFrame[] = [];
+  const emit = (frame: SessionFrame): void => {
+    for (const listener of listeners) listener(frame);
+  };
+  const respondToRequest = (frame: SessionFrame): void => {
+    if (typeof frame.id !== 'string' || typeof frame.type !== 'string') return;
+    emit({
+      type: 'response',
+      id: frame.id,
+      command: frame.type,
+      success: true,
+      data: frame.type === 'get_entries' ? { entries: [], leafId: null } : {},
+    });
+  };
   return {
     sent,
-    send: (frame) => sent.push(frame),
+    send: (frame) => {
+      sent.push(frame);
+      respondToRequest(frame);
+    },
     onFrame: (listener) => listeners.push(listener),
     exited: new Promise<number>(() => {}),
     endInput: () => undefined,
     stop: () => undefined,
-    emit: (frame) => {
-      for (const listener of listeners) listener(frame);
-    },
+    emit,
   };
 }
 
@@ -119,7 +133,7 @@ describe('doompi-server over the pi protocol', () => {
     const prompting = session.prompt('what changed?', BACKGROUND_CONTEXT);
     await vitestTick();
 
-    expect(agent.sent).toContainEqual({ type: 'prompt', message: 'what changed?' });
+    expect(agent.sent).toContainEqual({ type: 'prompt', message: 'what changed?', id: expect.any(String) });
 
     agent.emit({ type: 'agent_start' });
     agent.emit({ type: 'message_start', message: { id: 'm1', role: 'assistant', content: [] } });
@@ -165,8 +179,13 @@ describe('doompi-server over the pi protocol', () => {
     await session.setModel({ provider: 'anthropic', id: 'claude-opus-4-5' }, BACKGROUND_CONTEXT);
     await session.setThinking('high', BACKGROUND_CONTEXT);
 
-    expect(agent.sent).toContainEqual({ type: 'set_model', provider: 'anthropic', modelId: 'claude-opus-4-5' });
-    expect(agent.sent).toContainEqual({ type: 'set_thinking_level', level: 'high' });
+    expect(agent.sent).toContainEqual({
+      type: 'set_model',
+      provider: 'anthropic',
+      modelId: 'claude-opus-4-5',
+      id: expect.any(String),
+    });
+    expect(agent.sent).toContainEqual({ type: 'set_thinking_level', level: 'high', id: expect.any(String) });
   });
 
   it('refuses to attach a session this server does not supervise', async () => {
@@ -234,7 +253,7 @@ async function waitForIdle(session: SessionService): Promise<void> {
 
 /** Lets the server's microtasks run before the test inspects what it received. */
 async function vitestTick(): Promise<void> {
-  for (let attempt = 0; attempt < 50 && agent.sent.length === 0; attempt += 1) {
+  for (let attempt = 0; attempt < 50 && !agent.sent.some((frame) => frame.type === 'prompt'); attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }

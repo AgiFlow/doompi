@@ -1,5 +1,5 @@
 import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import {
   DOOM_COCKPIT_SERVER_ID,
@@ -10,30 +10,47 @@ import {
 import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
 import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
 import { createProtocolTimeline, toQueuedEntries } from '../lib/protocolTimeline.ts';
-import { applyProtocolQueue, applyProtocolTranscript, releaseProtocolTranscript } from '../stores/sessionStore.ts';
+import {
+  applyProtocolQueue,
+  applyProtocolTranscript,
+  releaseProtocolTranscript,
+  applySessionFrame,
+  beginSessionReplay,
+  endSessionReplay,
+  resetSessionStore,
+  refreshSessionFacts,
+} from '../stores/sessionStore.ts';
+import { bindSessionProtocol } from '../lib/sessionProtocolCommands.ts';
 
 /** How long to wait before dialling again after the protocol socket drops. */
 const RECONNECT_MS = 700;
 
 export interface ProtocolRuntime {
+  readonly client: Client;
   /** Points the runtime at the session the page is showing, or at none. */
   focus(sessionId: string | null): void;
   stop(): void;
 }
 
 /** Runs Pi 0.85's routed client and Chord session binding for the visible session. */
-export function startProtocolRuntime(location: Location = window.location): ProtocolRuntime {
+export function startProtocolRuntime(
+  location: Location = window.location,
+  onFrame: (sessionId: string, frame: Record<string, unknown>, replay: boolean) => void = (sessionId, frame, replay) =>
+    applySessionFrame(sessionId, frame, { replay }),
+): ProtocolRuntime {
   const client = new Client({
     serverId: DOOM_COCKPIT_SERVER_ID,
     transportFactory: createProtocolTransport(protocolSocketUrl(location)),
   });
   let binding: RemoteServiceBinding | undefined;
   let unsubscribe: (() => void) | undefined;
+  let releaseCommands: (() => void) | undefined;
   let boundSessionId: string | null = null;
   let focused: string | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   let generation = 0;
+  let cancelOpening: ((reason?: unknown) => void) | undefined;
 
   const schedule = (action: () => Promise<void>): void => {
     if (retry) clearTimeout(retry);
@@ -45,6 +62,10 @@ export function startProtocolRuntime(location: Location = window.location): Prot
   };
 
   const release = async (): Promise<void> => {
+    cancelOpening?.(new Error('The session attachment was replaced.'));
+    cancelOpening = undefined;
+    releaseCommands?.();
+    releaseCommands = undefined;
     unsubscribe?.();
     unsubscribe = undefined;
     const previous = binding;
@@ -59,12 +80,15 @@ export function startProtocolRuntime(location: Location = window.location): Prot
   const open = async (sessionId: string): Promise<void> => {
     const mine = ++generation;
     let next: RemoteServiceBinding | undefined;
+    await release();
+    if (stopped || mine !== generation || !client.connected) return;
+    const opening = withCancel(BACKGROUND_CONTEXT);
+    cancelOpening = opening.cancel;
     try {
-      await release();
-      if (stopped || mine !== generation || !client.connected) return;
       await client.request(
         { serverId: DOOM_COCKPIT_SERVER_ID },
         { serviceId: DoomSessionManagementService.id, member: 'attach', args: [sessionId] },
+        opening.context.abortSignal,
       );
       if (stopped || mine !== generation) return;
       next = createRemoteServiceBinding({
@@ -72,28 +96,64 @@ export function startProtocolRuntime(location: Location = window.location): Prot
         transport: createClientServiceTransport(client, () => client.attachment),
       });
       const service = next.use(DoomSessionService);
-      await next.ready(BACKGROUND_CONTEXT);
+      await next.ready(opening.context);
       if (stopped || mine !== generation) return;
       binding = next;
       next = undefined;
       boundSessionId = sessionId;
+      releaseCommands = bindSessionProtocol(sessionId, service, (frame) => onFrame(sessionId, frame, false));
       const timeline = createProtocolTimeline();
+      let initialized = false;
+      let revision = 0;
       const publish = (state: SessionServiceState): void => {
-        applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
-        applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
+        const presentation = state.presentation;
+        if (!presentation) throw new Error('Session server does not support the unified presentation protocol.');
+        const first = presentation.events[0]?.sequence ?? presentation.revision + 1;
+        const replay =
+          !initialized ||
+          revision < first - 1 ||
+          presentation.revision < revision ||
+          revision < (presentation.resetRevision ?? 0);
+        if (replay) {
+          beginSessionReplay(sessionId);
+          try {
+            // Reset first. Applying the snapshot before this reset loses it when
+            // a replay clears the store to remove the previous branch.
+            resetSessionStore(sessionId);
+            applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
+            applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
+            const events = new Map(
+              [...presentation.projections, ...presentation.events].map((event) => [event.sequence, event]),
+            );
+            for (const event of [...events.values()].sort((a, b) => a.sequence - b.sequence))
+              onFrame(sessionId, event.frame, true);
+          } finally {
+            endSessionReplay(sessionId);
+          }
+          initialized = true;
+        } else {
+          applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
+          applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
+          for (const event of presentation.events)
+            if (event.sequence > revision) onFrame(sessionId, event.frame, false);
+        }
+        revision = presentation.revision;
       };
       const initial = service.state.value;
       if (initial) publish(initial);
       unsubscribe = service.state.subscribe(publish);
+      onFrame(sessionId, { type: 'bridge_status', state: 'attached' }, false);
+      refreshSessionFacts(sessionId);
     } catch {
       if (stopped || mine !== generation) return;
-      releaseProtocolTranscript(sessionId);
+      await release();
       // A replacement process may not have published its registry record yet.
       if (client.connected)
         schedule(async () => {
           if (focused !== null) await open(focused);
         });
     } finally {
+      if (cancelOpening === opening.cancel) cancelOpening = undefined;
       // Failed or superseded openings never become the active binding.
       await next?.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
     }
@@ -134,6 +194,7 @@ export function startProtocolRuntime(location: Location = window.location): Prot
   void connect();
 
   return {
+    client,
     focus(sessionId) {
       if (sessionId === focused) return;
       focused = sessionId;

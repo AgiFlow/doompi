@@ -48,6 +48,8 @@ export interface RemoteGuardOptions {
   trustedDevice?: RemoteAuthorizer;
   /** A remote socket is admitted only after its purpose-bound channel exists. */
   channelReady?: (deviceId: string, scope: RemoteChannelScope) => boolean;
+  /** Exact, independently authenticated federation bootstrap or sealed message route. */
+  federationRoute?: (context: Context) => boolean;
   /** Additional origins the operator has allowed, from DOOMPI_WEB_ALLOW_ORIGIN. */
   extraOrigins?: readonly string[];
   /**
@@ -162,8 +164,16 @@ export function createRemoteGuard(options: RemoteGuardOptions): RemoteGuard {
     // anything else would let the guard and the router disagree about which
     // handler a request reaches.
     if (isPublicPairingRoute(context.req.method, context.req.path)) return next();
-
+    const isFederationRoute = options.federationRoute?.(context) === true;
     const trustedDeviceId = options.trustedDevice?.(context);
+    if (isFederationRoute) {
+      // A human device must not smuggle this peer-only route through the sealed
+      // cockpit gateway. The route performs the Ed25519 authentication itself.
+      if (trustedDeviceId !== undefined)
+        return context.json({ error: 'Federation transport is peer-only.' }, UNAUTHORIZED);
+      return next();
+    }
+
     if (
       trustedDeviceId === undefined &&
       !isDirectTunnelRoute(context.req.method, context.req.path, isUpgradeRequest(context))

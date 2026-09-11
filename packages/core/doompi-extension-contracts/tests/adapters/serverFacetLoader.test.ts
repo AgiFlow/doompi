@@ -320,6 +320,25 @@ describe('loadServerBundle', () => {
     };
   }
 
+  it.each(['session', 'hub'] as const)(
+    'admits default packages for %s without named layers, but retains mode and scope gates',
+    async (scope) => {
+      const fixture = bundle([
+        entry('base', { scopes: [scope], owners: [{ majorMode: 'coding', layer: 'default' }], required: true }),
+        entry('foreign', { scopes: [scope], owners: [{ majorMode: 'review', layer: 'default' }], required: true }),
+        entry('wrong-scope', {
+          scopes: [scope === 'session' ? 'hub' : 'session'],
+          owners: [{ majorMode: 'coding', layer: 'default' }],
+          required: true,
+        }),
+        entry('disabled', { scopes: [scope], required: true }),
+      ]);
+      fs.writeFileSync(path.join(fixture.directory, 'base.mjs'), 'export default { apply() {} };');
+      const loaded = await loadServerBundle(scope, { ...fixture.options, activeLayers: [] });
+      expect(loaded.facets.map(({ declaration }) => declaration.packageName)).toEqual(['base']);
+    },
+  );
+
   it('loads eligible packages in descriptor order and retains their attribution', async () => {
     const fixture = bundle([entry('second'), entry('first')]);
     for (const name of ['second', 'first']) {

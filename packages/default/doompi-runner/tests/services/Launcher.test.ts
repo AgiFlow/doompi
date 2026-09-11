@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -115,6 +116,19 @@ describe('Launcher.launch', () => {
 
     expect(runtimeEntry('runnerHost', pathToFileURL(builtModule).href)).toBe(path.join(builtBin, 'runnerHost.mjs'));
     expect(runtimeEntry('logSink', pathToFileURL(builtModule).href)).toBe(path.join(builtBin, 'logSink.mjs'));
+  });
+
+  it.each(['runnerHost', 'logSink'] as const)('executes %s through a symlinked package root', (name) => {
+    const real = path.join(directory, 'real');
+    const alias = path.join(directory, 'alias');
+    fs.mkdirSync(path.join(real, 'bin'), { recursive: true });
+    fs.symlinkSync(real, alias, 'junction');
+    fs.writeFileSync(
+      path.join(real, 'bin', `${name}.mjs`),
+      'import { pathToFileURL } from "node:url"; if (import.meta.url === pathToFileURL(process.argv[1]).href) process.stdout.write("executed");',
+    );
+    const entry = runtimeEntry(name, pathToFileURL(path.join(alias, 'schemas', 'runnerSpec.mjs')).href);
+    expect(execFileSync(process.execPath, [entry], { encoding: 'utf8' })).toBe('executed');
   });
 
   it('reports the module it searched from when no executable entry ships beside it', () => {

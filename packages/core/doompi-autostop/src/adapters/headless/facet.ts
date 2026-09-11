@@ -25,44 +25,41 @@ export const autoStopHeadlessFacet = {
       timer = setTimeout(() => {
         timer = undefined;
         if (!watching) return;
-        // The headless session owns the authoritative idle state. A settled event
-        // only starts the grace period; the host shutdown remains explicit here.
-        host.context.shutdown();
+        void host.context.session
+          .activity()
+          .then((activity) => {
+            if (!watching) return;
+            const decision = decideOnRecheck(activity, DEFAULT_AUTO_STOP_DELAYS);
+            if (decision.action === 'shutdown') host.context.shutdown();
+            else if (decision.action === 'stand-down') stopWatching();
+            else schedule(decision.delayMs);
+          })
+          .catch(() => stopWatching());
       }, delayMs);
     };
 
     const hooks: DoomHeadlessHook[] = [
       {
+        event: 'agent_start',
+        handle: stopWatching,
+      },
+      {
         event: 'agent_settled',
-        handle(event) {
-          const decision = decideOnSettled(
-            {
-              hasPendingMessages: event.hasPendingMessages === true,
-              isIdle: event.isIdle === true,
-            },
-            DEFAULT_AUTO_STOP_DELAYS,
-          );
+        async handle() {
+          const decision = decideOnSettled(await host.context.session.activity(), DEFAULT_AUTO_STOP_DELAYS);
           if (decision.action === 'recheck') schedule(decision.delayMs);
           else stopWatching();
         },
       },
       {
         event: 'session_shutdown',
-        handle() {
-          stopWatching();
-        },
+        handle: stopWatching,
       },
       {
         event: 'session_tree',
-        handle(event) {
+        async handle() {
           if (!watching) return;
-          const decision = decideOnRecheck(
-            {
-              hasPendingMessages: event.hasPendingMessages === true,
-              isIdle: event.isIdle === true,
-            },
-            DEFAULT_AUTO_STOP_DELAYS,
-          );
+          const decision = decideOnRecheck(await host.context.session.activity(), DEFAULT_AUTO_STOP_DELAYS);
           if (decision.action === 'shutdown') host.context.shutdown();
           else if (decision.action === 'stand-down') stopWatching();
           else schedule(decision.delayMs);

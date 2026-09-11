@@ -47,7 +47,7 @@ function stateFromEntries(entries: readonly Record<string, unknown>[]): ActiveGo
 }
 
 async function skill(): Promise<string> {
-  return readFile(new URL('../../prompts/doompi-use-goal/SKILL.md', import.meta.url), 'utf8');
+  return readFile(new URL('../../../src/prompts/doompi-use-goal/SKILL.md', import.meta.url), 'utf8');
 }
 
 export const goalHeadlessFacet: HeadlessFacet = {

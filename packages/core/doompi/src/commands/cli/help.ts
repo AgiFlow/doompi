@@ -99,6 +99,19 @@ Options:
 `;
 }
 
+export function historyImportHelp(): string {
+  return `Usage: doompi history-import <v3-source> <v4-destination> --confirm-offline
+
+Preserves the original v3 JSONL and imports a separate canonical v4 copy. Stop Pi
+before running this command. The confirmation flag cannot prove that an unmanaged
+Pi process has stopped, and stale ownership locks are never reclaimed automatically.
+
+Options:
+  --confirm-offline          Confirm Pi is stopped and authorize the offline import
+  -h, --help                Show this help
+`;
+}
+
 export function printHelp(): void {
   process.stdout.write(`doompi
 
@@ -107,6 +120,7 @@ Usage: doompi [harness options] [Pi options] [prompt]
        doompi sync [matrix options] [--check]
        doompi compat <codex|claude|antigravity> [matrix options] [provider arguments]
        doompi history-export <v4-source> <v3-destination> [options]
+       doompi history-import <v3-source> <v4-destination> --confirm-offline
 
 Initialization:
   doompi init              Fill missing files in ~/.pi/.doom

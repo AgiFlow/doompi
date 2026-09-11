@@ -686,6 +686,28 @@ describe('the web plugin registry', () => {
     expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-b', payload: { items: [] } })).toBe(true);
   });
 
+  it('replaces an active session registry in one notification and drops its prior channels', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('replace', [
+      defineWebPlugin({
+        id: 'before',
+        tabs: [{ id: 'before-tab', label: 'Before', panel: Panel }],
+        channels: [itemsChannel(log, 'before_items', 'before')],
+      }),
+    ]);
+    activateWebPluginSession('replace');
+    const observedTabs: string[][] = [];
+    const unsubscribe = subscribeWebPluginRegistry(() => observedTabs.push(webTabs().map((tab) => tab.label)));
+
+    installSessionWebPlugins('replace', [
+      defineWebPlugin({ id: 'after', tabs: [{ id: 'after-tab', label: 'After', panel: Other }] }),
+    ]);
+    unsubscribe();
+
+    expect(observedTabs).toEqual([['After']]);
+    expect(log).toEqual(['drop:before:replace']);
+  });
+
   it('replays the latest channel snapshot after an asynchronous session registry install', () => {
     const log: string[] = [];
     activateWebPluginSession('late');

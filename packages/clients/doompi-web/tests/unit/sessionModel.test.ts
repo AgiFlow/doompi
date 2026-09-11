@@ -662,6 +662,35 @@ describe('reduceSession', () => {
     expect(reduceSession(initialSessionState, { type: 'entry_appended', entry: 'junk' }).minorModes).toBeNull();
   });
 
+  it('restores live selection statuses from the journalled context projection', () => {
+    const projection = {
+      version: 1,
+      revision: 3,
+      selection: { majorMode: 'copilot', domains: ['default', 'web'], profile: 'writer' },
+      groups: [],
+      totalTokens: 0,
+      inactiveTokens: 0,
+      estimator: 'gpt-tokenizer',
+    };
+    const restored = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'doom-context', data: projection },
+    });
+    expect(restored.context).toEqual(projection);
+    expect(restored.statuses).toMatchObject({
+      'doom-major-mode': '*writer*:[copilot]:default,web',
+      'doom-domain': 'default,web',
+      'doom-profile': 'writer',
+    });
+
+    const legacy = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'doom-context', data: { ...projection, selection: undefined } },
+    });
+    expect(legacy.context).toEqual({ ...projection, selection: undefined });
+    expect(legacy.statuses).toEqual({});
+  });
+
   it('closes only the matching dialog when the hub reports it answered', () => {
     const opened = reduceSession(initialSessionState, {
       type: 'extension_ui_request',

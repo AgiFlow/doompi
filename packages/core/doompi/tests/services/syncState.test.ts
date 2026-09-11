@@ -500,6 +500,18 @@ describe('web sources hash', () => {
 });
 
 describe('inputs hash', () => {
+  it('hashes a symlinked repository identically to the canonical sync root', () => {
+    const root = makeRoot();
+    const alias = path.join(makeRoot(), 'alias');
+    fs.symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const home = homeFor(root);
+    const original = computeInputsHash(root, SELECTION, home);
+    expect(computeInputsHash(alias, SELECTION, home)).toBe(original);
+    fs.writeFileSync(path.join(root, '.mcp.json'), '{"mcpServers":{}}');
+    expect(computeInputsHash(alias, SELECTION, home)).toBe(computeInputsHash(root, SELECTION, home));
+    expect(computeInputsHash(alias, SELECTION, home)).not.toBe(original);
+  });
+
   it('changes when a .doom file changes', () => {
     const root = makeRoot();
     const before = computeInputsHash(root, SELECTION);

@@ -95,7 +95,7 @@ export function runtimeEntry(name: 'runnerHost' | 'logSink', moduleUrl = import.
 
   while (true) {
     const entry = path.join(directory, 'bin', `${name}.${extension}`);
-    if (fs.existsSync(entry)) return entry;
+    if (fs.existsSync(entry)) return fs.realpathSync(entry);
 
     const parent = path.dirname(directory);
     if (parent === directory) break;

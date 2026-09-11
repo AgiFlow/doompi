@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { listDomainNames } from '@agimon-ai/doompi-config/domains';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   requireDoomHeadlessHost,
@@ -6,7 +7,15 @@ import {
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
-import { DOMAIN_COMMAND, splitDomains } from '../../services/domainText.ts';
+import {
+  DOMAIN_COMMAND,
+  domainToggleOptions,
+  normalizeDomainNames,
+  pickerTitle,
+  splitDomains,
+  toggledDomains,
+  toggleOptionDomain,
+} from '../../services/domainText.ts';
 
 const PACKAGE_ROOT = new URL('../../../', import.meta.url);
 
@@ -46,16 +55,32 @@ export const domainHeadlessFacet = {
       name: DOMAIN_COMMAND,
       description: 'Show or change the active DoomPi domains.',
       async execute(args, execution) {
-        const trimmed = args.trim();
-        if (!trimmed) {
-          await execution.client.notify({
-            title: 'DoomPi domains',
-            body: `Active domains: ${execution.selection.domains.join(', ') || '(none)'}`,
-            level: 'info',
+        const available = listDomainNames(execution.repoRoot);
+        let requested = splitDomains(args);
+        if (requested.length === 0) {
+          const listing = {
+            active: [...execution.selection.domains],
+            effective: [...execution.selection.domains],
+            available,
+          };
+          const selected = await execution.client.request({
+            kind: 'select',
+            title: pickerTitle(listing),
+            options: domainToggleOptions(listing).map((label) => ({ label, value: label })),
           });
+          if (typeof selected !== 'string' || !selected) return;
+          requested = toggledDomains(listing.effective, toggleOptionDomain(selected));
+        }
+        requested = normalizeDomainNames(requested);
+        const unknown = requested.filter((name) => !available.includes(name));
+        if (unknown.length > 0) throw new Error(`Unknown domain: ${unknown.join(', ')}`);
+        if (
+          requested.length === execution.selection.domains.length &&
+          requested.every((name, index) => name === execution.selection.domains[index])
+        ) {
           return;
         }
-        await host.select({ domains: splitDomains(trimmed) });
+        await host.select({ domains: requested });
       },
     };
     const registrations = [

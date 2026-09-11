@@ -30,6 +30,7 @@ test('shows a running workflow with its jobs, steps, and breadcrumb', async ({ p
   });
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-workflows').click();
   await expect(page).toHaveURL(/\/session\/s1\/workflows-runs$/);
   await expect(page.getByTestId('workflow-picker')).toContainText('Release Hardening');
@@ -93,6 +94,7 @@ test('renders Markdown artifacts and explains when an artifact is empty', async 
   );
   writeWorkflowArtifact(cockpit.workflowHome, fixture, 'copy-review.md', '');
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toContainText('Publication');
   await page.getByTestId('pane-tab-artifacts').click();
@@ -121,6 +123,7 @@ test('confirms before permanently deleting a settled workflow', async ({ page, c
   const runDir = workflowRunDir(cockpit.workflowHome, fixture);
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toContainText('Finished Run');
   await page.getByTestId('delete-workflow').click();
@@ -139,6 +142,7 @@ test('confirms before permanently deleting a settled workflow', async ({ page, c
 test('a failure moves into the needs-you strip live', async ({ page, cockpit }) => {
   const at = new Date().toISOString();
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflows-empty')).toBeVisible();
 
@@ -183,6 +187,7 @@ test('a workflow owned by another session stays off this tab', async ({ page, co
   });
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toBeVisible({ timeout: 5000 });
   await page.getByTestId('workflow-picker').click();
@@ -207,6 +212,7 @@ test('searches thirty runs without turning them into a chip strip', async ({ pag
   }
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-workflows').click();
   await expect(page.getByTestId('workflow-picker')).toContainText('30 workflows', { timeout: 5000 });
 

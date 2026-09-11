@@ -225,6 +225,31 @@ function isToolDefinition(node: ts.ObjectLiteralExpression): boolean {
   return REQUIRED_TOOL_MEMBERS.every((member) => names.has(member));
 }
 
+/** Core adapts package-owned tools to AgentHarness; ownership stays with their declaring package. */
+function isHarnessToolProjection(node: ts.ObjectLiteralExpression): boolean {
+  if (!ts.isReturnStatement(node.parent) || !ts.isBlock(node.parent.parent)) return false;
+  const owner = node.parent.parent.parent;
+  if (
+    !ts.isFunctionDeclaration(owner) ||
+    !owner.type ||
+    !ts.isTypeReferenceNode(owner.type) ||
+    !ts.isIdentifier(owner.type.typeName) ||
+    owner.type.typeName.text !== 'AgentHarnessTool'
+  )
+    return false;
+  let receiver: string | undefined;
+  for (const key of ['name', 'parameters']) {
+    const member = node.properties.find((property) => memberName(property) === key);
+    if (!member || !ts.isPropertyAssignment(member)) return false;
+    const value = unwrap(member.initializer);
+    if (!ts.isPropertyAccessExpression(value) || !ts.isIdentifier(value.expression) || value.name.text !== key)
+      return false;
+    if (receiver !== undefined && receiver !== value.expression.text) return false;
+    receiver = value.expression.text;
+  }
+  return owner.parameters.some((parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === receiver);
+}
+
 function isTestPath(filePath: string): boolean {
   return TEST_FILE.test(filePath) || filePath.split(path.sep).some((segment) => TEST_DIRECTORIES.has(segment));
 }
@@ -233,6 +258,7 @@ function isTestPath(filePath: string): boolean {
 function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored: Set<string> } {
   const tools: ToolDefinition[] = [];
   const ignored = new Set<string>();
+  const coreHost = readManifest(configRoot)?.name === '@agimon-ai/doompi';
   for (const filePath of walkSources(path.join(configRoot, SRC_ROOT))) {
     if (isTestPath(filePath)) continue;
     const sourceFile = readSource(filePath);
@@ -244,7 +270,12 @@ function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored
     if (!text.includes('execute') || !text.includes('parameters')) continue;
     const relative = projectPath(filePath, configRoot) ?? filePath;
     const visit = (node: ts.Node): void => {
-      if (ts.isObjectLiteralExpression(node) && isToolDefinition(node)) {
+      const nativeProjection =
+        coreHost &&
+        relative === 'src/adapters/server/headlessSessionHost.ts' &&
+        ts.isObjectLiteralExpression(node) &&
+        isHarnessToolProjection(node);
+      if (ts.isObjectLiteralExpression(node) && isToolDefinition(node) && !nativeProjection) {
         tools.push({ resolved: resolveName(node, sourceFile, filePath, configRoot), file: relative });
       }
       ts.forEachChild(node, visit);

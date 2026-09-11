@@ -15,6 +15,7 @@ import { runnerServerFacet } from '../../../src/exports/extensions/server.ts';
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
     bashRunService: { run: vi.fn() },
+    paths: { setSessionId: vi.fn() },
     lifeline: { arm: vi.fn(async () => '/tmp/runner-lifeline.sock'), dispose: vi.fn() },
     runnerRegistry: {
       listBySession: vi.fn(async () => [
@@ -99,6 +100,7 @@ function headlessFacetContext() {
       prompt: vi.fn(async () => undefined),
       abort: vi.fn(async () => undefined),
       compact: vi.fn(async () => undefined),
+      activity: vi.fn(async () => ({ hasPendingMessages: false, isIdle: true })),
     },
     shutdown: vi.fn(),
   } as unknown as DoomHeadlessExecutionContext;
@@ -169,6 +171,10 @@ describe('runnerServerFacet', () => {
     const activity = harness.activity();
 
     const firstStop = await activity.start(harness.execution);
+    expect(lifecycleMocks.container.paths.setSessionId).toHaveBeenCalledWith('session-a');
+    expect(lifecycleMocks.container.paths.setSessionId.mock.invocationCallOrder[0]).toBeLessThan(
+      lifecycleMocks.container.lifeline.arm.mock.invocationCallOrder[0]!,
+    );
     await firstStop();
 
     expect(lifecycleMocks.stopRunnerProcess).not.toHaveBeenCalled();

@@ -125,6 +125,10 @@ export class CliApp {
       const { HistoryExportCommand } = await import('../historyExportCommand.ts');
       return new HistoryExportCommand().execute(args);
     }
+    if (args[0] === 'history-import') {
+      const { HistoryImportCommand } = await import('../historyImportCommand.ts');
+      return new HistoryImportCommand().execute(args);
+    }
 
     // The first pass resolves --cwd without touching repository configuration,
     // which keeps help and version available even when modes.yaml is malformed.

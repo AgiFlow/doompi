@@ -38,6 +38,52 @@ describe('web-plugin-tool-renderers', () => {
   const entry = (tools: string, extra = '') =>
     `import { defineWebPlugin } from '${CONTRACTS}';\nexport const webPlugin = defineWebPlugin({ id: 'demo', toolRenderers: [{ tools: ${tools}, ${extra}message: X }] });`;
 
+  const nativePath = 'src/adapters/server/headlessSessionHost.ts';
+  const projection = `function adapt(tool: HeadlessTool): AgentHarnessTool<object> {
+    return { name: tool.name, parameters: tool.parameters, async execute() { return tool.execute(); } };
+  }`;
+
+  it('leaves renderer ownership with the originating packages for core native tool projection', () => {
+    const file = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi' }));
+    write(nativePath, projection);
+    expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
+    write('src/adapters/pi/owned.ts', tool("'owned'"));
+    expect(webPluginToolRenderers.check?.(file, root)).toContain('owned');
+  });
+
+  it.each([
+    ['another package', 'p', nativePath, projection],
+    ['another core module', '@agimon-ai/doompi', 'src/adapters/pi/tool.ts', projection],
+    [
+      'a newly named core tool',
+      '@agimon-ai/doompi',
+      nativePath,
+      projection.replace('name: tool.name', "name: 'owned'"),
+    ],
+    [
+      'a changed schema',
+      '@agimon-ai/doompi',
+      nativePath,
+      projection.replace('parameters: tool.parameters', 'parameters: {}'),
+    ],
+    [
+      'different input ownership',
+      '@agimon-ai/doompi',
+      nativePath,
+      projection.replace('parameters: tool.parameters', 'parameters: other.parameters'),
+    ],
+    [
+      'a Pi return type',
+      '@agimon-ai/doompi',
+      nativePath,
+      projection.replace('AgentHarnessTool<object>', 'ToolDefinition'),
+    ],
+  ])('still requires renderers for %s', (_label, packageName, filePath, source) => {
+    const file = write('package.json', JSON.stringify({ name: packageName }));
+    write(filePath, source);
+    expect(webPluginToolRenderers.check?.(file, root)).not.toBeNull();
+  });
+
   it('is silent off the manifest and for a package that registers no tool', () => {
     write('src/adapters/pi/tool.ts', tool("'read'"));
     expect(webPluginToolRenderers.check?.(write('src/web/index.ts', entry("['read']")), root)).toBeNull();

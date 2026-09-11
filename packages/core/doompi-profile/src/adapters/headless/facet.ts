@@ -6,8 +6,8 @@ import {
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
-import { buildPersonaPrompt, resolveProfile } from '@agimon-ai/doompi-config/profiles';
-import { PROFILE_COMMAND } from '../../services/profileText.ts';
+import { buildPersonaPrompt, loadProfiles, resolveProfile } from '@agimon-ai/doompi-config/profiles';
+import { PROFILE_COMMAND, profileItems, profileTitle } from '../../services/profileText.ts';
 
 const PACKAGE_ROOT = new URL('../../../', import.meta.url);
 
@@ -55,15 +55,19 @@ export const profileHeadlessFacet = {
       name: PROFILE_COMMAND,
       description: 'Show or change the active DoomPi profile.',
       async execute(args, execution) {
-        const requested = args.trim();
+        const profiles = loadProfiles(execution.repoRoot);
+        let requested = args.trim();
         if (!requested) {
-          await execution.client.notify({
-            title: 'DoomPi profile',
-            body: `Active profile: ${execution.selection.profile ?? '(none)'}`,
-            level: 'info',
+          const selected = await execution.client.request({
+            kind: 'select',
+            title: profileTitle(execution.selection.profile),
+            options: profileItems(profiles),
           });
-          return;
+          if (typeof selected !== 'string' || !selected) return;
+          requested = selected;
         }
+        if (!profiles.some(({ name }) => name === requested)) throw new Error(`Unknown profile: ${requested}`);
+        if (requested === execution.selection.profile) return;
         await host.select({ profile: requested });
       },
     };

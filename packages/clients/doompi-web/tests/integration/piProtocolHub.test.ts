@@ -31,16 +31,30 @@ const SESSION_ID = 'hub-session';
 function fakeAgent() {
   const listeners: Array<(frame: SessionFrame) => void> = [];
   const sent: SessionFrame[] = [];
+  const emit = (frame: SessionFrame): void => {
+    for (const listener of listeners) listener(frame);
+  };
+  const respondToRequest = (frame: SessionFrame): void => {
+    if (typeof frame.id !== 'string' || typeof frame.type !== 'string') return;
+    emit({
+      type: 'response',
+      id: frame.id,
+      command: frame.type,
+      success: true,
+      data: frame.type === 'get_entries' ? { entries: [], leafId: null } : {},
+    });
+  };
   return {
     sent,
-    send: (frame: SessionFrame) => sent.push(frame),
+    send: (frame: SessionFrame) => {
+      sent.push(frame);
+      respondToRequest(frame);
+    },
     onFrame: (listener: (frame: SessionFrame) => void) => listeners.push(listener),
     exited: new Promise<number>(() => {}),
     endInput: () => undefined,
     stop: () => undefined,
-    emit: (frame: SessionFrame) => {
-      for (const listener of listeners) listener(frame);
-    },
+    emit,
   };
 }
 
@@ -184,10 +198,10 @@ describe('hub protocol endpoint', () => {
     const { session } = await connect();
 
     const prompting = session.prompt('what changed?', BACKGROUND_CONTEXT);
-    for (let attempt = 0; attempt < 60 && agent.sent.length === 0; attempt += 1) {
+    for (let attempt = 0; attempt < 60 && !agent.sent.some((frame) => frame.type === 'prompt'); attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    expect(agent.sent).toContainEqual({ type: 'prompt', message: 'what changed?' });
+    expect(agent.sent).toContainEqual({ type: 'prompt', message: 'what changed?', id: expect.any(String) });
 
     agent.emit({ type: 'agent_start' });
     agent.emit({ type: 'message_start', message: { id: 'm1', role: 'assistant', content: [] } });
@@ -205,6 +219,19 @@ describe('hub protocol endpoint', () => {
 
     expect(settled.phase).toBe('idle');
     expect(settled.transcript[0]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: 'a file' }] });
+  });
+
+  it('acknowledges an accepted prompt without waiting for agent settlement', async () => {
+    const { session } = await connect();
+
+    await expect(
+      session.prompt({ text: '/mcp auth example', waitFor: 'accepted' }, BACKGROUND_CONTEXT),
+    ).resolves.toBeUndefined();
+    expect(agent.sent).toContainEqual({
+      type: 'prompt',
+      message: '/mcp auth example',
+      id: expect.any(String),
+    });
   });
 
   it('refuses a session the registry does not list', async () => {

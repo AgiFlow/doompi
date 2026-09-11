@@ -24,8 +24,13 @@ jobs:
         include:
           - runner: macos-14
             platform: mac
+            target: darwin-arm64
           - runner: ubuntu-latest
             platform: linux
+            target: linux-x64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            target: linux-arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -47,6 +52,11 @@ jobs:
         with:
           node-version: 22.22.1
           cache: pnpm
+
+      - name: Confirm release target
+        run: |
+          actual="$(node -p 'process.platform + "-" + process.arch')"
+          test "$actual" = "${{ matrix.target }}"
 
       - name: Install frozen registry and workspace dependencies
         run: pnpm install --frozen-lockfile

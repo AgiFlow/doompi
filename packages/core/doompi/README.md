@@ -38,7 +38,8 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 npm install -g @agimon-ai/doompi
 ```
 
-The package pins and installs the upstream Pi version used by `dpi`.
+The package pins and installs the upstream Pi version used by `dpi`. It also owns the
+[`doompi-server` executable and server API](docs/server/index.md) used by the web and desktop clients.
 
 The root package contains the fixed host foundation only. Feature packages are selected by
 `.doom/modes.yaml` and installed into the consumer repository when they are first needed.
@@ -49,8 +50,8 @@ DoomPi is alpha software. Configuration and package boundaries may still change 
 releases.
 
 - Node.js 22.19.0 or newer
-- macOS or Linux on arm64 or x64 for the bundled Runner backend
-- Pi 0.85.0 and Pi TUI 0.85.0 for packages that declare them as peer requirements
+- Release targets: macOS arm64, Linux x64, and Linux arm64
+- Pi 0.85.1 and Pi TUI 0.85.1 for packages that declare them as peer requirements
 
 ## Try DoomPi without replacing your Pi setup
 

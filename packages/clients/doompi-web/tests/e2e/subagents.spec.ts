@@ -65,6 +65,7 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
     tokens: 85_380,
   });
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-agents').click();
   await expect(page).toHaveURL(/\/session\/s1\/subagents-fleet$/);
   await expect(page.getByTestId('run-card-run-a')).toHaveAttribute('data-run-state', 'running');
@@ -111,6 +112,7 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
 
 test('a run started while watching appears live', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-agents').click();
   await expect(page.getByTestId('subagents-empty')).toBeVisible();
 
@@ -147,6 +149,7 @@ test('a long prompt truncates inside the card instead of widening the grid', asy
   });
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await page.getByTestId('activity-open-agents').click();
   const card = page.getByTestId('run-card-run-wide');
   await expect(card).toBeVisible();

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { resolveHarnessOptions } from '../../commands/cli/harnessOptions';
+import type { HarnessOptions } from '../../types/interfaces/harness';
 import { buildHarnessContext, type HarnessContext } from '../harnessContext';
 import { ensureLayerPackages } from '../layerPackageInstaller';
 import { resolveLaunchPlan } from '../launchPlan';
@@ -73,6 +73,8 @@ export function pinnedDoomPiCli(
 }
 
 export interface DoomAgentLauncherOptions {
+  /** CLI policy is supplied by the composition root, not imported by the host adapter. */
+  resolveHarnessOptions(input: { args: string[]; environment: NodeJS.ProcessEnv; cwd: string }): HarnessOptions;
   /** Launcher arguments for this session, as they appeared after `--`. */
   agentArgs: readonly string[];
   cwd: string;
@@ -149,7 +151,7 @@ export function createDoomAgentLauncher(options: DoomAgentLauncherOptions): Agen
               : { ...environment, [LAUNCHER_COMPOSITION_REQUEST_ENV]: options.compositionRecordPath },
         };
       }
-      const harnessOptions = resolveHarnessOptions({ args, environment, cwd: options.cwd });
+      const harnessOptions = options.resolveHarnessOptions({ args, environment, cwd: options.cwd });
       const built = await buildHarnessContext(harnessOptions, telemetry);
       context = built;
       await ensureLayerPackages({

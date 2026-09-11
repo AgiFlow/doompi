@@ -1,5 +1,4 @@
-import { createRequire } from 'node:module';
-import type { Terminal } from '@xterm/headless';
+import headless, { type Terminal } from '@xterm/headless';
 import { NO_TERMINAL_INPUT_ENV } from '../../schemas/runnerSpec.ts';
 import { getResultMaxBytes } from '../../types/config.ts';
 import { scrubTerminalOutput } from '../../services/AnsiScrub/ansiScrub';
@@ -20,13 +19,9 @@ const TERM_GRACE_MS = 2_000;
 const LIVENESS_POLL_MS = 100;
 const NEWLINE = '\n';
 
-/**
- * `@xterm/headless` publishes CommonJS, and Node's ESM loader cannot detect its
- * named exports, so it is required rather than imported.
- */
-const { Terminal: HeadlessTerminal } = createRequire(import.meta.url)(
-  '@xterm/headless',
-) as typeof import('@xterm/headless');
+// Use the CommonJS default export: Node cannot detect this package's named exports.
+// A static import also lets server bundles include it without a live node_modules lookup.
+const { Terminal: HeadlessTerminal } = headless;
 
 export class PtyHost implements IPtyHost {
   private readonly runs = new Map<string, PtyRun>();

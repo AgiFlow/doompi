@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
   type DoomHeadlessResource,
@@ -31,6 +32,7 @@ function execution(repoRoot: string, profile: string): DoomHeadlessExecutionCont
       prompt: vi.fn(),
       abort: vi.fn(),
       compact: vi.fn(),
+      activity: vi.fn(async () => ({ hasPendingMessages: false, isIdle: true })),
     },
     selection: {
       majorMode: 'copilot',
@@ -43,18 +45,28 @@ function execution(repoRoot: string, profile: string): DoomHeadlessExecutionCont
   };
 }
 
-function profileResource(): DoomHeadlessResource {
+function profileSetup() {
+  const commands: DoomHeadlessCommand[] = [];
   const resources: DoomHeadlessResource[] = [];
+  const select = vi.fn(async () => undefined);
+  const disposed = vi.fn();
   const host = {
     registerResource: (resource: DoomHeadlessResource) => {
       resources.push(resource);
-      return { dispose: vi.fn() };
+      return { dispose: disposed };
     },
-    registerCommand: () => ({ dispose: vi.fn() }),
+    registerCommand: (command: DoomHeadlessCommand) => {
+      commands.push(command);
+      return { dispose: disposed };
+    },
+    select,
   } as unknown as DoomHeadlessHostService;
-  const context = { get: () => host } as unknown as Context;
-  profileHeadlessFacet.apply(context);
-  const resource = resources.find(({ name }) => name === 'doompi/profile-config');
+  const dispose = profileHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  return { command: commands[0]!, dispose, disposed, resources, select };
+}
+
+function profileResource(): DoomHeadlessResource {
+  const resource = profileSetup().resources.find(({ name }) => name === 'doompi/profile-config');
   if (!resource) throw new Error('profile headless resource was not registered');
   return resource;
 }
@@ -91,5 +103,61 @@ describe('profile headless resource', () => {
     const resource = profileResource();
 
     await expect(resource.read(execution(root, 'missing'))).rejects.toThrow('Unknown profile: missing');
+  });
+});
+
+describe('headless profile command', () => {
+  function configuredExecution() {
+    const root = temporaryRoot();
+    const personaDirectory = path.join(root, 'agents', 'writer', 'mara');
+    fs.mkdirSync(personaDirectory, { recursive: true });
+    fs.writeFileSync(path.join(personaDirectory, 'profile.md'), '# Mara');
+    fs.mkdirSync(path.join(root, 'agents', 'reviewer', 'reed'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'agents', 'reviewer', 'reed', 'profile.md'), '# Reed');
+    fs.mkdirSync(path.join(root, '.doom'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, '.doom', 'profiles.yaml'),
+      'profiles:\n  entries:\n    writer:\n      persona: agents/writer/mara\n      env: {}\n    reviewer:\n      persona: agents/reviewer/reed\n      env: {}\n',
+    );
+    return execution(root, 'writer');
+  }
+
+  it('opens a typed picker and applies the selected configured profile', async () => {
+    const { command, select } = profileSetup();
+    const context = configuredExecution();
+    vi.mocked(context.client.request).mockResolvedValue('reviewer');
+    await command.execute('', context);
+    expect(context.client.request).toHaveBeenCalledExactlyOnceWith({
+      kind: 'select',
+      title: 'Profile (current: writer)',
+      options: [
+        { label: 'reviewer', value: 'reviewer', description: 'agents/reviewer/reed' },
+        { label: 'writer', value: 'writer', description: 'agents/writer/mara' },
+      ],
+    });
+    expect(select).toHaveBeenCalledExactlyOnceWith({ profile: 'reviewer' });
+  });
+
+  it.each([undefined, false, '', 'writer'])(
+    'does not transition for cancellation or the current profile: %s',
+    async (answer) => {
+      const { command, select } = profileSetup();
+      const context = configuredExecution();
+      vi.mocked(context.client.request).mockResolvedValue(answer);
+      await command.execute('', context);
+      expect(select).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects unknown values and propagates selection failures', async () => {
+    const { command, select } = profileSetup();
+    const context = configuredExecution();
+    await expect(command.execute('missing', context)).rejects.toThrow('Unknown profile: missing');
+    vi.mocked(context.client.request).mockResolvedValue('missing');
+    await expect(command.execute('', context)).rejects.toThrow('Unknown profile: missing');
+    expect(select).not.toHaveBeenCalled();
+    vi.mocked(context.client.request).mockResolvedValue('reviewer');
+    select.mockRejectedValueOnce(new Error('Selection was not applied'));
+    await expect(command.execute('', context)).rejects.toThrow('Selection was not applied');
   });
 });

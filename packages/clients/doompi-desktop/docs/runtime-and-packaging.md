@@ -102,8 +102,9 @@ The current electron-builder configuration produces:
 | -------- | ------------ | ------------- |
 | macOS    | arm64        | DMG, ZIP      |
 | Linux    | x64          | AppImage, DEB |
+| Linux    | arm64        | AppImage, DEB |
 
-Windows and macOS x64 are not configured release targets.
+Windows and macOS x64 are not supported release targets. Build producers reject unsupported platform and architecture pairs before producing an artifact.
 
 ## Updates and compatibility
 

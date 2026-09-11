@@ -28,6 +28,9 @@ export default defineConfig({
         'doompi/dist/src/adapters/syncedRuntimeBuilder': source(
           'packages/core/doompi/src/adapters/syncedRuntimeBuilder.ts',
         ),
+        'doompi/dist/src/extensions/entries/agentModel': source(
+          'packages/core/doompi/src/extensions/entries/agentModel.ts',
+        ),
         'doompi/dist/src/extensions/entries/doom': source('packages/core/doompi/src/extensions/entries/doom.ts'),
         'doompi/dist/src/extensions/entries/cordisFinalizer': source(
           'packages/core/doompi/src/extensions/entries/cordisFinalizer.ts',
@@ -38,6 +41,9 @@ export default defineConfig({
         'doompi/dist/src/extensions/entries/effort': source('packages/core/doompi/src/extensions/entries/effort.ts'),
         'doompi/dist/src/extensions/entries/launcherBootstrap': source(
           'packages/core/doompi/src/extensions/entries/launcherBootstrap.ts',
+        ),
+        'doompi/dist/src/extensions/entries/minorModeCommand': source(
+          'packages/core/doompi/src/extensions/entries/minorModeCommand.ts',
         ),
         'doompi/dist/src/extensions/entries/modeCatalog': source(
           'packages/core/doompi/src/extensions/entries/modeCatalog.ts',

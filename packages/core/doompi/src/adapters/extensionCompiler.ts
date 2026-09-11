@@ -28,10 +28,9 @@ import {
  * remain separate content-addressed chunks so their evaluation semantics survive
  * compilation.
  *
- * Direct module artifacts bundle ordinary JavaScript dependencies. Node built-ins and
- * Pi's shared runtime stays external; native or resource-bearing dependencies fail
- * explicitly because the current artifact publisher does not copy those files.
- * Pi set artifacts retain the installed graph for native and startup-sensitive packages.
+ * Direct module artifacts bundle ordinary JavaScript dependencies. Node built-ins and Pi's
+ * shared runtime stay external; native or resource-bearing dependencies fail explicitly
+ * unless their package-owned resources are pinned into the artifact.
  * Those imports are rewritten to absolute paths so a worktree-local artifact never relies
  * on its generated directory having its own `node_modules` tree. Immutable build objects
  * may be shared by linked worktrees, but materialized output stays worktree-local.
@@ -125,6 +124,9 @@ const NATIVE_PACKAGES = new Set([
   'typescript',
 ]);
 
+const TURSO_DATABASE_PACKAGE = '@tursodatabase/database';
+const TURSO_DATABASE_COMMON_PACKAGE = '@tursodatabase/database-common';
+
 /**
  * Dependency-heavy ESM runtimes that Pi set artifacts should retain in their installed graph.
  *
@@ -161,7 +163,7 @@ type CompilationKind = 'pi-set' | 'module';
 
 /**
  * Direct modules may bundle ordinary JavaScript, but these packages carry runtime
- * files or native bindings that the compiled artifact does not currently publish.
+ * files or native bindings that require explicitly pinned resources.
  */
 const DIRECT_RESOURCE_PACKAGES = new Set([
   '@agimon-ai/doompi-runner-rmux-darwin-arm64',
@@ -291,6 +293,282 @@ function canonicalPath(target: string): string {
 function isInside(directory: string, target: string): boolean {
   const relative = path.relative(path.resolve(directory), path.resolve(target));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function packageManifestDirectory(target: string): string | undefined {
+  let directory = path.dirname(canonicalPath(target));
+  while (true) {
+    const manifestPath = path.join(directory, 'package.json');
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as unknown;
+      if (isRecord(manifest) && typeof manifest.name === 'string') return directory;
+    } catch {
+      // Continue through package roots only when their manifest is readable.
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}
+
+function packageDependencyNames(manifest: Record<string, unknown>): string[] {
+  return ['dependencies', 'optionalDependencies'].flatMap((field) => {
+    const dependencies = manifest[field];
+    return isRecord(dependencies) ? Object.keys(dependencies) : [];
+  });
+}
+
+function resolvePackageDirectory(name: string, manifestPath: string): string | undefined {
+  try {
+    return packageManifestDirectory(createRequire(manifestPath).resolve(name));
+  } catch {
+    return undefined;
+  }
+}
+
+function nativePackageDirectories(entries: readonly string[]): string[] {
+  const queue = entries.map(packageManifestDirectory).filter((value): value is string => value !== undefined);
+  const visited = new Set<string>();
+  const found: string[] = [];
+  while (queue.length > 0) {
+    const directory = canonicalPath(queue.shift() as string);
+    if (visited.has(directory)) continue;
+    visited.add(directory);
+    const manifestPath = path.join(directory, 'package.json');
+    let manifest: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as unknown;
+      if (!isRecord(parsed)) continue;
+      manifest = parsed;
+    } catch {
+      continue;
+    }
+    if (manifest.name === '@agimon-ai/log-sink-mcp') found.push(directory);
+    if (
+      manifest.name === TURSO_DATABASE_PACKAGE ||
+      manifest.name === 'sqlite-vec' ||
+      manifest.name === 'ruvector-onnx-embeddings-wasm' ||
+      manifest.name === '@napi-rs/keyring'
+    ) {
+      found.push(directory);
+      continue;
+    }
+    for (const dependency of packageDependencyNames(manifest)) {
+      const resolved = resolvePackageDirectory(dependency, manifestPath);
+      if (resolved) queue.push(resolved);
+    }
+  }
+  return found;
+}
+
+function currentTursoPlatformPackage(): string | undefined {
+  let suffix = `${process.platform}-${process.arch}`;
+  if (process.platform === 'linux') {
+    const report: unknown = process.report.getReport();
+    if (!isRecord(report) || !isRecord(report.header) || typeof report.header.glibcVersionRuntime !== 'string') {
+      return undefined;
+    }
+    suffix += '-gnu';
+  } else if (process.platform === 'win32') {
+    suffix += '-msvc';
+  }
+  return `${TURSO_DATABASE_PACKAGE}-${suffix}`;
+}
+
+function tursoPlatformResource(packageDirectory: string): CompileExtensionResourcePackage | undefined {
+  const packageName = currentTursoPlatformPackage();
+  if (!packageName) return undefined;
+  const manifest: unknown = JSON.parse(fs.readFileSync(path.join(packageDirectory, 'package.json'), 'utf8'));
+  if (
+    !isRecord(manifest) ||
+    !isRecord(manifest.optionalDependencies) ||
+    typeof manifest.optionalDependencies[packageName] !== 'string'
+  ) {
+    return undefined;
+  }
+  let entry: string;
+  try {
+    entry = createRequire(path.join(packageDirectory, 'package.json')).resolve(packageName);
+  } catch {
+    return undefined;
+  }
+  const nativeDirectory = packageManifestDirectory(entry);
+  if (!nativeDirectory) return undefined;
+  const relative = path.relative(nativeDirectory, canonicalPath(entry)).split(path.sep).join('/');
+  if (!relative || relative.startsWith('../') || path.isAbsolute(relative)) return undefined;
+  return {
+    packageName,
+    packageDirectory: nativeDirectory,
+    files: [{ path: 'package.json' }, { path: relative }],
+  };
+}
+
+function currentSqliteVecPlatformPackage(): string | undefined {
+  if (process.platform === 'linux' && currentTursoPlatformPackage() === undefined) return undefined;
+  const platform = process.platform === 'win32' ? 'windows' : process.platform;
+  const target = `${platform}-${process.arch}`;
+  if (!['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'windows-x64'].includes(target)) return undefined;
+  return `sqlite-vec-${target}`;
+}
+
+function sqliteVecPlatformResource(packageDirectory: string): CompileExtensionResourcePackage | undefined {
+  const packageName = currentSqliteVecPlatformPackage();
+  if (!packageName) return undefined;
+  const manifest: unknown = JSON.parse(fs.readFileSync(path.join(packageDirectory, 'package.json'), 'utf8'));
+  if (
+    !isRecord(manifest) ||
+    !isRecord(manifest.optionalDependencies) ||
+    typeof manifest.optionalDependencies[packageName] !== 'string'
+  )
+    return undefined;
+  const suffix = process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so';
+  let entry: string;
+  try {
+    entry = createRequire(path.join(packageDirectory, 'package.json')).resolve(`${packageName}/vec0.${suffix}`);
+  } catch {
+    return undefined;
+  }
+  const nativeDirectory = packageManifestDirectory(entry);
+  if (!nativeDirectory) return undefined;
+  const relative = path.relative(nativeDirectory, canonicalPath(entry)).split(path.sep).join('/');
+  if (!relative || relative.startsWith('../') || path.isAbsolute(relative)) return undefined;
+  return { packageName, packageDirectory: nativeDirectory, files: [{ path: 'package.json' }, { path: relative }] };
+}
+
+function vectorWasmResource(packageDirectory: string): CompileExtensionResourcePackage {
+  const manifest: unknown = JSON.parse(fs.readFileSync(path.join(packageDirectory, 'package.json'), 'utf8'));
+  if (
+    !isRecord(manifest) ||
+    !Array.isArray(manifest.files) ||
+    !manifest.files.every((file) => typeof file === 'string') ||
+    !manifest.files.includes('ruvector_onnx_embeddings_wasm.js') ||
+    !manifest.files.includes('ruvector_onnx_embeddings_wasm_bg.wasm') ||
+    !manifest.files.includes('loader.js')
+  ) {
+    throw new Error('Unsupported embedding WASM resource manifest');
+  }
+  return {
+    packageName: 'ruvector-onnx-embeddings-wasm',
+    packageDirectory,
+    files: ['package.json', ...manifest.files].map((file) => ({ path: file })),
+  };
+}
+
+function keyringResources(packageDirectory: string): CompileExtensionResourcePackage[] {
+  const suffix = currentTursoPlatformPackage()?.slice(TURSO_DATABASE_PACKAGE.length);
+  const packageName = suffix && `@napi-rs/keyring${suffix}`;
+  const manifestPath = path.join(packageDirectory, 'package.json');
+  const manifest: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (
+    !packageName ||
+    !isRecord(manifest) ||
+    !isRecord(manifest.optionalDependencies) ||
+    typeof manifest.optionalDependencies[packageName] !== 'string'
+  ) {
+    throw new Error('Unsupported or missing native keyring binding');
+  }
+  const nativeDirectory = resolvePackageDirectory(packageName, manifestPath);
+  if (!nativeDirectory) throw new Error('Unsupported or missing native keyring binding');
+  const entry = createRequire(manifestPath).resolve(packageName);
+  return [
+    {
+      packageName: '@napi-rs/keyring',
+      packageDirectory,
+      files: ['package.json', 'index.js', 'keytar.js'].map((file) => ({ path: file })),
+    },
+    {
+      packageName,
+      packageDirectory: nativeDirectory,
+      files: [
+        { path: 'package.json' },
+        { path: path.relative(nativeDirectory, canonicalPath(entry)).split(path.sep).join('/') },
+      ],
+    },
+  ];
+}
+
+function resourcesWithPinnedNativePlatforms(
+  entries: readonly string[],
+  resources: readonly CompileExtensionResourceBinding[] = [],
+): CompileExtensionResourceBinding[] {
+  const pinned = resources.map((resource) => ({ ...resource, packages: [...resource.packages] }));
+  const packagesByName = new Map(
+    pinned.flatMap((resource) => resource.packages.map((pkg) => [pkg.packageName, pkg] as const)),
+  );
+  for (const directory of nativePackageDirectories(entries)) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8')) as { name: string };
+    if (manifest.name === '@agimon-ai/log-sink-mcp') {
+      // Its createRequire lookup must resolve the pinned embedding package, not the source installation.
+      if (!pinned.some((resource) => canonicalPath(resource.ownerDirectory) === canonicalPath(directory))) {
+        pinned.push({ ownerPackageName: manifest.name, ownerDirectory: directory, packages: [] });
+      }
+      continue;
+    }
+    if (manifest.name === '@napi-rs/keyring') {
+      for (const pkg of keyringResources(directory)) {
+        const existing = packagesByName.get(pkg.packageName);
+        if (existing) {
+          if (canonicalPath(existing.packageDirectory) !== canonicalPath(pkg.packageDirectory)) {
+            throw new Error(`Conflicting native package roots for ${pkg.packageName}`);
+          }
+          continue;
+        }
+        packagesByName.set(pkg.packageName, pkg);
+        pinned.push({ ownerPackageName: pkg.packageName, ownerDirectory: pkg.packageDirectory, packages: [pkg] });
+      }
+      continue;
+    }
+    const sqliteVec = manifest.name === 'sqlite-vec';
+    const platform =
+      manifest.name === 'ruvector-onnx-embeddings-wasm'
+        ? vectorWasmResource(directory)
+        : sqliteVec
+          ? sqliteVecPlatformResource(directory)
+          : tursoPlatformResource(directory);
+    if (!platform) {
+      throw new Error(
+        `Unsupported or missing native ${sqliteVec ? 'sqlite-vec' : 'Turso'} binding for ${process.platform}-${process.arch}`,
+      );
+    }
+    const existing = packagesByName.get(platform.packageName);
+    if (existing) {
+      if (canonicalPath(existing.packageDirectory) !== canonicalPath(platform.packageDirectory)) {
+        throw new Error(`Conflicting native package roots for ${platform.packageName}`);
+      }
+      continue;
+    }
+    packagesByName.set(platform.packageName, platform);
+    pinned.push({
+      ownerPackageName: platform.packageName,
+      ownerDirectory: platform.packageDirectory,
+      packages: [platform],
+    });
+  }
+  return pinned;
+}
+
+function tursoPlatformIsPinned(resources: readonly CompileExtensionResourceBinding[]): boolean {
+  const packageName = currentTursoPlatformPackage();
+  return (
+    packageName !== undefined &&
+    resources.some((resource) => resource.packages.some((pkg) => pkg.packageName === packageName))
+  );
+}
+
+function directModuleDependencyIsPinned(root: string, resources: readonly CompileExtensionResourceBinding[]): boolean {
+  if (root === 'ruvector-onnx-embeddings-wasm' || root === '@napi-rs/keyring') {
+    return resources.some((resource) => resource.packages.some((pkg) => pkg.packageName === root));
+  }
+  if (root === 'sqlite-vec') {
+    const packageName = currentSqliteVecPlatformPackage();
+    return (
+      packageName !== undefined &&
+      resources.some((resource) => resource.packages.some((pkg) => pkg.packageName === packageName))
+    );
+  }
+  return (
+    (root === TURSO_DATABASE_PACKAGE || root === TURSO_DATABASE_COMMON_PACKAGE) && tursoPlatformIsPinned(resources)
+  );
 }
 
 function externalLogicalPath(sourcePath: string): string {
@@ -719,7 +997,12 @@ function pathToImportSpecifier(target: string): string {
   return path.resolve(target).split(path.sep).join('/');
 }
 
-function setExternalResolver(inputs: Set<string>, kind: CompilationKind, entry?: string) {
+function setExternalResolver(
+  inputs: Set<string>,
+  kind: CompilationKind,
+  entry?: string,
+  resources: readonly CompileExtensionResourceBinding[] = [],
+) {
   return {
     name: 'doom-set-external',
     async resolveId(
@@ -736,8 +1019,21 @@ function setExternalResolver(inputs: Set<string>, kind: CompilationKind, entry?:
       if (path.isAbsolute(specifier)) {
         if (!importer && entry && path.resolve(specifier) === path.resolve(entry)) return null;
         const root = packageRootFromPath(specifier);
-        if (root && kind === 'module' && directModuleDependencyIsUnbundlable(root)) {
+        if (
+          root &&
+          kind === 'module' &&
+          directModuleDependencyIsUnbundlable(root) &&
+          !directModuleDependencyIsPinned(root, resources)
+        ) {
           throw directModuleDependencyError(root);
+        }
+        if (root === '@napi-rs/keyring' && kind === 'module' && directModuleDependencyIsPinned(root, resources)) {
+          const directory = packageManifestDirectory(specifier);
+          if (!directory) throw directModuleDependencyError(root);
+          return {
+            id: `${root}/${path.relative(directory, canonicalPath(specifier)).split(path.sep).join('/')}`,
+            external: true,
+          };
         }
         if (
           root &&
@@ -768,8 +1064,16 @@ function setExternalResolver(inputs: Set<string>, kind: CompilationKind, entry?:
           return { id: typebox, external: kind === 'pi-set' };
         }
       }
-      if (root && kind === 'module' && directModuleDependencyIsUnbundlable(root)) {
+      if (
+        root &&
+        kind === 'module' &&
+        directModuleDependencyIsUnbundlable(root) &&
+        !directModuleDependencyIsPinned(root, resources)
+      ) {
         throw directModuleDependencyError(root);
+      }
+      if (root === '@napi-rs/keyring' && kind === 'module' && directModuleDependencyIsPinned(root, resources)) {
+        return { id: renamed, external: true };
       }
       if (root && kind === 'pi-set' && (NATIVE_PACKAGES.has(root) || STARTUP_EXTERNAL_PACKAGES.has(root))) {
         const resolved = await this.resolve(renamed, importer, options);
@@ -849,6 +1153,8 @@ function preserveImportMetaUrl(outputDirectory: string, resources: readonly Comp
       id: string,
     ): string | null {
       if (!path.isAbsolute(id) || !source.includes('import.meta.url')) return null;
+      const packageRoot = packageRootFromPath(id);
+      if (packageRoot === TURSO_DATABASE_PACKAGE || packageRoot === TURSO_DATABASE_COMMON_PACKAGE) return null;
       const extension = path.extname(id).toLowerCase();
       const lang = extension === '.tsx' ? 'tsx' : extension === '.jsx' ? 'jsx' : isTypeScriptEntry(id) ? 'ts' : 'js';
       const ranges: SourceRange[] = [];
@@ -905,7 +1211,8 @@ export function extensionModuleManifestPath(
   options: CompileExtensionSetOptions = {},
 ): string {
   const root = options.repositoryRoot ? canonicalPath(options.repositoryRoot) : undefined;
-  const resourceKey = resourceCacheKey(options.resources, resourceArtifacts(options.resources), root);
+  const resources = resourcesWithPinnedNativePlatforms([path.resolve(entry)], options.resources);
+  const resourceKey = resourceCacheKey(resources, resourceArtifacts(resources), root);
   const base = `${extensionSetManifestPath([entry], cacheDirectory, options)}.module.json`;
   return resourceKey ? `${base}.${resourceKey}.json` : base;
 }
@@ -935,9 +1242,13 @@ async function compileGraph(
   const outputName = safeOutputName(options.outputName ?? DEFAULT_SET_OUTPUT_NAME);
   fs.mkdirSync(outputDirectory, { recursive: true });
   const repositoryRoot = options.repositoryRoot ? canonicalPath(options.repositoryRoot) : undefined;
-  const resources = resourceArtifacts(options.resources);
+  const effectiveResources =
+    kind === 'module'
+      ? resourcesWithPinnedNativePlatforms(normalized, options.resources)
+      : [...(options.resources ?? [])];
+  const resources = resourceArtifacts(effectiveResources);
   validateResourceOutputPaths(outputDirectory, resources);
-  const resourceKey = resourceCacheKey(options.resources, resources, repositoryRoot);
+  const resourceKey = resourceCacheKey(effectiveResources, resources, repositoryRoot);
   const setManifestPath = extensionSetManifestPath(normalized, cacheDirectory, options);
   const manifestPath =
     kind === 'module'
@@ -949,7 +1260,7 @@ async function compileGraph(
   if (previous && manifestIsFresh(previous, normalized) && resourceArtifactsAreFresh(outputDirectory, resources))
     return previous.output;
 
-  const resourceInputs = resourceInputPaths(options.resources);
+  const resourceInputs = resourceInputPaths(effectiveResources);
   const generate = async (): Promise<{ generated: RolldownOutput; inputs: Set<string> }> => {
     const inputs = new Set([...normalized, ...resourceInputs]);
     const moduleSpecifier = javascriptStringLiteral(pathToImportSpecifier(normalized[0]));
@@ -971,8 +1282,8 @@ async function compileGraph(
             return id === VIRTUAL_SET_ENTRY ? source : null;
           },
         },
-        setExternalResolver(inputs, kind),
-        preserveImportMetaUrl(outputDirectory, options.resources),
+        setExternalResolver(inputs, kind, normalized[0], effectiveResources),
+        preserveImportMetaUrl(outputDirectory, effectiveResources),
         inputCollector(inputs),
       ],
       onLog: failUnresolvedImport,

@@ -1,5 +1,5 @@
-import type { SkillEntry } from '@agimon-ai/doompi-skill/catalog';
 import { type CountTokens, type ToolSource, tokensForTool } from '@agimon-ai/doompi-ui/toolInventory';
+import type { ContextSkillInventory } from './contextProjection.ts';
 import type { ContextItemDetail, ContextToolDetail } from '../types/contextApi.ts';
 
 /**
@@ -21,7 +21,7 @@ function ownerOf(source: ToolSource): string {
   return CORE_OWNER;
 }
 
-function skillSource(group: SkillEntry['group']): ContextItemDetail['source'] {
+function skillSource(group: ContextSkillInventory['group']): ContextItemDetail['source'] {
   if (group === 'plugins') return 'plugin';
   if (group === 'extensions') return 'extension';
   return 'core';
@@ -29,7 +29,7 @@ function skillSource(group: SkillEntry['group']): ContextItemDetail['source'] {
 
 export interface ContextDetailInput {
   readonly sources: readonly ToolSource[];
-  readonly skills: readonly SkillEntry[];
+  readonly skills: readonly ContextSkillInventory[];
   readonly countTokens: CountTokens;
 }
 
@@ -65,7 +65,7 @@ export function buildContextDetail(input: ContextDetailInput): ContextItemDetail
       active: true,
       tokens: skill.promptTokens ?? 0,
       description: skill.description,
-      filePath: skill.filePath,
+      ...(skill.filePath === undefined ? {} : { filePath: skill.filePath }),
       modelInvocable: skill.modelInvocable,
     });
   }

@@ -1,6 +1,6 @@
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
 import type { SkillEntry } from '@agimon-ai/doompi-skill/catalog';
-import { type CountTokens, type ToolSource, tokensForTool } from '@agimon-ai/doompi-ui/toolInventory';
+import { type CountTokens, type ToolEntry, type ToolSource, tokensForTool } from '@agimon-ai/doompi-ui/toolInventory';
 
 /**
  * What the session is carrying, and what carrying it costs.
@@ -57,21 +57,55 @@ export interface ContextGroupProjection {
 export interface ContextProjection {
   readonly version: typeof CONTEXT_PROJECTION_VERSION;
   readonly revision: number;
+  /** Selection snapshot used to build this projection, replayable after reconnect. */
+  readonly selection: {
+    readonly majorMode: string;
+    readonly domains: readonly string[];
+    readonly profile?: string;
+  };
   readonly groups: readonly ContextGroupProjection[];
   readonly totalTokens: number;
   readonly inactiveTokens: number;
   readonly estimator: typeof CONTEXT_PROJECTION_ESTIMATOR;
 }
 
+export interface ContextConditionalAttribution {
+  readonly kind: 'minor' | 'domain';
+  readonly mode: string;
+  readonly label?: string;
+}
+
+export interface ContextToolInventory extends ToolEntry {
+  /** A contribution-level gate is more specific than its package's major-mode owner. */
+  readonly contextAttribution?: ContextConditionalAttribution;
+}
+
+export interface ContextToolSource extends Omit<ToolSource, 'tools'> {
+  readonly tools: readonly ContextToolInventory[];
+}
+
+/** Skill fields needed to project cost and serve detail. Virtual resources may not have a filesystem path. */
+export interface ContextSkillInventory {
+  readonly name: string;
+  readonly description: string;
+  readonly group: SkillEntry['group'];
+  readonly owner: string;
+  readonly modelInvocable: boolean;
+  readonly promptTokens?: number;
+  readonly filePath?: string;
+  readonly contextAttribution?: ContextConditionalAttribution;
+}
+
 export interface ContextProjectionInput {
   readonly revision: number;
   readonly majorMode: string;
+  readonly profile?: string;
   /** Active minor modes, in the order the catalog reports them. */
   readonly minorModes: readonly { readonly id: string; readonly label: string }[];
   /** Domains the composition resolved under, whether or not they carried a plugin. */
   readonly domains: readonly string[];
-  readonly sources: readonly ToolSource[];
-  readonly skills: readonly SkillEntry[];
+  readonly sources: readonly ContextToolSource[];
+  readonly skills: readonly ContextSkillInventory[];
   /**
    * Owner identifier to the mode that admitted it.
    *
@@ -89,7 +123,7 @@ interface Bucket {
   items: ContextItemProjection[];
 }
 
-function skillSource(group: SkillEntry['group']): ContextItemSource {
+function skillSource(group: ContextSkillInventory['group']): ContextItemSource {
   if (group === 'plugins') return 'plugin';
   if (group === 'extensions') return 'extension';
   return 'core';
@@ -115,10 +149,11 @@ export function projectContext(input: ContextProjectionInput): ContextProjection
   // otherwise read its absence as the panel being out of date.
   for (const domain of input.domains) declare(domain, domain, 'domain');
 
-  const place = (owner: string, item: ContextItemProjection): void => {
-    const attributed = input.attribution[owner];
+  const place = (owner: string, item: ContextItemProjection, conditional?: ContextConditionalAttribution): void => {
+    const attributed = conditional ?? input.attribution[owner];
     const id = attributed?.mode ?? CORE_GROUP;
-    declare(id, id, attributed ? (attributed.kind === 'domain' ? 'domain' : 'major') : 'core');
+    const kind = attributed?.kind ?? 'core';
+    declare(id, attributed && 'label' in attributed ? (attributed.label ?? id) : id, kind);
     buckets.get(id)?.items.push(item);
   };
 
@@ -146,22 +181,26 @@ export function projectContext(input: ContextProjectionInput): ContextProjection
         declare(CORE_GROUP, CORE_GROUP, 'core');
         buckets.get(CORE_GROUP)?.items.push(item);
       } else {
-        place(owner, item);
+        place(owner, item, tool.contextAttribution);
       }
     }
   }
 
   for (const skill of input.skills) {
-    place(skill.owner, {
-      name: skill.name,
-      itemKind: 'skill',
-      source: skillSource(skill.group),
-      owner: skill.owner,
-      tokens: skill.promptTokens ?? 0,
-      // A skill is always offered to the model; there is no inactive state for
-      // it the way there is for a tool Pi has filtered out.
-      active: true,
-    });
+    place(
+      skill.owner,
+      {
+        name: skill.name,
+        itemKind: 'skill',
+        source: skillSource(skill.group),
+        owner: skill.owner,
+        tokens: skill.promptTokens ?? 0,
+        // A skill is always offered to the model; there is no inactive state for
+        // it the way there is for a tool Pi has filtered out.
+        active: true,
+      },
+      skill.contextAttribution,
+    );
   }
 
   const groups: ContextGroupProjection[] = [...buckets.entries()]
@@ -184,6 +223,11 @@ export function projectContext(input: ContextProjectionInput): ContextProjection
   return {
     version: CONTEXT_PROJECTION_VERSION,
     revision: input.revision,
+    selection: {
+      majorMode: input.majorMode,
+      domains: [...input.domains],
+      ...(input.profile === undefined ? {} : { profile: input.profile }),
+    },
     groups,
     totalTokens: groups.reduce((total, group) => total + group.tokens, 0),
     inactiveTokens: groups.reduce((total, group) => total + group.inactiveTokens, 0),

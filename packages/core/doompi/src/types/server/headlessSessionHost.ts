@@ -5,6 +5,7 @@ import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contract
 import type { HeadlessHost } from '../../adapters/server/headlessHost';
 import type { DirectHarnessRuntime } from './directHarnessRuntime';
 import type { AgentProcess } from './session';
+import type { HeadlessHostOptions } from './headlessHost';
 
 export interface HeadlessSessionHostOptions {
   cwd: string;
@@ -14,6 +15,7 @@ export interface HeadlessSessionHostOptions {
   agentArgs: readonly string[];
   selection: DoomHeadlessSelection;
   candidates: readonly DoomServerBundleEntry[];
+  resolveSelection?: HeadlessHostOptions['resolveSelection'];
   onNotice?: (message: string) => void;
 }
 

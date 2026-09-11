@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   requireDoomHeadlessHost,
@@ -6,7 +7,7 @@ import {
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
-import { MAJOR_MODE_COMMAND } from '../../services/majorModeText.ts';
+import { MAJOR_MODE_COMMAND, majorModeOptionLabel } from '../../services/majorModeText.ts';
 
 const PACKAGE_ROOT = new URL('../../../', import.meta.url);
 
@@ -56,15 +57,23 @@ export const majorModeHeadlessFacet = {
       name: MAJOR_MODE_COMMAND,
       description: 'Show or change the active DoomPi major mode.',
       async execute(args, execution) {
-        const requested = args.trim();
+        const config = loadMajorModesConfig(execution.repoRoot);
+        let requested = args.trim();
         if (!requested) {
-          await execution.client.notify({
-            title: 'DoomPi major mode',
-            body: `Active major mode: ${execution.selection.majorMode}\nActive layers: ${execution.selection.activeLayers.join(', ') || '(none)'}`,
-            level: 'info',
+          const selected = await execution.client.request({
+            kind: 'select',
+            title: `Major mode (current: ${execution.selection.majorMode})`,
+            options: Object.keys(config.majorMode).map((name) => ({
+              label: majorModeOptionLabel(name, config.majorMode[name]?.layers ?? [], execution.selection.majorMode),
+              value: name,
+            })),
           });
-          return;
+          if (typeof selected !== 'string' || !selected) return;
+          requested = selected;
         }
+        // Reject invalid command input before requesting a capability transition.
+        resolveLayers(config, requested);
+        if (requested === execution.selection.majorMode) return;
         await host.select({ majorMode: requested });
       },
     };

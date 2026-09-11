@@ -1,8 +1,7 @@
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
 import type { SkillEntry } from '@agimon-ai/doompi-skill/catalog';
-import type { ToolSource } from '@agimon-ai/doompi-ui/toolInventory';
 import { describe, expect, it } from 'vitest';
-import { projectContext } from '../../src/services/contextProjection.ts';
+import { projectContext, type ContextToolSource } from '../../src/services/contextProjection.ts';
 
 // One token per character, so every figure below is checkable by hand.
 const countTokens = (text: string): number => text.length;
@@ -10,7 +9,7 @@ const countTokens = (text: string): number => text.length;
 const TEAM: PackageAttribution = { kind: 'major', mode: 'copilot', layer: 'team' };
 const DEV: PackageAttribution = { kind: 'domain', mode: 'development' };
 
-function source(overrides: Partial<ToolSource> & Pick<ToolSource, 'key' | 'kind'>): ToolSource {
+function source(overrides: Partial<ContextToolSource> & Pick<ContextToolSource, 'key' | 'kind'>): ContextToolSource {
   return { label: overrides.key, tools: [], ...overrides };
 }
 
@@ -60,6 +59,31 @@ describe('projectContext', () => {
     expect(result.groups[0]?.items.map((item) => item.name)).toEqual(['subagent']);
   });
 
+  it('files a conditionally gated tool under the minor mode that controls it', () => {
+    const result = project({
+      sources: [
+        source({
+          key: '/x/plan.mjs',
+          kind: 'extension',
+          packageName: '@agimon-ai/doompi-plan',
+          tools: [
+            {
+              ...tool('write_plan', false),
+              contextAttribution: { kind: 'minor', mode: 'plan', label: 'Plan' },
+            },
+          ],
+        }),
+      ],
+      attribution: { '@agimon-ai/doompi-plan': TEAM },
+    });
+
+    expect(result.groups.find((group) => group.kind === 'minor')).toMatchObject({
+      id: 'plan',
+      label: 'Plan',
+      items: [expect.objectContaining({ name: 'write_plan', active: false })],
+    });
+    expect(result.groups.find((group) => group.kind === 'major')?.items).toEqual([]);
+  });
   it('files a domain plugin skill under its domain', () => {
     const result = project({
       skills: [skill({ name: 'doompi-review', owner: 'testing', group: 'plugins', promptTokens: 40 })],
@@ -191,8 +215,13 @@ describe('projectContext', () => {
     expect(result.inactiveTokens).toBe(core?.items.find((item) => item.name === 'narrate')?.tokens);
   });
 
-  it('stamps the version, revision, and estimator it was built with', () => {
-    expect(project({ revision: 7 })).toMatchObject({ version: 1, revision: 7, estimator: 'gpt-tokenizer' });
+  it('stamps the selection, version, revision, and estimator it was built with', () => {
+    expect(project({ revision: 7, profile: 'writer', domains: ['default'] })).toMatchObject({
+      version: 1,
+      revision: 7,
+      selection: { majorMode: 'copilot', domains: ['default'], profile: 'writer' },
+      estimator: 'gpt-tokenizer',
+    });
   });
 });
 

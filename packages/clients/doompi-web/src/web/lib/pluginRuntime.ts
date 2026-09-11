@@ -208,7 +208,6 @@ export async function focusSessionWebPlugins(
 
   if (replacingActiveSession) disposeActivePlugins();
   if (previous === undefined || previous.key !== key) {
-    if (previous !== undefined) removeSessionWebPlugins(sessionId);
     loadedSessions.set(sessionId, { key, plugins });
     installSessionWebPlugins(sessionId, plugins);
   }

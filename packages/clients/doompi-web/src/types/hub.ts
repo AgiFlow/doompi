@@ -246,6 +246,7 @@ export interface ContextGroupProjection {
 export interface ContextProjection {
   version: 1;
   revision: number;
+  selection?: { majorMode: string; domains: string[]; profile?: string };
   groups: ContextGroupProjection[];
   totalTokens: number;
   inactiveTokens: number;

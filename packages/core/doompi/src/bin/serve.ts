@@ -15,7 +15,7 @@ import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doo
 import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
 import { resolveHarnessOptions } from '../commands/cli/harnessOptions';
 import { buildHarnessContext } from '../adapters/harnessContext.ts';
-import { layerHookGroups, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { createHarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry';
 import { findRepositoryRoot } from '../adapters/repository/repository';
 import { readSyncRegistration, type SyncRegistration } from '../adapters/syncRegistration';
@@ -74,7 +74,7 @@ function currentServerBundleSelection(agentArgs: readonly string[]): {
   return {
     root: options.repoRoot,
     majorMode: options.majorMode,
-    activeLayers: options.hooks ? layers : layers.filter((layer) => layerHookGroups(config, [layer]).length === 0),
+    activeLayers: filterHookDisabledLayers(config, layers, options.hooks),
   };
 }
 
@@ -151,6 +151,7 @@ async function main(): Promise<number> {
           [DOOM_API_INTERNAL_TOKEN_ENV]: apiInternalToken,
           [DOOM_API_SOCKET_ENV]: apiSocketPath,
         });
+        const selectionPolicyOptions = harnessContext.options;
         directHost = await createHeadlessSessionHost({
           cwd: harnessContext.options.cwd,
           repoRoot: harnessContext.options.repoRoot,
@@ -164,11 +165,23 @@ async function main(): Promise<number> {
             minorModes: [],
           },
           candidates: loadedBundle.descriptor.entries,
+          resolveSelection: (requested) => {
+            const config = loadMajorModesConfig(selectionPolicyOptions.repoRoot, selectionPolicyOptions.homeDirectory);
+            return {
+              ...requested,
+              activeLayers: filterHookDisabledLayers(
+                config,
+                resolveLayers(config, requested.majorMode),
+                selectionPolicyOptions.hooks,
+              ),
+            };
+          },
           onNotice: notice,
         });
         agent = directHost.agent;
       } else {
         launcher = createDoomAgentLauncher({
+          resolveHarnessOptions,
           agentArgs: [...resolved.agentArgs, ...RPC_MODE_ARGS],
           cwd: process.cwd(),
           environment: {

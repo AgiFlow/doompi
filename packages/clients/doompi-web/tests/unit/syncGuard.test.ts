@@ -178,8 +178,12 @@ describe('sync guard', () => {
     expect(runSync).toHaveBeenCalledOnce();
   });
 
-  it('runs the packaged sync command when no runner is injected', async () => {
+  it('runs the packaged sync command without inheriting the host selection', async () => {
     vi.stubEnv('DOOMPI_WEB_PACKAGE_ROOT', '');
+    vi.stubEnv('DOOMPI_PROFILE', 'ponytail');
+    vi.stubEnv('DOOMPI_DOMAINS', 'development');
+    vi.stubEnv('DOOMPI_MAJOR_MODE', 'dev');
+    vi.stubEnv('DOOMPI_PRESET', 'anthropic');
     const child = fakeChild();
     const subject = createSyncGuard({ repoRoot: REPO, readDrift: driftOnce() });
 
@@ -195,6 +199,11 @@ describe('sync guard', () => {
         env: expect.objectContaining({ DOOMPI_ROOT: REPO, DOOMPI_WEB_PACKAGE_ROOT: webHostPackageRoot() }),
       }),
     );
+    const environment = vi.mocked(spawn).mock.calls.at(-1)?.[2]?.env;
+    expect(environment).not.toHaveProperty('DOOMPI_PROFILE');
+    expect(environment).not.toHaveProperty('DOOMPI_DOMAINS');
+    expect(environment).not.toHaveProperty('DOOMPI_MAJOR_MODE');
+    expect(environment).not.toHaveProperty('DOOMPI_PRESET');
     subject.close();
   });
 

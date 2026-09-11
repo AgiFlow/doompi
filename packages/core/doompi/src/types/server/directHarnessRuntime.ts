@@ -7,6 +7,7 @@ import type {
   AgentMessage,
   HarnessEvent,
   AgentLane,
+  HookMap,
 } from '@earendil-works/pi-agent-core';
 import type {
   Api,
@@ -87,8 +88,32 @@ export interface DirectHarnessRuntimeOptions<TContext extends object | undefined
   context?: Context;
   /** Synchronous admission check at the public Models dispatch boundary, before auth/provider work starts. */
   guardModelRequest?: () => void;
-  /** Awaited preparation for turns/requests. Failures are retained and rejected at model admission. */
   beforeModelRequest?: (boundary: DirectHarnessModelBoundary, context: Context) => void | Promise<void>;
+  /** Active AgentHarness execution-hook bridges. */
+  transformContext?: (
+    event: HookMap['transform_context']['event'],
+    context: Context,
+  ) => HookMap['transform_context']['result'] | Promise<HookMap['transform_context']['result']>;
+  beforePayload?: (
+    event: HookMap['before_payload']['event'],
+    context: Context,
+  ) => HookMap['before_payload']['result'] | Promise<HookMap['before_payload']['result']>;
+  beforeTool?: (
+    event: HookMap['before_tool']['event'],
+    context: Context,
+  ) => HookMap['before_tool']['result'] | Promise<HookMap['before_tool']['result']>;
+  afterTool?: (
+    event: HookMap['after_tool']['event'],
+    context: Context,
+  ) => HookMap['after_tool']['result'] | Promise<HookMap['after_tool']['result']>;
+  beforeCompaction?: (
+    event: HookMap['before_compaction']['event'],
+    context: Context,
+  ) => HookMap['before_compaction']['result'] | Promise<HookMap['before_compaction']['result']>;
+  /** Active package commands advertised through the compatibility protocol. */
+  listCommands?: () => readonly { name: string; description: string }[];
+  /** Returns false when the text is not an active package command, preserving normal prompt handling. */
+  dispatchCommand?: (text: string) => Promise<boolean>;
 }
 
 export interface DirectHarnessEventListener {

@@ -3,7 +3,9 @@
   "version": "0.0.1-alpha.5",
   "description": "Git worktree sessions for DoomPi: spawn an isolated worktree with its own session and manage it from the parent",
   "keywords": [
+    "ai",
     "coding-agent",
+    "developer-tools",
     "doompi",
     "git-worktree",
     "pi-coding-agent",

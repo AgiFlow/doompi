@@ -82,11 +82,18 @@ describe('doompi-cache package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './env', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './env',
+      './extensions/pi',
+      './extensions/headless',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./env'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./extensions/headless'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 

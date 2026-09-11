@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createAgentServerService, serveProtocolSocket } from '@agimon-ai/doompi/server';
 import type { SessionSnapshot, TranscriptItem } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { SessionRecord } from '../../src/types/registry.ts';
 export type Frame = Record<string, unknown>;
 type ToolContent = Extract<TranscriptItem, { role: 'tool' }>['content'];
 export interface FakeSession {
@@ -65,6 +66,8 @@ export interface FakeSessionOptions {
   pid?: number;
   /** Where this session serves its package APIs, as a real server would record it. */
   apiSocketPath?: string;
+  /** Pinned server bundle selection a real direct host records for hub API isolation. */
+  serverComposition?: NonNullable<SessionRecord['serverComposition']>;
 }
 
 function fixtureTranscript(id: string, cwd: string, name: string) {
@@ -296,11 +299,50 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
   const attachWaiters: Array<() => void> = [];
   const commandWaiters: Array<{ type: string; resolve: (frame: Frame) => void }> = [];
   const protocolListeners: Array<(frame: Frame) => void> = [];
+  const recordCommand = (frame: Frame): void => {
+    const { id: _id, ...command } = frame;
+    received.push(command);
+    for (let index = commandWaiters.length - 1; index >= 0; index -= 1) {
+      if (commandWaiters[index].type === frame.type) {
+        commandWaiters[index].resolve(command);
+        commandWaiters.splice(index, 1);
+      }
+    }
+  };
+  const respond = (frame: Frame): void => {
+    if (typeof frame.id !== 'string' || typeof frame.type !== 'string') return;
+    const data =
+      frame.type === 'get_entries'
+        ? { entries: [], leafId: null }
+        : frame.type === 'get_commands'
+          ? { commands: [] }
+          : frame.type === 'get_available_models'
+            ? { models: [] }
+            : frame.type === 'get_available_thinking_levels'
+              ? { levels: [] }
+              : {};
+    for (const listener of protocolListeners)
+      listener({ type: 'response', id: frame.id, command: frame.type, success: true, data });
+  };
   const protocolSocket = await serveProtocolSocket({
     socketPath: `${socketPath}.pi`,
     service: createAgentServerService({
       agent: {
-        send: (frame: Frame) => received.push(frame),
+        send: (frame: Frame) => {
+          // Initialization is transport plumbing; exposed commands match the old scriptable fixture shape.
+          if (
+            ![
+              'get_state',
+              'get_entries',
+              'get_session_stats',
+              'get_commands',
+              'get_available_models',
+              'get_available_thinking_levels',
+            ].includes(String(frame.type))
+          )
+            recordCommand(frame);
+          respond(frame);
+        },
         onFrame: (listener: (frame: Frame) => void) => protocolListeners.push(listener),
         exited: new Promise<number>(() => undefined),
         endInput: () => undefined,
@@ -355,13 +397,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
           continue;
         }
 
-        received.push(frame);
-        for (let index = commandWaiters.length - 1; index >= 0; index -= 1) {
-          if (commandWaiters[index].type === frame.type) {
-            commandWaiters[index].resolve(frame);
-            commandWaiters.splice(index, 1);
-          }
-        }
+        recordCommand(frame);
       }
     });
 
@@ -391,6 +427,7 @@ export async function startFakeSession(options: FakeSessionOptions = {}): Promis
         protocolSocketPath: protocolSocket.socketPath,
         protocolServerId: protocolSocket.serverId,
         ...(options.apiSocketPath === undefined ? {} : { apiSocketPath: options.apiSocketPath }),
+        ...(options.serverComposition === undefined ? {} : { serverComposition: options.serverComposition }),
         pid: options.pid ?? process.pid,
         createdAt: new Date().toISOString(),
       }),

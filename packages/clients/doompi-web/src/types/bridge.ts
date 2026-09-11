@@ -32,6 +32,8 @@ export interface WebServerOptions {
   /** Repository whose synchronized composition is pinned instead of resolving live-session compositions. */
   compositionDir?: string;
   onNotice?: (message: string) => void;
+  /** Explicit acceptance-harness opt-in. Normal launchers keep peer access disabled until acceptance. */
+  federation?: { enabled: boolean };
   /** Watch this registry directory for running sessions. */
   registryDir: string;
   /** Command launching created sessions; overridable so tests can stand in a fake. */

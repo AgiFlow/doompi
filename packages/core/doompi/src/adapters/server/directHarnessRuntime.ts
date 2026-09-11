@@ -19,6 +19,7 @@ import {
 import {
   createModels,
   createAssistantMessageEventStream,
+  getSupportedThinkingLevels,
   type AssistantMessage,
   type Api,
   type ImageContent,
@@ -27,8 +28,8 @@ import {
   type MutableModels,
   type Usage,
 } from '@earendil-works/pi-ai';
-import { protectAndImportHistory, preserveHistoryBeforeOpen } from '../serialization/historyImport.ts';
-import { importV3WithPinnedUpstream } from '../serialization/jsonlSessionRepo.ts';
+import { preserveHistoryBeforeOpen } from '../serialization/historyImport.ts';
+import { createHistoryCreationFileSystem } from '../serialization/historyCreationFileSystem.ts';
 import type {
   DirectHarnessEventListener,
   DirectHarnessFrame,
@@ -220,17 +221,9 @@ async function openStorage<TContext extends object | undefined>(
   const legacyPath = options.legacySessionPath === undefined ? sessionPath : path.resolve(options.legacySessionPath);
   let importedPath = sessionPath;
   if (legacyPath !== undefined && isV3File(legacyPath)) {
-    const owner = options.historyOwnership;
-    if (owner === undefined) throw new Error('Opening a legacy session requires explicit HistoryOwnership');
-    importedPath = sessionPath !== undefined && sessionPath !== legacyPath ? sessionPath : `${legacyPath}.v4`;
-    await protectAndImportHistory({
-      sourcePath: legacyPath,
-      destinationPath: importedPath,
-      owner,
-      ...(options.historyOriginalPath === undefined ? {} : { originalPath: options.historyOriginalPath }),
-      ...(options.historyStatePath === undefined ? {} : { statePath: options.historyStatePath }),
-      importStaging: importV3WithPinnedUpstream,
-    });
+    throw new Error(
+      'Legacy v3 history cannot be opened for writing. Stop Pi, run doompi history-import <v3-source> <v4-destination> --confirm-offline, then open the v4 destination.',
+    );
   }
 
   const environment = new NodeExecutionEnv({ cwd: options.cwd });
@@ -238,15 +231,36 @@ async function openStorage<TContext extends object | undefined>(
     options.sessionsRoot ??
       (importedPath === undefined ? path.join(options.cwd, DEFAULT_SESSION_ROOT) : path.dirname(importedPath)),
   );
-  const repository = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot, now: () => Date.now() });
+  let metadata: JsonlSessionMetadata | undefined;
+  if (importedPath === undefined && options.sessionId !== undefined) {
+    const discovery = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot, now: () => Date.now() });
+    try {
+      metadata = (await discovery.list({ cwd: options.cwd }, context)).find(
+        (candidate) => candidate.id === options.sessionId,
+      );
+      importedPath = metadata?.path;
+    } finally {
+      await discovery.close(context);
+    }
+  }
+
   let historyLease: HistoryOwnershipLease | undefined;
+  let session: AnySession | undefined;
+  const fileSystem =
+    importedPath === undefined
+      ? createHistoryCreationFileSystem(environment, async (destinationPath) => {
+          const owner = options.historyOwnership;
+          if (owner === undefined) throw new Error('Creating a writable session requires explicit HistoryOwnership');
+          historyLease = await acquireHistoryLease(owner, destinationPath);
+        })
+      : environment;
+  const repository = new JsonlSessionRepo({ fileSystem, sessionsRoot, now: () => Date.now() });
   try {
-    let session: AnySession;
     if (importedPath !== undefined) {
       const owner = options.historyOwnership;
       if (owner === undefined) throw new Error('Opening an existing session requires explicit HistoryOwnership');
       historyLease = await acquireHistoryLease(owner, importedPath);
-      const metadata = metadataFromFile(importedPath);
+      metadata ??= metadataFromFile(importedPath);
       if (options.sessionId !== undefined && options.sessionId !== metadata.id) {
         throw new Error(`Session id mismatch: expected ${options.sessionId}, found ${metadata.id}`);
       }
@@ -258,11 +272,11 @@ async function openStorage<TContext extends object | undefined>(
       const created = await repository.create({ id: options.sessionId, cwd: options.cwd }, context);
       session = created;
       importedPath = created.metadata.path;
-      historyLease = await acquireHistoryLease(owner, importedPath);
+      if (historyLease === undefined) throw new Error('New history was not admitted before publication');
     }
     return { session, sessionFile: importedPath, repository, environment, historyLease };
   } catch (error) {
-    await closeStorage({ repository, environment, historyLease }, context);
+    await closeStorage({ session, repository, environment, historyLease }, context);
     throw error;
   }
 }
@@ -540,6 +554,8 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   let storageQuarantined = false;
   let requestPreparationFailure: { error: unknown } | undefined;
   let turnPreparationFailure: { error: unknown } | undefined;
+  let contextPreparationFailure: { error: unknown } | undefined;
+  let payloadPreparationFailure: { error: unknown } | undefined;
   let toolsReady = true;
   let activeToolNames = new Set(options.activeToolNames ?? options.tools?.map((tool) => tool.name) ?? []);
   const storage = await openStorage(options, context);
@@ -570,6 +586,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
                 throw new Error('Model request contains a tool disabled after generation preparation');
               }
             }
+            if (contextPreparationFailure !== undefined) throw contextPreparationFailure.error;
             if (turnPreparationFailure !== undefined) throw turnPreparationFailure.error;
             if (requestPreparationFailure !== undefined) throw requestPreparationFailure.error;
             options.guardModelRequest?.();
@@ -600,6 +617,20 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
             const stream = createAssistantMessageEventStream();
             stream.push({ type: 'error', reason: 'error', error: blocked });
             return stream;
+          }
+          const requestOptions = args[2];
+          if (isRecord(requestOptions) && typeof requestOptions.onPayload === 'function') {
+            const onPayload = requestOptions.onPayload as (payload: unknown, model: Model<Api>) => Promise<unknown>;
+            args[2] = {
+              ...requestOptions,
+              onPayload: async (payload: unknown, requestModel: Model<Api>) => {
+                payloadPreparationFailure = undefined;
+                const transformed = await onPayload(payload, requestModel);
+                const failure = payloadPreparationFailure as { error: unknown } | undefined;
+                if (failure !== undefined) throw failure.error;
+                return transformed;
+              },
+            };
           }
           return Reflect.apply(value, target, args);
         };
@@ -663,10 +694,20 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       }),
     );
   };
-  const handleHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
+  let settledEvents = Promise.resolve();
+  const deliverHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
     await emitLifecycle(event, eventContext);
     if (event.type === 'fault') markStorageFailure(event);
     for (const frame of mapHarnessEvent(event)) emitFrame(frame);
+  };
+  const handleHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
+    if (event.type === 'run_end') {
+      // The native drive still owns the lane while emitting run_end. Release its
+      // callback before settled hooks write history, then drain before acknowledging drive.
+      settledEvents = settledEvents.then(() => deliverHarnessEvent(event, eventContext));
+      return;
+    }
+    await deliverHarnessEvent(event, eventContext);
   };
   const unsubscribe = EVENT_TYPES.map((type) => harness.events.on(type, handleHarnessEvent as never));
 
@@ -694,6 +735,14 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
 
   const unsubscribeHooks: Array<() => void> = [];
+  if (options.transformContext !== undefined) {
+    unsubscribeHooks.push(
+      harness.hooks.on('before_run', () => {
+        contextPreparationFailure = undefined;
+        return undefined;
+      }),
+    );
+  }
   if (options.beforeModelRequest !== undefined) {
     unsubscribeHooks.push(
       harness.hooks.on('before_run', async (event, hookContext) => {
@@ -726,6 +775,43 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       }),
     );
   }
+  if (options.transformContext !== undefined) {
+    unsubscribeHooks.push(
+      harness.hooks.on('transform_context', async (event, hookContext) => {
+        try {
+          return await options.transformContext!(event, hookContext);
+        } catch (error) {
+          // AgentHarness reports and continues after transform errors. Retain the failure so the
+          // public Models boundary blocks provider dispatch instead of admitting untransformed context.
+          contextPreparationFailure = { error };
+          throw error;
+        }
+      }),
+    );
+  }
+  if (options.beforePayload !== undefined) {
+    unsubscribeHooks.push(
+      harness.hooks.on('before_payload', async (event, hookContext) => {
+        try {
+          return await options.beforePayload!(event, hookContext);
+        } catch (error) {
+          // Upstream reports and continues after hook errors. Retain the failure so the Models payload
+          // callback rejects instead of sending the original, untransformed payload.
+          payloadPreparationFailure = { error };
+          throw error;
+        }
+      }),
+    );
+  }
+  if (options.beforeTool !== undefined) {
+    unsubscribeHooks.push(harness.hooks.on('before_tool', options.beforeTool));
+  }
+  if (options.afterTool !== undefined) {
+    unsubscribeHooks.push(harness.hooks.on('after_tool', options.afterTool));
+  }
+  if (options.beforeCompaction !== undefined) {
+    unsubscribeHooks.push(harness.hooks.on('before_compaction', options.beforeCompaction));
+  }
   try {
     lane = await harness.lane(laneName, context);
     if (options.sessionName !== undefined) await writable(() => harness.setName(options.sessionName, context));
@@ -744,6 +830,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
 
   const drive = async (operationId: string): Promise<void> => {
     const result = await writable(() => lane.drive({ operationId, waitForRetry: true }, context));
+    await settledEvents;
     if (!result.ok) resultError(result);
     if (result.value.kind === 'waiting' && result.value.reason === 'retry') {
       throw new Error(`Direct harness returned an unexpected retry wait for ${operationId}`);
@@ -793,6 +880,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           return;
         }
         try {
+          if (await options.dispatchCommand?.(message)) {
+            emitFrame(successFrame(id, type));
+            return;
+          }
           await startPrompt(
             message,
             Array.isArray(frame.images) ? (frame.images as ImageContent[]) : undefined,
@@ -848,6 +939,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         }
         return;
       }
+      case 'get_commands': {
+        try {
+          const commands = (options.listCommands?.() ?? []).map((entry) => ({ ...entry, source: 'extension' }));
+          emitFrame(successFrame(id, type, { commands }));
+        } catch (error) {
+          emitFrame(failureFrame(id, type, error));
+        }
+        return;
+      }
       case 'get_state': {
         try {
           const snapshot = await lane.watch(context);
@@ -856,7 +956,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           const configuredModel = await lane.getModel(context);
           const name = await harness.getName(context);
           const data = {
-            model: configuredModel,
+            model:
+              configuredModel === undefined
+                ? undefined
+                : { provider: configuredModel.provider, id: configuredModel.id },
             thinkingLevel: execution.configuration.thinkingLevel,
             isStreaming: execution.operation?.kind === 'run',
             isCompacting: execution.operation?.kind === 'compaction',
@@ -892,6 +995,16 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       case 'get_available_models': {
         try {
           emitFrame(successFrame(id, type, { models: await models.getAvailable() }));
+        } catch (error) {
+          emitFrame(failureFrame(id, type, error));
+        }
+        return;
+      }
+      case 'get_available_thinking_levels': {
+        try {
+          const model = await lane.getModel(context);
+          if (!model) throw new Error('No model is selected');
+          emitFrame(successFrame(id, type, { levels: getSupportedThinkingLevels(model) }));
         } catch (error) {
           emitFrame(failureFrame(id, type, error));
         }

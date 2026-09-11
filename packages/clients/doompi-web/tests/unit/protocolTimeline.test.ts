@@ -81,6 +81,10 @@ describe('protocol transcript projection', () => {
       'a',
     ]);
     expect(createProtocolTimeline()(state).map((entry) => entry.id)).toEqual(['u']);
+    const reattached = createProtocolTimeline();
+    expect(reattached({ ...state, inFlight: [assistant, tool] }).map((entry) => entry.id)).toEqual(['u', 'a', 't']);
+    expect(reattached({ ...state, inFlight: [tool] }).map((entry) => entry.id)).toEqual(['u', 't']);
+    expect(reattached({ ...state, inFlight: [], progress: null }).map((entry) => entry.id)).toEqual(['u']);
   });
 
   it('renders a user message as its text', () => {

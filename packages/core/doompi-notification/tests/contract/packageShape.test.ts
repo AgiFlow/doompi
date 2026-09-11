@@ -18,6 +18,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -56,16 +57,21 @@ describe('doompi-notification package contract', () => {
     expect(manifest.keywords).toEqual([...(manifest.keywords ?? [])].sort());
   });
 
-  it('publishes one closed set of subpaths and one Pi entry', async () => {
+  it('publishes Pi and headless entries through a closed exports map', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/headless', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './extensions/pi']) {
+    for (const subpath of ['.', './extensions/pi', './extensions/headless']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+    expect(manifest.doompiServer).toMatchObject({
+      entry: './src/exports/extensions/headless.ts',
+      dist: './dist/extensions/headless.mjs',
+      scopes: ['session'],
+    });
   });
 
   it('routes the Pi entry through a default-exported factory', async () => {
@@ -86,6 +92,7 @@ describe('doompi-notification package contract', () => {
       'createWorkerTitleController',
       'notificationBody',
       'notificationExtension',
+      'notificationHeadlessFacet',
       'promptTitle',
       'sendSystemNotification',
       'settledNotification',

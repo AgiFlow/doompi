@@ -26,7 +26,9 @@ function owner(): HistoryOwnership {
   };
 }
 
-async function upstreamJournal(root: string): Promise<{ path: string; mainTip: string; branchTip: string }> {
+async function upstreamJournal(
+  root: string,
+): Promise<{ path: string; rootId: string; mainTip: string; branchTip: string }> {
   const environment = new NodeExecutionEnv({ cwd: root });
   const repository = new JsonlSessionRepo({
     fileSystem: environment,
@@ -51,7 +53,7 @@ async function upstreamJournal(root: string): Promise<{ path: string; mainTip: s
   const sessionPath = session.metadata.path;
   await repository.close(BACKGROUND_CONTEXT);
   await environment.cleanup(BACKGROUND_CONTEXT);
-  return { path: sessionPath, mainTip, branchTip };
+  return { path: sessionPath, rootId: rootEntry, mainTip, branchTip };
 }
 
 function records(filePath: string): Record<string, unknown>[] {
@@ -66,6 +68,31 @@ function errorWithCode(code: string): Error {
   return Object.assign(new Error(code), { code });
 }
 
+function v4Source(writes: readonly unknown[], header: Record<string, unknown> = {}): string {
+  const baseHeader = {
+    v: 4,
+    kind: 'header',
+    id: 'session-id',
+    storageVersion: 1,
+    createdAt: CREATED_AT,
+    cwd: '/workspace',
+  };
+  return `${JSON.stringify({ ...baseHeader, ...header })}\n${writes.map((write) => JSON.stringify(write)).join('\n')}\n`;
+}
+
+function entryWrite(id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    kind: 'entry',
+    id,
+    parentId: null,
+    seq: 1,
+    timestamp: CREATED_AT + 1_000,
+    type: 'message',
+    message: { role: 'user', content: [{ type: 'text', text: id }] },
+    ...overrides,
+  };
+}
+
 describe('protected v4 to v3 export', () => {
   let root: string;
 
@@ -78,8 +105,9 @@ describe('protected v4 to v3 export', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('exports an upstream journal with every branch and resumes at the selected main tip', async () => {
+  it('exports branches at the selected main tip and reports untimestamped native metadata without altering canonical bytes', async () => {
     const source = await upstreamJournal(root);
+    const canonicalBytes = fs.readFileSync(source.path);
     const destinationPath = path.join(root, 'resume.jsonl');
 
     const result = await exportV4ToV3({ sourcePath: source.path, destinationPath, owner: owner() });
@@ -90,12 +118,28 @@ describe('protected v4 to v3 export', () => {
     const outputIds = output.map((record) => record.id).filter((id): id is string => typeof id === 'string');
 
     expect(outputIds).toEqual(expect.arrayContaining([source.mainTip, source.branchTip]));
-    expect(output.filter((record) => record.type === 'message').at(-1)?.id).toBe(source.mainTip);
-    expect(output.find((record) => record.type === 'session_info')).toMatchObject({ name: 'Upstream session' });
-    expect(output.find((record) => record.type === 'label')).toMatchObject({
-      targetId: source.mainTip,
-      label: 'resume here',
+    expect(output.find((record) => record.id === source.mainTip)).toMatchObject({
+      id: source.mainTip,
+      parentId: source.rootId,
+      timestamp: expect.any(String),
     });
+    expect(output.find((record) => record.id === source.branchTip)).toMatchObject({
+      id: source.branchTip,
+      parentId: source.rootId,
+      timestamp: expect.any(String),
+    });
+    expect(fs.readFileSync(source.path)).toEqual(canonicalBytes);
+    expect(report).toMatchObject({
+      version: 1,
+      format: 'doompi-v4-to-v3-loss-report',
+      sourcePath: source.path,
+      destinationPath,
+      sourceSha256: expect.any(String),
+    });
+    expect(report.losses.filter((loss) => loss.code === 'value-provenance')).toEqual([
+      expect.objectContaining({ record: expect.objectContaining({ value: 'Upstream session' }) }),
+      expect.objectContaining({ record: expect.objectContaining({ key: source.mainTip, value: 'resume here' }) }),
+    ]);
     expect(report.losses).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'branch-tip-value' }),
@@ -207,5 +251,167 @@ describe('protected v4 to v3 export', () => {
       'does not match interrupted state',
     );
     expect(fs.readFileSync(destinationPath, 'utf8')).toContain('changed by another writer');
+  });
+  it('rejects malformed v4 input before staging any derived file', async () => {
+    const cases: [string, string, RegExp | undefined][] = [
+      ['empty', '', /Cannot export an empty v4 JSONL file/],
+      ['malformed-header', 'not-json\n', undefined],
+      ['wrong-header', `${JSON.stringify({ v: 3, kind: 'header' })}\n`, /Source is not v4 JSONL/],
+      ['truncated', v4Source([]).trimEnd(), /Cannot export a truncated v4 JSONL file/],
+      ['malformed-transaction', `${v4Source([]).trimEnd()}\nnot-json\n`, /Invalid v4 JSONL transaction at line 2/],
+      ['invalid-header-id', v4Source([], { id: '' }), /Invalid v4 header id/],
+      ['invalid-storage-version', v4Source([], { storageVersion: 0 }), /Invalid v4 storage version/],
+      ['invalid-created-at', v4Source([], { createdAt: -1 }), /Invalid v4 header createdAt/],
+      ['invalid-cwd', v4Source([], { cwd: '' }), /Invalid v4 header cwd/],
+      ['invalid-parent-session-id', v4Source([], { parentSessionId: '' }), /Invalid v4 parent session id/],
+      [
+        'invalid-parent-session-path',
+        v4Source([], { legacyParentSessionPath: '' }),
+        /Invalid v4 legacy parent session path/,
+      ],
+    ];
+
+    for (const [name, content, expectedError] of cases) {
+      const sourcePath = path.join(root, `${name}.jsonl`);
+      const destinationPath = path.join(root, `${name}.export.jsonl`);
+      fs.writeFileSync(sourcePath, content);
+
+      const exportPromise = exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+      if (expectedError === undefined) await expect(exportPromise).rejects.toThrow();
+      else await expect(exportPromise).rejects.toThrow(expectedError);
+      expect(fs.readFileSync(sourcePath, 'utf8')).toBe(content);
+      expect(fs.existsSync(destinationPath)).toBe(false);
+      expect(fs.existsSync(`${destinationPath}.loss.json`)).toBe(false);
+      expect(fs.existsSync(`${destinationPath}.export-state.json`)).toBe(false);
+    }
+  });
+
+  it.each([
+    ['entry', entryWrite('root', { seq: 0 }), /Invalid v4 entry sequence/],
+    ['usage', { kind: 'usage', seq: 0, entryId: 'root', usage: {} }, /Invalid v4 usage sequence/],
+    [
+      'value',
+      { kind: 'value', op: 'set', namespace: 'pi.test', key: 'key', seq: 0, value: true },
+      /Invalid v4 value sequence/,
+    ],
+    [
+      'list',
+      { kind: 'list', op: 'append', namespace: 'pi.test', key: 'key', seq: 0, value: true },
+      /Invalid v4 list sequence/,
+    ],
+  ])('rejects an invalid %s sequence before publication', async (_kind, write, expectedError) => {
+    const sourcePath = path.join(root, 'invalid-sequence.jsonl');
+    const destinationPath = path.join(root, 'invalid-sequence.export.jsonl');
+    const source = v4Source([write]);
+    fs.writeFileSync(sourcePath, source);
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(expectedError);
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+    expect(fs.existsSync(destinationPath)).toBe(false);
+    expect(fs.existsSync(`${destinationPath}.loss.json`)).toBe(false);
+  });
+
+  it.each([
+    ['duplicate entry ids', [entryWrite('same'), entryWrite('same', { seq: 2 })], /Duplicate v4 entry id/],
+    ['missing entry parent', [entryWrite('child', { parentId: 'missing' })], /Missing v4 entry parent/],
+    [
+      'invalid branch summary source',
+      [entryWrite('summary', { type: 'branch_summary', fromId: 42 })],
+      /Invalid v4 branch summary source/,
+    ],
+    ['invalid custom entry type', [entryWrite('custom', { type: 'custom' })], /Invalid v4 custom entry type/],
+  ])('rejects %s without publishing a partial export', async (_case, writes, expectedError) => {
+    const sourcePath = path.join(root, 'invalid-entry.jsonl');
+    const destinationPath = path.join(root, 'invalid-entry.export.jsonl');
+    const source = v4Source(writes);
+    fs.writeFileSync(sourcePath, source);
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(expectedError);
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+    expect(fs.existsSync(destinationPath)).toBe(false);
+    expect(fs.existsSync(`${destinationPath}.loss.json`)).toBe(false);
+    expect(fs.existsSync(`${destinationPath}.export-state.json`)).toBe(false);
+  });
+
+  it('reports non-object transactions and unsupported entries without writing those records', async () => {
+    const sourcePath = path.join(root, 'losses.jsonl');
+    const destinationPath = path.join(root, 'losses.export.jsonl');
+    const source = v4Source([
+      [
+        42,
+        entryWrite('future', { seq: 2, type: 'future_entry' }),
+        { kind: 'value', op: 'set', namespace: 'pi.branch.tip', key: 'main', value: 'future', seq: 3 },
+      ],
+    ]);
+    fs.writeFileSync(sourcePath, source);
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+    const output = records(destinationPath);
+
+    expect(output).toHaveLength(1);
+    expect(result.losses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unknown-record', record: 42 }),
+        expect.objectContaining({ code: 'entry-type', record: expect.objectContaining({ id: 'future' }) }),
+        expect.objectContaining({ code: 'main-tip-not-representable' }),
+      ]),
+    );
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+  });
+
+  it('reports each invalid native value independently while retaining valid entries', async () => {
+    const sourcePath = path.join(root, 'invalid-values.jsonl');
+    const destinationPath = path.join(root, 'invalid-values.export.jsonl');
+    const source = v4Source([
+      entryWrite('root'),
+      { kind: 'value', op: 'set', namespace: 'pi.session.name', key: '', value: 42, seq: 2 },
+      { kind: 'value', op: 'set', namespace: 'pi.session.name', key: 'extra', value: 'ignored', seq: 3 },
+      { kind: 'value', op: 'set', namespace: 'pi.entry.label', key: 'root', value: 42, seq: 4 },
+      { kind: 'value', op: 'set', namespace: 'pi.entry.label', key: 'missing', value: 'ignored', seq: 5 },
+      { kind: 'value', op: 'set', namespace: 'pi.branch.tip', key: 'main', value: 42, seq: 6 },
+    ]);
+    fs.writeFileSync(sourcePath, source);
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+    const output = records(destinationPath);
+
+    expect(output.find((record) => record.id === 'root')).toMatchObject({ type: 'message' });
+    expect(output.some((record) => record.type === 'session_info' || record.type === 'label')).toBe(false);
+    expect(result.losses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'session-name-value' }),
+        expect.objectContaining({ code: 'session-name-key' }),
+        expect.objectContaining({ code: 'label-value' }),
+        expect.objectContaining({ code: 'label-target' }),
+        expect.objectContaining({ code: 'main-tip-value' }),
+      ]),
+    );
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+  });
+
+  it.each([
+    ['missing', [entryWrite('root')], 'main-tip-missing'],
+    [
+      'non-leaf',
+      [
+        entryWrite('root'),
+        entryWrite('child', { parentId: 'root', seq: 2 }),
+        { kind: 'value', op: 'set', namespace: 'pi.branch.tip', key: 'main', value: 'root', seq: 3 },
+      ],
+      'main-tip-not-leaf',
+    ],
+  ])('reports a %s main tip instead of claiming an unsafe resume point', async (_case, writes, lossCode) => {
+    const sourcePath = path.join(root, 'main-tip.jsonl');
+    const destinationPath = path.join(root, 'main-tip.export.jsonl');
+    const source = v4Source(writes);
+    fs.writeFileSync(sourcePath, source);
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+
+    expect(result.losses).toEqual(expect.arrayContaining([expect.objectContaining({ code: lossCode })]));
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+    expect(records(destinationPath).filter((record) => record.type === 'message')).toHaveLength(
+      _case === 'missing' ? 1 : 2,
+    );
   });
 });

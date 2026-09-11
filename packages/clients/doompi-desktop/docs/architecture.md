@@ -50,7 +50,7 @@ It does not resolve plugin composition, create DoomPi sessions, or launch agents
 
 ### Cockpit and session processes
 
-The staged `@agimon-ai/doompi-web` CLI remains the cockpit control plane. It serves the web client and launches the staged `@agimon-ai/doompi-server` command when the cockpit creates a session. Each session server owns its registry record and agent process.
+The staged `@agimon-ai/doompi-web` CLI remains the cockpit control plane. It serves the web client and launches the `doompi-server` executable staged from `@agimon-ai/doompi` when the cockpit creates a session. Each session server owns its registry record and agent runtime.
 
 Session discovery uses the normal DoomPi runtime directory:
 

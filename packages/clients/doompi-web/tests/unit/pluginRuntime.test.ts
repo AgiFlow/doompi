@@ -216,7 +216,7 @@ describe('the focused session plugin runtime', () => {
     await focusSessionWebPlugins('session-six', replacement);
 
     expect(firstStop).toHaveBeenCalledOnce();
-    expect(mocks.removeSessionWebPlugins).toHaveBeenCalledWith('session-six');
+    expect(mocks.removeSessionWebPlugins).not.toHaveBeenCalled();
     expect(mocks.installSessionWebPlugins).toHaveBeenLastCalledWith('session-six', secondPlugins);
     expect(mocks.activateVerifiedPluginComposition).toHaveBeenCalledTimes(2);
 

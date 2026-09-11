@@ -1,5 +1,5 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createPiHubService } from '../../src/adapters/piHubService.ts';
 import type { SessionRecord } from '../../src/types/registry.ts';
 
@@ -20,7 +20,7 @@ function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 function service(records: SessionRecord[]) {
-  return createPiHubService({ records: () => records, spawn: vi.fn() });
+  return createPiHubService({ records: () => records });
 }
 
 describe('hub protocol service', () => {

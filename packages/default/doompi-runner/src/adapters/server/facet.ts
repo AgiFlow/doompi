@@ -60,6 +60,7 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
         sessionId ??= executionContext.sessionId;
         supervision ??= (async () => {
           try {
+            container.paths.setSessionId(executionContext.sessionId);
             await container.lifeline.arm(executionContext.sessionId);
             const reconciled = await reconcileActiveRunners({
               registry: container.runnerRegistry,

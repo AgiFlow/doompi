@@ -7,6 +7,8 @@ import { observe, type ServerTelemetry } from './serverTelemetry.ts';
 
 /** How long a relaunching agent may take to flush and exit before it is killed. */
 const GRACEFUL_EXIT_TIMEOUT_MS = 15_000;
+/** Persistent markers remain authoritative when native watch events are missed. */
+const RELAUNCH_POLL_INTERVAL_MS = 100;
 /** Startup frames retained for every server-side consumer of this agent generation. */
 const EARLY_FRAME_LIMIT = 512;
 
@@ -65,7 +67,7 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
   // Ending its input asks Pi's rpc mode for a graceful, flushed exit; the
   // relaunch itself happens in the exit handler below.
   const beginGracefulEnd = (): void => {
-    if (endRequested || stopping || !fs.existsSync(options.relaunchFile)) return;
+    if (!current || endRequested || stopping || !fs.existsSync(options.relaunchFile)) return;
     endRequested = true;
     current?.endInput();
     escalation = setTimeout(() => {
@@ -75,25 +77,22 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
   };
 
   let watcher: fs.FSWatcher | undefined;
-  try {
-    const directory = path.dirname(options.relaunchFile);
-    const basename = path.basename(options.relaunchFile);
-    watcher = fs.watch(directory, (_event, filename) => {
-      if (filename === null || filename === basename) beginGracefulEnd();
-    });
-  } catch {
-    options.onNotice?.('relaunch requests are handled on agent exit only; watching the request file failed');
-  }
+  let poller: NodeJS.Timeout | undefined;
+  let settlePendingRelaunch: (() => void) | undefined;
 
   const settle = (): void => {
     if (escalation) clearTimeout(escalation);
     escalation = undefined;
     watcher?.close();
+    watcher = undefined;
+    if (poller) clearInterval(poller);
+    poller = undefined;
   };
 
   // Resolved before the loop so a composition failure fails the server start
   // rather than surfacing as an agent that never came up.
   const first = await options.launcher.resolve();
+  const firstAgent = spawn(first);
 
   const exited = new Promise<number>((resolve) => {
     const attach = (agent: AgentProcess): void => {
@@ -124,6 +123,7 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
             }),
             options.onNotice,
           );
+        current = undefined;
         if (escalation) clearTimeout(escalation);
         escalation = undefined;
         const handoff = stopping ? undefined : takeHandoff();
@@ -134,22 +134,44 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
         }
         options.onNotice?.(`relaunching the agent with major mode ${handoff.majorMode}`);
         let next: AgentProcessOptions;
+        settlePendingRelaunch = () => resolve(code);
         try {
           next = await options.launcher.resolve(handoff.majorMode);
+          if (stopping) {
+            resolve(code);
+            return;
+          }
+          attach(spawn(next));
         } catch (error) {
-          // The requested matrix did not compose. Settling on the exit code the
-          // agent already gave is the only honest outcome: there is nothing to
-          // relaunch into, and a half-built composition must not run.
+          // Composition or spawning failed. Nothing usable remains to relaunch.
           const detail = error instanceof Error ? error.message : String(error);
-          options.onNotice?.(`could not compose major mode ${handoff.majorMode}: ${detail}`);
+          options.onNotice?.(`could not relaunch major mode ${handoff.majorMode}: ${detail}`);
           settle();
           resolve(code);
-          return;
+        } finally {
+          settlePendingRelaunch = undefined;
         }
-        attach(spawn(next));
       });
     };
-    attach(spawn(first));
+    attach(firstAgent);
+    // Do not allocate monitoring until initial composition and attachment succeed.
+    const watchFailed = (): void => {
+      watcher?.close();
+      watcher = undefined;
+      options.onNotice?.('watching the relaunch request file failed; polling remains active');
+    };
+    try {
+      const directory = path.dirname(options.relaunchFile);
+      const basename = path.basename(options.relaunchFile);
+      watcher = fs.watch(directory, (_event, filename) => {
+        if (filename === null || filename === basename) beginGracefulEnd();
+      });
+      watcher.on('error', watchFailed);
+    } catch {
+      watchFailed();
+    }
+    poller = setInterval(beginGracefulEnd, RELAUNCH_POLL_INTERVAL_MS);
+    poller.unref();
   });
 
   return {
@@ -168,6 +190,7 @@ export async function superviseAgentRelaunches(options: AgentSupervisorOptions):
       stopping = true;
       settle();
       current?.stop();
+      settlePendingRelaunch?.();
     },
   };
 }

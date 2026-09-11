@@ -57,15 +57,22 @@ function fakeChild(options: AgentProcessOptions): FakeChild {
 let workDir: string;
 const spawned: FakeChild[] = [];
 const notices: string[] = [];
+const supervisors: AgentProcess[] = [];
 
 beforeEach(() => {
   workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-supervisor-'));
 });
 
-afterEach(() => {
+afterEach(async () => {
+  for (const supervisor of supervisors.splice(0)) {
+    supervisor.stop();
+    await supervisor.exited;
+  }
   spawned.splice(0);
   notices.splice(0);
   fs.rmSync(workDir, { recursive: true, force: true });
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const BASE_ARGS = ['--name', 'web', '--mode', 'rpc'];
@@ -105,6 +112,7 @@ async function supervise(overrides: Partial<AgentSupervisorOptions> = {}): Promi
     },
     ...overrides,
   });
+  supervisors.push(agent);
   return { agent, relaunchFile };
 }
 
@@ -182,10 +190,7 @@ describe('superviseAgentRelaunches', () => {
     const { relaunchFile } = await supervise({ gracefulExitTimeoutMs: 500 });
     fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
 
-    // The watcher asks for a graceful end first. Wait for the filesystem event
-    // instead of assuming it will arrive within a fixed scheduling window; the
-    // case's own timeout has to outlast the two waits below or a slow fs event
-    // fails the test instead of the behaviour.
+    // Exercise real filesystem monitoring, including the durable-marker fallback.
     await vi.waitFor(() => expect(spawned[0]?.inputEnded).toBe(true), { timeout: 5_000 });
     expect(spawned[0]?.stopped).toBe(false);
 
@@ -195,6 +200,59 @@ describe('superviseAgentRelaunches', () => {
     expect(spawned).toHaveLength(2);
     expect(spawned[1]?.options.args).toEqual(['--name', 'web', '--mode', 'rpc', '--major-mode', 'minimal']);
   }, 10_000);
+
+  it.each(['unavailable', 'silent', 'error'] as const)(
+    'polls durable requests when the watcher is %s',
+    async (mode) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+      const nativeWatch = fs.watch;
+      const closed = vi.fn();
+      let monitor: fs.FSWatcher | undefined;
+      vi.spyOn(fs, 'watch').mockImplementation(() => {
+        if (mode === 'unavailable') throw new Error('watch unavailable');
+        // Keep a real watcher resource but deliberately lose its notifications.
+        const watcher = nativeWatch(workDir, () => undefined);
+        watcher.on('close', closed);
+        monitor = watcher;
+        return watcher;
+      });
+      const { agent, relaunchFile } = await supervise({ gracefulExitTimeoutMs: 500 });
+      if (mode === 'error') expect(() => monitor!.emit('error', new Error('watch lost'))).not.toThrow();
+      fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
+      await vi.advanceTimersByTimeAsync(100);
+      expect(spawned[0]?.inputEnded).toBe(true);
+      expect(spawned[0]?.stopped).toBe(false);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(spawned[0]?.stopped).toBe(true);
+      expect(spawned).toHaveLength(2);
+      expect(spawned[1]?.options.args).toContain('minimal');
+      expect(fs.existsSync(relaunchFile)).toBe(false);
+      agent.stop();
+      await agent.exited;
+      await settled();
+      expect(vi.getTimerCount()).toBe(0);
+      if (mode !== 'unavailable') expect(closed).toHaveBeenCalledOnce();
+      if (mode !== 'silent')
+        expect(notices).toContain('watching the relaunch request file failed; polling remains active');
+    },
+  );
+
+  it.each(['resolve', 'spawn'] as const)('allocates no monitoring when initial %s fails', async (stage) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const watch = vi.spyOn(fs, 'watch');
+    const failure = new Error('initial launch failed');
+    const overrides: Partial<AgentSupervisorOptions> =
+      stage === 'resolve'
+        ? { launcher: { ...fakeLauncher(), resolve: () => Promise.reject(failure) } }
+        : {
+            spawn: () => {
+              throw failure;
+            },
+          };
+    await expect(supervise(overrides)).rejects.toBe(failure);
+    expect(watch).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('treats a malformed relaunch file as a real exit', async () => {
     const { agent, relaunchFile } = await supervise();
@@ -211,6 +269,50 @@ describe('superviseAgentRelaunches', () => {
     agent.stop();
     await expect(agent.exited).resolves.toBe(0);
     expect(spawned).toHaveLength(1);
+  });
+
+  it('does not spawn after stop while relaunch composition is pending', async () => {
+    const launcher = fakeLauncher();
+    let finishComposition: (() => void) | undefined;
+    const { agent, relaunchFile } = await supervise({
+      launcher: {
+        ...launcher,
+        resolve: (majorMode) =>
+          majorMode === undefined
+            ? launcher.resolve()
+            : new Promise((resolve) => {
+                finishComposition = () => resolve({ command: 'pi', args: [], cwd: workDir, env: {} });
+              }),
+      },
+    });
+    fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
+    spawned[0]?.exit(0);
+    await settled();
+    expect(finishComposition).toBeTypeOf('function');
+    agent.stop();
+    await expect(agent.exited).resolves.toBe(0);
+    finishComposition!();
+    await settled();
+    expect(spawned).toHaveLength(1);
+    await expect(agent.exited).resolves.toBe(0);
+  });
+
+  it('settles and cleans monitoring when replacement spawning fails', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    const { agent, relaunchFile } = await supervise({
+      spawn: (options) => {
+        if (spawned.length > 0) throw new Error('replacement could not spawn');
+        const child = fakeChild(options);
+        spawned.push(child);
+        return child;
+      },
+    });
+    fs.writeFileSync(relaunchFile, serializeRelaunchHandoff({ version: 1, majorMode: 'minimal', operationId: 'op' }));
+    spawned[0]?.exit(7);
+    await expect(agent.exited).resolves.toBe(7);
+    expect(spawned).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(notices.some((notice) => notice.includes('replacement could not spawn'))).toBe(true);
   });
 
   it('settles on the exit code when the requested mode will not compose', async () => {

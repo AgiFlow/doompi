@@ -66,6 +66,7 @@ export interface WebPluginBlock {
 }
 
 export interface WebPackageManifest {
+  name?: unknown;
   files?: unknown;
   dependencies?: Record<string, string>;
   doompiWeb?: unknown;

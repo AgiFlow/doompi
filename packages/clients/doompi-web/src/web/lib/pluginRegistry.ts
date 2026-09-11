@@ -550,10 +550,12 @@ export function resetWebPlugins(): void {
   emitRegistryChange();
 }
 
-/** Installs one session's independently synchronized plugin definitions. */
+/** Installs or atomically replaces one session's independently synchronized plugin definitions. */
 export function installSessionWebPlugins(sessionId: string, plugins: readonly WebPluginDefinition[]): void {
+  const previous = sessionStates.get(sessionId);
   const state = buildWebPluginState(plugins);
   sessionStates.set(sessionId, state);
+  for (const channel of previous?.channels.values() ?? []) channel.drop(sessionId);
   const pending = pendingSessionFrames.get(sessionId);
   if (pending !== undefined) {
     pendingSessionFrames.delete(sessionId);

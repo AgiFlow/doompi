@@ -103,4 +103,47 @@ describe('Pi WebSocket byte listener', () => {
     });
     await expect(listener.close()).resolves.toBeUndefined();
   });
+  it('orders asynchronous sends before final bytes and closes only once', async () => {
+    const { transport, connection, handler, accepted, listener } = await setup();
+    let release!: () => void;
+    transport.send.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const first = connection.send(new Uint8Array([1]));
+    const second = connection.send(new Uint8Array([2]));
+    const closed = connection.close(new Uint8Array([3]));
+    await vi.waitFor(() => expect(transport.send).toHaveBeenCalledTimes(1));
+    expect(transport.close).not.toHaveBeenCalled();
+    release();
+    await Promise.all([first, second, closed]);
+    expect(transport.send.mock.calls.map(([bytes]) => [...bytes])).toEqual([[1], [2], [3]]);
+    accepted.onClose();
+    accepted.onError(new Error('late error'));
+    accepted.onData(new Uint8Array([4]));
+    expect(handler.onClose).toHaveBeenCalledOnce();
+    expect(handler.onError).not.toHaveBeenCalled();
+    expect(handler.onData).not.toHaveBeenCalled();
+    await listener.close();
+    expect(transport.close).toHaveBeenCalledOnce();
+  });
+  it('bounds a stalled write so shutdown cannot wait forever', async () => {
+    vi.useFakeTimers();
+    try {
+      const { transport, connection, handler, listener } = await setup();
+      transport.send.mockImplementationOnce(() => new Promise<void>(() => {}));
+      const sent = connection.send(new Uint8Array([1]));
+      const failed = expect(sent).rejects.toThrow('write timed out');
+      const stopped = listener.close();
+      await vi.advanceTimersByTimeAsync(15_000);
+      await Promise.all([failed, stopped]);
+      expect(connection.closed).toBe(true);
+      expect(handler.onError).toHaveBeenCalledOnce();
+      expect(handler.onClose).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

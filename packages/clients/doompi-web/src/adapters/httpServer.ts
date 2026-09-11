@@ -16,6 +16,17 @@ import { DOOM_COCKPIT_SERVER_ID } from '@agimon-ai/doompi-extension-contracts/se
 import { BUNDLE_MANIFEST_ROUTE, assetFor } from '@agimon-ai/doompi-web-security';
 import { packagedVersion } from './packageVersion.ts';
 import { createPiHubService } from './piHubService.ts';
+import { createHubProtocol } from './hubProtocol.ts';
+import type { WSEvents } from 'hono/ws';
+import { createFederationStore } from './federationStore.ts';
+import { registerFederationRoutes } from './federationRoutes.ts';
+import {
+  createFederationTransport,
+  FEDERATION_PROTOCOL_ROUTE,
+  FEDERATION_TRANSPORT_ROUTE,
+} from './federationTransport.ts';
+import { createFederationProtocol } from './federationProtocol.ts';
+import { createFederationDirectory } from './federationDirectory.ts';
 import { createSyncGuard } from './syncGuard.ts';
 import { createPiWebSocketListener } from './piWebSocketListener.ts';
 import { type Context, Hono } from 'hono';
@@ -883,12 +894,48 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // registration order: a guard added after a terminating handler never runs
   // for that path. It also refuses socket upgrades, which is what closes the
   // cross-site WebSocket hijack that loopback binding never covered.
+  const federationStore = createFederationStore(store.directory);
+  const federationTransport = options.federation?.enabled
+    ? createFederationTransport({
+        store: federationStore,
+        records: () => hub.records(),
+        onNotice: notice,
+      })
+    : undefined;
+  const federationProtocol = federationTransport
+    ? createFederationProtocol({
+        transport: federationTransport,
+        store: federationStore,
+        records: () => hub.records(),
+        onNotice: notice,
+      })
+    : undefined;
+  const federationDirectory: ReturnType<typeof createFederationDirectory> | undefined = federationTransport
+    ? createFederationDirectory({
+        store: federationStore,
+        onNotice: notice,
+        onChanged: () =>
+          broadcast(
+            {
+              type: SESSIONS_SNAPSHOT_TYPE,
+              sessions: [...hub.snapshot(), ...(federationDirectory?.summaries() ?? [])],
+            },
+            false,
+          ),
+      })
+    : undefined;
   const guard = createRemoteGuard({
     loopbackPort: () => loopbackPort,
     tunnelPolicy: () => remote.tunnelPolicy(),
     authorize: (context) => remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')),
     trustedDevice: (context) => (context.env as SealedRequestBindings | undefined)?.sealedDeviceId,
     channelReady: (deviceId, scope) => remote.channelFor(deviceId, scope) !== undefined,
+    federationRoute: (context) =>
+      federationTransport !== undefined &&
+      ((context.req.method === 'POST' && context.req.path === FEDERATION_TRANSPORT_ROUTE) ||
+        (context.req.method === 'GET' &&
+          context.req.path === FEDERATION_PROTOCOL_ROUTE &&
+          context.req.header('upgrade')?.toLowerCase() === 'websocket')),
     stepUp: {
       required: (action) => remote.stepUpRequired(action),
       verify: async (context, action, assertion) => {
@@ -1080,26 +1127,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   // into one server so a browser sees a single endpoint with many sessions.
   // Remote clients get a distinct protocol service that can attach to existing
   // sessions but cannot bypass HTTP step-up by creating one directly.
-  const localProtocolListener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
-  const remoteProtocolListener = createPiWebSocketListener({
-    onError: (error) => notice(`protocol: ${error.message}`),
-  });
-  const protocolService = createPiHubService({
-    records: () => hub.records(),
-    spawn: (input) => hub.create(input),
-    onNotice: notice,
-  });
-  const localProtocolServer = new Server(protocolService, {
-    serverId: DOOM_COCKPIT_SERVER_ID,
-    listeners: [localProtocolListener],
-    onError: (error) => notice(`protocol: ${error.message}`),
-  });
-  const remoteProtocolServer = new Server(protocolService, {
-    serverId: DOOM_COCKPIT_SERVER_ID,
-    listeners: [remoteProtocolListener],
-    onError: (error) => notice(`protocol: ${error.message}`),
-  });
-  await Promise.all([localProtocolServer.start(), remoteProtocolServer.start()]);
+  const protocolConnections = new Set<() => void>();
   // Provider credentials belong to the machine, not to a session: the hub
   // keeps one Pi runtime over the shared auth.json and signs in for all.
   const providerAuth = createProviderAuth({ runtime: options.authRuntime, onNotice: notice });
@@ -1236,6 +1264,15 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       version: packagedVersion(),
     }),
   );
+
+  registerFederationRoutes(app, {
+    store: federationStore,
+    records: () => hub.records(),
+    transport: federationTransport,
+    directory: federationDirectory,
+    isLocal: (context) => guard.callerOf(context)?.locality === 'local',
+    onNotice: notice,
+  });
 
   app.post(SESSIONS_API_ROUTE, async (context) => {
     let body: unknown;
@@ -1475,184 +1512,199 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     return context.json({ error: 'The file changed after it was read.' }, 409);
   });
 
-  app.get(
-    SESSION_SOCKET_ROUTE,
-    nodeWs.upgradeWebSocket((context) => {
-      const local = guard.listenerOf(context) === 'local';
-      // Resolved once at upgrade: the device is fixed for the socket's life, and
-      // looking it up per frame would bump last-seen on every keystroke.
-      const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
-      const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'session');
-      const subscriptions = new Set<string>();
-      const connectionId = randomUUID();
-      /** The threads this page follows; one socket may follow several of one session. */
-      const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
-      let disconnect: (() => void) | undefined;
-      let disconnectThreads: (() => void) | undefined;
-      /** Held on the socket, not inside onOpen, so close can withdraw it. */
-      let registered: { post: (frame: object) => void; local: boolean } | undefined;
-      /** Withdraws this socket from the remote registry, so switch-off can close it. */
-      let untrack: (() => void) | undefined;
-      /** Lets go of every followed thread, or only a departed session's. */
-      const releaseThreads = (sessionId?: string): void => {
-        for (const [key, held] of threadSubscriptions) {
-          if (sessionId !== undefined && held.sessionId !== sessionId) continue;
-          threadSubscriptions.delete(key);
-          threads.unsubscribe(held.sessionId, held.threadId);
+  const hubEvents = (context: Context, protocol = false): WSEvents => {
+    const local = guard.listenerOf(context) === 'local';
+    // Resolved once at upgrade: the device is fixed for the socket's life, and
+    // looking it up per frame would bump last-seen on every keystroke.
+    const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
+    const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'session');
+    const subscriptions = new Set<string>();
+    const connectionId = randomUUID();
+    /** The threads this page follows; one socket may follow several of one session. */
+    const threadSubscriptions = new Map<string, { sessionId: string; threadId: string }>();
+    let disconnect: (() => void) | undefined;
+    let disconnectThreads: (() => void) | undefined;
+    /** Held on the socket, not inside onOpen, so close can withdraw it. */
+    let registered: { post: (frame: object) => void; local: boolean } | undefined;
+    /** Withdraws this socket from the remote registry, so switch-off can close it. */
+    let untrack: (() => void) | undefined;
+    /** Lets go of every followed thread, or only a departed session's. */
+    const releaseThreads = (sessionId?: string): void => {
+      for (const [key, held] of threadSubscriptions) {
+        if (sessionId !== undefined && held.sessionId !== sessionId) continue;
+        threadSubscriptions.delete(key);
+        threads.unsubscribe(held.sessionId, held.threadId);
+      }
+    };
+    return {
+      onOpen(_event, ws) {
+        if (!local && channel === undefined && !protocol) {
+          ws.close(1008, 'sealed session channel required');
+          return;
         }
-      };
-      return {
-        onOpen(_event, ws) {
-          if (!local && channel === undefined) {
-            ws.close(1008, 'sealed session channel required');
-            return;
+        const post = (frame: SessionFrame | object): void => {
+          const text = JSON.stringify(frame);
+          let outgoing = text;
+          if (!local && !protocol) {
+            if (channel === undefined) return;
+            const sealed = channel.seal(new TextEncoder().encode(text));
+            if (!sealed.ok) {
+              ws.close(1008, 'sealed session channel failed');
+              return;
+            }
+            outgoing = JSON.stringify(sealed.envelope);
           }
-          const post = (frame: SessionFrame | object): void => {
-            const text = JSON.stringify(frame);
-            let outgoing = text;
-            if (!local) {
-              if (channel === undefined) return;
-              const sealed = channel.seal(new TextEncoder().encode(text));
-              if (!sealed.ok) {
-                ws.close(1008, 'sealed session channel failed');
-                return;
-              }
-              outgoing = JSON.stringify(sealed.envelope);
-            }
-            try {
-              ws.send(outgoing);
-            } catch {
-              // The browser went away mid-write; onClose tears the socket down.
-            }
-          };
-          registered = { post, local };
-          pages.add(registered);
-          // A socket that has upgraded has left the HTTP server's connection
-          // tracking, so closing the tunnel listener does not reach it.
-          // Without this a paired phone keeps driving the agent after remote
-          // access is switched off.
-          if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
-          post(hubHello(hub.channelTypes()));
-          post({ type: SESSIONS_SNAPSHOT_TYPE, sessions: hub.snapshot() });
-          disconnect = hub.onEvent((event) => {
-            if (event.kind === 'upsert') post({ type: SESSION_UPSERT_TYPE, session: event.session });
-            else if (event.kind === 'removed') {
-              subscriptions.delete(event.sessionId);
-              releaseThreads(event.sessionId);
-              post({ type: SESSION_REMOVED_TYPE, sessionId: event.sessionId });
-            } else if (event.kind === 'channel') {
-              if (
-                event.connectionId === connectionId ||
-                (event.connectionId === undefined && subscriptions.has(event.sessionId))
-              ) {
-                post({ type: event.frameType, sessionId: event.sessionId, payload: event.payload });
-              }
-            } else {
-              const notification = parseDoomNotificationEntry(event.frame);
-              if (notification !== undefined || subscriptions.has(event.sessionId)) {
-                post(sessionFrameEnvelope(event.sessionId, event.frame));
-              }
-            }
-          });
-          disconnectThreads = threads.onFrame((event) => {
-            if (threadSubscriptions.has(threadKey(event.sessionId, event.threadId))) {
-              post(threadFrameEnvelope(event.sessionId, event.threadId, event.frame));
-            }
-          });
-          notice('browser attached');
-        },
-        onMessage(event) {
-          if (typeof event.data !== 'string') return;
-          let parsed: unknown;
           try {
-            parsed = JSON.parse(event.data);
+            ws.send(outgoing);
+          } catch {
+            // The browser went away mid-write; onClose tears the socket down.
+          }
+        };
+        registered = { post, local };
+        pages.add(registered);
+        // A socket that has upgraded has left the HTTP server's connection
+        // tracking, so closing the tunnel listener does not reach it.
+        // Without this a paired phone keeps driving the agent after remote
+        // access is switched off.
+        if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
+        post(hubHello(hub.channelTypes()));
+        post({
+          type: SESSIONS_SNAPSHOT_TYPE,
+          sessions: [...hub.snapshot(), ...(federationDirectory?.summaries() ?? [])],
+        });
+        if (federationDirectory)
+          void federationDirectory.refresh().catch((error: unknown) => notice(`peer discovery: ${String(error)}`));
+        disconnect = hub.onEvent((event) => {
+          if (event.kind === 'upsert') post({ type: SESSION_UPSERT_TYPE, session: event.session });
+          else if (event.kind === 'removed') {
+            subscriptions.delete(event.sessionId);
+            releaseThreads(event.sessionId);
+            post({ type: SESSION_REMOVED_TYPE, sessionId: event.sessionId });
+          } else if (event.kind === 'channel') {
+            if (
+              event.connectionId === connectionId ||
+              (event.connectionId === undefined && subscriptions.has(event.sessionId))
+            ) {
+              post({ type: event.frameType, sessionId: event.sessionId, payload: event.payload });
+            }
+          } else {
+            const notification = parseDoomNotificationEntry(event.frame);
+            if (notification !== undefined || subscriptions.has(event.sessionId)) {
+              post(sessionFrameEnvelope(event.sessionId, event.frame));
+            }
+          }
+        });
+        disconnectThreads = threads.onFrame((event) => {
+          if (threadSubscriptions.has(threadKey(event.sessionId, event.threadId))) {
+            post(threadFrameEnvelope(event.sessionId, event.threadId, event.frame));
+          }
+        });
+        notice('browser attached');
+      },
+      onMessage(event) {
+        if (typeof event.data !== 'string') return;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (!local && !protocol) {
+          if (channel === undefined) return;
+          const opened = channel.open(parsed);
+          // A frame that will not open was altered or replayed. Dropping it
+          // is the only safe answer; there is no plaintext to fall back to.
+          if (!opened.ok) return;
+          try {
+            parsed = JSON.parse(new TextDecoder().decode(opened.plaintext));
           } catch {
             return;
           }
-          if (!local) {
-            if (channel === undefined) return;
-            const opened = channel.open(parsed);
-            // A frame that will not open was altered or replayed. Dropping it
-            // is the only safe answer; there is no plaintext to fall back to.
-            if (!opened.ok) return;
-            try {
-              parsed = JSON.parse(new TextDecoder().decode(opened.plaintext));
-            } catch {
-              return;
-            }
-          }
-          if (!isRecord(parsed) || typeof parsed.sessionId !== 'string') return;
-          const sessionId = parsed.sessionId;
-          if (
-            typeof parsed.type === 'string' &&
-            hub.channelTypes().includes(parsed.type) &&
-            (subscriptions.has(sessionId) || hub.channelReceivesWithoutSubscription(sessionId, parsed.type))
-          ) {
-            hub.receiveChannel(sessionId, parsed.type, parsed.payload, connectionId);
+        }
+        if (!isRecord(parsed) || typeof parsed.sessionId !== 'string') return;
+        const sessionId = parsed.sessionId;
+        if (
+          typeof parsed.type === 'string' &&
+          hub.channelTypes().includes(parsed.type) &&
+          (subscriptions.has(sessionId) || hub.channelReceivesWithoutSubscription(sessionId, parsed.type))
+        ) {
+          hub.receiveChannel(sessionId, parsed.type, parsed.payload, connectionId);
+          return;
+        }
+        if (parsed.type === SUBSCRIBE_TYPE) {
+          const backlog = hub.backlog(sessionId);
+          if (!backlog) return; // Unknown session; the snapshot said otherwise.
+          subscriptions.add(sessionId);
+          if (!protocol) registered?.post(backlog);
+          for (const frame of hub.channelFrames(sessionId)) registered?.post(frame);
+          return;
+        }
+        if (parsed.type === UNSUBSCRIBE_TYPE) {
+          subscriptions.delete(sessionId);
+          return;
+        }
+        if (parsed.type === HISTORY_REQUEST_TYPE) {
+          // Older transcript, on demand. The hub kept what the attach path
+          // was too small to publish, so scrolling back reads from memory
+          // rather than asking the session to re-read its journal.
+          const page = hub.history(sessionId, {
+            ...(typeof parsed.before === 'string' ? { before: parsed.before } : {}),
+            ...(typeof parsed.limit === 'number' ? { limit: parsed.limit } : {}),
+          });
+          if (!page) return;
+          registered?.post(page);
+          return;
+        }
+        if (parsed.type === SUBSCRIBE_THREAD_TYPE || parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
+          if (typeof parsed.threadId !== 'string') return;
+          const threadId = parsed.threadId;
+          const key = threadKey(sessionId, threadId);
+          if (parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
+            if (threadSubscriptions.delete(key)) threads.unsubscribe(sessionId, threadId);
             return;
           }
-          if (parsed.type === SUBSCRIBE_TYPE) {
-            const backlog = hub.backlog(sessionId);
-            if (!backlog) return; // Unknown session; the snapshot said otherwise.
-            subscriptions.add(sessionId);
-            registered?.post(backlog);
-            for (const frame of hub.channelFrames(sessionId)) registered?.post(frame);
-            return;
-          }
-          if (parsed.type === UNSUBSCRIBE_TYPE) {
-            subscriptions.delete(sessionId);
-            return;
-          }
-          if (parsed.type === HISTORY_REQUEST_TYPE) {
-            // Older transcript, on demand. The hub kept what the attach path
-            // was too small to publish, so scrolling back reads from memory
-            // rather than asking the session to re-read its journal.
-            const page = hub.history(sessionId, {
-              ...(typeof parsed.before === 'string' ? { before: parsed.before } : {}),
-              ...(typeof parsed.limit === 'number' ? { limit: parsed.limit } : {}),
-            });
-            if (!page) return;
-            registered?.post(page);
-            return;
-          }
-          if (parsed.type === SUBSCRIBE_THREAD_TYPE || parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
-            if (typeof parsed.threadId !== 'string') return;
-            const threadId = parsed.threadId;
-            const key = threadKey(sessionId, threadId);
-            if (parsed.type === UNSUBSCRIBE_THREAD_TYPE) {
-              if (threadSubscriptions.delete(key)) threads.unsubscribe(sessionId, threadId);
-              return;
-            }
-            // Register even when the hub does not know the session yet. The tailer resolves
-            // the journal path lazily on every tick, so the subscription self-heals once the
-            // session appears. Refusing here would drop the request in silence, and the page
-            // only sends it again on a fresh socket.
-            if (threadSubscriptions.has(key)) return;
-            threadSubscriptions.set(key, { sessionId, threadId });
-            registered?.post(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId)));
-            return;
-          }
-          if (parsed.type === SESSION_COMMAND_TYPE && isRecord(parsed.frame)) {
-            // The hub owns the handshake; a page must not be able to replay it.
-            if (parsed.frame.type === ATTACH_TYPE) return;
-            hub.command(sessionId, parsed.frame);
-          }
-        },
-        onClose() {
-          hub.disconnectChannels(connectionId);
-          if (registered) pages.delete(registered);
-          registered = undefined;
-          untrack?.();
-          untrack = undefined;
-          disconnect?.();
-          disconnect = undefined;
-          disconnectThreads?.();
-          disconnectThreads = undefined;
-          subscriptions.clear();
-          releaseThreads();
-          notice('browser detached');
-        },
-      };
+          // Register even when the hub does not know the session yet. The tailer resolves
+          // the journal path lazily on every tick, so the subscription self-heals once the
+          // session appears. Refusing here would drop the request in silence, and the page
+          // only sends it again on a fresh socket.
+          if (threadSubscriptions.has(key)) return;
+          threadSubscriptions.set(key, { sessionId, threadId });
+          registered?.post(threadBacklog(sessionId, threadId, threads.subscribe(sessionId, threadId)));
+          return;
+        }
+        if (!protocol && parsed.type === SESSION_COMMAND_TYPE && isRecord(parsed.frame)) {
+          // The hub owns the handshake; a page must not be able to replay it.
+          if (parsed.frame.type === ATTACH_TYPE) return;
+          hub.command(sessionId, parsed.frame);
+        }
+      },
+      onClose() {
+        hub.disconnectChannels(connectionId);
+        if (registered) pages.delete(registered);
+        registered = undefined;
+        untrack?.();
+        untrack = undefined;
+        disconnect?.();
+        disconnect = undefined;
+        disconnectThreads?.();
+        disconnectThreads = undefined;
+        subscriptions.clear();
+        releaseThreads();
+        notice('browser detached');
+      },
+    };
+  };
+  // Kept for explicit compatibility clients; the cockpit no longer opens this socket.
+  app.get(
+    SESSION_SOCKET_ROUTE,
+    nodeWs.upgradeWebSocket((context) => hubEvents(context)),
+  );
+
+  app.get(
+    FEDERATION_PROTOCOL_ROUTE,
+    nodeWs.upgradeWebSocket(() => {
+      if (!federationProtocol) return { onOpen: (_event, ws) => ws.close(1008, 'Federation is disabled') };
+      return federationProtocol.events();
     }),
   );
 
@@ -1662,68 +1714,127 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       const local = guard.listenerOf(context) === 'local';
       const deviceId = local ? undefined : remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
       const channel = deviceId === undefined ? undefined : remote.channelFor(deviceId, 'protocol');
-      let handler: ReturnType<typeof localProtocolListener.accept>;
+      let handler: ReturnType<ReturnType<typeof createPiWebSocketListener>['accept']>;
       let untrack: (() => void) | undefined;
+      const listener = createPiWebSocketListener({ onError: (error) => notice(`protocol: ${error.message}`) });
+      let server: Server | undefined;
+      let hubProtocol: ReturnType<typeof createHubProtocol> | undefined;
+      let starting: Promise<void> = Promise.resolve();
+      let receiving = Promise.resolve();
+      let pendingBytes = 0;
+      const maxPendingBytes = 64 * 1024 * 1024;
+      let ended = false;
+      let disconnectSocket = () => {};
+      const cleanup = () => {
+        if (ended) return;
+        ended = true;
+        protocolConnections.delete(cleanup);
+        disconnectSocket();
+        untrack?.();
+        handler?.onClose();
+        hubProtocol?.close();
+        if (server) void server.close().catch((error: unknown) => notice(`protocol close: ${String(error)}`));
+      };
       return {
         onOpen(_event, ws) {
+          disconnectSocket = () => ws.close();
+          protocolConnections.add(cleanup);
           if (!local && channel === undefined) {
             ws.close(1008, 'sealed protocol channel required');
             return;
           }
           if (deviceId !== undefined) untrack = remote.trackSocket(deviceId, (code, reason) => ws.close(code, reason));
-          handler = (local ? localProtocolListener : remoteProtocolListener).accept({
-            send: (data) => {
-              if (local) {
-                ws.send(data as ArrayBuffer);
-                return;
-              }
-              if (channel === undefined) return;
-              const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
-              const sealed = channel.seal(bytes);
-              if (!sealed.ok) {
-                ws.close(1008, 'sealed protocol channel failed');
-                return;
-              }
-              ws.send(new TextEncoder().encode(JSON.stringify(sealed.envelope)));
-            },
-            close: () => ws.close(),
-            get readyState() {
-              return ws.readyState;
-            },
+          starting = (async () => {
+            hubProtocol = createHubProtocol(hubEvents(context, true), () => ws.close());
+            server = new Server(
+              createPiHubService({
+                records: () => hub.records(),
+                // Session creation stays on HTTP, where remote requests require step-up.
+                onNotice: notice,
+                remote: federationDirectory?.remote,
+                hub: hubProtocol.service,
+              }),
+              {
+                serverId: DOOM_COCKPIT_SERVER_ID,
+                listeners: [listener],
+                onError: (error) => notice(`protocol: ${error.message}`),
+              },
+            );
+            await server.start();
+            if (ended) {
+              await server.close();
+              return;
+            }
+            handler = listener.accept({
+              send: async (data) => {
+                const raw = ws.raw;
+                if (!raw || ended) throw new Error('The protocol socket is closed.');
+                const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+                let outgoing = bytes;
+                if (!local) {
+                  if (!channel) throw new Error('The sealed protocol channel is missing.');
+                  const sealed = channel.seal(bytes);
+                  if (!sealed.ok) throw new Error('The sealed protocol channel failed.');
+                  outgoing = new TextEncoder().encode(JSON.stringify(sealed.envelope));
+                }
+                if (raw.bufferedAmount + outgoing.byteLength > maxPendingBytes)
+                  throw new Error('Protocol send queue exhausted.');
+                await new Promise<void>((resolve, reject) =>
+                  raw.send(outgoing, (error) => (error ? reject(error) : resolve())),
+                );
+              },
+              close: () => ws.close(),
+              get readyState() {
+                return ws.readyState;
+              },
+            });
+          })().catch((error: unknown) => {
+            notice(`protocol startup: ${String(error)}`);
+            cleanup();
+            ws.close();
           });
         },
-        async onMessage(event) {
+        onMessage(event) {
+          if (ended) return;
           const data = event.data;
-          if (typeof data === 'string') return;
-          const bytes =
-            data instanceof Blob
-              ? new Uint8Array(await data.arrayBuffer())
-              : data instanceof ArrayBuffer
-                ? new Uint8Array(data)
-                : new Uint8Array(data);
-          if (local) {
-            handler?.onData(bytes);
+          if (typeof data === 'string') {
+            cleanup();
             return;
           }
-          if (channel === undefined) return;
-          let envelope: unknown;
-          try {
-            envelope = JSON.parse(new TextDecoder().decode(bytes));
-          } catch {
+          const size = data instanceof Blob ? data.size : data.byteLength;
+          if (pendingBytes + size > maxPendingBytes) {
+            cleanup();
             return;
           }
-          const opened = channel.open(envelope);
-          if (opened.ok) handler?.onData(opened.plaintext);
+          pendingBytes += size;
+          receiving = receiving
+            .then(async () => {
+              await starting;
+              if (ended) return;
+              const bytes = data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : new Uint8Array(data);
+              if (ended) return;
+              if (local) {
+                handler?.onData(bytes);
+                return;
+              }
+              if (!channel) throw new Error('The sealed protocol channel is missing.');
+              const envelope: unknown = JSON.parse(new TextDecoder().decode(bytes));
+              const opened = channel.open(envelope);
+              if (!opened.ok) throw new Error('The sealed protocol frame could not be opened.');
+              handler?.onData(opened.plaintext);
+            })
+            .catch((error: unknown) => {
+              notice(`protocol receive: ${String(error)}`);
+              cleanup();
+            })
+            .finally(() => {
+              pendingBytes -= size;
+            });
         },
-        onClose() {
-          untrack?.();
-          untrack = undefined;
-          handler?.onClose();
-          handler = undefined;
-        },
+        onClose: cleanup,
         onError(event) {
           handler?.onError(event instanceof Error ? event : new Error('The protocol socket failed'));
-          handler = undefined;
+          cleanup();
         },
       };
     }),
@@ -1859,8 +1970,10 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
         await new Promise<void>((done) => {
           threads.close();
           cockpitSyncGuard.close();
-          void localProtocolServer.close();
-          void remoteProtocolServer.close();
+          federationDirectory?.close();
+          federationProtocol?.close();
+          federationTransport?.close();
+          for (const close of protocolConnections) close();
           disconnectApiBundleCleanup();
           disconnectLivePush();
           livePush?.close();

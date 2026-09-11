@@ -171,7 +171,7 @@ export function McpSessionAuthSection({
           }
         }}
       >
-        <DialogContent data-testid="mcp-authorization-dialog">
+        <DialogContent data-testid="mcp-authorization-dialog" onInteractOutside={(event) => event.preventDefault()}>
           <DialogHeader className="items-start px-4 py-4 sm:px-5">
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <DialogTitle className="break-words text-base leading-snug">

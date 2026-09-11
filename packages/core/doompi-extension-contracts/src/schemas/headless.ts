@@ -60,6 +60,7 @@ export interface DoomHeadlessSession {
   prompt(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
+  activity(): Promise<{ hasPendingMessages: boolean; isIdle: boolean }>;
 }
 
 export interface DoomHeadlessExecutionContext {
@@ -137,7 +138,6 @@ export type DoomHeadlessEventName =
   | 'session_start'
   | 'session_shutdown'
   | 'session_tree'
-  | 'input'
   | 'before_agent_start'
   | 'agent_start'
   | 'agent_settled'
@@ -157,11 +157,52 @@ export type DoomHeadlessEventName =
   | 'session_before_compact'
   | 'session_compact';
 
-export interface DoomHeadlessHook {
-  when?: DoomHeadlessCondition;
-  event: DoomHeadlessEventName;
-  handle(event: Readonly<Record<string, unknown>>, context: DoomHeadlessExecutionContext): unknown | Promise<unknown>;
+export type DoomHeadlessHookEvent<E extends DoomHeadlessEventName> = E extends 'before_provider_request'
+  ? { lane: string; runId: string; model: { provider: string; id: string }; payload: unknown }
+  : E extends 'session_before_compact'
+    ? { reason: string; preparation: unknown; instructions?: string; customInstructions?: string }
+    : E extends 'model_select'
+      ? { model: { provider: string; id: string } }
+      : Readonly<Record<string, unknown>>;
+
+export interface DoomHeadlessCompactionResult {
+  summary: string;
+  tokensBefore: number;
+  retainedTail: Record<string, unknown>[];
+  usage?: Record<string, unknown>;
+  details?: unknown;
 }
+
+export type DoomHeadlessHookResult<E extends DoomHeadlessEventName> = E extends 'before_provider_request'
+  ? { payload: unknown } | void
+  : E extends 'session_before_compact'
+    ? { cancel?: boolean; decline?: boolean; compaction?: DoomHeadlessCompactionResult } | void
+    : E extends 'context'
+      ? { messages?: unknown[]; systemPrompt?: string } | void
+      : E extends 'before_agent_start'
+        ? { systemPrompt?: string } | void
+        : E extends 'tool_call'
+          ? { args?: Record<string, unknown>; block?: { reason: string; terminate?: boolean } } | void
+          : E extends 'tool_result'
+            ? {
+                content?: DoomHeadlessContent[];
+                details?: unknown;
+                isError?: boolean;
+                usage?: Record<string, unknown>;
+                terminate?: boolean;
+              } | void
+            : unknown;
+
+export type DoomHeadlessHook<E extends DoomHeadlessEventName = DoomHeadlessEventName> = E extends DoomHeadlessEventName
+  ? {
+      when?: DoomHeadlessCondition;
+      event: E;
+      handle(
+        event: Readonly<DoomHeadlessHookEvent<E>>,
+        context: DoomHeadlessExecutionContext,
+      ): DoomHeadlessHookResult<E> | Promise<DoomHeadlessHookResult<E>>;
+    }
+  : never;
 
 /** A retained facet can register activity without starting disabled watchers or services. */
 export interface DoomHeadlessActivity {

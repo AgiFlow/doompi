@@ -92,18 +92,158 @@ export interface SessionSnapshot {
   queuedSteerCount: number;
 }
 
+export interface ProtocolEvent {
+  sequence: number;
+  frame: { type: string; [key: string]: JsonValue };
+}
+
+export interface SessionPresentation {
+  revision: number;
+  dropped: number;
+  /** A branch replacement invalidates earlier presentation state, even without ring overflow. */
+  resetRevision?: number;
+  events: ProtocolEvent[];
+  projections: ProtocolEvent[];
+}
+
+export interface HubService {
+  readonly state: ReplicatedState<{ events: ProtocolEvent[] }>;
+  send(frame: { type: string; [key: string]: JsonValue }, context: Context): Promise<void>;
+}
+
+export const DoomHubService = defineService<HubService>('doompi.hub.v1');
+
 export interface SessionServiceState {
   snapshot: SessionSnapshot;
   progress: TranscriptProgress | null;
+  presentation?: SessionPresentation;
+  /** Current concurrent drafts/tools, so a fresh attachment does not depend on missed progress events. */
+  inFlight?: TranscriptItem[];
+}
+
+export interface SessionMessageArgs {
+  text: string;
+  images?: ImageContentPart[];
+}
+
+export interface PromptArgs extends SessionMessageArgs {
+  /** Interactive clients acknowledge preflight without owning the supervised turn's lifetime. */
+  waitFor?: 'accepted' | 'settled';
+}
+export type SteerArgs = SessionMessageArgs;
+export type FollowUpArgs = SessionMessageArgs;
+
+export interface ClearQueueResult {
+  steering: string[];
+  followUp: string[];
+}
+
+export interface RewindArgs {
+  itemId: string;
+  summarize?: boolean;
+  customInstructions?: string;
+  replaceInstructions?: boolean;
+  label?: string;
+}
+
+export interface SessionUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+}
+
+export interface RewindSummaryEntry {
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  fromId: string;
+  summary: string;
+  details?: JsonValue;
+  usage?: SessionUsage;
+  fromHook?: boolean;
+}
+
+export interface RewindResult {
+  editorText?: string;
+  cancelled: boolean;
+  aborted?: boolean;
+  summaryEntry?: RewindSummaryEntry;
+}
+
+export type ExtensionUiResponse =
+  | { id: string; value: string }
+  | { id: string; confirmed: boolean }
+  | { id: string; cancelled: true };
+
+export interface SessionStateInfo {
+  model?: ModelRef;
+  thinkingLevel: ThinkingLevel;
+  isStreaming: boolean;
+  isCompacting: boolean;
+  steeringMode: 'all' | 'one-at-a-time';
+  followUpMode: 'all' | 'one-at-a-time';
+  sessionFile?: string;
+  sessionId: string;
+  sessionName?: string;
+  autoCompactionEnabled: boolean;
+  messageCount: number;
+  pendingMessageCount: number;
+}
+
+export interface SessionStats {
+  sessionFile?: string;
+  sessionId: string;
+  userMessages: number;
+  assistantMessages: number;
+  toolCalls: number;
+  toolResults: number;
+  totalMessages: number;
+  tokens: SessionUsage;
+  cost: number;
+  contextUsage?: {
+    tokens: number | null;
+    contextWindow: number;
+    percent: number | null;
+  };
+}
+
+export interface SessionCommandSourceInfo {
+  path: string;
+  source: string;
+  scope: 'user' | 'project' | 'temporary';
+  origin: 'package' | 'top-level';
+  baseDir?: string;
+}
+
+export interface SessionCommand {
+  name: string;
+  description?: string;
+  source: 'extension' | 'prompt' | 'skill';
+  sourceInfo?: SessionCommandSourceInfo;
 }
 
 export interface SessionService {
   readonly state: ReplicatedState<SessionServiceState>;
   prompt(text: string, context: Context): Promise<void>;
+  prompt(args: PromptArgs, context: Context): Promise<void>;
   steer(text: string, context: Context): Promise<void>;
+  steer(args: SteerArgs, context: Context): Promise<void>;
   abort(context: Context): Promise<void>;
   setModel(model: ModelRef, context: Context): Promise<void>;
   setThinking(thinkingLevel: ThinkingLevel, context: Context): Promise<void>;
+  followUp(args: FollowUpArgs, context: Context): Promise<void>;
+  clearQueue(context: Context): Promise<ClearQueueResult>;
+  rewind(args: RewindArgs, context: Context): Promise<RewindResult>;
+  extensionUiResponse(response: ExtensionUiResponse, context: Context): Promise<void>;
+  getState(context: Context): Promise<SessionStateInfo>;
+  getSessionStats(context: Context): Promise<SessionStats>;
+  getCommands(context: Context): Promise<SessionCommand[]>;
+  getAvailableModels(context: Context): Promise<ModelRef[]>;
+  getAvailableThinkingLevels(context: Context): Promise<ThinkingLevel[]>;
+  compact(args: { customInstructions?: string }, context: Context): Promise<JsonValue>;
+  setName(name: string, context: Context): Promise<void>;
 }
 
 export interface SessionManagementService {

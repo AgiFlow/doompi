@@ -72,7 +72,7 @@ function limitMatches(output: string, limit: number | undefined): string {
   const lines = output.trimEnd().split('\n');
   const selected: string[] = [];
   for (const line of lines) {
-    if (/:(\d+): /u.test(line)) {
+    if (/:(\d+):/u.test(line)) {
       matches++;
       if (matches > limit) continue;
     }

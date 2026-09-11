@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveSessionApiDirectory } from '../../../../src/services/server/sessionApiDirectory.ts';
 
 const SESSION_CWD = '/Users/dev/workspace/vision-capture';
-const INSTALLATION_DIR = '/Users/dev/workspace/doompi/node_modules/@agimon-ai/doompi-server/dist/bin';
+const INSTALLATION_DIR = '/Users/dev/workspace/doompi/node_modules/@agimon-ai/doompi/dist/bin';
 
 describe('resolveSessionApiDirectory', () => {
   it('serves the session repository generation when that repository is synced', () => {

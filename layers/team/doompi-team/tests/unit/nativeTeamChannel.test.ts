@@ -19,6 +19,7 @@ import {
   NATIVE_TEAM_TOOL_NAME,
   NativeTeamChannelService,
   type NativeTeamRuntime,
+  type NativeTeamTransport,
   nativeTeamMemberEnvironment,
   nativeTeamRootEnvironment,
   normalizeTeamMemberName,
@@ -462,6 +463,30 @@ function bindSubagent(
   const runtime = service.createRuntime(pi as never);
   const context = runtime.bindChildFromEnvironment();
   if (!context) throw new Error('expected bindChildFromEnvironment to bind');
+  Object.assign(process.env, clearNativeTeamMemberEnvironment());
+  return { runtime, context, dispose: membership.dispose };
+}
+
+type RecordedTransport = NativeTeamTransport & {
+  sendMessage: ReturnType<typeof vi.fn>;
+  sendUserMessage: ReturnType<typeof vi.fn>;
+};
+
+function makeHeadlessTransport(): RecordedTransport {
+  return { sendMessage: vi.fn(), sendUserMessage: vi.fn() } as unknown as RecordedTransport;
+}
+
+function bindHeadlessSubagent(
+  service: NativeTeamChannelService,
+  transport: NativeTeamTransport,
+  root: TeamRootContext,
+  name: string,
+): { runtime: NativeTeamRuntime; context: TeamMemberContext; dispose: () => void } {
+  const membership = registerNativeTeamMember({ root, role: 'subagent', name });
+  Object.assign(process.env, nativeTeamRootEnvironment(root), nativeTeamMemberEnvironment(membership.context));
+  const runtime = service.createHeadlessRuntime(transport);
+  const context = runtime.bindChildFromEnvironment();
+  if (!context) throw new Error('expected headless bindChildFromEnvironment to bind');
   Object.assign(process.env, clearNativeTeamMemberEnvironment());
   return { runtime, context, dispose: membership.dispose };
 }
@@ -1136,9 +1161,85 @@ describe('TeamChannelRuntime tool actions', () => {
 });
 
 // ============================================================================
-// NativeTeamChannelService
+// Headless Team runtime. It has no Pi registration, but it must retain the same
+// session-bound lifecycle and keep each root session's transport isolated.
 // ============================================================================
 
+describe('headless TeamChannelRuntime', () => {
+  it('rejects dispatch while detached, then supports a fresh binding on the same runtime', async () => {
+    const service = new FastTeamChannelService();
+    const transport = makeHeadlessTransport();
+    const runtime = service.createHeadlessRuntime(transport);
+    const context = runtime.bindMainSession(freshSessionId('headless-detached'));
+    createdTeamIds.push(context.teamId);
+
+    try {
+      const active = await runtime.execute('members-before', { action: 'members' });
+      expect(active.details).toMatchObject({ members: [{ name: 'main', role: 'main' }] });
+
+      runtime.dispose();
+      expect(runtime.current()).toBeUndefined();
+      await expect(runtime.execute('members-detached', { action: 'members' })).rejects.toThrow(
+        'Intercom is not active for this session',
+      );
+      expect(transport.sendMessage).not.toHaveBeenCalled();
+      expect(transport.sendUserMessage).not.toHaveBeenCalled();
+
+      const rebound = runtime.bindMainSession(context.rootSessionId);
+      expect(rebound.memberId).toBe('main');
+      const activeAgain = await runtime.execute('members-after', { action: 'members' });
+      expect(activeAgain.details).toMatchObject({ members: [{ name: 'main', role: 'main' }] });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  it('keeps headless member discovery and delivery inside the root session', async () => {
+    vi.useFakeTimers();
+    const service = new FastTeamChannelService();
+    const mainATransport = makeHeadlessTransport();
+    const workerATransport = makeHeadlessTransport();
+    const mainBTransport = makeHeadlessTransport();
+    const workerBTransport = makeHeadlessTransport();
+    const mainA = service.createHeadlessRuntime(mainATransport);
+    const mainB = service.createHeadlessRuntime(mainBTransport);
+    const rootA = mainA.bindMainSession(freshSessionId('headless-isolation-a'));
+    const rootB = mainB.bindMainSession(freshSessionId('headless-isolation-b'));
+    createdTeamIds.push(rootA.teamId, rootB.teamId);
+    const workerA = bindHeadlessSubagent(service, workerATransport, rootA, 'worker-a');
+    const workerB = bindHeadlessSubagent(service, workerBTransport, rootB, 'worker-b');
+
+    try {
+      await expect(
+        mainA.execute('cross-session', { action: 'send', to: 'worker-b', message: 'not for session A' }),
+      ).rejects.toThrow(/was not found/);
+
+      await mainA.execute('session-a', { action: 'send', to: 'worker-a', message: 'only session A' });
+      await vi.advanceTimersByTimeAsync(5);
+      expect(workerATransport.sendUserMessage).toHaveBeenCalledWith(expect.stringContaining('only session A'), {
+        deliverAs: 'steer',
+      });
+      expect(workerBTransport.sendUserMessage).not.toHaveBeenCalled();
+
+      const membersA = await mainA.execute('members-a', { action: 'members' });
+      const membersB = await mainB.execute('members-b', { action: 'members' });
+      expect(membersA.details).toMatchObject({ members: [{ name: 'main' }, { name: 'worker-a' }] });
+      expect(membersB.details).toMatchObject({ members: [{ name: 'main' }, { name: 'worker-b' }] });
+    } finally {
+      workerA.runtime.dispose();
+      workerA.dispose();
+      workerB.runtime.dispose();
+      workerB.dispose();
+      mainA.dispose();
+      mainB.dispose();
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ============================================================================
+// NativeTeamChannelService
+// ============================================================================
 describe('NativeTeamChannelService', () => {
   it('reuses the same runtime for the same host instance', () => {
     const service = new FastTeamChannelService();

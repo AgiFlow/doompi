@@ -89,12 +89,15 @@ function tryUpgrade(route: string, headers: Record<string, string>): Promise<num
 }
 
 describe('the loopback listener refuses cross-site socket upgrades', () => {
-  it.each(['/api/session', '/api/pi'])('refuses %s when a hostile page opens it', async (route) => {
-    // WebSockets are exempt from CORS, so before the guard any web page could
-    // open this and drive the agent. The browser always sends Origin, which is
-    // what makes the refusal reliable.
-    await expect(tryUpgrade(route, { origin: HOSTILE_ORIGIN })).resolves.toBe(403);
-  });
+  it.each(['/api/session', '/api/pi', '/api/federation/protocol'])(
+    'refuses %s when a hostile page opens it',
+    async (route) => {
+      // WebSockets are exempt from CORS, so before the guard any web page could
+      // open this and drive the agent. The browser always sends Origin, which is
+      // what makes the refusal reliable.
+      await expect(tryUpgrade(route, { origin: HOSTILE_ORIGIN })).resolves.toBe(403);
+    },
+  );
 
   it.each(['/api/session', '/api/pi'])('still opens %s for the cockpit itself', async (route) => {
     await expect(tryUpgrade(route, { origin: loopbackOrigin() })).resolves.toBe('open');
@@ -107,8 +110,27 @@ describe('the loopback listener refuses cross-site socket upgrades', () => {
     await expect(tryUpgrade(route, {})).resolves.toBe('open');
   });
 
-  it('refuses an upgrade whose Host is not the loopback listener', async () => {
-    await expect(tryUpgrade('/api/session', { host: 'attacker.test' })).resolves.toBe(403);
+  it.each(['/api/session', '/api/pi', '/api/federation/protocol'])('refuses %s with a foreign Host', async (route) => {
+    await expect(tryUpgrade(route, { host: 'attacker.test' })).resolves.toBe(403);
+  });
+
+  it('keeps federation HTTP and protocol access disabled without explicit opt-in', async () => {
+    const response = await fetch(`${server.url}/api/federation/transport`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'challenge' }),
+    });
+    expect(response.status).toBe(404);
+    await response.text();
+    const socket = new WebSocket(`${server.url.replace('http', 'ws')}/api/federation/protocol`, {
+      origin: server.url,
+      handshakeTimeout: 5000,
+    });
+    const closed = new Promise<number>((resolve, reject) => {
+      socket.once('close', (code) => resolve(code));
+      socket.once('error', reject);
+    });
+    expect(await closed).toBe(1008);
   });
 });
 

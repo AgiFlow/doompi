@@ -1676,8 +1676,8 @@ describe('consumer ownership boundaries', () => {
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
     const names = PACKAGE_MATRIX.map((entry) => entry.name);
-    expect(PACKAGE_MATRIX).toHaveLength(46);
-    expect(standardPackageSet.size).toBe(30);
+    expect(PACKAGE_MATRIX).toHaveLength(49);
+    expect(standardPackageSet.size).toBe(33);
     expect(standardPackageSet).toContain('@agimon-ai/doompi-author');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-computer-use');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-help');
@@ -1685,6 +1685,10 @@ describe('consumer ownership boundaries', () => {
     expect(names).toContain('@agimon-ai/doompi-web-components');
     expect(names).toContain('@agimon-ai/doompi-web-contracts');
     expect(names).toContain('@agimon-ai/doompi-web-security');
+    expect(PACKAGE_MATRIX.find(({ name }) => name === '@agimon-ai/doompi-user-feedback')?.layer).toBe('ask-user');
+    expect(PACKAGE_MATRIX.find(({ name }) => name === '@agimon-ai/doompi-git')?.layer).toBe('layer');
+    expect(PACKAGE_MATRIX.find(({ name }) => name === '@agimon-ai/doompi-model-guidance')?.layer).toBe('layer');
+    expect(PACKAGE_MATRIX.find(({ name }) => name === '@agimon-ai/doompi-sandbox')?.layer).toBe('layer');
   });
 });
 

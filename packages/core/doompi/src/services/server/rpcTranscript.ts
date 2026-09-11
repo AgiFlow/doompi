@@ -197,7 +197,7 @@ function timestampFrom(entry: Record<string, unknown>, message: Record<string, u
 }
 
 /** Selects the active branch from a complete get_entries response. */
-function activeBranch(data: Record<string, unknown>): Record<string, unknown>[] | undefined {
+export function activeBranch(data: Record<string, unknown>): Record<string, unknown>[] | undefined {
   if (!Array.isArray(data.entries)) return undefined;
   if (data.leafId === null) return [];
   if (typeof data.leafId !== 'string') return undefined;

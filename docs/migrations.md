@@ -4,6 +4,16 @@ The re-architecture behind DoomPi's kernel, its unified server facet, and the
 agent mesh. This is the plan of record. What is left to do is in
 [migrations_todo.md](./migrations_todo.md).
 
+## History migration boundary
+
+Existing v3 history is never implicitly upgraded during direct-host startup. Stop Pi and every writer first, then run `doompi history-import <v3-source> <v4-destination> --confirm-offline`. Import preserves a byte-exact original and publishes a distinct v4 journal while holding cooperative source and destination leases. Confirmation cannot prove that an unmanaged writer stopped; ambiguous locks are not automatically reclaimed.
+
+If import or export reports an ambiguous lock, do not infer safety from the recorded PID and do not force a retry. Stop every managed and unmanaged writer, preserve and inspect the relevant `<history-path>.doompi-v4.lock` and migration state sidecars, and independently verify that the source and destination are quiescent. Only then archive or remove the stale lock explicitly and rerun the same command so it resumes from the retained state. If quiescence or file provenance cannot be proved, leave the lock and history files untouched for manual investigation.
+
+Use `doompi history-export <v4-source> <v3-destination>` for a derived Pi-compatible fork and its machine-readable loss report. Resume the explicit file with pinned Pi 0.85.1's `pi --session <v3-destination>`, or select an export in the normal `/resume` discovery picker. `--resume <path>` is not that pinned CLI's path selector. Continuing the export never merges into canonical v4 history, and a modified continuation cannot be overwritten by re-export.
+
+See the latest verification section in [migrations_todo.md](./migrations_todo.md) for evidence and remaining gates. This workflow does not authorize normal writable v4 cutover before those gates pass.
+
 ## Why
 
 Four hard requirements drive it.
@@ -131,19 +141,20 @@ shadow the rest.
 
 Matches the API loader's. A missing module is ordinary state. A throwing facet
 costs only its own surface and becomes a notice, never a host startup failure.
-A broken static import is broader today: because each scope is one generated
-aggregate module, it makes that scope's whole facet list unavailable. Phase 4
-must replace that aggregate before load failures are isolated per package.
+Phase 4 replaced the scope aggregate with independently compiled, generation-pinned
+facet entries, so a broken package import no longer makes every facet in that
+scope unavailable.
 
 ## 3. Agent mesh
 
-Already 80 percent built. `piHubService.ts` makes the hub simultaneously a
-pi-protocol server to clients and a pi-protocol client to each session, joined
-by a Chord `RemoteServiceProvider`/`RemoteServiceEndpoint` re-publish.
+`piHubService.ts` already makes the hub simultaneously a pi-protocol server to
+clients and a pi-protocol client to each session, joined by a Chord
+`RemoteServiceProvider`/`RemoteServiceEndpoint` re-publication.
 
-Federation is that exact code pointed one level up: hub as client to a peer hub
-instead of to a local Unix socket. The new work is the catalog and the trust
-model, not the proxy.
+The catalog allowlist and durable host-local enrollment are implemented, not
+runtime-accepted. Peer transport and proxy integration are in progress. Explicit
+pairing requires confirmed public-key fingerprints and per-agent grants, with
+rotation and revocation. Peer credentials must not authorize human-device APIs.
 
 ```ts
 interface CatalogEntry {
@@ -161,40 +172,41 @@ Never leaves the machine: `cwd`, `socketPath`, `tokenFile`, `apiSocketPath`,
 `protocolSocketPath`, `pid`. Served at `/api/agents`, beside the `/api/health`
 probe `hubProbe.ts` already trusts.
 
-## 4. Web, desktop and native
+## 4. Web and desktop
 
-One protocol, one carrier, already proven for two of three targets.
+Web and desktop share the browser bundle and WebSocket carrier. Protocol
+unification remains in scope. React Native and mobile-only client extraction were
+explicitly removed by the user; no native application is required for completion.
 
-| Target  | Transport                                      | Status   |
-| ------- | ---------------------------------------------- | -------- |
-| web     | WebSocket, `binaryType='arraybuffer'`          | shipping |
-| desktop | identical, loads the same bundle               | shipping |
-| native  | same protocol, needs its own transport factory | new      |
-
-The codec is portable by construction: `pi-protocol` depends only on
-`@earendil-works/chord` and `typebox`, and the CBOR path touches only
-`Uint8Array`, `DataView`, `TextEncoder` and `TextDecoder`. No `Buffer`
-references. React Native needs a transport factory and app-lifecycle reconnect
-hooks, not a protocol port.
+Approved release targets are `darwin-arm64`, `linux-x64`, and `linux-arm64`.
+Intel Mac and Windows are unsupported for this migration. Each supported target
+still needs native acceptance evidence before release.
 
 ## Phases
 
-| #   | Phase                                              | Requirement               | Reversible |
-| --- | -------------------------------------------------- | ------------------------- | ---------- |
-| 0   | Tactical state-loss fix                            | keeps the product working | yes        |
-| 1   | `doompi-kernel` plus contribution registry         | 1                         | yes        |
-| 2   | Package remediation: lazy activation               | 1                         | yes        |
-| 3   | `./extensions/server`, pilot two, migrate the rest | 2                         | yes        |
-| 4   | `serverBundleSync`, delete `apiRoutesSync`         | 2                         | yes        |
-| 5   | Harness-driven session server                      | **1 lands here**          | **no**     |
-| 6   | Delete `doompi-server`                             | 2                         | yes        |
-| 7   | Client core extraction, native transport           | 4                         | yes        |
-| 8   | Agent catalog and hub federation                   | 3                         | yes        |
+| #   | Phase                                              | Requirement               | Current status                                                  |
+| --- | -------------------------------------------------- | ------------------------- | --------------------------------------------------------------- |
+| 0   | Tactical state-loss fix                            | keeps the product working | landed                                                          |
+| 1   | `doompi-kernel` plus contribution registry         | 1                         | landed                                                          |
+| 2   | Package remediation: lazy activation               | 1                         | landed                                                          |
+| 3   | `./extensions/server`, pilot two, migrate the rest | 2                         | landed                                                          |
+| 4   | `serverBundleSync`, delete `apiRoutesSync`         | 2                         | implemented, distribution pending                               |
+| 5   | Harness-driven session server                      | **1 lands here**          | opt-in, acceptance pending                                      |
+| 6   | Retire the standalone server package               | 2                         | removed at user request; core retains the executable            |
+| 7   | Unified web/desktop client protocol                | 4                         | source integrated; runtime acceptance deferred; no React Native |
+| 8   | Agent catalog and hub federation                   | 3                         | source integrated; default-disabled; acceptance deferred        |
 
-Phase 5 is the only irreversible phase: it flips the on-disk format to Pi format 4. The format-3 export view ships **in** Phase 5, not after, so `pi --resume`
-works before the flip is permanent. Migration operates on a verified copy and preserves the original v3 bytes; opening the only original for a writable upstream commit is forbidden.
+Phase 5 contains the irreversible cutover because normal operation begins writing
+Pi format 4 history. The format-3 export view must be accepted before that cutover.
+Continue an explicit derived file with pinned Pi 0.85.1 using
+`pi --session <v3-destination>`, or select it in `/resume`. Migration operates on a
+verified copy and preserves the original v3 bytes. Opening the only original for a
+writable upstream commit is forbidden.
 
-Before Phase 4 starts, three verified baseline defects must be closed: tool restrictions must reconcile against the host's actual active tools, a rejected kernel sink must remain retryable, and packed-install must include the kernel as a nonselectable core foundation.
+The three Phase 4 prerequisites are closed: tool restrictions reconcile against
+the host's active tools, rejected kernel sinks remain retryable, and packed-install
+includes the kernel as a nonselectable core foundation. The remaining work and
+acceptance evidence are tracked in [migrations_todo.md](./migrations_todo.md).
 
 ## Costs that are not hidden
 
@@ -209,23 +221,32 @@ packages and 18 packages import `pi-tui`. These stay TUI-only. The server host
 surface omits `setWidget`, `editor` and `custom` entirely, so a miscall fails at
 typecheck rather than silently no-opping.
 
-**The legacy hub channel is not covered by "one protocol."** `transport.ts` and
-`sessionModel.ts` carry dialogs, status, widgets, notifications, four custom
-entry types and five response commands, none of it pi-protocol. Migrating it
-onto `DoomSessionService` sits between Phase 5 and Phase 7.
+**One protocol includes extension presentation and hub events.** The cockpit now
+routes typed controls, bounded presentation replay, and hub/plugin/thread events
+over one Pi client connection. The explicit compatibility `/api/session` route
+remains available, but the cockpit no longer opens it. Lifecycle regression and
+runtime acceptance are still required before declaring feature parity.
 
 **Federation reverses a deliberate security posture.** `hubAdvertisement.ts`
 advertises loopback only and `remoteAccessStore.ts` deliberately persists no
 device sessions. Hub-to-hub trust needs new durable credentials. `deviceAuth`
-and `webauthn` authenticate a human; a peer hub is not a human.
+and `webauthn` authenticate a human; a peer hub is not a human. Explicit local
+peer enrollment, a restart-fresh signed handshake, sealed protocol promotion, and
+outgoing discovery/proxy source are implemented, including ordered native writes,
+bounded queues, shutdown cancellation, and revocation cleanup. New regressions
+remain unrun. Federation requires explicit `WebServerOptions.federation.enabled`;
+normal launchers do not enable it. Static checks do not establish runtime acceptance.
 
-## Open items needing a spike
+## Implementation-first execution
 
-1. React Native `WebSocket` binary framing on the chosen RN baseline. Cheap: a
-   throwaway RN app echoing a CBOR frame.
-2. `sealedProtocolSession` crypto portability to RN. Unread.
-3. Chord's bundler emits CommonJS; Metro does not consume that the way Node
-   does. Blocks a shared client facet, not the native client itself.
+The user requested remaining implementation before further test execution.
+Architectural and static checks continue. Add focused regression coverage with each
+change, but retain test execution and runtime acceptance as explicit outstanding
+gates. Normal direct-host defaults remain blocked until those gates pass. The user
+explicitly authorized immediate retirement of `packages/clients/doompi-server`:
+core retains the executable, public server API, implementation, tests, and guides.
+This package deletion does not enable writable v4 cutover. See the ledger for the
+latest static evidence and deferred browser acceptance failure.
 
 ## Verification
 

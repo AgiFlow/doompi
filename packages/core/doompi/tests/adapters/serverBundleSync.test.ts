@@ -345,6 +345,14 @@ describe('syncServerBundle', () => {
       const target = `${process.platform}-${process.arch}`;
       if (!new Set(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']).has(target)) return;
       const resourcePackage = `${resourcePrefix}${target}`;
+      const tursoPlatformPackage =
+        target === 'darwin-arm64'
+          ? '@tursodatabase/database-darwin-arm64'
+          : target === 'darwin-x64'
+            ? '@tursodatabase/database-darwin-x64'
+            : target === 'linux-arm64'
+              ? '@tursodatabase/database-linux-arm64-gnu'
+              : '@tursodatabase/database-linux-x64-gnu';
       const runnerManifest = installedRequire.resolve(`${runnerPackage}/package.json`);
       const runner = JSON.parse(fs.readFileSync(runnerManifest, 'utf8')) as Record<string, unknown>;
       const optional = runner.optionalDependencies;
@@ -406,6 +414,14 @@ describe('syncServerBundle', () => {
       expect(descriptor.entries).toHaveLength(1);
       expect(fs.readFileSync(generatedBinary)).toEqual(sourceBinaryContents);
       expect(fs.statSync(generatedBinary).mode & 0o777).toBe(fs.statSync(sourceBinary).mode & 0o777);
+      const generatedTursoDirectory = path.join(
+        input.outputDirectory,
+        'modules',
+        '0',
+        'node_modules',
+        ...tursoPlatformPackage.split('/'),
+      );
+      expect(fs.readdirSync(generatedTursoDirectory).some((name) => name.endsWith('.node'))).toBe(true);
       const generatedRunner = path.join(
         input.outputDirectory,
         'modules',
@@ -455,7 +471,18 @@ describe('syncServerBundle', () => {
       const runnerSpec = (await import(pathToFileURL(runnerSpecPath).href)) as {
         runtimeEntry(name: 'runnerHost', moduleUrl?: string): string;
       };
-      expect(runnerSpec.runtimeEntry('runnerHost', pathToFileURL(runnerSpecPath).href)).toBe(runnerHostPath);
+      const executable = runnerSpec.runtimeEntry('runnerHost', pathToFileURL(runnerSpecPath).href);
+      expect(executable).toBe(fs.realpathSync(runnerHostPath));
+      const spec = path.join(root, 'runner.command.json');
+      const gate = path.join(root, 'runner.gate');
+      const exit = path.join(root, 'runner.exit.json');
+      const env = { HOME: root, PI_CODING_AGENT_DIR: path.join(root, 'agent') };
+      fs.writeFileSync(spec, JSON.stringify({ command: 'printf runner-host-executed', cwd: root, env }));
+      fs.writeFileSync(gate, '');
+      expect(
+        execFileSync(process.execPath, [executable, spec, gate, exit], { env, encoding: 'utf8', timeout: 5_000 }),
+      ).toBe('runner-host-executed');
+      expect(JSON.parse(fs.readFileSync(exit, 'utf8'))).toEqual({ code: 0, signal: null });
       const runnerHost = (await import(pathToFileURL(runnerHostPath).href)) as {
         main?: unknown;
       };

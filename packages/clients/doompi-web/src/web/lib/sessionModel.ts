@@ -511,6 +511,25 @@ function applyStatus(state: SessionState, frame: Frame): SessionState {
   return { ...state, statuses: { ...state.statuses, [key]: text } };
 }
 
+function applyContextSelection(state: SessionState, projection: ContextProjection): SessionState {
+  const selection = projection.selection;
+  if (!selection || !selection.majorMode || !Array.isArray(selection.domains)) return { ...state, context: projection };
+  const profile = typeof selection.profile === 'string' ? selection.profile : '';
+  const status = [profile ? `*${profile}*` : undefined, `[${selection.majorMode}]`, selection.domains.join(',')]
+    .filter(Boolean)
+    .join(':');
+  return {
+    ...state,
+    context: projection,
+    statuses: {
+      ...state.statuses,
+      'doom-major-mode': status,
+      'doom-domain': selection.domains.join(','),
+      'doom-profile': profile,
+    },
+  };
+}
+
 function applyWidget(state: SessionState, frame: Frame): SessionState {
   const key = asString(frame.widgetKey);
   if (!key) return state;
@@ -886,7 +905,7 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
       if (entry.type === 'custom' && entry.customType === CONTEXT_ENTRY_TYPE) {
         const data = isRecord(entry.data) ? entry.data : undefined;
         if (!data || !Array.isArray(data.groups)) return state;
-        return { ...state, context: data as unknown as ContextProjection };
+        return applyContextSelection(state, data as unknown as ContextProjection);
       }
       // Pi has no wire event for a model an extension chose, so the runtime
       // journals one. Guarded on agent because a get_state has to have named

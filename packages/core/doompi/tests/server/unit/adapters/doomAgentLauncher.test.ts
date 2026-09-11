@@ -10,9 +10,6 @@ const doompiMocks = vi.hoisted(() => ({
 const telemetryMocks = vi.hoisted(() => ({ createHarnessTelemetry: vi.fn(() => ({})) }));
 const utilsMocks = vi.hoisted(() => ({ piCliPath: vi.fn(() => '/pi/cli.js') }));
 
-vi.mock('../../../../src/commands/cli/harnessOptions', () => ({
-  resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
-}));
 vi.mock('../../../../src/adapters/harnessContext', () => ({ buildHarnessContext: doompiMocks.buildHarnessContext }));
 vi.mock('../../../../src/adapters/layerPackageInstaller', () => ({
   ensureLayerPackages: doompiMocks.ensureLayerPackages,
@@ -66,7 +63,12 @@ beforeEach(() => {
 
 describe('createDoomAgentLauncher', () => {
   it('runs Pi directly under this node with the composed extension bundle', async () => {
-    const launcher = createDoomAgentLauncher({ agentArgs: BASE_ARGS, cwd: CWD, resolvePinnedCli: noPin });
+    const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
+      agentArgs: BASE_ARGS,
+      cwd: CWD,
+      resolvePinnedCli: noPin,
+    });
 
     const launch = await launcher.resolve();
 
@@ -77,7 +79,12 @@ describe('createDoomAgentLauncher', () => {
   });
 
   it('stages the layer packages the selected composition needs', async () => {
-    const launcher = createDoomAgentLauncher({ agentArgs: BASE_ARGS, cwd: CWD, resolvePinnedCli: noPin });
+    const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
+      agentArgs: BASE_ARGS,
+      cwd: CWD,
+      resolvePinnedCli: noPin,
+    });
 
     await launcher.resolve();
 
@@ -90,7 +97,12 @@ describe('createDoomAgentLauncher', () => {
   });
 
   it('pins the requested major mode without accumulating flags', async () => {
-    const launcher = createDoomAgentLauncher({ agentArgs: BASE_ARGS, cwd: CWD, resolvePinnedCli: noPin });
+    const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
+      agentArgs: BASE_ARGS,
+      cwd: CWD,
+      resolvePinnedCli: noPin,
+    });
 
     await launcher.resolve();
     const switched = await launcher.resolve('minimal');
@@ -108,7 +120,12 @@ describe('createDoomAgentLauncher', () => {
   });
 
   it('releases the previous composition before staging the next one', async () => {
-    const launcher = createDoomAgentLauncher({ agentArgs: BASE_ARGS, cwd: CWD, resolvePinnedCli: noPin });
+    const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
+      agentArgs: BASE_ARGS,
+      cwd: CWD,
+      resolvePinnedCli: noPin,
+    });
 
     await launcher.resolve();
     await launcher.resolve('minimal');
@@ -123,6 +140,7 @@ describe('createDoomAgentLauncher', () => {
   it('reports a failed cleanup instead of failing the session', async () => {
     const notices: string[] = [];
     const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
       agentArgs: BASE_ARGS,
       cwd: CWD,
       onNotice: (m) => notices.push(m),
@@ -139,6 +157,7 @@ describe('createDoomAgentLauncher', () => {
   it('delegates to the DoomPi the repository pins rather than substituting its own', async () => {
     const notices: string[] = [];
     const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
       agentArgs: BASE_ARGS,
       cwd: CWD,
       onNotice: (m) => notices.push(m),
@@ -162,6 +181,7 @@ describe('createDoomAgentLauncher', () => {
 
   it('prefers the repository DoomPi over the configured global fallback', async () => {
     const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
       agentArgs: BASE_ARGS,
       cwd: CWD,
       environment: { DOOMPI_AGENT_COMMAND: '/global/dist/bin/cli.mjs' },
@@ -176,6 +196,7 @@ describe('createDoomAgentLauncher', () => {
 
   it('treats a configured launcher without a script suffix as the command itself', async () => {
     const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
       agentArgs: BASE_ARGS,
       cwd: CWD,
       environment: { DOOMPI_AGENT_COMMAND: 'doompi' },
@@ -191,6 +212,7 @@ describe('createDoomAgentLauncher', () => {
   it('asks the delegated launcher to reuse the composition record', async () => {
     const callerEnvironment = { DOOMPI_AGENT_COMMAND: '/global/dist/bin/cli.mjs' };
     const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
       agentArgs: BASE_ARGS,
       compositionRecordPath: '/generations/abc/state.json',
       cwd: CWD,
@@ -208,6 +230,7 @@ describe('createDoomAgentLauncher', () => {
   it('leaves the delegated environment untouched without a composition record', async () => {
     const callerEnvironment = { DOOMPI_AGENT_COMMAND: '/global/dist/bin/cli.mjs' };
     const launcher = createDoomAgentLauncher({
+      resolveHarnessOptions: doompiMocks.resolveHarnessOptions,
       agentArgs: BASE_ARGS,
       cwd: CWD,
       environment: callerEnvironment,

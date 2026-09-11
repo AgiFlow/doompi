@@ -12,6 +12,11 @@ const fake = vi.hoisted(() => ({
   dispose: vi.fn<() => Promise<void>>(),
   binding: vi.fn(),
   publish: vi.fn(),
+  applyFrame: vi.fn(),
+  applyQueue: vi.fn(),
+  reset: vi.fn(),
+  refresh: vi.fn(),
+  order: [] as string[],
   release: vi.fn(),
 }));
 
@@ -40,11 +45,29 @@ vi.mock('../../src/web/lib/piTransport.ts', () => ({
   protocolSocketUrl: () => 'ws://test/api/pi',
   createProtocolTransport: () => ({}),
 }));
+vi.mock('../../src/web/lib/sessionProtocolCommands.ts', () => ({ bindSessionProtocol: () => fake.release }));
 vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({ recordBrowserPerformance: () => {} }));
 vi.mock('../../src/web/stores/sessionStore.ts', () => ({
-  applyProtocolTranscript: fake.publish,
+  applyProtocolTranscript: (...args: unknown[]) => {
+    fake.order.push('transcript');
+    fake.publish(...args);
+  },
+  applyProtocolQueue: (...args: unknown[]) => {
+    fake.order.push('queue');
+    fake.applyQueue(...args);
+  },
+  applySessionFrame: (...args: unknown[]) => {
+    fake.order.push('frame');
+    fake.applyFrame(...args);
+  },
+  beginSessionReplay: () => fake.order.push('begin'),
+  endSessionReplay: () => fake.order.push('end'),
+  resetSessionStore: () => {
+    fake.order.push('reset');
+    fake.reset();
+  },
   releaseProtocolTranscript: fake.release,
-  applyProtocolQueue: () => {},
+  refreshSessionFacts: fake.refresh,
 }));
 
 import { startProtocolRuntime, type ProtocolRuntime } from '../../src/web/app/protocolRuntime.ts';
@@ -68,6 +91,7 @@ function sessionState() {
       queuedSteerCount: 0,
     },
     progress: null,
+    presentation: { revision: 0, dropped: 0, events: [], projections: [] },
   });
 }
 
@@ -86,6 +110,7 @@ beforeEach(() => {
   fake.dispose.mockResolvedValue(undefined);
   state = sessionState();
   disposeBinding = vi.fn().mockResolvedValue(undefined);
+  fake.order = [];
   fake.binding.mockImplementation(() => ({
     use: () => ({ state }),
     ready: async () => {},
@@ -154,10 +179,45 @@ describe('protocol attachment recovery', () => {
     });
     fake.binding.mockImplementation(() => ({ use: () => ({ state }), ready: () => pending, dispose: disposeBinding }));
     await start();
+    fake.publish.mockClear();
     runtime!.stop();
     ready();
     await vi.advanceTimersByTimeAsync(0);
     expect(fake.publish).not.toHaveBeenCalled();
     expect(disposeBinding).toHaveBeenCalledTimes(1);
+  });
+  it('resets before applying a branch snapshot and replays when resetRevision advances', async () => {
+    await start();
+    fake.order = [];
+    state.state.snapshot.transcript = [
+      { id: 'user-1', role: 'user', content: [{ type: 'text', text: 'new branch' }], timestamp: 1 },
+    ];
+    state.state.snapshot.queuedSteer = [
+      { id: 'queued-1', role: 'user', content: [{ type: 'text', text: 'later' }], timestamp: 2 },
+    ];
+    state.state.presentation = {
+      revision: 1,
+      resetRevision: 1,
+      dropped: 0,
+      projections: [],
+      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    expect(fake.order).toEqual(['begin', 'reset', 'transcript', 'queue', 'frame', 'end']);
+  });
+  it('replays when the presentation revision regresses even without a ring gap', async () => {
+    await start();
+    state.state.presentation = {
+      revision: 2,
+      dropped: 0,
+      projections: [],
+      events: [{ sequence: 2, frame: { type: 'agent_start' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    fake.order = [];
+    state.state.presentation = { revision: 1, dropped: 0, projections: [], events: [] };
+    state.publish(BACKGROUND_CONTEXT);
+    expect(fake.order[0]).toBe('begin');
+    expect(fake.order[1]).toBe('reset');
   });
 });

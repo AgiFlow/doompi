@@ -1,5 +1,11 @@
 import type { ModelGuidanceDocument, ModelGuidanceMap } from '../types/modelGuidance.ts';
 
+export const DEFAULT_MODEL_GUIDANCE_PRESET: ModelGuidanceDocument = Object.freeze({
+  modelGuidance: Object.freeze({
+    'gpt-6-astra':
+      'Continue executing an agreed plan and its scoped tasks without pausing for small decisions or repeated confirmation. Treat the accepted plan and task list as authorization to complete the work, make reasonable low-risk and reversible implementation choices, and verify the result. Ask only when blocked or when a decision would materially change scope, requirements, security, data safety, or destructive behavior.',
+  }),
+});
 /**
  * Folds guidance documents in source order, so a later document overrides one
  * model id at a time.

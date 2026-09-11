@@ -51,9 +51,9 @@ export function sandboxDockerfile(): string {
  * `--sandbox` launch pay for an extra apt repository and a larger download to
  * get them would be a poor trade.
  *
- * Installing `@agimon-ai/doompi-web` is enough for all three programs: it
- * depends on `@agimon-ai/doompi` and `@agimon-ai/doompi-server`, so the hub can
- * spawn sessions and each session can run an agent.
+ * Installing `@agimon-ai/doompi-web` is enough for all three programs: its
+ * `@agimon-ai/doompi` dependency owns both the session server executable and
+ * the agent runtime.
  */
 export function cockpitDockerfile(): string {
   return [

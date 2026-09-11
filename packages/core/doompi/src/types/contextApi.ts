@@ -56,7 +56,7 @@ export interface ContextSkillDetail {
   /** A skill has no schema half, so the figure is the prompt cost alone. */
   readonly tokens: number;
   readonly description: string;
-  readonly filePath: string;
+  readonly filePath?: string;
   /** Whether the model may invoke it, as opposed to a human running it. */
   readonly modelInvocable: boolean;
 }

@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadModelGuidance } from '../../../src/adapters/modelGuidanceStore.ts';
+import { DEFAULT_MODEL_GUIDANCE_PRESET, mergeModelGuidance } from '../../../src/services/modelGuidance.ts';
 
+const defaultGuidance = mergeModelGuidance([DEFAULT_MODEL_GUIDANCE_PRESET]);
 let workspace: string;
 let repositoryRoot: string;
 let homeDirectory: string;
@@ -34,17 +36,20 @@ afterEach(() => {
 });
 
 describe('loadModelGuidance', () => {
-  it('returns an empty map when the repository root is unknown', () => {
-    expect(loadModelGuidance(undefined, homeDirectory)).toEqual({});
+  it('returns the built-in default when the repository root is unknown', () => {
+    expect(loadModelGuidance(undefined, homeDirectory)).toEqual(defaultGuidance);
   });
 
-  it('returns an empty map when neither document exists', () => {
-    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual({});
+  it('returns the built-in default when neither document exists', () => {
+    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual(defaultGuidance);
   });
 
-  it('reads the global document alone', () => {
+  it('merges the global document over the built-in default', () => {
     writeGlobal('modelGuidance:\n  claude-opus-5: Stay focused.\n');
-    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual({ 'claude-opus-5': 'Stay focused.' });
+    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual({
+      ...defaultGuidance,
+      'claude-opus-5': 'Stay focused.',
+    });
   });
 
   it('reads the repository document alone', () => {
@@ -70,7 +75,7 @@ describe('loadModelGuidance', () => {
   it('treats an empty document as absent', () => {
     writeGlobal('');
     writeRepository('modelGuidance:\n  m: Kept.\n');
-    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual({ m: 'Kept.' });
+    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual({ ...defaultGuidance, m: 'Kept.' });
   });
 
   it('fails open on malformed YAML, warning on stderr instead of throwing', () => {
@@ -78,7 +83,7 @@ describe('loadModelGuidance', () => {
     writeRepository('modelGuidance:\n  m: "unterminated\n   : : :\n');
 
     expect(() => loadModelGuidance(repositoryRoot, homeDirectory)).not.toThrow();
-    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual({});
+    expect(loadModelGuidance(repositoryRoot, homeDirectory)).toEqual(defaultGuidance);
     expect(stderr).toHaveBeenCalledWith(expect.stringContaining('doompi-model-guidance'));
   });
 });

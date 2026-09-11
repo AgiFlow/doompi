@@ -35,6 +35,13 @@ export interface HostHandshake {
   accept(peerPublicKey: string): SealedChannel | undefined;
 }
 
+export interface ClientHandshake {
+  /** Base64url uncompressed P-256 point sent to the host. */
+  publicKey: string;
+  /** Completes the exchange against the host's fresh key and yields the channel. */
+  accept(hostPublicKey: string): SealedChannel | undefined;
+}
+
 function derive(secret: Buffer, direction: SealedDirection): Buffer {
   return Buffer.from(hkdfSync(HKDF_HASH, secret, HKDF_SALT, Buffer.from(infoFor(direction)), KEY_BYTES));
 }
@@ -111,6 +118,27 @@ function createChannel(secret: Buffer, sendDirection: SealedDirection, noncePref
   };
 }
 
+function ecdhPoint(value: string): Buffer | undefined {
+  if (value.length > 128 || !/^[A-Za-z0-9_-]+$/.test(value)) return undefined;
+  let encoded: Buffer;
+  try {
+    encoded = Buffer.from(value, 'base64url');
+  } catch {
+    return undefined;
+  }
+  if (
+    (encoded.length !== 65 && encoded.length !== 33) ||
+    (encoded.length === 65 ? encoded[0] !== 4 : encoded[0] !== 2 && encoded[0] !== 3) ||
+    encoded.toString('base64url') !== value
+  )
+    return undefined;
+  try {
+    return ECDH.convertKey(encoded, CURVE, undefined, undefined, 'uncompressed');
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The host half of the handshake.
  *
@@ -127,20 +155,41 @@ export function createHostHandshake(): HostHandshake {
   return {
     publicKey: exchange.getPublicKey().toString('base64url'),
     accept(peerPublicKey) {
-      let peer: Buffer;
+      const peer = ecdhPoint(peerPublicKey);
+      if (peer === undefined || acceptedPeers.has(peer.toString('base64url'))) return undefined;
       let secret: Buffer;
       try {
-        peer = ECDH.convertKey(Buffer.from(peerPublicKey, 'base64url'), CURVE, undefined, undefined, 'uncompressed');
-        if (acceptedPeers.has(peer.toString('base64url'))) return undefined;
         secret = exchange.computeSecret(peer);
       } catch {
-        // A key that is not a point on the curve; there is no channel to make.
         return undefined;
       }
       acceptedPeers.add(peer.toString('base64url'));
       // The prefix is the host's to choose and travels in every nonce, so the
       // client reads it off the wire rather than needing it up front.
       return createChannel(secret, 's2c', randomBytes(NONCE_PREFIX_BYTES));
+    },
+  };
+}
+
+/** Creates the client half for a single fresh peer handshake. */
+export function createClientHandshake(): ClientHandshake {
+  const exchange = createECDH(CURVE);
+  exchange.generateKeys();
+  let accepted = false;
+  return {
+    publicKey: exchange.getPublicKey().toString('base64url'),
+    accept(hostPublicKey) {
+      if (accepted) return undefined;
+      const host = ecdhPoint(hostPublicKey);
+      if (host === undefined) return undefined;
+      let secret: Buffer;
+      try {
+        secret = exchange.computeSecret(host);
+      } catch {
+        return undefined;
+      }
+      accepted = true;
+      return createChannel(secret, 'c2s', randomBytes(NONCE_PREFIX_BYTES));
     },
   };
 }

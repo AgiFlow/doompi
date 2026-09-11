@@ -322,6 +322,8 @@ export function computeInputsHash(
   selection: SyncSelection,
   homeDirectory: string = os.homedir(),
 ): string {
+  // Match sync publication, including callers that reach the repository through a symlink.
+  repoRoot = resolveSyncLocation(repoRoot, homeDirectory).root;
   const hash = crypto.createHash('sha256');
   hash.update(JSON.stringify({ ...selection, domains: [...selection.domains].sort() }));
   // Every .doom document layers the global copy under the repository one, so an

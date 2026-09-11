@@ -173,7 +173,25 @@ describe('protected history import', () => {
       kind: 'header',
       id: 'session-id',
     });
+    const canonicalBytes = fs.readFileSync(destinationPath);
     expect(result.verification.entries.length).toBeGreaterThan(0);
+    expect(result.verification.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: 'root',
+          sourceParentId: null,
+          importedParentId: null,
+          sourceContentHash: expect.any(String),
+          importedContentHash: expect.any(String),
+        }),
+        expect.objectContaining({ sourceId: 'child', sourceParentId: 'root' }),
+      ]),
+    );
+    const mainProof = result.verification.entries.find((entry) => entry.sourceId === 'child');
+    if (!mainProof) throw new Error('Main branch entry proof was not recorded');
+    expect(result.verification.branches).toEqual([
+      { sourceTipId: 'child', importedTipId: mainProof.importedId, branch: 'main' },
+    ]);
     expect(fs.statSync(originalPath).mode & 0o077).toBe(0);
     expect(JSON.parse(fs.readFileSync(statePath, 'utf8')).phase).toBe('published');
 
@@ -187,6 +205,7 @@ describe('protected history import', () => {
     });
     expect(resumed.status).toBe('already-published');
     expect(importStaging).toHaveBeenCalledOnce();
+    expect(fs.readFileSync(destinationPath)).toEqual(canonicalBytes);
   });
 
   it('rejects concurrent ownership and keeps an interrupted preparation resumable', async () => {
@@ -558,5 +577,146 @@ describe('v4 to v3 export', () => {
       'overwrite',
     );
     expect(fs.readFileSync(destinationPath, 'utf8')).toBe('existing');
+  });
+  it.each(['corrupt import state', 'replaced protected original', 'mismatched entry proof'])(
+    'omits protected labels and reports provenance loss when the %s sidecar is not authoritative',
+    async (sidecar) => {
+      const sourcePath = path.join(root, 'original-v3.jsonl');
+      const canonicalPath = path.join(root, 'canonical-v4.jsonl');
+      const exportedPath = path.join(root, `exported-${sidecar.replaceAll(' ', '-')}.jsonl`);
+      fs.writeFileSync(sourcePath, v3Source());
+      await protectAndImportHistory({ sourcePath, destinationPath: canonicalPath, owner: owner() });
+      const canonicalBytes = fs.readFileSync(canonicalPath);
+
+      if (sidecar === 'corrupt import state') {
+        fs.writeFileSync(`${canonicalPath}.import-state.json`, '{not-json');
+      } else if (sidecar === 'replaced protected original') {
+        fs.writeFileSync(`${sourcePath}.original`, 'replaced protected original');
+      } else {
+        const statePath = `${canonicalPath}.import-state.json`;
+        const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as {
+          verification: { entries: { importedContentHash: string }[] };
+        };
+        state.verification.entries[0]!.importedContentHash = '0'.repeat(64);
+        fs.writeFileSync(statePath, `${JSON.stringify(state)}\n`);
+      }
+
+      const result = await exportV4ToV3({ sourcePath: canonicalPath, destinationPath: exportedPath, owner: owner() });
+      const records = fs
+        .readFileSync(exportedPath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+      expect(records.find((record) => record.type === 'label')).toBeUndefined();
+      expect(result.losses.filter((loss) => loss.code === 'value-provenance')).toEqual([
+        expect.objectContaining({
+          record: expect.objectContaining({ namespace: 'pi.entry.label', value: 'bookmark' }),
+        }),
+      ]);
+      expect(JSON.parse(fs.readFileSync(result.reportPath, 'utf8')).losses).toEqual(result.losses);
+      expect(fs.readFileSync(canonicalPath)).toEqual(canonicalBytes);
+    },
+  );
+
+  it.each(['destination', 'loss report'])('rejects a replaced published %s sidecar', async (sidecar) => {
+    const sourcePath = path.join(root, 'canonical.jsonl');
+    const destinationPath = path.join(root, 'resume.jsonl');
+    fs.writeFileSync(sourcePath, v4Source());
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+    const replacedPath = sidecar === 'destination' ? destinationPath : result.reportPath;
+    fs.appendFileSync(replacedPath, 'replaced by another writer\n');
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(/modified/);
+    expect(fs.readFileSync(replacedPath, 'utf8')).toContain('replaced by another writer');
+  });
+
+  it('rejects an interrupted export when its staged loss report is replaced', async () => {
+    const sourcePath = path.join(root, 'canonical.jsonl');
+    const destinationPath = path.join(root, 'resume.jsonl');
+    fs.writeFileSync(sourcePath, v4Source());
+    const realLink = fs.linkSync;
+    let calls = 0;
+    vi.spyOn(fs, 'linkSync').mockImplementation((source, destination) => {
+      calls += 1;
+      if (calls === 2) throw new Error('publication interrupted');
+      return realLink(source, destination);
+    });
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(
+      'publication interrupted',
+    );
+    vi.restoreAllMocks();
+    const state = JSON.parse(fs.readFileSync(`${destinationPath}.export-state.json`, 'utf8')) as {
+      reportStagingPath: string;
+    };
+    fs.rmSync(state.reportStagingPath);
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(
+      'missing its staged loss report',
+    );
+    expect(fs.existsSync(destinationPath)).toBe(true);
+  });
+
+  it('cleans both staged exports when writing the loss report runs out of space', async () => {
+    const sourcePath = path.join(root, 'canonical.jsonl');
+    const destinationPath = path.join(root, 'resume.jsonl');
+    fs.writeFileSync(sourcePath, v4Source());
+    const realWrite = fs.writeFileSync;
+    let descriptorWrites = 0;
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((file, data, options) => {
+      if (typeof file === 'number') {
+        descriptorWrites += 1;
+        if (descriptorWrites === 2) throw Object.assign(new Error('no space left'), { code: 'ENOSPC' });
+      }
+      return realWrite(file, data, options);
+    });
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toMatchObject({
+      code: 'ENOSPC',
+    });
+    expect(fs.existsSync(destinationPath)).toBe(false);
+    expect(fs.existsSync(`${destinationPath}.loss.json`)).toBe(false);
+    expect(fs.existsSync(`${destinationPath}.export-state.json`)).toBe(false);
+    expect(fs.readdirSync(root).some((name) => name.endsWith('.staging'))).toBe(false);
+  });
+  it('preserves protected session names, labels, and their original timestamps during export', async () => {
+    const sourcePath = path.join(root, 'original-with-metadata-v3.jsonl');
+    const canonicalPath = path.join(root, 'canonical-with-metadata-v4.jsonl');
+    const exportedPath = path.join(root, 'exported-with-metadata-v3.jsonl');
+    const source =
+      v3Source() +
+      `${JSON.stringify({
+        type: 'session_info',
+        id: 'session-info',
+        parentId: null,
+        timestamp: '2026-01-01T00:00:05.000Z',
+        name: 'Original session name',
+      })}\n`;
+    fs.writeFileSync(sourcePath, source);
+
+    await protectAndImportHistory({ sourcePath, destinationPath: canonicalPath, owner: owner() });
+    const canonicalBytes = fs.readFileSync(canonicalPath);
+    await exportV4ToV3({ sourcePath: canonicalPath, destinationPath: exportedPath, owner: owner() });
+
+    const records = fs
+      .readFileSync(exportedPath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const child = records.find((record) => record.type === 'message' && record.message.role === 'assistant');
+
+    expect(records.find((record) => record.type === 'session_info')).toMatchObject({
+      name: 'Original session name',
+      parentId: null,
+      timestamp: '2026-01-01T00:00:05.000Z',
+    });
+    expect(records.find((record) => record.type === 'label')).toMatchObject({
+      targetId: child?.id,
+      label: 'bookmark',
+      timestamp: '2026-01-01T00:00:04.000Z',
+    });
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+    expect(fs.readFileSync(canonicalPath)).toEqual(canonicalBytes);
   });
 });

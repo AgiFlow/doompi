@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands.ts';
+
+vi.mock('../../src/web/lib/sessionProtocolCommands.ts', () => ({ sendSessionProtocolFrame: vi.fn() }));
 import type { SessionSummary } from '../../src/types/hub.ts';
 import {
   abortCommand,
@@ -52,6 +55,7 @@ import {
 } from '../../src/web/stores/paletteStore.ts';
 import {
   abortRun,
+  beginSessionReplay,
   answerDialogConfirm,
   answerDialogValue,
   applyProtocolQueue,
@@ -60,6 +64,7 @@ import {
   cancelDialog,
   clearQueuedMessages,
   deleteQueuedMessage,
+  endSessionReplay,
   dropSessionStore,
   loadModelChoices,
   queueFollowUp,
@@ -124,6 +129,12 @@ beforeEach(() => {
   resetSessions();
   resetNewSessionStore();
   bindTransport((frame) => sent.push(frame as Frame));
+  // A tagged test log joins both send boundaries, not a legacy wire envelope.
+  vi.mocked(sendSessionProtocolFrame)
+    .mockReset()
+    .mockImplementation((sessionId, frame) => {
+      sent.push({ type: 'session_command', sessionId, frame });
+    });
 });
 
 describe('command builders', () => {
@@ -364,15 +375,54 @@ describe('transcript ownership', () => {
     ]);
   });
 });
+describe('replay projections', () => {
+  it('keeps live-only status and widget keys through a no-protocol backlog reset', () => {
+    const sessionId = 'replay-projection';
+    beginSessionReplay(sessionId);
+    applySessionFrame(sessionId, {
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'live-status',
+      statusText: 'live',
+    });
+    applySessionFrame(sessionId, {
+      type: 'extension_ui_request',
+      method: 'setWidget',
+      widgetKey: 'live-widget',
+      widgetLines: ['live'],
+    });
+
+    resetSessionStore(sessionId);
+
+    expect(sessionStoreFor(sessionId).state.statuses).toEqual({ 'live-status': 'live' });
+    expect(sessionStoreFor(sessionId).state.widgets).toEqual(['live-widget']);
+    applySessionFrame(
+      sessionId,
+      { type: 'extension_ui_request', method: 'setStatus', statusKey: 'live-status', statusText: 'stale' },
+      { replay: true },
+    );
+    applySessionFrame(
+      sessionId,
+      { type: 'extension_ui_request', method: 'setWidget', widgetKey: 'live-widget', widgetLines: [] },
+      { replay: true },
+    );
+
+    expect(sessionStoreFor(sessionId).state.statuses).toEqual({ 'live-status': 'live' });
+    expect(sessionStoreFor(sessionId).state.widgets).toEqual(['live-widget']);
+    endSessionReplay(sessionId);
+  });
+});
+
 describe('transport', () => {
-  it('envelopes session commands with the session id', () => {
+  it('routes session commands through the typed binding without a hub envelope', () => {
+    vi.mocked(sendSessionProtocolFrame).mockImplementation(() => undefined);
     sendFrame('s1', promptCommand('hello'));
-    expect(sent).toEqual([{ type: 'session_command', sessionId: 's1', frame: { type: 'prompt', message: 'hello' } }]);
+    expect(sendSessionProtocolFrame).toHaveBeenCalledExactlyOnceWith('s1', { type: 'prompt', message: 'hello' });
+    expect(sent).toEqual([]);
   });
 
   it('sends hub frames unenveloped', () => {
     sendHubFrame({ type: 'subscribe', sessionId: 's1' });
-    expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
     expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
   });
 
@@ -387,10 +437,13 @@ describe('transport', () => {
 
     expect(connections).toBe(2);
   });
-  it('drops frames when nothing is bound rather than throwing', () => {
+  it('propagates a disconnected session binding rather than silently dropping a command', () => {
     releaseTransport();
-    expect(() => sendFrame('s1', { type: 'prompt' })).not.toThrow();
-    bindTransport((frame) => sent.push(frame as Frame));
+    vi.mocked(sendSessionProtocolFrame).mockImplementation(() => {
+      throw new Error('The session protocol is not connected.');
+    });
+    expect(() => sendFrame('s1', { type: 'prompt' })).toThrow('The session protocol is not connected.');
+    expect(sent).toEqual([]);
   });
 });
 

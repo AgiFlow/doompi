@@ -1,5 +1,6 @@
 import { Context, Service } from '@deepseek-ai/cordis';
 import { createDoomKernel } from '@agimon-ai/doompi-kernel';
+import { formatSkillsForSystemPrompt } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -19,7 +20,10 @@ import {
   type DoomHeadlessMinorMode,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
+import type { CountTokens } from '@agimon-ai/doompi-ui/toolInventory';
 import type {
+  HeadlessContextInventory,
   HeadlessHostOptions,
   HeadlessSelectionStatus,
   ResolvedHeadlessResource,
@@ -30,9 +34,24 @@ import {
   type MinorModeOwnerHandle,
 } from '@agimon-ai/doompi-extension-contracts/mode';
 import { createMinorModeCatalogHost } from '../../services/modeCatalog';
+import type {
+  ContextConditionalAttribution,
+  ContextToolInventory,
+  ContextToolSource,
+} from '../../services/contextProjection.ts';
 
 type Owned<T> = { source: string; value: T };
 type StopActivity = () => void | Promise<void>;
+
+/** Maps one typed headless resource to the exact skill shape installed in AgentHarness. */
+export function headlessHarnessSkill(resource: ResolvedHeadlessResource) {
+  return {
+    name: resource.name,
+    description: `Headless skill from ${resource.source}`,
+    content: resource.text,
+    filePath: `doom-headless://${resource.source}/${resource.name}`,
+  };
+}
 
 /** Retains facets and their state; only kernel-computed active contributions change. */
 export class HeadlessHost extends Service<DoomHeadlessHostService> implements DoomHeadlessHostService {
@@ -53,6 +72,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
   private availableSources = new Set<string>();
   private tools = new Map<string, Owned<DoomHeadlessTool>>();
   private resources: readonly Owned<DoomHeadlessResource>[] = [];
+  private resolvedResources: readonly ResolvedHeadlessResource[] = [];
   private commands = new Map<string, Owned<DoomHeadlessCommand>>();
   private hooks: readonly Owned<DoomHeadlessHook>[] = [];
   private readonly activities = new Map<Owned<DoomHeadlessActivity>, StopActivity>();
@@ -68,7 +88,9 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       context: { sessionManager: { getSessionId: () => this.context.sessionId } },
       routeInvocation: async (_request, _source, invoke) => {
         this.assertReady();
-        return invoke();
+        const response = await invoke();
+        await this.options.onMinorModeChanged?.();
+        return response;
       },
     });
     context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, this.catalog);
@@ -101,7 +123,8 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     });
     this.kernel.defineSlot<Owned<DoomHeadlessResource>>('resources', async (entries) => {
       this.resources = this.selected(entries);
-      await this.options.applyResources(await this.resolveResources(this.applying));
+      this.resolvedResources = await this.resolveResources(this.applying);
+      await this.options.applyResources(this.resolvedResources);
     });
     this.kernel.defineSlot<Owned<DoomHeadlessCommand>>('commands', (entries) => {
       const next = new Map<string, Owned<DoomHeadlessCommand>>();
@@ -154,10 +177,96 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     };
   }
 
+  getContextInventory(
+    selection: DoomHeadlessSelection = this.applied,
+    countTokens?: CountTokens,
+  ): HeadlessContextInventory {
+    const currentSources = new Set(
+      this.options.candidates
+        .filter(
+          (candidate) =>
+            candidate.scopes.includes('session') &&
+            candidate.owners.some((owner) => owner.majorMode === selection.majorMode),
+        )
+        .map((candidate) => candidate.packageName),
+    );
+    const modeLabels = new Map(
+      this.catalog.getSnapshot().modes.map(({ descriptor }) => [descriptor.id, descriptor.label]),
+    );
+    const conditionAttribution = (when?: DoomHeadlessCondition): ContextConditionalAttribution | undefined => {
+      if (when?.minorMode !== undefined) {
+        const label = modeLabels.get(when.minorMode);
+        return {
+          kind: 'minor',
+          mode: when.minorMode,
+          ...(label === undefined ? {} : { label }),
+        };
+      }
+      return when?.domain === undefined ? undefined : { kind: 'domain', mode: when.domain };
+    };
+    const toolsBySource = new Map<string, ContextToolInventory[]>();
+    for (const contribution of this.kernel.contributions<Owned<DoomHeadlessTool>>('tools')) {
+      if (!currentSources.has(contribution.source)) continue;
+      const tool = contribution.value.value;
+      const contextAttribution = conditionAttribution(tool.when);
+      const entry: ContextToolInventory = {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),
+        ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
+        active: this.tools.get(tool.name) === contribution.value,
+        ...(contextAttribution === undefined ? {} : { contextAttribution }),
+      };
+      const tools = toolsBySource.get(contribution.source);
+      if (tools) tools.push(entry);
+      else toolsBySource.set(contribution.source, [entry]);
+    }
+
+    const sources: ContextToolSource[] = [...toolsBySource].map(([source, tools]) => ({
+      key: source,
+      label: `${source} · extension`,
+      kind: 'extension',
+      packageName: source,
+      tools,
+    }));
+    const framingTokens = countTokens === undefined ? 0 : countTokens(formatSkillsForSystemPrompt([]));
+    const skills = this.resolvedResources.flatMap((resource, index) => {
+      if (resource.kind !== 'skill') return [];
+      const skill = headlessHarnessSkill(resource);
+      const contextAttribution = conditionAttribution(this.resources[index]?.value.when);
+      return [
+        {
+          name: skill.name,
+          description: skill.description,
+          group: 'extensions' as const,
+          owner: resource.source,
+          modelInvocable: true,
+          ...(countTokens === undefined
+            ? {}
+            : { promptTokens: Math.max(0, countTokens(formatSkillsForSystemPrompt([skill])) - framingTokens) }),
+          ...(contextAttribution === undefined ? {} : { contextAttribution }),
+        },
+      ];
+    });
+    const attribution: Record<string, PackageAttribution> = {};
+    for (const candidate of this.options.candidates) {
+      const owner =
+        candidate.owners.find(
+          (entry) =>
+            entry.majorMode === selection.majorMode &&
+            (entry.layer === 'default' || selection.activeLayers.includes(entry.layer)),
+        ) ?? candidate.owners.find((entry) => entry.majorMode === selection.majorMode);
+      if (owner && attribution[candidate.packageName] === undefined) {
+        attribution[candidate.packageName] = { kind: 'major', mode: selection.majorMode, layer: owner.layer };
+      }
+    }
+    return { sources, skills, attribution };
+  }
+
   setAvailableSources(sources: readonly string[]): void {
     this.availableSources = new Set(sources);
   }
-
   private selected<T extends { when?: DoomHeadlessCondition }>(entries: readonly Owned<T>[]): readonly Owned<T>[] {
     return entries.filter(
       ({ value }) =>
@@ -190,20 +299,24 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return (
       entry.scopes.includes('session') &&
       entry.owners.some(
-        (owner) => owner.majorMode === selection.majorMode && selection.activeLayers.includes(owner.layer),
+        (owner) =>
+          owner.majorMode === selection.majorMode &&
+          (owner.layer === 'default' || selection.activeLayers.includes(owner.layer)),
       )
     );
   }
 
   async select(patch: Partial<DoomHeadlessSelection>): Promise<void> {
     if (this.disposed) throw new Error('The headless host is disposed');
-    const selection = structuredClone({ ...this.requested, ...patch });
-    this.requested = selection;
+    const requested = structuredClone({ ...this.requested, ...patch });
+    this.requested = requested;
     const revision = ++this.requestedRevision;
     this.ready = false;
     const apply = async (): Promise<void> => {
       if (this.disposed) throw new Error('The headless host is disposed');
+      const selection = structuredClone((await this.options.resolveSelection?.(requested)) ?? requested);
       await this.options.validateSelection?.(selection);
+      if (revision === this.requestedRevision) this.requested = selection;
       const eligible = this.options.candidates.filter((entry) => this.eligible(entry, selection));
       const missing = eligible.find((entry) => entry.required && !this.availableSources.has(entry.packageName));
       if (missing) throw new Error(`Required headless package '${missing.packageName}' is unavailable`);
@@ -273,6 +386,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return this.add('activities', activity);
   }
 
+  listCommands(): Array<Pick<DoomHeadlessCommand, 'name' | 'description'>> {
+    this.assertReady();
+    return [...this.commands.values()].map(({ value }) => ({ name: value.name, description: value.description }));
+  }
+
   async dispatchCommand(name: string, args: string): Promise<void> {
     this.assertReady();
     const command = this.commands.get(name);
@@ -288,21 +406,57 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     for (const hook of this.hooks.filter((entry) => entry.value.event === event)) {
       this.assertReady();
       if (!this.hooks.includes(hook)) continue;
-      const result = await hook.value.handle(current, this.context);
+      let result: unknown;
+      try {
+        result = await hook.value.handle(current as never, this.context);
+      } catch (error) {
+        this.options.onError?.(error);
+        continue;
+      }
+      if (event === 'session_start') {
+        // Startup hooks may register retained contributions. Finish their queued reconciliation
+        // before the next hook, without relaxing dispatch guards during the transition.
+        await this.tail;
+        this.assertReady();
+      }
       results.push(result);
-      if (
-        event === 'before_agent_start' &&
-        result &&
-        typeof result === 'object' &&
-        'systemPrompt' in result &&
-        typeof result.systemPrompt === 'string'
-      ) {
-        current = { ...current, systemPrompt: result.systemPrompt };
+      if (result && typeof result === 'object' && !Array.isArray(result)) {
+        const patch = result as Record<string, unknown>;
+        // Execution hooks compose in registration order, just like the public harness hooks.
+        const fields =
+          event === 'context'
+            ? ['messages', 'systemPrompt']
+            : event === 'tool_call'
+              ? ['args']
+              : event === 'tool_result'
+                ? ['content', 'details', 'isError', 'usage']
+                : event === 'before_agent_start'
+                  ? ['systemPrompt']
+                  : event === 'before_provider_request'
+                    ? ['payload']
+                    : [];
+        for (const field of fields) {
+          if (event === 'before_agent_start' && typeof patch[field] !== 'string') continue;
+          if (patch[field] !== undefined) current = { ...current, [field]: patch[field] };
+        }
+        // Denials and structural decisions use upstream first-result semantics.
+        if (event === 'tool_call' && patch.block !== undefined) break;
+        if (
+          event === 'session_before_compact' &&
+          (patch.cancel !== undefined || patch.decline !== undefined || patch.compaction !== undefined)
+        )
+          break;
       }
     }
-    if (event === 'before_agent_start') {
+    if (event === 'before_agent_start' || event === 'context' || event === 'tool_call') {
       this.assertReady();
-      if (revision !== this.appliedRevision) throw new Error('Selection changed while preparing the system prompt');
+      if (revision !== this.appliedRevision) {
+        throw new Error(
+          event === 'before_agent_start'
+            ? 'Selection changed while preparing the system prompt'
+            : `Selection changed while dispatching ${event}`,
+        );
+      }
     }
     return results;
   }

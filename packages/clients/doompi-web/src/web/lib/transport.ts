@@ -1,4 +1,4 @@
-import { sessionCommand } from '../../types/hub.ts';
+import { sendSessionProtocolFrame } from './sessionProtocolCommands.ts';
 
 type Frame = Record<string, unknown>;
 
@@ -22,7 +22,7 @@ export function releaseTransport(): void {
 
 /** Sends one command frame to a session's agent, enveloped for the hub. */
 export function sendFrame(sessionId: string, frame: Frame): void {
-  send?.(sessionCommand(sessionId, frame));
+  sendSessionProtocolFrame(sessionId, frame);
 }
 
 /** Sends one hub-level frame (subscribe, unsubscribe) as-is. */

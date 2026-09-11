@@ -80,10 +80,8 @@ test.describe('with the synced MCP context contribution', () => {
     await expect(serverRow).toHaveCount(1);
 
     const authorize = serverRow.getByRole('button', { name: 'authorize' });
-    await authorize.focus();
-    await expect(authorize).toBeFocused();
     const commandOffset = cockpit.session.received.length;
-    await page.keyboard.press('Enter');
+    await authorize.press('Enter');
 
     await expect
       .poll(() => cockpit.session.received.slice(commandOffset).filter((frame) => frame.type === 'prompt'))

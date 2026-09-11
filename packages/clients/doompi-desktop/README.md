@@ -2,7 +2,7 @@
 
 DoomPi Desktop packages the DoomPi cockpit as an Electron application. It is a desktop shell over the same hub, session-server, web, and agent architecture used by the command-line cockpit. Electron owns application startup and the native window. It does not replace the hub or introduce a separate session model.
 
-The package is workspace-private. It produces macOS arm64 and Linux x64 release artifacts rather than a published npm library.
+The package is workspace-private. It produces macOS arm64 and Linux x64/arm64 release artifacts rather than a published npm library.
 
 ## Run from the workspace
 

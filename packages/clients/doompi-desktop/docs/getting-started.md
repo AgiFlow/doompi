@@ -63,8 +63,9 @@ Release artifacts are written under `packages/clients/doompi-desktop/release`. C
 
 - macOS arm64 DMG and ZIP
 - Linux x64 AppImage and DEB
+- Linux arm64 AppImage and DEB
 
-Packaging is not a portable cross-platform build. Build each target on the corresponding operating system, especially macOS where nested executable signing and Apple notarization are part of the release path.
+Packaging is not a portable cross-platform build. Build each target on the corresponding operating system and architecture, especially macOS where nested executable signing and Apple notarization are part of the release path.
 
 For artifact structure, signing inputs, and the absence of an in-app updater, read [Runtime and packaging](./runtime-and-packaging.md).
 

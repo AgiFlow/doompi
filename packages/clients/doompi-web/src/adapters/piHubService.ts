@@ -19,16 +19,31 @@ import {
 import {
   DoomSessionManagementService,
   DoomSessionService,
+  type ExtensionUiResponse,
+  type FollowUpArgs,
+  type ModelRef,
+  type PromptArgs,
+  type RewindArgs,
+  type SessionCommand,
+  DoomHubService,
+  type HubService,
   type SessionServiceState,
+  type SessionStateInfo,
+  type SessionStats,
+  type SteerArgs,
+  type ThinkingLevel,
 } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { SessionRecord } from '../types/registry.ts';
-import type { SpawnSessionInput, SpawnOutcome } from './serverSpawner.ts';
 
 export interface PiHubServiceOptions {
   /** Every session the registry currently lists. */
   records(): readonly SessionRecord[];
-  spawn(input: SpawnSessionInput): Promise<SpawnOutcome>;
   onNotice?: (message: string) => void;
+  hub?: HubService;
+  remote?: {
+    resolve(sessionId: string): Promise<HubSessionMetadata>;
+    connect(sessionId: string): Promise<{ client: Client; serverId: string; sessionId: string }>;
+  };
 }
 
 export interface HubSessionMetadata {
@@ -48,10 +63,14 @@ function endpointAttachment(endpoint: RemoteServiceEndpoint): {
   };
 }
 
-function managementHost(): RoutedServerServiceHost {
+function managementHost(hub?: HubService): RoutedServerServiceHost {
   return {
     attachClient(presentation) {
-      const provider = new RemoteServiceProvider([{ service: DoomSessionManagementService, mode: 'singleton' }]);
+      const provider = new RemoteServiceProvider([
+        { service: DoomSessionManagementService, mode: 'singleton' },
+        ...(hub ? [{ service: DoomHubService, mode: 'singleton' as const }] : []),
+      ]);
+      if (hub) provider.provide(DoomHubService, hub);
       provider.provide(DoomSessionManagementService, {
         attach: (sessionId, context) => presentation.attachSession(sessionId, context),
         detach: (context) => presentation.detachSession(context),
@@ -70,8 +89,10 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
   };
 
   return {
-    serverServices: managementHost(),
+    serverServices: managementHost(options.hub),
     async resolveSession(sessionId) {
+      if (!options.records().some((record) => record.id === sessionId) && options.remote)
+        return options.remote.resolve(sessionId);
       const record = find(sessionId);
       const createdAt = Date.parse(record.createdAt);
       return {
@@ -82,46 +103,71 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
       };
     },
     async openSession(metadata, context): Promise<RoutedSessionHandle> {
-      const record = find(metadata.id);
-      if (!record.protocolSocketPath || !record.protocolServerId) {
-        throw new SessionNotFoundError(`Session ${record.id} does not publish a Pi 0.85 protocol endpoint`);
-      }
-      const client = new Client({
-        serverId: record.protocolServerId,
-        transportFactory: createUnixTransportFactory({ path: record.protocolSocketPath }),
-        onListenerError: (error) => options.onNotice?.(`session ${record.id} listener error: ${error.message}`),
-      });
+      const local = options.records().find((record) => record.id === metadata.id);
+      const endpoint = await (async () => {
+        if (!local && options.remote) return options.remote.connect(metadata.id);
+        const record = local ?? find(metadata.id);
+        if (!record.protocolSocketPath || !record.protocolServerId)
+          throw new SessionNotFoundError(`Session ${record.id} does not publish a Pi 0.85 protocol endpoint`);
+        return {
+          sessionId: record.id,
+          serverId: record.protocolServerId,
+          client: new Client({
+            serverId: record.protocolServerId,
+            transportFactory: createUnixTransportFactory({ path: record.protocolSocketPath }),
+            onListenerError: (error) => options.onNotice?.(`session ${metadata.id} listener error: ${error.message}`),
+          }),
+        };
+      })();
+      const { client } = endpoint;
       let binding: RemoteServiceBinding | undefined;
       try {
         await client.connect();
         await client.request(
-          { serverId: record.protocolServerId },
-          { serviceId: DoomSessionManagementService.id, member: 'attach', args: [record.id] },
+          { serverId: endpoint.serverId },
+          { serviceId: DoomSessionManagementService.id, member: 'attach', args: [endpoint.sessionId] },
           context.abortSignal,
         );
         binding = createRemoteServiceBinding({
           services: [DoomSessionService],
           transport: createClientServiceTransport(client, () => client.attachment),
-          onError: (error) => options.onNotice?.(`session ${record.id} service error: ${error.message}`),
+          onError: (error) => options.onNotice?.(`session ${metadata.id} service error: ${error.message}`),
         });
         const session = binding.use(DoomSessionService);
         await binding.ready(context);
         const initial = session.state.value;
-        if (!initial) throw new Error(`Session ${record.id} did not publish initial state`);
+        if (!initial) throw new Error(`Session ${metadata.id} did not publish initial state`);
         const state = replicatedState<SessionServiceState>(initial);
         const unsubscribe = session.state.subscribe((value, publishContext) => {
           state.state.snapshot = value.snapshot;
           state.state.progress = value.progress;
+          state.state.presentation = value.presentation;
+          state.state.inFlight = value.inFlight;
           state.publish(publishContext);
         });
         const provider = new RemoteServiceProvider([{ service: DoomSessionService, mode: 'singleton' }]);
         provider.provide(DoomSessionService, {
           state,
-          prompt: (text, callContext) => session.prompt(text, callContext),
-          steer: (text, callContext) => session.steer(text, callContext),
+          prompt: (input: string | PromptArgs, callContext) =>
+            typeof input === 'string' ? session.prompt(input, callContext) : session.prompt(input, callContext),
+          steer: (input: string | SteerArgs, callContext) =>
+            typeof input === 'string' ? session.steer(input, callContext) : session.steer(input, callContext),
           abort: (callContext) => session.abort(callContext),
-          setModel: (model, callContext) => session.setModel(model, callContext),
-          setThinking: (thinkingLevel, callContext) => session.setThinking(thinkingLevel, callContext),
+          setModel: (model: ModelRef, callContext) => session.setModel(model, callContext),
+          setThinking: (thinkingLevel: ThinkingLevel, callContext) => session.setThinking(thinkingLevel, callContext),
+          followUp: (args: FollowUpArgs, callContext) => session.followUp(args, callContext),
+          clearQueue: (callContext) => session.clearQueue(callContext),
+          rewind: (args: RewindArgs, callContext) => session.rewind(args, callContext),
+          extensionUiResponse: (response: ExtensionUiResponse, callContext) =>
+            session.extensionUiResponse(response, callContext),
+          getState: (callContext): Promise<SessionStateInfo> => session.getState(callContext),
+          getSessionStats: (callContext): Promise<SessionStats> => session.getSessionStats(callContext),
+          getCommands: (callContext): Promise<SessionCommand[]> => session.getCommands(callContext),
+          getAvailableModels: (callContext): Promise<ModelRef[]> => session.getAvailableModels(callContext),
+          getAvailableThinkingLevels: (callContext): Promise<ThinkingLevel[]> =>
+            session.getAvailableThinkingLevels(callContext),
+          compact: (instructions, callContext) => session.compact(instructions, callContext),
+          setName: (name, callContext) => session.setName(name, callContext),
         });
         let closed = false;
         let terminate!: (error: Error | undefined) => void;
@@ -138,7 +184,7 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
           try {
             await binding?.dispose(closeContext);
           } catch (error) {
-            options.onNotice?.(`session ${record.id} binding cleanup failed: ${String(error)}`);
+            options.onNotice?.(`session ${metadata.id} binding cleanup failed: ${String(error)}`);
           } finally {
             await client.dispose();
           }
@@ -147,9 +193,9 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
         // process disappears so the next attach reads the new registry identity.
         const stopConnectionWatch = client.onConnectionStateChange((change) => {
           if (closed || change.state !== 'disconnected') return;
-          terminate(change.error ?? new Error(`Session ${record.id} protocol disconnected`));
+          terminate(change.error ?? new Error(`Session ${metadata.id} protocol disconnected`));
           void close(BACKGROUND_CONTEXT).catch((error) => {
-            options.onNotice?.(`session ${record.id} connection cleanup failed: ${String(error)}`);
+            options.onNotice?.(`session ${metadata.id} connection cleanup failed: ${String(error)}`);
           });
         });
         return {
@@ -161,7 +207,7 @@ export function createPiHubService(options: PiHubServiceOptions): ServerHost<Hub
         try {
           await binding?.dispose(context);
         } catch (cleanupError) {
-          options.onNotice?.(`session ${record.id} binding cleanup failed: ${String(cleanupError)}`);
+          options.onNotice?.(`session ${metadata.id} binding cleanup failed: ${String(cleanupError)}`);
         }
         await client.dispose();
         throw error;

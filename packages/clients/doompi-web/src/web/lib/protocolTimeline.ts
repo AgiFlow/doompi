@@ -89,7 +89,11 @@ export function toTimelineEntries(transcript: readonly TranscriptItem[]): Timeli
 /** Retains concurrent live items between progress events for one protocol binding. */
 export function createProtocolTimeline(): (state: SessionServiceState) => TimelineEntry[] {
   const pending = new Map<string, TranscriptItem>();
-  return ({ snapshot, progress }) => {
+  return ({ snapshot, progress, inFlight }) => {
+    if (inFlight !== undefined) {
+      pending.clear();
+      for (const item of inFlight) pending.set(item.id, item);
+    }
     if (snapshot.phase === 'idle') pending.clear();
     if (progress && snapshot.phase !== 'idle') {
       if (progress.type === 'item_finished') pending.delete(progress.item.id);

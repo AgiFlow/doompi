@@ -1,11 +1,22 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  assertSupportedDesktopTarget,
   bundledDoomPiPackages,
   DOOMPI_RUNTIME_PACKAGES,
   isExternalRuntimePackage,
 } from '../../scripts/desktopRuntimePlugin.ts';
 import runtimeConfig from '../../vite.runtime.config.ts';
+
+describe('desktop release targets', () => {
+  it.each(['darwin-arm64', 'linux-x64', 'linux-arm64'])('accepts %s', (target) => {
+    expect(() => assertSupportedDesktopTarget(target)).not.toThrow();
+  });
+
+  it.each(['win32-x64', 'darwin-x64', 'linux-ia32'])('rejects %s', (target) => {
+    expect(() => assertSupportedDesktopTarget(target)).toThrow(/not supported/u);
+  });
+});
 
 describe('desktop runtime externals', () => {
   it('keeps Pi imports on the staged package instance', () => {
@@ -28,7 +39,9 @@ describe('desktop DoomPi entrypoints', () => {
       build: {
         rollupOptions: {
           input: {
+            'doompi/dist/src/extensions/entries/agentModel': expect.any(String),
             'doompi/dist/src/extensions/entries/doom': expect.any(String),
+            'doompi/dist/src/extensions/entries/minorModeCommand': expect.any(String),
             'doompi/dist/src/extensions/entries/styleSystem': expect.any(String),
           },
         },

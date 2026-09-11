@@ -171,7 +171,9 @@ export async function loadServerBundle(
   for (const declaration of descriptor.entries) {
     if (!declaration.scopes.includes(scope)) continue;
     const eligible = declaration.owners.some(
-      (owner) => owner.majorMode === options.majorMode && options.activeLayers.includes(owner.layer),
+      (owner) =>
+        owner.majorMode === options.majorMode &&
+        (owner.layer === 'default' || options.activeLayers.includes(owner.layer)),
     );
     if (!(scope === 'session' && options.retainCandidates === true) && !eligible) continue;
     try {

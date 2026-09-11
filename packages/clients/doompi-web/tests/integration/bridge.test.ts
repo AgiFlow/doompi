@@ -201,9 +201,12 @@ describe('the hub bridge', () => {
     const { frames } = await openSocket(server.url);
 
     await waitFor(() => frames.length >= 2, 'the hello and snapshot');
-    // Zero channels: every data source is a plugin, and plugins arrive via a
-    // synced bundle's server registry; this server runs on a bare assets dir.
-    expect(frames[0]).toEqual({ type: 'hub_hello', protocol: HUB_PROTOCOL_VERSION, channels: [] });
+    // Channel loading is session-local and asynchronous. The hello advertises the
+    // channel types that completed before this socket connected, while later session
+    // summaries carry the authoritative composition for each session.
+    expect(frames[0]).toMatchObject({ type: 'hub_hello', protocol: HUB_PROTOCOL_VERSION, channels: expect.any(Array) });
+    const channels = (frames[0].channels as string[]) ?? [];
+    expect(new Set(channels).size).toBe(channels.length);
     expect(frames[1].type).toBe('sessions_snapshot');
 
     await session.waitForAttach();

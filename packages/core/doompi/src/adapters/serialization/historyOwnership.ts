@@ -15,9 +15,19 @@ interface HistoryLockRecord {
   token: string;
 }
 
+interface HeldHistoryLock {
+  lockPath: string;
+  token: string;
+  handle: number;
+}
+
 export interface HistoryOwnershipOptions {
   /** Checks managed writers; this cannot account for an unmanaged Pi process. */
   assertQuiescent?: (sourcePath: string) => void | Promise<void>;
+  /** The source format admitted by this owner. Defaults to canonical v4. */
+  sourceFormat?: 'v3' | 'v4';
+  /** Additional paths to lock for the lifetime of each acquired source lease. */
+  additionalPaths?: readonly string[];
 }
 
 function canonicalSourcePath(sourcePath: string): string {
@@ -37,24 +47,48 @@ export function historyOwnershipLockPath(sourcePath: string): string {
   return `${canonicalSourcePath(sourcePath)}${LOCK_SUFFIX}`;
 }
 
+function isHistoryObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function isV4Header(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  const header = value as Record<string, unknown>;
-  return header.kind === 'header' && header.v === 4;
+  return isHistoryObject(value) && value.kind === 'header' && value.v === 4;
+}
+
+function isV3Header(value: unknown): boolean {
+  return isHistoryObject(value) && value.type === 'session' && value.version === 3;
+}
+
+function readHeader(sourcePath: string, format: 'v3' | 'v4'): unknown {
+  const firstLine = fs.readFileSync(sourcePath, 'utf8').split('\n', 1)[0] ?? '';
+  try {
+    return JSON.parse(firstLine);
+  } catch (error) {
+    const message =
+      format === 'v4'
+        ? `History ownership source is not canonical v4 JSONL: ${sourcePath}`
+        : `Offline history source is not canonical v3 JSONL: ${sourcePath}`;
+    throw new Error(message, { cause: error });
+  }
+}
+
+function assertIndependentRegularFile(sourcePath: string, label: string): void {
+  const stat = fs.statSync(sourcePath);
+  if (!stat.isFile() || stat.nlink !== 1) throw new Error(`${label} must be an independent regular file`);
 }
 
 function assertV4Source(sourcePath: string): void {
   if (!fs.existsSync(sourcePath)) return;
-  const stat = fs.statSync(sourcePath);
-  if (!stat.isFile() || stat.nlink !== 1) throw new Error('Canonical history must be an independent regular file');
-  const firstLine = fs.readFileSync(sourcePath, 'utf8').split('\n', 1)[0] ?? '';
-  let header: unknown;
-  try {
-    header = JSON.parse(firstLine);
-  } catch (error) {
-    throw new Error(`History ownership source is not canonical v4 JSONL: ${sourcePath}`, { cause: error });
-  }
-  if (!isV4Header(header)) throw new Error(`History ownership only supports canonical v4 sources: ${sourcePath}`);
+  assertIndependentRegularFile(sourcePath, 'Canonical history');
+  if (!isV4Header(readHeader(sourcePath, 'v4')))
+    throw new Error(`History ownership only supports canonical v4 sources: ${sourcePath}`);
+}
+
+function assertV3Source(sourcePath: string): void {
+  if (!fs.existsSync(sourcePath)) return;
+  assertIndependentRegularFile(sourcePath, 'Offline v3 history source');
+  if (!isV3Header(readHeader(sourcePath, 'v3')))
+    throw new Error(`Offline history import only supports v3 sources: ${sourcePath}`);
 }
 
 function isFileSystemError(error: unknown): error is NodeJS.ErrnoException {
@@ -78,72 +112,91 @@ function releaseLock(lockPath: string, token: string, handle: number): void {
 }
 
 function createLease(
-  lockPath: string,
+  locks: readonly HeldHistoryLock[],
   sourcePath: string,
-  token: string,
-  handle: number,
   assertQuiescent: (sourcePath: string) => void | Promise<void>,
 ): HistoryOwnershipLease {
   let released = false;
   return {
     assertQuiescent: () => {
       if (released) throw new Error('History ownership lease has been released');
-      const held = fs.fstatSync(handle);
-      const current = fs.statSync(lockPath);
-      if (held.dev !== current.dev || held.ino !== current.ino || readToken(lockPath) !== token) {
-        throw new Error('History ownership lock was replaced');
+      for (const lock of locks) {
+        const held = fs.fstatSync(lock.handle);
+        const current = fs.statSync(lock.lockPath);
+        if (held.dev !== current.dev || held.ino !== current.ino || readToken(lock.lockPath) !== lock.token) {
+          throw new Error('History ownership lock was replaced');
+        }
       }
       return assertQuiescent(sourcePath);
     },
     release: () => {
       if (released) return;
       released = true;
-      releaseLock(lockPath, token, handle);
+      let firstError: unknown;
+      for (const lock of [...locks].reverse()) {
+        try {
+          releaseLock(lock.lockPath, lock.token, lock.handle);
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+      if (firstError !== undefined) throw firstError;
     },
   };
 }
 
 /**
- * Creates the canonical v4 owner used by both runtime writers and export CLI.
- * The lock is deliberately never reclaimed from a dead pid: a stale or
- * malformed sidecar needs explicit operator cleanup because it cannot prove Pi
- * quiescence.
+ * Creates the canonical history owner used by runtime writers, export CLI, and
+ * the explicit offline importer. The default source boundary remains v4.
+ * Locks are deliberately never reclaimed from dead pids: a stale or malformed
+ * sidecar needs explicit operator cleanup because it cannot prove quiescence.
  */
 export function createHistoryOwnership(options: HistoryOwnershipOptions = {}): HistoryOwnership {
   const assertQuiescent = options.assertQuiescent ?? (() => undefined);
+  const assertSource = options.sourceFormat === 'v3' ? assertV3Source : assertV4Source;
   return {
     async acquire(sourcePath: string): Promise<HistoryOwnershipLease> {
       const absoluteSourcePath = canonicalSourcePath(sourcePath);
-      const lockPath = historyOwnershipLockPath(absoluteSourcePath);
-      const token = randomUUID();
-      const record: HistoryLockRecord = {
-        version: LOCK_VERSION,
-        format: LOCK_FORMAT,
-        pid: process.pid,
-        sourcePath: absoluteSourcePath,
-        token,
-      };
-      fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-      let handle: number | undefined;
+      const paths = [absoluteSourcePath, ...(options.additionalPaths ?? [])].map(canonicalSourcePath);
+      const canonicalPaths = [...new Set(paths)].sort((left, right) => left.localeCompare(right));
+      const locks: HeldHistoryLock[] = [];
+      let conflictingLockPath = historyOwnershipLockPath(absoluteSourcePath);
       try {
-        handle = fs.openSync(lockPath, 'wx', 0o600);
-        fs.writeFileSync(handle, `${JSON.stringify(record)}\n`, 'utf8');
-        fs.fsyncSync(handle);
-        assertV4Source(absoluteSourcePath);
-      } catch (error) {
-        try {
-          if (handle !== undefined) fs.closeSync(handle);
-        } catch {
-          // Preserve the acquisition failure.
+        for (const lockedPath of canonicalPaths) {
+          const lockPath = historyOwnershipLockPath(lockedPath);
+          conflictingLockPath = lockPath;
+          const token = randomUUID();
+          const record: HistoryLockRecord = {
+            version: LOCK_VERSION,
+            format: LOCK_FORMAT,
+            pid: process.pid,
+            sourcePath: lockedPath,
+            token,
+          };
+          fs.mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+          const handle = fs.openSync(lockPath, 'wx', 0o600);
+          const lock = { lockPath, token, handle };
+          locks.push(lock);
+          fs.writeFileSync(handle, `${JSON.stringify(record)}\n`, 'utf8');
+          fs.fsyncSync(handle);
         }
-        if (readToken(lockPath) === token) fs.rmSync(lockPath, { force: true });
+        assertSource(absoluteSourcePath);
+      } catch (error) {
+        for (const lock of [...locks].reverse()) {
+          try {
+            releaseLock(lock.lockPath, lock.token, lock.handle);
+          } catch {
+            // Preserve the acquisition failure and never remove a replaced lock.
+          }
+        }
         if (isFileSystemError(error) && error.code === 'EEXIST') {
-          throw new Error(`History ownership lock already exists or is ambiguous: ${lockPath}`, { cause: error });
+          throw new Error(`History ownership lock already exists or is ambiguous: ${conflictingLockPath}`, {
+            cause: error,
+          });
         }
         throw error;
       }
-      if (handle === undefined) throw new Error('History ownership lock was not opened');
-      return createLease(lockPath, absoluteSourcePath, token, handle, assertQuiescent);
+      return createLease(locks, absoluteSourcePath, assertQuiescent);
     },
   };
 }

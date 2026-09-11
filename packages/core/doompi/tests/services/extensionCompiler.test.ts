@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -50,6 +50,412 @@ afterEach(() => {
 });
 
 describe('compiled direct modules', () => {
+  it.each([
+    ['local', false],
+    ['shared', false],
+    ['local', true],
+    ['shared', true],
+  ])(
+    'loads pinned keyring from %s output (absolute import: %s) after source removal without accessing credentials',
+    async (cache, absolute) => {
+      const directory = temporaryDirectory();
+      const source = path.join(directory, 'source');
+      const keyringEntry = createRequire(import.meta.resolve('@earendil-works/pi-coding-agent')).resolve(
+        '@napi-rs/keyring',
+      );
+      const keyringRoot = path.dirname(keyringEntry);
+      const suffix = `${process.platform}-${process.arch}${process.platform === 'linux' ? '-gnu' : process.platform === 'win32' ? '-msvc' : ''}`;
+      const nativeName = `@napi-rs/keyring-${suffix}`;
+      const nativeRoot = path.dirname(createRequire(keyringEntry).resolve(nativeName));
+      for (const [name, root] of [
+        ['@napi-rs/keyring', keyringRoot],
+        [nativeName, nativeRoot],
+      ]) {
+        fs.cpSync(root!, path.join(source, 'node_modules', name!), { recursive: true, dereference: true });
+      }
+      fs.writeFileSync(
+        path.join(source, 'package.json'),
+        JSON.stringify({ name: 'fixture', dependencies: { '@napi-rs/keyring': '2' } }),
+      );
+      const specifier = absolute ? path.join(source, 'node_modules/@napi-rs/keyring/index.js') : '@napi-rs/keyring';
+      const entry = writeModule(
+        source,
+        'facet',
+        `import { Entry } from ${javascriptStringLiteral(specifier)}; import keytar from "@napi-rs/keyring/keytar.js"; export default [typeof Entry, typeof keytar.getPassword];`,
+      );
+      const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+        outputDirectory: path.join(directory, 'generation'),
+        ...(cache === 'shared'
+          ? { repositoryRoot: directory, sharedCacheDirectory: path.join(directory, 'shared') }
+          : {}),
+      });
+      fs.rmSync(source, { recursive: true });
+      const result = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `console.log(JSON.stringify((await import(${javascriptStringLiteral(pathToFileURL(output).href)})).default));`,
+        ],
+        { cwd: directory, env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' }, encoding: 'utf8' },
+      );
+      expect(JSON.parse(result)).toEqual(['function', 'function']);
+      expect(fs.existsSync(source)).toBe(false);
+    },
+  );
+
+  it.each([
+    ['absent', undefined],
+    ['not an array', 'loader.js'],
+    ['non-string', [null]],
+    ['missing JavaScript', ['loader.js', 'ruvector_onnx_embeddings_wasm_bg.wasm']],
+    ['missing WASM', ['loader.js', 'ruvector_onnx_embeddings_wasm.js']],
+    ['missing loader', ['ruvector_onnx_embeddings_wasm.js', 'ruvector_onnx_embeddings_wasm_bg.wasm']],
+  ])('rejects embedding resources with %s declarations before publication', async (_condition, files) => {
+    const directory = temporaryDirectory();
+    const vector = path.join(directory, 'node_modules/ruvector-onnx-embeddings-wasm');
+    fs.mkdirSync(vector, { recursive: true });
+    fs.writeFileSync(
+      path.join(directory, 'package.json'),
+      JSON.stringify({
+        name: 'fixture',
+        dependencies: { 'ruvector-onnx-embeddings-wasm': '1' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(vector, 'package.json'),
+      JSON.stringify({
+        name: 'ruvector-onnx-embeddings-wasm',
+        main: 'index.mjs',
+        files,
+      }),
+    );
+    writeModule(vector, 'index', 'export default {};');
+    const entry = writeModule(directory, 'facet', 'import "ruvector-onnx-embeddings-wasm"; export default {};');
+    const outputDirectory = path.join(directory, 'generation');
+    await expect(compileExtensionModule(entry, path.join(directory, 'cache'), { outputDirectory })).rejects.toThrow(
+      'Unsupported embedding WASM resource manifest',
+    );
+    expect(fs.readdirSync(outputDirectory)).toEqual([]);
+  });
+
+  it.each(['local', 'shared'])('executes pinned embedding WASM from %s output after source removal', async (cache) => {
+    const directory = temporaryDirectory();
+    const source = path.join(directory, 'source');
+    const logRequire = createRequire(new URL('../../../../default/doompi-log/package.json', import.meta.url));
+    const vectorRoot = path.dirname(
+      createRequire(logRequire.resolve('@agimon-ai/log-sink-mcp')).resolve('ruvector-onnx-embeddings-wasm'),
+    );
+    fs.cpSync(vectorRoot, path.join(source, 'node_modules/ruvector-onnx-embeddings-wasm'), {
+      recursive: true,
+      dereference: true,
+    });
+    const sink = path.join(source, 'node_modules/@agimon-ai/log-sink-mcp');
+    fs.mkdirSync(sink, { recursive: true });
+    fs.writeFileSync(
+      path.join(source, 'package.json'),
+      JSON.stringify({ name: 'fixture', dependencies: { '@agimon-ai/log-sink-mcp': '1' } }),
+    );
+    fs.writeFileSync(
+      path.join(sink, 'package.json'),
+      JSON.stringify({
+        name: '@agimon-ai/log-sink-mcp',
+        main: 'index.mjs',
+        dependencies: { 'ruvector-onnx-embeddings-wasm': '0.1.2' },
+      }),
+    );
+    writeModule(
+      sink,
+      'index',
+      `
+      import { createRequire, Module } from 'node:module';
+      import fs from 'node:fs';
+      import path from 'node:path';
+      export default async function() {
+        const loader = await import('ruvector-onnx-embeddings-wasm/loader.js');
+        const entry = createRequire(import.meta.url).resolve('ruvector-onnx-embeddings-wasm');
+        const module = new Module(entry);
+        module.filename = entry;
+        module.paths = Module._nodeModulePaths(path.dirname(entry));
+        module._compile(fs.readFileSync(entry, 'utf8'), entry);
+        return { loader: typeof loader.createEmbedder, similarity: module.exports.cosineSimilarity(new Float32Array([1,0]), new Float32Array([1,0])) };
+      }
+    `,
+    );
+    const entry = writeModule(source, 'facet', 'export { default } from "@agimon-ai/log-sink-mcp";');
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      outputDirectory: path.join(directory, 'generation'),
+      ...(cache === 'shared'
+        ? { repositoryRoot: directory, sharedCacheDirectory: path.join(directory, 'shared') }
+        : {}),
+    });
+    fs.rmSync(source, { recursive: true });
+    const result = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const compiled = await import(${javascriptStringLiteral(pathToFileURL(output).href)}); console.log(JSON.stringify(await compiled.default()));`,
+      ],
+      {
+        cwd: directory,
+        env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' },
+        encoding: 'utf8',
+      },
+    );
+    expect(JSON.parse(result)).toEqual({ loader: 'function', similarity: 1 });
+    expect(fs.existsSync(source)).toBe(false);
+  });
+  it.each(['undeclared', 'missing'])('rejects %s sqlite-vec bindings before publication', async (condition) => {
+    const directory = temporaryDirectory();
+    const vector = path.join(directory, 'node_modules', 'sqlite-vec');
+    fs.mkdirSync(vector, { recursive: true });
+    const nativeName = `sqlite-vec-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`;
+    fs.writeFileSync(
+      path.join(directory, 'package.json'),
+      JSON.stringify({ name: 'fixture', dependencies: { 'sqlite-vec': '1' } }),
+    );
+    fs.writeFileSync(
+      path.join(vector, 'package.json'),
+      JSON.stringify({
+        name: 'sqlite-vec',
+        main: 'index.mjs',
+        optionalDependencies: condition === 'missing' ? { [nativeName]: '1' } : {},
+      }),
+    );
+    writeModule(vector, 'index', 'export default {};');
+    const native = path.join(vector, 'node_modules', nativeName);
+    fs.mkdirSync(native, { recursive: true });
+    fs.writeFileSync(
+      path.join(native, 'package.json'),
+      JSON.stringify({ name: nativeName, exports: { './*': './missing/*' } }),
+    );
+    const entry = writeModule(directory, 'facet', 'import "sqlite-vec"; export default {};');
+    const outputDirectory = path.join(directory, 'generation');
+    await expect(compileExtensionModule(entry, path.join(directory, 'cache'), { outputDirectory })).rejects.toThrow(
+      'Unsupported or missing native sqlite-vec binding',
+    );
+    expect(fs.readdirSync(outputDirectory)).toEqual([]);
+  });
+  it.each(['local', 'shared'])('loads pinned sqlite-vec SQL from %s output after source removal', async (cache) => {
+    const directory = temporaryDirectory();
+    const source = path.join(directory, 'source');
+    const logRequire = createRequire(new URL('../../../../default/doompi-log/package.json', import.meta.url));
+    const vectorEntry = createRequire(logRequire.resolve('@agimon-ai/log-sink-mcp')).resolve('sqlite-vec');
+    const vectorRoot = path.dirname(vectorEntry);
+    const nativeName = `sqlite-vec-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`;
+    const suffix = process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so';
+    const nativeRoot = path.dirname(createRequire(vectorEntry).resolve(`${nativeName}/vec0.${suffix}`));
+    for (const [name, packageRoot] of [
+      ['sqlite-vec', vectorRoot],
+      [nativeName, nativeRoot],
+    ]) {
+      fs.cpSync(packageRoot!, path.join(source, 'node_modules', name!), { recursive: true, dereference: true });
+    }
+    fs.writeFileSync(
+      path.join(source, 'package.json'),
+      JSON.stringify({ name: 'vector-fixture', dependencies: { 'sqlite-vec': '0.1.9' } }),
+    );
+    const entry = writeModule(
+      source,
+      'vector',
+      `
+      import { getLoadablePath } from 'sqlite-vec';
+      import { DatabaseSync } from 'node:sqlite';
+      export default function() {
+        const db = new DatabaseSync(':memory:', { allowExtension: true });
+        try { db.loadExtension(getLoadablePath()); return db.prepare('select vec_version() as version').get(); }
+        finally { db.close(); }
+      }
+    `,
+    );
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      outputDirectory: path.join(directory, 'generation'),
+      ...(cache === 'shared'
+        ? { repositoryRoot: directory, sharedCacheDirectory: path.join(directory, 'shared') }
+        : {}),
+    });
+    fs.rmSync(source, { recursive: true });
+    const result = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const compiled = await import(${javascriptStringLiteral(pathToFileURL(output).href)}); console.log(JSON.stringify(compiled.default()));`,
+      ],
+      {
+        cwd: directory,
+        env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' },
+        encoding: 'utf8',
+      },
+    );
+    expect(JSON.parse(result)).toEqual({ version: 'v0.1.9' });
+    expect(fs.existsSync(source)).toBe(false);
+  });
+  it.each(['local', 'shared'])(
+    'executes pinned Turso SQL from %s output after fixture source removal',
+    async (cache) => {
+      const directory = temporaryDirectory();
+      const source = path.join(directory, 'source');
+      const workflowRequire = createRequire(new URL('../../../../minor/doompi-workflow/package.json', import.meta.url));
+      const databaseEntry = createRequire(workflowRequire.resolve('@agimon-ai/workflow-mcp')).resolve(
+        '@tursodatabase/database',
+      );
+      const databaseRoot = path.dirname(path.dirname(databaseEntry));
+      const manifest = JSON.parse(fs.readFileSync(path.join(databaseRoot, 'package.json'), 'utf8')) as {
+        name: string;
+        version: string;
+      };
+      expect(manifest.name).toBe('@tursodatabase/database');
+      expect(manifest.version).toBe('0.7.2');
+      const databaseRequire = createRequire(databaseEntry);
+      const commonRoot = path.dirname(path.dirname(databaseRequire.resolve('@tursodatabase/database-common')));
+      const suffix = `${process.platform}-${process.arch}${process.platform === 'linux' ? '-gnu' : process.platform === 'win32' ? '-msvc' : ''}`;
+      const nativeName = `@tursodatabase/database-${suffix}`;
+      const nativeRoot = path.dirname(databaseRequire.resolve(nativeName));
+      // Copy the whole dependency closure so removing the fixture also removes
+      // every source the compiler was permitted to resolve, including the binding.
+      for (const [name, packageRoot] of [
+        ['@tursodatabase/database', databaseRoot],
+        ['@tursodatabase/database-common', commonRoot],
+        [nativeName, nativeRoot],
+      ] as const) {
+        fs.cpSync(packageRoot, path.join(source, 'node_modules', name), { recursive: true, dereference: true });
+      }
+      fs.writeFileSync(
+        path.join(source, 'package.json'),
+        JSON.stringify({ name: 'native-fixture', dependencies: { '@tursodatabase/database': manifest.version } }),
+      );
+      const entry = writeModule(
+        source,
+        'database',
+        `
+      import { connect } from '@tursodatabase/database';
+      export default async function(databasePath) {
+        const database = await connect(databasePath);
+        try {
+          await database.exec('CREATE TABLE proof (value TEXT)');
+          await database.run('INSERT INTO proof VALUES (?)', 'ok');
+          return await database.get('SELECT value FROM proof');
+        } finally {
+          await database.close();
+        }
+      }
+    `,
+      );
+      const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+        outputDirectory: path.join(directory, 'generation'),
+        ...(cache === 'shared'
+          ? { repositoryRoot: directory, sharedCacheDirectory: path.join(directory, 'shared') }
+          : {}),
+      });
+      fs.rmSync(source, { recursive: true });
+      const result = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
+        const compiled = await import(${javascriptStringLiteral(pathToFileURL(output).href)});
+        console.log(JSON.stringify(await compiled.default(${javascriptStringLiteral(path.join(directory, 'proof.db'))})));
+      `,
+        ],
+        {
+          cwd: directory,
+          env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' },
+          encoding: 'utf8',
+        },
+      );
+      expect(JSON.parse(result)).toEqual({ value: 'ok' });
+      expect(fs.existsSync(source)).toBe(false);
+    },
+    60_000,
+  );
+
+  it.each(['undeclared', 'missing'])(
+    'rejects %s platform bindings instead of publishing an unpinned native import',
+    async (condition) => {
+      const directory = temporaryDirectory();
+      const database = path.join(directory, 'node_modules', '@tursodatabase', 'database');
+      fs.mkdirSync(database, { recursive: true });
+      const suffix = `${process.platform}-${process.arch}${process.platform === 'linux' ? '-gnu' : process.platform === 'win32' ? '-msvc' : ''}`;
+      fs.writeFileSync(
+        path.join(directory, 'package.json'),
+        JSON.stringify({ name: 'fixture', dependencies: { '@tursodatabase/database': '1' } }),
+      );
+      fs.writeFileSync(
+        path.join(database, 'package.json'),
+        JSON.stringify({
+          name: '@tursodatabase/database',
+          main: 'index.mjs',
+          optionalDependencies: condition === 'missing' ? { [`@tursodatabase/database-${suffix}`]: '1' } : {},
+        }),
+      );
+      writeModule(database, 'index', 'export default {};');
+      const entry = writeModule(directory, 'facet', 'import "@tursodatabase/database"; export default {};');
+      const outputDirectory = path.join(directory, 'generation');
+      if (condition === 'missing') {
+        // Shadow any runner-provided lookup fallback with an installed but incomplete binding package.
+        const native = path.join(database, 'node_modules', '@tursodatabase', `database-${suffix}`);
+        fs.mkdirSync(native, { recursive: true });
+        fs.writeFileSync(
+          path.join(native, 'package.json'),
+          JSON.stringify({
+            name: `@tursodatabase/database-${suffix}`,
+            main: 'missing.node',
+          }),
+        );
+      }
+      await expect(compileExtensionModule(entry, path.join(directory, 'cache'), { outputDirectory })).rejects.toThrow(
+        'Unsupported or missing native Turso binding',
+      );
+      expect(fs.readdirSync(outputDirectory)).toEqual([]);
+    },
+  );
+
+  it('rejects conflicting native package roots rather than silently choosing one binding', async () => {
+    const platformNames: Record<string, string> = {
+      'darwin-arm64': '@tursodatabase/database-darwin-arm64',
+      'darwin-x64': '@tursodatabase/database-darwin-x64',
+      'linux-arm64': '@tursodatabase/database-linux-arm64-gnu',
+      'linux-x64': '@tursodatabase/database-linux-x64-gnu',
+      'win32-x64': '@tursodatabase/database-win32-x64-msvc',
+    };
+    const platformName = platformNames[`${process.platform}-${process.arch}`];
+    if (!platformName) return;
+    const directory = temporaryDirectory();
+    fs.writeFileSync(
+      path.join(directory, 'package.json'),
+      JSON.stringify({ name: 'fixture', dependencies: { first: '1', second: '1' } }),
+    );
+    for (const name of ['first', 'second']) {
+      const wrapper = path.join(directory, 'node_modules', name);
+      const database = path.join(wrapper, 'node_modules', '@tursodatabase', 'database');
+      const native = path.join(database, 'node_modules', ...platformName.split('/'));
+      fs.mkdirSync(native, { recursive: true });
+      fs.writeFileSync(
+        path.join(wrapper, 'package.json'),
+        JSON.stringify({ name, main: 'index.mjs', dependencies: { '@tursodatabase/database': '1' } }),
+      );
+      writeModule(wrapper, 'index', 'import "@tursodatabase/database";');
+      fs.writeFileSync(
+        path.join(database, 'package.json'),
+        JSON.stringify({
+          name: '@tursodatabase/database',
+          main: 'index.mjs',
+          optionalDependencies: { [platformName]: '1' },
+        }),
+      );
+      writeModule(database, 'index', 'export default {};');
+      fs.writeFileSync(path.join(native, 'package.json'), JSON.stringify({ name: platformName, main: 'binding.node' }));
+      fs.writeFileSync(path.join(native, 'binding.node'), name);
+    }
+    const entry = writeModule(directory, 'facet', 'import "first"; import "second"; export default {};');
+    await expect(compileExtensionModule(entry, path.join(directory, 'cache'))).rejects.toThrow(
+      `Conflicting native package roots for ${platformName}`,
+    );
+  });
+
   it('preserves the server object default and bundles its static dependencies', async () => {
     const directory = temporaryDirectory();
     const dependency = writeModule(directory, 'dependency', 'export const value = "original";');
@@ -887,32 +1293,46 @@ describe('compiled extension sets', () => {
     expect(fs.readdirSync(dist).sort()).toEqual(['chunks', path.basename(output)].sort());
     expect(fs.readdirSync(path.join(dist, 'chunks'))).not.toHaveLength(0);
   });
-  it('compiles and loads every declared server graph without package-local dependency paths', async () => {
+  it.each([
+    'packages/minor/doompi-voice',
+    'packages/default/doompi-runner',
+    'packages/default/doompi-log',
+    'packages/core/doompi',
+  ])('compiles and loads the %s server graph without package-local dependency paths', async (relativeRoot) => {
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
-    const serverPackages = ['packages/minor/doompi-voice', 'packages/default/doompi-runner', 'packages/core/doompi'];
+    const packageRoot = path.join(repositoryRoot, relativeRoot);
+    const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
+      name: string;
+      doompiServer: { dist: string };
+    };
+    const entry = path.resolve(packageRoot, manifest.doompiServer.dist);
+    const directory = temporaryDirectory();
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+      repositoryRoot,
+      outputDirectory: path.join(directory, 'generation'),
+      // Runner resources relocate import.meta.url in published bundles. No live dependency tree may be required.
+      ...(manifest.name === '@agimon-ai/doompi-runner'
+        ? { resources: [{ ownerPackageName: manifest.name, ownerDirectory: packageRoot, packages: [] }] }
+        : {}),
+    });
+    const loadedType = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `console.log(typeof (await import(${javascriptStringLiteral(pathToFileURL(output).href)})).default);`,
+      ],
+      { cwd: directory, env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' }, encoding: 'utf8' },
+    ).trim();
+    const source = readCompiledSource(output);
+    const externalImports = [...source.matchAll(/(?:from|import)\s*["']([^"']+)["']/gu)].map((match) => match[1]);
 
-    for (const relativeRoot of serverPackages) {
-      const packageRoot = path.join(repositoryRoot, relativeRoot);
-      const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
-        name: string;
-        doompiServer: { dist: string };
-      };
-      const entry = path.resolve(packageRoot, manifest.doompiServer.dist);
-      const directory = temporaryDirectory();
-      const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
-        repositoryRoot,
-        outputDirectory: path.join(directory, 'generation'),
-      });
-      const loaded = (await import(`${pathToFileURL(output).href}?server-graph=${Date.now()}`)) as { default: unknown };
-      const source = readCompiledSource(output);
-      const externalImports = [...source.matchAll(/(?:from|import)\s*["']([^"']+)["']/gu)].map((match) => match[1]);
-
-      expect(typeof loaded.default, manifest.name).toBe('object');
-      expect(
-        externalImports.filter((specifier) => !specifier.startsWith('node:') && !specifier.startsWith('${')),
-        manifest.name,
-      ).toEqual([]);
-      expect(source, manifest.name).not.toContain('node_modules');
-    }
+    expect(loadedType, manifest.name).toBe('object');
+    expect(
+      externalImports.filter(
+        (specifier) => !isBuiltin(specifier) && !specifier.startsWith('${') && !specifier.startsWith('.'),
+      ),
+    ).toEqual([]);
+    expect(source, manifest.name).not.toContain(path.join(repositoryRoot, 'node_modules'));
   });
 });

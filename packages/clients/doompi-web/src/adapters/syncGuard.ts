@@ -14,6 +14,7 @@ const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
 const CLI_SEGMENTS = ['dist', 'bin', 'cli.mjs'];
 const SYNC_ARGS = ['sync'];
+const INHERITED_SELECTION_ENV = ['DOOMPI_PROFILE', 'DOOMPI_DOMAINS', 'DOOMPI_MAJOR_MODE', 'DOOMPI_PRESET'] as const;
 /** How often the watcher re-reads the drift inputs. */
 const WATCH_INTERVAL_MS = 2_000;
 /** Ceiling for the retry delay after a sync that keeps failing. */
@@ -78,14 +79,16 @@ function syncCliFor(repoRoot: string): string {
 /** Runs the launcher's own sync, in its own process so the hub keeps serving. */
 function spawnSync(repoRoot: string): Promise<SyncRunOutcome> {
   const cli = syncCliFor(repoRoot);
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    [HARNESS_ROOT_ENV]: repoRoot,
+    [WEB_PACKAGE_ROOT_ENV]: process.env[WEB_PACKAGE_ROOT_ENV] || webHostPackageRoot(),
+  };
+  for (const name of INHERITED_SELECTION_ENV) delete environment[name];
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cli, ...SYNC_ARGS], {
       cwd: repoRoot,
-      env: {
-        ...process.env,
-        [HARNESS_ROOT_ENV]: repoRoot,
-        [WEB_PACKAGE_ROOT_ENV]: process.env[WEB_PACKAGE_ROOT_ENV] || webHostPackageRoot(),
-      },
+      env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const tail: string[] = [];

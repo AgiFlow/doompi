@@ -3,6 +3,9 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { assertSupportedDesktopTarget } from './desktopTarget.mjs';
+
+assertSupportedDesktopTarget();
 
 if (process.platform === 'darwin') {
   const packageDirectory = fileURLToPath(new URL('../native/macos-computer-use/', import.meta.url));

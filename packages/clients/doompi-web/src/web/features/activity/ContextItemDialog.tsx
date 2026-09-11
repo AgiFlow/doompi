@@ -188,7 +188,7 @@ function SkillFacts({ detail }: { detail: Extract<ContextItemDetail, { itemKind:
   return (
     <div data-testid="context-item-cost" className="flex flex-col gap-1">
       <Row label="listing" value={tokens(detail.tokens)} strong />
-      <Row label="file" value={detail.filePath} />
+      {detail.filePath ? <Row label="file" value={detail.filePath} /> : null}
       {detail.modelInvocable ? null : <p className="text-xs text-doom-faint">not offered to the model</p>}
     </div>
   );

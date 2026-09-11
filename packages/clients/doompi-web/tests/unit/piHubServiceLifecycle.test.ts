@@ -55,7 +55,7 @@ const record: SessionRecord = {
 };
 
 function subject(onNotice?: (message: string) => void) {
-  return createPiHubService({ records: () => [record], spawn: vi.fn(), onNotice });
+  return createPiHubService({ records: () => [record], onNotice });
 }
 async function open(onNotice?: (message: string) => void) {
   const host = subject(onNotice);

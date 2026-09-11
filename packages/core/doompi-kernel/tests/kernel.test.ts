@@ -256,4 +256,15 @@ describe('createDoomKernel', () => {
     expect(kernel.activeValues('tools')).toEqual(['delegate']);
     expect(sink).not.toHaveBeenCalled();
   });
+  it('reads active and gated registrations for inventory projections', () => {
+    const kernel = createDoomKernel({ activeLayers: ['team'] });
+    const slot = kernel.defineSlot<string>('tools', () => undefined);
+    slot.contribute({ source: 'team', layer: 'team', value: 'delegate' });
+    slot.contribute({ source: 'plan', layer: 'plan', value: 'plan' });
+
+    expect(kernel.contributions('tools')).toEqual([
+      { source: 'team', layer: 'team', value: 'delegate' },
+      { source: 'plan', layer: 'plan', value: 'plan' },
+    ]);
+  });
 });

@@ -191,6 +191,10 @@ export function createDoomKernel(options: CreateDoomKernelOptions = {}): DoomKer
       const state = slots.get(slot);
       return state ? (activeOf(state) as readonly TValue[]) : [];
     },
+    contributions<TValue>(slot: string): readonly KernelContribution<TValue>[] {
+      const state = slots.get(slot);
+      return state ? ([...state.entries.values()] as readonly KernelContribution<TValue>[]) : [];
+    },
     dispose(): void {
       if (disposed) return;
       disposed = true;

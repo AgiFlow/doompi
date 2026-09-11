@@ -70,7 +70,7 @@ function latestMarkdown(entries: readonly Record<string, unknown>[]): string | u
 }
 
 async function skill(): Promise<string> {
-  return readFile(new URL('../../prompts/doompi-use-plan/SKILL.md', import.meta.url), 'utf8');
+  return readFile(new URL('../../../src/prompts/doompi-use-plan/SKILL.md', import.meta.url), 'utf8');
 }
 
 export const planHeadlessFacet: HeadlessFacet = {

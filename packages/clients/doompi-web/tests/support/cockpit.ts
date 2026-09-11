@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base } from '@playwright/test';
-import { type FakeSession, startFakeSession } from './fakeSession.ts';
+import { type FakeSession, type FakeSessionOptions, startFakeSession } from './fakeSession.ts';
 import { startRunnerApiSocket } from './runnerRuns.ts';
 
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -136,21 +136,48 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   assets: ['packaged', { option: true }],
   assetPackageRoot: [null, { option: true }],
   backlogLimit: [512, { option: true }],
-  page: async ({ page, cockpit }, use) => {
+  page: async ({ page, cockpit, assets }, use) => {
+    if (assets === 'synced') {
+      await page.addInitScript(() => {
+        const root = document.documentElement;
+        root.style.pointerEvents = 'none';
+        const releaseWhenReady = (): boolean => {
+          if (!document.querySelector('link[data-doompi-plugin-composition][media="all"]')) return false;
+          root.style.removeProperty('pointer-events');
+          return true;
+        };
+        if (!releaseWhenReady()) {
+          const observer = new MutationObserver(() => {
+            if (!releaseWhenReady()) return;
+            observer.disconnect();
+          });
+          observer.observe(document, { attributes: true, childList: true, subtree: true });
+        }
+      });
+    }
     await page.goto(`${cockpit.url}/pair`);
     await page.waitForURL(`${cockpit.url}/`);
     await page.getByTestId('cockpit').waitFor();
     await page.goto('about:blank');
+    for (const session of cockpit.sessions) {
+      const waitForSocketAttach = session.waitForAttach.bind(session);
+      session.waitForAttach = async (timeoutMs = 5000): Promise<void> => {
+        await waitForSocketAttach(timeoutMs);
+        await page.locator('[data-testid="composer-input"]:not([disabled])').waitFor({ timeout: timeoutMs });
+      };
+    }
     await use(page);
   },
   cockpit: async ({ sessionCount, spawnStub, assets, assetPackageRoot, backlogLimit }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
     const syncedHome = process.env.DOOMPI_E2E_SYNCED_HOME;
+    const serializedServerComposition = process.env.DOOMPI_E2E_SYNCED_SERVER_COMPOSITION;
     const syncedWorkRoot = process.env.DOOMPI_E2E_SYNCED_WORK_ROOT;
-    if (!syncedDist || !syncedHome || !syncedWorkRoot) {
+    if (!syncedDist || !syncedHome || !serializedServerComposition || !syncedWorkRoot) {
       throw new Error('global setup did not publish the synchronized test composition');
     }
+    const serverComposition = JSON.parse(serializedServerComposition) as FakeSessionOptions['serverComposition'];
     const registryDir = path.join(root, 'run');
     const stateDir = path.join(root, 'state');
     const teamTemp = path.join(root, 'tmp');
@@ -186,6 +213,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           registryDir,
           apiSocketPath,
           cwd,
+          serverComposition,
         }),
       );
       sessionApiStops.push(startRunnerApiSocket(runnerStore, id, apiSocketPath));

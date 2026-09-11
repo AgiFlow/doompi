@@ -6,5 +6,10 @@
   "doompiWeb": {
     "pluginId": "crash",
     "client": "./src/exports/webClient.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
   }
 }

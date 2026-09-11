@@ -1,7 +1,7 @@
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 const SERVICE_NAME = 'doompi-server';
-const PACKAGE_NAME = '@agimon-ai/doompi-server';
+const PACKAGE_NAME = '@agimon-ai/doompi';
 
 export type ServerTelemetry = Pick<
   DoomTelemetry,

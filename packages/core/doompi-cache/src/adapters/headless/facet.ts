@@ -68,7 +68,8 @@ export const cacheHeadlessFacet = {
             modelFingerprint,
             sha256Base64Url,
           );
-          return rewritePromptCacheKey(payload, identity.api, key, true);
+          const rewritten = rewritePromptCacheKey(payload, identity.api, key, true);
+          return rewritten === undefined ? undefined : { payload: rewritten };
         },
       },
       {

@@ -49,9 +49,15 @@ import { activeSessionId, sessionsStore } from './sessionsStore.ts';
 const stores = new Map<string, Store<SessionState>>();
 /** Sessions whose visible transcript is currently supplied by Pi's protocol. */
 const protocolTranscripts = new Set<string>();
+/** Projection keys changed after a subscription snapshot was requested. */
+const replayGuards = new Map<string, { statuses: Set<string>; widgets: Set<string> }>();
 const PROTOCOL_ENTRY_KINDS = new Set<TimelineEntry['kind']>(['user', 'assistant', 'tool']);
 /** Read-only stand-in while no session is focused, so hooks stay unconditional. */
 const detachedStore = new Store<SessionState>(initialSessionState);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export function sessionStoreFor(sessionId: string | null): Store<SessionState> {
   if (sessionId === null) return detachedStore;
@@ -68,7 +74,31 @@ export function useActiveSession<T>(selector: (state: SessionState) => T): T {
   return useStore(sessionStoreFor(activeId), selector);
 }
 
-export function applySessionFrame(sessionId: string, frame: Record<string, unknown>): void {
+function projectionKey(frame: Record<string, unknown>): { kind: 'status' | 'widget'; key: string } | undefined {
+  const projected = frame.type === 'replay' && isRecord(frame.frame) ? frame.frame : frame;
+  if (projected.type !== 'extension_ui_request') return undefined;
+  if (typeof projected.statusKey === 'string' && projected.method === 'setStatus') {
+    return { kind: 'status', key: projected.statusKey };
+  }
+  if (typeof projected.widgetKey === 'string' && projected.method === 'setWidget') {
+    return { kind: 'widget', key: projected.widgetKey };
+  }
+  return undefined;
+}
+
+/** Frames from the live session socket, or from a backlog when replay is true. */
+export function applySessionFrame(
+  sessionId: string,
+  frame: Record<string, unknown>,
+  options: { replay?: boolean } = {},
+): void {
+  const projection = projectionKey(frame);
+  const guard = replayGuards.get(sessionId);
+  if (projection !== undefined && guard !== undefined) {
+    const keys = projection.kind === 'status' ? guard.statuses : guard.widgets;
+    if (options.replay && keys.has(projection.key)) return;
+    if (!options.replay) keys.add(projection.key);
+  }
   // The legacy wire is the realtime and recovery fallback until Pi's protocol
   // publishes a snapshot. Once it does, only DoomPi-specific frames reduce here.
   const transcriptFromProtocol = protocolTranscripts.has(sessionId);
@@ -272,15 +302,38 @@ export function applyProtocolQueue(sessionId: string, queue: readonly QueuedEntr
     protocolQueueMatches(state, queue) ? state : replaceQueuedEntries(state, queue),
   );
 }
+/** Marks the start of a subscription replay, so live projections beat an older snapshot. */
+export function beginSessionReplay(sessionId: string): void {
+  replayGuards.set(sessionId, { statuses: new Set(), widgets: new Set() });
+}
+
+export function endSessionReplay(sessionId: string): void {
+  replayGuards.delete(sessionId);
+}
+
 export function resetSessionStore(sessionId: string): void {
+  const guard = replayGuards.get(sessionId);
   sessionStoreFor(sessionId).setState((state) => {
-    if (!protocolTranscripts.has(sessionId)) return initialSessionState;
+    const preservedStatuses =
+      guard === undefined
+        ? {}
+        : Object.fromEntries(Object.entries(state.statuses).filter(([key]) => guard.statuses.has(key)));
+    const preservedWidgets = guard === undefined ? [] : state.widgets.filter((key) => guard.widgets.has(key));
+    if (!protocolTranscripts.has(sessionId)) {
+      return {
+        ...initialSessionState,
+        statuses: preservedStatuses,
+        widgets: preservedWidgets,
+      };
+    }
     // A legacy socket reconnect replays its backlog. Keep the protocol snapshot
     // visible while that replay rebuilds DoomPi-only state around it.
     const entries = state.entries.filter((entry) => PROTOCOL_ENTRY_KINDS.has(entry.kind));
     return {
       ...initialSessionState,
       entries,
+      statuses: preservedStatuses,
+      widgets: preservedWidgets,
       streaming: state.streaming,
       settled: state.settled,
       pendingUserEntries: state.pendingUserEntries,
@@ -298,11 +351,13 @@ export function resetSessionStore(sessionId: string): void {
 export function dropSessionStore(sessionId: string): void {
   stores.delete(sessionId);
   protocolTranscripts.delete(sessionId);
+  replayGuards.delete(sessionId);
 }
 
 export function resetSessionStores(): void {
   stores.clear();
   protocolTranscripts.clear();
+  replayGuards.clear();
   detachedStore.setState(() => initialSessionState);
 }
 

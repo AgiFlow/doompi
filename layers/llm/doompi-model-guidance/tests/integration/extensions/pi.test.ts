@@ -60,9 +60,11 @@ describe('before_agent_start', () => {
     expect(handler({ systemPrompt: 'base' }, {})).toBeUndefined();
   });
 
-  it('is inert for a model id with no entry', () => {
+  it('applies the built-in GPT-6 Astra preset when no file entry overrides it', () => {
     writeRepositoryGuidance('modelGuidance:\n  claude-opus-5: Stay focused.\n');
-    expect(handler({ systemPrompt: 'base' }, { model: { id: 'gpt-6-astra' } })).toBeUndefined();
+    expect(handler({ systemPrompt: 'base' }, { model: { id: 'gpt-6-astra' } })?.systemPrompt).toContain(
+      'Continue executing an agreed plan',
+    );
   });
 
   it('is inert when the harness root is unset', () => {

@@ -1,17 +1,26 @@
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
 import type { InstalledServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import { DOOM_MINOR_MODE_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/mode';
 import type {
+  DoomHeadlessEventName,
   DoomHeadlessExecutionContext,
   DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { domainStatus } from '@agimon-ai/doompi-domain';
+import { statusText } from '@agimon-ai/doompi-major-mode';
 import { createHeadlessClient } from './headlessClient.ts';
-import { HeadlessHost } from './headlessHost.ts';
+import { HeadlessHost, headlessHarnessSkill } from './headlessHost.ts';
 import { createDirectHarnessRuntime } from './directHarnessRuntime.ts';
 import { createHistoryOwnership } from '../serialization/historyOwnership.ts';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../../types/server/headlessSessionHost.ts';
 import type { AgentProcess, SessionFrame } from '../../types/server/session.ts';
 import type { ResolvedHeadlessResource } from '../../types/server/headlessHost.ts';
+import type { DirectHarnessRuntime } from '../../types/server/directHarnessRuntime.ts';
+import { buildContextDetail } from '../../services/contextDetail.ts';
+import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../services/contextProjection.ts';
+import { projectMinorModes } from '../../services/minorModeProjection.ts';
+import { writeContextDetail } from '../contextDetailStore.ts';
 import {
   getAgentDir,
   ModelRuntime,
@@ -21,9 +30,10 @@ import {
   SettingsManager,
   type Args,
 } from '@earendil-works/pi-coding-agent';
+import { counter } from '@agimon-ai/doompi-skill/catalog';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import type { AgentHarnessResources, AgentHarnessTool } from '@earendil-works/pi-agent-core';
-import type { Model, Api } from '@earendil-works/pi-ai';
+import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
+import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import path from 'node:path';
 
 /** Explicit test-only switch for the same-process server adapter. */
@@ -35,6 +45,126 @@ export function isDirectHeadlessOptedIn(environment: NodeJS.ProcessEnv = process
 
 type AnyRecord = Record<string, unknown>;
 type HeadlessTool = DoomHeadlessTool;
+type AfterToolPatch = NonNullable<HookMap['after_tool']['result']>;
+type ToolContent = NonNullable<AfterToolPatch['content']>;
+type CompactResult = NonNullable<NonNullable<HookMap['before_compaction']['result']>['compaction']>;
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+function isRecord(value: unknown): value is AnyRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value : undefined;
+}
+
+/** Restores the last accepted live selection from journal projections, falling back on launch configuration. */
+export function restoreHeadlessSelection(
+  entries: readonly AnyRecord[],
+  fallback: DoomHeadlessSelection,
+): DoomHeadlessSelection {
+  let projected: Partial<DoomHeadlessSelection> | undefined;
+  let minorModes: string[] | undefined;
+  for (
+    let index = entries.length - 1;
+    index >= 0 && (projected === undefined || minorModes === undefined);
+    index -= 1
+  ) {
+    const entry = entries[index];
+    if (!isRecord(entry) || entry.type !== 'custom' || !isRecord(entry.data)) continue;
+    if (projected === undefined && entry.customType === DOOM_CONTEXT_ENTRY_TYPE) {
+      const selection = entry.data.selection;
+      if (!isRecord(selection) || typeof selection.majorMode !== 'string') continue;
+      const domains = stringArray(selection.domains);
+      if (domains === undefined || (selection.profile !== undefined && typeof selection.profile !== 'string')) continue;
+      projected = {
+        majorMode: selection.majorMode,
+        domains,
+        ...(typeof selection.profile === 'string' ? { profile: selection.profile } : {}),
+      };
+    }
+    if (
+      minorModes === undefined &&
+      entry.customType === DOOM_MINOR_MODE_ENTRY_TYPE &&
+      Array.isArray(entry.data.modes)
+    ) {
+      minorModes = entry.data.modes
+        .filter((mode): mode is AnyRecord => isRecord(mode))
+        .filter((mode) => mode.activation === 'active' && typeof mode.id === 'string')
+        .map((mode) => mode.id as string);
+    }
+  }
+  return { ...fallback, ...projected, minorModes: minorModes ?? fallback.minorModes };
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function isToolContent(value: unknown): value is ToolContent {
+  return (
+    Array.isArray(value) &&
+    value.every((part) => {
+      if (!isRecord(part)) return false;
+      if (part.type === 'text') return typeof part.text === 'string';
+      return part.type === 'image' && typeof part.data === 'string' && typeof part.mimeType === 'string';
+    })
+  );
+}
+
+function isUsage(value: unknown): value is Usage {
+  if (!isRecord(value) || !isRecord(value.cost)) return false;
+  const cost = value.cost;
+  return (
+    ['input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens'].every(
+      (key) => typeof value[key] === 'number' && Number.isFinite(value[key]),
+    ) &&
+    ['input', 'output', 'cacheRead', 'cacheWrite', 'total'].every(
+      (key) => typeof cost[key] === 'number' && Number.isFinite(cost[key]),
+    )
+  );
+}
+
+function isAgentMessage(value: unknown): value is AgentMessage {
+  if (!isRecord(value) || typeof value.timestamp !== 'number' || !Number.isFinite(value.timestamp)) return false;
+  if (value.role === 'user') return typeof value.content === 'string' || Array.isArray(value.content);
+  if (!Array.isArray(value.content)) return false;
+  if (value.role === 'assistant') {
+    return (
+      typeof value.api === 'string' &&
+      typeof value.provider === 'string' &&
+      typeof value.model === 'string' &&
+      typeof value.stopReason === 'string' &&
+      isUsage(value.usage)
+    );
+  }
+  return (
+    value.role === 'toolResult' &&
+    typeof value.toolCallId === 'string' &&
+    typeof value.toolName === 'string' &&
+    typeof value.isError === 'boolean'
+  );
+}
+
+function isCompactResult(value: unknown): value is CompactResult {
+  return (
+    isRecord(value) &&
+    typeof value.summary === 'string' &&
+    typeof value.tokensBefore === 'number' &&
+    Number.isFinite(value.tokensBefore) &&
+    Array.isArray(value.retainedTail) &&
+    value.retainedTail.every(isAgentMessage) &&
+    (value.usage === undefined || isUsage(value.usage)) &&
+    (value.details === undefined || isJsonValue(value.details))
+  );
+}
 
 const unsupported = (parsed: Args): string | undefined => {
   const flags: Array<[string, unknown]> = [
@@ -136,12 +266,7 @@ function mapResources(resources: readonly ResolvedHeadlessResource[]): {
   const context: string[] = [];
   for (const resource of resources) {
     if (resource.kind === 'skill') {
-      skills.push({
-        name: resource.name,
-        description: `Headless skill from ${resource.source}`,
-        content: resource.text,
-        filePath: `doom-headless://${resource.source}/${resource.name}`,
-      });
+      skills.push(headlessHarnessSkill(resource));
     } else if (resource.kind === 'prompt') {
       promptTemplates.push({ name: resource.name, content: resource.text });
     } else {
@@ -187,8 +312,8 @@ function toolAdapter(
   };
 }
 
-function eventHook(event: string): string | undefined {
-  const hooks: Record<string, string> = {
+function eventHook(event: string): DoomHeadlessEventName | undefined {
+  const hooks: Record<string, DoomHeadlessEventName> = {
     run_start: 'agent_start',
     run_resume: 'agent_start',
     run_end: 'agent_settled',
@@ -200,9 +325,7 @@ function eventHook(event: string): string | undefined {
     tool_start: 'tool_execution_start',
     tool_update: 'tool_execution_update',
     tool_end: 'tool_execution_end',
-    compaction_start: 'session_before_compact',
     compaction_end: 'session_compact',
-    navigation_start: 'session_before_tree',
     navigation_end: 'session_tree',
   };
   return hooks[event];
@@ -218,6 +341,66 @@ function emitTo(listeners: Set<(frame: SessionFrame) => void>, frame: SessionFra
       // Compatibility listeners are observers.
     }
   }
+}
+
+function publishHeadlessSelectionStatus(
+  setStatus: (source: string, text: string | undefined) => void,
+  selection: DoomHeadlessSelection,
+): void {
+  setStatus('doom-major-mode', statusText(selection.majorMode, selection.domains, selection.profile));
+  setStatus('doom-domain', domainStatus(selection.domains));
+  setStatus('doom-profile', selection.profile);
+}
+
+function createHeadlessCompositionPublisher(
+  runtime: Pick<DirectHarnessRuntime, 'sessionId' | 'appendCustomEntry'>,
+  host: HeadlessHost,
+): (selection?: DoomHeadlessSelection) => Promise<void> {
+  let countTokens: ((text: string) => number) | undefined;
+  let contextRevision = 0;
+  let publishedContext: string | undefined;
+  let publishedMinorModes: string | undefined;
+
+  return async (selection = host.context.selection): Promise<void> => {
+    countTokens ??= await counter();
+    const inventory = host.getContextInventory(selection, countTokens);
+    const snapshot = host.catalog.getSnapshot();
+    const minorModeLabels = new Map(snapshot.modes.map(({ descriptor }) => [descriptor.id, descriptor.label]));
+    const minorModes = selection.minorModes.flatMap((id) => {
+      const label = minorModeLabels.get(id);
+      return label === undefined ? [] : [{ id, label }];
+    });
+    const context = projectContext({
+      revision: contextRevision + 1,
+      majorMode: selection.majorMode,
+      ...(selection.profile === undefined ? {} : { profile: selection.profile }),
+      minorModes,
+      domains: selection.domains,
+      sources: inventory.sources,
+      skills: inventory.skills,
+      attribution: inventory.attribution,
+      countTokens,
+    });
+    const contextKey = JSON.stringify({ ...context, revision: 0 });
+    if (contextKey !== publishedContext) {
+      const revision = contextRevision + 1;
+      const details = buildContextDetail({
+        sources: inventory.sources,
+        skills: inventory.skills,
+        countTokens,
+      });
+      await runtime.appendCustomEntry(DOOM_CONTEXT_ENTRY_TYPE, { ...context, revision });
+      writeContextDetail(runtime.sessionId, revision, details);
+      contextRevision = revision;
+      publishedContext = contextKey;
+    }
+
+    const minorProjection = projectMinorModes(snapshot, 'headless');
+    const minorKey = JSON.stringify(minorProjection);
+    if (minorKey === publishedMinorModes) return;
+    await runtime.appendCustomEntry(DOOM_MINOR_MODE_ENTRY_TYPE, minorProjection);
+    publishedMinorModes = minorKey;
+  };
 }
 
 /** Create the gated, same-process host used by direct-headless startup tests. */
@@ -250,6 +433,122 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
       if (phase === 'turn') await headlessHost.select({});
     },
+    transformContext: async (event) => {
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      const patches = await headlessHost.dispatchHook('context', event);
+      let messages = event.messages;
+      let systemPrompt = event.systemPrompt;
+      for (const patch of patches) {
+        if (!isRecord(patch)) continue;
+        if (patch.messages !== undefined) {
+          if (!Array.isArray(patch.messages)) throw new Error('Invalid headless context messages');
+          messages = patch.messages as typeof messages;
+        }
+        if (patch.systemPrompt !== undefined) {
+          if (typeof patch.systemPrompt !== 'string') throw new Error('Invalid headless context system prompt');
+          systemPrompt = patch.systemPrompt;
+        }
+      }
+      return { messages, systemPrompt };
+    },
+    beforeTool: async (event) => {
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      const patches = await headlessHost.dispatchHook('tool_call', event);
+      let args = event.args;
+      let block: NonNullable<HookMap['before_tool']['result']>['block'];
+      for (const patch of patches) {
+        if (!isRecord(patch)) continue;
+        if (patch.args !== undefined) {
+          if (!isJsonObject(patch.args)) throw new Error('Invalid headless tool arguments');
+          args = patch.args as typeof args;
+        }
+        if (patch.block === undefined) continue;
+        if (
+          !isRecord(patch.block) ||
+          typeof patch.block.reason !== 'string' ||
+          (patch.block.terminate !== undefined && typeof patch.block.terminate !== 'boolean')
+        ) {
+          throw new Error('Invalid headless tool denial');
+        }
+        block = {
+          reason: patch.block.reason,
+          ...(typeof patch.block.terminate === 'boolean' ? { terminate: patch.block.terminate } : {}),
+        };
+        break;
+      }
+      return {
+        ...(args === event.args ? {} : { args }),
+        ...(block === undefined ? {} : { block }),
+      };
+    },
+    afterTool: async (event) => {
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      const patches = await headlessHost.dispatchHook('tool_result', event);
+      let content = event.content;
+      let details = event.details;
+      let isError = event.isError;
+      let usage = event.usage;
+      let terminate: boolean | undefined;
+      for (const patch of patches) {
+        if (!isRecord(patch)) continue;
+        if (isToolContent(patch.content)) content = patch.content;
+        if ('details' in patch && isJsonValue(patch.details)) details = patch.details;
+        if (typeof patch.isError === 'boolean') isError = patch.isError;
+        if (isUsage(patch.usage)) usage = patch.usage;
+        if (typeof patch.terminate === 'boolean') terminate = patch.terminate;
+      }
+      return {
+        ...(content === event.content ? {} : { content }),
+        ...(details === event.details ? {} : { details }),
+        ...(isError === event.isError ? {} : { isError }),
+        ...(usage === event.usage ? {} : { usage }),
+        ...(terminate === undefined ? {} : { terminate }),
+      };
+    },
+    beforePayload: async (event) => {
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      const patches = await headlessHost.dispatchHook('before_provider_request', event);
+      let payload = event.payload;
+      for (const patch of patches) {
+        if (patch === undefined || patch === null) continue;
+        if (!isRecord(patch) || !('payload' in patch)) throw new Error('Invalid headless provider payload patch');
+        payload = patch.payload;
+      }
+      return { payload };
+    },
+    beforeCompaction: async (event) => {
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      const patches = await headlessHost.dispatchHook('session_before_compact', {
+        reason: event.reason,
+        preparation: event.preparation,
+        ...(event.customInstructions === undefined
+          ? {}
+          : { instructions: event.customInstructions, customInstructions: event.customInstructions }),
+      });
+      try {
+        for (const patch of patches) {
+          if (patch === undefined || patch === null) continue;
+          if (!isRecord(patch)) throw new Error('Invalid headless compaction patch');
+          if (patch.cancel !== undefined && typeof patch.cancel !== 'boolean')
+            throw new Error('Invalid headless compaction cancellation');
+          if (patch.decline !== undefined && typeof patch.decline !== 'boolean')
+            throw new Error('Invalid headless compaction decline');
+          const decline = patch.cancel === true || patch.decline === true;
+          if (decline && patch.compaction !== undefined) throw new Error('Conflicting headless compaction patch');
+          if (decline) return { decline: true };
+          if (patch.compaction !== undefined) {
+            if (!isCompactResult(patch.compaction)) throw new Error('Invalid headless compaction result');
+            return { compaction: patch.compaction };
+          }
+        }
+      } catch (error) {
+        options.onNotice?.(
+          `Headless compaction hook rejected: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return { decline: true };
+      }
+      return undefined;
+    },
     systemPrompt: async () => {
       try {
         if (!headlessHost) throw new Error('Headless capabilities are not installed.');
@@ -269,6 +568,19 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         return '';
       }
     },
+    listCommands: () => {
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      return headlessHost.listCommands();
+    },
+    dispatchCommand: async (text) => {
+      const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text);
+      if (!match) return false;
+      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+      const name = match[1]!;
+      if (!headlessHost.listCommands().some((entry) => entry.name === name)) return false;
+      await headlessHost.dispatchCommand(name, match[2] ?? '');
+      return true;
+    },
     guardModelRequest: () => {
       if (!headlessReady || promptPreparationFailed || !headlessHost?.status.ready)
         throw new Error('Headless capability preparation is not ready.');
@@ -281,10 +593,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     BACKGROUND_CONTEXT,
   )) as unknown as AnyRecord[];
   const listeners = new Set<(frame: SessionFrame) => void>();
+  const initialSelection = restoreHeadlessSelection(entries, options.selection);
   let headlessHost: HeadlessHost | undefined;
   let client: ReturnType<typeof createHeadlessClient> | undefined;
   let disposed = false;
+  let historyReplayed = false;
   let disposePromise: Promise<void> | undefined;
+  let publishComposition: (selection?: DoomHeadlessSelection) => Promise<void> = async () => {
+    throw new Error('Direct headless composition publisher is not installed.');
+  };
 
   const executionContext = (selection: DoomHeadlessSelection): DoomHeadlessExecutionContext => ({
     cwd: options.cwd,
@@ -310,6 +627,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
             : runtime.prompt(text),
       abort: () => runtime.abort(),
       compact: (instructions) => runtime.compact(instructions),
+      async activity() {
+        const watch = await runtime.lane.watch(BACKGROUND_CONTEXT);
+        try {
+          const snapshot = await watch.resnapshot(BACKGROUND_CONTEXT);
+          return { hasPendingMessages: snapshot.queues.length > 0, isIdle: snapshot.operation === null };
+        } finally {
+          watch.unsubscribe();
+        }
+      },
     },
     shutdown: () => stop(),
   });
@@ -329,38 +655,51 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const unsubscribeEvents = runtime.onEvent(async (event, _context) => {
     if (event.type === 'config_update' && event.property === 'model') {
       currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
+      if (headlessHost !== undefined && currentModel !== undefined && headlessHost.status.ready) {
+        await headlessHost.dispatchHook('model_select', { model: currentModel });
+      }
     }
     const eventRecord = event as unknown as AnyRecord;
     if (event.type === 'entry_added' && eventRecord.entry !== undefined && typeof eventRecord.entry === 'object')
       entries = [...entries, eventRecord.entry as AnyRecord];
     const hook = eventHook(event.type);
     if (headlessHost !== undefined && hook !== undefined && headlessHost.status.ready)
-      await headlessHost.dispatchHook(hook as never, event as unknown as AnyRecord);
+      await headlessHost.dispatchHook(hook, event as unknown as AnyRecord);
   });
 
   const prepareFacets = (root: CordisContext): void => {
     if (headlessHost !== undefined) throw new Error('Direct headless facets were prepared more than once.');
     headlessHost = new HeadlessHost(root, {
       candidates: options.candidates,
-      selection: options.selection,
+      selection: initialSelection,
       context: executionContext,
+      resolveSelection: options.resolveSelection,
       applyTools: async (tools) =>
         runtime.replaceTools(tools.map((tool) => toolAdapter(tool, () => headlessHost!.context))),
       applyResources: async (next) => {
         const mapped = mapResources(next);
         await runtime.replaceResources(mapped.harness);
       },
+      onApplied: async (selection) => {
+        if (headlessReady) await publishComposition(selection);
+        publishHeadlessSelectionStatus((source, text) => client!.client.setStatus(source, text), selection);
+      },
+      onMinorModeChanged: () => publishComposition(),
       onError: (error) =>
         options.onNotice?.(`Headless selection failed: ${error instanceof Error ? error.message : String(error)}`),
     });
+    publishComposition = createHeadlessCompositionPublisher(runtime, headlessHost);
   };
 
   const activateFacets = async (installed: InstalledServerFacets): Promise<void> => {
     if (headlessHost === undefined) throw new Error('Direct headless host was not prepared.');
     headlessHost.setAvailableSources(installed.installedPackages);
-    await headlessHost.select(options.selection);
+    await headlessHost.select(initialSelection);
     headlessReady = headlessHost.status.ready;
-    if (headlessReady) await headlessHost.dispatchHook('session_start', {});
+    if (headlessReady) {
+      await headlessHost.dispatchHook('session_start', {});
+      await publishComposition();
+    }
   };
 
   const dispose = (): Promise<void> => {
@@ -374,13 +713,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       } catch (error) {
         failures.push(error);
       }
-      client?.dispose();
-      unsubscribeEvents();
       try {
         await headlessHost?.close();
       } catch (error) {
         failures.push(error);
       }
+      client?.dispose();
+      unsubscribeEvents();
       try {
         await runtime.dispose();
       } catch (error) {
@@ -403,6 +742,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     },
     onFrame(listener) {
       listeners.add(listener);
+      if (historyReplayed) return;
+      historyReplayed = true;
+      for (const entry of entries) listener({ type: 'entry_appended', entry });
     },
     exited: runtime.exited,
     endInput: stop,

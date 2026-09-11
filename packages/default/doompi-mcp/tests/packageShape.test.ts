@@ -102,7 +102,7 @@ describe('doom-mcp package boundary', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub'],
+      scopes: ['hub', 'session'],
     });
     expect(manifest.exports?.['./extensions/server']).toEqual({
       types: './dist/extensions/server.d.mts',

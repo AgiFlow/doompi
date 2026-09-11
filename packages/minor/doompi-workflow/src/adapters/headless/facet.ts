@@ -39,7 +39,8 @@ function callResult(value: unknown): DoomHeadlessToolResult {
 }
 
 async function skill(name: string): Promise<string> {
-  return readFile(new URL(`../../prompts/${name}/SKILL.md`, import.meta.url), 'utf8');
+  const root = name === 'workflow-recovery' ? '../../../skills' : '../../prompts';
+  return readFile(new URL(`${root}/${name}/SKILL.md`, import.meta.url), 'utf8');
 }
 
 export const workflowHeadlessFacet: HeadlessFacet = {

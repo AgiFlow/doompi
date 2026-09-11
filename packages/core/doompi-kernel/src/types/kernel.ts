@@ -65,5 +65,7 @@ export interface DoomKernel {
   refresh(slot?: string): Promise<void>;
   /** Active values for one slot, in registration order. Empty if undefined. */
   activeValues<TValue>(slot: string): readonly TValue[];
+  /** All registered contributions for one slot, including inactive layers. */
+  contributions<TValue>(slot: string): readonly KernelContribution<TValue>[];
   dispose(): void;
 }
